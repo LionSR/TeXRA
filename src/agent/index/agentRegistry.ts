@@ -1,11 +1,10 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Data, Effect, FileSystem } from 'effect';
+import { Cause, Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
-import { createLog } from '@logger/logUtils';
-import type { StateReadFailed } from '@platform/interfaces';
-import { AgentDirectories } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import { withLogChannel } from '@logger/effectLog';
+import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentCategory as AgentCategoryType,
@@ -21,18 +20,19 @@ import {
   agentKeyOf,
   agentMatchesIdentifier,
   agentName,
-  parseAgentModePresets,
 } from '@shared/schemas';
 import { PREFERRED_TOOL_USE_AGENTS } from '@shared/constants/agents';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
+import { builtInToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
-const log = createLog('agentRegistry');
+const CHANNEL = 'agentRegistry';
 
 /** Resolving an agent directory failed (I/O or a rejected configured path). */
 export class AgentCatalogLoadError extends Data.TaggedError(
@@ -46,20 +46,13 @@ export class AgentCatalogLoadError extends Data.TaggedError(
  * Source priority for lookups (higher priority first). Every source must be
  * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
  * source scores `-1`, ranking it first by accident instead of by decision.
+ * Bundled outranks remote, so a stale hosted row never shadows a bundled name.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
-  'remote',
   'builtInWorkflow',
   'builtInToolUse',
-];
-
-/** Source priority for tool-use sessions (prefers tool-use agents over workflow). */
-const TOOL_USE_LOOKUP_PRIORITY: AgentSource[] = [
-  'custom',
   'remote',
-  'builtInToolUse',
-  'builtInWorkflow',
 ];
 
 // =============================================================================
@@ -101,6 +94,13 @@ export interface LoadAgentsOptions {
   includeRemote?: boolean;
 }
 
+/**
+ * On {@link refresh}, `includeRemote: true` refetches remote metadata and
+ * `false` drops it. Omitted, it rescans only the local directories and keeps
+ * the remote entries the catalog already holds: a local edit costs no network.
+ */
+type RemoteMode = boolean | undefined;
+
 // =============================================================================
 // CORE API
 // =============================================================================
@@ -115,7 +115,7 @@ export function loadAgents(
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   const includeRemote = options.includeRemote ?? true;
   return onCatalogLoadLane(
@@ -133,35 +133,17 @@ export function loadAgents(
  * own caller — the lane hands the next entrant off regardless.
  */
 function queueLoad(
-  includeRemote: boolean,
+  includeRemote: RemoteMode,
   loadEpoch: number,
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-> {
-  return Effect.suspend(() => {
-    if (loadEpoch !== epoch) return Effect.void;
-    return doLoad(includeRemote, loadEpoch).pipe(
-      Effect.map((loaded) => {
-        if (loaded) catalog = { includesRemote: includeRemote };
-      }),
-    );
-  });
-}
-
-function doLoad(
-  includeRemote: boolean,
-  loadEpoch: number,
-): Effect.Effect<
-  boolean,
-  AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
+    if (loadEpoch !== epoch) return;
     const startTime = Date.now();
 
-    // Load from all sources in parallel
     const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
       [dirs.custom(), dirs.builtIn(), dirs.builtInToolUse()],
@@ -181,9 +163,9 @@ function doLoad(
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
-          scanDirectory(customDir, 'custom'),
-          scanDirectory(builtInDir, 'builtInWorkflow'),
-          scanDirectory(toolUseDir, 'builtInToolUse'),
+          scanDirectory([customDir], 'custom'),
+          scanDirectory([builtInDir], 'builtInWorkflow'),
+          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
@@ -201,44 +183,41 @@ function doLoad(
       ...remoteEntries,
     ];
 
-    if (loadEpoch !== epoch) return false;
+    if (loadEpoch !== epoch) return;
 
+    // Carried-over remote entries are read at publish time, after every older
+    // load and any sign-out removal have settled.
+    const keptRemote =
+      includeRemote === undefined
+        ? [...cache.values()].filter((entry) => entry.source === 'remote')
+        : [];
     cache.clear();
     customScanIssues = Object.freeze(customScan.issues);
-    for (const entry of allEntries) {
+    for (const entry of [...allEntries, ...keptRemote]) {
       cache.set(agentKeyOf(entry), entry);
     }
+    catalog = {
+      includesRemote: includeRemote ?? catalog?.includesRemote ?? false,
+    };
 
-    log.info(`Loaded ${cache.size} agents in ${Date.now() - startTime}ms`);
-    return true;
+    yield* Effect.logInfo(
+      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
+    ).pipe(withLogChannel(CHANNEL));
   });
 }
 
 /**
- * Canonical agent resolver: look up an agent by identifier.
- *
- * Supports "source:name" format or just "name". Plain names use the default
- * source priority unless `lookupCategory` requests a category-specific
- * priority. This is not a category filter: callers that require a category
- * must check the returned entry.
- *
- * All other lookups in this module (`resolveAgentKey`, `isRemoteAgent`,
- * `updateAgent*`) delegate here.
+ * Category-blind catalog lookup by identifier: a "source:name" key hits its
+ * entry directly, and a plain name takes the first source in
+ * `LOOKUP_PRIORITY`. Callers that require a category resolve through
+ * `getCategoryAgent` or `resolveAgentForLaunch` instead.
  */
-export function getAgent(
-  identifier: string,
-  lookupCategory?: AgentCategoryType,
-): AgentEntry | undefined {
+export function getAgent(identifier: string): AgentEntry | undefined {
   // Direct lookup for source:name format (already resolved)
   const direct = cache.get(identifier);
   if (direct) return direct;
 
-  // Find first match using session-appropriate priority
-  const priority =
-    lookupCategory === AgentCategory.ToolUse
-      ? TOOL_USE_LOOKUP_PRIORITY
-      : LOOKUP_PRIORITY;
-  for (const source of priority) {
+  for (const source of LOOKUP_PRIORITY) {
     const entry = cache.get(agentKey(source, identifier));
     if (entry) return entry;
   }
@@ -285,20 +264,21 @@ export function getCustomAgentScanIssues(): readonly AgentScanIssue[] {
  * still queued from before. The cache keeps serving the catalog it already
  * published until the new one lands, including when the refresh fails. The
  * epoch advances only once the refresh actually starts, so constructing a
- * refresh without running it is inert.
+ * refresh without running it is inert. An omitted `includeRemote` means a
+ * local rescan here, unlike {@link loadAgents} (see {@link RemoteMode}).
  */
 export function refresh(
   options: LoadAgentsOptions = {},
 ): Effect.Effect<
   void,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.suspend(() => {
-    const loadEpoch = ++epoch;
-    return onCatalogLoadLane(
-      queueLoad(options.includeRemote ?? true, loadEpoch),
-    );
+    // A local rescan is weaker than the loads queued before it, so it takes
+    // the current epoch instead of superseding a pending remote refetch.
+    const loadEpoch = options.includeRemote === undefined ? epoch : ++epoch;
+    return onCatalogLoadLane(queueLoad(options.includeRemote, loadEpoch));
   });
 }
 
@@ -315,71 +295,26 @@ function removeRemoteEntries(): void {
 export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.suspend(() => {
     removeRemoteEntries();
     return refresh({ includeRemote: false });
   }).pipe(
-    Effect.catch((error: AgentCatalogLoadError | StateReadFailed) =>
-      Effect.sync(() => {
-        // An older in-flight remote load may have settled before the rebuild.
-        // Preserve the signed-out invariant even when local directory I/O fails.
-        removeRemoteEntries();
-        log.warn(
-          `Local agent catalog rebuild failed after sign-out: ${error.message}`,
-        );
-      }),
-    ),
+    Effect.catchCause((cause) => {
+      // Best effort, defects included: a stale catalog never blocks sign-out.
+      // Re-remove: an older remote load may have settled before the rebuild.
+      removeRemoteEntries();
+      return Effect.logWarning(
+        `Local agent catalog rebuild failed after sign-out: ${toErrorMessage(Cause.squash(cause))}`,
+      ).pipe(withLogChannel(CHANNEL));
+    }),
   );
 }
 
 // =============================================================================
 // KEY HELPERS
 // =============================================================================
-
-/**
- * Resolve an agent identifier to its full source:name key.
- * Handles both plain names ("criticize") and existing keys ("builtIn:criticize").
- * Falls back to original identifier if agent not found.
- */
-export function resolveAgentKey(
-  agentIdentifier: string,
-  lookupCategory?: AgentCategoryType,
-): string {
-  if (!agentIdentifier) return agentIdentifier;
-  const entry = getAgent(agentIdentifier, lookupCategory);
-  if (!entry) return agentIdentifier;
-  return agentKeyOf(entry);
-}
-
-/**
- * Resolve one roster identifier without collapsing an exact source key.
- * Module-local: the roster controller it exists for is built here, so no
- * caller outside this file needs the resolution rule on its own.
- */
-function getRosterAgent(
-  category: AgentCategoryType,
-  identifier: string,
-): AgentEntry | undefined {
-  const name = agentName(identifier);
-  const entry =
-    identifier === name
-      ? getCategoryAgent(category, identifier)
-      : getAgent(identifier, category);
-  return entry?.category === category ? entry : undefined;
-}
-
-// =============================================================================
-// SOURCE HELPERS
-// =============================================================================
-
-/** Check if identifier refers to a remote agent. */
-export function isRemoteAgent(identifier: string | undefined): boolean {
-  if (!identifier) return false;
-  const entry = getAgent(identifier);
-  return entry?.source === 'remote';
-}
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)
@@ -413,10 +348,8 @@ export function createWorkspaceAgentRosterController(
     globalState,
     getAgents,
     getPresets: () =>
-      workspaceState
-        .get(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [])
-        .pipe(Effect.map(parseAgentModePresets)),
-    resolveAgent: getRosterAgent,
+      workspaceState.get<unknown>(WorkspaceStateKey.CUSTOM_AGENT_PRESETS),
+    resolveAgent: getCategoryAgent,
   });
 }
 
@@ -455,7 +388,7 @@ export function resolveDelegationScopeAgents(
     // entry contribute it once.
     const byKey = new Map<string, AgentEntry>();
     for (const key of keys) {
-      const entry = getRosterAgent(category, key);
+      const entry = getCategoryAgent(category, key);
       if (entry) byKey.set(agentKeyOf(entry), entry);
     }
     return [...byKey.values()];
@@ -492,17 +425,32 @@ export function getVisibleAgent(
   });
 }
 
-/** Resolve an identifier to an agent in a category, ignoring visibility. */
+/**
+ * Resolve an identifier to an agent in a category, ignoring visibility: the
+ * one member identity rule the roster, team plans and launch share. A bare
+ * name matches the category's deduplicated entries; a `source:name` key
+ * matches its exact entry, even one a higher-priority source shadows. An
+ * entry outside `category` is no match.
+ */
 export function getCategoryAgent(
-  category: AgentCategory,
+  category: AgentCategoryType,
   identifier: string,
 ): AgentEntry | undefined {
-  return findAgentByIdentifier(getAgentsByCategory(category), identifier);
+  const entry =
+    identifier === agentName(identifier)
+      ? findAgentByIdentifier(getAgentsByCategory(category), identifier)
+      : cache.get(identifier);
+  return entry?.category === category ? entry : undefined;
 }
 
 /** Resolve a launch by pinned source, visible roster, then full category.
  * Each tier runs only when the preceding one has no match, preserving the
- * exact agent chosen during validation even when visibility changes.
+ * exact agent chosen during validation even when visibility changes. Only an
+ * explicit `source` (a run record's decided identity) pins, and that tier is
+ * category-blind, so a caller that requires a category checks the returned
+ * entry. A `source:name` identifier resolves through the category-scoped
+ * tiers, which match its exact entry even when a higher-priority source
+ * shadows the name, and never answer with an entry of the other category.
  */
 export function resolveAgentForLaunch(
   stores: AgentRosterStores,
@@ -513,7 +461,7 @@ export function resolveAgentForLaunch(
   return Effect.gen(function* () {
     return (
       (source
-        ? getAgent(agentKey(source, agentName(identifier)))
+        ? cache.get(agentKey(source, agentName(identifier)))
         : undefined) ??
       (yield* getVisibleAgent(stores, category, identifier)) ??
       getCategoryAgent(category, identifier)
@@ -522,10 +470,8 @@ export function resolveAgentForLaunch(
 }
 
 /**
- * Deduplicate agents by name, keeping only the highest priority source.
- * Priority: custom > remote > builtInWorkflow > builtInToolUse.
- * When the same agent name exists in multiple sources (e.g. local + remote),
- * only the highest-priority version appears in the dropdown.
+ * Deduplicate agents by name, keeping only the highest-priority source
+ * (custom > builtInWorkflow > builtInToolUse > remote) for the dropdown.
  */
 function deduplicateByName(entries: AgentEntry[]): AgentEntry[] {
   const byKey = new Map<string, AgentEntry>();
@@ -597,7 +543,7 @@ export function computeAgentOptionsData(
 ): Effect.Effect<
   AgentOptionsDataPayload,
   AgentCatalogLoadError | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     yield* loadAgents();

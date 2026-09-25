@@ -12,7 +12,6 @@ import {
   AgentCategorySchema,
   AgentConfigBannerDataSchema,
   AgentOptionDataSchema,
-  ApiKeyBannerDataSchema,
   DependencyBannerDataSchema,
   FileOptionsSchema,
   ModelOptionDataSchema,
@@ -75,13 +74,12 @@ export const HostSnapshotSchema = z.object({
   isGitRepo: z.boolean(),
   /** The one recorder per process and where its take is going. */
   recording: z.object({ session: z.string(), target: z.string() }).nullable(),
-  /** The five banners of the New-task state; host-owned visibility. */
+  /** The New-task state's notices; host-owned visibility. */
   banners: z.object({
-    apiKey: ApiKeyBannerDataSchema.extend(visible),
+    apiKey: z.object(visible),
     agentConfig: AgentConfigBannerDataSchema.extend(visible),
     dependency: DependencyBannerDataSchema.extend(visible),
     gettingStarted: z.boolean(),
-    login: z.boolean(),
   }),
   onboarding: OnboardingFunnelStateSchema,
 });
@@ -102,7 +100,6 @@ export function emptyHostSnapshot(project: ProjectDisplay): HostSnapshot {
       agentConfig: { visible: false },
       dependency: { visible: false },
       gettingStarted: false,
-      login: false,
     },
     onboarding: 'done',
   };

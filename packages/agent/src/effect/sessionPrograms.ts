@@ -21,7 +21,6 @@ import {
   Effect,
   Exit,
   Fiber,
-  FileSystem,
   Queue,
   Stream,
   type Cause,
@@ -37,7 +36,6 @@ import {
   listSessions as listOwnedSessions,
   openSessionEffect,
   runAgent as runValidatedAgent,
-  type AgentRunHandle as RuntimeAgentRunHandle,
   type SessionHandle as RuntimeSessionHandle,
 } from '@agent/runtime';
 import type { AgentEvent } from '@agent/trace';
@@ -48,10 +46,11 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 
 // The composition root supplies its existing scoped services privately;
 // public Session capabilities carry no process implementation types.
-import { createLog } from '@logger/logUtils';
-import type { AgentDirectories } from '@platform/interfaces';
-import type { ProcessServices } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import { withLogChannel } from '@logger/effectLog';
+import type {
+  AgentCatalogServices,
+  ProcessServices,
+} from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AgentCategory,
@@ -69,13 +68,12 @@ import {
   type LaunchError,
 } from './errors.js';
 import type { Sessions, Session, Run, StartInput } from './sessions.js';
-import type { AgentRuntime } from './runtime.js';
 
 /** A run that returned without ever publishing its stream: the launcher's
  *  contract broke, and a caller waiting on admission must hear it. */
 const NEVER_ENTERED = 'The run ended without entering the session.';
 
-const log = createLog('agentPackage');
+const CHANNEL = 'agentPackage';
 
 /**
  * How many trace events a run holds for a reader that has yet to attach.
@@ -126,18 +124,16 @@ function denyRetryRequests(handle: RuntimeSessionHandle): Effect.Effect<void> {
             decision: { action: 'deny', reason: RETRY_DENIAL },
           })
           .pipe(
-            Effect.catch((error) =>
-              Effect.sync(() => {
-                // A refused write answered nothing: the request stays
-                // pending, so this listener must forget it or no later
-                // level would ever deny it again and the run would wait
-                // for a surface that never comes.
-                answered.delete(pending.requestId);
-                log.warn(
-                  `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
-                );
-              }),
-            ),
+            Effect.catch((error) => {
+              // A refused write answered nothing: the request stays
+              // pending, so this listener must forget it or no later
+              // level would ever deny it again and the run would wait
+              // for a surface that never comes.
+              answered.delete(pending.requestId);
+              return Effect.logWarning(
+                `The retry denial for request ${pending.requestId} was refused: ${toErrorMessage(error)}`,
+              ).pipe(withLogChannel(CHANNEL));
+            }),
           );
       },
       { discard: true },
@@ -174,7 +170,7 @@ function admitInput(
 ): Effect.Effect<
   ReturnType<typeof AgentConfigSchema.parse>,
   LaunchError | RunFailure,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     const tools = input.tools ?? [];
@@ -223,7 +219,7 @@ function admitInput(
 /**
  * Start one run on `session` and hand back the {@link Run} once it exists
  * there. The launch is the runtime's `runAgent`: an interruption before
- * admission ends it through the live handle's `interrupt`.
+ * admission ends it through the run fiber's own interrupt.
  *
  * The handoff is all-or-nothing, which is what lets a caller treat the
  * `Run` as the only handle on the run: this either returns one, or it ends
@@ -243,7 +239,6 @@ function start(
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();
-    let handle: RuntimeAgentRunHandle | undefined;
     let detach: (() => void) | undefined;
     let reading = false;
     let buffered = 0;
@@ -259,6 +254,11 @@ function start(
     ): Effect.Effect<void> =>
       Effect.gen(function* () {
         release();
+        if (buffered > TRACE_HANDOVER_EVENTS) {
+          yield* Effect.logWarning(
+            `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; its trace was detached. Iterate the run's events in the turn that starts it, or await only its result.`,
+          ).pipe(withLogChannel(CHANNEL));
+        }
         // A run nobody read retains nothing: what it buffered goes with it.
         if (!reading) yield* Effect.orDie(Queue.clear(trace));
         if (Exit.isFailure(exit)) {
@@ -283,13 +283,8 @@ function start(
     // outside the mask covers the rest, the boundary included: an interrupt
     // that lands while the tail runs is raised the moment the mask lifts,
     // with a `Run` built that reaches no one.
-    const interruptLaunch = ():
-      Pick<RuntimeAgentRunHandle, 'interrupt'> | undefined => {
-      const current = handle ?? session.runs.getHandle(runId);
-      current?.interrupt();
-      return current;
-    };
-    const spawned: Fiber.Fiber<unknown, unknown>[] = [];
+    const interruptLaunch = (): boolean => session.runs.interrupt(runId);
+    const spawned: Fiber.Fiber<unknown, Error>[] = [];
     return yield* Effect.uninterruptibleMask((restore) =>
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
@@ -297,17 +292,10 @@ function start(
             { kind: 'fresh', config, runId },
             {
               approvalPromptsUnavailable: true,
-              onRun: (live) =>
-                Effect.sync(() => {
-                  handle = live;
-                }),
               onRunResolved: (_, runTrace) => {
                 detach = runTrace.subscribe((event) => {
                   if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                    log.warn(
-                      `Run ${runId} buffered ${TRACE_HANDOVER_EVENTS} trace events with no reader attached; detaching its trace. Iterate the run's events in the turn that starts it, or await only its result.`,
-                    );
-                    release();
+                    release(); // `settle` logs it: no fiber here to log from.
                     return;
                   }
                   Queue.offerUnsafe(trace, event);
@@ -319,14 +307,14 @@ function start(
               tools: input.tools,
             },
           ).pipe(
-            // The embedder owns this runtime. Provide the process's existing
-            // context so native tool I/O shares its scoped clients and stores.
-            Effect.provide(services),
             Effect.mapError(
               (cause) =>
                 new RunFailure({ cause, message: toErrorMessage(cause) }),
             ),
             Effect.onExit(settle),
+            // The embedder owns this runtime. Provide the process's existing
+            // context: tool I/O shares its scoped clients, `settle` its logger.
+            Effect.provide(services),
           ),
           { startImmediately: true },
         );
@@ -438,7 +426,7 @@ function sessionOf(
  *  transcript store and, on the sessions it opens, the retry denial that
  *  stands in for the person a package session has no way to ask. */
 export function makeSessions(
-  runtime: AgentRuntime,
+  processRoots: WorkspaceRoots,
   services: Layer.Layer<ProcessServices>,
 ): Context.Service.Shape<typeof Sessions> {
   /** The retry listener of each session this package opened, by storage
@@ -447,10 +435,9 @@ export function makeSessions(
   return {
     open: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
-        const resolved = roots ?? runtime.roots;
-        // A root a host already opened keeps that host's decision delivery:
-        // its UI prompts for the retries of every run on the session, this
-        // package's included. Only a session opened here gets the denial.
+        const resolved = roots ?? processRoots;
+        // A root already open on this runtime keeps the retry listener it
+        // was opened with; only the first open of a root installs one.
         const hostOpened = (yield* listOwnedSessions()).some(
           (other) => other.roots.storage === resolved.storage,
         );
@@ -472,7 +459,7 @@ export function makeSessions(
             root,
             yield* Effect.forkDetach(
               Effect.ensuring(
-                denyRetryRequests(handle),
+                denyRetryRequests(handle).pipe(Effect.provide(services)),
                 Effect.sync(() => deniers.delete(root)),
               ),
             ),
@@ -482,7 +469,7 @@ export function makeSessions(
       }),
     close: (roots?: WorkspaceRoots) =>
       Effect.gen(function* () {
-        const root = (roots ?? runtime.roots).storage;
+        const root = (roots ?? processRoots).storage;
         const report = yield* closeOwnedSession(root);
         // A close that could not settle leaves the session open with its
         // runs live, so the listener stays with them; the close that finally

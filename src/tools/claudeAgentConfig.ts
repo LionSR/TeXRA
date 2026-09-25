@@ -5,71 +5,19 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
-import { execa } from 'execa';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { exposeApiKey, lookupApiKey, apiKeyEnvName } from '@model/apiProviders';
-import type { StateReadFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
+import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import { Secrets } from '@platform/secrets';
-import type {
-  ClaudeAgentEffort,
-  ClaudeAgentModel,
-  ClaudeAgentPermissionMode,
-} from '@shared/schemas';
-import {
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-  parseClaudeAgentEffort,
-  parseClaudeAgentModel,
-  parseClaudeAgentPermissionMode,
-} from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { apiKeyEnvName } from '@shared/constants/providers';
+import { inheritedEnv } from '@utils/system/envFlags';
+import { executeCommand } from '@utils/system/execUtils';
 import { safeHomedir } from '@utils/system/platformPaths';
-
-// Local file imports
-import { createEnumStateGetter } from './support/enumConfig';
+import { ensureError } from '@utils/errors/errorMessage';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'claudeAgent';
-
-// ============================================================================
-// Model — defaults to Sonnet 5; users can override per-call or via workspace state
-// ============================================================================
-
-export const getClaudeAgentModel: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentModel, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-  CLAUDE_AGENT_DEFAULT_MODEL,
-  parseClaudeAgentModel,
-);
-
-// ============================================================================
-// Permission mode
-// ============================================================================
-
-export const getClaudeAgentPermissionMode: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =
-  createEnumStateGetter(
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-    CLAUDE_AGENT_DEFAULT_PERMISSION_MODE,
-    parseClaudeAgentPermissionMode,
-  );
-
-// ============================================================================
-// Effort — adaptive thinking depth hint passed via `effort` SDK option
-// ============================================================================
-
-export const getClaudeAgentEffort: (
-  workspaceState: StateStore,
-) => Effect.Effect<ClaudeAgentEffort, StateReadFailed> = createEnumStateGetter(
-  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-  CLAUDE_AGENT_DEFAULT_EFFORT,
-  parseClaudeAgentEffort,
-);
 
 // ============================================================================
 // Auth env — pulls ANTHROPIC_API_KEY from secrets if set
@@ -104,7 +52,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   function* (
     env: NodeJS.ProcessEnv = process.env,
     currentPlatform: NodeJS.Platform = process.platform,
-  ): Effect.fn.Return<boolean, never> {
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     if (hasClaudeCodeOauthToken(env)) return true;
 
     const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
@@ -114,7 +62,7 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
     // boolean, and this check runs before any root is resolved.
     const credentialFileExists = yield* Effect.tryPromise({
       try: () => access(path.join(configDir, '.credentials.json')),
-      catch: (error) => error,
+      catch: ensureError,
     }).pipe(
       Effect.as(true),
       // access(F_OK) succeeds when the file exists regardless of its read
@@ -126,19 +74,19 @@ const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
 
     if (currentPlatform === 'darwin') {
       for (const probe of claudeKeychainCredentialProbes(configDir)) {
-        const exitCode = yield* Effect.tryPromise({
-          try: () =>
-            execa('security', probe, {
-              stdio: 'ignore',
-              timeout: 1000,
-              reject: false,
-            }),
-          catch: (error) => error,
-        }).pipe(
-          Effect.map((result) => result.exitCode),
-          // Not found / `security` unavailable — try the next known service name.
-          Effect.catch(() => Effect.succeed(undefined)),
-        );
+        const { exitCode } = yield* executeCommand(['security', ...probe], {
+          cwd: process.cwd(),
+          settings: undefined,
+          timeout: 1000,
+          quiet: true,
+        });
+        // `quiet` also silences the spawn-failure log, and `security` is part
+        // of macOS, so its absence is worth a line before reading not-found.
+        if (exitCode === 127) {
+          yield* Effect.logWarning(
+            'The macOS `security` tool could not start; the keychain credential probe reads as not found.',
+          ).pipe(withLogChannel(CHANNEL));
+        }
         if (exitCode === 0) return true;
       }
     }
@@ -210,8 +158,11 @@ function claudeKeychainCredentialProbes(configDir: string): string[][] {
  */
 export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   options: { platform?: NodeJS.Platform } = {},
-): Effect.fn.Return<NodeJS.ProcessEnv, never, Secrets> {
-  const env: NodeJS.ProcessEnv = { ...process.env };
+): Effect.fn.Return<NodeJS.ProcessEnv, never, Secrets | ChildProcessSpawner> {
+  const apiKeyVar = apiKeyEnvName('anthropic');
+  // The other providers' keys stay out of the subprocess: what its tools
+  // print comes back as a tool result. Its own Anthropic key is resolved below.
+  const env: NodeJS.ProcessEnv = inheritedEnv('anthropic');
   env.CLAUDE_AGENT_SDK_CLIENT_APP = 'texra';
   env.CLAUDE_CODE_ENABLE_TODO_TOOLS = '1';
   const oauthToken = env.CLAUDE_CODE_OAUTH_TOKEN?.trim();
@@ -220,8 +171,6 @@ export const buildClaudeAgentEnv = Effect.fn('buildClaudeAgentEnv')(function* (
   } else {
     delete env.CLAUDE_CODE_OAUTH_TOKEN;
   }
-
-  const apiKeyVar = apiKeyEnvName('anthropic');
 
   // 1. OAuth wins: drop any inherited API key so it can't out-prioritize the
   //    OAuth credential, and skip injecting the managed secret entirely.

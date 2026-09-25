@@ -11,12 +11,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { ToolError, ToolResult } from '@shared/schemas';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { formatToolOutput } from '@tools/formatting';
-import {
-  resolveAndFormat,
-  resolveWorkspaceRelativePath,
-  workspacePathPorts,
-  type WorkspacePathPorts,
-} from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';
@@ -48,22 +43,19 @@ interface GlobMatchInfo {
  * The per-call context this tool reads from the caller's turn: the batch's
  * abort signal and the working directory.
  */
-interface GlobPorts extends WorkspacePathPorts {
+interface GlobPorts {
+  readonly call: ToolPathCall;
   readonly signal: AbortSignal | undefined;
 }
 
 const runGlob = Effect.fn('GlobTool.execute')(function* (
   ports: GlobPorts,
   input: GlobInput,
-): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
-  const root = ports.toolRoot();
-  const { path, display } = yield* resolveAndFormat(
-    ports.settings,
-    ports.workspaceRoot,
-    input.path ?? undefined,
-    root,
-  );
-  const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
+): Effect.fn.Return<ToolResult, Error, FileSystem.FileSystem> {
+  const { call } = ports;
+  const path = yield* resolveToolPath(call, input.path ?? undefined);
+  const { display } = path;
+  const gitignore = yield* getGitignoreMatcher(call.roots.workspace);
 
   const cancelSignal = ports.signal;
   const matches = yield* Effect.tryPromise({
@@ -96,15 +88,13 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const fs = yield* FileSystem.FileSystem;
   const statMatch = Effect.fn('GlobTool.statMatch')(function* (
     match: string,
-  ): Effect.fn.Return<GlobMatchInfo | null, unknown> {
-    const resolved = yield* resolveWorkspaceRelativePath(
-      ports.settings,
-      ports.workspaceRoot,
+  ): Effect.fn.Return<GlobMatchInfo | null, Error> {
+    const resolved = yield* resolveToolPath(
+      call,
       // posix.join, not path.join: the base and the match are both
       // POSIX-normalized, and path.join would reintroduce backslashes
       // on Windows. `|| '.'` keeps an empty base a relative join.
       nodePath.posix.join(path.relative || '.', match),
-      root,
     ).pipe(
       Effect.mapError(
         (err) =>
@@ -175,7 +165,7 @@ export const GlobTool = defineTool({
   execute: Effect.fn('GlobTool.call')(function* (input: GlobInput) {
     const call = yield* ToolCall;
     const ports: GlobPorts = {
-      ...workspacePathPorts(call),
+      call,
       signal: yield* Effect.abortSignal,
     };
     return yield* runGlob(ports, input);

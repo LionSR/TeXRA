@@ -22,12 +22,8 @@ import {
   revealProgressRun,
 } from '@progressView/progressNavigation';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import {
-  SETTINGS_VIEW_CMD,
-  type SettingsMessageFor,
-} from '@shared/settingsView/settingsViewMessages';
-import {
-  GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
@@ -43,13 +39,12 @@ import {
 /** The Git tab's inbound arms, spread into the settings-view registry. */
 type GitTabHandlers = Pick<
   SettingsViewInboundHandlerRegistry,
-  | typeof SETTINGS_VIEW_CMD.GET_GITHUB_TOKEN_STATUS
-  | typeof SETTINGS_VIEW_CMD.SET_GITHUB_TOKEN
-  | typeof SETTINGS_VIEW_CMD.REMOVE_GITHUB_TOKEN
-  | typeof SETTINGS_VIEW_CMD.OPEN_GITHUB_TOKEN_URL
-  | typeof SETTINGS_VIEW_CMD.GET_PR_SUBSCRIPTIONS
-  | typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR
-  | typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
+  | typeof SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS
+  | typeof SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN
+  | typeof SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN
+  | typeof SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS
+  | typeof SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR
+  | typeof SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM
 >;
 
 /** GitHub token and subscription handler delegate. */
@@ -67,7 +62,6 @@ export class GitHubSubscriptionHandlers {
         ctx.withActiveWebview((w) => this.sendGitHubTokenStatus(w)),
       setGitHubToken: () => this.handleSetGitHubToken(),
       removeGitHubToken: () => this.handleRemoveGitHubToken(),
-      openGitHubTokenUrl: () => this.openGitHubTokenUrl(),
       getPRSubscriptions: () =>
         ctx.withActiveWebview((w) => this.sendPRSubscriptions(w)),
       unsubscribePR: (message) => this.handleUnsubscribePR(message),
@@ -126,12 +120,6 @@ export class GitHubSubscriptionHandlers {
     );
   }
 
-  private openGitHubTokenUrl() {
-    return Effect.promise(() =>
-      vscode.env.openExternal(vscode.Uri.parse(GITHUB_TOKEN_CREATE_URL)),
-    ).pipe(Effect.asVoid);
-  }
-
   sendPRSubscriptions(webview: vscode.Webview) {
     return Effect.flatMap(
       listGitHubSubscriptionEntries(getProgressRunLabel),
@@ -144,7 +132,7 @@ export class GitHubSubscriptionHandlers {
   }
 
   private handleUnsubscribePR(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_CMD.UNSUBSCRIBE_PR>,
+    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR>,
   ) {
     return Effect.gen(function* () {
       const removed = yield* unsubscribeGitHubKey(data.key);
@@ -158,7 +146,7 @@ export class GitHubSubscriptionHandlers {
 
   private handleOpenPRSubscriptionStream(
     data: SettingsMessageFor<
-      typeof SETTINGS_VIEW_CMD.OPEN_PR_SUBSCRIPTION_STREAM
+      typeof SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM
     >,
   ) {
     return Effect.gen({ self: this }, function* () {

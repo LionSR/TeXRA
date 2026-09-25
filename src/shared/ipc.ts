@@ -4,13 +4,11 @@ export const COMMON_COMMANDS = {
   WEBVIEW_READY: 'webviewReady',
 } as const;
 
-/**
- * Settings-view command literals the schema definitions reference. Mostly
- * inbound (webview → host), plus a few outbound ones such as `SET_TAB` and the
- * auth-status updates; `SETTINGS_VIEW_COMMANDS` adds the rest of the outbound
- * set on top of these.
- */
-export const SETTINGS_VIEW_CMD = {
+/** Settings-view command literals, both directions. */
+export const SETTINGS_VIEW_COMMANDS = {
+  ...COMMON_COMMANDS,
+  // Schema-referenced: mostly inbound (webview → host), plus a few outbound
+  // ones such as `SET_TAB` and the auth-status updates.
   // Navigation commands
   SET_TAB: 'setTab',
   // Memory commands
@@ -85,18 +83,6 @@ export const SETTINGS_VIEW_CMD = {
   APPLY_LATEX_SETTINGS: 'applyLatexSettings',
   INSTALL_LATEX_WORKSHOP: 'installLatexWorkshop',
   RUN_INSTALL_COMMAND: 'runInstallCommand',
-  // Experimental settings
-  GET_INLINE_CRITICISM_ENABLED: 'getInlineCriticismEnabled',
-  SET_INLINE_CRITICISM_ENABLED: 'setInlineCriticismEnabled',
-  GET_GOAL_LIST: 'getGoalList',
-  REVEAL_GOAL_RUN: 'revealGoalRun',
-} as const;
-
-// Settings view specific commands
-// SETTINGS_VIEW_CMD is the source of truth; outbound-only commands are added here
-export const SETTINGS_VIEW_COMMANDS = {
-  ...COMMON_COMMANDS,
-  ...SETTINGS_VIEW_CMD,
   // Outbound-only commands (backend → frontend, not schema-validated)
   UPDATE_MEMORY: 'updateMemory',
   UPDATE_MEMORY_PREVIEW: 'updateMemoryPreview',
@@ -112,14 +98,4 @@ export const SETTINGS_VIEW_COMMANDS = {
   UPDATE_TOOL_DASHBOARD: 'updateToolDashboard',
   UPDATE_SUBSCRIPTION_USAGE: 'updateSubscriptionUsage',
   UPDATE_LATEX_SETTINGS_STATUS: 'updateLatexSettingsStatus',
-  UPDATE_INLINE_CRITICISM_ENABLED: 'updateInlineCriticismEnabled',
-  UPDATE_GOAL_LIST: 'updateGoalList',
-  /**
-   * Commands this host's inbound registry declares `unsupported(...)`
-   * (see `unsupportedCommands` in `@shared/utils/dispatcher`), sent once at
-   * webview-ready. Drives the frontend's capability-derived UI (e.g. hiding
-   * the "Open VS Code Settings" button on desktop) instead of an
-   * `isDesktopHost` check.
-   */
-  SET_UNSUPPORTED_COMMANDS: 'setUnsupportedCommands',
 } as const;

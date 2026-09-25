@@ -8,7 +8,6 @@ import { CliSecrets } from '@cli/runtime/cliSecrets';
 import { onAppSignal } from '@eventBus/AppSignals';
 
 import {
-  apiKeyEnvName,
   apiKeySecretName,
   configuredApiKeyProviders,
   getApiKey,
@@ -19,16 +18,15 @@ import {
   lookupApiKeyUncached,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
+import { apiKeyEnvName } from '@shared/constants/providers';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 import { UnsetApiKeyTool } from '@tools/setup/UnsetApiKeyTool';
 
-function createSecrets(
-  initial: Record<string, string> = {},
-  env: Record<string, string> = {},
-): {
+function createSecrets(initial: Record<string, string> = {}): {
   secrets: PlatformSecrets;
   store: Map<string, string>;
 } {
@@ -55,9 +53,6 @@ function createSecrets(
       listStoredKeys() {
         return Effect.sync(() => [...store.keys()]);
       },
-      getEnv(name) {
-        return env[name];
-      },
     },
   };
 }
@@ -68,9 +63,10 @@ function createSecrets(
  */
 async function setupApiKeyToolPlatform(
   secrets: PlatformSecrets,
+  env: Record<string, string> = {},
 ): Promise<void> {
   await installPlatform(
-    {},
+    { env },
     {
       secrets,
       setup: {
@@ -107,60 +103,61 @@ describe('API provider key caches', () => {
         });
 
         invalidateApiKeyCache();
-        const empty = createSecrets({}, { OPENAI_API_KEY: 'from-env' });
+        const empty = createSecrets({});
 
-        expect(yield* loadApiKeyStatusMap(empty.secrets, ['openai'])).toEqual({
+        expect(
+          yield* loadApiKeyStatusMap(empty.secrets, ['openai']).pipe(
+            withEnv({ OPENAI_API_KEY: 'from-env' }),
+          ),
+        ).toEqual({
           openai: 'env',
         });
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect('lists only providers with a configured key (secret or env)', () =>
     Effect.gen(function* () {
-      const { secrets } = createSecrets(
-        { [apiKeySecretName('openai')]: 'sk-test' },
-        { MOONSHOT_API_KEY: 'from-env' },
-      );
+      const { secrets } = createSecrets({
+        [apiKeySecretName('openai')]: 'sk-test',
+      });
 
       expect(yield* configuredApiKeyProviders(secrets)).toEqual([
         'openai',
         'moonshot',
       ]);
-    }),
+    }).pipe(withEnv({ MOONSHOT_API_KEY: 'from-env' })),
   );
 
   it.effect('treats empty env keys as missing in uncached lookups', () =>
     Effect.gen(function* () {
-      const { secrets } = createSecrets({}, { OPENAI_API_KEY: '' });
+      const { secrets } = createSecrets({});
 
       expect(yield* lookupApiKeyUncached(secrets, 'openai')).toBeUndefined();
-    }),
+    }).pipe(withEnv({ OPENAI_API_KEY: '' })),
   );
 
   it.effect(
     'falls through blank stored values to a usable environment key',
     () =>
       Effect.gen(function* () {
-        const { secrets } = createSecrets(
-          { [apiKeySecretName('openai')]: '   ' },
-          { OPENAI_API_KEY: '  from-env  ' },
-        );
+        const { secrets } = createSecrets({
+          [apiKeySecretName('openai')]: '   ',
+        });
 
         expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('env');
         expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(true);
-      }),
+      }).pipe(withEnv({ OPENAI_API_KEY: '  from-env  ' })),
   );
 
   it.effect('reports blank stored and environment values as absent', () =>
     Effect.gen(function* () {
-      const { secrets } = createSecrets(
-        { [apiKeySecretName('openai')]: '   ' },
-        { OPENAI_API_KEY: '\t' },
-      );
+      const { secrets } = createSecrets({
+        [apiKeySecretName('openai')]: '   ',
+      });
 
       expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
       expect(yield* hasUsableApiKey(secrets, 'openai')).toBe(false);
-    }),
+    }).pipe(withEnv({ OPENAI_API_KEY: '\t' })),
   );
 
   it.effect(
@@ -181,7 +178,7 @@ describe('API provider key caches', () => {
         expect(yield* Effect.flip(getApiKey(secrets, 'openai'))).toBe(
           readFailure,
         );
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -217,7 +214,7 @@ describe('API provider key caches', () => {
         );
         expect(first.get).toHaveBeenCalledTimes(1);
         expect(secondRead).toHaveBeenCalledTimes(1);
-      }),
+      }).pipe(withEnv({})),
   );
 
   it.effect(
@@ -253,7 +250,7 @@ describe('API provider key caches', () => {
 
         expect(yield* Fiber.join(staleLookup)).toBe('none');
         expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('secret');
-      }),
+      }).pipe(withEnv({})),
   );
 
   // Regression: the key cache drop and the repaint signal belong to the
@@ -277,16 +274,16 @@ describe('API provider key caches', () => {
           );
           yield* Effect.yieldNow;
 
-          yield* new UnsetApiKeyTool()
-            .call({ provider: 'openai' })
-            .pipe(Effect.provide(nativeToolTestLayer()));
+          yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
+            Effect.provide(nativeToolTestLayer()),
+          );
 
           expect(yield* lookupApiKeyOrigin(secrets, 'openai')).toBe('none');
           expect(yield* Deferred.await(changed)).toBe(
             apiKeySecretName('openai'),
           );
           yield* Fiber.interrupt(subscriber);
-        }),
+        }).pipe(withEnv({})),
       ),
   );
 
@@ -301,9 +298,9 @@ describe('API provider key caches', () => {
       vi.spyOn(secrets, 'getStored').mockReturnValue(Effect.succeed(undefined));
       yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-      const result = yield* new UnsetApiKeyTool()
-        .call({ provider: 'openai' })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* UnsetApiKeyTool.call({ provider: 'openai' }).pipe(
+        Effect.provide(nativeToolTestLayer()),
+      );
 
       expect(result.status).toBe('executed');
       expect(result.output).toContain('Removed stored API key');
@@ -315,15 +312,16 @@ describe('API provider key caches', () => {
     'reports the canonical Kimi Code environment variable when unsetting',
     () =>
       Effect.gen(function* () {
-        const { secrets } = createSecrets(
-          {},
-          { [apiKeyEnvName('kimiCode')]: 'from-env' },
+        const { secrets } = createSecrets({});
+        yield* Effect.promise(() =>
+          setupApiKeyToolPlatform(secrets, {
+            [apiKeyEnvName('kimiCode')]: 'from-env',
+          }),
         );
-        yield* Effect.promise(() => setupApiKeyToolPlatform(secrets));
 
-        const result = yield* new UnsetApiKeyTool()
-          .call({ provider: 'kimiCode' })
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* UnsetApiKeyTool.call({
+          provider: 'kimiCode',
+        }).pipe(Effect.provide(nativeToolTestLayer()));
 
         expect(result.status).toBe('executed');
         expect(result.output).toContain('KIMI_CODE_API_KEY');

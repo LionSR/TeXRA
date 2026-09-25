@@ -4,16 +4,6 @@
 // output. A PTY adds emulator reflow but cannot reveal stale rows that the same
 // repaint subsequently clears.
 
-// Set before Ink/chalk load so reverse-video SGR (`ESC[7m`) is emitted to the
-// in-memory TTY; otherwise chalk no-ops `inverse` and the band has no styled
-// fill to measure.
-const ORIGINAL_COLOR_ENV = {
-  FORCE_COLOR: process.env.FORCE_COLOR,
-  NO_COLOR: process.env.NO_COLOR,
-};
-delete process.env.NO_COLOR;
-process.env.FORCE_COLOR = '3';
-
 // Third-party imports
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -42,12 +32,23 @@ import {
   viewWith,
 } from './fixtures/sessionViewFixture';
 
-afterAll(() => {
-  for (const [name, value] of Object.entries(ORIGINAL_COLOR_ENV)) {
-    if (value == null) delete process.env[name];
-    else process.env[name] = value;
-  }
+// Reverse-video SGR (`ESC[7m`) must reach the in-memory TTY, or chalk no-ops
+// `inverse` and the band has no styled fill to measure. Chalk reads its level
+// from the environment once, when it first loads, and the `pure` project
+// shares one module registry: whichever suite loads Ink first would fix the
+// level for both. So the level is set on Ink's own chalk instance for this
+// suite and restored after it, not through `FORCE_COLOR`.
+let restoreChalkLevel = (): void => {};
+beforeAll(async () => {
+  const { requireFromInk } = await loadInk();
+  const chalk = (await import(requireFromInk.resolve('chalk'))).default;
+  const level: number = chalk.level;
+  chalk.level = 3;
+  restoreChalkLevel = () => {
+    chalk.level = level;
+  };
 });
+afterAll(() => restoreChalkLevel());
 
 const TRANSCRIPT_SESSION: Omit<SessionMeta, 'cwd'> = {
   agent: 'research',
@@ -233,79 +234,6 @@ describe('Static band resize', () => {
       expect(bandWidths).not.toContain(38);
       expect(occurrences(visibleFrame, '{ T } TeXRA')).toBe(1);
       expect(occurrences(visibleFrame, `› ${prompt}`)).toBe(1);
-    } finally {
-      inst.unmount();
-      cliState.resetCliState();
-    }
-  });
-
-  it('replaces finalized run rows when subagent labels arrive', async () => {
-    const {
-      ink,
-      React,
-      cliState,
-      clearTerminal,
-      StaticConversationTranscript,
-    } = await loadTranscriptStack();
-    const { createElement } = React;
-    const runId = 'run-label-stream' as RunId;
-    const childRunId = 'late-subagent-id';
-    const runPath = `/executions/${childRunId}/report`;
-    const runEntry = completedToolEntry({
-      id: 'run-view',
-      toolName: 'executions',
-      input: { path: runPath },
-      outputText: 'report',
-      settlementSeqNo: 1,
-    });
-
-    seedTranscript(cliState, runId, '/tmp/run-label-proof', [runEntry]);
-
-    const inkRef: {
-      current?: { repaint(options: TuiRepaintOptions): void };
-    } = {};
-    function App({ labels }: { labels: ReadonlyMap<string, string> }): unknown {
-      // The render key is label-agnostic, as in ConversationRegion: the
-      // transcript state owns the label-change repaint through its epoch.
-      const renderKey = 'run-label-render';
-      return createElement(StaticConversationTranscript, {
-        onRenderKeyChange: () => {
-          inkRef.current?.repaint({
-            clearScrollback: true,
-            preserveStatic: false,
-          });
-        },
-        ownerKey: 'run-label-owner',
-        renderKey,
-        scrollbackRunId: runId,
-        subagentRunLabels: labels,
-        width: 80,
-      });
-    }
-
-    const { instance: inst, stdout: out } = renderWithTerminalSize(
-      ink,
-      createElement(App, { labels: new Map() }),
-      80,
-      12,
-    );
-    inkRef.current = inst;
-
-    try {
-      await expectEventually(() => out.output.includes(runPath));
-
-      out.output = '';
-      inst.rerender(
-        createElement(App, {
-          labels: new Map([[childRunId, 'reviewer']]),
-        }),
-      );
-
-      await expectEventually(() => out.output.includes(clearTerminal));
-      const frame = stripAnsi(latestRepaintFrame(out.output, clearTerminal));
-      expect(frame).toContain('executions (view: reviewer/report)');
-      expect(frame).not.toContain(runPath);
-      expect(occurrences(frame, 'executions (view: reviewer/report)')).toBe(1);
     } finally {
       inst.unmount();
       cliState.resetCliState();

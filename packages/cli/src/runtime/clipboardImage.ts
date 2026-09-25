@@ -15,15 +15,12 @@
 // runs it on the process runtime it already holds, so nothing here runs an
 // Effect of its own and the clipboard tools stay one wrapped foreign edge.
 
-import { execFile } from 'node:child_process';
-import { readFile, rm, stat } from 'node:fs/promises';
 import { platform as osPlatform } from 'node:os';
-import { join } from 'node:path';
-import { promisify } from 'node:util';
+import { dirname, join } from 'node:path';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import { Data, Effect, FileSystem, type Path, Stream } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
-import { isFileNotFoundError } from '@common/errors';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
@@ -31,11 +28,17 @@ import {
   type PastedImageSaveFailed,
   savePastedImageBuffer,
 } from '@utils/files/pastedImageUtils';
-import { createTexraTempDir } from '@utils/files/tempDir';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { executeCommand } from '@utils/system/execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { PlatformError } from 'effect/PlatformError';
 
-const execFileAsync = promisify(execFile);
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+
+/** A clipboard tool's stdout passed {@link MAX_IMAGE_BYTES}. */
+class ClipboardImageTooLarge extends Data.TaggedError(
+  'ClipboardImageTooLarge',
+) {}
 
 /**
  * The clipboard probe failed at a foreign edge (an OS clipboard tool, a
@@ -67,36 +70,51 @@ type ClipboardAttachResult =
 type ClipboardRead = Buffer | 'none' | 'unsupported' | 'too-large';
 
 /** The PNG a platform reader wrote, or the size refusal. A failure here is
- *  the probe's failure, not "no image": it reaches the caller's error hook. */
+ *  the probe's failure, not "no image": it reaches the caller's error hook,
+ *  worded by the errno text. */
 function readPngFileWithinLimit(
   outFile: string,
-): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
-  return Effect.tryPromise({
-    try: async (): Promise<ClipboardRead> => {
-      const { size } = await stat(outFile);
-      if (size > MAX_IMAGE_BYTES) return 'too-large';
-      return readFile(outFile);
-    },
-    catch: probeFailed,
-  });
+): Effect.Effect<
+  ClipboardRead,
+  ClipboardImageProbeFailed,
+  FileSystem.FileSystem
+> {
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const { size } = yield* fs.stat(outFile);
+    if (Number(size) > MAX_IMAGE_BYTES) return 'too-large' as const;
+    const bytes = yield* fs.readFile(outFile);
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }).pipe(Effect.mapError((error) => probeFailed(error.reason.cause ?? error)));
 }
 
-function isMaxBufferError(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    err.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+/** Whether a platform reader ran to success and left no 'NO_IMAGE' mark. */
+function readerWrote(
+  command: readonly [string, ...string[]],
+  outDir: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner> {
+  return Effect.map(
+    executeCommand([...command], {
+      cwd: outDir,
+      settings: undefined,
+      quiet: true,
+    }),
+    (result) => result.success && !result.stdout.includes('NO_IMAGE'),
   );
 }
 
 function readClipboardPngMac(
   outFile: string,
-): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
+): Effect.Effect<
+  ClipboardRead,
+  ClipboardImageProbeFailed,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   // osascript ships with macOS — no external dependency. The first statement
   // fails when the clipboard holds no image, which is the 'none' outcome.
-  return Effect.tryPromise(() =>
-    execFileAsync('osascript', [
+  return readerWrote(
+    [
+      'osascript',
       '-e',
       'set png_data to (the clipboard as «class PNGf»)',
       '-e',
@@ -105,16 +123,47 @@ function readClipboardPngMac(
       'write png_data to fp',
       '-e',
       'close access fp',
-    ]),
+    ],
+    dirname(outFile),
   ).pipe(
-    Effect.match({ onSuccess: () => true, onFailure: () => false }),
     Effect.flatMap((written) =>
       written ? readPngFileWithinLimit(outFile) : Effect.succeed('none'),
     ),
   );
 }
 
-function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
+/** One Linux clipboard tool's PNG bytes, stopped past the size limit. The
+ *  scope's release kills a tool stopped early. */
+const readToolBytes = (cmd: string, args: readonly string[]) =>
+  Effect.gen(function* () {
+    const handle = yield* ChildProcess.make(cmd, args, {
+      stdin: 'ignore',
+      stderr: 'ignore',
+      detached: false,
+      forceKillAfter: '5 seconds',
+    });
+    const chunks = yield* handle.stdout.pipe(
+      Stream.runFoldEffect(
+        () => ({ chunks: [] as Uint8Array[], size: 0 }),
+        (acc, chunk) => {
+          const size = acc.size + chunk.length;
+          if (size > MAX_IMAGE_BYTES) {
+            return Effect.fail(new ClipboardImageTooLarge());
+          }
+          acc.chunks.push(chunk);
+          return Effect.succeed({ chunks: acc.chunks, size });
+        },
+      ),
+    );
+    const code = yield* handle.exitCode;
+    return code === 0 ? Buffer.concat(chunks.chunks) : Buffer.alloc(0);
+  }).pipe(Effect.scoped);
+
+function readClipboardPngLinux(): Effect.Effect<
+  ClipboardRead,
+  never,
+  ChildProcessSpawner
+> {
   // Prefer Wayland (wl-paste) then X11 (xclip). Both are optional; if neither
   // is installed we report unsupported rather than "no image".
   const attempts: ReadonlyArray<readonly [string, readonly string[]]> = [
@@ -124,28 +173,15 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
   return Effect.gen(function* () {
     let toolFound = false;
     for (const [cmd, args] of attempts) {
-      const outcome = yield* Effect.result(
-        Effect.tryPromise({
-          try: () =>
-            execFileAsync(cmd, [...args], {
-              encoding: 'buffer',
-              maxBuffer: MAX_IMAGE_BYTES,
-            }),
-          // Raw passthrough: `Effect.result` absorbs the rejection into the
-          // value channel, and the classifiers below (`isMaxBufferError`,
-          // `isFileNotFoundError`) read the raw error's `code`, which a
-          // tagged wrapper would strip.
-          catch: (error: unknown) => error,
-        }),
-      );
+      const outcome = yield* Effect.result(readToolBytes(cmd, args));
       if (outcome._tag === 'Success') {
         toolFound = true;
-        const buffer = outcome.success.stdout as unknown as Buffer;
-        if (buffer.length > 0) return buffer;
+        if (outcome.success.length > 0) return outcome.success;
         continue;
       }
-      if (isMaxBufferError(outcome.failure)) return 'too-large';
-      if (isFileNotFoundError(outcome.failure)) continue; // tool not installed → try next
+      const failure: ClipboardImageTooLarge | PlatformError = outcome.failure;
+      if (failure._tag === 'ClipboardImageTooLarge') return 'too-large';
+      if (failure.reason._tag === 'NotFound') continue; // tool not installed → try next
       toolFound = true; // tool ran but the clipboard had no image
     }
     return toolFound ? 'none' : 'unsupported';
@@ -154,16 +190,17 @@ function readClipboardPngLinux(): Effect.Effect<ClipboardRead> {
 
 function readClipboardPngWindows(
   outFile: string,
-): Effect.Effect<ClipboardRead, ClipboardImageProbeFailed> {
+): Effect.Effect<
+  ClipboardRead,
+  ClipboardImageProbeFailed,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   const quotedOutFile = outFile.replaceAll("'", "''");
   const script = `$img = Get-Clipboard -Format Image; if ($img) { Add-Type -AssemblyName System.Drawing; $img.Save('${quotedOutFile}', [System.Drawing.Imaging.ImageFormat]::Png) } else { Write-Output 'NO_IMAGE' }`;
-  return Effect.tryPromise(() =>
-    execFileAsync('powershell', ['-NoProfile', '-Command', script]),
+  return readerWrote(
+    ['powershell', '-NoProfile', '-Command', script],
+    dirname(outFile),
   ).pipe(
-    Effect.match({
-      onSuccess: ({ stdout }) => !String(stdout).includes('NO_IMAGE'),
-      onFailure: () => false,
-    }),
     Effect.flatMap((saved) =>
       saved ? readPngFileWithinLimit(outFile) : Effect.succeed('none'),
     ),
@@ -183,7 +220,7 @@ export function attachClipboardImage(
 ): Effect.Effect<
   ClipboardAttachResult,
   ClipboardImageProbeFailed | PastedImageSaveFailed,
-  FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
   /** Nothing attached: the caller surfaces `reason` and keeps the draft. */
   const notAttached = (reason: string): ClipboardAttachResult => ({
@@ -196,21 +233,17 @@ export function attachClipboardImage(
       return notAttached(`Image paste is not supported on ${plat}.`);
     }
 
-    const dir = yield* Effect.acquireRelease(
-      Effect.tryPromise({
-        try: () => createTexraTempDir('texra-clip-'),
-        catch: probeFailed,
-      }),
-      (created) =>
-        Effect.ignore(
-          Effect.tryPromise(() =>
-            rm(created, { recursive: true, force: true }),
-          ),
-        ),
-    );
+    const fs = yield* FileSystem.FileSystem;
+    const dir = yield* fs
+      .makeTempDirectoryScoped({ prefix: 'texra-clip-' })
+      .pipe(Effect.mapError(probeFailed));
     const tmpFile = join(dir, 'clipboard.png');
 
-    let reader: Effect.Effect<ClipboardRead, ClipboardImageProbeFailed>;
+    let reader: Effect.Effect<
+      ClipboardRead,
+      ClipboardImageProbeFailed,
+      FileSystem.FileSystem | ChildProcessSpawner
+    >;
     switch (plat) {
       case 'darwin':
         reader = readClipboardPngMac(tmpFile);

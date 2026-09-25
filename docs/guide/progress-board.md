@@ -23,11 +23,11 @@ tab of the TeXRA view in VS Code.
 
 ## Opening the ProgressBoard
 
-The ProgressBoard shares the **TeXRA view** with the launcher. Select the TeXRA icon in the Secondary Side Bar, then switch to the **Sessions** tab (the launcher is the **New** tab).
+The ProgressBoard shares the **TeXRA view** with the New task screen. Select the TeXRA icon in the Secondary Side Bar; the **Sessions** button at the top left of the panel lists every session, and **+** starts a new task.
 
 - **Automatic**: It usually opens when you execute an agent.
-- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Progress**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS).
-- **Editor tab**: Run **TeXRA: Open Progress in Editor Tab** to open the ProgressBoard as a full editor tab.
+- **Manual**: Open it from the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) with **TeXRA: Show Sessions**, or press `Ctrl+Alt+P` (`Cmd+Option+P` on macOS). From the New task screen this opens the newest session.
+- **Editor tab**: Run **TeXRA: Open Sessions in Editor**, or pick **Open sessions in editor** from the panel's **⋯** menu, to open the ProgressBoard as a full editor tab.
 
 <GuideIntroHero />
 
@@ -67,18 +67,27 @@ The header provides a summary and actions for the selected stream:
 <p class="hero-caption">The status dot: green while running, blue while waiting for input, gray once finished, red on error.</p>
 
 - **Token and cost summary**: Displays the combined input and output token counts from all completed rounds (e.g., `r0`, `r1`, `r2`, …) along with the estimated cost.
-- **Stream header actions**: A toolbar of icon buttons acting on the selected stream. Workflow streams get Stop, Run New, Resume, Restore, Open in run storage, Export, Copy run context, Diff, Clean, and Pack; tool-use streams get Stop, AUTO-EDIT, AUTO-BASH, AUTO-TASK, Compact, Restore, Open in run storage, and Export. Export saves the conversation as Markdown, HTML, or PDF.
-
-<StreamHeaderActions />
-
-<p class="hero-caption">The stream header: identity and token/cost summary on the left, the action toolbar on the right, every icon mapped to its action.</p>
+- **One header row**: the Sessions button, the run's title, its status and
+  time, **Stop** while it runs, **New task**, and one **More** menu (⋯).
+  The menu holds the run's actions, then Open sessions in editor,
+  LaTeXDiffs, and Figures. Workflow runs offer Run again from
+  scratch, Resume, Open run folder, Export, Copy run context, latexdiff,
+  Archive outputs, and Delete output files; tool-use runs offer Compact,
+  Open run folder, and Export. Export saves the conversation as Markdown,
+  HTML, or PDF.
+- **Once a session ends**: where the message box stood, the session says
+  it has ended and offers **Edit as new task**, which opens New task with
+  the same agent, files, and instruction. An interrupted session also
+  offers **Resume**.
+- **Delete session…**: at the end of the menu, for a run that has stopped.
+  It asks before it removes the conversation and its run folder.
 
 Each action in detail:
 
 - <wa-icon library="texra" name="circle-stop"></wa-icon> **Stop**: Stops the running task for this stream. For providers supporting `AbortController` (like OpenAI or Anthropic) the active request is aborted immediately; otherwise the current API call finishes before stopping.
 - <wa-icon library="texra" name="play"></wa-icon> **Run New**: Starts a fresh run of the task associated with this stream using the _exact same configuration_ (agent, model, files, instruction), discarding previous outputs. Useful for retrying failed tasks or reproducing results.
 - <wa-icon library="texra" name="forward-step"></wa-icon> **Resume**: Continues the run from its saved outputs, picking up where it left off instead of starting over.
-- <wa-icon library="texra" name="reply"></wa-icon> **Restore**: Loads the configuration (agent, model, files, instruction) from this stream back into the main TeXRA view, so you can modify and re-run a previous task.
+- <wa-icon library="texra" name="reply"></wa-icon> **Edit as new task**: Shown once the session ends. Loads the configuration (agent, model, files, instruction) from this stream back into New task, so you can modify and re-run a previous task.
 - <wa-icon library="texra" name="code-compare"></wa-icon> **Diff**: Runs `latexdiff` to compare the original input file(s) with the generated output `.tex` file(s) from this stream. If no base file was selected, TeXRA uses the original file. Requires `latexdiff` to be installed. Read the [LaTeX Diff guide](./latex-diff.md).
 - <wa-icon library="texra" name="folder-open"></wa-icon> **Open in run storage**:
   Reveals the run folder under run storage so you can browse generated
@@ -94,9 +103,14 @@ Each action in detail:
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Auto-approve toggles
+### Auto-approving in a run
 
-The header has three auto-approve toggles for the current run, matching the CLI status-bar badges. **AUTO-EDIT** (pencil) auto-approves file edits; **AUTO-BASH** (terminal) auto-approves shell commands — those two are independent, so turning one on does not take the other with it. **AUTO-TASK** (rocket) auto-approves delegated agent tasks and also later edits and commands — turning AUTO-TASK off returns all three to asking, including an AUTO-EDIT or AUTO-BASH grant you made on its own. Use them for work you trust; turn them off when you want to review each step.
+You grant auto-approval from an approval card: its ▾ menu approves this
+request and every later one of the same kind in the run (edits, commands,
+or agent work, which covers the other two). While a grant is on, the header
+shows an amber **Auto-approving** chip naming what it covers. Click the chip
+to go back to asking. The CLI shows the same grants as AUTO-EDIT, AUTO-BASH,
+and AUTO-TASK badges.
 
 ### Context utilization
 
@@ -122,7 +136,7 @@ When a run recorded a compile failure, **Run latexFixer** still appears under
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, or by running **TeXRA: Show Memory** from the Command Palette. Read the [memory guide](./memory.md) for a full walkthrough.
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
 
 ### Log content
 

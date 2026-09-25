@@ -1,9 +1,5 @@
-// Node imports
-import { constants as fsConstants } from 'node:fs';
-import { access, stat } from 'node:fs/promises';
-
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem, PlatformError } from 'effect';
 import { satisfies as semverSatisfies } from 'semver';
 
 // Local imports
@@ -15,7 +11,6 @@ import {
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { TELEMETRY_ENABLED_KEY } from '@shared/schemas';
 import type { UsageLoggingOptOut } from '@telemetry/UsageLogService';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -28,6 +23,8 @@ import {
   writeTextStdout,
 } from './logSinks';
 import { createCliStyle } from './style';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from './terminalRequirements';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { CliAuthProfile } from './supabaseAuth';
 import type { CliContext } from './cliContext';
 import type { CliStyle } from './style';
@@ -48,16 +45,12 @@ export interface DoctorReport {
   readonly checks: readonly DoctorCheck[];
 }
 
-interface DirectoryStat {
-  isDirectory(): boolean;
-}
-
 /**
- * The failure of a probe this module drives itself: the two Node `fs` reads,
- * the LaTeX toolchain probe and the telemetry consent read. It carries the
- * value the foreign edge threw, so the check that recovers from it renders the
- * same hint it rendered when it caught the rejection. The two probes the CLI
- * root supplies are programs already and keep their own `Error` failure.
+ * The failure of a probe this module drives itself: the LaTeX toolchain probe
+ * and the telemetry consent read. It carries the value the foreign edge threw,
+ * so the check that recovers from it renders the same hint it rendered when it
+ * caught the rejection. The two probes the CLI root supplies are programs
+ * already and keep their own `Error` failure.
  */
 class DoctorProbeFailed extends Data.TaggedError('DoctorProbeFailed')<{
   readonly cause: unknown;
@@ -69,29 +62,21 @@ const probeFailure = (cause: unknown): DoctorProbeFailed =>
 interface DoctorDependencies {
   readonly nodeVersion?: string;
   /**
-   * The account read the CLI root hands over: the program itself, yielded by
-   * the auth check below rather than settled into a Promise first — the same
-   * contract as `modelAccessList`.
+   * The account read the CLI root hands over, yielded by the auth check below
+   * rather than settled into a Promise first, as `modelAccessList` is.
    */
   readonly authProfile?: Effect.Effect<CliAuthProfile, Error>;
   /**
-   * Model availability needs the process stores, which only the CLI root
-   * holds, so this is the one probe the caller supplies rather than one this
-   * module defaults to. It is absent exactly when platform init failed, and
-   * `initError` then skips the model check that would read it.
+   * Model availability needs the process stores only the CLI root holds, so
+   * the caller supplies this probe. It is absent exactly when platform init
+   * failed, and `initError` then skips the model check that would read it.
    */
   readonly modelAccessList?: Effect.Effect<readonly CliModelAccess[], Error>;
   readonly latexToolchain?: Effect.Effect<
     LatexToolchainProbe,
-    DoctorProbeFailed
+    DoctorProbeFailed,
+    ChildProcessSpawner
   >;
-  readonly pathStat?: (
-    filePath: string,
-  ) => Effect.Effect<DirectoryStat, DoctorProbeFailed>;
-  readonly pathAccess?: (
-    filePath: string,
-    mode?: number,
-  ) => Effect.Effect<void, DoctorProbeFailed>;
   readonly usageLoggingOptOut?: () => UsageLoggingOptOut;
 }
 
@@ -194,10 +179,9 @@ function checkNode(version: string): DoctorCheck {
 }
 
 /**
- * `read` is for directories the CLI only ever loads from — the packaged
- * resources root is root-owned whenever the global install went through
- * `sudo npm install -g`, which is the norm on Linux and WSL with a
- * system-wide Node prefix, and demanding write access there fails a healthy
+ * `read` is for directories the CLI only loads from: the packaged resources
+ * root is root-owned after `sudo npm install -g`, the norm on Linux and WSL
+ * with a system-wide Node prefix, so demanding write access fails a healthy
  * install.
  */
 type DirectoryAccess = 'read' | 'readwrite';
@@ -207,21 +191,20 @@ function checkDirectory(
   name: string,
   dir: string,
   access: DirectoryAccess,
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
-  const mode =
-    access === 'readwrite'
-      ? fsConstants.R_OK | fsConstants.W_OK
-      : fsConstants.R_OK;
+): Effect.Effect<DoctorCheck, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
-    const info = yield* deps.pathStat(dir);
-    if (!info.isDirectory()) {
+    const fs = yield* FileSystem.FileSystem;
+    const info = yield* fs.stat(dir);
+    if (info.type !== 'Directory') {
       return fail(id, name, `${dir} exists but is not a directory.`);
     }
-    yield* deps.pathAccess(dir, mode);
+    yield* fs.access(dir, {
+      readable: true,
+      writable: access === 'readwrite',
+    });
     return pass(id, name, dir);
   }).pipe(
-    Effect.catch((failure: DoctorProbeFailed) =>
+    Effect.catch((failure: PlatformError.PlatformError) =>
       Effect.succeed(
         failFromError(
           id,
@@ -229,7 +212,7 @@ function checkDirectory(
           access === 'readwrite'
             ? `${dir} is not readable and writable.`
             : `${dir} is not readable.`,
-          failure.cause,
+          failure.reason.cause ?? failure,
         ),
       ),
     ),
@@ -312,7 +295,7 @@ function checkModels(
 
 function checkLatex(
   deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck[]> {
+): Effect.Effect<DoctorCheck[], never, ChildProcessSpawner> {
   return deps.latexToolchain.pipe(
     Effect.map((probe) => {
       const checks: DoctorCheck[] = [];
@@ -361,17 +344,18 @@ function checkLatex(
 
 function checkConfig(
   context: CliContext,
-  deps: ResolvedDoctorDependencies,
-): Effect.Effect<DoctorCheck> {
+): Effect.Effect<DoctorCheck, never, FileSystem.FileSystem> {
   // The project file the config provider layers over the user file. Its
   // readability is asked here rather than carried on the context: the provider
   // answers with values, and this check is the one caller that needs the path.
   const filePath = workspaceTexraConfigPath(context.cwd);
-  return deps.pathAccess(filePath, fsConstants.R_OK).pipe(
+  return FileSystem.FileSystem.use((fs) =>
+    fs.access(filePath, { readable: true }),
+  ).pipe(
     Effect.as(true),
     // The probe's answer, not a swallowed failure: an unreadable file is
     // exactly the `skip` row below, and it is reported there.
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catch((_: PlatformError.PlatformError) => Effect.succeed(false)),
     Effect.map((readable) => {
       if (context.configWarnings.length > 0) {
         return warn(
@@ -451,22 +435,6 @@ function checkTelemetry(
 }
 
 /**
- * The foreign edges this module drives itself, each wrapped exactly once: a
- * rejection becomes a {@link DoctorProbeFailed} carrying what was thrown, and
- * the check that recovers from it renders that value as its hint.
- */
-const statPath = (
-  filePath: string,
-): Effect.Effect<DirectoryStat, DoctorProbeFailed> =>
-  Effect.tryPromise({ try: () => stat(filePath), catch: probeFailure });
-
-const accessPath = (
-  filePath: string,
-  mode?: number,
-): Effect.Effect<void, DoctorProbeFailed> =>
-  Effect.tryPromise({ try: () => access(filePath, mode), catch: probeFailure });
-
-/**
  * Stand-in for the one probe this module cannot build for itself. Unreachable:
  * the caller omits `modelAccessList` only when platform init failed, and that
  * sets `initError`, which skips the model check before it is ever called.
@@ -497,18 +465,18 @@ const missingUsageLoggingOptOut = (): never => {
   );
 };
 
+type DoctorServices = FileSystem.FileSystem | ChildProcessSpawner;
+
 export function buildDoctorReport(
   context: CliContext,
   deps: DoctorDependencies = {},
   initError?: Error,
-): Effect.Effect<DoctorReport> {
+): Effect.Effect<DoctorReport, never, DoctorServices> {
   const resolved = {
     nodeVersion: deps.nodeVersion ?? process.versions.node,
     authProfile: deps.authProfile ?? missingAuthProfileProbe,
     modelAccessList: deps.modelAccessList ?? missingModelAccessProbe,
     latexToolchain: deps.latexToolchain ?? probeLatexToolchain(),
-    pathStat: deps.pathStat ?? statPath,
-    pathAccess: deps.pathAccess ?? accessPath,
     usageLoggingOptOut: deps.usageLoggingOptOut ?? missingUsageLoggingOptOut,
   };
   return Effect.gen(function* () {
@@ -533,23 +501,16 @@ export function buildDoctorReport(
           ];
     const checks: DoctorCheck[] = [
       checkNode(resolved.nodeVersion),
-      yield* checkDirectory(
-        'workspace',
-        'Workspace',
-        context.cwd,
-        'readwrite',
-        resolved,
-      ),
+      yield* checkDirectory('workspace', 'Workspace', context.cwd, 'readwrite'),
       yield* checkDirectory(
         'resources',
         'Packaged resources',
         context.resourcesPath,
         'read',
-        resolved,
       ),
       ...sessionDependentChecks,
       ...(yield* checkLatex(resolved)),
-      yield* checkConfig(context, resolved),
+      yield* checkConfig(context),
     ];
     return {
       ok: !checks.some((check) => check.status === 'fail'),
@@ -610,10 +571,9 @@ export function writeDoctorReport(
     }
     return;
   }
-  // Gate color on the stream the report is actually written to: a passing
-  // report goes to stdout, a failing one to stderr (clig.dev). Using a single
-  // stderr-keyed gate leaked ANSI into `doctor | cat` and stripped color from
-  // `doctor 2>/dev/null` on a TTY.
+  // Gate color on the stream the report is written to: a passing report goes
+  // to stdout, a failing one to stderr (clig.dev). One stderr-keyed gate leaked
+  // ANSI into `doctor | cat` and stripped color from `doctor 2>/dev/null`.
   const colorEnabled = report.ok
     ? context.stdoutColorEnabled
     : context.stderrColorEnabled;

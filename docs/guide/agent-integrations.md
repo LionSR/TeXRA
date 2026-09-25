@@ -14,7 +14,7 @@ When a theoretical investigation requires external software execution—such as 
   (or an Anthropic API key). TeXRA agents reach it through the `claude_code`
   tool.
 
-Each one is set up from its own card on **Dashboard → Integrations**. When a
+Each one is set up from its own card on **Dashboard → Tools → Integrations**. When a
 TeXRA agent uses the tool, the work runs in a side panel on the ProgressBoard
 that you can watch live and reply to. TeXRA carries on while the side agent
 works.
@@ -23,7 +23,7 @@ works.
 
 Both integrations follow the same setup flow from the TeXRA Dashboard.
 
-1. Open **TeXRA: Show Settings Dashboard** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
+1. Open **TeXRA: Open Settings** (`Ctrl+Shift+P`) → **Integrations** tab (<wa-icon library="texra" name="link"></wa-icon>).
 2. Find the **OpenAI Codex CLI** or **Claude Code CLI** card. When it shows **Needs setup**, the setup actions expand automatically.
 3. Select <wa-icon library="texra" name="terminal"></wa-icon> **Install in Terminal**, then <wa-icon library="texra" name="right-to-bracket"></wa-icon> **Sign in** to OAuth in your browser.
 4. Reopen the dashboard (or select **Re-check** on the **Tools** tab). The status changes to a green <wa-icon library="texra" name="check"></wa-icon> check (tooltip **Ready**) once TeXRA detects the install.
@@ -38,7 +38,7 @@ recheck.
 
 <p class="hero-caption"><code>texra tools</code> drives the full lifecycle: <code>status</code> reports the registered install and auth commands, <code>install --run</code> executes the installer after printing it, and <code>auth</code> hands off to the tool's own sign-in.</p>
 
-Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Dashboard → Tools → Approval & safety**: an **Approval policy** select (Ask, Never, or Auto-approve; default Ask) plus two toggles, **Under Ask: require approval for file edits** and **Under Ask: require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
+Each integration's options live on its card and are scoped to the current workspace. Per-call approval prompts are governed by **Dashboard → Tools → Approval**: an **Approval policy** select (Ask, Never, or Auto-approve; default Ask) plus two toggles, **Under Ask: require approval for file edits** and **Under Ask: require approval for shell commands** (both on by default). To let agents call Codex or Claude Code without confirming each time, set the policy to Auto-approve, or keep Ask and turn off the shell-command toggle.
 
 Both CLIs are installed once per machine and shared by every TeXRA surface: the VS Code extension, the desktop app, and the terminal client all detect the same installation. Neither ships inside TeXRA. Each one is a 250-410 MB native binary that Anthropic and OpenAI update on their own schedule, so TeXRA looks for whichever version you have rather than freezing a copy into every release.
 
@@ -115,6 +115,62 @@ When the tool fires:
 
 <DelegatedStreamHero />
 <p class="hero-caption">The delegated session streams live in its own ProgressBoard tab (reasoning, commands, file changes, web searches, and todos), then shows <strong>Idle</strong> and hands its result back to the calling agent.</p>
+
+## MCP servers
+
+TeXRA agents can call the tools of local [Model Context Protocol](https://modelcontextprotocol.io)
+servers. List them in `~/.texra/mcp.json`, in the same shape as Claude Code's
+`.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..." }
+    }
+  }
+}
+```
+
+A server name uses letters, digits, `_` and `-` (at most 32 characters, no
+`__`). Only stdio servers (a `command` TeXRA starts) are supported. An entry
+that does not match this shape is skipped, and a run that asks for MCP tools
+shows why in its transcript.
+
+An agent gets a server's tools only when its YAML `tools:` list names them,
+either one by one as `mcp__<server>__<tool>` or all at once as
+`mcp__<server>__*`:
+
+```yaml
+tools:
+  - read_file
+  - mcp__github__*
+```
+
+- **Every call goes through shell-command approval.** The prompt shows the
+  server, the tool and its arguments. It follows **Dashboard → Tools →
+  Approval** like a shell command does: no prompt under
+  Auto-approve, or under Ask with **require approval for shell commands**
+  turned off, and every call refused under Never. A session where approval
+  prompts can't be shown (a headless run) is not offered MCP tools.
+- **The server runs only while a run uses it.** TeXRA starts it when the first
+  run that names it begins and stops it when the last such run ends. Editing a
+  server's entry takes effect for runs started afterwards; runs already in
+  progress keep the server they started with. A subagent uses the servers of
+  the run that launched it.
+- **Environment.** A server inherits TeXRA's environment minus variables whose
+  names contain `KEY`, `TOKEN`, `SECRET`, `PASSWORD` or `CREDENTIAL`, so your
+  provider API keys don't reach it. Pass what a server needs through its `env`.
+- **Limits.** A call times out after 60 seconds, and output beyond 54,000
+  characters keeps its first 4,000 and last 50,000.
+- **A server that fails to start** (a missing command, no answer within 30
+  seconds, a malformed tool list) contributes no tools; the run continues with
+  the rest and its transcript names the server and the reason.
+
+Not yet supported: a project-level `.texra/mcp.json`, HTTP servers, servers
+that change their tool list while running, and MCP resources and prompts.
 
 ## Troubleshooting
 

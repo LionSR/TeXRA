@@ -9,7 +9,6 @@ import { z } from 'zod';
 import {
   buildConfigListItems,
   coerceSettingInput,
-  isConfigResetInput,
   settingEditKind,
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
@@ -18,10 +17,7 @@ import {
   buildProviderApiKeyItems,
   formatProviderApiKeySummary,
 } from '@cli/chat/tui/forms/ProviderApiKeyForm';
-import {
-  listSlashCommands,
-  unregisterSlashCommand,
-} from '@cli/chat/tui/commands/slashRegistry';
+import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
 import { ConfigApp } from '@cli/config/runConfigTui';
@@ -115,7 +111,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   resetCliState();
 });
 
@@ -248,17 +244,6 @@ describe('ConfigForm helpers', () => {
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) expect(invalid.message).not.toBe('');
   });
-
-  it.each<[string, Parameters<typeof isConfigResetInput>[1], boolean]>([
-    ['r', { ctrl: true }, true],
-    ['\u0012', {}, true],
-    ['r', { meta: true }, false],
-  ])(
-    'recognizes parsed and raw Ctrl-R reset input (%j, %j)',
-    (input, key, expected) => {
-      expect(isConfigResetInput(input, key)).toBe(expected);
-    },
-  );
 
   it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
     [

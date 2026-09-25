@@ -24,14 +24,15 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { isModuleNotFoundError } from '@common/errors';
-import type { StateStore, StateReadFailed } from '@platform/interfaces';
+import type { StateReadFailed } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ClaudeAgentPermissionMode } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 import {
   createCachedBinaryResolver,
-  resolveSdkExport,
+  importForeignSdk,
 } from './support/externalBinaryUtils';
 // Mirror the native `query` signature exactly (no hand-rolled structural copy).
 type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
@@ -45,39 +46,24 @@ type QueryFn = typeof import('@anthropic-ai/claude-agent-sdk').query;
  *
  * The SDK is ESM-only ("type": "module"). esbuild converts the dynamic import
  * to a CJS require at build time — keep the package OUT of esbuild's
- * `external` array. The dynamic import is this module's one foreign edge and
- * is wrapped exactly once, here; a missing package is re-stated as install
- * guidance with the original attached as `cause`, so callers classify it off
- * the cause chain rather than the message text.
+ * `external` array. The dynamic import is this module's one foreign edge,
+ * kept inline as a literal for esbuild's benefit; {@link importForeignSdk}
+ * wraps everything downstream of it (the shape shared with `importCodexClass`).
  *
  * No memo of its own: `import()` resolves an already-loaded module from Node's
  * module cache, so a repeat call is a cache hit — the same shape
  * `importCodexClass` has.
  */
 export function importClaudeAgentSdk(): Effect.Effect<QueryFn, Error> {
-  return Effect.tryPromise({
-    try: (): Promise<Record<string, unknown>> =>
+  return importForeignSdk<QueryFn>({
+    load: (): Promise<Record<string, unknown>> =>
       import('@anthropic-ai/claude-agent-sdk'),
-    catch: (err) =>
-      isModuleNotFoundError(err)
-        ? new Error(
-            '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
-            { cause: err },
-          )
-        : ensureError(err),
-  }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () =>
-          resolveSdkExport<QueryFn>(mod, {
-            exportName: 'query',
-            specifier: '@anthropic-ai/claude-agent-sdk',
-            errorLabel: 'query()',
-          }),
-        catch: ensureError,
-      }),
-    ),
-  );
+    notFoundMessage:
+      '@anthropic-ai/claude-agent-sdk package not found. Reinstall TeXRA or run corepack pnpm install in the TeXRA workspace.',
+    exportName: 'query',
+    specifier: '@anthropic-ai/claude-agent-sdk',
+    errorLabel: 'query()',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -111,17 +97,18 @@ const CLAUDE_BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
  * The platform binary sits directly in the platform-package directory.
  *
  * The probe is a plain predicate on a path this module just built, over the
- * real filesystem the packaged binary lives on, so it stays synchronous like
- * the sibling `which.sync` / `executeCommandSync` probes. The static it
- * replaces asked lstat, which counted a dangling symlink as present where
- * `existsSync`'s access probe does not — a link no executable can be run
- * through either way.
+ * real filesystem the packaged binary lives on, like the sibling `which.sync`
+ * probe. The static it replaces asked lstat, which counted a dangling symlink
+ * as present where `existsSync`'s access probe does not — a link no
+ * executable can be run through either way.
  */
 function claudeBinaryInPlatformPackage(
   platformPkgDir: string,
-): string | undefined {
-  const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
-  return existsSync(binary) ? binary : undefined;
+): Effect.Effect<string | undefined> {
+  return Effect.sync(() => {
+    const binary = path.join(platformPkgDir, CLAUDE_BINARY_NAME);
+    return existsSync(binary) ? binary : undefined;
+  });
 }
 
 /**
@@ -169,10 +156,10 @@ export const getClaudeAgentConfig = Effect.promise(
  */
 export const claudeAgentPermissionMode = (
   input: { readonly permission_mode?: ClaudeAgentPermissionMode | null },
-  workspaceState: StateStore,
+  stores: SettingsStores,
 ): Effect.Effect<ClaudeAgentPermissionMode, StateReadFailed> =>
-  Effect.flatMap(getClaudeAgentConfig, (config) =>
-    input.permission_mode == null
-      ? config.getClaudeAgentPermissionMode(workspaceState)
-      : Effect.succeed(input.permission_mode),
+  readSettingUnlessOverridden(
+    input.permission_mode,
+    stores,
+    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
   );

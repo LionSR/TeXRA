@@ -1,15 +1,21 @@
+import { realpathSync } from 'node:fs';
+
 import { Effect } from 'effect';
 
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
+  type InstalledPlugin,
   type RawAcceptedSkill,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
+import { isPathWithin } from '@utils/core/pathCore';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { registerExternalRoot } from '@utils/files/externalRoots';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import {
@@ -20,16 +26,30 @@ import {
   type SourcedSkill,
 } from './loadSkills';
 
-/**
- * Builds the skill sources for one workspace folder. Project and interop
- * sources live under the folder, so they are resolved per call from the
- * calling session's workspace rather than fixed once per process: a desktop
- * with several papers open discovers each run's project skills in that run's
- * own folder.
- */
-type RuntimeSkillSourceResolver = (cwd: string) => readonly SkillSource[];
+import {
+  foldSkillSources,
+  type SkillSourceContribution,
+  type SkillSourceOptions,
+} from './skillSources';
 
-let resolveRuntimeSkillSources: RuntimeSkillSourceResolver = () => [];
+/**
+ * The skill contributions a host installed, with its bundled resources tree
+ * and its process-wide source options. Only data is fixed here: project and
+ * interop sources live under the workspace folder, so they are resolved per
+ * call from the calling session's workspace, and a desktop with several
+ * papers open discovers each run's project skills in that run's own folder.
+ */
+interface SkillContributionsInstall {
+  readonly resourcesPath: string;
+  readonly options: SkillSourceOptions;
+  readonly contributions: readonly SkillSourceContribution[];
+}
+
+let installed: SkillContributionsInstall = {
+  resourcesPath: '',
+  options: {},
+  contributions: [],
+};
 
 interface RuntimeSkillCatalogResult {
   catalog: string;
@@ -42,15 +62,40 @@ interface DisabledSkills {
   readonly scopes: readonly ActiveSkillSourceScope[];
 }
 
-/**
- * Install the runtime skill sources: a resolver from the workspace folder, or
- * a fixed list for sources that do not depend on the folder.
- */
-export function setRuntimeSkillSources(
-  sources: readonly SkillSource[] | RuntimeSkillSourceResolver,
+/** Install the process's skill contributions; the default installs none. */
+export function installSkillContributions(
+  install: SkillContributionsInstall,
 ): void {
-  resolveRuntimeSkillSources =
-    typeof sources === 'function' ? sources : () => sources;
+  installed = install;
+}
+
+/**
+ * The installed contributions folded for one folder, with the plugins
+ * recorded in `stores`. `options` replaces the installed options for one
+ * call: the CLI's `skills list` flags.
+ */
+export function runtimeSkillSources(
+  cwd: string,
+  stores: SettingsStores,
+  options: SkillSourceOptions = installed.options,
+) {
+  return Effect.gen(function* () {
+    const plugins = yield* readSettingFrom<InstalledPlugin[]>(
+      stores,
+      GlobalStateKey.INSTALLED_PLUGINS,
+    );
+    return foldSkillSources(installed.contributions, {
+      cwd,
+      // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
+      // raise UV_ENOENT in containers/CI); `/nonexistent` matches the
+      // fallback used by other agnostic-zone callers (e.g.
+      // `claudeAgentConfig.ts`).
+      home: safeHomedir() ?? '/nonexistent',
+      resourcesPath: installed.resourcesPath,
+      options,
+      plugins,
+    });
+  });
 }
 
 /**
@@ -59,12 +104,14 @@ export function setRuntimeSkillSources(
  * data by the caller that holds it — a run's session workspace, or the host's
  * at the settings surface that asked (#12421).
  */
-function discoverRuntimeSkills(workspaceRoot: string | undefined) {
-  return discoverSkillSources(
-    resolveRuntimeSkillSources(
-      workspaceRoot ?? safeHomedir() ?? '/nonexistent',
-    ),
-  );
+function discoverRuntimeSkills(
+  workspaceRoot: string | undefined,
+  stores: SettingsStores,
+) {
+  return runtimeSkillSources(
+    workspaceRoot ?? safeHomedir() ?? '/nonexistent',
+    stores,
+  ).pipe(Effect.flatMap(discoverSkillSources));
 }
 
 function sourceLabel(source: SkillSource): string {
@@ -124,7 +171,7 @@ export function skillDisplayItem(
 export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
   function* (workspaceRoot: string | undefined, stores: SettingsStores) {
     const disabled = yield* readDisabledSkills(stores);
-    const result = yield* discoverRuntimeSkills(workspaceRoot);
+    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
     return {
       skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
       issues: result.errors.map(({ message, path }) => ({ message, path })),
@@ -147,14 +194,55 @@ export function filterDiscoveredSkills(
   };
 }
 
-/** Discover only skills that may be injected or explicitly activated. */
+/**
+ * Discover only skills that may be injected or explicitly activated.
+ *
+ * The catalog and an activation both point the model at a skill's `SKILL.md`
+ * and its directory, so each enabled skill outside the workspace is
+ * registered as a read-only external root: `read_file` can read the skill
+ * and its resources, and no tool can write them. A skill inside the
+ * workspace is already readable and stays writable like any project file.
+ */
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
 ) {
   return Effect.gen(function* () {
-    const result = yield* discoverRuntimeSkills(workspaceRoot);
-    return filterDiscoveredSkills(result, yield* readDisabledSkills(stores));
+    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
+    const enabled = filterDiscoveredSkills(
+      result,
+      yield* readDisabledSkills(stores),
+    );
+    for (const { skill } of enabled.skills) {
+      // Hosts hand the workspace root over already canonical, and a
+      // discovered skill directory exists, so its realpath is its physical
+      // place. Registration fails closed on a path it cannot verify; that
+      // skill then stays unreadable to tools, worth a warning, not a run.
+      yield* Effect.try({
+        try: () => {
+          const directory = realpathSync(skill.baseDir);
+          if (
+            workspaceRoot !== undefined &&
+            isPathWithin(workspaceRoot, directory)
+          ) {
+            return;
+          }
+          registerExternalRoot(directory, {
+            kind: 'skill',
+            writable: false,
+            label: `Skill ${skill.name}`,
+          });
+        },
+        catch: ensureError,
+      }).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Skill ${skill.name} is not readable by tools: ${toErrorMessage(error)}`,
+          ),
+        ),
+      );
+    }
+    return enabled;
   });
 }
 

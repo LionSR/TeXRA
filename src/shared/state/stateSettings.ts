@@ -13,6 +13,7 @@ import {
   LATEX_FORMATTER_VALUES,
   LATEXDIFF_MATH_MARKUP_VALUES,
 } from '@shared/constants/latexConfig';
+import { MODEL_PROVIDER_PLUGINS } from '@shared/constants/modelProviderPlugins';
 import {
   DEFAULT_HELPER_MODEL,
   PROVIDER_ENDPOINT_STATE_ENTRIES,
@@ -44,6 +45,7 @@ import {
   CodexApprovalPolicySchema,
   CodexReasoningEffortSchema,
   CodexSandboxModeSchema,
+  InstalledPluginSchema,
   LATEXDIFF_TEMP_FILE_LOCATIONS,
   MODEL_COMPACTION_THRESHOLD_SETTING,
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -419,32 +421,26 @@ const CORE_SETTING_ROWS: Record<
       'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
     honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
   },
-  // The Models-tab provider toggles below are `configTarget: 'global'`:
+  // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
   // routed them through the shared write path. The target restores global
   // writes and exempts them from the extension's open-workspace write guard,
   // while Models-tab and runtime reads both keep merged-config semantics. A
   // workspace override therefore remains visible and honored; cleanup of values
-  // stranded by the regression window is tracked separately in #11173.
-  'model.gpt5ReasoningSummary': modelProviderToggle({
-    default: false,
+  // stranded by the regression window is tracked separately in #11173. Only
+  // server-side state is a choice a user makes (it decides data retention);
+  // the transport knobs have no settings-view row and are set in
+  // `.texra/config.json`.
+  'model.gpt5ReasoningSummary': {
+    schema: z.boolean().prefault(false),
+    configTarget: 'global',
+    category: 'model',
     title: 'GPT-5 reasoning summary',
     description:
       "Show the model's reasoning steps alongside its output when using GPT-5 models. Requires an OpenAI account with access to reasoning features.",
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
-    model: {
-      provider: 'openai',
-      label: 'GPT-5 reasoning summary',
-      description:
-        'Request reasoning summaries from GPT-5 models. Only available on OpenAI API Tier 3+.',
-      warning:
-        'New accounts with $20 credit are typically Tier 1 and will hit rate limits.',
-      warningUrl:
-        'https://platform.openai.com/settings/organization/billing/overview',
-      warningUrlLabel: 'Check your tier',
-    },
-  }),
+  },
   'model.useGoogleInteractionsServerState': modelProviderToggle({
     default: true,
     title: 'Server-side conversation state',
@@ -458,45 +454,33 @@ const CORE_SETTING_ROWS: Record<
         "Store Interactions conversation state on Google's servers (send only the new turn each round; Google retains the conversation for a limited period to enable chaining). Disable to keep conversations off Google's servers and resend the full transcript each round.",
     },
   }),
-  'model.useGoogleBackgroundResponses': modelProviderToggle({
-    default: false,
+  'model.useGoogleBackgroundResponses': {
+    schema: z.boolean().prefault(false),
+    configTarget: 'global',
+    category: 'model',
     title: 'Google background responses',
     description:
       'Run Google workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
-    model: {
-      provider: 'google',
-      label: 'Background responses',
-      description:
-        'Run workflow generations as background Interactions (submit + poll) instead of one long streamed request. Requires server-side conversation state and a model that supports background execution. Off by default; unsupported models fall back automatically.',
-    },
-  }),
-  'model.useBackgroundResponses': modelProviderToggle({
-    default: true,
+  },
+  'model.useBackgroundResponses': {
+    schema: z.boolean().prefault(true),
+    configTarget: 'global',
+    category: 'model',
     title: 'Background responses',
     description:
       'Keep long-running OpenAI requests alive in the background (polling) instead of timing out after 10 minutes. Applies automatically to GPT models running workflow agents; ignored otherwise. Disable to fall back to synchronous streaming requests.',
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Background responses',
-      description:
-        'Handle long-running generations (>10 min) via polling to prevent timeouts. Adds polling overhead.',
-    },
-  }),
-  'model.openaiParallelToolCalls': modelProviderToggle({
-    default: true,
+  },
+  'model.openaiParallelToolCalls': {
+    schema: z.boolean().prefault(true),
+    configTarget: 'global',
+    category: 'model',
     title: 'Parallel tool calls',
     description:
       'Let OpenAI models use multiple tools at the same time for faster results. Enabled by default; disable for models that require sequential tool run.',
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
-    model: {
-      provider: 'openai',
-      label: 'Parallel tool calls',
-      description:
-        'Allow the model to call multiple tools in parallel. On by default; disable for models that require sequential run.',
-    },
-  }),
+  },
   // No `configTarget`: both runtime readers resolve the *merged* config value
   // through `readSettingFrom`, so the row must not narrow itself to the
   // global scope — a workspace override the runtime honors would then be
@@ -595,7 +579,6 @@ const CORE_SETTING_ROWS: Record<
       'Wrap bare criticism and comment commands inside align environments with intertext.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacements': {
     schema: z
@@ -605,7 +588,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Enabled groups of direct LaTeX cleanup replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.enabledReplacementsRegex': {
     schema: z
@@ -615,7 +597,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Enabled groups of pattern-based LaTeX cleanup replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacementsRegex': {
     schema: z.record(z.string(), z.string()).prefault({}),
@@ -623,7 +604,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Custom regular-expression replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latex.customReplacements': {
     schema: z.record(z.string(), z.string()).prefault({}),
@@ -631,7 +611,6 @@ const CORE_SETTING_ROWS: Record<
     description: 'Custom direct text replacements.',
     category: 'latex',
     honoredBy: everyHost(REPLACEMENT_ENGINE_READER),
-    surfaces: { settingsView: 'latex' },
   },
   'latexdiff.tempFileLocation': {
     schema: z.enum(LATEXDIFF_TEMP_FILE_LOCATIONS).prefault('sameDirectory'),
@@ -803,10 +782,10 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
 
 const GIT_AUTHOR_READER = 'src/utils/system/gitAuthorEnv.ts';
 const GIT_WORKTREE_READER = 'src/utils/config/worktreeConfig.ts';
-const CODEX_CONFIG_READER = 'src/tools/codexConfig.ts';
-const CLAUDE_AGENT_CONFIG_READER = 'src/tools/claudeAgentConfig.ts';
+const CODEX_TOOL_READER = 'src/tools/codex.ts';
+const CLAUDE_AGENT_TOOL_READER = 'src/tools/claudeAgent.ts';
 const WORKFLOW_COMPILE_READER = 'src/agent/output/compileCheck.ts';
-const ROUTE_ENDPOINT_READER = 'src/agent/runtime/run/routeEndpoint.ts';
+const ROUTE_ENDPOINT_READER = 'src/model/routeEndpoint.ts';
 const PROVIDER_CONFIG_READER = 'src/utils/config/providerConfig.ts';
 
 /**
@@ -827,9 +806,9 @@ const WORKSPACE_STATE_CLI_CONFIG_SLOTS: SettingSlots = {
 
 const GIT_AUTHOR_HONORED_BY = everyHost(GIT_AUTHOR_READER);
 
-const CODEX_AGENT_HONORED_BY = everyHost(CODEX_CONFIG_READER);
+const CODEX_AGENT_HONORED_BY = everyHost(CODEX_TOOL_READER);
 
-const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_CONFIG_READER);
+const CLAUDE_AGENT_HONORED_BY = everyHost(CLAUDE_AGENT_TOOL_READER);
 
 const WORKFLOW_COMPILE_HONORED_BY = everyHost(WORKFLOW_COMPILE_READER);
 
@@ -850,78 +829,29 @@ const PROVIDER_ENDPOINT_SETTINGS = PROVIDER_ENDPOINT_STATE_ENTRIES.map(
 );
 
 /**
- * Region/routing toggles resolved by `run/routeEndpoint`, each also a Models
- * tab control for its provider. The rows differ only in key, default, and
- * copy, so the shared fields are written once.
+ * Region toggles resolved by `@model/routeEndpoint`, each also a Models tab
+ * control for its provider: one row per provider plugin `region`.
  */
-const PROVIDER_ROUTING_SETTINGS = (
-  [
-    [
-      GlobalStateKey.MOONSHOT_USE_CHINA,
-      'moonshot',
-      true,
-      {
-        label: 'Kimi/Moonshot China region',
-        description:
-          'Use the China endpoint (api.moonshot.cn) instead of international (api.moonshot.ai). Enabled by default. Keys are platform-specific — get international keys at platform.moonshot.ai.',
-        warning:
-          'A platform.moonshot.cn key does not work with the international endpoint, and vice versa.',
-        warningUrl: 'https://platform.moonshot.ai/console',
-        warningUrlLabel: 'International console',
-      },
-    ],
-    [
-      GlobalStateKey.DASHSCOPE_USE_CHINA,
-      'dashscope',
-      false,
-      {
-        label: 'Qwen China region (Bailian)',
-        description:
-          'Use the China region endpoint (dashscope.aliyuncs.com) instead of international (dashscope-intl.aliyuncs.com). Display name switches to "Bailian".',
-      },
-    ],
-    [
-      GlobalStateKey.MINIMAX_USE_CHINA,
-      'minimax',
-      false,
-      {
-        label: 'MiniMax China region',
-        description:
-          'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
-        warning:
-          'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
-        warningUrl: 'https://platform.minimax.io/',
-        warningUrlLabel: 'Get API key',
-      },
-    ],
-    [
-      GlobalStateKey.GLM_USE_CHINA,
-      'glm',
-      true,
-      {
-        label: 'GLM China region',
-        description:
-          'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-        warningUrl: 'https://open.bigmodel.cn/',
-        warningUrlLabel: 'BigModel console',
-      },
-    ],
-  ] as const
-).map(([key, provider, defaultValue, copy]) =>
-  surfacedSetting({
-    key,
-    schema: z.boolean().prefault(defaultValue),
-    title: copy.label,
-    description: copy.description,
-    category: 'model',
-    slots: sameSlot('globalState'),
-    honoredBy: everyHost(ROUTE_ENDPOINT_READER),
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [{ provider, ...copy }],
-    },
-  }),
+const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
+  ({ id: provider, region }) =>
+    region === undefined
+      ? []
+      : [
+          surfacedSetting({
+            key: region.key,
+            schema: z.boolean().prefault(region.default),
+            title: region.control.label,
+            description: region.control.description,
+            category: 'model',
+            slots: sameSlot('globalState'),
+            honoredBy: everyHost(ROUTE_ENDPOINT_READER),
+            surfaces: {
+              settingsView: 'profile',
+              cliConfig: true,
+              models: [{ provider, ...region.control }],
+            },
+          }),
+        ],
 );
 
 export const STATE_SETTINGS: readonly StateSettingEntry[] = [
@@ -989,7 +919,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'Allow the orchestrator to stop subagents that are no longer needed.',
     category: 'multi-agent',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/tools/ExecutionsTool.ts'),
+    honoredBy: everyHost('src/tools/executions/killPolicy.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   }),
   surfacedSetting({
@@ -1005,9 +935,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- Memory ---------------------------------------------------------------
-  // Every host's runtime honors the key through the `memory` entry of
-  // `AGENT_TOOL_INJECTIONS`, but only the settings view renders it; the
-  // CLI has no `/config` row for it.
+  // Every host's runtime honors the key through the `memory` entry of the
+  // memory-workflow plugin's `injectedWhen` (`@tools/plugins`), but only the
+  // settings view renders it; the CLI has no `/config` row for it.
   surfacedSetting({
     key: GlobalStateKey.MEMORY_ENABLED,
     schema: z.boolean().prefault(true),
@@ -1015,7 +945,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     description: 'Remember useful details across chat sessions.',
     category: 'tools',
     slots: sameSlot('globalState'),
-    honoredBy: everyHost('src/agent/runtime/toolInjection.ts'),
+    honoredBy: everyHost('src/agent/runtime/agentToolResolution.ts'),
     surfaces: { settingsView: 'memory' },
   }),
 
@@ -1123,13 +1053,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: WORKFLOW_COMPILE_HONORED_BY,
-    surfaces: { settingsView: 'latex', cliConfig: true },
+    surfaces: { cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf),
+    title: 'Open the compiled PDF',
     description:
-      'Open the compiled PDF automatically after a successful auto-compile.',
+      'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
@@ -1145,9 +1076,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z
       .boolean()
       .prefault(LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure),
-    title: 'Reject compile failures',
+    title: 'Repair failed compiles',
     description:
-      'Reject an agent edit when the automatic post-output compile fails, so broken LaTeX is not accepted.',
+      'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
@@ -1155,13 +1086,15 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them; deferred from the
-  // CLI `/config` panel by product decision, which is a surface choice only.
+  // Run by the reflection flow, so every host honors them. The timeout is kept
+  // out of the settings view (an insider knob) and edited from CLI `/config`;
+  // the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
+    title: 'Diff consecutive rounds',
     description:
-      'Generate a latexdiff between successive reflection rounds, not just against the original input.',
+      'Also diff each agent round against the previous one, not only against your original input.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/agent/output/LatexDiffManager.ts'),
@@ -1174,18 +1107,20 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       .min(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min)
       .max(LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max)
       .prefault(LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs),
+    title: 'latexdiff timeout',
     description:
       'Maximum time (in milliseconds) to allow a single latexdiff invocation to run.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/latexdiff.ts'),
-    surfaces: { settingsView: 'latex' },
+    surfaces: { cliConfig: true },
   }),
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
     schema: z
       .enum(LATEXDIFF_MATH_MARKUP_VALUES)
       .prefault(LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup),
+    title: 'Math markup in diffs',
     description: 'How latexdiff marks up changes inside math environments.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
@@ -1201,8 +1136,9 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly),
+    title: 'Only changed pages in diff PDFs',
     description:
-      'Produce a changes-only diff (show only the parts that changed) rather than the full marked-up document.',
+      'Compile diff PDFs with only the pages that contain edits, instead of the full document.',
     category: 'latexdiff',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/latexdiff/diffCommandExecutor.ts'),
@@ -1215,15 +1151,37 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z
       .enum(LATEX_FORMATTER_VALUES)
       .prefault(LATEX_CONFIG_DEFAULTS.latexFormatter),
+    title: 'LaTeX formatter',
     description: 'Which formatter to run when formatting LaTeX source.',
     category: 'latex',
     slots: sameSlot('workspaceState'),
     honoredBy: everyHost('src/latex/formatter/texFormatter.ts'),
+    enumLabels: ['latexindent', 'tex-fmt', 'None'],
     enumDescriptions: [
-      'Format with latexindent.',
-      'Format with tex-fmt.',
-      'Do not run any formatter.',
+      'needs Perl',
+      'standalone Rust binary',
+      'leave formatting unchanged',
     ],
+    surfaces: { settingsView: 'latex' },
+  }),
+
+  // --- Inline criticism -------------------------------------------------------
+  // Editor squiggles and Problems-panel entries exist only in VS Code. Every
+  // host carries the slot so the shared LaTeX snapshot reads on each of them;
+  // the desktop LaTeX page hides the row.
+  surfacedSetting({
+    key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
+    schema: z.boolean().prefault(false),
+    title: 'Show criticism as editor diagnostics',
+    description:
+      'Show \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files as squiggles and Problems-panel entries.',
+    category: 'latex',
+    slots: sameSlot('globalState'),
+    honoredBy: {
+      vscode: {
+        reader: 'packages/extension/src/frontend/latex/inlineCriticism.ts',
+      },
+    },
     surfaces: { settingsView: 'latex' },
   }),
 
@@ -1360,8 +1318,8 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
 
   // --- External tool integrations ------------------------------------------
   // This is a list-backed global-state domain. `/config` delegates editing to
-  // the existing `/tools` form so the catalog owns discoverability while the
-  // tool dashboard remains the single editor for per-integration toggles.
+  // the tools form so the catalog owns discoverability while the tool
+  // dashboard remains the single editor for per-integration toggles.
   surfacedSetting({
     key: GlobalStateKey.DISABLED_TOOLS,
     schema: z.array(z.string()).prefault([]),
@@ -1396,6 +1354,19 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     openForm: 'skills',
     surfaces: { settingsView: 'skills', cliConfig: true },
   }),
+  // Written only by `texra plugin install|update|remove`; the settings view
+  // lists it read-only, so the CLI command stays the one home for the action.
+  surfacedSetting({
+    key: GlobalStateKey.INSTALLED_PLUGINS,
+    schema: z.array(InstalledPluginSchema).prefault([]),
+    title: 'Installed plugins',
+    description:
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+    category: 'tools',
+    slots: sameSlot('globalState'),
+    honoredBy: everyHost('src/skills/runtimeSkills.ts'),
+    surfaces: { settingsView: 'skills' },
+  }),
   surfacedSetting({
     key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
     schema: z.boolean().prefault(DEFAULT_TOOL_PATH_PROTECTION_ENABLED),
@@ -1418,10 +1389,6 @@ export const ALL_SETTINGS: readonly StateSettingEntry[] = [
   ...CORE_SETTINGS,
   ...STATE_SETTINGS,
 ];
-
-const STATE_SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
-  STATE_SETTINGS.map((entry) => [entry.key, entry]),
-);
 
 const SETTINGS_BY_KEY: ReadonlyMap<string, StateSettingEntry> = new Map(
   ALL_SETTINGS.map((entry) => [entry.key, entry]),
@@ -1447,11 +1414,6 @@ const SETTINGS_VIEW_SETTINGS_BY_KEY: ReadonlyMap<
       entry.surfaces.settingsView !== undefined,
   ).map((entry) => [entry.key, entry]),
 );
-
-/** Look up a state-backed catalog entry by its canonical `texra.*` key. */
-export function stateSettingByKey(key: string): StateSettingEntry | undefined {
-  return STATE_SETTINGS_BY_KEY.get(key);
-}
 
 /** Look up any catalog entry — config-tree or state-backed — by its key. */
 export function settingByKey(key: string): StateSettingEntry | undefined {
@@ -1489,6 +1451,16 @@ export function settingsViewSnapshotEntries(
  */
 export const CLI_STATE_SETTINGS: readonly SurfacedSettingEntry[] =
   SURFACED_SETTINGS.filter((entry) => entry.surfaces.cliConfig === true);
+
+const CLI_STATE_SETTINGS_BY_KEY: ReadonlyMap<string, SurfacedSettingEntry> =
+  new Map(CLI_STATE_SETTINGS.map((entry) => [entry.key, entry]));
+
+/** Look up a row the CLI `/config` panel lists, and so may write. */
+export function cliConfigSettingByKey(
+  key: string,
+): SurfacedSettingEntry | undefined {
+  return CLI_STATE_SETTINGS_BY_KEY.get(key);
+}
 
 /**
  * Canonical `texra.*` keys the CLI reads or writes in `.texra/config.json` —

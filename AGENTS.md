@@ -142,11 +142,12 @@ Membership is computed from the suite's source, not declared. A suite under a
 `pure` directory is `pure` unless it calls `vi.mock` / `vi.doMock` on a
 repository module, imports `@platform/*` or a support module that installs or
 reads a host, or brings its own DOM (`lit`, `jsdom`) — then it is `kernel`. What
-a source scan cannot see — a pair of suites sharing terminal state — is found by
-file-order shuffles and kept by name in
-`config/ratchets/pure-tier-kernel-suites.json`, shrink-only. A module under test
-that reads `platform()` or the workspace roots itself is not an entry there: it
-is a production defect, and the fix is to make it take its host as a layer or a
+a source scan cannot see — a suite that changes process-wide state a library
+reads once, such as the environment chalk takes its color level from — is found
+by file-order shuffles and fixed in the suite: set the state on the instance it
+lives on and restore it after. There is no list of exempt suites. A module
+under test that reaches for an ambient host or the workspace roots itself is a
+production defect, and the fix is to make it take its host as a layer or a
 value. So the practical
 rule for a new suite: test the module directly, provide dependencies as values
 or layers, and do not mock repository modules. A `vi.mock` is what moves your
@@ -257,11 +258,12 @@ a decrease is always welcome. Kernel architecture tests under
 hardcoded allowlists rather than baseline JSON. The remaining boundary work is the Tier-1 public manifest and shrinking the
 frozen deep-import lists, not another lint rule.
 
-Three of those baselines budget the code itself rather than an import edge, and all three run in the pure tier:
+Two of those baselines budget the code itself rather than an import edge, and both run in the pure tier:
 
 - `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails, which is the one way deleting lines breaks the suite: drop the entry in the same PR. A file that shrank but stayed over the threshold keeps its budget.
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
-- `unknown-error-baseline.json` — a per-file count of `Effect.Effect<..., unknown, ...>` signatures (`unknownErrorChannelRatchet.vitest.ts`), exact and shrink-only like the effect-migration ratchet: type the channel with the tagged error the path already raises and lower the entry in the same PR.
+
+A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity); a combinator that absorbs any failure is generic in it.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
@@ -294,7 +296,7 @@ Three of those baselines budget the code itself rather than an import edge, and 
   Git, Shortcuts, LaTeX, Memory, Goals)
 - `packages/extension/src/progressView/` - Task tracking board webview, including the file-selection, banner and onboarding-card components it owns; there is no separate main-view bundle
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
-- `src/platform/` - Platform abstraction layer (composition root). Hosts call `initPlatform()` once at startup; agnostic code uses `platform()` from `@platform/platform`.
+- `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
 - `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types only; `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 - `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
@@ -563,7 +565,7 @@ For good separation of concerns and platform independence, core business logic s
 
 3. **Push UI side-effects to the caller.** Business logic functions should return error information (result objects, thrown errors) instead of calling `vscode.window.show*Message()` directly. The command/frontend layer handles user-facing notifications.
 
-4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). Do not add fields to `Platform`: it is shrinking onto those services (ruling 2026-09-13, #12073 R-1), and a new `Platform` port is a second home for a fact a service already owns.
+4. **Read host capabilities from the Context service that owns them.** When agnostic code needs something only the host provides (e.g., whether an editor extension is installed), take it from the typed service the host composition root already provides once per process (e.g., `SetupPlatform.extensions?.isInstalled`, `Secrets`, `AppState`, the Effect-native `FileSystem`/`Path`). There is no `Platform` object to add a field to: it shrank onto those services (ruling 2026-09-13, #12073 R-1) and is gone, and a process fact has one home, the service the runtime serves.
 
 5. **Prefer the session's own `roots.workspace` over `vscode.workspace.workspaceFolders`.** Carry it as data from the caller that holds it (a run's `session.roots`, a tool's `ToolCall.roots`); inside Effect, take it from the `WorkspaceFs` service, whose `root` is the same value. There is no ambient fallback left, since `workspaceRootPath()` was deleted with the rest of the ambient readers (#12770), so code that cannot name a caller holding the root has an owner to thread it from, not a helper to reach for.
 
@@ -618,7 +620,7 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 **Error handling and types**
 
 - Format and surface errors through `logErrorMessage`, `showLoggedErrorMessage`, and `showLoggedMessageWithDocs` in `packages/extension/src/frontend/ui/errorHandlingUtils.ts` for consistent telemetry and documentation links.
-- Keep shared type definitions colocated with their domains (e.g., `src/agent/types`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
+- Keep shared type definitions colocated with their domains (e.g., `src/agent/core/state`) and derive runtime-safe interfaces with `zod` plus `z.infer`.
 
 **Miscellaneous**
 
@@ -646,8 +648,7 @@ one the view you're touching already uses:
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
-  `SETTINGS_VIEW_CMD`, `SETTINGS_VIEW_COMMANDS`) — use those, not string
-  literals. Frontend state lives in module-level reactive
+  `SETTINGS_VIEW_COMMANDS`) — use those, not string literals. Frontend state lives in module-level reactive
   signals declared in `settingsView/frontend/settingsState.ts`
   (`trackedSignal`); `settingsView/frontend/messageDispatcher.ts` holds the one
   outbound message-handler registry (`settingsViewHandlers`, typed

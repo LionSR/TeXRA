@@ -165,6 +165,21 @@ export const IMAGE_LATEX_TOOLS: readonly ImageLatexTool[] = LATEX_TOOLS.filter(
 ).map((tool) => tool.name);
 
 /**
+ * What the dependency banner says TeXRA cannot do without each tool it
+ * probes, completing "TeXRA can't …". Keyed by the catalog, so a new core
+ * or image tool fails the type check until it says what it is for.
+ */
+export const DEPENDENCY_USE: Readonly<
+  Record<CoreEntry['name'] | ImageLatexTool, string>
+> = {
+  latexindent: 'format .tex files',
+  perl: 'run latexindent',
+  gs: 'turn PDF figures into images',
+  gm: 'turn PDF figures into images',
+  magick: 'turn PDF figures into images',
+};
+
+/**
  * How user-facing output names the image capability when neither candidate is
  * installed: one entry, not two, because either tool satisfies it.
  */
@@ -339,32 +354,6 @@ export const TEXFMT_INSTALL_GUIDE: Guide = {
     'Install tex-fmt:\n  apt install tex-fmt\n\n' +
     'Or via Cargo:\n  cargo install tex-fmt',
   win32: 'Install tex-fmt via Cargo:\n  cargo install tex-fmt',
-};
-
-export const WOLFRAM_INSTALL_GUIDE: Guide = {
-  darwin:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  brew install --cask wolfram-engine\n\n' +
-    '"brew" requires Homebrew (https://brew.sh).\n' +
-    'Or download from:\n  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
-  linux:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
-  win32:
-    'TeXRA requires the "wolframscript" command-line tool.\n\n' +
-    'Install the free Wolfram Engine:\n' +
-    '  https://www.wolfram.com/engine/\n\n' +
-    'Note: A Mathematica installation alone is not enough.\n' +
-    'You need WolframScript on your PATH. The Wolfram Engine\n' +
-    'includes it automatically.',
 };
 
 // ── Simple brew / apt / URL tools ──────────────────────────

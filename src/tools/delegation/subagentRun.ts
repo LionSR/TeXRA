@@ -16,7 +16,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
   TODO_STATUS,
@@ -41,8 +41,6 @@ import type { DelegationParent } from './proposalFlow';
 // ============================================================================
 // Shared utilities
 // ============================================================================
-
-const log = createLog('childRunLoop');
 
 /**
  * One compact trace line per child progress update, for the in-band arm where
@@ -146,8 +144,8 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
+        composition: parent.run.composition.key,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-        runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
         notify: notifyParentTrace,
@@ -187,7 +185,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       yield* registerChildRun(parentSession, {
         runId,
         config,
-        agentName,
         userFollowUpSupport,
         parentRunId: parentRunId,
       });
@@ -202,8 +199,8 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         workingDirectory,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
+        composition: parent.run.composition.key,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-        runtimeUnavailableTools: parent.run.toolPolicy.runtimeUnavailableTools,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,
       };
@@ -219,14 +216,13 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
             Effect.andThen(
               Effect.sync(() => ({
                 strategy: createNativeSubagentStrategy(strategyParams),
-                onLoopFailed: (error: unknown): void => {
-                  log.error(
+                onLoopFailed: (error: unknown) =>
+                  Effect.logError(
                     `Subagent '${agentName}' run loop failed after launch`,
-                    {
-                      data: error,
-                    },
-                  );
-                },
+                  ).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel('childRunLoop'),
+                  ),
               })),
             ),
           ),

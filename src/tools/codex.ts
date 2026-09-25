@@ -14,7 +14,7 @@
  * OPENAI_API_KEY, config files).
  *
  * Requires the Codex CLI binary — gated by the availability check in
- * externalToolDefs.ts.
+ * pluginAvailability.ts.
  */
 
 // Third-party imports
@@ -30,12 +30,12 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
-import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { createLog } from '@logger/logUtils';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
+  CodexApprovalPolicy,
   RunId,
   TodoItem,
   ToolResult,
@@ -48,8 +48,9 @@ import {
   ToolError,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { parseWorkingDirectory } from '@tools/pathResolution';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -60,8 +61,7 @@ import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
   codexSandboxMode,
   getCodexConfig,
-  importCodexClass,
-  findCodexBinaryPath,
+  openCodexClient,
 } from './codexImport';
 import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
@@ -84,6 +84,7 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
@@ -102,9 +103,9 @@ import type {
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
 // dependency-free leaf) since it is used at module level by the input schema.
-// All other config (model, reasoning, sandbox getter) is lazy-imported from
-// codexConfig.ts at runtime to avoid pulling the heavy platform/SDK graph into
-// the tool-registration path.
+// The model and reasoning config are lazy-imported from codexConfig.ts at
+// runtime, off the tool-registration path. Setting reads are schema-typed and
+// land in SDK-typed fields, so a value the Codex union rejects fails to compile.
 
 // ============================================================================
 // Schema
@@ -420,12 +421,7 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
   roots: WorkspaceRoots,
   workingDir?: string,
 ) {
-  const CodexClass = yield* importCodexClass();
-  const codexPath = yield* Effect.try({
-    try: findCodexBinaryPath,
-    catch: ensureError,
-  });
-  const codex = new CodexClass({ codexPathOverride: codexPath });
+  const { codex, codexPath } = yield* openCodexClient();
   const config = yield* getCodexConfig;
   // Resumed threads keep their stored workspace unless explicitly overridden.
   const workspace =
@@ -434,19 +430,19 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
       : {};
   // Probe Extra High support only when that tier is selected so other
   // efforts do not wait on a slow or hung Codex binary.
-  const requestedEffort = yield* config.getCodexCliReasoningEffort(
-    roots.workspaceState,
-    true,
-  );
+  const requestedEffort = yield* config.getCodexCliReasoningEffort(roots);
   const threadOptions: ThreadOptions = {
     ...workspace,
     sandboxMode,
-    approvalPolicy: yield* config.getCodexApprovalPolicy(roots.workspaceState),
+    approvalPolicy: yield* readSettingFrom<CodexApprovalPolicy>(
+      roots,
+      WorkspaceStateKey.CODEX_APPROVAL_POLICY,
+    ),
     model: config.CODEX_CLI_MODEL,
     modelReasoningEffort:
       requestedEffort === 'xhigh'
-        ? yield* config.getCodexCliReasoningEffort(
-            roots.workspaceState,
+        ? config.toCodexCliReasoningEffort(
+            requestedEffort,
             yield* config.codexBinarySupportsXhigh(codexPath),
           )
         : requestedEffort,
@@ -466,7 +462,41 @@ const createCodexThread = Effect.fn('codex.createCodexThread')(function* (
 // Tool
 // ============================================================================
 
-export class CodexTool extends defineTool({
+const runCodex = Effect.fn('CodexTool.run')(function* (
+  input: CodexInput,
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  ToolCall | Runs | AgentResume | ChildProcessSpawner
+> {
+  const toolCall = yield* ToolCall;
+  const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
+
+  return yield* dispatchAgentCliTool({
+    toolCall,
+    agentName: CODEX_AGENT_NAME,
+    store: codexThreadsFor,
+    resumeId: input.thread_id ?? undefined,
+    prompt: input.prompt,
+    labels: {
+      notActiveLabel: 'Codex thread',
+      idParamName: 'thread_id',
+      summaryLabel: 'Codex',
+      queuedLabel: 'Codex thread',
+    },
+    launch: (context) =>
+      launchCodexSession(
+        input,
+        sandboxMode,
+        context.parentRunId,
+        context.parentWorkingDirectory,
+        context.releaseFallbackClaim,
+        context.session,
+      ),
+  });
+});
+
+export const CodexTool = defineTool({
   name: 'codex',
   requiresApproval: true,
   description:
@@ -475,63 +505,21 @@ export class CodexTool extends defineTool({
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…).',
+    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…). ' +
+    'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
+    'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
+    'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: CodexInputSchema,
   guard: {
     bash: (input: CodexInput) =>
-      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (state) =>
-        codexSandboxMode(input, state),
+      agentCliApprovalCommand(CODEX_AGENT_NAME, input.prompt, (stores) =>
+        codexSandboxMode(input, stores),
       ),
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-}) {
-  protected execute(input: CodexInput) {
-    return Effect.gen({ self: this }, function* () {
-      return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall),
-      );
-    });
-  }
-
-  private readonly run = Effect.fn('CodexTool.run')(function* (
-    this: CodexTool,
-    input: CodexInput,
-    toolCall: ToolCallShape,
-  ): Effect.fn.Return<
-    ToolResult,
-    AgentCliToolFailure,
-    ToolCall | Runs | AgentResume
-  > {
-    const sandboxMode = yield* codexSandboxMode(
-      input,
-      toolCall.roots.workspaceState,
-    );
-
-    return yield* dispatchAgentCliTool({
-      toolCall,
-      agentName: CODEX_AGENT_NAME,
-      store: codexThreadsFor,
-      resumeId: input.thread_id ?? undefined,
-      prompt: input.prompt,
-      labels: {
-        notActiveLabel: 'Codex thread',
-        idParamName: 'thread_id',
-        summaryLabel: 'Codex',
-        queuedLabel: 'Codex thread',
-      },
-      launch: (context) =>
-        launchCodexSession(
-          input,
-          sandboxMode,
-          context.parentRunId,
-          context.parentWorkingDirectory,
-          context.releaseFallbackClaim,
-          context.session,
-        ),
-    });
-  });
-}
+  execute: (input) => reraiseAgentCliCallFailure(runCodex(input)),
+});
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
@@ -543,12 +531,11 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  ToolCall | Runs | AgentResume
+  ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
-  const workingDir = parseWorkingDirectory(parentWorkingDirectory);
   const { roots } = yield* ToolCall;
   const thread = yield* agentCliCall(
-    createCodexThread(input, sandboxMode, roots, workingDir),
+    createCodexThread(input, sandboxMode, roots, parentWorkingDirectory),
   );
   // Synthetic run metadata for the child run: Codex runs outside the normal
   // run loop, so the tool-use category and a stable Codex model label are

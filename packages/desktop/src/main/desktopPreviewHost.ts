@@ -1,11 +1,23 @@
-import { access } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Data, Effect, type FileSystem, type Path } from 'effect';
+import {
+  Data,
+  Effect,
+  FileSystem,
+  type Path,
+  type PlatformError,
+} from 'effect';
 
-import { isFileNotFoundError } from '@common/errors';
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import type { ExternalOpener, MessageHost } from '@hosts/uiHosts';
+import {
+  ExternalOpenFailed,
+  type ExternalOpener,
+  type MessageHost,
+} from '@hosts/uiHosts';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import { withSessionFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { FileLocation } from '@shared/schemas';
@@ -21,6 +33,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
@@ -46,13 +59,12 @@ interface DesktopPreviewHost {
   openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   /**
    * `reportFailure: false` leaves the dialog out and hands the caller the
-   * shell's own rejection, the value it was thrown with — which is why that
-   * form's channel is `unknown` and the default form's is not.
+   * shell's rejection as {@link ExternalOpenFailed}.
    */
   openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
   /** Open a workspace file in the OS default application. */
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   /**
@@ -65,6 +77,9 @@ interface DesktopPreviewHost {
 
 interface DesktopPreviewHostOptions extends DesktopOverlayPostOptions {
   shell: DesktopShellAdapter;
+  /** The process runtime the window was handed. It only supplies the
+   *  filesystem `openPath` probes through; nothing settles on it. */
+  runtime: ProcessRuntime;
   showErrorMessage?: MessageHost['showErrorMessage'];
 }
 
@@ -102,19 +117,21 @@ export function createDesktopPreviewHost(
 
   function ensurePathExists(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable> {
-    return Effect.tryPromise({
-      try: () => access(filePath),
-      catch: (error) =>
-        isFileNotFoundError(error)
-          ? `File not found: ${filePath}`
-          : `Cannot access file ${filePath}: ${toErrorMessage(error)}`,
-    }).pipe(Effect.catch(fail));
+  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
+    return FileSystem.FileSystem.use((fs) => fs.access(filePath)).pipe(
+      Effect.catch((error: PlatformError.PlatformError) =>
+        fail(
+          error.reason._tag === 'NotFound'
+            ? `File not found: ${filePath}`
+            : `Cannot access file ${filePath}: ${toErrorMessage(error.reason.cause ?? error)}`,
+        ),
+      ),
+    );
   }
 
   function openPathProgram(
     filePath: string,
-  ): Effect.Effect<void, PreviewUnavailable> {
+  ): Effect.Effect<void, PreviewUnavailable, FileSystem.FileSystem> {
     return Effect.gen(function* () {
       yield* ensurePathExists(filePath);
 
@@ -132,33 +149,39 @@ export function createDesktopPreviewHost(
   function openExternalProgram(
     url: string,
     reportFailure: boolean,
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
     return Effect.tryPromise({
       try: () => options.shell.openExternal(url),
-      catch: (error) => error,
+      catch: (cause) =>
+        new ExternalOpenFailed({
+          kind: 'url',
+          target: url,
+          message: `The desktop could not open ${url} in the default browser: ${toErrorMessage(cause)}`,
+          cause,
+        }),
     }).pipe(
+      // Unreported, an OAuth flow decides for itself whether a missing
+      // browser handler is worth a dialog.
       Effect.catch((error) =>
         reportFailure
-          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error)}`)
-          : // The caller asked to keep the original rejection: an OAuth flow
-            // decides for itself whether a missing browser handler is worth a
-            // dialog.
-            Effect.fail(error),
+          ? fail(`Failed to open URL ${url}: ${toErrorMessage(error.cause)}`)
+          : Effect.fail<PreviewUnavailable | ExternalOpenFailed>(error),
       ),
+      Effect.asVoid,
     );
   }
 
   /** The two forms above as one implementation: the reported one is the
-   *  default, and only the unreported one carries the shell's own value. */
+   *  default, and only the unreported one carries the shell's rejection. */
   function openExternal(url: string): Effect.Effect<void, PreviewUnavailable>;
   function openExternal(
     url: string,
     options: { readonly reportFailure?: boolean },
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed>;
   function openExternal(
     url: string,
     { reportFailure = true }: { readonly reportFailure?: boolean } = {},
-  ): Effect.Effect<void, unknown> {
+  ): Effect.Effect<void, PreviewUnavailable | ExternalOpenFailed> {
     return openExternalProgram(url, reportFailure);
   }
 
@@ -184,7 +207,11 @@ export function createDesktopPreviewHost(
   function buildDisplayProgram(
     roots: WorkspaceRoots,
     fileLocation: FileLocation,
-  ): Effect.Effect<void, unknown, FileSystem.FileSystem | Path.Path> {
+  ): Effect.Effect<
+    void,
+    PreviewUnavailable,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  > {
     return Effect.gen(function* () {
       const sourcePath = fileLocation.absolutePath;
       yield* ensurePathExists(sourcePath);
@@ -243,6 +270,7 @@ export function createDesktopPreviewHost(
     openBuildDisplayIn: (roots) => (location) =>
       buildDisplayProgram(roots, location),
     openExternal,
-    openPath: openPathProgram,
+    openPath: (filePath) =>
+      withProcessServices(options.runtime, openPathProgram(filePath)),
   };
 }

@@ -12,8 +12,10 @@ import { Data } from 'effect';
 
 /**
  * A second, different platform was handed to a process the package already
- * composed. The platform is process-wide by contract, so this is a
- * programming error rather than a condition to retry.
+ * composed and still holds, or the process already runs a process runtime
+ * the package did not compose (a host installed it for its own roots). The
+ * platform is process-wide by contract, so this is a programming error
+ * rather than a condition to retry.
  */
 export class PlatformConflict extends Data.TaggedError('PlatformConflict')<{
   readonly message: string;

@@ -26,13 +26,11 @@ import {
   type FoldInput,
   type OutputFileInfo,
   type SessionEvent,
-  type SessionEventDraft,
   type RunId,
 } from '@shared/schemas';
 
 import { foldRunState, unboundRequests } from '@shared/session/runStateFold';
 import { fold } from '@shared/session/sessionFold';
-import { redactTraceDraft } from '@shared/session/traceRedaction';
 import {
   emptySessionView,
   type SessionView,
@@ -268,10 +266,10 @@ describe('sessionFold', () => {
     expect(root.transcript.rows).toStrictEqual([
       {
         id: 'phase-Map',
-        seqNo: 2,
+        seqNo: 1,
         timestamp: T.root + 1,
         level: 'info',
-        settlementSeqNo: 2,
+        settlementSeqNo: 1,
         verbose: false,
         messageType: MESSAGE_TYPES.DEFAULT,
         kind: 'phase',
@@ -282,10 +280,10 @@ describe('sessionFold', () => {
       },
       {
         id: 'call-1',
-        seqNo: 3,
+        seqNo: 2,
         timestamp: T.root + 2,
         level: 'info',
-        settlementSeqNo: 3,
+        settlementSeqNo: 2,
         verbose: false,
         groupId: 'phase-Map',
         messageType: MESSAGE_TYPES.WORKFLOW_TASK,
@@ -1189,7 +1187,8 @@ describe('sessionFold', () => {
 //
 // Measured serialized size of the two snapshot drafts below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
-// writes on: tool-use with `stateSlices: null` is 362 bytes; reflection with
+// writes on (before the offered toolset joined the tool-use state): tool-use
+// with `stateSlices: null` was 362 bytes; reflection with
 // an empty workspace and no round outputs is 741 bytes. Both grow with the
 // family state they carry, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
@@ -1292,7 +1291,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { shouldSkipCycle: false, stateSlices: null },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   },
 });
 
@@ -1307,7 +1306,6 @@ const reflectionSnapshot = {
     family: 'reflection',
     runtime: RUNTIME,
     state: {
-      currentRound: 0,
       totalRounds: 1,
       workspaceSnapshot: {
         assembly: {},
@@ -1316,10 +1314,6 @@ const reflectionSnapshot = {
         interactions: {},
         workPlan: {},
       },
-      outputLocation: null,
-      runStateSnapshot: {},
-      continueRounds: true,
-      endTurn: false,
     },
   },
 };
@@ -1559,19 +1553,26 @@ describe('foldRunState', () => {
     [
       'compaction that replaced history mid-run: keepPrefix plus the row',
       () => {
-        const state = stateOf(
-          through(11, {
-            type: 'model.compaction',
-            payload: {
-              keepPrefix: 1,
-              messages: [USER('summary')],
-              cause: 'context-limit',
-              continuation: null,
-              continuationDropped: null,
-            },
-          }),
-        );
+        const compacted = (cause: 'context-limit' | 'context-window') =>
+          stateOf(
+            through(11, {
+              type: 'model.compaction',
+              payload: {
+                keepPrefix: 1,
+                messages: [USER('summary')],
+                cause,
+                continuation: null,
+                continuationDropped: null,
+              },
+            }),
+          );
+        const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
+        // Only an overflow compaction spends the round's one overflow retry.
+        expect(state?.overflowRecoveredAtRound).toBeNull();
+        const overflow = compacted('context-window');
+        expect(overflow?.round).toBeTypeOf('number');
+        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
       },
     ],
     [
@@ -1690,11 +1691,48 @@ describe('foldRunState', () => {
         );
         const flow = state?.flow;
         expect(flow?.family).toBe('reflection');
-        // D12: no snapshot payload carries an accumulator; usage is derived.
-        expect(
-          flow?.family === 'reflection' ? flow.state.runStateSnapshot : null,
-        ).not.toHaveProperty('usageAccumulator');
+        // D12: no snapshot payload carries usage; it is derived from the rows.
+        expect(flow?.state).not.toHaveProperty('runStateSnapshot');
         expect(state?.snapshotCommit).toBe(2);
+      },
+    ],
+    [
+      'a length continuation in a non-final reflection round: the next round opens at continuation 0',
+      () => {
+        const step = (
+          name: string,
+          round: number,
+          continuationIndex: number,
+        ) => ({
+          type: 'flow.step',
+          payload: {
+            family: 'reflection',
+            step: name,
+            round,
+            continuationIndex,
+          },
+        });
+        const rows = [
+          message({
+            kind: 'append',
+            messages: [USER('draft the introduction')],
+            sourceResponse: null,
+          }),
+          reflectionSnapshot,
+          step('round.begin', 0, 0),
+          step('round.end', 0, 1),
+          step('round.begin', 1, 0),
+          step('round.end', 1, 1),
+        ].map((draft, index) => ledgerRow(index + 1, draft));
+        const state = stateOf(foldRunState(null, rows));
+        expect(state?.round).toBe(1);
+        expect(state?.continuationIndex).toBe(1);
+        // Within one round the index still never goes back.
+        expect(
+          reasonOf(
+            foldRunState(state, [ledgerRow(7, step('round.end', 1, 0))]),
+          ),
+        ).toBe('out-of-order');
       },
     ],
     [
@@ -1883,17 +1921,6 @@ describe('foldRunState', () => {
     for (const row of TURN_ROWS) {
       expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
     }
-    // `redactTraceDraft` is applied to every draft before storage; a ledger
-    // row passes through its `default` arm untouched.
-    const {
-      seq: _seq,
-      commit: _commit,
-      ownerId: _owner,
-      at: _at,
-      ...draft
-    } = TURN_ROWS[4];
-    const ledgerDraft: SessionEventDraft = draft;
-    expect(redactTraceDraft(ledgerDraft)).toBe(ledgerDraft);
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
     expect(ModelOriginSchema.safeParse(ORIGIN).success).toBe(true);

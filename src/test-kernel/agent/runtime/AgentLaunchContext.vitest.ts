@@ -5,20 +5,15 @@ import { assert, beforeEach, describe, expect, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   resolve: vi.fn(),
   load: vi.fn(),
-  createTrace: vi.fn(),
   buildVars: vi.fn(),
 }));
 
 vi.mock('@agent/index', () => ({
-  isRemoteAgent: () => false,
+  refresh: () => Effect.void,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
-}));
-vi.mock('@transcript', async (importActual) => ({
-  ...(await importActual<typeof import('@transcript')>()),
-  createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 
@@ -30,6 +25,7 @@ import {
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { TraceEmitter } from '@agent/trace';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
   LanguageModel,
@@ -259,6 +255,7 @@ describe('AgentLaunchContext', () => {
               nodePlatformLayer,
             ),
           ),
+          Effect.provide(fakeProcessServices()),
         );
         expect(error.message).toContain('is not registered');
 
@@ -300,7 +297,7 @@ describe('AgentLaunchContext', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.createTrace.mockImplementationOnce(() => {
+        vi.spyOn(session, 'attachRunTrace').mockImplementationOnce(() => {
           throw new Error('trace failed');
         });
 
@@ -341,11 +338,6 @@ describe('AgentLaunchContext', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.createTrace.mockReturnValueOnce({
-          trace: noopTrace,
-          handleStatus: () => {},
-          dispose: vi.fn(),
-        });
         mocks.buildVars.mockReturnValueOnce(
           Effect.succeed({ ATTACHED_MEMORY_MISSES: [] }),
         );
@@ -354,7 +346,7 @@ describe('AgentLaunchContext', () => {
           model: 'gpt55',
           agentCategory: AgentCategory.ToolUse,
         });
-        yield* registerRun(session, EXECUTION_ID, config, 'chat', {
+        yield* registerRun(session, EXECUTION_ID, config, {
           identity: { kind: 'agent', agent: 'chat' },
         });
         yield* buildAgentLaunchContext({
@@ -365,7 +357,6 @@ describe('AgentLaunchContext', () => {
         });
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
-          'run.launchLabel',
           'run.record',
           'run.activate',
         ]);
@@ -374,11 +365,11 @@ describe('AgentLaunchContext', () => {
             .slice(0, 2)
             .map((event) => event.type),
         ).toEqual(['run.start', 'run.activate']);
-        // One aggregate, one counter: the activation is the fourth durable
+        // One aggregate, one counter: the activation is the third durable
         // row of the creation batch, and the phase the fold reads from it.
         expect(
           (yield* Effect.promise(() => recording.read()))[1],
-        ).toMatchObject({ seq: 4 });
+        ).toMatchObject({ seq: 3 });
       }),
   );
 
@@ -388,7 +379,9 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const order: string[] = [];
         const failure = new Error('user vars unavailable');
-        const postProcessResponse = vi.fn((text: string) => text);
+        const postProcessResponse = vi.fn((text: string) =>
+          Effect.succeed(text),
+        );
         const responseTextProcessing = {
           normalizeResponseText: (text: string) => text,
           postProcessResponse,
@@ -408,16 +401,19 @@ describe('AgentLaunchContext', () => {
           order.push('detach');
           return terminalEvents.read();
         });
-        const rawDispose = vi.fn(() => order.push('raw-trace'));
-        const trace = { ...noopTrace, subscribe: vi.fn(() => detachTrace) };
-        trace.openStage = vi.fn(() => stage);
+        const openStage = vi
+          .spyOn(TraceEmitter.prototype, 'openStage')
+          .mockReturnValue(stage);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => openStage.mockRestore()),
+        );
+        vi.spyOn(session, 'attachRunTrace').mockReturnValueOnce(detachTrace);
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({ path: '/agents/chat.yaml' }),
         );
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.createTrace.mockReturnValueOnce({ trace, dispose: rawDispose });
         mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
 
         const error = yield* Effect.flip(
@@ -454,9 +450,8 @@ describe('AgentLaunchContext', () => {
             outcome: RUN_OUTCOME.FAILED,
           }),
         );
-        expect(rawDispose).toHaveBeenCalledOnce();
         // Terminal compensation is committed before the trace is detached.
-        expect(order).toEqual(['stage', 'detach', 'raw-trace']);
+        expect(order).toEqual(['stage', 'detach']);
       }),
   );
 });

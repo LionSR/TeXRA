@@ -265,11 +265,21 @@ export const runLedgerLayer: Layer.Layer<
     // `acquireClaims` proves prior owners dead before moving the claim, and
     // succeeds when this process already holds it. A live foreign owner is a
     // claim verdict (`DatabaseClaimRefused`, carried as the write failure's
-    // cause), which is the one write failure that means `not-owner`; every
-    // other database failure passes through unconverted (F3).
+    // cause), and a claim another process took after that proof is
+    // `DatabaseNotOwner`; those are the refusals that mean `not-owner`, and
+    // every other database failure passes through unconverted (F3).
     const acquire = Effect.fn('RunLedger.acquire')(function* (run: RunId) {
       const aggregate = qualifyAggregateId('run', run);
       yield* log.acquireClaims([aggregate]).pipe(
+        Effect.catchTag('DatabaseNotOwner', (failure) =>
+          Effect.fail(
+            new RunLedgerRefused({
+              reason: 'not-owner',
+              runId: run,
+              detail: notOwnerDetail(failure),
+            }),
+          ),
+        ),
         Effect.mapError((error) =>
           error instanceof DatabaseWriteFailed &&
           error.cause instanceof DatabaseClaimRefused
@@ -305,14 +315,14 @@ export const runLedgerLayer: Layer.Layer<
           })),
         )
         .pipe(
-          Effect.mapError((failure) =>
-            failure instanceof DatabaseNotOwner
-              ? new RunLedgerRefused({
-                  reason: 'not-owner',
-                  runId: run,
-                  detail: notOwnerDetail(failure),
-                })
-              : failure,
+          Effect.catchTag('DatabaseNotOwner', (failure) =>
+            Effect.fail(
+              new RunLedgerRefused({
+                reason: 'not-owner',
+                runId: run,
+                detail: notOwnerDetail(failure),
+              }),
+            ),
           ),
         );
     });
@@ -422,14 +432,14 @@ export const runLedgerLayer: Layer.Layer<
       // `not-owner`, nothing written (D6 b, R7); any other rollback stays the
       // write failure it is (F3).
       const committed = yield* events.publish(drafts).pipe(
-        Effect.mapError((failure) =>
-          failure instanceof DatabaseNotOwner
-            ? new RunLedgerRefused({
-                reason: 'not-owner',
-                runId: run,
-                detail: notOwnerDetail(failure),
-              })
-            : failure,
+        Effect.catchTag('DatabaseNotOwner', (failure) =>
+          Effect.fail(
+            new RunLedgerRefused({
+              reason: 'not-owner',
+              runId: run,
+              detail: notOwnerDetail(failure),
+            }),
+          ),
         ),
       );
       // The same fold over the same rows, at the commits the publisher

@@ -28,11 +28,11 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { SessionView } from '@shared/session/sessionView';
+import type { RunGroup, SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
-import { currentSessionRunIds, registerCliStateResetHook } from './cliState';
+import { registerCliStateResetHook, sessionRunIds } from './cliState';
 import { sessionView } from './sessionView';
 import {
   appendLocalAssistantTranscript,
@@ -56,7 +56,7 @@ interface TuiApprovalAdornments {
  * inquiry. The CLI does not offer the async inquiry flow (the inquiry tool
  * declares `unavailableHosts: ['cli']`), and an inquiry another host opened
  * in a shared session is answered from its thread rather than from a modal
- * here, so {@link pendingApprovalFacts} leaves that kind out of this queue.
+ * here, so {@link attentionRequests} leaves that kind out of this queue.
  */
 export type PendingApprovalKind = Exclude<
   ProgressPermissionKind,
@@ -101,29 +101,13 @@ type PendingApprovalFact = SessionView['requests'][number] & {
   readonly payload: Extract<PermissionPayload, { kind: PendingApprovalKind }>;
 };
 
-/**
- * The fold's pending requests under {@link PendingApprovalKind}: the fold
- * lists every kind, including an `externalInquiry` a persisted session
- * carries from another host, and this surface renders none of those, so the
- * narrowing is a filter rather than an assertion.
- */
-function pendingApprovalFacts(
-  view: SessionView,
-): readonly PendingApprovalFact[] {
-  const included = currentSessionRunIds(view);
-  return view.requests.filter(
-    (request): request is PendingApprovalFact =>
-      included.has(request.runId) && request.payload.kind !== 'externalInquiry',
-  );
-}
-
 /** Each run's pending request kinds in commit order: the badge the session
  *  list and the workflow popup paint on its row. */
 export const pendingApprovalKindsByRun = computed(() =>
   groupBy(
-    pendingApprovalFacts(sessionView().get()),
+    attentionRequests.get(),
     (request) => request.runId,
-    (request) => request.payload.kind,
+    (request) => request.kind,
   ),
 );
 
@@ -175,36 +159,57 @@ export function useHostCapability(
   };
 }
 
-/** Whether `payload` presents; a stager keys its entry by the same id. */
-export function approvalPayloadRunId(
-  payload: Pick<ApprovalPayload, 'data'>,
-): RunId | undefined {
-  return payload.data.runId || undefined;
+/** Whether the promoted stream's requests lead `request`'s. */
+function leads(request: { readonly runId: RunId }): boolean {
+  const lead = promoted.get();
+  return (
+    lead !== undefined &&
+    (request.runId === lead.runId || lead.includeRunIds.has(request.runId))
+  );
 }
+
+/** Drop each request-keyed entry whose request is no longer in `live`. */
+export function pruneToLive(
+  live: ReadonlySet<string>,
+  ...keyed: ReadonlyArray<Set<string> | Map<string, unknown>>
+): void {
+  for (const entries of keyed) {
+    for (const id of entries.keys()) if (!live.has(id)) entries.delete(id);
+  }
+}
+
+/** Run groups whose requests can still be answered here. */
+const LIVE_GROUPS: ReadonlySet<RunGroup> = new Set(['running', 'waiting']);
 
 /**
  * Every request awaiting the user, from the fold: the outstanding requests
- * in commit order. The promoted stream's requests lead; nothing is decided
+ * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
  * or re-notified by a promotion. The status bar, the title, and the modal
  * all read this one list.
  */
-export function attentionRequests(
-  view: SessionView,
-  lead = promoted.get(),
-): readonly AttentionRequest[] {
-  const requests = pendingApprovalFacts(view).map(
-    (pending): AttentionRequest => ({
+export const attentionRequests = computed((): readonly AttentionRequest[] => {
+  const included = sessionRunIds.get();
+  const view = sessionView().get();
+  // The fold lists every kind, including an `externalInquiry` a persisted
+  // session carries from another host; this surface renders none of those,
+  // so the narrowing is a filter rather than an assertion. Nor does it render
+  // one a stopped run left for its resume to ask again: that modal would trap
+  // the keys `/resume` needs.
+  const requests = view.requests
+    .filter(
+      (request): request is PendingApprovalFact =>
+        included.has(request.runId) &&
+        request.payload.kind !== 'externalInquiry' &&
+        LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? 'recent'),
+    )
+    .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
       runId: pending.runId,
       kind: pending.payload.kind,
       payload: pending.payload,
-    }),
-  );
-  if (!lead) return requests;
-  const leads = (request: AttentionRequest): boolean =>
-    request.runId === lead.runId || lead.includeRunIds.has(request.runId);
+    }));
   return [...requests.filter(leads), ...requests.filter((r) => !leads(r))];
-}
+});
 
 /** The payload the modal renders: the staged one when there is one, else the
  *  fact's, for the kinds that need nothing staged. */
@@ -231,42 +236,38 @@ function presentedPayload(
 
 /** The order requests became presentable: a request that only became
  *  showable now (a retry after its key lookup) joins behind the modal the
- *  user is already answering rather than displacing it. */
+ *  user is already answering rather than displacing it. The stamp is a
+ *  monotonic counter, not the map's size: settled entries are pruned, and a
+ *  size-based stamp would hand a later request the index of one on screen. */
 const presentedOrder = new Map<string, number>();
+let nextPresentedOrder = 0;
 
 /** The entry the modal shows: the first pending request this surface can
  *  render and has not decided, in presentation order under the promoted
  *  stream's lead. */
 export const currentApproval = computed<PendingApproval | undefined>(() => {
-  const view = sessionView().get();
   const staged = stagedPresentations.get();
   const done = decided.get();
   const candidates: Array<{
     readonly request: AttentionRequest;
     readonly payload: ApprovalPayload;
-    readonly rank: number;
+    readonly order: number;
   }> = [];
-  attentionRequests(view).forEach((request, rank) => {
-    if (done.has(request.requestId)) return;
+  for (const request of attentionRequests.get()) {
+    if (done.has(request.requestId)) continue;
     const payload = presentedPayload(request, staged);
-    if (!payload) return;
-    if (!presentedOrder.has(request.requestId)) {
-      presentedOrder.set(request.requestId, presentedOrder.size);
+    if (!payload) continue;
+    let order = presentedOrder.get(request.requestId);
+    if (order === undefined) {
+      order = nextPresentedOrder++;
+      presentedOrder.set(request.requestId, order);
     }
-    candidates.push({ request, payload, rank });
-  });
-  const lead = promoted.get();
-  const leads = (request: AttentionRequest): boolean =>
-    lead !== undefined &&
-    (request.runId === lead.runId || lead.includeRunIds.has(request.runId));
-  candidates.sort((a, b) => {
-    const leadDelta = Number(leads(b.request)) - Number(leads(a.request));
-    if (leadDelta !== 0) return leadDelta;
-    return (
-      (presentedOrder.get(a.request.requestId) ?? a.rank) -
-      (presentedOrder.get(b.request.requestId) ?? b.rank)
-    );
-  });
+    candidates.push({ request, payload, order });
+  }
+  candidates.sort(
+    (a, b) =>
+      Number(leads(b.request)) - Number(leads(a.request)) || a.order - b.order,
+  );
   const first = candidates[0];
   if (!first) return undefined;
   return {
@@ -313,18 +314,13 @@ export function forgetSettledRequests(live: ReadonlySet<string>): void {
   );
   if (remaining.length !== staged.size) {
     stagedPresentations.set(new Map(remaining));
-    for (const id of stagedSeenListed) {
-      if (!live.has(id)) stagedSeenListed.delete(id);
-    }
   }
-  for (const id of presentedOrder.keys()) {
-    if (!live.has(id)) presentedOrder.delete(id);
-  }
+  pruneToLive(live, stagedSeenListed, presentedOrder);
 }
 
 function markDecided(requestId: string): void {
   const live = new Set(
-    attentionRequests(sessionView().get()).map((request) => request.requestId),
+    attentionRequests.get().map((request) => request.requestId),
   );
   const next = new Set([...decided.get()].filter((id) => live.has(id)));
   next.add(requestId);
@@ -378,16 +374,19 @@ function issue(
   onRefused: (() => void) | undefined,
   ...requests: RuntimeRequest[]
 ): void {
+  const reopen = (): void => {
+    const next = new Set(decided.get());
+    next.delete(requestId);
+    decided.set(next);
+    onRefused?.();
+  };
   void runtime.runPromise(
     Effect.forEach(requests, (request) => session.requests.request(request), {
       discard: true,
     }).pipe(
       Effect.match({
         onFailure: (error) => {
-          const next = new Set(decided.get());
-          next.delete(requestId);
-          decided.set(next);
-          onRefused?.();
+          reopen();
           appendLocalRequestRefusal(error, runId);
         },
         onSuccess: () => undefined,
@@ -395,19 +394,16 @@ function issue(
       // `match` recovers only the typed refusal; a collaborator that rejects
       // defects, and fire-and-forget would leave it an unhandled rejection.
       // A pure interruption is teardown, not a failure to report.
-      Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          if (Cause.hasInterruptsOnly(cause)) return;
-          // The durable request never recorded the decision; reopen it the
-          // same way a typed refusal does, or `currentApproval` keeps
-          // filtering it out and the run waits with no UI.
-          const next = new Set(decided.get());
-          next.delete(requestId);
-          decided.set(next);
-          onRefused?.();
-          appendLocalAssistantTranscript(reportRequestDefect(cause), runId);
-        }),
-      ),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+        // The durable request never recorded the decision; reopen it the
+        // same way a typed refusal does, or `currentApproval` keeps
+        // filtering it out and the run waits with no UI.
+        reopen();
+        return Effect.map(reportRequestDefect(cause), (message) =>
+          appendLocalAssistantTranscript(message, runId),
+        );
+      }),
     ),
   );
 }
@@ -472,9 +468,8 @@ function approveQueuedDelegatedWorkForRun(
   runtime: ProcessRuntime,
   runId: RunId,
 ): void {
-  const view = sessionView().get();
   const done = decided.get();
-  for (const request of attentionRequests(view)) {
+  for (const request of attentionRequests.get()) {
     if (request.runId !== runId || done.has(request.requestId)) continue;
     if (
       request.kind !== 'proposal' &&
@@ -503,9 +498,9 @@ export function decidePendingRequest(
   decision: SurfaceDecision,
   onRefused?: () => void,
 ): void {
-  const request = attentionRequests(sessionView().get()).find(
-    (pending) => pending.requestId === requestId,
-  );
+  const request = attentionRequests
+    .get()
+    .find((pending) => pending.requestId === requestId);
   if (!request) {
     logWarning(
       'cli.tui',
@@ -556,6 +551,7 @@ function resetApprovalSurface(): void {
   decided.set(new Set());
   promoted.set(undefined);
   presentedOrder.clear();
+  nextPresentedOrder = 0;
 }
 
 registerCliStateResetHook(resetApprovalSurface);

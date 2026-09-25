@@ -149,6 +149,8 @@ export const RunUsageTotalsSchema = z.object({
   totalReasoningTokens: TokenCountSchema.prefault(0),
   totalToolUsePromptTokens: TokenCountSchema.prefault(0),
   totalServerToolRequests: TokenCountSchema.prefault(0),
+  /** The sum of `NormalizedUsage.responseTimeMs` over the run's priced turns. */
+  totalResponseTimeMs: z.number().nonnegative().prefault(0),
 });
 
 export type RunUsageTotals = z.infer<typeof RunUsageTotalsSchema>;

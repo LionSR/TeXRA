@@ -153,7 +153,9 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   const { app, page } = launched;
   const brand = await page.locator('.shell-sidebar-brand').boundingBox();
   const brandLogo = await page.locator('.shell-sidebar-logo').boundingBox();
-  const shellHeader = await page.locator('.shell-header').boundingBox();
+  const shellHeader = await page
+    .locator('.shell-conversation > .shell-header')
+    .boundingBox();
   expect(brand).not.toBeNull();
   expect(brandLogo).not.toBeNull();
   expect(shellHeader).not.toBeNull();
@@ -204,17 +206,15 @@ test('opens settings beside the permanent conversation', async () => {
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
-test('toggles and restores the bottom, side, and summary bars', async () => {
+test('toggles and restores the bottom and side bars', async () => {
   const { page } = launched;
 
   await openSidebarWorkbench('Settings');
   const bottomToggle = page.locator('#shellToggleBottomBar');
   const sideToggle = page.locator('#shellToggleSidePanel');
-  const summaryToggle = page.locator('#shellToggleSummaryBar');
 
   await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
-  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'true');
 
   await bottomToggle.click();
   const bottomWorkbench = page.locator(
@@ -241,12 +241,6 @@ test('toggles and restores the bottom, side, and summary bars', async () => {
   await expect(bottomWorkbench).toBeHidden();
   await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.shell-sidebar-footer')).toBeVisible();
-
-  await summaryToggle.click();
-  await expect(page.locator('.shell-environment-button')).toHaveCount(0);
-  await expect(summaryToggle).toHaveAttribute('aria-pressed', 'false');
-  await summaryToggle.click();
-  await expect(page.locator('.shell-environment-button')).toBeVisible();
 
   await sideToggle.click();
   await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
@@ -310,41 +304,39 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     .toBeLessThanOrEqual(520);
 
   await page.evaluate(() => {
-    window.postMessage({ command: 'setTab', tab: 'tools' }, '*');
+    window.postMessage({ command: 'setTab', tab: 'tools/tools' }, '*');
   });
   await expect(page.locator('tools-tab tool-card').first()).toBeVisible({
     timeout: 5_000,
   });
 
-  const alignments = await page.evaluate(() => {
+  // A narrow pane keeps each page's name and drops its icon.
+  const compactButtons = await page.evaluate(() => {
     const root = document.querySelector('settings-app')?.shadowRoot;
     const buttons =
-      root?.querySelectorAll<HTMLElement>('.settings-page-button') ?? [];
+      root?.querySelectorAll<HTMLElement>(
+        '.settings-page-button[data-panel]',
+      ) ?? [];
     return [...buttons].map((button) => {
-      const base =
-        button.shadowRoot?.querySelector<HTMLElement>('[part~="base"]');
-      const icon = button.querySelector<HTMLElement>('.settings-tab-icon');
+      const start =
+        button.shadowRoot?.querySelector<HTMLElement>('[part~="start"]');
       const label =
         button.shadowRoot?.querySelector<HTMLElement>('[part~="label"]');
-      if (!base || !icon || !label) {
+      if (!start || !label) {
         throw new Error('Compact settings navigation was not mounted.');
       }
-      const baseRect = base.getBoundingClientRect();
-      const iconRect = icon.getBoundingClientRect();
       return {
+        iconDisplay: getComputedStyle(start).display,
         labelDisplay: getComputedStyle(label).display,
-        horizontalOffset:
-          (iconRect.left + iconRect.right - baseRect.left - baseRect.right) / 2,
-        verticalOffset:
-          (iconRect.top + iconRect.bottom - baseRect.top - baseRect.bottom) / 2,
+        ariaLabel: button.getAttribute('aria-label'),
       };
     });
   });
-  expect(alignments.length).toBeGreaterThan(0);
-  for (const alignment of alignments) {
-    expect(alignment.labelDisplay).toBe('none');
-    expect(Math.abs(alignment.horizontalOffset)).toBeLessThanOrEqual(1);
-    expect(Math.abs(alignment.verticalOffset)).toBeLessThanOrEqual(1);
+  expect(compactButtons.length).toBeGreaterThan(0);
+  for (const button of compactButtons) {
+    expect(button.iconDisplay).toBe('none');
+    expect(button.labelDisplay).not.toBe('none');
+    expect(button.ariaLabel).toBeTruthy();
   }
 
   // The active Settings page owns scrolling for every hierarchical page: with
@@ -374,9 +366,6 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   await expect(
     shortcuts.getByText('Toggle Side Panel', { exact: true }),
   ).toBeVisible();
-  await expect(
-    shortcuts.getByText('Toggle Summary Bar', { exact: true }),
-  ).toBeVisible();
   const recorder = page.locator('shortcuts-tab .shortcut-recorder').first();
   await expect(recorder).toBeVisible();
   await recorder.click();
@@ -394,23 +383,6 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
     page.locator('wa-dialog.desktop-command-palette'),
   ).toHaveJSProperty('open', true);
   await page.keyboard.press('Escape');
-});
-
-test('shows live environment status without duplicate panel actions', async () => {
-  const { page } = launched;
-
-  await page.locator('.shell-environment-button').click();
-  const popover = page.locator('.shell-environment-popover');
-  await expect(popover).toBeVisible();
-  await expect(popover).toContainText('Environment');
-  await expect(popover).toContainText('Changes');
-  await expect(popover).toContainText('Background terminal');
-  await expect(popover).toContainText('No open sources');
-  await expect(popover.locator('wa-button')).toHaveCount(1);
-  await expect(
-    popover.locator('.shell-environment-refresh'),
-  ).not.toBeDisabled();
-  await page.locator('.shell-environment-button').click();
 });
 
 test('loads a workspace file into the Monaco editor workbench', async () => {

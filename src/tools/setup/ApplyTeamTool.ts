@@ -8,7 +8,7 @@
  *
  * The roster write goes through the same shared application path
  * (`applyTeamRosterWithPreflight`) as the Settings "apply team" action, so the
- * two can't drift. Account-served leads (orchestrators) that aren't in the
+ * two can't drift. Account-served members (remote workflow agents) that aren't in the
  * registry yet (signed out) are reported as "after sign-in" rather than
  * silently dropped.
  */
@@ -19,24 +19,18 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 import {
   createWorkspaceAgentRosterController,
-  getAgentsByCategory,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
+import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
   resolveTeamRoster,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import {
-  AGENT_MODE_PRESETS,
-  AGENT_MODE_PRESETS_BY_ID,
-  agentName,
-  STARTER_AGENT_MODE_PRESET,
-  ToolError,
-} from '@shared/schemas';
+import { agentName, ToolError } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -44,10 +38,10 @@ import { defineTool } from '../core/define';
 import { getSetupAuthStatus, SetupPlatform } from './platform';
 
 /**
- * Built from the actual preset list (plus the hidden starter team) so the
- * enum can't drift from `AGENT_MODE_PRESETS`.
+ * The shared catalog's built-in teams (the setup starter included), so the
+ * enum can't drift from the presets the roster accepts.
  */
-const TEAM_CHOICES = [...AGENT_MODE_PRESETS, STARTER_AGENT_MODE_PRESET];
+const TEAM_CHOICES = teamPresets(undefined);
 const TEAM_IDS = TEAM_CHOICES.map((preset) => preset.id);
 
 function describeTeams(): string {
@@ -77,7 +71,6 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   input: ApplyTeamInput,
 ) {
   const call = yield* ToolCall;
-  const state = { getAgents: getAgentsByCategory };
   const roster = createWorkspaceAgentRosterController(call.roots);
   const { signIn } = yield* SetupPlatform;
   const authStatus = yield* getSetupAuthStatus();
@@ -87,16 +80,13 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // only the roster, since it has no notion of a fresh-workspace default.
   const catalog: TeamRosterCatalog = {
     resolvePreset: (presetId) =>
-      Effect.sync(() => {
-        const preset =
-          presetId === STARTER_AGENT_MODE_PRESET.id
-            ? STARTER_AGENT_MODE_PRESET
-            : AGENT_MODE_PRESETS_BY_ID.get(presetId);
-        if (!preset) return { ok: false, reason: 'unknownPreset' };
+      Effect.gen(function* () {
+        const preset = findTeamPreset(yield* roster.allPresets(), presetId);
+        if (!preset) return { ok: false, reason: 'unknownPreset' } as const;
         return {
           ok: true,
           preset,
-          resolution: resolveTeamRoster(state, preset),
+          resolution: resolveTeamRoster(roster, preset),
         };
       }),
     commitPreset: (preset) =>
@@ -170,12 +160,12 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   // that didn't resolve are not dropped: the roster stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. `unresolvedNames` is preflight
-  // evidence, not stored state. Account-served leads are absent until
+  // evidence, not stored state. Account-served members are absent until
   // sign-in — say so instead of letting it read as a silent failure; check
   // registry resolution, never auth.
   const activeWorkflow = keys.workflow;
   const activeToolUse = keys.toolUse;
-  const pendingRemoteLeads = unresolvedNames.filter((name) =>
+  const pendingRemoteMembers = unresolvedNames.filter((name) =>
     texraHostedNames.has(name),
   );
   const pendingOther = unresolvedNames.filter(
@@ -183,8 +173,8 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   );
 
   const signInNote =
-    pendingRemoteLeads.length > 0
-      ? `The ${pendingRemoteLeads.join(' and ')} lead is TeXRA-hosted. It joins the roster automatically after sign-in.`
+    pendingRemoteMembers.length > 0
+      ? `TeXRA-hosted members join the roster automatically after sign-in: ${pendingRemoteMembers.join(', ')}.`
       : undefined;
 
   const lines = [

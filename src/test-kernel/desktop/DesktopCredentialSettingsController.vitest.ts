@@ -116,7 +116,7 @@ async function createFixture({
   const warnings: string[] = [];
   const errors: string[] = [];
   const signIn = vi.fn(() => Effect.void);
-  const signOut = vi.fn(async () => undefined);
+  const signOut = vi.fn(() => Effect.void);
   const onCredentialChanged = vi.fn(() =>
     Effect.sync(() => {
       events.push('credential');
@@ -181,8 +181,8 @@ async function createFixture({
     externalOpener: {
       openExternal: () => Effect.void,
       openSubscriptionSignInUrl: () => Effect.void,
-      presentSubscriptionSignInUrl: () => undefined,
-      presentSubscriptionDeviceCode: () => undefined,
+      presentSubscriptionSignInUrl: () => Effect.void,
+      presentSubscriptionDeviceCode: () => Effect.void,
     },
     notifications: {
       showInfoMessage: (message) =>
@@ -264,12 +264,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
 
@@ -295,10 +290,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
         yield* Effect.gen(function* () {
           yield* withProcessServices(
             testRuntime(),
-            assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-              command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-              provider: 'google',
-            }),
+            fixture.controller.profileKeyController.setProviderKey('google'),
           );
         });
 
@@ -340,10 +332,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider: 'openai',
-          }),
+          fixture.controller.profileKeyController.setProviderKey('openai'),
         );
       });
       expect(yield* secrets.get(secretName)).toBe('replacement');
@@ -351,12 +340,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
       yield* Effect.gen(function* () {
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.removeProviderKey)(
-            {
-              command: SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
-              provider: 'openai',
-            },
-          ),
+          fixture.controller.profileKeyController.removeProviderKey('openai'),
         );
       });
       expect(deleteSpy).toHaveBeenCalledExactlyOnceWith(secretName);
@@ -380,10 +364,7 @@ describe('DefaultDesktopCredentialSettingsController', () => {
 
         yield* withProcessServices(
           testRuntime(),
-          assertSupported(fixture.controller.profileHandlers.setProviderKey)({
-            command: SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
-            provider,
-          }),
+          fixture.controller.profileKeyController.setProviderKey(provider),
         );
 
         expect(fixture.subscriptionUsage.invalidate).toHaveBeenCalledWith(
@@ -489,8 +470,8 @@ describe('DefaultDesktopCredentialSettingsController', () => {
             }),
           ),
         );
-        const presentSubscriptionSignInUrl = vi.fn();
-        const presentSubscriptionDeviceCode = vi.fn();
+        const presentSubscriptionSignInUrl = vi.fn(() => Effect.void);
+        const presentSubscriptionDeviceCode = vi.fn(() => Effect.void);
         const logs = captureLogEntries();
         const fixture = yield* Effect.promise(() =>
           createFixture({

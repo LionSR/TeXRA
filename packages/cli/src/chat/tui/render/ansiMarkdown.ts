@@ -17,7 +17,6 @@ import pico from 'picocolors';
 
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { createLog } from '@logger/logUtils';
 import {
   createMarkdownProcessor,
   type MarkdownProcessorRenderEnv,
@@ -29,14 +28,12 @@ import {
 } from '@ui/markdown/createMarkdownRenderer';
 import { clamp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { normalizeKnownHtmlForCliMarkdown } from './htmlMarkdownNormalize';
 
 /** SGR open/close codes wrapped through String.fromCharCode so the ESC byte
  *  is never a literal in source (pre-commit hooks have been known to mangle
  *  raw control chars). */
 const ESC = String.fromCharCode(27);
 const sgr = (code: number): string => `${ESC}[${code}m`;
-const log = createLog('cli.ansiMarkdown');
 
 interface AnsiMarkdownStyle {
   readonly enabled: boolean;
@@ -77,9 +74,11 @@ function highlightForTui(
     try {
       return highlight(trimmed, { language: lang, ignoreIllegals: true });
     } catch (error) {
-      log.warn(
-        `Syntax highlighting failed for ${lang} (${trimmed.length} chars); rendering plain text: ${toErrorMessage(error)}`,
-      );
+      // The frame is the only surface the TUI has (its log sink is silent
+      // while Ink owns the screen), so the fallback carries its own notice.
+      return `${style.gray(trimmed)}\n${style.dim(
+        `[syntax highlighting failed for ${lang}; shown as plain text: ${toErrorMessage(error)}]`,
+      )}`;
     }
   }
   return style.gray(trimmed);
@@ -521,18 +520,15 @@ interface RenderAnsiMarkdownOptions {
 /**
  * Render markdown to an ANSI-coloured string suitable for an Ink `<Text>`.
  * Uses a per-host LRU cache so streaming deltas don't re-render the entire
- * message body each frame.
+ * message body each frame. Transcript text arrives already HTML-normalized
+ * (`transcriptRowHeadline`); this renderer does not normalize again.
  */
 export function renderAnsiMarkdown(
   content: string,
   options: RenderAnsiMarkdownOptions = {},
 ): string {
   const processor = processorFor(options.width, options.colorEnabled ?? true);
-  return wrapAnsiToWidth(
-    processor(normalizeKnownHtmlForCliMarkdown(content)),
-    options.width,
-    true,
-  ).trimEnd();
+  return wrapAnsiToWidth(processor(content), options.width, true).trimEnd();
 }
 
 /** Test seam: drop the cached processors so tests can re-init cleanly. */

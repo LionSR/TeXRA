@@ -1,10 +1,9 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
+import { isNotADirectoryError } from '@common/errors';
 import type {
   OutputFileSummary,
   WorkflowRunEndOutputSchema,
@@ -16,7 +15,7 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
-import { ensureError } from '@utils/errors/errorMessage';
+import { withWorkflowDiffs } from '@tools/delegation/subagentResults';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash
@@ -32,7 +31,6 @@ import {
 import { CliUsageError, type CliContext } from './cliContext';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
-import type { Stats } from 'node:fs';
 import type { z } from 'zod';
 
 /** Resolve a user-supplied path against `cwd` when it isn't already absolute. */
@@ -40,27 +38,20 @@ function joinCwdRelative(target: string, cwd: string): string {
   return path.isAbsolute(target) ? target : path.join(cwd, target);
 }
 
-type OutputPathStats = Pick<Stats, 'isDirectory'>;
-
 type OutputFlag = '--output' | '--output-dir';
 
-interface OutputPathProbeDependencies {
-  readonly stat: (target: string) => Promise<OutputPathStats>;
-  readonly mkdir: (
-    target: string,
-    options: { readonly recursive: true },
-  ) => Promise<string | undefined>;
-  readonly dirname: (target: string) => string;
-}
+const notADirectory = (error: PlatformError.PlatformError): boolean =>
+  error.reason._tag === 'BadResource' &&
+  isNotADirectoryError(error.reason.cause);
 
-const outputPathProbeDefaults: OutputPathProbeDependencies = {
-  stat: fs.stat,
-  mkdir: fs.mkdir,
-  dirname: path.dirname,
-};
-
-function isAlreadyExistsError(error: unknown): boolean {
-  return (error as { readonly code?: string })?.code === 'EEXIST';
+/** The user named a path this process may not create or read through. */
+function permissionUsageError(
+  target: string,
+  flagLabel: OutputFlag,
+): CliUsageError {
+  return new CliUsageError(
+    `${flagLabel} is not writable (permission denied): ${target}`,
+  );
 }
 
 function parentFileUsageError(
@@ -78,42 +69,51 @@ function parentFileUsageError(
  * Probe `target` and materialize the directory that the eventual output write
  * requires. Using the same recursive mkdir operation as the writer avoids
  * platform-specific ancestor traversal: it handles missing depth, Windows
- * ENOENT-through-file behavior, and symlink resolution natively.
+ * ENOENT-through-file behavior, and symlink resolution natively. The Path
+ * service serves dirname so tests can supply NodePath.layerWin32; at runtime
+ * NodePath.layer is node:path, so it agrees with joinCwdRelative.
  */
-function probeOutputPath(
+const probeOutputPath = Effect.fn('probeOutputPath')(function* (
   target: string,
   flagLabel: OutputFlag,
-  dependencies: OutputPathProbeDependencies = outputPathProbeDefaults,
-): Effect.Effect<OutputPathStats | null, Error> {
-  const { stat, mkdir, dirname } = dependencies;
-  return Effect.tryPromise({
-    try: () => stat(target),
-    catch: ensureError,
-  }).pipe(
-    Effect.catch((error) => {
-      if (isNotADirectoryError(error)) {
+): Effect.fn.Return<
+  FileSystem.File.Info | null,
+  CliUsageError | PlatformError.PlatformError,
+  FileSystem.FileSystem | Path.Path
+> {
+  const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* Path.Path;
+  return yield* fs.stat(target).pipe(
+    Effect.catch((error: PlatformError.PlatformError) => {
+      if (notADirectory(error)) {
         return Effect.fail(parentFileUsageError(target, flagLabel));
       }
-      if (!isFileNotFoundError(error)) return Effect.fail(error);
+      if (error.reason._tag === 'PermissionDenied') {
+        return Effect.fail(permissionUsageError(target, flagLabel));
+      }
+      if (error.reason._tag !== 'NotFound') return Effect.fail(error);
       const requiredDirectory =
-        flagLabel === '--output-dir' ? target : dirname(target);
-      return Effect.tryPromise({
-        try: () => mkdir(requiredDirectory, { recursive: true }),
-        catch: (cause: unknown) => {
-          if (isNotADirectoryError(cause) || isAlreadyExistsError(cause)) {
+        flagLabel === '--output-dir' ? target : pathService.dirname(target);
+      return fs.makeDirectory(requiredDirectory, { recursive: true }).pipe(
+        Effect.mapError((cause) => {
+          if (notADirectory(cause) || cause.reason._tag === 'AlreadyExists') {
             return parentFileUsageError(target, flagLabel);
           }
-          if (!isFileNotFoundError(cause)) return ensureError(cause);
+          if (cause.reason._tag === 'PermissionDenied') {
+            return permissionUsageError(target, flagLabel);
+          }
+          if (cause.reason._tag !== 'NotFound') return cause;
           return new CliUsageError(
             flagLabel === '--output-dir'
               ? `--output-dir cannot be created: ${target}`
               : `--output parent directory cannot be created: ${target}`,
           );
-        },
-      }).pipe(Effect.as(null));
+        }),
+        Effect.as(null),
+      );
     }),
   );
-}
+});
 
 export { probeOutputPath as probeOutputPathForTests };
 
@@ -121,12 +121,16 @@ export { probeOutputPath as probeOutputPathForTests };
 export function assertOutputDirAvailable(
   outputDir: string | undefined,
   cwd: string,
-): Effect.Effect<void, Error> {
+): Effect.Effect<
+  void,
+  CliUsageError | PlatformError.PlatformError,
+  FileSystem.FileSystem | Path.Path
+> {
   if (!outputDir) return Effect.void;
   const target = joinCwdRelative(outputDir, cwd);
   return probeOutputPath(target, '--output-dir').pipe(
     Effect.flatMap((stats) =>
-      stats && !stats.isDirectory()
+      stats && stats.type !== 'Directory'
         ? Effect.fail(
             new CliUsageError(`--output-dir is not a directory: ${target}`),
           )
@@ -139,12 +143,16 @@ export function assertOutputDirAvailable(
 export function assertOutputFileAvailable(
   outputFile: string | undefined,
   cwd: string,
-): Effect.Effect<void, Error> {
+): Effect.Effect<
+  void,
+  CliUsageError | PlatformError.PlatformError,
+  FileSystem.FileSystem | Path.Path
+> {
   if (!outputFile) return Effect.void;
   const target = joinCwdRelative(outputFile, cwd);
   return probeOutputPath(target, '--output').pipe(
     Effect.flatMap((stats) =>
-      stats?.isDirectory()
+      stats?.type === 'Directory'
         ? Effect.fail(
             new CliUsageError(
               `--output is a directory; use --output-dir or pick a file path: ${target}`,
@@ -256,14 +264,12 @@ export function inputDerivedOutputFiles(
 function copyOutputFile(
   source: string,
   targetPath: string,
-): Effect.Effect<void, Error> {
-  return Effect.tryPromise({
-    try: async () => {
-      await fs.mkdir(path.dirname(targetPath), { recursive: true });
-      await fs.copyFile(source, targetPath);
-    },
-    catch: ensureError,
-  });
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  return FileSystem.FileSystem.use((fs) =>
+    fs
+      .makeDirectory(path.dirname(targetPath), { recursive: true })
+      .pipe(Effect.andThen(fs.copyFile(source, targetPath))),
+  );
 }
 
 export function resolveWorkflowOutput(
@@ -272,11 +278,18 @@ export function resolveWorkflowOutput(
   result: WorkflowFlowResult,
   context: CliContext,
   options: WorkflowOutputResolutionOptions,
-): Effect.Effect<CliWorkflowRunResult, Error> {
+): Effect.Effect<CliWorkflowRunResult, Error, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const runDirectory = runDirUnder(options.storageRoot, result.runId);
     const baseResult = {
       ...result,
+      // The flow reports no diffs: computing them is the delivery's, and this
+      // is the CLI's, so its result carries the diffs a subagent's record does.
+      output: yield* withWorkflowDiffs(
+        options.storageRoot,
+        result.runId,
+        result.output,
+      ),
       workingDirectory: context.cwd,
       runDirectory,
     };

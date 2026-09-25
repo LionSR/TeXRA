@@ -67,12 +67,16 @@ vi.mock('@common/teams/TeamPlan', async (importOriginal) => {
   return {
     ...actual,
     canLaunchTeam: mocks.canLaunchTeam,
-    findTeamPreset: mocks.findTeamPreset,
     planTeamRun: mocks.planTeamRun,
     planTeamRuns: mocks.planTeamRuns,
     teamPlanHasGaps: mocks.teamPlanHasGaps,
   };
 });
+
+vi.mock('@common/teams/TeamPresets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@common/teams/TeamPresets')>()),
+  findTeamPreset: mocks.findTeamPreset,
+}));
 
 vi.mock('@cli/runtime/runModel', () => ({
   buildHeadlessRunContext: vi.fn((context: CliContext) => ({
@@ -277,10 +281,7 @@ describe('CLI multi-agent run command', () => {
     mocks.planTeamRuns.mockImplementation((presets) =>
       presets.map((preset: unknown) =>
         mocks.planTeamRun(preset, {
-          agents: {
-            workflow: agentCatalogMock.getAgentsByCategory('workflow'),
-            toolUse: agentCatalogMock.getAgentsByCategory('toolUse'),
-          },
+          resolveAgent: agentCatalogMock.getCategoryAgent,
         }),
       ),
     );

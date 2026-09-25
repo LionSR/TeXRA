@@ -26,11 +26,11 @@ to compare two LaTeX versions.
 
 ### Controlling between-round diffs
 
-TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are off by default. Enable them from the **Dashboard → LaTeX** tab (the `texra.latexdiff.generateBetweenRoundDiffs` setting in the VS Code extension). When off, the run command and progress notifications only account for the original-vs-round comparisons, so fewer diff files are created.
+TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are off by default. Enable **Diff consecutive rounds** on **Dashboard → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-round comparisons, so fewer diff files are created.
 
 ### Focusing diff PDFs on changed pages
 
-By default, TeXRA passes `--subtype=ONLYCHANGEDPAGE` to `latexdiff` so compiled diff PDFs show only pages with edits. Disable **Show only changed pages in latexdiff PDFs** in the LaTeX tab when you need a full-document diff PDF.
+By default, TeXRA passes `--subtype=ONLYCHANGEDPAGE` to `latexdiff` so compiled diff PDFs show only pages with edits. Disable **Only changed pages in diff PDFs** in the LaTeX tab when you need a full-document diff PDF.
 
 ## Understanding LaTeX diff
 
@@ -135,7 +135,7 @@ By default, latexdiff wraps each edit in a markup command that is defined in the
 
 For complex LaTeX structures, pay attention to:
 
-1. **Math environments**: How changes inside equations are marked is configurable. The **latexdiff math markup** setting in the Dashboard's LaTeX tab (`texra.latexdiff.mathMarkup`) offers suppress markup, equation-level, within equations, or small changes inside equations, and applies to every diff route
+1. **Math environments**: How changes inside equations are marked is configurable. The **Math markup in diffs** setting in the Dashboard's LaTeX tab (`texra.latexdiff.mathMarkup`) offers suppress markup, equation-level, within equations, or small changes inside equations, and applies to every diff route
 2. **Nested environments**: Changes within nested environments can be hard to read
 3. **Command arguments**: Changes to command arguments are marked specially
 4. **Whitespace changes**: May or may not be highlighted depending on settings
@@ -236,7 +236,7 @@ The intelligent merge process:
 **Solutions**:
 
 - Keep the document structure similar between versions
-- Adjust the latexdiff settings in the Dashboard's LaTeX tab: **latexdiff math markup**, **latexdiff timeout (ms)**, **Generate diffs between consecutive rounds**, and **Show only changed pages in latexdiff PDFs**
+- Adjust the diff settings in the Dashboard's LaTeX tab: **Math markup in diffs**, **Diff consecutive rounds**, and **Only changed pages in diff PDFs**. The latexdiff timeout is in the CLI's `/config`
 - Break large changes into smaller edits
 
 ### Git integration issues

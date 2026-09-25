@@ -9,7 +9,6 @@ import { isLatexFile } from '@common/files/fileTypeUtils';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import { compileLatex2Pdf } from '@latex/texTools';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { withSessionFs } from '@platform/rootedFs';
 import type { FileLocation } from '@shared/schemas';
 import {
@@ -21,6 +20,7 @@ import {
 import { getFileStem } from '@utils/core';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'OpenBuildUtils';
 
@@ -96,9 +96,9 @@ export const invokeLatexWorkshopBuild = (
     vscode.commands.executeCommand('latex-workshop.build', uri),
   ).pipe(
     Effect.catch((err) =>
-      Effect.sync(() => {
-        createLog(channel).warn(`${warnLabel}: ${toErrorMessage(err)}`);
-      }),
+      Effect.logWarning(`${warnLabel}: ${toErrorMessage(err)}`).pipe(
+        withLogChannel(channel),
+      ),
     ),
   );
 
@@ -169,7 +169,8 @@ export const prepareBuildDisplay = (
   });
 
 /** What the file-open/build phase takes from the runtime it is run on. */
-type PreparedFileServices = FileSystem.FileSystem | Path.Path;
+type PreparedFileServices =
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
 /** How it fails: the editor's own rejections, and the existence probe's. */
 type DisplayFailure = Error | PlatformError.PlatformError;

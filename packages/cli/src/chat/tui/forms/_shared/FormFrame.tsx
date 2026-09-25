@@ -4,8 +4,11 @@
 
 import { Text, useWindowSize } from 'ink';
 
-import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
-import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
+import { CLOSE_HINTS, KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
+import {
+  BORDERED_PANEL_CHROME_COLUMNS,
+  BorderedPanel,
+} from '@cli/tui/ui/BorderedPanel';
 import { COLOR_ERROR, COLOR_HINT } from '@cli/tui/ui/colors';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import { clamp } from '@utils/core';
@@ -21,7 +24,7 @@ interface FormFrameProps {
   readonly children: React.ReactNode;
   /**
    * Append the canonical `Esc close` footer. Forms whose transient states
-   * carry their own footer (or none, like `/tools`) pass `false`.
+   * carry their own footer (or none, like the tools form) pass `false`.
    */
   readonly showCloseHint?: boolean;
 }
@@ -34,6 +37,11 @@ export function formFrameWidth(columns: number | undefined): number {
   return clamp(normalized, 1, FORM_FRAME_MAX_WIDTH);
 }
 
+/** Width a form frame's body paints at, inside the border. */
+export function formFrameContentWidth(columns: number | undefined): number {
+  return Math.max(1, formFrameWidth(columns) - BORDERED_PANEL_CHROME_COLUMNS);
+}
+
 export function FormFrame(props: FormFrameProps): React.JSX.Element {
   const { columns } = useWindowSize();
 
@@ -44,10 +52,7 @@ export function FormFrame(props: FormFrameProps): React.JSX.Element {
       width={formFrameWidth(columns)}
       footer={
         props.showCloseHint === false ? undefined : (
-          <KeyHints
-            hints={[{ key: 'Esc', action: 'close' }]}
-            confirmCancel={false}
-          />
+          <KeyHints hints={CLOSE_HINTS} confirmCancel={false} />
         )
       }
     >

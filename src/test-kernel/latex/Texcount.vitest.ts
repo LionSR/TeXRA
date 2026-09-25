@@ -11,6 +11,7 @@ import { captureLogEntries } from '@test/support/logSinkCapture';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({
   runToolWithCheck: vi.fn(),
@@ -45,8 +46,8 @@ const withDiagnostics = <A, E, R>(
 /**
  * A `FileSystem` that reports every path as present and fails every read with
  * `message`: the injected read failure the Chinese-package probe must treat as
- * best-effort. The suite used to spy on `platform().fs.readFile`, which the
- * probe no longer reads through.
+ * best-effort. The probe reads through the context `FileSystem`, so the
+ * failure is injected as a layer.
  */
 function failingReadLayer(message: string): Layer.Layer<FileSystem.FileSystem> {
   return FileSystem.layerNoop({
@@ -165,6 +166,7 @@ describe('texcount diagnostics', () => {
       }).pipe(
         withDiagnostics,
         Effect.provide(failingReadLayer('disk flutter')),
+        Effect.provide(nodeSpawnerLayer),
       ),
   );
 

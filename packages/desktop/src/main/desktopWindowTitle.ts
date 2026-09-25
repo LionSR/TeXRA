@@ -1,8 +1,7 @@
 import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   formatSessionTitle,
   NATIVE_WINDOW_TITLE,
@@ -38,52 +37,66 @@ export function getDesktopWindowTitle(
 }
 
 /**
- * Keep one BrowserWindow title synchronized with its session's view.
- * Renderer page titles are presentation content and cannot replace this
- * host-owned projection.
+ * Keep one BrowserWindow title synchronized with its session's view, for as
+ * long as the enclosing scope is open and `isCurrent` holds. Renderer page
+ * titles are presentation content and cannot replace this host-owned
+ * projection. `isCurrent` is the owner's synchronous check: a project switch
+ * forks the old scope's close, so until that close runs, only this check
+ * keeps the old session's stream from writing over the new project's title.
  */
 export function installDesktopWindowTitle(
   window: DesktopTitleWindow,
   session: DesktopTitleSession,
   workspacePath: string | undefined,
-  runtime: ProcessRuntime,
-): () => void {
-  let currentTitle = window.getTitle();
-  let disposed = false;
-  const update = (): void => {
-    if (disposed || window.isDestroyed()) return;
-    const title = getDesktopWindowTitle(session, workspacePath);
-    if (title === currentTitle) return;
-    currentTitle = title;
-    window.setTitle(title);
-  };
-  const preventRendererTitle = (event: { preventDefault(): void }): void => {
-    event.preventDefault();
-  };
+  isCurrent: () => boolean,
+): Effect.Effect<void, never, Scope.Scope> {
+  return Effect.gen(function* () {
+    let currentTitle = window.getTitle();
+    let disposed = false;
+    const update = (): void => {
+      if (disposed || !isCurrent() || window.isDestroyed()) return;
+      const title = getDesktopWindowTitle(session, workspacePath);
+      if (title === currentTitle) return;
+      currentTitle = title;
+      window.setTitle(title);
+    };
+    const preventRendererTitle = (event: { preventDefault(): void }): void => {
+      event.preventDefault();
+    };
 
-  window.webContents.on('page-title-updated', preventRendererTitle);
-  const views = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(session.view), () =>
+    yield* Stream.runForEach(SubscriptionRef.changes(session.view), () =>
       Effect.sync(update),
-    ),
-  );
-  update();
-
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    runtime.runFork(Fiber.interrupt(views));
-    // Check the window before touching `.webContents`: the property getter
-    // itself throws "Object has been destroyed" once the window is gone, so
-    // reaching for `webContents.isDestroyed()` was already too late. This
-    // disposer runs from the window's own `closed` handler, which is exactly
-    // that case: the listener dies with the web contents anyway.
-    if (window.isDestroyed()) return;
-    if (!window.webContents.isDestroyed()) {
-      window.webContents.removeListener(
-        'page-title-updated',
-        preventRendererTitle,
-      );
-    }
-  };
+    ).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          'The window title stopped following its session',
+          cause,
+        ),
+      ),
+      Effect.forkScoped({ startImmediately: true }),
+    );
+    // Registered after the fork, so the scope's close runs this first and
+    // synchronously, before that fiber is interrupted.
+    yield* Effect.acquireRelease(
+      Effect.sync(() => {
+        window.webContents.on('page-title-updated', preventRendererTitle);
+      }),
+      () =>
+        Effect.sync(() => {
+          disposed = true;
+          // Check the window before touching `.webContents`: the property
+          // getter itself throws "Object has been destroyed" once the window
+          // is gone, which is the case when the window's own `closed`
+          // handler closes this scope; the listener dies with it anyway.
+          if (window.isDestroyed()) return;
+          if (!window.webContents.isDestroyed()) {
+            window.webContents.removeListener(
+              'page-title-updated',
+              preventRendererTitle,
+            );
+          }
+        }),
+    );
+    update();
+  });
 }

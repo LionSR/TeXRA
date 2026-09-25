@@ -18,7 +18,6 @@
  * reads its input in the same live run, without a second queue consumer.
  */
 import {
-  Cause,
   Context,
   Effect,
   type FileSystem,
@@ -40,7 +39,6 @@ import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
 import type { MediaAttachmentKind } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
@@ -51,6 +49,7 @@ import {
   stepRow,
   type Message,
 } from './loop/rows';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export interface ConsumedFollowUps {
   readonly state: RunState;
@@ -82,7 +81,11 @@ export class FollowUps extends Context.Service<
     readonly consume: (
       state: RunState,
       batch: FollowUpBatch,
-    ) => Effect.Effect<ConsumedFollowUps, Error, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    >;
   }
 >()('@texra/agent/FollowUps') {}
 
@@ -103,7 +106,7 @@ export const followUpsLayer: Layer.Layer<
     // reach it, because a failed acquire or a thrown attach releases nothing
     // under acquireUseRelease semantics, and the lease must not outlive the
     // scope that claimed it (the run-loop design,
-    // .agents/docs/proposed/architecture/2026-09-21-effect-design-run-loop-programs.md).
+    // .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
     const created = yield* RunInput.make;
     let released = false;
     const lease = yield* Effect.acquireRelease(
@@ -138,7 +141,7 @@ export const followUpsLayer: Layer.Layer<
     ): Effect.fn.Return<
       { message: Message; kinds: readonly MediaAttachmentKind[] },
       Error,
-      FileSystem.FileSystem
+      FileSystem.FileSystem | ChildProcessSpawner
     > {
       const bound = yield* SynchronizedRef.get(run.model);
       const parts: InputPart[] = [];
@@ -178,9 +181,13 @@ export const followUpsLayer: Layer.Layer<
     const consume = Effect.fn('FollowUps.consume')(function* (
       state: RunState,
       batch: FollowUpBatch,
-    ): Effect.fn.Return<ConsumedFollowUps, Error, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    > {
       const followUps = batch.synthetic ? [] : batch.followUps;
-      const built = yield* Effect.exit(
+      const built = yield* (
         batch.synthetic
           ? Effect.succeed({
               message: {
@@ -189,36 +196,29 @@ export const followUpsLayer: Layer.Layer<
               } satisfies Message,
               kinds: [],
             })
-          : batchMessage(followUps),
+          : batchMessage(followUps)
+      ).pipe(
+        Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps, []))),
       );
-      if (built._tag === 'Failure') {
-        logFollowUps(followUps, []);
-        return yield* Effect.failCause(built.cause);
-      }
-      const committed = yield* Effect.exit(
-        Effect.uninterruptible(
-          ledger.appendBatch(runId, state, [
-            ...followUps.map((followUp) => ({
-              type: 'followup.consumed' as const,
-              aggregateId: rowAggregate(runId),
-              followUpId: followUp.followUpId,
-            })),
-            appendRow(runId, [built.value.message]),
-            // The input that recovers a failed run clears the error fact in
-            // the same transaction, so a resume taken between this batch and
-            // the next turn's snapshot does not read the run as still failed.
-            snapshotRow(runId, state, { runtime: { lastError: null } }),
-            stepRow(runId, state, 'turn.ready'),
-          ]),
-        ),
+      const committed = yield* Effect.uninterruptible(
+        ledger.appendBatch(runId, state, [
+          ...followUps.map((followUp) => ({
+            type: 'followup.consumed' as const,
+            aggregateId: rowAggregate(runId),
+            followUpId: followUp.followUpId,
+          })),
+          appendRow(runId, [built.message]),
+          // The input that recovers a failed run clears the error fact in
+          // the same transaction, so a resume taken between this batch and
+          // the next turn's snapshot does not read the run as still failed.
+          snapshotRow(runId, state, { runtime: { lastError: null } }),
+          stepRow(runId, state, 'turn.ready'),
+        ]),
       );
-      if (committed._tag === 'Failure') {
-        return yield* Effect.fail(ensureError(Cause.squash(committed.cause)));
-      }
       // The user's rows are durable; the transcript shows what was asked.
-      logFollowUps(followUps, built.value.kinds);
+      logFollowUps(followUps, built.kinds);
       return {
-        state: committed.value,
+        state: committed,
         instruction: userFollowUpInstruction(
           followUps.map((followUp) => followUp.content),
         ),

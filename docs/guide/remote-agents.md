@@ -21,13 +21,13 @@ Remote agents are pre-configured agents hosted in the cloud that you can run dir
 Remote agents require a TeXRA account:
 
 1. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)
-2. Run **TeXRA: Sign In**
+2. Run **TeXRA: Sign In to TeXRA Account (Remote Agents)**
 3. Choose a sign-in method (GitHub or Google)
 4. Complete the sign-in flow in your browser
 5. Return to VS Code once signed in
 
 ::: tip
-To check your sign-in status at any time, run **TeXRA: View Profile** from the Command Palette.
+To check your sign-in status at any time, run **TeXRA: Open Settings** and open the Account & Usage tab.
 :::
 
 ### 2. Browse available agents
@@ -35,11 +35,11 @@ To check your sign-in status at any time, run **TeXRA: View Profile** from the C
 Once signed in, browse remote agents from the Agents tab:
 
 1. Open the Command Palette
-2. Run **TeXRA: Show Agents** to open the Agents tab in Settings
+2. Run **TeXRA: Open Settings** and open the Agents tab
 3. Select a remote agent in the list to see its details
 4. Select **Show in agent selector** to add it to your agent selector
 
-Your email and access level sit on the Account & Usage tab (**TeXRA: View Profile**).
+Your email and access level sit on the General page of Settings.
 
 The selected agent appears in the main TeXRA view alongside your built-in agents.
 
@@ -60,27 +60,27 @@ The agent dropdown is a single flat list with no Local/Remote headers; remote ag
 
 <DropdownMenu
   label="Agent"
-  value="search"
+  value="generic"
   valueIcon="cloud"
   maxWidth="320px"
   :groups="[
     { items: [
       { name: 'polish', icon: 'sparkle' },
       { name: 'correct', icon: 'pencil' },
-      { name: 'search', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
-      { name: 'simplifier', icon: 'cloud' },
-      { name: 'orchestrator', icon: 'cloud' },
+      { name: 'generic', icon: 'cloud', badge: 'in use', badgeVariant: 'accent', active: true },
+      { name: 'devise', icon: 'cloud' },
+      { name: 'criticize', icon: 'cloud' },
     ] },
   ]"
 />
 
-<p class="hero-caption">The agent dropdown: one flat list where remote agents (<code>search</code>, <code>simplifier</code>, <code>orchestrator</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
+<p class="hero-caption">The agent dropdown: one flat list where remote agents (<code>generic</code>, <code>devise</code>, <code>criticize</code>) carry a cloud marker that sets them apart from local agents like <code>polish</code> and <code>correct</code>.</p>
 
 None of this is VS Code-only. The whole loop works from a terminal too:
 
 <CliRemoteHero />
 
-<p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra chat --agent search</code> runs it like any local agent.</p>
+<p class="hero-caption">Sign in once and remote agents resolve by name everywhere: <code>agents show</code> reports <code>source: remote</code>, and <code>texra run generic --input draft.tex</code> runs it like any local agent.</p>
 
 ## Remote agent access
 
@@ -103,7 +103,7 @@ Signed-in researchers, academics, and technical writers can use specialized remo
 
 <p class="hero-caption">What remote agent access gets you: domain-specific agents, advanced multi-step reasoning, early access to beta agents, and a direct line into how agents evolve.</p>
 
-Current remote agents include `search` (literature discovery), `simplifier` (code and writing simplification), and `orchestrator` (multi-agent coordination). Read the [remote agents section of the built-in agents guide](./built-in-agents.md#remote-agents) for details on each.
+Current remote agents are workflow agents such as `generic`, `devise`, `apply`, and `criticize`, which the Physicist, Mathematician, and Computer Scientist [teams](./built-in-agents.md#built-in-teams) include. The tool-use agents that used to be remote (`orchestrator`, `search`, `simplifier`, `presenter`, `progressCheck`, and the Lean Project agents) now ship with TeXRA and need no sign-in.
 
 Different agents may be available to different research groups, depending on their domain and needs.
 
@@ -130,10 +130,10 @@ TeXRA supports academic research. Remote agent access is **free for qualifying r
 To check your account status:
 
 1. Open the Command Palette
-2. Run **TeXRA: View Profile**
-3. View your email and access level on the Account & Usage tab
+2. Run **TeXRA: Open Settings**
+3. View your email and access level on the General page
 
-Run **TeXRA: Show Agents** to browse the remote agents available to you.
+The Agents tab of Settings lists the remote agents available to you.
 
 ### Sign out
 

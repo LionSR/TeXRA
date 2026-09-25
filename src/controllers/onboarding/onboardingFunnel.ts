@@ -12,7 +12,7 @@
  * workspace must never demote a veteran back to State 0/1. Each host
  * (extension, CLI, desktop) computes `hasCredential` with its own credential
  * sources and reads the flags from `@shared/state/onboardingState` using its
- * `platform().globalState`.
+ * `AppState` store.
  *
  * The derivation is the planner below; the in-session loop around it — probe,
  * plan, publish, clear a stale skip, serialized against itself — is

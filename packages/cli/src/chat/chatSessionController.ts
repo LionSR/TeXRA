@@ -18,7 +18,6 @@ import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   attachTerminalResultToast,
-  detachSubagentsOnStop,
   resumeRun,
   runAgent,
   type AgentConfig,
@@ -33,8 +32,7 @@ import {
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
 import { type CliContext } from '@cli/runtime/cliContext';
-import { warnApprovalDenied } from '@cli/runtime/approval/approvalPrompts';
-import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
+import { cliToolUseApprovalOptions } from '@cli/runtime/approval/settleApprovals';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -52,7 +50,6 @@ import type { RunModelDecisionReason } from '@model/runModelDecision';
 import type { DisposableStore } from '@platform/disposable';
 import {
   AgentResumeFailed,
-  StateWriteFailed,
   type AgentResumePort,
   type RecoveryContinuation,
   type StateStore,
@@ -60,20 +57,15 @@ import {
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  RUN_OUTCOME,
-  RUN_PHASE,
-  type RunId,
-  AgentCategory,
-} from '@shared/schemas';
+import { acceptsFollowUp } from '@shared/session/sessionView';
+import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -83,7 +75,7 @@ import {
   type SlashCommandContext,
 } from './tui/commands/handlers/slashContext';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   focusRun,
   rootRunId,
   patchSessionMeta,
@@ -99,10 +91,9 @@ import {
 import {
   currentView,
   runViewOf,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
 } from './tui/state/sessionView';
 import { createTuiHostInteractions } from './tui/state/subscribeApprovals';
-import { notify } from './tui/notifications/terminalNotifier';
 import {
   appendLocalErrorTranscript,
   appendLocalAssistantTranscript,
@@ -154,14 +145,6 @@ interface AutoResumeOptions {
 // ---------------------------------------------------------------------------
 
 /**
- * The recovery tail every run/resume program below shares. A typed failure
- * from a host call and a throw from the imperative body alike reach
- * `recover` with the original value, which is exactly what the `try`/`catch`
- * around these bodies did before they became programs. Interruption is not
- * folded in: a fiber the runtime is tearing down is not a run failure to
- * report, and the caller's own settlement still sees it.
- */
-/**
  * A chat-session host call this controller drives faulted. The model
  * selection reads the process stores, which does not report a normal outcome
  * this way.
@@ -186,6 +169,14 @@ const settleClaimOnExit =
       ),
     );
 
+/**
+ * The recovery tail every run/resume program below shares. A typed failure
+ * from a host call and a throw from the imperative body alike reach
+ * `recover` with the original value, which is exactly what the `try`/`catch`
+ * around these bodies did before they became programs. Interruption is not
+ * folded in: a fiber the runtime is tearing down is not a run failure to
+ * report, and the caller's own settlement still sees it.
+ */
 const recoverRun = <A, E, R>(
   program: Effect.Effect<A, E, R>,
   recover: (error: unknown) => A,
@@ -197,6 +188,10 @@ const recoverRun = <A, E, R>(
         : Effect.sync(() => recover(Cause.squash(cause))),
     ),
   );
+
+/** Workflow runs resume headless, never inside a chat. */
+const workflowResumeRefusal = (runId: RunId): string =>
+  `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`;
 
 /**
  * Narrow commands the chat-session controller exposes to the Ink component.
@@ -214,13 +209,10 @@ export interface ChatSessionController {
    * when the resume resolution and rehydration are complete, but the
    * continued run itself stays pending until the agent finishes or suspends.
    */
-  resume(id: RunId): Effect.Effect<void, unknown>;
+  resume(id: RunId): Effect.Effect<void, Error>;
 
   /** Request stop of the root run using the configured child policy. */
   stop(): void;
-
-  /** Stop one user-focused stream while preserving other agent runs. */
-  stopRun(runId: RunId): void;
 
   /**
    * Atomically admit a message into an interrupted root conversation.
@@ -250,7 +242,7 @@ export interface ChatSessionController {
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ): Effect.Effect<void, unknown, ProcessServices>;
+  ): Effect.Effect<void, Error, ProcessServices>;
   /** Reserve a skill activation for the next submitted message. */
   activateSkill(selection: SkillActivation): void;
   /** Drop every reserved skill activation. */
@@ -403,7 +395,7 @@ export function createChatSessionController(
   const adoptRunConfig = (
     config: Pick<
       AgentConfig,
-      'agent' | 'model' | 'cli' | 'delegationAgentScope'
+      'agent' | 'agentSource' | 'model' | 'cli' | 'delegationAgentScope'
     >,
     modelSource?: 'history',
   ) =>
@@ -415,6 +407,7 @@ export function createChatSessionController(
       );
       patchSessionMeta({
         agent: config.agent,
+        agentSource: config.agentSource ?? undefined,
         model: config.model,
         ...(modelSource ? { modelSource } : {}),
         teamName,
@@ -518,18 +511,9 @@ export function createChatSessionController(
     const runId = session.runId;
     if (!runId || !runViewOf(currentView(), runId)) return;
     session.interruptedRunId = runId;
-    // Ctrl-C honors the configured child-detach policy.
-    runtime.runFork(
-      Effect.flatMap(
-        detachSubagentsOnStop(runtimeSession.roots),
-        (detachActiveChildren) =>
-          request({
-            kind: 'run.stop',
-            runId,
-            detachActiveChildren,
-          }),
-      ),
-    );
+    // Ctrl-C leaves the child policy unset, so the session's request handler
+    // applies the configured "Keep subagents running".
+    runtime.runFork(request({ kind: 'run.stop', runId }));
   };
 
   // Shared tail of the run/resume failure recovery: surface the error to
@@ -546,9 +530,14 @@ export function createChatSessionController(
     if (!hasErrorPresentationClaimed(error)) {
       appendLocalErrorTranscript(toErrorMessage(error));
     }
+    // Another live process holds the run: it refused the claim, or took it
+    // after its owner was proved dead.
     if (
-      error instanceof DatabaseWriteFailed &&
-      error.cause instanceof DatabaseClaimRefused
+      (error instanceof DatabaseWriteFailed &&
+        error.cause instanceof DatabaseClaimRefused) ||
+      (error instanceof DatabaseNotOwner &&
+        !error.closed &&
+        error.ownerId !== null)
     ) {
       session.runExitCode = CliExitCode.Usage;
     } else {
@@ -580,32 +569,18 @@ export function createChatSessionController(
 
   /** The CLI chat's tool-use run policy, shared by every resume path. */
   const toolUseResumeOptions = (
-    launchRunId: RunId,
-    approvalsUnavailable: boolean,
+    approval: ReturnType<typeof cliToolUseApprovalOptions>,
   ): Pick<
     ResumeRunOptions,
     | 'session'
     | 'approvalPromptsUnavailable'
     | 'onApprovalPolicyDenial'
-    | 'runtimeUnavailableTools'
     | 'executeWorkflow'
   > => ({
     session: runtimeSession,
-    approvalPromptsUnavailable: approvalsUnavailable,
-    onApprovalPolicyDenial: () =>
-      warnApprovalDenied(
-        runtimeSession,
-        sessionContext,
-        'Tool or edit approval',
-        launchRunId,
-      ),
-    runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+    ...approval,
     executeWorkflow: (_config, runId) =>
-      Effect.fail(
-        new Error(
-          `Run ${runId} is a workflow; resume it with \`texra resume ${runId}\`.`,
-        ),
-      ),
+      Effect.fail(new Error(workflowResumeRefusal(runId))),
   });
 
   // Per launch: attach the root's terminal-result presenter until it
@@ -613,8 +588,10 @@ export function createChatSessionController(
   // published before its run promise settles, and children (runs with a
   // parent) never toast, so the listener has no work after the root finalizes
   // and must not overlap a later root's listener.
-  const setupRunHost = (): {
-    readonly approvalsUnavailable: boolean;
+  const setupRunHost = (
+    runId: RunId,
+  ): {
+    readonly approval: ReturnType<typeof cliToolUseApprovalOptions>;
     readonly finalize: () => void;
   } => {
     const detachResultToast = agentRuns.attachResultToast(
@@ -622,9 +599,10 @@ export function createChatSessionController(
       runtimeSession.interactions,
     );
     return {
-      approvalsUnavailable: cliApprovalPromptsUnavailable(
+      approval: cliToolUseApprovalOptions(
+        runtimeSession,
         sessionContext,
-        runtimeSession.approvalPolicy,
+        runId,
       ),
       finalize: (): void => {
         detachResultToast();
@@ -639,14 +617,14 @@ export function createChatSessionController(
 
   const startRootRun = (config: AgentConfigPayload): void => {
     void supersedeInterruptedRecovery();
-    const { approvalsUnavailable, finalize } = setupRunHost();
     const runId = generateRunId();
+    const { approval, finalize } = setupRunHost(runId);
 
     // The slot has to be claimed before the chain that settles it exists, so
     // the claim holds the `await` of a `Deferred` the run chain completes.
     // Awaiting the deferred is a plain suspension, so a run parked at the WAIT
     // node leaves the slot pending exactly as before.
-    const claimedRun = Deferred.makeUnsafe<void, unknown>();
+    const claimedRun = Deferred.makeUnsafe<void, Error>();
     // Native launch may resolve its stream on this turn. Claim first so
     // marking the run pending cannot erase that run or a reentrant stop.
     session.markRunPending(Deferred.await(claimedRun));
@@ -663,15 +641,7 @@ export function createChatSessionController(
             {
               session: runtimeSession,
               enforceCategory: true,
-              approvalPromptsUnavailable: approvalsUnavailable,
-              onApprovalPolicyDenial: () =>
-                warnApprovalDenied(
-                  runtimeSession,
-                  sessionContext,
-                  'Tool or edit approval',
-                  runId,
-                ),
-              runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+              ...approval,
               onRunResolved: (resolvedRunId) => {
                 // Each chat round mints a fresh root run id, so
                 // bash/tool-edit/super-YOLO bypass, which is
@@ -695,7 +665,6 @@ export function createChatSessionController(
             },
           );
           session.runExitCode = runOutcomeExitCode(result.outcome);
-          notify('agentFinished');
         }),
         reportRunFailure,
       ).pipe(
@@ -733,7 +702,7 @@ export function createChatSessionController(
   // `restoreInterruptedRecovery` pairing, where a double hand-back or a missed
   // restore silently loses the follow-ups typed during an interruption. Don't
   // merge these two bodies.
-  const resume = (id: RunId): Effect.Effect<void, unknown> =>
+  const resume = (id: RunId): Effect.Effect<void, Error> =>
     // `Effect.suspend` is what keeps the claim handshake synchronous: its
     // body is this program's first step, so the availability check and the
     // claim are one uninterrupted synchronous callback (see
@@ -741,7 +710,7 @@ export function createChatSessionController(
     // concurrent tryResumeRun() (or another resume()) can never observe this
     // call suspended between "checked available" and "claimed".
     Effect.suspend(() => {
-      const claimedRun = Deferred.makeUnsafe<void, unknown>();
+      const claimedRun = Deferred.makeUnsafe<void, Error>();
       if (!session.tryClaimRootRunSlot(Deferred.await(claimedRun))) {
         // The slot is taken, so the deferred this attempt made is dropped
         // unsettled: nothing holds it, and no fiber is parked on it.
@@ -779,9 +748,7 @@ export function createChatSessionController(
           return;
         }
         if (config.agentCategory !== AgentCategory.ToolUse) {
-          refuseResume(
-            `Run ${id} is a workflow; resume it with \`texra resume ${id}\`.`,
-          );
+          refuseResume(workflowResumeRefusal(id));
           return;
         }
 
@@ -791,7 +758,7 @@ export function createChatSessionController(
           return;
         }
 
-        const { approvalsUnavailable, finalize } = setupRunHost();
+        const { approval, finalize } = setupRunHost(id);
 
         // Adopting the resumed stream is the mutation a refusal must not cost:
         // `resumeRun` calls this only once the saved state loaded, so the
@@ -814,7 +781,6 @@ export function createChatSessionController(
           // only decides which stream it marks recoverable.
           if (session.stopRequested) interruptActiveRun();
 
-          yield* runtimeSession.transcripts.ensureLoaded(id);
           // The transcript and the work plan are the fold's: the TUI
           // subscribes the run's aggregate and renders `transcript.rows`, and
           // an open `/plan` reader reads the same `RunView`.
@@ -832,7 +798,7 @@ export function createChatSessionController(
           Effect.gen(function* () {
             recoveryHandedOff = true;
             const result = yield* agentRuns.resume(id, {
-              ...toolUseResumeOptions(id, approvalsUnavailable),
+              ...toolUseResumeOptions(approval),
               recovery,
               extraFollowUps: supersededRecovery?.followUps,
               onResumeResolved: adoptResumedRun,
@@ -878,7 +844,7 @@ export function createChatSessionController(
 
   /** Settle a resumed turn. A root acknowledges at idle, so its `completion`
    *  holds this chain, and the root-run slot it settles, until the run ends.
-   *  A subagent back at WAITING is a completed turn: no `agentFinished`. */
+   *  A subagent back at WAITING is a completed turn. */
   const settleResumedTurn = Effect.fn('settleResumedTurn')(function* (result: {
     readonly outcome?: TurnOutcome;
     readonly completion?: Effect.Effect<TurnOutcome, Error>;
@@ -887,7 +853,6 @@ export function createChatSessionController(
       (result.completion ? yield* result.completion : result.outcome) ??
       RUN_OUTCOME.COMPLETED;
     session.runExitCode = runOutcomeExitCode(outcome);
-    if (outcome !== RUN_PHASE.WAITING) notify('agentFinished');
   });
 
   /**
@@ -973,9 +938,8 @@ export function createChatSessionController(
 
         yield* adoptRunConfig(config, 'history');
 
-        const runHost = setupRunHost();
+        const runHost = setupRunHost(runId);
         finalize = runHost.finalize;
-        const { approvalsUnavailable } = runHost;
         session.runId = runId;
         if (!parentRunId) {
           rootRunId.set(runId);
@@ -987,19 +951,10 @@ export function createChatSessionController(
         focusRun(runId);
         session.runExitCode = CliExitCode.Success;
 
-        yield* setCliHelperModel(stores.globalState, config.model).pipe(
-          Effect.mapError(
-            (cause) =>
-              new StateWriteFailed({
-                key: GlobalStateKey.HELPER_MODEL,
-                message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
-                cause,
-              }),
-          ),
-        );
+        yield* setCliHelperModel(stores.globalState, config.model);
         recoveryHandedOff = true;
         const result = yield* agentRuns.resume(runId, {
-          ...toolUseResumeOptions(runId, approvalsUnavailable),
+          ...toolUseResumeOptions(runHost.approval),
           recovery,
           extraFollowUps: options.extraFollowUps,
           onFollowUpQueueReady: options.onFollowUpQueueReady,
@@ -1130,28 +1085,18 @@ export function createChatSessionController(
     interruptActiveRun();
   };
 
-  const stopRun = (runId: RunId): void => {
-    if (runId === session.runId) {
-      requestStop();
-      session.interruptedRunId = runId;
-    }
-    runtime.runFork(
-      request({ kind: 'run.stop', runId, detachActiveChildren: true }),
-    );
-  };
-
   const startSession = (
     instruction: string,
     mediaFiles?: readonly string[],
     displayInstruction?: string,
-  ): Effect.Effect<boolean, unknown, ProcessServices> =>
+  ): Effect.Effect<boolean, Error, ProcessServices> =>
     Effect.suspend(() => {
       followUpQueue.clear();
       let started = false;
       // The slot is claimed before the program runs, the way every other launch
       // path claims it: `startRootRun` below re-claims it for the run it mints,
       // and a refusal on the way there settles this deferred instead.
-      const startSettled = Deferred.makeUnsafe<void, unknown>();
+      const startSettled = Deferred.makeUnsafe<void, Error>();
       session.markRunPending(Deferred.await(startSettled));
       return recoverRun(
         Effect.gen(function* () {
@@ -1176,22 +1121,14 @@ export function createChatSessionController(
                 }),
             ),
           );
-          yield* setCliHelperModel(stores.globalState, selection.model).pipe(
-            Effect.mapError(
-              (cause) =>
-                new StateWriteFailed({
-                  key: GlobalStateKey.HELPER_MODEL,
-                  message: `The helper model could not be recorded: ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            ),
-          );
+          yield* setCliHelperModel(stores.globalState, selection.model);
           if (session.stopRequested) {
             session.markRunCompleted();
             return;
           }
           startRootRun({
             agent: meta.agent || initialAgent,
+            agentSource: meta.agentSource,
             model: selection.model,
             instruction,
             ...(displayInstruction !== undefined ? { displayInstruction } : {}),
@@ -1210,11 +1147,8 @@ export function createChatSessionController(
         (error) => {
           if (!session.stopRequested) {
             appendLocalUserTranscript(displayInstruction ?? instruction);
-            appendLocalErrorTranscript(toErrorMessage(error));
           }
-          session.runExitCode = session.stopRequested
-            ? CliExitCode.Success
-            : CliExitCode.AgentError;
+          reportRunFailure(error);
           session.markRunCompleted();
         },
       ).pipe(
@@ -1231,10 +1165,10 @@ export function createChatSessionController(
         readonly kind: 'accept' | 'reject';
         readonly runId: RunId;
       } => {
-    const stream = runViewOf(currentView(), activeRunIdSignal.get());
+    const stream = runViewOf(currentView(), selectedRunIdSignal.get());
     if (!stream || stream.parentId === null) return { kind: 'none' };
     return {
-      kind: focusedChildAcceptsFollowUps(stream) ? 'accept' : 'reject',
+      kind: acceptsFollowUp(stream, CLI_FOLLOW_UP_HOST) ? 'accept' : 'reject',
       runId: stream.id,
     };
   };
@@ -1316,15 +1250,23 @@ export function createChatSessionController(
               // this race with `undefined` so the draft is restored below.
               runSettled.pipe(Effect.exit, Effect.as(undefined)),
         ));
-      if (session.stopRequested) {
+      // Hand the message back to the input, naming why when there is a reason.
+      const restoreDraft = (reason?: string): void => {
         requestDraftRestore(line, images);
+        if (reason !== undefined) {
+          setTransientNotice(
+            `${reason} The message has been restored to the input.`,
+            { ttlMs: Infinity },
+          );
+        }
+      };
+      if (session.stopRequested) {
+        restoreDraft();
         return;
       }
       if (!followUpTarget) {
-        requestDraftRestore(line, images);
-        setTransientNotice(
-          'The conversation ended before the message could be sent. The message has been restored to the input.',
-          { ttlMs: Infinity },
+        restoreDraft(
+          'The conversation ended before the message could be sent.',
         );
         return;
       }
@@ -1341,22 +1283,30 @@ export function createChatSessionController(
             .pipe(
               Effect.match({
                 onFailure: (error) => ({
-                  refused: describeRequestError(error),
+                  kind: 'refused' as const,
+                  reason: describeRequestError(error),
                 }),
-                onSuccess: (value) => ({ refused: undefined, value }),
+                onSuccess: (value) =>
+                  value.kind === 'followUp'
+                    ? { kind: 'sent' as const, value }
+                    : {
+                        kind: 'refused' as const,
+                        reason: describeFollowUpFailure('not_resumable'),
+                      },
               }),
-              // `match` recovers only the typed refusal; a collaborator that
-              // rejects defects. Read the defect the way `SessionBridge`
-              // answers `Internal`: logged, worded, the message handed back.
+              // `match` recovers only the typed refusal; a defect is read the
+              // way `SessionBridge` answers `Internal`: logged and worded.
               Effect.catchCause((cause) =>
-                Effect.sync(() =>
-                  Cause.hasInterruptsOnly(cause)
-                    ? { interrupted: true as const }
-                    : { defect: reportRequestDefect(cause) },
-                ),
+                Effect.gen(function* () {
+                  if (Cause.hasInterruptsOnly(cause)) {
+                    return { kind: 'interrupted' as const };
+                  }
+                  const reason = yield* reportRequestDefect(cause);
+                  return { kind: 'defect' as const, reason };
+                }),
               ),
             );
-          if ('value' in outcome && outcome.value.kind === 'followUp') {
+          if (outcome.kind === 'sent') {
             runtimeSession.followUps.notifySent(followUpTarget);
             delivered = true;
             const presentation = presentFollowUpResult(
@@ -1370,31 +1320,22 @@ export function createChatSessionController(
                 followUpTarget,
               );
             }
-          } else if ('interrupted' in outcome) {
-            // Teardown mid-send is not a verdict on the message; hand it back.
-            requestDraftRestore(line, images);
-          } else if ('defect' in outcome) {
-            // The run may be healthy; a defect is no refusal, so it neither
-            // stops the stream nor retargets the conversation.
-            requestDraftRestore(line, images);
-            setTransientNotice(
-              `${outcome.defect} The message has been restored to the input.`,
-              { ttlMs: Infinity },
-            );
+            return;
+          }
+          // Teardown mid-send is not a verdict on the message, and a defect is
+          // no refusal (the run may be healthy): both hand the message back
+          // without stopping the stream or retargeting the conversation.
+          restoreDraft(
+            outcome.kind === 'interrupted' ? undefined : outcome.reason,
+          );
+          if (outcome.kind !== 'refused') return;
+          if (followUpTarget === session.runId) {
+            session.stopRequested = true;
           } else {
-            requestDraftRestore(line, images);
-            setTransientNotice(
-              `${outcome.refused ?? describeFollowUpFailure('not_resumable')} The message has been restored to the input.`,
-              { ttlMs: Infinity },
+            appendLocalAssistantTranscript(
+              FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
+              followUpTarget,
             );
-            if (followUpTarget === session.runId) {
-              session.stopRequested = true;
-            } else {
-              appendLocalAssistantTranscript(
-                FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
-                followUpTarget,
-              );
-            }
           }
         }),
       );
@@ -1444,7 +1385,6 @@ export function createChatSessionController(
     startRootRun,
     resume,
     stop,
-    stopRun,
     admitInterruptedFollowUp,
     clearInterruptedRecovery: () => {
       void supersedeInterruptedRecovery();

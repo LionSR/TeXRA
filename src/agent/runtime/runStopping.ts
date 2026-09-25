@@ -52,10 +52,8 @@ export class RunStopper {
     const stopToken = this.roster.beginStop(runId);
     const handle = this.roster.handle(runId);
     if (!handle) {
-      const activation = this.roster.activation(runId);
-      activation?.interrupt();
+      const reached = this.interruptActivation(runId);
       this.roster.notifyWaiters(runId);
-      const reached = activation !== undefined;
       return {
         accepted: () => reached,
         settlement: this.roster.throughStop(runId, stopToken, Effect.void),
@@ -115,7 +113,7 @@ export class RunStopper {
     return Effect.acquireUseRelease(
       this.acquireRunClaim(runId),
       () => this.applyStop(runId, options),
-      (release) => release.pipe(Effect.orDie),
+      (release) => release,
     );
   }
 
@@ -233,25 +231,13 @@ export class RunStopper {
             // Shared across the child sweep and the root cascade so each run in
             // the chain is interrupted exactly once.
             const visited = new Set<string>();
+            const cascade = options.detachActiveChildren !== true;
 
-            if (options.detachActiveChildren !== true) {
-              this.interruptActiveChildren(runId, visited, true);
-            }
+            if (cascade) this.interruptActiveChildren(runId, visited, true);
 
-            let stopped = rootHandle
-              ? this.terminate(
-                  rootHandle,
-                  visited,
-                  options.detachActiveChildren !== true,
-                )
-              : false;
-            if (!rootHandle) {
-              const activation = this.roster.activation(runId);
-              if (activation) {
-                activation.interrupt();
-                stopped = true;
-              }
-            }
+            const stopped = rootHandle
+              ? this.terminate(rootHandle, visited, cascade)
+              : this.interruptActivation(runId);
             // A reached handle or child driver owns terminal finalization.
             // Only an ownerless stop needs to write the terminal fact here.
             return stopped ? Effect.void : this.finalizeOwnerlessStop(runId);
@@ -336,10 +322,11 @@ export class RunStopper {
     }
     // A child run is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
-    // to the parent as a completed one.
+    // to the parent as a completed one. A detached child is still a loop: its
+    // process turn is reached through the loop's signal alone.
     const activation = this.roster.activation(handle.runId);
     let activationInterrupted = false;
-    if (activation && activation.parent.current !== null) {
+    if (activation) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
@@ -347,14 +334,30 @@ export class RunStopper {
         activationInterrupted = true;
       }
     }
-    const interrupted = handle.interrupt();
-    // The loop's own interrupt already carried the stop into the turn: the
-    // native-subagent strategy links the loop signal to this handle, so
-    // aborting the loop spends the handle's interrupt target before we reach
-    // it. The delivered stop is the admission, exactly as the handle-less
+    // The run's stop is its fiber's interruption. The fiber exists from the instant the run is admitted
+    // (`RunRoster.launch` forks inside the lane claim), so a launch has no
+    // pre-fiber window a stop could miss, and a handle whose fiber is not
+    // registered yet is one the roster's lane has not admitted — the
+    // activation arm above or the handle-less `kill` branch is its stop. A
+    // child loop's activation already carried the stop into its turns above,
+    // so it spends the fiber target before we reach it.
+    // The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    if (interrupted || activationInterrupted) return true;
-    return false;
+    return (
+      activationInterrupted ||
+      (activation === undefined && this.roster.interrupt(handle.runId))
+    );
+  }
+
+  /** Stop a run no live handle holds, reporting whether there was one to
+   *  reach: its child driver, or — for a run between admission and its
+   *  lifecycle's handle (the lineage reads, the definition load) — the fiber
+   *  that admitted it. */
+  private interruptActivation(runId: RunId): boolean {
+    const activation = this.roster.activation(runId);
+    if (activation === undefined) return this.roster.interrupt(runId);
+    activation.interrupt();
+    return true;
   }
 
   /**

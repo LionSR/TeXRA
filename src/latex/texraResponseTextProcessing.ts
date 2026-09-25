@@ -1,6 +1,8 @@
+import { Effect } from 'effect';
 import type { ConfigProvider } from '@platform/interfaces';
-import replacementEngine from '@replacement/engine';
-import type { Effect } from 'effect';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import type { HttpClient } from 'effect/unstable/http';
 
 type ResponseTextPostProcessor = (text: string) => string;
@@ -26,7 +28,7 @@ export interface ResponseTextProcessing {
   readonly postProcessResponse: (
     text: string,
     config: ConfigProvider,
-  ) => string;
+  ) => Effect.Effect<string>;
   readonly connectResponseText: ResponseTextConnector;
 }
 
@@ -37,7 +39,14 @@ export function createTexraResponseTextProcessing(
   return Object.freeze<ResponseTextProcessing>({
     normalizeResponseText: (text) => text.trim(),
     postProcessResponse: (text, config) =>
-      replacementEngine.applyAll(text, (key) => config.get(key)),
+      Effect.suspend(() => {
+        const replaced = replacementEngine.applyAll(text, (key) =>
+          config.get(key),
+        );
+        return logReplacementDiagnostics(replaced.diagnostics).pipe(
+          Effect.as(replaced.text),
+        );
+      }),
     connectResponseText,
   });
 }

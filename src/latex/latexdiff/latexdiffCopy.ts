@@ -9,7 +9,7 @@
  * disagreeing about the wording of an outcome they compute identically.
  */
 
-import type { MathMarkupOption } from './mathMarkup';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 
 /** The run produced no diff operation to report on at all. */
 export const NO_LATEXDIFF_OPERATIONS_MESSAGE =
@@ -21,7 +21,7 @@ export const NO_LATEXDIFF_OPERATIONS_MESSAGE =
  * and all-succeeded lines.
  */
 export function latexdiffAllFailedMessage(
-  mathMarkup: MathMarkupOption,
+  mathMarkup: LatexdiffMathMarkupValue,
 ): string {
   return `All LaTeX diff operations failed (math markup: "${mathMarkup}")`;
 }

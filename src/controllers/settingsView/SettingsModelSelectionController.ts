@@ -33,6 +33,7 @@ import {
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
+  isExpensiveModel,
   isFastFirstResponseModel,
   MODEL_SOURCE_ORDER,
 } from '@shared/constants/providers';
@@ -211,9 +212,7 @@ export class SettingsModelSelectionController<R = never> {
         // and — once enabled — into the helper-model dropdown, which does not
         // group. Registry-derived, so a new provider needs no edit here.
         .filter((config) =>
-          MODEL_SELECTION_SOURCES.has(
-            resolveModelSource(config) ?? config.provider,
-          ),
+          MODEL_SELECTION_SOURCES.has(resolveModelSource(config)),
         )
         .map((config) => config.name);
       const optionsData = yield* this.deps.resolveModelOptions(
@@ -232,13 +231,14 @@ export class SettingsModelSelectionController<R = never> {
           label: option.label,
           // Catalogue placement is a stable registry fact. `option.provider`
           // describes the effective request route and may change with credentials.
-          provider: resolveModelSource(config) ?? config.provider,
+          provider: resolveModelSource(config),
           routeLabel: option.routeLabel,
           enabled: enabledSet.has(name),
           deprecated: config.deprecated ?? false,
           contextWindow: option.context,
           cost: option.cost,
           isFast: isFastFirstResponseModel(config.inputPrice),
+          isExpensive: isExpensiveModel(config.outputPrice),
           availability: option.availability,
         };
 

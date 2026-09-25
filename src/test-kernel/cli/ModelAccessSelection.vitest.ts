@@ -10,9 +10,6 @@ import {
   buildCliModelAccessItems,
   formatCliModelAccessRoute,
   formatCliModelAccessRouteInline,
-  parseCliModelAccessSelection,
-  resolveCliModelAccessRoute,
-  shortCliModelAccessRoute,
 } from '@cli/runtime/modelAccessRoute';
 import { AppState, type StateWriteFailed } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -21,6 +18,8 @@ import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
@@ -67,6 +66,8 @@ const withServices = Effect.provide(
     testHttpClientLayer,
     Secrets.layer(secrets),
     AppState.layer(appState),
+    // Sign-in is mocked, so nothing is spawned.
+    scriptedSpawnerLayer(() => ({})).layer,
   ),
 );
 
@@ -204,47 +205,6 @@ beforeEach(() => {
 });
 
 describe('CLI model access routes', () => {
-  it.each([
-    ['chatgpt', subscriptionPreference('chatgpt', 'on')],
-    ['subscription', subscriptionPreference('chatgpt', 'on')],
-    ['grok', subscriptionPreference('grok', 'on')],
-    ['xai', subscriptionPreference('grok', 'on')],
-    ['kimi', subscriptionPreference('kimi-code', 'on')],
-    ['kimicode', subscriptionPreference('kimi-code', 'on')],
-    ['kimi-code', subscriptionPreference('kimi-code', 'on')],
-    ['glm', subscriptionPreference('glm-code', 'on')],
-    ['glmcode', subscriptionPreference('glm-code', 'on')],
-    ['glm-code', subscriptionPreference('glm-code', 'on')],
-    ['glm-coding', subscriptionPreference('glm-code', 'on')],
-    ['glm-coding-plan', subscriptionPreference('glm-code', 'on')],
-    ['direct', undefined],
-  ])('parses the route or compatibility spelling %s', (input, expected) => {
-    expect(parseCliModelAccessSelection(input)).toEqual(expected);
-  });
-
-  it('uses observed access before the prospective route', () => {
-    expect(
-      resolveCliModelAccessRoute({
-        usageRoute: 'api-key',
-        prospectiveRoute: 'chatgpt-subscription',
-      }),
-    ).toBe('api-key');
-    // A completed request's route cannot change: observed `api-key` usage
-    // still resolves to `api-key` while the Kimi Code route is active.
-    expect(
-      resolveCliModelAccessRoute({
-        usageRoute: 'api-key',
-        prospectiveRoute: 'kimi-code-subscription',
-      }),
-    ).toBe('api-key');
-    // With nothing observed yet, the prospective route is what shows.
-    expect(
-      resolveCliModelAccessRoute({
-        prospectiveRoute: 'kimi-code-subscription',
-      }),
-    ).toBe('kimi-code-subscription');
-  });
-
   it.effect('reports the ChatGPT preference independently of sign-in', () =>
     Effect.gen(function* () {
       mocks.getCodexStatus.mockReturnValue(

@@ -307,13 +307,11 @@ function validateMultiAgentListAvailability() {
       leanProjectLine != null,
       `multi-agent list should include lean-project\nstdout:\n${text.stdout}`,
     );
+    // The Lean agents ship bundled (#13080), so the preset is whole without
+    // any sign-in: a full count and no degraded/unavailable marker.
     assert(
-      /\ttool-use:\d+\/7\t(degraded|unavailable)(\t|$)/.test(leanProjectLine),
-      `lean-project should show no-auth available/total tool-use availability\nline:\n${leanProjectLine}`,
-    );
-    assert(
-      !leanProjectLine.includes('\ttool-use:7'),
-      `lean-project should not claim the full preset is available without auth\nline:\n${leanProjectLine}`,
+      /\ttool-use:7$/.test(leanProjectLine),
+      `lean-project should show its bundled tool-use agents as available without auth\nline:\n${leanProjectLine}`,
     );
 
     const json = runList(['--output-format', 'json']);
@@ -327,14 +325,13 @@ function validateMultiAgentListAvailability() {
       leanProjectAvailability?.agents?.toolUse?.label != null,
       `multi-agent list JSON should include planned availability\nstdout:\n${json.stdout}`,
     );
+    const leanProjectToolUse = leanProjectAvailability?.agents?.toolUse;
     assert(
-      leanProjectAvailability?.status === 'degraded' ||
-        leanProjectAvailability?.status === 'unavailable',
-      `lean-project JSON should report degraded or unavailable status\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
-    );
-    assert(
-      leanProjectAvailability?.agents?.toolUse?.label !== '7',
-      `lean-project JSON should not claim full tool-use availability\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
+      leanProjectAvailability?.status === 'available' &&
+        leanProjectToolUse?.available === 7 &&
+        leanProjectToolUse?.total === 7 &&
+        leanProjectToolUse?.missing?.length === 0,
+      `lean-project JSON should report its bundled agents as available without auth\nrecord:\n${JSON.stringify(leanProjectJson, null, 2)}`,
     );
 
     const ndjson = runList(['--output-format', 'ndjson']);

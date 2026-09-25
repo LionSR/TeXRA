@@ -28,6 +28,14 @@ updates:
     # eslint/prettier-only group, which the development-dependencies group now
     # subsumes.
     groups:
+      # Effect ships as prerelease versions (4.0.0-rc.N). A prerelease bump is
+      # neither 'minor' nor 'patch', so the groups below never caught it, and
+      # every release opened one PR per @effect package. The packages must move
+      # in lockstep, so they get one group, matched first, for every update type.
+      effect:
+        patterns:
+          - 'effect'
+          - '@effect/*'
       production-dependencies:
         dependency-type: 'production'
         update-types:

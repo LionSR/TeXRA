@@ -75,15 +75,10 @@ test('startup team chooser screenshot', async () => {
 
 test('command palette opens and dismisses', async () => {
   await showLauncher(launched);
-  // A prior screenshot can leave Settings in the workbench. Hide the workbench
-  // so this check exercises the conversation-header command affordance.
-  const closeWorkbench = launched.page.locator('.shell-workbench-close');
-  if (await closeWorkbench.isVisible()) {
-    await closeWorkbench.click();
-  }
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
   await launched.page
-    .locator('.shell-header-button[aria-label="Show Commands"]')
+    .locator('.shell-sidebar-primary .shell-sidebar-action')
+    .filter({ hasText: 'Commands' })
     .click();
   await expect.poll(commandPaletteEntryCount).toBeGreaterThan(0);
   await launched.page.keyboard.press('Escape');

@@ -29,12 +29,10 @@ import {
   DatabaseNotOwner,
   type SessionOpenError,
 } from '@shared/session/database';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { warnApprovalDenied } from './approval/approvalPrompts';
-import { cliApprovalPromptsUnavailable } from './approval/settleApprovals';
+import { cliToolUseApprovalOptions } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
   advertisesInterruptedRun,
@@ -183,11 +181,11 @@ export function executeCliConfig<
       expectedCategory !== undefined &&
       result.output.category !== expectedCategory
     ) {
-      // Unreachable: `enforceCategory` above makes the launch throw before the
-      // run whenever the resolved agent setting disagrees, and the output's
-      // category is stamped from that same resolved setting. Kept as an invariant so the
-      // `ExecuteAgentResultForCategory<C>` narrowing below stays honest.
-      throw new Error(`Agent resolved to a non ${expectedCategory} run.`);
+      // Unreachable: `enforceCategory` above refuses the launch whenever the
+      // resolved agent setting disagrees, and the output's category is stamped
+      // from that same setting. Kept so the narrowing below stays honest.
+      const message = `Agent resolved to a non ${expectedCategory} run.`;
+      return yield* Effect.fail(new Error(message));
     }
 
     return {
@@ -321,8 +319,8 @@ export function executeCliRequest(
     );
     const detachSessionProgressProjection =
       runContext.outputFormat === 'ndjson'
-        ? attachCliSessionProgressProjection(options.runtime, session)
-        : () => Effect.void;
+        ? yield* attachCliSessionProgressProjection(session)
+        : Effect.void;
     const detachWorkflowPlainOutput = renderWorkflowPlainProgress
       ? attachWorkflowPlainOutput(options.runtime, session, {
           runId: request.runId,
@@ -402,13 +400,13 @@ export function executeCliRequest(
                   resumability,
                   options.canAdvertiseInterruptedRun,
                 ),
-              catch: (error: unknown) => error,
+              catch: ensureError,
             });
             if (advertise) {
               yield* Deferred.succeed(recoveryNoticeStarted, undefined);
               yield* Effect.tryPromise({
                 try: () => Promise.resolve(onFinalized(runId)),
-                catch: (error: unknown) => error,
+                catch: ensureError,
               });
             }
           }
@@ -553,13 +551,7 @@ export function executeCliRequest(
           ownedRunId = runId;
         },
         stopAfterCycle: options.stopAfterCycle,
-        approvalPromptsUnavailable: cliApprovalPromptsUnavailable(
-          runContext,
-          runContext.approvalPolicy,
-        ),
-        onApprovalPolicyDenial: () =>
-          warnApprovalDenied(session, runContext, 'Tool or edit approval'),
-        runtimeUnavailableTools: getDefaultUnavailableToolNames('cli'),
+        ...cliToolUseApprovalOptions(session, runContext),
       });
 
     let runResult:
@@ -573,7 +565,7 @@ export function executeCliRequest(
       detachResultToast();
       terminalResult.dispose();
       detachRunProgressRenderer();
-      yield* detachSessionProgressProjection();
+      yield* detachSessionProgressProjection;
       detachWorkflowPlainOutput();
       detachHostInteractions();
       yield* presentationHost.close();

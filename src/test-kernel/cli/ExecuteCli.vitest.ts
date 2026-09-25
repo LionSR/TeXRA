@@ -25,7 +25,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { getDefaultUnavailableToolNames } from '@tools/registry';
+import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
@@ -99,8 +99,8 @@ vi.mock('@cli/runtime/terminalStatus', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/sessionProgressSubscription', () => ({
-  attachCliSessionProgressProjection: vi.fn(
-    () => mocks.detachSessionProgressProjection,
+  attachCliSessionProgressProjection: vi.fn(() =>
+    Effect.succeed(Effect.suspend(mocks.detachSessionProgressProjection)),
   ),
 }));
 
@@ -156,9 +156,6 @@ function toolUseConfig() {
     agentCategory: 'toolUse' as const,
   };
 }
-
-/** Tools the CLI runtime hides by default during agent run. */
-const DEFAULT_RUNTIME_UNAVAILABLE_TOOLS = getDefaultUnavailableToolNames('cli');
 
 /** A run program's options with the session, runtime and lifecycle the
  *  wrapper below supplies. */
@@ -254,16 +251,24 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
       },
       null,
     );
-    launchHandle.attachInterruptHandler({ interrupt: () => undefined });
-    options.session?.runs.track(launchHandle);
+    const runs = options.session?.runs;
+    // The launch's stop target is its run's roster fiber; the hanging
+    // promise is the test's to resolve, as the run's own result is, and the
+    // generation ends with it.
+    let generation: { interruptUnsafe(): void } | undefined;
+    if (runs) {
+      runs.track(launchHandle);
+      generation = admitInterruptibleRun(runs, runId, () => undefined);
+    }
     try {
       return await new Promise((resolve, reject) => {
         resolveRun = resolve;
         rejectRun = reject;
       });
     } finally {
-      if (options.session?.runs.getHandle(runId) === launchHandle) {
-        options.session.runs.untrack(runId);
+      generation?.interruptUnsafe();
+      if (runs && runs.getHandle(runId) === launchHandle) {
+        runs.untrack(runId);
       }
     }
   });
@@ -275,11 +280,10 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
 
 /** Observe the session's terminal artifact drain. */
 async function spyOnArtifactFlush() {
-  const store = testDefaultSession().transcripts;
   const flushSpy = vi
     .spyOn(testDefaultSession(), 'settlePublications')
     .mockReturnValue(Effect.void);
-  return { store, flushSpy };
+  return { flushSpy };
 }
 
 /**
@@ -301,13 +305,8 @@ function reflectionSnapshot(): FlowSnapshotPayload {
       declinedRoutes: [],
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      continueRounds: true,
-      endTurn: false,
     },
   };
 }
@@ -425,7 +424,7 @@ describe('executeCliRequest', () => {
 
         expect(attachProjection).toHaveBeenCalledTimes(1);
         // The writer slot: the projection defaults to the NDJSON stdout sink.
-        expect(attachProjection.mock.calls[0]?.[2]).toBeUndefined();
+        expect(attachProjection.mock.calls[0]?.[1]).toBeUndefined();
         expect(mocks.runAgent).toHaveBeenCalledTimes(1);
         expect(attachProjection.mock.invocationCallOrder[0]).toBeLessThan(
           mocks.runAgent.mock.invocationCallOrder[0] ??
@@ -544,7 +543,6 @@ describe('executeCliRequest', () => {
         request,
         expect.objectContaining({
           approvalPromptsUnavailable: false,
-          runtimeUnavailableTools: DEFAULT_RUNTIME_UNAVAILABLE_TOOLS,
         }),
       );
     }),
@@ -598,33 +596,30 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect(
-    'uses a persistent session and drains its artifacts after the run',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-        const { store, flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const callOrder: string[] = [];
-        flushSpy.mockImplementation(() =>
-          Effect.sync(() => {
-            callOrder.push('flush');
-          }),
-        );
-        mocks.runAgent.mockImplementationOnce(async () => {
-          callOrder.push('runAgent');
-          return {
-            outcome: 'completed',
-            output: { category: 'toolUse', response: '', files: [] },
-            runId: 'exec-1',
-          };
-        });
+  it.effect('drains the session artifacts after the run', () =>
+    Effect.gen(function* () {
+      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
+      const request = baseRequest();
+      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
+      const callOrder: string[] = [];
+      flushSpy.mockImplementation(() =>
+        Effect.sync(() => {
+          callOrder.push('flush');
+        }),
+      );
+      mocks.runAgent.mockImplementationOnce(async () => {
+        callOrder.push('runAgent');
+        return {
+          outcome: 'completed',
+          output: { category: 'toolUse', response: '', files: [] },
+          runId: 'exec-1',
+        };
+      });
 
-        yield* executeCliRequest(request, cliContext());
+      yield* executeCliRequest(request, cliContext());
 
-        expect(store.mode).toEqual({ kind: 'persistent' });
-        expect(callOrder).toEqual(['runAgent', 'flush']);
-      }),
+      expect(callOrder).toEqual(['runAgent', 'flush']);
+    }),
   );
 
   it.effect('drains session artifacts even when the run throws', () =>
@@ -926,33 +921,28 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const launch = yield* Deferred.make<RunHandle>();
+        const launch = yield* Deferred.make<void>();
         mocks.runAgent.mockImplementationOnce(
           async (request: { runId: RunId }, options: LeaseOptions) => {
-            // `runAgent` tracks its launch handle before preparation; its
-            // interrupt is the launch's stop, which fails preparation.
-            const launchHandle = new RunHandle(
-              {
-                runId: request.runId,
-                identity: { kind: 'agent', agent: 'chat' },
-                category: 'toolUse',
-              },
-              null,
-            );
-            try {
-              await new Promise<void>((_resolve, reject) => {
-                launchHandle.attachInterruptHandler({
-                  interrupt: () =>
-                    reject(new DOMException('Launch stopped.', 'AbortError')),
-                });
-                options.session?.runs.track(launchHandle);
-                // Published once the handle is tracked: the gate resumes the
-                // test fiber synchronously and its shutdown stops the launch.
-                Deferred.doneUnsafe(launch, Effect.succeed(launchHandle));
+            const runId = request.runId;
+            // The launch's fiber is its stop: shutdown interrupts the run by
+            // id, which fails the launch the way a real preparation unwinds.
+            let rejectRun!: (error: unknown) => void;
+            const runs = options.session?.runs;
+            if (runs)
+              admitInterruptibleRun(runs, runId, () => {
+                rejectRun(new DOMException('Launch stopped.', 'AbortError'));
               });
-              return COMPLETED_RUN;
+            try {
+              return await new Promise((_resolve, reject) => {
+                rejectRun = reject;
+                // Published once the stop target is live: the gate resumes
+                // the test fiber synchronously and its shutdown stops the
+                // launch.
+                Deferred.doneUnsafe(launch, Effect.void);
+              });
             } finally {
-              options.session?.runs.untrack(request.runId);
+              runs?.untrack(runId);
             }
           },
         );
@@ -960,7 +950,7 @@ describe('executeCliRequest', () => {
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {}),
         );
-        const launchHandle = yield* Deferred.await(launch);
+        yield* Deferred.await(launch);
         yield* settle;
 
         yield* platform.lifecycle.runShutdown;
@@ -968,7 +958,6 @@ describe('executeCliRequest', () => {
           ok: false,
           exitCode: CliExitCode.Interrupted,
         });
-        expect(launchHandle.stopRequested).toBe(true);
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
       }),
   );

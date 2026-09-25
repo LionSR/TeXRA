@@ -1,5 +1,5 @@
 // Local imports - run requests
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 import {
   validateRunRequest,
   type ValidatedRunRequest,
@@ -26,12 +26,8 @@ import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 // Local imports - shared types and errors
 import type { MessageHost } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
-import type {
-  AgentDirectories,
-  StateReadFailed,
-  StateStore,
-} from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { StateReadFailed, StateStore } from '@platform/interfaces';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import {
   AgentCategory,
   DEFAULT_TOOL_CONFIG,
@@ -140,7 +136,7 @@ export function prepareSurfaceLaunch(
 ): Effect.Effect<
   ValidatedRunRequest,
   Rejected | Cancelled | StateReadFailed,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     let preparation: LaunchPreparation;
@@ -148,17 +144,13 @@ export function prepareSurfaceLaunch(
     if (launch.launchTarget !== 'team') {
       // AgentConfigSchema prefaults agent/model; reject missing UI selections
       // before schema parsing so the user sees the real form problem.
-      const agent = launch.agent[launch.sessionType];
       preparation =
-        !agent || !launch.model
-          ? {
-              valid: false,
-              message: 'Choose an agent, a model, and a run type first.',
-            }
+        !launch.agent || !launch.model
+          ? { valid: false, message: 'Choose an agent and a model first.' }
           : buildLaunchRequest(
               launch,
               instruction,
-              agent,
+              launch.agent,
               launch.sessionType,
               storageRoot,
             );
@@ -173,7 +165,7 @@ export function prepareSurfaceLaunch(
           host.chooseTeamAvailability(unavailableNames),
         signIn: host.signInForRemoteAgentCatalog,
       }).pipe(
-        Effect.catch((error: unknown) =>
+        Effect.catch((error) =>
           Effect.fail(
             new Rejected({
               reason: `Team launch failed: ${toErrorMessage(error)}`,

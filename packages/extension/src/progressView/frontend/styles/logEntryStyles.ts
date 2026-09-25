@@ -113,23 +113,19 @@ export const logEntryStyles = css`
 
   /* Note: .detail-item base styles are in commonViewStyles; this adds log-specific variants */
 
-  :is(.file-link, .web-search-link) {
+  .file-link {
     color: var(--color-text-link);
     cursor: pointer;
   }
 
-  :is(.file-link, .web-search-link):hover {
+  .file-link:hover {
     text-decoration: underline;
   }
 
   /* Radius only — the ring itself comes from focusRingStyles, which an
      outline here would narrow to 1px. */
-  :is(.file-link, .web-search-link):focus-visible {
+  .file-link:focus-visible {
     border-radius: var(--border-radius-small);
-  }
-
-  .web-search-link {
-    text-decoration: none;
   }
 
   .memory-path {

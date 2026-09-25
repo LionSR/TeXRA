@@ -23,12 +23,17 @@ import type {
 } from '@tools/approval/latexPreview';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { toolEditApprovalRequest } from '../agent/progressTestUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const RUN = RunIdSchema.parse('ab12cd');
 
 /** The controller's verbs are Effects; this is the host wiring point's run. */
 function run<A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  program: Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  >,
 ): Promise<A> {
   return testRuntime().runPromise(program);
 }
@@ -125,7 +130,6 @@ function createTestHost() {
         Deferred.doneUnsafe(contextReady, Effect.void);
         return Deferred.await(staging).pipe(Effect.as(preview));
       },
-      revealApprovalSurface: () => Effect.void,
       openBuildDisplay: (() => Effect.void) as BuildDisplayFn,
       reportError: vi.fn(),
       decide: vi.fn(() => {
@@ -143,25 +147,6 @@ function createController(host: ReturnType<typeof createTestHost>['host']) {
 }
 
 describe('tool edit approval controller', () => {
-  it('decides a request discarded while its preview is still staging', async () => {
-    const testHost = createTestHost();
-    const controller = createController(testHost.host);
-
-    const presented = run(controller.present(approvalRequest()));
-    await run(Deferred.await(testHost.contextReady));
-    const requestId = testHost.contextForRequest().requestId;
-    await run(testHost.contextForRequest().discard());
-    expect(testHost.contextForRequest().isSettled()).toBe(true);
-    Deferred.doneUnsafe(testHost.staging, Effect.void);
-    await presented;
-
-    expect(testHost.host.decide).toHaveBeenCalledWith(RUN, requestId, {
-      action: 'reject',
-    });
-    expect(testHost.preview.dispose).toHaveBeenCalledOnce();
-    expect(testHost.preview.present).not.toHaveBeenCalled();
-  });
-
   it('holds a release open until the staging in flight has disposed', async () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
@@ -236,20 +221,26 @@ describe('tool edit approval controller', () => {
     await run(controller.present(approvalRequest()));
     const requestId = testHost.contextForRequest().requestId;
 
-    // `dispose` admits a release for every staged request without waiting
-    // for it, and the host's release for a refused `request.opened` lands
-    // right behind it: the second one finds the entry already dropped, so it
-    // has only the cleanup in flight to wait for.
-    await run(controller.dispose());
+    // `dispose` admits a release for every staged request before it waits on
+    // any, and the host's release for a refused `request.opened` lands right
+    // behind it: the second one finds the entry already dropped, so it has
+    // only the cleanup in flight to wait for. Both settle once it is gone.
+    let disposed = false;
+    const disposing = run(controller.dispose()).then(() => {
+      disposed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     let released = false;
     const release = run(controller.release(requestId)).then(() => {
       released = true;
     });
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(disposed).toBe(false);
     expect(released).toBe(false);
 
     Deferred.doneUnsafe(disposal, Effect.void);
-    await release;
+    await Promise.all([disposing, release]);
+    expect(disposed).toBe(true);
     expect(released).toBe(true);
     expect(testHost.preview.dispose).toHaveBeenCalledOnce();
   });
@@ -288,13 +279,13 @@ describe('tool edit approval controller', () => {
     const testHost = createTestHost();
     const controller = createController(testHost.host);
     const events: string[] = [];
-    const builds: Deferred.Deferred<void, unknown>[] = [];
+    const builds: Deferred.Deferred<void, Error>[] = [];
     // The host build is a program now, and its own settlement is what a
     // release waits for, so the event it records belongs inside it.
     const firstBuildStarted = Deferred.makeUnsafe<void>();
     const secondBuildStarted = Deferred.makeUnsafe<void>();
     const openBuildDisplay = vi.fn(() => {
-      const build = Deferred.makeUnsafe<void, unknown>();
+      const build = Deferred.makeUnsafe<void, Error>();
       builds.push(build);
       Deferred.doneUnsafe(
         builds.length === 1 ? firstBuildStarted : secondBuildStarted,

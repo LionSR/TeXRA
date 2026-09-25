@@ -4,11 +4,7 @@ import { describe, expect, it } from 'vitest';
 // Local imports - TUI interaction policy
 import {
   approvalVisibleForSelection,
-  foregroundEscapeAction,
-  foregroundMaxRowsForKind,
   foregroundSurfaceKind,
-  triggerAppCtrlC,
-  type AppCtrlCState,
   type ForegroundSurfaceKind,
 } from '@cli/chat/tui/appInteractionPolicy';
 import type { PendingApproval } from '@cli/chat/tui/state/approvalQueue';
@@ -17,31 +13,6 @@ import type { RunId } from '@shared/schemas';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
 
 type ForegroundSurfaceInput = Parameters<typeof foregroundSurfaceKind>[0];
-type ForegroundEscapeInput = Parameters<typeof foregroundEscapeAction>[0];
-type ForegroundRowsInput = Parameters<typeof foregroundMaxRowsForKind>[0];
-type ApprovalKind = NonNullable<ForegroundRowsInput['approvalKind']>;
-
-function ctrlCFixture({ draft }: { readonly draft: string }): {
-  readonly events: string[];
-  readonly readDraft: () => string;
-  readonly state: AppCtrlCState;
-} {
-  const events: string[] = [];
-  let currentDraft = draft;
-  return {
-    events,
-    readDraft: () => currentDraft,
-    state: {
-      discardDraft: () => {
-        if (currentDraft.length === 0) return false;
-        currentDraft = '';
-        events.push('clear');
-        return true;
-      },
-      onCtrlC: () => events.push('delegate'),
-    },
-  };
-}
 
 function bashApproval(runId?: RunId): PendingApproval {
   return {
@@ -66,41 +37,12 @@ function foregroundInput(
     formBusy: false,
     infoPaneOpen: false,
     pendingApproval: true,
-    readerKind: undefined,
+    readerOpen: false,
     ...overrides,
   };
 }
 
 describe('app interaction policy', () => {
-  it.each([
-    {
-      scenario: 'clears a non-empty draft instead of signalling the host',
-      draft: 'unfinished',
-      events: ['clear'],
-    },
-    {
-      scenario: 'hands an empty-draft Ctrl+C to the host signal policy',
-      draft: '',
-      events: ['delegate'],
-    },
-  ])('$scenario', ({ draft, events }) => {
-    const fixture = ctrlCFixture({ draft });
-
-    triggerAppCtrlC(fixture.state);
-    if (draft.length > 0) {
-      expect(fixture.readDraft()).toBe('');
-    }
-    expect(fixture.events).toEqual(events);
-  });
-
-  it('delegates the second Ctrl+C after clearing to existing signal policy', () => {
-    const fixture = ctrlCFixture({ draft: 'unfinished' });
-
-    triggerAppCtrlC(fixture.state);
-    triggerAppCtrlC(fixture.state);
-    expect(fixture.events).toEqual(['clear', 'delegate']);
-  });
-
   it('lets approvals preempt only a busy form', () => {
     const cases = [
       [foregroundInput({ activeFormOpen: true }), 'form'],
@@ -114,21 +56,13 @@ describe('app interaction policy', () => {
       [foregroundInput({ pendingApproval: false }), undefined],
       // Readers are passive, so every surface that needs an answer takes the
       // foreground away from them.
-      [
-        foregroundInput({ pendingApproval: false, readerKind: 'transcript' }),
-        'transcriptReader',
-      ],
-      [foregroundInput({ readerKind: 'transcript' }), 'approval'],
-      [
-        foregroundInput({ pendingApproval: false, readerKind: 'workPlan' }),
-        'workPlanReader',
-      ],
-      [foregroundInput({ readerKind: 'workPlan' }), 'approval'],
+      [foregroundInput({ pendingApproval: false, readerOpen: true }), 'reader'],
+      [foregroundInput({ readerOpen: true }), 'approval'],
       [
         foregroundInput({
           activeFormOpen: true,
           pendingApproval: false,
-          readerKind: 'transcript',
+          readerOpen: true,
         }),
         'form',
       ],
@@ -136,7 +70,7 @@ describe('app interaction policy', () => {
         foregroundInput({
           infoPaneOpen: true,
           pendingApproval: false,
-          readerKind: 'transcript',
+          readerOpen: true,
         }),
         'infoPane',
       ],

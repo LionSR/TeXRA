@@ -9,21 +9,20 @@
 // componentDidCatch are class-only), so this is a deliberate, localized
 // exception to the TUI's stateless-renderer rule. Keep it minimal: the only
 // state is the captured error, and the fallback never does width math or
-// anything that could itself throw.
+// anything that could itself throw. The inline marker is the whole report:
+// the CLI log sink is silent while Ink owns the screen, and a write to the
+// terminal from here would land inside the frame.
 
 import { Box, Text } from 'ink';
 import { Component, type ReactNode } from 'react';
 
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { WARNING } from '@cli/tui/ui/glyphs';
-import { createLog } from '@logger/logUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
-
-const log = createLog('cli.tui');
+import { truncateSummary } from '@utils/text/stringUtils';
 
 interface EntryErrorBoundaryProps {
-  // Names the failed entry in the inline marker and the log line (e.g. its
+  // Names the failed entry in the inline marker (e.g. its
   // role or "session header"). Falls back to "entry" when omitted.
   readonly label?: string;
   readonly children: ReactNode;
@@ -43,7 +42,7 @@ function formatRenderError(error: unknown): string {
   }
   // The marker is a single line: collapse whitespace and cap length so a long
   // or multi-line message can't reflow the transcript.
-  return truncateWithEllipsis(message.replaceAll(/\s+/g, ' ').trim(), 120);
+  return truncateSummary(message, 120);
 }
 
 export class EntryErrorBoundary extends Component<
@@ -56,23 +55,6 @@ export class EntryErrorBoundary extends Component<
 
   static getDerivedStateFromError(error: unknown): EntryErrorBoundaryState {
     return { hasError: true, error };
-  }
-
-  override componentDidCatch(error: unknown): void {
-    // Best-effort: while the TUI owns the screen the CLI log sink is a no-op,
-    // so the inline marker below is the primary surfacing. Logging serves the
-    // verbose / trace path and must never itself break the error unwind.
-    try {
-      log.error(
-        `transcript entry render failed (${this.props.label ?? 'entry'}): ${
-          error instanceof Error
-            ? (error.stack ?? error.message)
-            : String(error)
-        }`,
-      );
-    } catch {
-      // Nothing actionable if logging fails mid-unwind.
-    }
   }
 
   override render(): ReactNode {

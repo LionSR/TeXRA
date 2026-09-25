@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
-
 import {
   asObject,
   fetchSubscriptionUsage,
@@ -11,6 +10,8 @@ import {
   timestampField,
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
+import type { Cause } from 'effect';
+import type { HttpClient, HttpClientError } from 'effect/unstable/http';
 
 const KIMI_CODE_USAGE_URL = 'https://api.kimi.com/coding/v1/usages';
 
@@ -82,8 +83,12 @@ export function parseKimiCodeUsage(body: unknown): ParsedSubscriptionUsage {
 
 export function fetchKimiCodeUsage(
   apiKey: string,
-  signal: AbortSignal,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+  timeoutMs: number,
+): Effect.Effect<
+  ParsedSubscriptionUsage,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+> {
   return Effect.map(
     fetchSubscriptionUsage({
       url: KIMI_CODE_USAGE_URL,
@@ -91,7 +96,7 @@ export function fetchKimiCodeUsage(
         Accept: 'application/json',
         Authorization: `Bearer ${apiKey}`,
       },
-      signal,
+      timeoutMs,
     }),
     parseKimiCodeUsage,
   );

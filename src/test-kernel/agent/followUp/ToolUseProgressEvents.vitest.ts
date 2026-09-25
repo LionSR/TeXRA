@@ -30,26 +30,27 @@ import { turnText } from '@agent/runtime/run/turnText';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   type JsonValue,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { StreamLog } from '@shared/session/traceEntries';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   attachTestTranscriptFold,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { isObject } from '@utils/core';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -102,7 +103,6 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
     ...overrides,
   };
@@ -172,12 +172,12 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[index];
             index += 1;
             seen.push(request);
@@ -193,7 +193,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               // As the invoker does: the failure commits before it returns.
               return {
                 kind: 'failed' as const,
-                state: yield* ledger.appendBatch(run.runId, state, [
+                state: yield* cell.append([
                   snapshotRow(run.runId, state, {
                     runtime: { lastError: scripted.failWith },
                   }),
@@ -205,7 +205,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
             const turn = 'compactTo' in scripted ? scripted.turn : scripted;
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -316,6 +316,8 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(tools),
         finalToolName: init.finalToolName ?? null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: init.structured ?? { value: undefined },
         model,
         scope,
@@ -332,7 +334,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: { onModelChanged: vi.fn() },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );
@@ -669,8 +670,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
       const session = quietSession();
       const logger = new TraceEmitter();
       const runId = startedRun(session);
-      const store = new StreamLog();
-      const recorder = attachTestTranscriptFold(logger, runId, store);
+      const recorder = attachTestTranscriptFold(logger, runId);
 
       try {
         const { result } = yield* runScript({
@@ -681,26 +681,17 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         });
 
         expect(result.outcome).toBe(scenario.expectedOutcome);
-        const sessionStages = store
-          .toJSON()
-          .flatMap((entry) =>
-            entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-            isObject(entry.data) &&
-            entry.data.kind === 'session'
-              ? [{ label: entry.text, status: entry.data.status }]
-              : [],
-          );
+        const groups = recorder.transcript().taskGroups;
+        const sessionStages = groups.flatMap((group) =>
+          group.kind === 'session' && group.endTime !== undefined
+            ? [{ label: group.name, status: group.status }]
+            : [],
+        );
         expect(sessionStages).toEqual([
           { label: 'Tool-use turn', status: scenario.expectedOutcome },
         ]);
         // The turn is the only structural stage: rounds are row facts.
-        expect(
-          store
-            .toJSON()
-            .some(
-              (entry) => isObject(entry.data) && entry.data.kind === 'round',
-            ),
-        ).toBe(false);
+        expect(groups.some((group) => group.kind === 'round')).toBe(false);
       } finally {
         recorder.unsubscribe();
       }

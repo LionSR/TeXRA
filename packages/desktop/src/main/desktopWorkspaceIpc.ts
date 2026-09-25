@@ -1,18 +1,15 @@
 // Main-process IPC for the workspace shell surfaces: editor file I/O, terminal
-// pty sessions, and embedded browser tabs.
-//
-// All three are renderer-driven, and the renderer is sandboxed with no node
-// integration, so every request lands here. Requests are Zod-validated at the
-// boundary and — for file I/O — confined to the workspace root before touching
-// disk: a path from the renderer is untrusted input, and `../` traversal would
-// otherwise read or overwrite anything the user can reach.
+// pty sessions, and embedded browser tabs. All three are renderer-driven, and
+// the sandboxed renderer has no node integration, so every request lands here.
+// Requests are Zod-validated at the boundary and, for file I/O, confined to the
+// workspace root before touching disk: a renderer path is untrusted input, and
+// `../` traversal would otherwise reach anything the user can.
 //
 // Every disk operation below is a program over the standard library's
-// `FileSystem`, settled on the runtime the window handed this handler. The
-// paths they receive are the canonical ones the containment check above
-// already vouched for, which a workspace symlink can legitimately place
-// outside the lexical project root — so they go to the process filesystem, not
-// to a root-confined view that would refuse exactly those.
+// `FileSystem`, which the window's router runs and reports. The paths are the
+// canonical ones the containment check vouched for, which a workspace symlink
+// can place outside the lexical root, so they go to the process filesystem,
+// not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
 
@@ -25,7 +22,7 @@ import {
 } from '@common/files/fileListingRules';
 import { FILE_HANDLING_RULES } from '@common/files/fileHandlingRules';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { normalizeFilePath } from '@utils/core';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { isPathWithin } from '@utils/core/pathCore';
@@ -40,11 +37,8 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
-  EMPTY_DESKTOP_ENVIRONMENT_SUMMARY,
   type DesktopBrowserBounds,
-  type DesktopEnvironmentSummary,
 } from '../shared/desktopWorkspaceMessages.js';
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -71,11 +65,6 @@ interface DesktopWorkspaceIpcOptions {
    * compares to.
    */
   getWorkspacePath(): string | undefined;
-  getEnvironmentSummary(): Promise<DesktopEnvironmentSummary>;
-  onAsyncError(error: unknown): void;
-  /** The process runtime the window was handed; every program below settles
-   *  on it. */
-  runtime: ProcessRuntime;
 }
 
 interface DesktopWorkspaceIpc extends DesktopMessageHandler {
@@ -88,12 +77,11 @@ interface DesktopWorkspaceIpc extends DesktopMessageHandler {
   disposeRendererResources(): void;
 
   /**
-   * Releases the app-signal subscription. Separate from
-   * {@link DesktopWorkspaceIpc.disposeRendererResources} because that one also
-   * runs on renderer reload, where the subscription must survive — this one is
-   * window-scoped, and `createWindow` runs again on macOS dock reactivation.
+   * Tells the renderer to re-list its file tree when a write lands inside
+   * this project, until interrupted. The window forks it into the project
+   * binding's scope, which a renderer reload replaces along with this IPC.
    */
-  dispose(): void;
+  readonly followFilesWritten: Effect.Effect<void>;
 }
 
 /**
@@ -114,7 +102,7 @@ class WorkspaceRequestRefused extends Data.TaggedError(
 class WorkspaceHostCallFailed extends Data.TaggedError(
   'WorkspaceHostCallFailed',
 )<{
-  readonly member: 'ptyHost.create' | 'getEnvironmentSummary';
+  readonly member: 'ptyHost.create';
   readonly message: string;
   readonly cause: unknown;
 }> {}
@@ -267,8 +255,7 @@ export function createDesktopWorkspaceIpc(
   // watcher behind it — this signal is its only notice, and without it the
   // tree stays stale until the user hits Refresh. A write outside the
   // workspace root cannot appear in the tree, so it is not worth a re-list.
-  const unsubscribeFilesWritten = subscribeDesktopAppSignal(
-    options.runtime,
+  const followFilesWritten = onAppSignal(
     'workspaceFilesWritten',
     ({ absolutePaths }) => {
       const root = options.getWorkspacePath();
@@ -281,24 +268,26 @@ export function createDesktopWorkspaceIpc(
   );
 
   /**
-   * Report the failure and tell the renderer its request failed. Loud by
-   * construction: the window's own async-error reporter sees the cause and the
-   * request never settles in silence.
+   * Tell the renderer its request failed, then fail with the cause. Loud by
+   * construction: the window's router reports the cause and the request never
+   * settles in silence.
    */
-  function reportRequestFailure(
-    error: unknown,
+  function reportRequestFailure<E extends Error>(
+    error: E,
     message: DesktopCommandMessage,
-  ): Effect.Effect<void> {
-    return Effect.sync(() => {
-      options.onAsyncError(error);
-      renderer.postToRenderer(message);
-    });
+  ): Effect.Effect<never, E> {
+    return Effect.andThen(
+      Effect.sync(() => renderer.postToRenderer(message)),
+      Effect.fail(error),
+    );
   }
 
   function reportFileFailure(
     requestId: string,
     path: string,
-  ): (error: WorkspaceFileFailure) => Effect.Effect<void> {
+  ): (
+    error: WorkspaceFileFailure,
+  ) => Effect.Effect<never, WorkspaceFileFailure> {
     return (error) =>
       reportRequestFailure(error, {
         command: DESKTOP_WORKSPACE_COMMANDS.FILE_ERROR,
@@ -473,101 +462,66 @@ export function createDesktopWorkspaceIpc(
     );
   }
 
-  function postEnvironment() {
-    return Effect.tryPromise({
-      try: () => options.getEnvironmentSummary(),
-      catch: (cause) =>
-        new WorkspaceHostCallFailed({
-          member: 'getEnvironmentSummary',
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    }).pipe(
-      // The renderer's loading state clears either way, but the failure still
-      // reaches the window's reporter instead of being swallowed. The handler's
-      // parameter is the whole error type this expression can carry, so a
-      // second failure added here fails to compile.
-      Effect.catch((error: WorkspaceHostCallFailed) =>
-        Effect.sync(() => {
-          options.onAsyncError(error);
-          return EMPTY_DESKTOP_ENVIRONMENT_SUMMARY;
-        }),
-      ),
-      Effect.map((environment) => {
-        renderer.postToRenderer({
-          command: DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_STATE,
-          environment,
-        });
-      }),
-    );
-  }
-
   return {
     disposeRendererResources() {
       options.ptyHost.disposeAll();
       options.browserViews.disposeAll();
     },
 
-    dispose() {
-      unsubscribeFilesWritten();
-    },
+    followFilesWritten,
 
     handleMessage(message: DesktopCommandMessage) {
       const parsed = DesktopWorkspaceInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
+      if (!parsed.success) return undefined;
       const data = parsed.data;
 
       switch (data.command) {
         case DESKTOP_WORKSPACE_COMMANDS.LIST_FILES:
-          options.runtime.runFork(listFiles(data.requestId, data.directory));
-          return true;
+          return listFiles(data.requestId, data.directory);
         case DESKTOP_WORKSPACE_COMMANDS.READ_FILE:
-          options.runtime.runFork(readFile(data.requestId, data.path));
-          return true;
+          return readFile(data.requestId, data.path);
         case DESKTOP_WORKSPACE_COMMANDS.WRITE_FILE:
-          options.runtime.runFork(
-            writeFile(data.requestId, data.path, data.contents),
-          );
-          return true;
+          return writeFile(data.requestId, data.path, data.contents);
 
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_START:
-          options.runtime.runFork(
-            startTerminal(
-              data.sessionId,
-              data.cols,
-              data.rows,
-              data.initialCommand,
-            ),
+          return startTerminal(
+            data.sessionId,
+            data.cols,
+            data.rows,
+            data.initialCommand,
           );
-          return true;
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_INPUT:
-          options.ptyHost.get(data.sessionId)?.write(data.data);
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.write(data.data);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_RESIZE:
-          options.ptyHost.get(data.sessionId)?.resize(data.cols, data.rows);
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.resize(data.cols, data.rows);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.TERMINAL_CLOSE:
-          options.ptyHost.get(data.sessionId)?.dispose();
-          return true;
+          return Effect.sync(() => {
+            options.ptyHost.get(data.sessionId)?.dispose();
+          });
 
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_OPEN:
-          options.browserViews.open(data.tabId, data.url);
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.open(data.tabId, data.url);
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_BOUNDS:
-          options.browserViews.show(
-            data.tabId,
-            options.toWindowBounds(data.bounds),
-          );
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.show(
+              data.tabId,
+              options.toWindowBounds(data.bounds),
+            );
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE:
-          options.browserViews.hideAll();
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.hideAll();
+          });
         case DESKTOP_WORKSPACE_COMMANDS.BROWSER_CLOSE:
-          options.browserViews.close(data.tabId);
-          return true;
-        case DESKTOP_WORKSPACE_COMMANDS.ENVIRONMENT_REQUEST:
-          options.runtime.runFork(postEnvironment());
-          return true;
+          return Effect.sync(() => {
+            options.browserViews.close(data.tabId);
+          });
       }
     },
   };

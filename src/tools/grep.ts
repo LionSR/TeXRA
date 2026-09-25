@@ -8,11 +8,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 
 // Local imports - tools
 import { ToolError, type ToolResult } from '@shared/schemas';
-import {
-  resolveAndFormat,
-  workspacePathPorts,
-  type WorkspacePathPorts,
-} from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { getGitignoreMatcher } from '@tools/gitignore';
 import { executed } from '@tools/core/result';
 import { executeCommand } from '@utils/system/execUtils';
@@ -21,6 +17,7 @@ import { splitOutputLines } from '@utils/text/stringUtils';
 // Local file imports
 import { defineTool } from './core/define';
 import { nullishWithDefault } from './core/inputSchema';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const OUTPUT_MODES = ['content', 'files_with_matches', 'count'] as const;
 
@@ -76,8 +73,8 @@ export type GrepInput = z.infer<typeof GrepInputSchema>;
 
 const CHANNEL = 'GrepTool';
 // Pagination and total counts require draining all of ripgrep's output. Keep
-// execa 10's current per-stream ceiling explicit instead of coupling this
-// failure boundary to a dependency default or killing rg after one page.
+// the per-stream ceiling explicit instead of coupling this failure boundary
+// to executeCommand's default or killing rg after one page.
 const GREP_MAX_BUFFER_CHARS = 100_000_000;
 
 function buildArguments(input: GrepInput): string[] {
@@ -115,17 +112,16 @@ function buildArguments(input: GrepInput): string[] {
 }
 
 const runGrep = Effect.fn('GrepTool.execute')(function* (
-  ports: WorkspacePathPorts,
+  call: ToolPathCall,
   input: GrepInput,
-): Effect.fn.Return<ToolResult, unknown, FileSystem.FileSystem> {
-  const root = ports.toolRoot();
-  const { path, display } = yield* resolveAndFormat(
-    ports.settings,
-    ports.workspaceRoot,
-    input.path ?? undefined,
-    root,
-  );
-  const gitignore = yield* getGitignoreMatcher(ports.workspaceRoot);
+): Effect.fn.Return<
+  ToolResult,
+  Error,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
+  const path = yield* resolveToolPath(call, input.path ?? undefined);
+  const { display } = path;
+  const gitignore = yield* getGitignoreMatcher(call.roots.workspace);
   const args = buildArguments(input);
   const applyWorkspaceIgnores = !nodePath.isAbsolute(path.relative);
   const ignoreArgs = applyWorkspaceIgnores
@@ -157,9 +153,9 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
   const result = yield* executeCommand(command, {
     // No `working_directory` on the call means the search runs from the
     // session's own workspace root, which the call carries as data.
-    cwd: root ?? ports.workspaceRoot,
-    // The call's own setting slots, carried by the same ports as the root.
-    settings: ports.settings,
+    cwd: call.workingDirectory ?? call.roots.workspace,
+    // The call's own setting slots.
+    settings: call.roots,
     channel: CHANNEL,
     truncate: false,
     maxBuffer: GREP_MAX_BUFFER_CHARS,
@@ -175,8 +171,17 @@ const runGrep = Effect.fn('GrepTool.execute')(function* (
     );
   }
 
-  // ripgrep exit codes: 0 = matches found, 1 = no matches, 2+ = error
+  // ripgrep exit codes: 0 = matches found, 1 = no matches, 2 = error.
+  // 127 is executeCommand's spawn failure, which rg never returns itself.
   const exitCode = result.exitCode;
+  if (exitCode === 127) {
+    return yield* Effect.fail(
+      new ToolError(
+        `ripgrep could not start: ${result.stderr || `exit code ${exitCode}`}.\n` +
+          `Check that rg is installed and the search path exists.`,
+      ),
+    );
+  }
   if (exitCode >= 2) {
     return yield* Effect.fail(
       new ToolError(
@@ -224,6 +229,6 @@ export const GrepTool = defineTool({
   schema: GrepInputSchema,
   execute: Effect.fn('GrepTool.call')(function* (input: GrepInput) {
     const call = yield* ToolCall;
-    return yield* runGrep(workspacePathPorts(call), input);
+    return yield* runGrep(call, input);
   }),
 });

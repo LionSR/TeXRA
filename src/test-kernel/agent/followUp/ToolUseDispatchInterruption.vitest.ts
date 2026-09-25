@@ -33,6 +33,7 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
   type RequestDecision,
@@ -42,7 +43,10 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -100,7 +104,6 @@ function testBoundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -144,12 +147,12 @@ function invokerLayer(turns: readonly TurnResult[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       let index = 0;
       return {
-        invoke: (state: RunState) =>
+        invoke: (cell: RunCell) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turn = turns[index];
             index += 1;
             if (turn === undefined) {
@@ -160,7 +163,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -244,6 +247,8 @@ function agentRunTestLayer(init: HarnessInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry(init.tools),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
@@ -260,7 +265,6 @@ function agentRunTestLayer(init: HarnessInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: { onModelChanged: vi.fn() },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );
@@ -425,6 +429,65 @@ describe('tool dispatch interrupted mid-turn', () => {
         expect(group?.role === 'tool' ? group.results.length : 0).toBe(3);
         expect(delivered?.pendingResponse).toBeNull();
       }),
+  );
+
+  /**
+   * A policy with nobody to ask (yolo, never, a headless host) denies the
+   * barrier prompt, and would deny it again on every resume: the denial is a
+   * skip, so the resumed run completes instead of interrupting itself into a
+   * failure that no resume can get past.
+   */
+  it.effect('skips an outcome-unknown barrier the policy denies', () =>
+    Effect.gen(function* () {
+      const session = sessionWithInteractions({ emit: () => {} });
+      const runId = generateRunId();
+      publishTestRunStart(session, runId);
+      const asked = askedQuestions(session, () => ({
+        action: 'deny',
+        reason: 'No person can answer here.',
+      }));
+      const toolB = blockingTool('toolB');
+      const tools = { toolB: toolB.tool };
+      const calls = [{ id: 'call-b', name: 'toolB' }];
+
+      const fiber = yield* Effect.forkDetach(
+        runToolUse({ resume: false }).pipe(
+          Effect.provide(
+            loopLayer({
+              runId,
+              session,
+              tools,
+              turns: [toolCallTurn(calls)],
+              stopAfterCycle: true,
+            }),
+          ),
+        ),
+      );
+      yield* toolB.started;
+      yield* Fiber.interrupt(fiber);
+
+      const resumed = yield* runToolUse({ resume: true }).pipe(
+        Effect.provide(
+          loopLayer({
+            runId,
+            session,
+            tools,
+            turns: [textTurn('The call was skipped.')],
+            stopAfterCycle: true,
+          }),
+        ),
+      );
+      expect(resumed.outcome).toBe('completed');
+      expect(asked.questions).toHaveLength(1);
+      expect(toolB.call).toHaveBeenCalledTimes(1);
+      const delivered = yield* session.ledger.load(runId).pipe(Effect.orDie);
+      const group = delivered?.messages.find(
+        (message) => message.role === 'tool',
+      );
+      expect(group?.role === 'tool' ? group.results[0]?.status : null).toBe(
+        'error',
+      );
+    }),
   );
 
   /**

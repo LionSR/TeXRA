@@ -2,40 +2,32 @@
 // display lines. Unlike the finalized scrollback and the live region, this
 // renders every tool-output line.
 
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 
 import { isRenderableTranscriptEntry } from '../panes/transcriptEntries';
 import { fullTranscriptEntryLayout } from '../panes/transcriptEntryLayout';
 
-const EMPTY_EXECUTION_LABELS: RunLabels = new Map();
-
 interface EntryLinesMemo {
   readonly cols: number;
-  readonly labels: RunLabels;
   readonly lines: readonly string[];
 }
 
 // Wrapped-line memo keyed by the immutable entry object. Entries are replaced
 // (never mutated in place) when their content changes, so a hit is always
 // current, and the WeakMap needs no eviction: a replaced/discarded entry takes
-// its slot with it. One slot per entry suffices — the sole caller
-// (`TranscriptReader`) lays every entry out at one width under one labels
-// snapshot per frame, so only a resize or roster change misses, and then
-// exactly once per entry.
+// its slot with it. One slot per entry suffices: the sole caller
+// (`TranscriptReader`) lays every entry out at one width per frame, so only
+// a resize misses, and then exactly once per entry.
 const entryLinesCache = new WeakMap<TranscriptRow, EntryLinesMemo>();
 
 function transcriptEntryLines(
   entry: TranscriptRow,
   cols: number,
-  runLabels: RunLabels,
 ): readonly string[] {
   const memo = entryLinesCache.get(entry);
-  if (memo && memo.cols === cols && memo.labels === runLabels) {
-    return memo.lines;
-  }
-  const lines = fullTranscriptEntryLayout(entry, cols, runLabels).lines;
-  entryLinesCache.set(entry, { cols, labels: runLabels, lines });
+  if (memo && memo.cols === cols) return memo.lines;
+  const lines = fullTranscriptEntryLayout(entry, cols).lines;
+  entryLinesCache.set(entry, { cols, lines });
   return lines;
 }
 
@@ -71,14 +63,13 @@ function shouldSeparateEntries({
 export function transcriptToLines(
   rows: readonly TranscriptRow[],
   cols: number,
-  runLabels: RunLabels = EMPTY_EXECUTION_LABELS,
 ): readonly string[] {
   const out: string[] = [];
   let previousEntry: TranscriptRow | undefined;
   let previousLines: readonly string[] = [];
   for (const entry of rows) {
     if (!isRenderableTranscriptEntry(entry)) continue;
-    const lines = transcriptEntryLines(entry, cols, runLabels);
+    const lines = transcriptEntryLines(entry, cols);
     if (lines.length === 0) continue;
     if (
       previousEntry !== undefined &&

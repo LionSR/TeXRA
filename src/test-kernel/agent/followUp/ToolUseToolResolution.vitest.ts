@@ -1,8 +1,7 @@
 import { it } from '@effect/vitest';
-import { beforeEach, describe, expect } from 'vitest';
-import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
+import { Effect, Exit, Layer, Scope } from 'effect';
 
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import {
   LanguageModel,
@@ -10,9 +9,14 @@ import {
 } from '@platform/languageModel';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { DiagnosticsTool } from '@tools/DiagnosticsTool';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import type { CompositionKey } from '@tools/compositions';
+import { toolTableLayer } from '@tools/compositions';
+import { toolRegistryLayer } from '@tools/registry';
+import { toolTable } from '@tools/toolTable';
+import { setToolEnabled } from '@utils/config/constants';
 
 const logger = { warn: () => {} };
 
@@ -21,53 +25,30 @@ function toolDefs(names: readonly string[]): ToolDefinition[] {
 }
 
 describe('tool-use tool resolution', () => {
-  // The injections this run resolves with: the production shape, built here
-  // rather than taken from the process list.
-  let injected: readonly {
-    readonly toolName: 'update_config';
-    readonly shouldInject: () => Effect.Effect<boolean>;
-  }[] = [];
-  const toolInjections = { list: () => injected };
-
-  beforeEach(() => {
-    injected = [];
-  });
-
   function resolveNames(
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
-      runtimeUnavailableTools?: readonly string[];
+      host?: 'cli' | 'desktop' | 'extension' | undefined;
+      injectTools?: boolean;
     },
   ) {
     return resolveAgentTools({
       tools: toolDefs(names),
-      registry: getDefaultToolRegistry(),
       logger,
-      toolInjections,
+      injectTools: false,
       stores: hostStores(),
+      workspaceRoot: undefined,
+      host: 'extension',
       ...options,
     }).pipe(
-      Effect.map((tools) => tools.map((tool) => tool.name)),
+      Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
+      Effect.scoped,
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-    );
-  }
-
-  function resolveDiagnostics(runtimeUnavailableTools: readonly string[]) {
-    const diagnostics = new DiagnosticsTool();
-    const registry = new MapToolRegistry({ diagnostics });
-    return resolveAgentTools({
-      tools: [diagnostics.definition],
-      registry,
-      logger,
-      toolInjections,
-      stores: hostStores(),
-      runtimeUnavailableTools,
-      approvalPromptsUnavailable: false,
-    }).pipe(
-      Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+      Effect.provide(toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer))),
+      Effect.provide(nodeSpawnerLayer),
     );
   }
 
@@ -95,7 +76,7 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'filters runtime-unavailable tools without hiding other approval-gated tools',
+    'filters host-excluded tools without hiding other approval-gated tools',
     () =>
       Effect.gen(function* () {
         expect(
@@ -103,10 +84,18 @@ describe('tool-use tool resolution', () => {
             ['ask_user_question', 'bash', 'grep', 'inquiry', 'write_file'],
             {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: ['inquiry'],
+              host: 'cli',
             },
           ),
         ).toEqual(['ask_user_question', 'bash', 'grep', 'write_file']);
+        // A process no composition root named withholds every host-bound
+        // tool rather than guessing it is the extension.
+        expect(
+          yield* resolveNames(['bash', 'inquiry', 'send_to_terminal'], {
+            approvalPromptsUnavailable: false,
+            host: undefined,
+          }),
+        ).toEqual(['bash']);
       }),
   );
 
@@ -135,16 +124,88 @@ describe('tool-use tool resolution', () => {
     'filters injected approval-gated tools when approval prompts are unavailable',
     () =>
       Effect.gen(function* () {
-        injected = [
-          {
-            toolName: 'update_config',
-            shouldInject: () => Effect.succeed(true),
-          },
-        ];
-
+        // Memory and goal are on by default, so both are injected; `plan` is
+        // approval-gated.
         expect(
-          yield* resolveNames(['grep'], { approvalPromptsUnavailable: true }),
-        ).toEqual(['grep']);
+          yield* resolveNames(['grep'], {
+            approvalPromptsUnavailable: true,
+            injectTools: true,
+          }),
+        ).toEqual(['grep', 'memory']);
       }),
+  );
+
+  it.effect(
+    'a run keeps its composition across a switch change, and its plugin layer closes with the last run holding it',
+    () => {
+      const events: string[] = [];
+      // One plugin whose layer records its lifetime.
+      const table = toolTable(
+        {
+          zotero: {
+            zotero_search: {
+              definition: { name: 'zotero_search' },
+              call: () => Effect.die('not called'),
+            },
+          },
+        },
+        {
+          zotero: Layer.effectDiscard(
+            Effect.acquireRelease(
+              Effect.sync(() => events.push('open')),
+              () => Effect.sync(() => events.push('close')),
+            ),
+          ),
+        },
+      );
+      return Effect.gen(function* () {
+        const stores = hostStores();
+        const resolve = (inherited?: CompositionKey) =>
+          resolveAgentTools({
+            tools: toolDefs(['zotero_search']),
+            logger,
+            injectTools: false,
+            stores,
+            workspaceRoot: undefined,
+            host: 'extension',
+            inherited,
+          }).pipe(
+            Effect.provide(
+              LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
+            ),
+            Effect.provide(nodeSpawnerLayer),
+          );
+        const names = (resolved: Effect.Success<ReturnType<typeof resolve>>) =>
+          resolved.definitions.map((tool) => tool.name);
+
+        const parentScope = yield* Scope.make();
+        const parent = yield* Scope.provide(resolve(), parentScope);
+        expect(names(parent)).toEqual(['zotero_search']);
+        expect(events).toEqual(['open']);
+
+        yield* setToolEnabled('zotero', false, stores.globalState);
+        // A new run gets the new composition; a child joins its parent's.
+        const laterScope = yield* Scope.make();
+        const later = yield* Scope.provide(resolve(), laterScope);
+        expect(names(later)).toEqual([]);
+        expect(later.pinned.key.hash).not.toBe(parent.pinned.key.hash);
+        const childScope = yield* Scope.make();
+        const child = yield* Scope.provide(
+          resolve(parent.pinned.key),
+          childScope,
+        );
+        expect(names(child)).toEqual(['zotero_search']);
+
+        yield* Scope.close(parentScope, Exit.void);
+        expect(events).toEqual(['open']);
+        yield* Scope.close(childScope, Exit.void);
+        expect(events).toEqual(['open', 'close']);
+        yield* Scope.close(laterScope, Exit.void);
+      }).pipe(
+        Effect.provide(toolTableLayer(table)),
+        Effect.provide(nodeSpawnerLayer),
+        Effect.ensuring(Effect.promise(() => installPlatform())),
+      );
+    },
   );
 });

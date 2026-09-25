@@ -25,10 +25,7 @@ import {
   shouldCollapsePaste,
   type PastedImageEntry,
 } from '../input/draftAttachments';
-import {
-  ImagePasteQueue,
-  type ImagePasteAttempt,
-} from '../input/imagePasteQueue';
+import { ImagePasteQueue } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import {
   appendSlashCommandEcho,
@@ -88,7 +85,6 @@ interface InputBarProps {
 
 export interface InputBarHandle {
   readonly appendInput: (input: string) => void;
-  readonly discardDraft: () => boolean;
 }
 
 export function slashSubmitText(
@@ -131,8 +127,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const historyBrowseRef = useRef<
     { index: number; savedDraft: string; applied: string } | undefined
   >(undefined);
+  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
+  // by chip id and are expanded back into the submitted text at handleSubmit.
+  // Ref-held so the store survives re-renders and never triggers one itself.
+  // An emptied draft holds no chip, so it drops them, whichever path emptied
+  // it (a submit, or the input's own Ctrl-C discard).
+  const attachmentsRef = useRef(new DraftAttachmentStore());
   const setValue = useCallback((next: string) => {
     draftValueRef.current = next;
+    if (next === '') attachmentsRef.current.clear();
     if (next !== historyBrowseRef.current?.applied) {
       historyBrowseRef.current = undefined;
     }
@@ -158,14 +161,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   imagePasteQueueRef.current ??= new ImagePasteQueue();
   const imagePasteQueue = imagePasteQueueRef.current;
 
-  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
-  // by chip id and are expanded back into the submitted text at handleSubmit.
-  // Ref-held so the store survives re-renders and never triggers one itself.
-  const attachmentsRef = useRef(new DraftAttachmentStore());
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
     setValue('');
-    attachmentsRef.current.clear();
   }, [imagePasteQueue, setValue]);
   const clearDraftEdit = useCallback<CursorEdit>(() => {
     clearDraft();
@@ -175,21 +173,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     (input: string): void => setValue(`${draftValueRef.current}${input}`),
     [setValue],
   );
-  const discardDraft = useCallback((): boolean => {
-    if (
-      draftValueRef.current.length === 0 &&
-      !imagePasteQueue.hasPending &&
-      !imagePasteQueue.hasDeferredAction
-    ) {
-      return false;
-    }
-    clearDraft();
-    return true;
-  }, [clearDraft, imagePasteQueue]);
-  useImperativeHandle(props.controlRef, () => ({ appendInput, discardDraft }), [
-    appendInput,
-    discardDraft,
-  ]);
+  useImperativeHandle(props.controlRef, () => ({ appendInput }), [appendInput]);
   const replaceSlashTriggerInput = useCallback(
     (input: string, value: string, cursor: number) => {
       if (value === '/' && cursor === 1 && input.startsWith('/')) {
@@ -258,9 +242,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const onImagePaste = useMemo(
     () => ({
       runtime,
-      probe: (attempt: ImagePasteAttempt) =>
+      probe: () =>
         Effect.map(attachClipboardImage(roots), (result): string | null => {
-          if (!attempt.isCurrent()) return null;
           if (!result.ok) {
             setTransientNotice(result.reason);
             return null;
@@ -468,10 +451,6 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
           onPick={(cmd, intent) => {
             acceptSlashCommand(cmd, intent, parsed.name, parsed.remainder);
           }}
-          onCancel={() => {
-            /* Esc clears the slash — caller can re-open by typing again. */
-            clearDraft();
-          }}
         />
       ) : null}
       {reverseSearchOpen && historyRef.current ? (
@@ -525,6 +504,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
               shouldDropInputChunk={
                 showPalette ? dropSlashPaletteControlTail : undefined
               }
+              // Esc clears the slash, closing the palette; typing reopens it.
               escapeEdit={showPalette ? clearDraftEdit : undefined}
               transformPaste={transformPaste}
               onImagePaste={onImagePaste}

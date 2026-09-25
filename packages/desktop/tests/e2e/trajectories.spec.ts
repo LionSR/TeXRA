@@ -39,7 +39,7 @@ test.afterAll(async () => {
  */
 test('first launch shows a usable launcher chrome', async () => {
   await showLauncher(launched);
-  // The workspace directory and command palette button must be reachable.
+  // The workspace directory and the Commands entry must be reachable.
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
@@ -48,7 +48,9 @@ test('first launch shows a usable launcher chrome', async () => {
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
   await expect(
-    launched.page.locator('.shell-header-button[aria-label="Show Commands"]'),
+    launched.page
+      .locator('.shell-sidebar-primary .shell-sidebar-action')
+      .filter({ hasText: 'Commands' }),
   ).toBeVisible();
   // The conversation view renders the launcher or the no-workspace empty
   // state — both are valid first-launch outcomes. The audit doc tracks which
@@ -62,12 +64,12 @@ test('first launch shows a usable launcher chrome', async () => {
 /**
  * Trajectory 2 — Settings: Models tab carries model access + provider keys.
  *
- * Account identity and usage live in their own page; Models remains the single
- * home for configuring model access and provider credentials.
+ * Models is the single home for connecting a model: provider keys and
+ * subscription sign-in.
  */
 
 /**
- * Trajectory 3 — Memory tab is the leftmost settings panel. Cross-launch
+ * Trajectory 3 — Memory settings page. Cross-launch
  * persistence is covered by `settingsPersistence.spec.ts`, which relaunches
  * the desktop app on a shared Electron user-data directory.
  */
@@ -93,16 +95,21 @@ test('logs workbench renders the desktop log viewer', async () => {
         command: 'desktop:setLog',
         log: {
           path: '/tmp/texra-desktop.log',
-          text: '2026-07-26T12:00:00.000Z [info] Geometry check',
+          text: JSON.stringify({
+            level: 'INFO',
+            timestamp: '2026-07-26T12:00:00.000Z',
+            message: 'Geometry check',
+          }),
           truncated: false,
         },
       },
       '*',
     );
   });
-  const infoSurface = launched.page.locator(
-    '.desktop-log-entry[data-level="info"] .desktop-log-entry-level-icon',
-  );
+  const infoSurface = launched.page
+    .locator('.desktop-log-entry[data-level="info"]')
+    .filter({ hasText: 'Geometry check' })
+    .locator('.desktop-log-entry-level-icon');
   await expect(infoSurface).toBeVisible();
   const iconOffset = await infoSurface.evaluate((surface) => {
     const icon = surface.querySelector<HTMLElement>('wa-icon');
@@ -148,7 +155,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     'memory',
     'models',
     'agents',
-    'multi-agent',
+    'general',
     'latex',
   ] as const) {
     await setSettingsTab(launched, tab);
@@ -186,8 +193,9 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
   };
 
   await launched.page.evaluate((message) => {
-    const session =
-      document.querySelector<HTMLElement>('progress-app')?.dataset.session;
+    const session = document.querySelector<HTMLElement>(
+      '.shell-launcher-surface',
+    )?.dataset.session;
     window.postMessage({ ...message, session }, '*');
   }, payload);
 
@@ -235,8 +243,8 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'a-superseded-preview',
-        session:
-          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
+          ?.dataset.session,
       },
       '*',
     );
@@ -252,8 +260,8 @@ test('desktop:showDiff opens the in-app Review workbench', async () => {
       {
         command: 'desktop:closeDiff',
         previewId: 'trajectory-review',
-        session:
-          document.querySelector<HTMLElement>('progress-app')?.dataset.session,
+        session: document.querySelector<HTMLElement>('.shell-launcher-surface')
+          ?.dataset.session,
       },
       '*',
     );
@@ -268,7 +276,7 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   const { page } = launched;
   const pdfPath = '/tmp/texra-trajectory/output.pdf';
   const session = await page
-    .locator('progress-app')
+    .locator('.shell-launcher-surface')
     .getAttribute('data-session');
   const pdfTab = page.locator('.shell-workbench-tab[data-kind="pdf"]');
   const frame = page.locator('iframe.shell-workbench-pdf-frame');
@@ -313,9 +321,8 @@ test('desktop:showPdf opens and closes an in-app PDF workbench', async () => {
   await expect(pdfTab).toHaveCount(1);
   await expect(frame).toHaveAttribute('src', `file://${pdfPath}`);
 
-  await page.evaluate((session) => {
-    window.postMessage({ command: 'desktop:closePdf', session }, '*');
-  }, session);
+  // A PDF is a workbench tab, closed from its own tab like any other.
+  await pdfTab.locator('.shell-workbench-tab-close').click();
   await expect(pdfTab).toHaveCount(0);
   await expect(frame).toHaveCount(0);
 });

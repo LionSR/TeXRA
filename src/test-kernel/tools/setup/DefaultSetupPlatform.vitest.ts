@@ -5,7 +5,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import * as codexAuth from '@auth/codex';
-import * as providerCapabilities from '@model/providerCapabilities';
+import * as computeModelOptions from '@model/computeModelOptions';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -22,7 +22,7 @@ setupPlatform(
   {
     config: { 'texra.bib.defaultPath': 'references.bib' },
     secrets: { 'apiKey.openai': 'sk-stored-key' },
-    secretsEnv: { GITHUB_TOKEN: 'github-env-token' },
+    env: { GITHUB_TOKEN: 'github-env-token' },
   },
   { setup: { host: 'extension', signIn: () => Effect.succeed(false) } },
 );
@@ -37,11 +37,7 @@ describe('shared setup capabilities', () => {
   it.effect('keeps API-key-only setup usable without reporting sign-in', () =>
     Effect.gen(function* () {
       expect(
-        yield* hasUsableSetupCredential(
-          hostStores(),
-          hostStores().secrets,
-          () => {},
-        ),
+        yield* hasUsableSetupCredential(hostStores(), hostStores().secrets),
       ).toBe(true);
       expect(yield* getSetupAuthStatus()).toEqual({
         authenticated: false,
@@ -81,9 +77,9 @@ describe('shared setup capabilities', () => {
           }),
         );
         vi.spyOn(
-          providerCapabilities,
-          'isCodexSubscriptionActive',
-        ).mockReturnValue(Effect.succeed(false));
+          computeModelOptions,
+          'readProspectiveUsageRoute',
+        ).mockReturnValue(Effect.succeed(undefined));
 
         expect(yield* getChatGptSubscriptionStatus(hostStores())).toEqual({
           signedIn: true,

@@ -33,7 +33,7 @@ const DEFAULT_AGENT_PRIORITY: readonly string[] = [
  * is visible at all (an empty/undefined roster — e.g. every tool-use agent
  * disabled). That is a deliberate last resort: it keeps `texra chat` usable by
  * falling back to the universal assistant rather than refusing to start. The
- * returned name may then sit outside a scoped roster — `chatToolUseAgentUsageError`
+ * returned name may then sit outside a scoped roster — `resolveChatToolUseAgent`
  * only rejects a name missing from the registry, not one merely hidden.
  */
 export function pickDefaultToolUseAgent<T extends { readonly name: string }>(

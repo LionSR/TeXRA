@@ -24,6 +24,7 @@ import { vi } from 'vitest';
 const agentCatalogMock = vi.hoisted(() => ({
   getAgent: vi.fn(),
   getAgentsByCategory: vi.fn(),
+  getCategoryAgent: vi.fn(),
   getVisibleAgents: vi.fn(),
   getCustomAgentScanIssues: vi.fn(() => []),
   // The registry's load functions are Effect programs; the callers under

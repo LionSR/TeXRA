@@ -32,6 +32,7 @@ import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import {
   claimStanding,
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
@@ -54,7 +55,7 @@ import {
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
-import type { AgentRunServices } from './toolInjection';
+import type { AgentRunServices } from './runRegistry';
 
 type ResumeRunCompletion = Effect.Effect<AgentFlowResult['outcome'], Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
@@ -70,9 +71,7 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   SubagentRunOptions,
-  | 'approvalPromptsUnavailable'
-  | 'onApprovalPolicyDenial'
-  | 'runtimeUnavailableTools'
+  'approvalPromptsUnavailable' | 'onApprovalPolicyDenial'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -279,6 +278,17 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   return WORKFLOW_STARTED;
 });
 
+/** The follow-ups still queued on the run, folded from its durable rows. */
+const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
+  Effect.gen(function* () {
+    const folded = foldRunState(
+      null,
+      yield* session.readAggregate(aggregateId('run', runId)),
+    );
+    if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
+    return folded.success?.followUps ?? [];
+  });
+
 const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
   Effect.logWarning(
     `Run ${runId}: its queued follow-ups could not be read; keeping it recoverable`,
@@ -295,22 +305,14 @@ const releaseUnstartedRecovery = Effect.fn('releaseUnstartedRecovery')(
     provisional: boolean,
   ) {
     if (!session.followUps.useRecovery(recovery)) return;
-    let queued = true;
-    if (provisional) {
-      const rows = yield* Effect.result(
-        session.readAggregate(aggregateId('run', recovery.runId)),
-      );
-      if (Result.isFailure(rows)) {
-        yield* warnUnreadable(recovery.runId, rows.failure);
-      } else {
-        const folded = foldRunState(null, rows.success);
-        if (Result.isSuccess(folded)) {
-          queued = (folded.success?.followUps.length ?? 0) > 0;
-        } else {
-          yield* warnUnreadable(recovery.runId, folded.failure);
-        }
-      }
-    }
+    const queued =
+      !provisional ||
+      (yield* queuedFollowUps(session, recovery.runId).pipe(
+        Effect.map((followUps) => followUps.length > 0),
+        Effect.catch((failure) =>
+          warnUnreadable(recovery.runId, failure).pipe(Effect.as(true)),
+        ),
+      ));
     const current = session.followUps.useRecovery(recovery);
     if (!current) return;
     if (!queued) {
@@ -328,12 +330,16 @@ function refusalFor(
   runId: RunId,
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
-  if (
-    error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused
-  ) {
+  // A live owner refused the claim, or took it after its owner was proved dead.
+  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
+  const holder =
+    refusal instanceof DatabaseClaimRefused ||
+    (refusal instanceof DatabaseNotOwner && !refusal.closed)
+      ? refusal.ownerId
+      : null;
+  if (holder !== null) {
     return session
-      .markUnreadable(runId, runHeldMessage(ownerPid(error.cause.ownerId)))
+      .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
       .pipe(Effect.as({ failed: 'owned_elsewhere' } as const));
   }
   if (error instanceof ResumeSessionUnavailableError) {
@@ -365,8 +371,9 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const runId = resume.runId;
   const followUps = session.followUps;
 
-  // Do not revive a generation while its stop is settling.
-  if ((yield* Runs).getHandle(resume.runId)?.stopRequested === true) {
+  // Do not revive a generation while its stop is settling: a live roster
+  // entry is a run whose fiber has not settled yet.
+  if ((yield* Runs).isLive(resume.runId)) {
     followUps.release(queueLease, 'recoverable');
     return REFUSED;
   }
@@ -377,14 +384,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   const admitted = new Set<string>();
   const isAdmitted = (input: { readonly followUpId: string }): boolean =>
     admitted.has(input.followUpId);
-  const queuedInput = Effect.gen(function* () {
-    const folded = foldRunState(
-      null,
-      yield* session.readAggregate(aggregateId('run', runId)),
-    );
-    if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
-    return folded.success?.followUps ?? [];
-  });
+  const queuedInput = queuedFollowUps(session, runId);
   // A root holds no lease of its own: its exit releases this one by the rows.
   const releaseRecovery = (exit: Exit.Exit<AgentFlowResult, Error>) =>
     queuedInput.pipe(
@@ -421,7 +421,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         session,
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-        runtimeUnavailableTools: options.runtimeUnavailableTools,
         isCancellationRequested: options.isCancellationRequested,
         onCancellationAtFlowAttachment: () => {
           cancelledAtFlowAttachment = true;

@@ -1,7 +1,6 @@
 import { Cause, Effect, Exit } from 'effect';
 import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { throwAggregated } from '@utils/core';
@@ -17,7 +16,6 @@ import type {
 } from './runtimePresentationEvents';
 
 const CHANNEL = 'SessionHostInteractions';
-const logger = createLog(CHANNEL);
 
 /**
  * Ceiling on presentation notices queued while no host is attached. A session
@@ -264,10 +262,9 @@ export class SessionHostInteractions implements HostInteractions {
         );
       }
       // The replay loop warn-logs a replay that fails.
-      if (options.replayWhenAttached && !this.disposed) {
-        this.queuePresentationReplay(present);
-      }
-      return Effect.void;
+      return options.replayWhenAttached && !this.disposed
+        ? this.queuePresentationReplay(present)
+        : Effect.void;
     });
   }
 
@@ -300,17 +297,18 @@ export class SessionHostInteractions implements HostInteractions {
    */
   presentToolEdit(
     request: ToolEditApprovalRequest,
-  ): Effect.Effect<void> | undefined {
-    const { requestId } = request.permission;
-    const active = this.activeAttachment;
-    if (!active?.interactions.presentToolEdit) {
-      logger.info(
-        `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
-      );
-      return undefined;
-    }
-    active.interactions.presentToolEdit(request);
-    return active.interactions.releaseToolEdit?.(requestId);
+  ): Effect.Effect<Effect.Effect<void> | undefined> {
+    return Effect.suspend(() => {
+      const { requestId } = request.permission;
+      const active = this.activeAttachment;
+      if (!active?.interactions.presentToolEdit) {
+        return Effect.logInfo(
+          `No attached host stages tool-edit previews: request ${requestId} is answerable from its payload alone.`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
+      }
+      active.interactions.presentToolEdit(request);
+      return Effect.succeed(active.interactions.releaseToolEdit?.(requestId));
+    });
   }
 
   /**
@@ -352,17 +350,20 @@ export class SessionHostInteractions implements HostInteractions {
     return this.attachments.at(-1);
   }
 
-  private queuePresentationReplay(replay: PresentationProgram): void {
-    if (
-      this.pendingPresentationReplays.length >= MAX_PENDING_PRESENTATION_REPLAYS
-    ) {
-      this.pendingPresentationReplays.shift();
-      logger.warn(
-        `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
-          'notices are waiting for an interaction host to attach.',
-      );
-    }
+  private queuePresentationReplay(
+    replay: PresentationProgram,
+  ): Effect.Effect<void> {
+    const dropsOldest =
+      this.pendingPresentationReplays.length >=
+      MAX_PENDING_PRESENTATION_REPLAYS;
+    if (dropsOldest) this.pendingPresentationReplays.shift();
     this.pendingPresentationReplays.push(replay);
+    return dropsOldest
+      ? Effect.logWarning(
+          `Dropped the oldest queued presentation notice: more than ${MAX_PENDING_PRESENTATION_REPLAYS} ` +
+            'notices are waiting for an interaction host to attach.',
+        ).pipe(withLogChannel(CHANNEL))
+      : Effect.void;
   }
 
   private replayPendingPresentations(

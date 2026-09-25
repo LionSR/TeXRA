@@ -8,7 +8,6 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 // Local imports
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { platform, type Platform } from '@platform/platform';
 import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -18,7 +17,7 @@ import { installPlatform as installFakePlatform } from '@test/support/setupPlatf
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
-import { proposalApprovals, releaseRunResources } from '@tools/approval';
+import { releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
 import { generateRunId } from '@utils/core';
 
@@ -48,9 +47,8 @@ const followUpPlan: Plan = {
   ].join('\n'),
 };
 
-async function installPlatform(flagOn: boolean): Promise<Platform> {
+async function installPlatform(flagOn: boolean): Promise<void> {
   await installFakePlatform({ config: { [GOAL_FEATURE_FLAG_KEY]: flagOn } });
-  return platform();
 }
 
 /** Request watchers the cases opened, released after each. */
@@ -102,7 +100,7 @@ function startPlanUpdate(
     const { session, awaitPlanRequest } = planSession(runId);
     if (seed) yield* seed(session);
     const workPlanState = new WorkPlanState();
-    const tool = new PlanTool();
+    const tool = PlanTool;
 
     const resultFiber = yield* Effect.forkScoped(
       tool.call({ command: 'update', objective }).pipe(
@@ -171,10 +169,10 @@ describe('PlanTool — update (plan approval)', () => {
           );
 
           session.approvals.setDelegatedWorkBypasses(runId, true);
-          expect(proposalApprovals(session).isBypassed(runId)).toBe(true);
+          expect(session.approvals.proposal.isBypassed(runId)).toBe(true);
 
           const resultFiber = yield* Effect.forkScoped(
-            new PlanTool().call({ command: 'update', ...followUpPlan }).pipe(
+            PlanTool.call({ command: 'update', ...followUpPlan }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },
@@ -398,7 +396,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   });
 
   function callTool(input: unknown) {
-    const tool = new PlanTool();
+    const tool = PlanTool;
     return tool.call(input).pipe(
       Effect.provide(
         nativeToolTestLayer({

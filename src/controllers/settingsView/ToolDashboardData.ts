@@ -1,9 +1,9 @@
 /**
  * Tool dashboard data builder.
  *
- * Enriches settings-view tool groups with runtime availability. External tool
- * definitions live in {@link @tools/externalToolDefs}; this controller module
- * keeps that tool-layer dependency out of shared settings-view code.
+ * Projects the tool plugin manifest ({@link @tools/plugins}) onto the Tools
+ * dashboard, enriched with runtime availability; this controller module keeps
+ * that tool-layer dependency out of shared settings-view code.
  */
 
 // Third-party imports
@@ -16,15 +16,9 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
-import {
-  findExternalToolDef,
-  type ExternalToolDef,
-  type ToolProbeInputs,
-} from '@tools/externalToolDefs';
-import {
-  isDefaultToolUnavailableOnHost,
-  type RegisteredToolName,
-} from '@tools/registry';
+import { TOOL_PLUGINS, findToolPlugin, type ToolPlugin } from '@tools/plugins';
+import { isToolUnavailableOnHost } from '@tools/registry';
+import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
   runExternalToolChecks,
   type ExternalToolCheckResult,
@@ -49,7 +43,7 @@ export type ToolTerminalAction =
 /**
  * Plan the terminal command for a tool-dashboard install/auth action.
  *
- * Hosts re-look up the command from the shared tool definitions rather than
+ * Hosts re-look up the command from the plugin manifest rather than
  * trusting a command string supplied by the webview, and report which of the
  * two failure reasons applies instead of silently doing nothing.
  */
@@ -57,8 +51,8 @@ export function planToolTerminalAction(input: {
   readonly toolId: string;
   readonly commandKind: ToolCommandKind;
 }): ToolTerminalAction {
-  const def = findExternalToolDef(input.toolId);
-  if (!def) return { kind: 'none', reason: 'unknownTool' };
+  const def = findToolPlugin(input.toolId);
+  if (!def?.availability) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
     input.commandKind === 'install' ? def.installCommand : def.authCommand;
@@ -67,120 +61,41 @@ export function planToolTerminalAction(input: {
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
 }
 
-// ============================================================
-// Static tool metadata
-// ============================================================
-
-/**
- * Built-in tool groups with no external dependencies. A group is omitted from
- * the dashboard when every tool in it declares itself unavailable on the
- * asking host.
- */
-const BUILTIN_TOOLS: (Omit<
-  ToolDashboardItem,
-  'status' | 'tools' | 'installActions' | 'requiresSetup'
-> & {
-  toolNames: readonly RegisteredToolName[];
-})[] = [
-  {
-    id: 'file-ops',
-    name: 'File & Shell Operations',
-    category: 'file',
-    description:
-      'Read, write, edit files and run shell commands. Includes glob/grep search.',
-    toolNames: ['bash', 'read_file', 'write_file', 'edit_file', 'glob', 'grep'],
-  },
-  {
-    id: 'latex-extract',
-    name: 'LaTeX Extraction',
-    category: 'latex',
-    description:
-      'Extract figures, TikZ diagrams, and bibliography entries from LaTeX documents.',
-    toolNames: [
-      'extract_figures',
-      'extract_tikz_figures',
-      'extract_bib_entries',
-    ],
-  },
-  {
-    id: 'latex-diagnostics',
-    name: 'LaTeX Diagnostics',
-    category: 'latex',
-    description:
-      'Report LaTeX compilation errors and warnings from the VS Code Problems panel.',
-    toolNames: ['diagnostics'],
-  },
-  {
-    id: 'arxiv',
-    name: 'ArXiv Search & Download',
-    category: 'academic',
-    description:
-      'Search arXiv papers, retrieve metadata, and download LaTeX source packages.',
-    toolNames: ['arxiv_search', 'arxiv_metadata', 'download_arxiv_source'],
-  },
-  {
-    id: 'crossref',
-    name: 'Crossref Citation Lookup',
-    category: 'academic',
-    description:
-      'Search Crossref for academic publications by query or resolve DOIs to full metadata.',
-    toolNames: ['crossref_search'],
-  },
-  {
-    id: 'web',
-    name: 'Web Search & Fetch',
-    category: 'web',
-    description:
-      'Search the web and fetch or extract content from URLs. Uses native provider tools when available, and DuckDuckGo Instant Answers otherwise.',
-    toolNames: ['web_search', 'web_fetch'],
-  },
-  {
-    id: 'memory-workflow',
-    name: 'Memory, Tasks & Delegation',
-    category: 'workflow',
-    description:
-      'Persistent memory across sessions, task tracking with to-do lists, and delegate work to sub-agents.',
-    toolNames: [
-      'memory',
-      'todo_write',
-      'plan',
-      'delegate_workflow',
-      'delegate_agent',
-      'executions',
-      'accept_run_files',
-    ],
-  },
-];
+/** The plugin's inline settings rows, as the dashboard item carries them. */
+function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
+  return plugin.settings
+    ? { settings: plugin.settings.map(([key, label]) => [key, label]) }
+    : {};
+}
 
 // ============================================================
 // Public API
 // ============================================================
 
 /**
- * Whether an external tool group belongs on `host`'s dashboard. A group that
- * hides itself, or whose every tool declares itself unavailable on the asking
- * host, is not shown there and cannot be installed, authed or toggled from it.
+ * Whether a plugin belongs on `host`'s dashboard. A hidden plugin, or one
+ * whose every tool declares itself unavailable on the asking host, is not
+ * shown there and cannot be installed, authed or toggled from it: host
+ * exclusion removes those tools from the resolved roster, so they can never
+ * be called there.
  */
-export function isExternalToolDefVisible(
-  def: ExternalToolDef,
+export function isToolPluginVisible(
+  plugin: ToolPlugin,
   host: ToolHost,
 ): boolean {
   return (
-    def.hideFromDashboard !== true &&
-    !(
-      def.tools.length > 0 &&
-      def.tools.every((name) => isDefaultToolUnavailableOnHost(name, host))
-    )
+    plugin.hidden !== true &&
+    !plugin.toolNames.every((name) => isToolUnavailableOnHost(name, host))
   );
 }
 
 /**
  * Build the complete tool dashboard items list.
  *
- * @param host - the product host asking. A group whose every tool declares
- *   itself unavailable on that host is dropped rather than shown as
- *   "available": host exclusion removes those tools from the resolved roster,
- *   so they can never be called there.
+ * Built-in plugins come first, in manifest order, then the probed plugins in
+ * the order their results arrive.
+ *
+ * @param host - the product host asking; see {@link isToolPluginVisible}.
  * @param probeInputs - the asking host's workspace folder and configuration,
  *   carried as data for the probes that need them (the GitHub group asks
  *   whether the folder is a git repository, the Zotero group reads its port).
@@ -195,15 +110,19 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     probeInputs: ToolProbeInputs,
     cachedResults?: ExternalToolCheckResult[],
   ) {
-    const builtinItems: ToolDashboardItem[] = BUILTIN_TOOLS.filter(
-      ({ toolNames }) =>
-        !toolNames.every((name) => isDefaultToolUnavailableOnHost(name, host)),
-    ).map(({ toolNames, ...rest }) => ({
-      ...rest,
-      tools: toolNames.map((name) => ({ name })),
+    const builtinItems: ToolDashboardItem[] = TOOL_PLUGINS.filter(
+      (plugin) =>
+        plugin.availability === undefined && isToolPluginVisible(plugin, host),
+    ).map((plugin) => ({
+      id: plugin.id,
+      name: plugin.name,
+      category: plugin.category,
+      description: plugin.description,
+      tools: plugin.toolNames.map((toolName) => ({ name: toolName })),
       status: 'available' as const,
       installActions: [],
       requiresSetup: false,
+      ...settingRows(plugin),
     }));
 
     const results =
@@ -212,8 +131,8 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     const disabledIds = yield* getDisabledToolIds(yield* AppState);
     const externalItems: ToolDashboardItem[] = [];
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
-      const def = findExternalToolDef(id);
-      if (!def || !isExternalToolDefVisible(def, host)) continue;
+      const def = findToolPlugin(id);
+      if (!def || !isToolPluginVisible(def, host)) continue;
       externalItems.push({
         id: def.id,
         name: def.name,
@@ -250,6 +169,7 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         authNote: def.authNote,
         toggleable: def.toggleable,
         enabled: !disabledIds.has(def.id),
+        ...settingRows(def),
       });
     }
 

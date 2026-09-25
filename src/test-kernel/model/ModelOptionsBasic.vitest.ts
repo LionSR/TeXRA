@@ -11,6 +11,7 @@ import {
 import {
   DEFAULT_AGENT_MODEL,
   DEFAULT_HELPER_MODEL,
+  isExpensiveModel,
 } from '@shared/constants/providers';
 
 describe('default helper model', () => {
@@ -48,5 +49,14 @@ describe('default model list', () => {
         (model) => isRetiredModel(model) || isDeprecatedModel(model),
       ),
     ).toEqual([]);
+  });
+});
+
+describe('premium pricing hint', () => {
+  // Name matching (`gpt<digits>pro`) flagged the $4/$20 gpt56pro and missed
+  // the $150/$600 o1pro; the hint follows the price.
+  it('flags models by output price, not by a Pro-shaped name', () => {
+    expect(isExpensiveModel(MODEL_CONFIGS.o1pro.outputPrice)).toBe(true);
+    expect(isExpensiveModel(MODEL_CONFIGS.gpt56pro.outputPrice)).toBe(false);
   });
 });

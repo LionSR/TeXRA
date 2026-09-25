@@ -66,7 +66,6 @@ const boundAnthropic: BoundModel = {
   supportsForcedToolChoice: true,
   wireRouteKey: 'test-route',
   modelRetryRouteKey: 'test-route/test-model',
-  routedOnKimiCode: false,
   backgroundCapable: false,
 };
 

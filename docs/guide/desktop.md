@@ -88,9 +88,9 @@ so provider API keys and sign-in sessions are added separately in each app.
 
 ## Logs
 
-The desktop app writes a local session log named `texra-desktop.log`. Use the
-**Logs** button in the desktop toolbar or **TeXRA > Open Logs Folder** from the
-application menu to open the folder in your operating system.
+The desktop app writes a local session log named `texra-desktop.log`. Choose
+**Show Logs** from the application menu or from Commands to read it in the
+app, or **Open Logs Folder** to open the folder in your operating system.
 
 Include relevant log excerpts when reporting beta desktop issues. Avoid sharing
 API keys, unpublished manuscript text, or private file paths.

@@ -22,6 +22,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import type { ToolServices } from '@agent/runtime/ToolServices';
 import { ToolError, type ToolResult } from '@shared/schemas';
 import { withRequestTimeout, type RequestError } from '@tools/timeouts';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const ZOTERO_BBT_TIMEOUT_MS = 10_000; // 10 s
 const ZOTERO_PING_TIMEOUT_MS = 2_000; // 2 s
@@ -46,9 +47,9 @@ export const withZoteroPort =
     run: (
       input: I,
       port: number,
-    ) => Effect.Effect<ToolResult, unknown, ToolServices>,
+    ) => Effect.Effect<ToolResult, Error, ToolServices>,
   ) =>
-  (input: I): Effect.Effect<ToolResult, unknown, ToolServices> =>
+  (input: I): Effect.Effect<ToolResult, Error, ToolServices> =>
     Effect.gen(function* () {
       const call = yield* ToolCall;
       return yield* run(input, call.roots.config.get<number>(ZOTERO_PORT_KEY));
@@ -235,7 +236,7 @@ export const callBetterBibTeX = Effect.fn('bbtClient.callBetterBibTeX')(
               retry: 0,
             })
             .json<unknown>(),
-        catch: (cause) => cause,
+        catch: ensureError,
       }),
     ).pipe(Effect.mapError((error) => bbtRequestError(error, port, timeout)));
 
@@ -292,7 +293,7 @@ export const checkZoteroRunning = Effect.fn('bbtClient.checkZoteroRunning')(
             signal,
             retry: 0,
           }),
-        catch: (cause) => cause,
+        catch: ensureError,
       }),
     ).pipe(
       Effect.mapError(() => zoteroUnreachableError(port)),
@@ -367,7 +368,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
               retry: 0,
               throwHttpErrors: false,
             }),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
         if (
           response.status === StatusCodes.OK ||
@@ -381,7 +382,7 @@ export const callZoteroConnector = Effect.fn('bbtClient.callZoteroConnector')(
         // reachability/timeout classification.
         const data = yield* Effect.tryPromise({
           try: () => response.json<{ error?: string }>(),
-          catch: (cause) => cause,
+          catch: ensureError,
         }).pipe(
           // Body is not JSON or is empty; use the generic status message.
           Effect.catch(() => Effect.succeed(undefined)),

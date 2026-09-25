@@ -55,6 +55,30 @@ export const progressAppStyles = css`
     border-bottom: var(--border-thin) solid var(--color-border);
   }
 
+  /* The desktop has no title bar: this row is the window's drag handle,
+     taller to sit level with the traffic lights, and its controls, the
+     host's slotted ones included, stay clickable. */
+  :host([placement='desktop']) .shell-header {
+    min-height: 48px;
+    -webkit-app-region: drag;
+  }
+  :host([placement='desktop']) .shell-header :is(wa-button, wa-dropdown),
+  :host([placement='desktop']) ::slotted(*) {
+    -webkit-app-region: no-drag;
+  }
+  /* The desktop rail lists each project's tasks, so the sessions button
+     and drawer would be a second list there. */
+  :host([placement='desktop']) .sessions-button,
+  :host([placement='desktop']) session-drawer {
+    display: none;
+  }
+  /* One readable column, as the wide editor tab has: the desktop window
+     is wide and a launcher stretched edge to edge reads as packed. */
+  :host([placement='desktop']) .reading > * {
+    width: min(760px, 100%);
+    margin: 0 auto;
+  }
+
   /* The dock cell of the header exists only docked wide (see the container
      query); until then the header is one cell. */
   .header-dock {
@@ -90,8 +114,8 @@ export const progressAppStyles = css`
     flex: 1 1 auto;
   }
 
-  .stop-button {
-    color: var(--color-error);
+  .header-run {
+    flex: 1 1 auto;
   }
 
   .shell-body {
@@ -213,6 +237,14 @@ export const progressAppStyles = css`
     font-size: var(--font-size-sm);
     line-height: var(--line-height-normal, 1.5);
     color: var(--color-text-secondary);
+  }
+
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--wa-space-2xs);
+    margin-top: var(--wa-space-2xs);
   }
 
   .context::part(base) {

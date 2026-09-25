@@ -106,9 +106,8 @@ export enum GlobalStateKey {
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
 
-  // Dismissable main-view hint. Written only by the banner's own close
-  // button, read only to decide whether to show that banner again.
-  LOGIN_BANNER_DISMISSED = 'texra.ui.loginBannerDismissed',
+  // Plugins recorded by `texra plugin install`
+  INSTALLED_PLUGINS = 'texra.plugins.installed',
 
   // Experimental
   INLINE_CRITICISM_ENABLED = 'texra.inlineCriticism.enabled',

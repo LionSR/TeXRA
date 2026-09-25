@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import {
   afterAll,
   beforeAll,
@@ -24,7 +24,7 @@ import {
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 import {
   fakeHostAgentDirectories,
@@ -34,6 +34,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
 
 /**
@@ -42,17 +43,14 @@ import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-  >,
+  program: Effect.Effect<A, E, AgentCatalogServices>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
+      testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
     ),
   );
@@ -71,35 +69,41 @@ afterAll(async () => {
 });
 
 describe('validateAgentYamlContent', () => {
-  it('rejects root settings that only satisfy the partial YAML schema', () => {
-    assert.throws(() =>
+  it.effect(
+    'rejects root settings that only satisfy the partial YAML schema',
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.flip(
+          validateAgentYamlContent(
+            [
+              'name: bad_tool_use_root',
+              'settings:',
+              '  agentCategory: toolUse',
+              '  rounds: 2',
+              '',
+            ].join('\n'),
+          ),
+        );
+      }),
+  );
+
+  it.effect(
+    'keeps inherited child settings partial before parent merging',
+    () =>
       validateAgentYamlContent(
         [
-          'name: bad_tool_use_root',
+          'name: child',
+          'inherits: parent',
           'settings:',
-          '  agentCategory: toolUse',
           '  rounds: 2',
+          'prompts:',
+          '  userRequest: Override the parent request.',
           '',
         ].join('\n'),
       ),
-    );
-  });
+  );
 
-  it('keeps inherited child settings partial before parent merging', () => {
-    validateAgentYamlContent(
-      [
-        'name: child',
-        'inherits: parent',
-        'settings:',
-        '  rounds: 2',
-        'prompts:',
-        '  userRequest: Override the parent request.',
-        '',
-      ].join('\n'),
-    );
-  });
-
-  it('validates root agents after resolving raw tool names', () => {
+  it.effect('validates root agents after resolving raw tool names', () =>
     validateAgentYamlContent(
       [
         'name: root_tool_use',
@@ -109,17 +113,17 @@ describe('validateAgentYamlContent', () => {
         '    - grep',
         '',
       ].join('\n'),
-    );
-  });
+    ),
+  );
 
-  it('wraps malformed YAML text through the shared parse boundary', () => {
-    assert.throws(
-      () => validateAgentYamlContent('name: "unterminated'),
-      (error: unknown) =>
-        error instanceof Error &&
-        error.message.startsWith('Failed to parse agent YAML:'),
-    );
-  });
+  it.effect('wraps malformed YAML text through the shared parse boundary', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        validateAgentYamlContent('name: "unterminated'),
+      );
+      assert.ok(error.message.startsWith('Failed to parse agent YAML:'));
+    }),
+  );
 });
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -139,7 +143,9 @@ describe('loadAgentSettingAndPrompts', () => {
 
   /** The loader on the process filesystem it reads its definitions through. */
   const loadDefinition = (entry: AgentEntry) =>
-    loadAgentSettingAndPrompts(entry).pipe(Effect.provide(nodePlatformLayer));
+    loadAgentSettingAndPrompts(entry).pipe(
+      Effect.provide(Layer.merge(nodePlatformLayer, testHttpClientLayer)),
+    );
 
   beforeAll(async () => {
     definitionDir = await makeTempDir('texra-agent-load-', tempDirs);

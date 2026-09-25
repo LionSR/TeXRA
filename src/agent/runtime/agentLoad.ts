@@ -15,34 +15,51 @@ import {
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
+import { withLogChannel } from '@logger/effectLog';
 import { agentKey, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
 import { normalizeAgentSettingTools } from './agentSettingTools';
+import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'agentLoad';
 
 /**
  * Parses YAML text and validates that it represents a full agent definition,
- * throwing when it does not. Inheriting definitions stay partial: only a root
+ * failing when it does not. Inheriting definitions stay partial: only a root
  * definition is held to the full settings/prompts schemas.
  */
-export function validateAgentYamlContent(content: string): void {
+export const validateAgentYamlContent = Effect.fn(
+  'agentLoad.validateAgentYamlContent',
+)(function* (content: string): Effect.fn.Return<void, Error> {
   const parsed = parseYamlWith(content, AgentDefinitionSchema);
   if (Result.isFailure(parsed)) {
-    throw new Error(`Failed to parse agent YAML: ${parsed.failure.message}`, {
-      cause: parsed.failure,
-    });
+    return yield* Effect.fail(
+      new Error(`Failed to parse agent YAML: ${parsed.failure.message}`, {
+        cause: parsed.failure,
+      }),
+    );
   }
   const data = parsed.success;
+  if (data.inherits) return;
 
-  if (!data.inherits) {
-    AgentSettingSchema.parse(
-      normalizeAgentSettingTools(data.settings, CHANNEL),
-    );
-    AgentPromptSchema.parse(data.prompts);
-  }
+  const normalized = normalizeAgentSettingTools(data.settings);
+  yield* logInertTools(normalized.inertToolsWarning);
+  yield* Effect.try({
+    try: () => {
+      AgentSettingSchema.parse(normalized.settings);
+      AgentPromptSchema.parse(data.prompts);
+    },
+    catch: ensureError,
+  });
+});
+
+/** Report the load-time warning {@link normalizeAgentSettingTools} returns. */
+function logInertTools(warning: string | undefined): Effect.Effect<void> {
+  return warning === undefined
+    ? Effect.void
+    : Effect.logWarning(warning).pipe(withLogChannel(CHANNEL));
 }
 
 /** Loads and parses a YAML file from an absolute path. */
@@ -74,7 +91,11 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 )(function* (
   entry: AgentEntry,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  [AgentSetting, AgentPrompt],
+  Error,
+  FileSystem.FileSystem | HttpClient.HttpClient
+> {
   // Handle remote agents
   if (entry.source === 'remote') {
     const remoteConfig = yield* loadRemoteAgent(entry.name);
@@ -136,13 +157,14 @@ export const loadAgentSettingAndPrompts = Effect.fn(
     settings = { ...settings, agentCategory: AgentCategory.ToolUse };
   }
 
-  const normalizedSettings = normalizeAgentSettingTools(settings, CHANNEL);
+  const normalized = normalizeAgentSettingTools(settings);
+  yield* logInertTools(normalized.inertToolsWarning);
 
   // Apply defaults and validate the final settings and prompts
   return yield* Effect.try({
     try: () =>
       [
-        AgentSettingSchema.parse(normalizedSettings),
+        AgentSettingSchema.parse(normalized.settings),
         AgentPromptSchema.parse(prompts),
       ] as [AgentSetting, AgentPrompt],
     catch: ensureError,

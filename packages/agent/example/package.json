@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@texra-ai/agent": "file:agent.tgz",
-    "effect": "4.0.0-rc.116",
+    "effect": "4.0.0-rc.117",
     "zod": "^4.4.3"
   }
 }

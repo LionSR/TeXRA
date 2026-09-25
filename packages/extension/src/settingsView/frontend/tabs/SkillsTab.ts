@@ -8,6 +8,7 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
   ActiveSkillSourceScopeSchema,
   type ActiveSkillSourceScope,
+  type InstalledPlugin,
   type SkillDisplayIssue,
   type SkillDisplayItem,
 } from '@shared/schemas';
@@ -55,6 +56,7 @@ export class SkillsTab extends LitElement {
   @property({ attribute: false }) disabledSkills: string[] = [];
   @property({ attribute: false }) disabledSources: ActiveSkillSourceScope[] =
     [];
+  @property({ attribute: false }) plugins: InstalledPlugin[] = [];
   @property({ attribute: false }) skills: SkillDisplayItem[] = [];
   @property({ attribute: false }) issues: SkillDisplayIssue[] = [];
 
@@ -68,34 +70,24 @@ export class SkillsTab extends LitElement {
       : [...new Set([...values, value])];
   }
 
+  /** The whole-source switch, in that source's list heading. */
   private renderSourceToggle(scope: ActiveSkillSourceScope): TemplateResult {
-    const checked = !this.disabledSources.includes(scope);
-    const id = `skill-source-${scope}`;
     return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${id}
-            >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</label
-          >
-          <span class="settings-row-help">Skills from ${scope} sources.</span>
-        </div>
-        <div class="settings-row-control">
-          <wa-switch
-            id=${id}
-            .checked=${checked}
-            ?disabled=${!this.masterEnabled}
-            @change=${(event: Event) =>
-              postStateSetting(
-                WorkspaceStateKey.DISABLED_SKILL_SOURCES,
-                this.toggleValue(
-                  this.disabledSources,
-                  scope,
-                  Boolean((event.target as WaSwitch).checked),
-                ),
-              )}
-          ></wa-switch>
-        </div>
-      </div>
+      <wa-switch
+        id=${`skill-source-${scope}`}
+        .checked=${!this.disabledSources.includes(scope)}
+        ?disabled=${!this.masterEnabled}
+        @change=${(event: Event) =>
+          postStateSetting(
+            WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            this.toggleValue(
+              this.disabledSources,
+              scope,
+              Boolean((event.target as WaSwitch).checked),
+            ),
+          )}
+        >Use ${SOURCE_LABELS[scope].toLowerCase()} skills</wa-switch
+      >
     `;
   }
 
@@ -129,28 +121,62 @@ export class SkillsTab extends LitElement {
     `;
   }
 
+  /**
+   * Installed plugins, read-only: `texra plugin install|update|remove` is the
+   * one home for changing them, and their skills are listed and toggled below
+   * with the user skills.
+   */
+  private renderPlugins(): TemplateResult | typeof nothing {
+    if (this.plugins.length === 0) return nothing;
+    return html`
+      <div class="category-section">
+        ${renderSettingsSectionHeading({
+          icon: 'cube',
+          title: `Plugins (${this.plugins.length})`,
+          description:
+            'Installed with texra plugin install. Their skills load as user skills.',
+        })}
+        <div class="settings-section">
+          ${repeat(
+            this.plugins,
+            (plugin) => plugin.name,
+            (plugin) => html`
+              <div class="settings-row">
+                <div class="settings-row-text">
+                  <span class="settings-row-label">${plugin.name}</span>
+                  <span class="settings-row-help"
+                    ><code>${plugin.source}</code>${
+                      plugin.commit
+                        ? html` at <code>${plugin.commit.slice(0, 12)}</code>`
+                        : nothing
+                    }</span
+                  >
+                </div>
+              </div>
+            `,
+          )}
+        </div>
+      </div>
+    `;
+  }
+
   override render(): TemplateResult {
     const groups = groupBy(this.skills, (skill) => skill.scope);
     return html`
-      <div class="tab-content-container">
+      <div>
+        ${renderSettingsSectionHeading({
+          icon: 'wand-magic-sparkles',
+          title: 'Skills',
+          description:
+            'Reusable instructions agents can load when a task needs them.',
+        })}
         <div class="settings-section">
           ${renderStateSettingToggleRow({
             key: AGENT_SKILLS_CONFIG_KEY,
             checked: this.masterEnabled,
           })}
         </div>
-        <div class="category-section">
-          ${renderSettingsSectionHeading({
-            icon: 'folder-tree',
-            title: 'Sources',
-            description: 'Choose which workspace skill sources are available.',
-          })}
-          <div class="settings-section">
-            ${ActiveSkillSourceScopeSchema.options.map((scope) =>
-              this.renderSourceToggle(scope),
-            )}
-          </div>
-        </div>
+        ${this.renderPlugins()}
         ${
           this.issues.length === 0
             ? nothing
@@ -177,6 +203,7 @@ export class SkillsTab extends LitElement {
                           icon: 'wand-magic-sparkles',
                           title: `${SOURCE_LABELS[scope]} (${items.length})`,
                           description: `Skills discovered from ${scope} sources.`,
+                          actions: this.renderSourceToggle(scope),
                         })}
                         <div class="settings-section">
                           ${repeat(

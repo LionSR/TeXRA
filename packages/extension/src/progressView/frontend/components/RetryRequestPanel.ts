@@ -1,4 +1,4 @@
-/** Retry request panel for failed model requests. */
+/** Retry request card: "The request to <model> failed", Retry / Stop run. */
 
 // Third-party imports
 import { html, nothing, type TemplateResult } from 'lit';
@@ -9,8 +9,6 @@ import { when } from 'lit/directives/when.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
-// Local imports - shared styles
-
 // Local imports - shared schemas
 import {
   getExhaustionReason,
@@ -18,13 +16,9 @@ import {
   type ProviderErrorPartial,
 } from '@shared/schemas';
 import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
-import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
+import { getModelLabel } from '@shared/model/modelLabel';
+import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
-import { renderDotMeta, type MetaPart } from '@ui/wa/metaStrip';
 import { tailWithEllipsis, toGraphemes } from '@utils/text/stringUtils';
 
 // Local imports - base class
@@ -35,117 +29,91 @@ import { retryRequestPanelStyles } from './RetryRequestPanel.styles';
 
 @customElement('retry-request-panel')
 export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    requestPanelSharedStyles,
-    retryRequestPanelStyles,
-  ];
+  static override styles = [BaseRequestPanel.styles, retryRequestPanelStyles];
 
-  override handleKeyboardShortcut(key: string): boolean {
-    if (this.readOnly) return false;
-    switch (key) {
-      case 'r':
-        this.emitAction({ action: 'retry' });
-        return true;
-      case 'k':
-        if (this.canUseOwnApiKey()) {
-          this.emitAction({ action: 'retry', credentials: 'personal' });
-          return true;
-        }
-        return false;
-      case 'escape':
-        this.emitAction({ action: 'cancel' });
-        return true;
-      default:
-        return false;
-    }
+  protected override get primaryIcon(): TeXRAIconName {
+    return 'rotate-right';
+  }
+
+  protected override get decline(): 'stop' {
+    return 'stop';
+  }
+
+  // A Copilot quota stop retries the same subscription; say so.
+  protected override get primaryLabel(): string {
+    return this.copilotQuotaExhausted() ? 'Retry Copilot' : 'Retry';
+  }
+
+  protected override submitPrimary(): void {
+    this.emitAction({ action: 'retry' });
+  }
+
+  protected override renderAsk(): string {
+    const { model } = this.permission.data;
+    return model
+      ? `The request to ${getModelLabel(model)} failed`
+      : 'The model request failed';
+  }
+
+  protected override handleExtraKey(key: string): boolean {
+    if (key !== 'k' || !this.canUseOwnApiKey()) return false;
+    this.emitAction({ action: 'retry', credentials: 'personal' });
+    return true;
   }
 
   override render(): TemplateResult {
     const data = this.permission.data;
-    const canUseOwnApiKey = this.canUseOwnApiKey();
-    const copilotQuotaExhausted =
-      getExhaustionReason(data.errorDetails) === 'copilot-subscription';
-    const userRetryable = data.errorDetails?.userRetryable !== false;
-    const metaParts: MetaPart[] = [
-      ...(data.model ? [`Model: ${data.model}`] : []),
-      `Can retry: ${userRetryable ? 'Yes' : 'No'}`,
-    ];
-
     const detailsText = this.formatRetryDetails(data.errorDetails);
-    const disabled = this.readOnly;
+    const ownKeyLabel = this.copilotQuotaExhausted()
+      ? 'Start with your own API key'
+      : 'Retry with your own API key';
 
-    return html`
-      <div class="retry-request">
-        <div class="retry-request__details">
-          <h3 class="retry-request__operation">
-            ${data.operation ? `Failed: ${data.operation}` : 'Request failed'}
-          </h3>
-          <div class="retry-request__meta">${renderDotMeta(metaParts)}</div>
-          ${when(
-            data.errorMessage,
-            () =>
-              html`<div class="retry-request__error">
-                ${data.errorMessage}
-              </div>`,
-          )}
-          ${
-            detailsText
-              ? html`
-                  <wa-details
-                    class="retry-request__error-details collapsible-quiet"
-                  >
-                    <span slot="summary" class="retry-request__error-summary">
-                      Error details
-                    </span>
-                    <div class="retry-request__error-body">${detailsText}</div>
-                  </wa-details>
-                `
-              : nothing
-          }
-        </div>
-        <div class="retry-request__actions">
-          ${when(canUseOwnApiKey, () =>
-            renderLabeledActionButton({
-              icon: 'key',
-              text: copilotQuotaExhausted
-                ? 'Start with your own API key'
-                : 'Retry with your own API key',
-              title: copilotQuotaExhausted
-                ? 'Start a new run with your own API key (k)'
-                : 'Retry with your own API key (k)',
-              action: 'useOwnApiKey',
-              disabled,
-              onClick: () =>
-                this.emitAction({ action: 'retry', credentials: 'personal' }),
-            }),
-          )}
-          ${renderLabeledActionButton({
-            icon: 'rotate-right',
-            text: copilotQuotaExhausted ? 'Retry Copilot' : 'Retry',
-            title: copilotQuotaExhausted ? 'Retry Copilot (r)' : 'Retry (r)',
-            action: 'retry',
-            kind: 'primary',
-            disabled,
-            onClick: () => this.emitAction({ action: 'retry' }),
-          })}
-          ${renderLabeledActionButton({
-            icon: 'xmark',
-            text: 'Dismiss',
-            title: 'Dismiss (Esc)',
-            action: 'cancel',
-            disabled,
-            onClick: () => this.emitAction({ action: 'cancel' }),
-          })}
-        </div>
-      </div>
-    `;
+    return this.renderCard(
+      html`
+        ${when(
+          data.errorMessage,
+          () =>
+            html`<div class="retry-request__error">${data.errorMessage}</div>`,
+        )}
+        ${
+          detailsText
+            ? html`
+                <wa-details
+                  class="retry-request__error-details collapsible-quiet"
+                >
+                  <span slot="summary" class="retry-request__error-summary">
+                    Error details
+                  </span>
+                  <div class="retry-request__error-body">${detailsText}</div>
+                </wa-details>
+              `
+            : nothing
+        }
+      `,
+      this.canUseOwnApiKey()
+        ? renderLabeledActionButton({
+            icon: 'key',
+            text: ownKeyLabel,
+            title: `${ownKeyLabel} (k)`,
+            action: 'useOwnApiKey',
+            disabled: this.readOnly,
+            onClick: () =>
+              this.emitAction({ action: 'retry', credentials: 'personal' }),
+          })
+        : nothing,
+    );
   }
 
   // ===========================================================================
   // Utilities
   // ===========================================================================
+
+  private copilotQuotaExhausted(): boolean {
+    return (
+      getExhaustionReason(this.permission.data.errorDetails) ===
+      'copilot-subscription'
+    );
+  }
 
   private canUseOwnApiKey(): boolean {
     const data = this.permission.data;

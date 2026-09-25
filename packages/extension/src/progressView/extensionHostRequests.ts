@@ -10,7 +10,6 @@
  * `Rejected` with its reason, never dropped.
  */
 import * as path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
@@ -26,12 +25,11 @@ import {
   createFileSelectionPickers,
   getCurrentFile,
 } from '@commands/files/fileSelectionCommands';
-import { setActiveSidebarView } from '@common/webview';
 import { getIncludedExtensions } from '@common/files/fileTypeUtils';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import {
-  attachDroppedPaths,
+  attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
@@ -58,6 +56,7 @@ import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
 import {
   handleSharedHostRequest,
+  isSharedHostRequest,
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
@@ -70,25 +69,23 @@ import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { ExternalOpenFailed } from '@hosts/uiHosts';
 import { parseVersionControlDiffFilename } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import type {
-  AgentDirectories,
   StateStore,
   StateReadFailed,
   StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import {
-  withSessionFs,
-  WorkspaceFs,
-  type GlobalStorageFs,
-  type StorageFs,
-} from '@platform/rootedFs';
+  withProcessServices,
+  type AgentCatalogServices,
+  type ProcessRuntime,
+  type ProcessServices,
+} from '@platform/processRuntime';
+import { withSessionFs, WorkspaceFs, type StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import latexPreamble from '@resources/templates/chatExport.tex';
@@ -114,7 +111,6 @@ import {
   setOnboardingDeclined,
 } from '@shared/state/onboardingState';
 
-import { getProviderKeyUrl } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import {
@@ -129,7 +125,6 @@ import {
 } from '@utils/text/stringUtils';
 
 const CHANNEL = 'ExtensionHostRequests';
-const log = createLog(CHANNEL);
 
 interface ExtensionHostRequestsOptions {
   readonly session: SessionHandle;
@@ -170,25 +165,27 @@ interface ExtensionHostRequests {
 
 const done: HostOutcome = Object.freeze({ kind: 'done' } as const);
 
+/** A VS Code command lifted once through `fromHost`, named by the command,
+ *  with its failure logged before it travels on. */
 function runCommand<T = void>(
   command: string,
   ...args: unknown[]
-): Promise<T | undefined> {
-  return Promise.resolve(
-    vscode.commands.executeCommand<T>(command, ...args),
-  ).then(
-    (result) => result,
-    (error: unknown) => {
-      log.error(`Command ${command} failed: ${toErrorMessage(error)}`);
-      throw error;
-    },
+): Effect.Effect<T | undefined, HostCallFailed | RequestRefusal> {
+  return fromHost(command, () =>
+    vscode.commands.executeCommand<T | undefined>(command, ...args),
+  ).pipe(
+    Effect.tapError((failure) =>
+      Effect.logError(
+        `Command ${command} failed: ${toErrorMessage(failure)}`,
+      ).pipe(withLogChannel(CHANNEL)),
+    ),
   );
 }
 
 /** A VS Code command as a verb of the shared binding table: lifted once,
  *  named, and with the command's own result discarded. */
 function commandVerb(command: string, ...args: unknown[]) {
-  return Effect.asVoid(fromHost(command, () => runCommand(command, ...args)));
+  return Effect.asVoid(runCommand(command, ...args));
 }
 
 /** The typed notification surface the run-action ports, the launch host, and
@@ -226,8 +223,12 @@ export function createExtensionHostRequests(
   ) => {
     const validation = validateRunRequest(request);
     if (!validation.valid) {
-      log.error(validation.message);
-      return Effect.fail(new Rejected({ reason: validation.message }));
+      return Effect.logError(validation.message).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.fail(new Rejected({ reason: validation.message })),
+        ),
+      );
     }
     const { config, runId } = validation.request;
     const launch = runAgent(
@@ -258,9 +259,7 @@ export function createExtensionHostRequests(
             }),
       ),
     );
-    return Effect.flatMap(runtime.contextEffect, (context) =>
-      Effect.provideContext(launch, context),
-    );
+    return withProcessServices(runtime, launch);
   };
 
   const runActions = runtime.runSync(
@@ -268,27 +267,26 @@ export function createExtensionHostRequests(
       session,
       runAgentRequest,
       loadModelOptions: () =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(
-            readModelAvailabilityInputs({
-              ...session.roots,
-              secrets,
-            }).pipe(Effect.map(modelOptionsFrom)),
-            context,
-          ),
+        withProcessServices(
+          runtime,
+          readModelAvailabilityInputs({
+            ...session.roots,
+            secrets,
+          }).pipe(Effect.map(modelOptionsFrom)),
         ),
       // The set-key quick pick is a VS Code command: it either runs or
       // faults, so its rejection is the one failure, as `ApiKeyPromptFailed`.
       promptForApiKey: (provider) =>
-        Effect.tryPromise({
-          try: () => runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider),
-          catch: (cause) =>
-            new ApiKeyPromptFailed({
-              provider,
-              message: 'The host could not ask for a provider API key.',
-              cause,
-            }),
-        }),
+        runCommand(EXTENSION_COMMANDS.SET_API_KEY, provider).pipe(
+          Effect.mapError(
+            (failure) =>
+              new ApiKeyPromptFailed({
+                provider,
+                message: 'The host could not ask for a provider API key.',
+                cause: failure,
+              }),
+          ),
+        ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showWarning: (message) => vscodeUi.showWarningMessage(message),
     }),
@@ -303,34 +301,24 @@ export function createExtensionHostRequests(
       // Each VS Code command is a foreign edge: one lift, named, so the
       // port's failure channel carries a tag and never a bare rejection.
       compareFiles: (baseFile, editedFile) =>
-        fromHost('texra.compare', () =>
-          runCommand(
-            'texra.compare',
-            pathToLocationIn(session.roots.workspace, baseFile),
-            pathToLocationIn(session.roots.workspace, editedFile),
-          ),
+        runCommand(
+          'texra.compare',
+          pathToLocationIn(session.roots.workspace, baseFile),
+          pathToLocationIn(session.roots.workspace, editedFile),
         ),
       acceptEditedFile: (baseFile, editedFile, copyMeta) =>
-        fromHost('texra.acceptEdited', () =>
-          runCommand<boolean>(
-            'texra.acceptEdited',
-            pathToLocationIn(session.roots.workspace, baseFile),
-            pathToLocationIn(session.roots.workspace, editedFile),
-            copyMeta,
-          ),
+        runCommand<boolean>(
+          'texra.acceptEdited',
+          pathToLocationIn(session.roots.workspace, baseFile),
+          pathToLocationIn(session.roots.workspace, editedFile),
+          copyMeta,
         ),
       mergeFile: (baseFile, editedFile) =>
-        fromHost('texra.merge', () =>
-          runCommand('texra.merge', baseFile, editedFile),
-        ),
+        runCommand('texra.merge', baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        fromHost('texra.latexdiff', () =>
-          runCommand('texra.latexdiff', undefined, baseFile, editedFile),
-        ),
+        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
       openDirectory: (directory) =>
-        fromHost('revealFileInOS', () =>
-          runCommand('revealFileInOS', vscode.Uri.file(directory)),
-        ),
+        runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
       // controller already resolved, so this reads through the process
       // filesystem rather than a rooted view that would refuse a path the
@@ -341,11 +329,6 @@ export function createExtensionHostRequests(
         ),
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
-      logError: (message, error) => {
-        log.error(message, {
-          data: error instanceof Error ? error : undefined,
-        });
-      },
     },
     sendFollowUp: (runId, text) => runActions.sendFollowUp(runId, text),
   });
@@ -410,7 +393,6 @@ export function createExtensionHostRequests(
       showInfo: (message) => vscodeUi.showInfoMessage(message),
       showWarning: (message) => vscodeUi.showWarningMessage(message),
       showError: (message) => vscodeUi.showErrorMessage(message),
-      reportDetail: (message, data) => log.error(message, { data }),
       getController: Effect.sync(
         () =>
           (chatExportController ??= new ChatExportController({
@@ -435,7 +417,7 @@ export function createExtensionHostRequests(
   ): Effect.Effect<
     void,
     HostCallFailed | RequestRefusal | StateReadFailed,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices
   > {
     return Effect.gen(function* () {
       const { launch: form } = request;
@@ -471,17 +453,17 @@ export function createExtensionHostRequests(
         session.roots.workspaceState,
         session.roots.storage,
       );
-      yield* fromHost('texra.execute', () =>
-        runCommand('texra.execute', prepared),
-      );
+      yield* runCommand('texra.execute', prepared);
     });
   }
 
-  function getOpenedFiles(): string[] {
+  function getOpenedFiles(): Effect.Effect<string[]> {
     const workspaceRoot = session.roots.workspace;
     if (!workspaceRoot) {
-      log.warn('No workspace path found for opened files');
-      return [];
+      return Effect.logWarning('No workspace path found for opened files').pipe(
+        withLogChannel(CHANNEL),
+        Effect.as([]),
+      );
     }
     const fileUris = vscode.window.tabGroups.all
       .flatMap((group) => group.tabs)
@@ -493,77 +475,34 @@ export function createExtensionHostRequests(
       )
       .map((input) => input.uri)
       .filter((uri) => uri.scheme === 'file');
-    return [
+    return Effect.succeed([
       ...new Set(
         fileUris.map((uri) => workspaceRelativePath(workspaceRoot, uri.fsPath)),
       ),
-    ];
+    ]);
   }
 
-  /** One dropped path as a workspace-relative file, or `null` when it is
-   *  not one. A path that does not decode as a URL stands as its raw text,
-   *  and a file the workspace cannot stat is not a file here; both say so
-   *  in the debug log. */
-  function resolveWorkspaceDropFile(
-    rawPath: string,
-  ): Effect.Effect<string | null> {
-    return Effect.gen(function* () {
-      const trimmed = rawPath.trim();
-      const decodedPath = trimmed.startsWith('file:')
-        ? yield* Effect.try({
-            try: () => fileURLToPath(trimmed),
-            catch: (cause) => cause,
-          }).pipe(
-            Effect.catch((cause: unknown) =>
-              Effect.logDebug(
-                `Dropped path is not a file URL: ${trimmed}: ${toErrorMessage(cause)}`,
-              ).pipe(withLogChannel(CHANNEL), Effect.as(trimmed)),
-            ),
-          )
-        : trimmed;
-      const resolved = locateInWorkspace(session.roots.workspace, decodedPath);
-      if (resolved.kind !== 'workspace') return null;
-      return yield* Effect.tryPromise({
-        try: () =>
-          vscode.workspace.fs.stat(vscode.Uri.file(resolved.absolutePath)),
-        catch: (cause) => cause,
-      }).pipe(
-        Effect.map((stat) =>
-          (stat.type & vscode.FileType.File) === 0
-            ? null
-            : resolved.relativePath,
-        ),
-        Effect.catch((cause: unknown) =>
-          Effect.logDebug(
-            `Dropped file could not be read: ${decodedPath}: ${toErrorMessage(cause)}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-        ),
-      );
-    });
-  }
-
-  function attachDroppedFiles(
+  function attachDropped(
     request: Extract<HostRequest, { kind: 'attachDroppedFiles' }>,
-  ): Effect.Effect<HostOutcome> {
-    return Effect.forEach(
+  ) {
+    return attachDroppedFiles(
+      session.roots.workspace,
       request.paths,
-      (rawPath) => resolveWorkspaceDropFile(rawPath),
-      { concurrency: 'unbounded' },
+      getIncludedExtensions(request.category),
     ).pipe(
-      Effect.map((paths): HostOutcome => {
-        const attached = attachDroppedPaths(
-          paths,
-          getIncludedExtensions(request.category),
-        );
-        if (attached.attachedCount > 0 && attached.rejectedCount > 0) {
-          void runtime.runFork(
-            vscodeUi.showInfoMessage(
-              `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
-            ),
-          );
-        }
-        return { kind: 'files', paths: attached.paths };
-      }),
+      Effect.tap((attached) =>
+        attached.attachedCount > 0 && attached.rejectedCount > 0
+          ? Effect.forkDetach(
+              vscodeUi.showInfoMessage(
+                `Attached ${formatResultCount(attached.attachedCount, 'dropped file')}; skipped ${formatResultCount(attached.rejectedCount, 'unsupported, folder, or out-of-workspace item')}.`,
+              ),
+            )
+          : Effect.void,
+      ),
+      Effect.map((attached): HostOutcome => ({
+        kind: 'files',
+        paths: attached.paths,
+      })),
     );
   }
 
@@ -587,11 +526,9 @@ export function createExtensionHostRequests(
       if (request.fileType === 'base') {
         const parsed = parseVersionControlDiffFilename(currentOpenFile);
         if (parsed) {
-          const commitLabel = yield* fromHost('texra.findCommitInHistory', () =>
-            runCommand<string | null>(
-              'texra.findCommitInHistory',
-              parsed.commitHash,
-            ),
+          const commitLabel = yield* runCommand<string | null>(
+            'texra.findCommitInHistory',
+            parsed.commitHash,
           );
           if (commitLabel) {
             options.surfaceAction({
@@ -668,7 +605,6 @@ export function createExtensionHostRequests(
         Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
-      snapshot.refreshAuth,
       refreshOnboardingFunnel,
     ],
     { concurrency: 'unbounded', discard: true },
@@ -680,11 +616,9 @@ export function createExtensionHostRequests(
     openPath: (file, line) => commandVerb('texra.openFile', file, line),
     openLabel: (label) =>
       Effect.map(
-        fromHost('texra.openLabel', () =>
-          runCommand<boolean>('texra.openLabel', label, {
-            notifyNotFound: false,
-          }),
-        ),
+        runCommand<boolean>('texra.openLabel', label, {
+          notifyNotFound: false,
+        }),
         (opened) => opened === true,
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
@@ -707,7 +641,6 @@ export function createExtensionHostRequests(
       commandVerb('texra.merge', baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
-    openDashboard: commandVerb('texra.showDashboard'),
     openSettings: (section, sessionType) => {
       if (section === 'agents')
         return commandVerb(
@@ -718,26 +651,20 @@ export function createExtensionHostRequests(
         section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
       );
     },
-    setApiKey: (provider) =>
-      Effect.gen(function* () {
-        yield* commandVerb('texra.setApiKey', provider);
-        // SecretManager has no key-changed event, so the set-key flow's
-        // completion is the explicit refresh point for the funnel.
-        yield* refreshOnboardingFunnel;
-      }),
-    openApiKeyGuide: (provider) =>
-      Effect.gen(function* () {
-        const url = provider
-          ? yield* getProviderKeyUrl(session.roots, provider)
-          : undefined;
-        yield* fromHost('env.openExternal', () =>
-          vscode.env.openExternal(
-            vscode.Uri.parse(
-              url || 'https://texra.ai/guide/installation#setting-up-api-keys',
-            ),
+    // SecretManager has no key-changed event, so the set-key flow's
+    // completion is the explicit refresh point for the funnel.
+    setApiKey: commandVerb('texra.setApiKey').pipe(
+      Effect.andThen(refreshOnboardingFunnel),
+    ),
+    openApiKeyGuide: Effect.asVoid(
+      fromHost('env.openExternal', () =>
+        vscode.env.openExternal(
+          vscode.Uri.parse(
+            'https://texra.ai/guide/installation#setting-up-api-keys',
           ),
-        );
-      }),
+        ),
+      ),
+    ),
     openAgentSettings: (sessionType) =>
       commandVerb(
         'texra.showAgents',
@@ -770,14 +697,8 @@ export function createExtensionHostRequests(
           );
         }
         const [command, ...args] = docsCommand.split(',');
-        yield* fromHost(command, () => runCommand(command, ...args));
+        yield* runCommand(command, ...args);
       }),
-    signIn: Effect.gen(function* () {
-      const authenticated = yield* fromHost(AUTH_COMMANDS.SIGN_IN, () =>
-        vscode.commands.executeCommand<boolean>(AUTH_COMMANDS.SIGN_IN),
-      );
-      if (authenticated) yield* refreshAfterCredentialChange;
-    }),
     gettingStarted: (action) =>
       Effect.gen(function* () {
         yield* commandVerb(GETTING_STARTED_COMMANDS[action]);
@@ -803,11 +724,6 @@ export function createExtensionHostRequests(
         yield* refreshOnboardingFunnel;
       }),
       openGettingStarted: commandVerb(GETTING_STARTED_COMMANDS.openWalkthrough),
-    },
-    setActiveView: (view, port) => {
-      // Only the sidebar port names the sidebar's state; the editor tab
-      // has no view-title menu of its own.
-      if (port === 'sidebar') setActiveSidebarView(view);
     },
   };
 
@@ -839,40 +755,10 @@ export function createExtensionHostRequests(
     ProcessServices | StorageFs | WorkspaceFs
   > {
     return Effect.gen(function* () {
+      if (isSharedHostRequest(request)) {
+        return yield* handleSharedHostRequest(sharedRequests, request, port);
+      }
       switch (request.kind) {
-        case 'openFile':
-        case 'openLabel':
-        case 'openRunStorage':
-        case 'exportTranscript':
-        case 'restoreIntoLauncher':
-        case 'resume':
-        case 'runNew':
-        case 'runCompileFixer':
-        case 'useOwnApiKey':
-        case 'latexdiff':
-        case 'pack':
-        case 'clean':
-        case 'latexdiffs':
-        case 'record':
-        case 'openDashboard':
-        case 'refreshCommits':
-        case 'refreshFiles':
-        case 'openSettings':
-        case 'polish':
-        case 'savePastedImage':
-        case 'toolEdit':
-        case 'setActiveView':
-        case 'fileAction':
-        case 'restoreProposalConfig':
-        case 'apiKeyBanner':
-        case 'agentConfigBanner':
-        case 'recheckDependencies':
-        case 'openInstallGuide':
-        case 'signIn':
-        case 'dismissBanner':
-        case 'gettingStarted':
-        case 'onboarding':
-          return yield* handleSharedHostRequest(sharedRequests, request, port);
         case 'popOut':
           yield* options.popOutToEditor();
           return done;
@@ -889,7 +775,7 @@ export function createExtensionHostRequests(
               normalizeMainViewFileExtension,
             ),
           );
-          const opened = getOpenedFiles();
+          const opened = yield* getOpenedFiles();
           const outcome: HostOutcome = {
             kind: 'files',
             paths:
@@ -902,7 +788,7 @@ export function createExtensionHostRequests(
           return outcome;
         }
         case 'attachDroppedFiles':
-          return yield* attachDroppedFiles(request);
+          return yield* attachDropped(request);
         case 'launch':
           yield* launch(request);
           return done;

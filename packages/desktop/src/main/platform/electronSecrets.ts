@@ -13,7 +13,7 @@ import {
 import type { JsonStore } from '@platform/defaults/jsonStore';
 import { assertNever } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import { envFlag } from '@utils/system/envFlags';
 
 type StoredSecret = { encrypted: true; value: string };
 type SecretStorageMode = 'encrypted' | 'basic_text' | 'unavailable';
@@ -36,10 +36,9 @@ const SAFE_STORAGE_UNAVAILABLE_MESSAGE =
  * skips every `safeStorage` call so headless Playwright runs do not block on
  * the macOS keychain prompt. Not exposed as a user-facing toggle — env-var
  * API keys still work via the existing override in `ElectronSecrets.get()`.
+ * Re-read on every yield (the ambient ConfigProvider is live), never latched.
  */
-function isKeychainDisabled(): boolean {
-  return isEnvFlagEnabled('TEXRA_DISABLE_KEYCHAIN');
-}
+const keychainDisabled = envFlag('TEXRA_DISABLE_KEYCHAIN');
 
 let warnedAboutKeychainDisabled = false;
 function warnKeychainDisabledOnce(): void {
@@ -80,12 +79,12 @@ export class ElectronSecrets implements PlatformSecrets {
   }
 
   getStored(key: string): Effect.Effect<string | undefined, SecretsFailed> {
-    return Effect.suspend(() => {
+    return Effect.flatMap(keychainDisabled, (disabled) => {
       // Test-harness shim: skip safeStorage entirely when the env var is set
       // so headless Playwright runs do not block on the macOS keychain
       // prompt. Env-var API key overrides already returned; here we just
       // report "no saved secret" rather than touching safeStorage.
-      if (isKeychainDisabled()) {
+      if (disabled) {
         warnKeychainDisabledOnce();
         return Effect.succeed(undefined);
       }
@@ -163,47 +162,51 @@ export class ElectronSecrets implements PlatformSecrets {
    * written nothing.
    */
   set(key: string, value: string): Effect.Effect<void, SecretsFailed> {
-    return Effect.suspend(() => {
+    return Effect.flatMap(keychainDisabled, (disabled) => {
       // Test-harness shim: with the env var set, swallow writes instead of
       // failing on the unavailable storage mode. The harness explicitly opts
       // out of persisted secrets, so a failure would break the same
       // bootstrap path we are trying to keep alive.
-      if (isKeychainDisabled()) {
+      if (disabled) {
         warnKeychainDisabledOnce();
         return Effect.void;
       }
-      const storageMode = getSecretStorageMode();
-      switch (storageMode) {
-        case 'encrypted':
-          return Effect.flatMap(
-            Effect.try({
-              try: () => safeStorage.encryptString(value).toString('base64'),
-              catch: (cause) =>
-                new SecretsFailed({
-                  reason: 'io',
-                  operation: 'set',
-                  key,
-                  message: `The system keychain refused to encrypt the secret "${key}": ${toErrorMessage(cause)}`,
-                  cause,
-                }),
-            }),
-            (encrypted) =>
-              this.commit(key, { encrypted: true, value: encrypted }),
-          );
-        case 'unavailable':
-          return Effect.fail(
-            this.unavailable(key, SAFE_STORAGE_UNAVAILABLE_MESSAGE),
-          );
-        case 'basic_text':
-          return Effect.andThen(
-            this.warnOnce('basicText', LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
-            Effect.fail(
-              this.unavailable(key, LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
-            ),
-          );
-        default:
-          assertNever(storageMode, 'Unhandled Electron secret storage mode');
-      }
+      return Effect.flatMap(getSecretStorageMode(), (storageMode) => {
+        switch (storageMode) {
+          case 'encrypted':
+            return Effect.flatMap(
+              Effect.try({
+                try: () => safeStorage.encryptString(value).toString('base64'),
+                catch: (cause) =>
+                  new SecretsFailed({
+                    reason: 'io',
+                    operation: 'set',
+                    key,
+                    message: `The system keychain refused to encrypt the secret "${key}": ${toErrorMessage(cause)}`,
+                    cause,
+                  }),
+              }),
+              (encrypted) =>
+                this.commit(key, { encrypted: true, value: encrypted }),
+            );
+          case 'unavailable':
+            return Effect.fail(
+              this.unavailable(key, SAFE_STORAGE_UNAVAILABLE_MESSAGE),
+            );
+          case 'basic_text':
+            return Effect.andThen(
+              this.warnOnce(
+                'basicText',
+                LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE,
+              ),
+              Effect.fail(
+                this.unavailable(key, LINUX_BASIC_TEXT_SECRET_STORAGE_MESSAGE),
+              ),
+            );
+          default:
+            assertNever(storageMode, 'Unhandled Electron secret storage mode');
+        }
+      });
     });
   }
 
@@ -216,10 +219,6 @@ export class ElectronSecrets implements PlatformSecrets {
     return Effect.sync(() => this.store.keys());
   }
 
-  getEnv(name: string): string | undefined {
-    return process.env[name];
-  }
-
   /**
    * Shows a dialog once per kind per instance. Best-effort: a failed dialog
    * must not affect the outcome of the secret operation that triggered it
@@ -230,8 +229,13 @@ export class ElectronSecrets implements PlatformSecrets {
     return Effect.suspend(() => {
       if (this.warnedOnce.has(kind)) return Effect.void;
       this.warnedOnce.add(kind);
-      return Effect.ignore(
-        this.options.showWarningMessage?.(message) ?? Effect.void,
+      return (this.options.showWarningMessage?.(message) ?? Effect.void).pipe(
+        Effect.catch((error) =>
+          Effect.logWarning(
+            `Keychain warning could not be shown: ${message}`,
+            error,
+          ),
+        ),
       );
     });
   }
@@ -284,16 +288,18 @@ export function __resetKeychainStateForTests(): void {
   warnedAboutKeychainDisabled = false;
 }
 
-export function getSecretStorageMode(): SecretStorageMode {
-  // Test-harness shim: report unavailable without ever calling safeStorage,
-  // which is the path that would otherwise prompt the macOS keychain.
-  if (isKeychainDisabled()) return 'unavailable';
-  if (!safeStorage.isEncryptionAvailable()) return 'unavailable';
-  if (
-    process.platform === 'linux' &&
-    safeStorage.getSelectedStorageBackend() === 'basic_text'
-  ) {
-    return 'basic_text';
-  }
-  return 'encrypted';
+export function getSecretStorageMode(): Effect.Effect<SecretStorageMode> {
+  return Effect.map(keychainDisabled, (disabled) => {
+    // Test-harness shim: report unavailable without ever calling safeStorage,
+    // which is the path that would otherwise prompt the macOS keychain.
+    if (disabled) return 'unavailable';
+    if (!safeStorage.isEncryptionAvailable()) return 'unavailable';
+    if (
+      process.platform === 'linux' &&
+      safeStorage.getSelectedStorageBackend() === 'basic_text'
+    ) {
+      return 'basic_text';
+    }
+    return 'encrypted';
+  });
 }

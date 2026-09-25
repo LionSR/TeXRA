@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect, Exit, Fiber } from 'effect';
+import { Effect, Exit, Fiber, Logger } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 import { AgentDirectories } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
@@ -82,7 +82,6 @@ const mocks = vi.hoisted(() => {
     requestDeviceAuthorization: vi.fn(),
     signInWithOAuth: vi.fn(),
     toStorableSupabaseSession: vi.fn((session) => session),
-    platform: vi.fn(),
   };
 });
 
@@ -141,10 +140,6 @@ vi.mock('@auth/SupabaseSession', () => ({
   toStorableSupabaseSession: mocks.toStorableSupabaseSession,
 }));
 
-vi.mock('@platform/platform', () => ({
-  platform: mocks.platform,
-}));
-
 vi.mock('@cli/runtime/browser', () => ({
   openBrowser: mocks.openBrowser,
 }));
@@ -174,17 +169,12 @@ async function loadSupabaseAuth() {
     import('@shared/session/sessionEvents'),
     import('@platform/defaults/nodeProcesses'),
   ]);
-  const [
-    { Secrets },
-    { AgentResume, AppState },
-    { SetupPlatform },
-    { ToolInjections },
-  ] = await Promise.all([
-    import('@platform/secrets'),
-    import('@platform/interfaces'),
-    import('@tools/setup/platform'),
-    import('@agent/runtime/toolInjection'),
-  ]);
+  const [{ Secrets }, { AgentResume, AppState }, { SetupPlatform }] =
+    await Promise.all([
+      import('@platform/secrets'),
+      import('@platform/interfaces'),
+      import('@tools/setup/platform'),
+    ]);
   const { SupabaseAuth, unavailableSupabaseAuth } =
     await import('@auth/SupabaseAuth');
   const { LanguageModel } = await import('@platform/languageModel');
@@ -202,6 +192,7 @@ async function loadSupabaseAuth() {
         Layer.provideMerge(
           globalDatabaseLayer(globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            Layer.provide(nodePlatformLayer),
             Layer.orDie,
           ),
         ),
@@ -209,7 +200,7 @@ async function loadSupabaseAuth() {
       // The process services this suite's runtime carries: the auth run edge
       // reads none of them, so a member call is a test error the mock raises
       // rather than an answer from a store nothing here opened.
-      Layer.mock(Secrets, { getEnv: unreadProcessService }),
+      Layer.mock(Secrets, { get: unreadProcessService }),
       Layer.mock(AppState, { update: unreadProcessService }),
       // The account plane the module under test serves is its own module
       // state; this one only satisfies the process-runtime type.
@@ -223,13 +214,12 @@ async function loadSupabaseAuth() {
       // Plain in-memory ownership tables; the auth edge binds nothing.
       gitHubSubscriptionsLayer,
       SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
-      ToolInjections.layer([]),
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');
-  // The root's init is what builds the coordinator; nothing below it builds
-  // one on demand.
-  supabaseAuth.initializeCliSupabaseAuth(cliSecrets);
+  // The root's runtime install is what builds the coordinator; nothing below
+  // it builds one on demand.
+  supabaseAuth.ensureCliSupabaseAuth(cliSecrets);
   return { ...supabaseAuth, runtime };
 }
 
@@ -251,14 +241,13 @@ describe('CLI Supabase auth', () => {
       Effect.succeed('none'),
     );
     mocks.authCoordinator.loadSession.mockReturnValue(Effect.succeed(null));
-    mocks.platform.mockReturnValue({ secrets: { kind: 'platform-secrets' } });
   });
 
   it('builds one account plane for the root secret store', async () => {
-    const { initializeCliSupabaseAuth } = await loadSupabaseAuth();
+    const { ensureCliSupabaseAuth } = await loadSupabaseAuth();
 
-    initializeCliSupabaseAuth(cliSecrets);
-    initializeCliSupabaseAuth(cliSecrets);
+    ensureCliSupabaseAuth(cliSecrets);
+    ensureCliSupabaseAuth(cliSecrets);
 
     expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
     expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(
@@ -329,6 +318,7 @@ describe('CLI Supabase auth', () => {
       yield* signOutCliSupabase().pipe(
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
+        Effect.provide(testHttpClientLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
       );
 
@@ -366,19 +356,16 @@ describe('CLI Supabase auth', () => {
 
   it.effect('completes sign-out when the local catalog rebuild fails', () =>
     Effect.gen(function* () {
-      const warn = vi.fn();
-      const { initializeCliSupabaseAuth, signOutCliSupabase } =
-        yield* Effect.promise(() => loadSupabaseAuth());
-      initializeCliSupabaseAuth(cliSecrets, {
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn,
-        error: vi.fn(),
+      const { signOutCliSupabase } = yield* Effect.promise(() =>
+        loadSupabaseAuth(),
+      );
+      const warnings: unknown[] = [];
+      const capture = Logger.make((options) => {
+        if (options.logLevel === 'Warn') warnings.push(options.message);
       });
       const { globalStorage } = createFakeWorkspaceRoots();
-      // The real invalidation catches its typed load failures itself, so only
-      // a defect reaches the CLI's warn channel: the directory port dying
-      // mid-rebuild is one.
+      // The invalidation owns the best-effort guard, defects included: the
+      // directory port dying mid-rebuild must not fail sign-out.
       const rebuildDies = {
         custom: () => Effect.die(new Error('local rebuild failed')),
         builtIn: () => Effect.die(new Error('local rebuild failed')),
@@ -389,15 +376,16 @@ describe('CLI Supabase auth', () => {
         yield* signOutCliSupabase().pipe(
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
+          Effect.provide(testHttpClientLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
+          Effect.withLogger(capture),
         ),
       ).toBeUndefined();
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
-      expect(warn).toHaveBeenCalledWith(
-        'cli-auth',
-        'Local agent catalog refresh failed after sign-out: local rebuild failed',
-      );
+      expect(warnings).toContainEqual([
+        'Local agent catalog rebuild failed after sign-out: local rebuild failed',
+      ]);
     }),
   );
 });

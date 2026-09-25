@@ -10,7 +10,6 @@ import type { RunId } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   configureDelegatedChildApprovals,
-  proposalApprovals,
   releaseRunResources,
 } from '@tools/approval';
 import { generateRunId } from '@utils/core';
@@ -186,7 +185,7 @@ describe('child subagent stream approval inheritance', () => {
     testDefaultSession().approvals.setDelegatedWorkBypasses(roundOne, true);
     testDefaultSession().approvals.registerRunParent(roundTwo, roundOne);
 
-    expect(proposalApprovals(testDefaultSession()).isBypassed(roundTwo)).toBe(
+    expect(testDefaultSession().approvals.proposal.isBypassed(roundTwo)).toBe(
       true,
     );
     expect(
@@ -206,7 +205,7 @@ describe('child subagent stream approval inheritance', () => {
     expect(
       testDefaultSession().approvals.bash.bypass.isBypassed(roundOne),
     ).toBe(true);
-    expect(proposalApprovals(testDefaultSession()).isBypassed(roundTwo)).toBe(
+    expect(testDefaultSession().approvals.proposal.isBypassed(roundTwo)).toBe(
       true,
     );
     expect(
@@ -320,7 +319,7 @@ describe('child subagent stream approval inheritance', () => {
   it('propagates delegated-task approval through nested orchestrators', () => {
     const { parent, child } = runPair();
     const grandchild = generateRunId();
-    proposalApprovals(testDefaultSession()).setBypass(parent, true);
+    testDefaultSession().approvals.proposal.setBypass(parent, true);
 
     configureDelegatedChildApprovals(
       child,
@@ -335,13 +334,13 @@ describe('child subagent stream approval inheritance', () => {
       testDefaultSession(),
     );
 
-    expect(proposalApprovals(testDefaultSession()).isBypassed(parent)).toBe(
+    expect(testDefaultSession().approvals.proposal.isBypassed(parent)).toBe(
       true,
     );
-    expect(proposalApprovals(testDefaultSession()).isBypassed(child)).toBe(
+    expect(testDefaultSession().approvals.proposal.isBypassed(child)).toBe(
       true,
     );
-    expect(proposalApprovals(testDefaultSession()).isBypassed(grandchild)).toBe(
+    expect(testDefaultSession().approvals.proposal.isBypassed(grandchild)).toBe(
       true,
     );
   });

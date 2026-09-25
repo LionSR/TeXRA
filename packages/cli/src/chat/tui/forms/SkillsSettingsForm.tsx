@@ -1,5 +1,5 @@
 import { Text } from 'ink';
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -7,15 +7,12 @@ import {
   type ActiveSkillSourceScope,
   type SkillDisplayItem,
 } from '@shared/schemas';
-import { stateSettingByKey } from '@shared/state/stateSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { readSetting } from '@shared/config/settingsAccess';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { readSettingFrom } from '@utils/config/platformSettings';
 
-import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 type SkillToggle =
@@ -42,40 +39,6 @@ interface SkillsSettingsFormProps {
   readonly onClose: () => void;
 }
 
-function requireSetting(key: string) {
-  const entry = stateSettingByKey(key);
-  if (!entry) throw new Error(`Missing skill setting: ${key}`);
-  return entry;
-}
-
-async function loadSkillsSettings(
-  stores: SettingsStores,
-  workspaceRoot: string | undefined,
-  runtime: ProcessRuntime,
-): Promise<SkillsSettingsData> {
-  return runtime.runPromise(
-    Effect.gen(function* () {
-      const disabledNames = (yield* readSetting(
-        requireSetting(WorkspaceStateKey.DISABLED_SKILLS),
-        stores,
-        'cli',
-      )) as string[];
-      const disabledScopes = (yield* readSetting(
-        requireSetting(WorkspaceStateKey.DISABLED_SKILL_SOURCES),
-        stores,
-        'cli',
-      )) as ActiveSkillSourceScope[];
-      const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
-      return {
-        skills: result.skills,
-        disabledNames,
-        disabledScopes,
-        issueCount: result.issues.length,
-      };
-    }),
-  );
-}
-
 function toggleDisabled<T>(
   values: readonly T[],
   value: T,
@@ -94,8 +57,24 @@ export function SkillsSettingsForm(
       title="/config · Skills"
       loadingLabel="Loading skills..."
       load={() =>
-        loadSkillsSettings(props.stores, props.workspaceRoot, props.runtime)
+        Effect.gen(function* () {
+          const { stores, workspaceRoot } = props;
+          const result = yield* loadRuntimeSkillDisplay(workspaceRoot, stores);
+          return {
+            skills: result.skills,
+            disabledNames: yield* readSettingFrom<string[]>(
+              stores,
+              WorkspaceStateKey.DISABLED_SKILLS,
+            ),
+            disabledScopes: yield* readSettingFrom<ActiveSkillSourceScope[]>(
+              stores,
+              WorkspaceStateKey.DISABLED_SKILL_SOURCES,
+            ),
+            issueCount: result.issues.length,
+          };
+        })
       }
+      runtime={props.runtime}
       items={(data) => [
         ...ActiveSkillSourceScopeSchema.options.map((scope) => ({
           value: { kind: 'source' as const, scope },
@@ -120,7 +99,7 @@ export function SkillsSettingsForm(
       detailRowsFor={(data) => (data.issueCount > 0 ? 1 : 0)}
       action="toggle"
       showTransientCloseHint={false}
-      onSelect={(toggle, { data, reload }) => {
+      onSelect={(toggle, { data, update }) => {
         const key =
           toggle.kind === 'source'
             ? WorkspaceStateKey.DISABLED_SKILL_SOURCES
@@ -129,27 +108,18 @@ export function SkillsSettingsForm(
           toggle.kind === 'source' ? data.disabledScopes : data.disabledNames;
         const value = toggle.kind === 'source' ? toggle.scope : toggle.name;
         const next = toggleDisabled(current, value, current.includes(value));
-        props.runtime.runFork(
-          applyStateSettingUpdate(key, next, {
-            host: 'cli',
-            stores: props.stores,
-          }).pipe(
-            Effect.flatMap((result) =>
-              Effect.sync(() => {
-                if (result.kind !== 'applied') {
-                  setTransientNotice(
-                    `Could not update skills (${result.kind}).`,
-                  );
-                } else {
-                  reload();
-                }
-              }),
-            ),
-            Effect.catchCause((cause) =>
-              Effect.sync(() =>
-                setTransientNotice(toErrorMessage(Cause.squash(cause))),
-              ),
-            ),
+        update(
+          Effect.flatMap(
+            applyStateSettingUpdate(key, next, {
+              host: 'cli',
+              stores: props.stores,
+            }),
+            (result) =>
+              result.kind === 'applied'
+                ? Effect.void
+                : Effect.fail(
+                    new Error(`Could not update skills (${result.kind}).`),
+                  ),
           ),
         );
       }}

@@ -1,7 +1,6 @@
-import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Result, Stream } from 'effect';
+import { Effect, FileSystem, PlatformError, Result, Stream } from 'effect';
 
 import {
   checkpointExists,
@@ -15,34 +14,33 @@ import {
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
-import { redactDisplayValue } from '@logger/redaction';
 import {
   RunIdSchema,
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
-  resolveHistoryRunStatus,
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+import { serializeFilteredConfig } from '@tools/executions/configView';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
 } from '@transcript';
 import { byStringProp } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
-import { isCliRunResumable, readCliResumedModel } from './toolUseResumeData';
+import { cliErrorMessage } from './logSinks';
+import { cliRunStanding, readCliResumedModel } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -215,22 +213,16 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
-    // `history list` for the run in the row the caller just read. A run whose
-    // config is missing or malformed has no category to resume under and no
-    // config for a host to adopt, so it is not offered, the listing never
-    // reaches this rule for such a row, which lists as incomplete.
-    const resumable =
-      config !== null &&
-      (yield* isCliRunResumable(
-        {
-          id,
-          checkpointPresent,
-          agentCategory: config.agentCategory,
-          outcome:
-            run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
-        },
-        session,
-      ));
+    // `history list` for the run in the row the caller just read.
+    const standing = yield* cliRunStanding(
+      {
+        id,
+        checkpointPresent,
+        agentCategory: config === null ? null : config.agentCategory,
+        phase: run?.status,
+      },
+      session,
+    );
     const workspaceFiles = yield* listRunWorkspaceFiles(
       config,
       persistedWorkspaceFilePaths,
@@ -261,13 +253,9 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     ) {
       return null;
     }
-    return redactDisplayValue({
+    return {
       id,
-      status: resolveHistoryRunStatus({
-        resumable,
-        outcome:
-          run && isTerminalOutcomePhase(run.status) ? run.status : undefined,
-      }),
+      status: standing.status,
       run: run
         ? {
             launchedAt: run.launchedAt,
@@ -285,7 +273,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       files,
       hasFlowRecord: checkpointPresent,
       currentModel,
-    }) satisfies CliHistoryDetails;
+    } satisfies CliHistoryDetails;
   },
 );
 
@@ -337,32 +325,30 @@ const TRACE_VIEWER_DIR_NAME = 'traceViewer';
 /**
  * Read the trace-viewer's single-file default bundle — one self-contained
  * `index.html` with no external `assets/` (JS/CSS/fonts all inlined) so the
- * default export opens correctly via `file://` with no server. Returns `null`
- * (without throwing) only when the template is absent — e.g. a dev checkout
- * where `packages/trace-viewer` hasn't been built — so the caller can report a
- * clear error instead of an ENOENT stack trace. Any other read failure
- * (EACCES, a transient I/O error) is a different problem and must not be
- * reported as "rebuild the CLI", so it surfaces as a usage error naming the
- * real cause.
+ * default export opens correctly via `file://` with no server. Succeeds with
+ * `null` only when the template is absent — e.g. a dev checkout where
+ * `packages/trace-viewer` hasn't been built — so the caller can report a clear
+ * error instead of an ENOENT stack trace. Any other read failure (EACCES, a
+ * transient I/O error) is not "rebuild the CLI", so it fails as a usage error
+ * naming the real cause.
  */
 export function readCliHistoryStandaloneTemplate(
   resourcesPath: string,
-): Effect.Effect<string | null, CliUsageError> {
+): Effect.Effect<string | null, CliUsageError, FileSystem.FileSystem> {
   const templatePath = path.join(
     resourcesPath,
     TRACE_VIEWER_DIR_NAME,
     'index.html',
   );
-  return Effect.tryPromise({
-    try: () => readFile(templatePath, 'utf8'),
-    catch: (cause) => cause,
-  }).pipe(
-    Effect.catch((error) =>
-      isFileNotFoundError(error) || isNotADirectoryError(error)
+  return FileSystem.FileSystem.use((fs) =>
+    fs.readFileString(templatePath),
+  ).pipe(
+    Effect.catch((error: PlatformError.PlatformError) =>
+      absentReason(error)
         ? Effect.succeed(null)
         : Effect.fail(
             new CliUsageError(
-              `history export: cannot read ${templatePath}: ${toErrorMessage(error)}`,
+              `history export: cannot read ${templatePath}: ${cliErrorMessage(error)}`,
             ),
           ),
     ),
@@ -549,15 +535,14 @@ export function formatCliHistoryDetailsText(
   } else if (!details.report && details.conversationPreview) {
     lines.push('', formatConversationPreview(details.conversationPreview));
   }
-  lines.push('', 'Config:', JSON.stringify(config ?? {}, null, 2));
-  lines.push('', `Files (${details.files.length}):`);
-  lines.push(
-    ...(details.files.length
-      ? details.files.map(
-          (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
-        )
-      : ['(none)']),
+  const shown = config
+    ? serializeFilteredConfig(config, config.agentCategory)
+    : '{}';
+  const files = details.files.map(
+    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
   );
+  lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
+  lines.push(...(files.length ? files : ['(none)']));
   if (details.hasFlowRecord) lines.push('', 'Flow record: present');
   return lines.join('\n');
 }
@@ -569,16 +554,16 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
   const config = entry.record;
   const firstInputFile = config.inputFiles.at(0);
   const inputBasename = firstInputFile ? path.basename(firstInputFile) : '-';
-  const resumable = yield* isCliRunResumable(
+  const { status, resumable } = yield* cliRunStanding(
     {
       id: entry.id,
       checkpointPresent: entry.checkpointPresent,
       agentCategory: config.agentCategory,
-      outcome: entry.outcome,
+      phase: entry.status,
     },
     session,
   );
-  return redactDisplayValue({
+  return {
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
@@ -586,14 +571,14 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     // records that only inside its checkpoint, which a listing no longer
     // parses; `history show` still reports the resumed model.
     model: config.model,
-    status: resolveHistoryRunStatus({ resumable, outcome: entry.outcome }),
+    status,
     resumable,
     inputBasename,
     category: config.agentCategory,
     description: entry.description,
     teamPresetId: teamPresetId(config),
     parentRunId: entry.parentRunId,
-  });
+  };
 });
 
 function teamPresetId(config: AgentConfig | null): string | undefined {

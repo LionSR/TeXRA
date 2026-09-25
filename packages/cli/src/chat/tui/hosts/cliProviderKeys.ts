@@ -29,13 +29,9 @@ import { apiProviderOfSecretName, type ApiProvider } from '@model/apiProviders';
 // Local imports - platform
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 // Local imports - shared
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { providerDisplayName } from '@shared/constants/providers';
-// Local imports - tools
-import { GITHUB_TOKEN_STORAGE_KEY } from '@tools/github/githubAuth';
-import { refreshToolAvailability } from '@tools/toolAvailability';
 // Local imports - utils
 import {
   getProviderDisplayName,
@@ -173,25 +169,17 @@ export const promptForCliProviderApiKey = Effect.fn(
  * and interrupted by the returned disposer. The secret store announces every
  * committed write, whoever made it: `/key`, `/config`, the setup agent's
  * `unset_api_key`. A provider key bumps the subscription-preference level the
- * status bar and model pickers read. The GitHub token re-probes tool
- * availability, whose cache the next run's tool list reads. Other entries
- * (OAuth tokens, sign-in nonces) are ignored.
+ * status bar and model pickers read. A key a tool plugin declares (the GitHub
+ * token) is re-probed by the shared bootstrap. Other entries (OAuth tokens,
+ * sign-in nonces) are ignored.
  */
 export function subscribeCliCredentialChanges(
   runtime: ProcessRuntime,
-  roots: Pick<WorkspaceRoots, 'workspace' | 'config'>,
 ): () => void {
   const fiber = runtime.runFork(
     onAppSignal('credentialChanged', ({ key }) => {
       if (apiProviderOfSecretName(key) !== undefined) {
         bumpCodexPreferenceVersion();
-      } else if (key === GITHUB_TOKEN_STORAGE_KEY) {
-        runtime.runFork(
-          refreshToolAvailability({
-            workspaceRoot: roots.workspace,
-            config: roots.config,
-          }),
-        );
       }
     }),
   );

@@ -98,6 +98,11 @@ function wrapLine(line: string, columns: number): string {
   });
 }
 
+/** Visual rows `text` occupies once wrapped to `width`, as Ink wraps it. */
+export function wrappedRowCount(text: string, width: number): number {
+  return wrapAnsiToWidth(text, width).split('\n').length;
+}
+
 export function wrapAnsiToWidth(
   text: string,
   width?: number,

@@ -3,7 +3,12 @@ import { Data, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical protocol binding
-import { EditorOriginSchema, OriginSchema } from './protocol.js';
+import {
+  EditorOriginSchema,
+  OriginSchema,
+  sameModelOrigin,
+  type ModelOrigin,
+} from './protocol.js';
 
 // Local imports - canonical messages
 import {
@@ -106,6 +111,37 @@ const ModelErrorFieldsSchema = z.strictObject({
 export class ModelError extends Data.TaggedError('ModelError')<
   z.infer<typeof ModelErrorFieldsSchema> & { readonly cause?: unknown }
 > {}
+
+/** The operation `input` names, provided it belongs to the `origin` binding. */
+export const boundOperation = Effect.fn('llm.boundOperation')(function* (
+  input: RemoteOperation,
+  origin: ModelOrigin,
+) {
+  const parsed = RemoteOperationSchema.safeParse(input);
+  if (!parsed.success || !sameModelOrigin(parsed.data.origin, origin))
+    return yield* new ModelError({
+      kind: 'unsupported',
+      message: 'The remote operation belongs to another model binding.',
+    });
+  return parsed.data;
+});
+
+/**
+ * What a cancel reply's status says about the work: `cancelled` confirms it,
+ * a queued or running status leaves it unconfirmed, and any other status is
+ * the terminal outcome it reached first, bounded by the cancellation
+ * evidence schema the caller parses this into.
+ */
+export const cancellationStatus = (status: string) =>
+  status === 'cancelled'
+    ? { kind: 'confirmed-cancelled' as const }
+    : {
+        kind:
+          status === 'queued' || status === 'in_progress'
+            ? ('unconfirmed' as const)
+            : ('observed-terminal' as const),
+        status,
+      };
 
 /**
  * Rebuild a `ModelError` with `patch` applied over the fields it already

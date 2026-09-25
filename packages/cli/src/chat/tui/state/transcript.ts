@@ -8,17 +8,18 @@
  * residency cap drops never shifts a notice.
  */
 import { signal } from '@lit-labs/signals';
-import { Cause } from 'effect';
+import { Cause, Effect } from 'effect';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
+import type { RunView } from '@shared/session/sessionView';
 import type { RequestError } from '@shared/session/requestErrors';
 import { transcriptText, type TranscriptRow } from '@ui/transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
-  activeRunId,
   focusRun,
+  selectedRunId,
   rootRunId,
   registerCliStateResetHook,
 } from './cliState';
@@ -55,6 +56,7 @@ export function appendLocalUserTranscript(text: string): void {
   appendLocalTranscriptEntry('user', text);
 }
 
+/** The one non-event row producer. */
 function localTranscriptRow(
   kind: 'assistant' | 'error' | 'user',
   id: string,
@@ -92,7 +94,7 @@ function appendLocalTranscriptEntry(
   const normalized = text.trim();
   if (!normalized) return;
   const view = currentView();
-  const active = activeRunId.get();
+  const active = selectedRunId.get();
   const runId =
     explicitRunId ??
     resolveLocalTranscriptRunId({
@@ -101,7 +103,7 @@ function appendLocalTranscriptEntry(
       parentOf: (id) => runViewOf(view, id)?.parentId ?? undefined,
       rootRunId: rootRunId.get(),
     });
-  focusRun(runId, { onlyIfUnset: true });
+  focusRun(runId, { when: 'unset' });
   const afterSeq = rowSeq(runViewOf(view, runId)?.transcript.rows.at(-1));
   notices.set([
     ...notices.get(),
@@ -149,16 +151,14 @@ export function moveLocalTranscriptToRun(runId: RunId): void {
         : notice,
     ),
   );
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) focusRun(runId);
+  focusRun(runId, { when: 'local' });
 }
 
 export function clearLocalTranscript(): void {
   const current = notices.get();
   const kept = current.filter((notice) => notice.runId !== CLI_LOCAL_RUN_ID);
   if (kept.length !== current.length) notices.set(kept);
-  if (activeRunId.get() === CLI_LOCAL_RUN_ID) {
-    activeRunId.set(undefined);
-  }
+  focusRun(null, { when: 'local' });
 }
 
 export function noticesFor(
@@ -178,10 +178,11 @@ export function noticesFor(
  * anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
-  rows: readonly TranscriptRow[],
-  settledRows: number,
+  run: RunView | undefined,
   runNotices: readonly LocalNotice[],
 ): { readonly rows: readonly TranscriptRow[]; readonly settledRows: number } {
+  const rows = run?.transcript.rows ?? [];
+  const settledRows = run?.transcript.settledRows ?? 0;
   if (runNotices.length === 0) return { rows, settledRows };
   const settledSeq = settledRows === 0 ? 0 : rowSeq(rows[settledRows - 1]);
   const out: TranscriptRow[] = [];
@@ -234,16 +235,22 @@ export function appendLocalRequestRefusal(
   appendLocalAssistantTranscript(describeRequestError(error), runId);
 }
 
-const log = createLog('cli.transcript');
+const CHANNEL = 'cli.transcript';
 
 /**
  * A runtime request that defected in process: `SessionBridge` logs the cause
  * and answers `Internal`; with no bridge in the middle the same defect is
  * logged here and worded for the surface that issued the request.
  */
-export function reportRequestDefect(cause: Cause.Cause<unknown>): string {
-  log.error(`Runtime request failed: ${toErrorMessage(Cause.squash(cause))}`);
-  return 'The request failed inside TeXRA; see the log.';
+export function reportRequestDefect(
+  cause: Cause.Cause<unknown>,
+): Effect.Effect<string> {
+  return Effect.logError(
+    `Runtime request failed: ${toErrorMessage(Cause.squash(cause))}`,
+  ).pipe(
+    withLogChannel(CHANNEL),
+    Effect.as('The request failed inside TeXRA; see the log.'),
+  );
 }
 
 registerCliStateResetHook(() => {

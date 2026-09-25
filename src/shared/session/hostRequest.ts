@@ -1,7 +1,7 @@
 /**
  * `host.request` (PRD one-fold-three-renderers, section 8.3): a capability
- * the host performs on the surface's behalf, mapped onto `platform()` and
- * the `@hosts/*` ports. Components dispatch one arm as the detail of a
+ * the host performs on the surface's behalf, mapped onto the process
+ * services and the `@hosts/*` ports. Components dispatch one arm as the detail of a
  * `host-request` event (`uiEvents.ts`); the root forwards it over the
  * bridge under a `session` and a `requestId`, answered by 8.4.
  *
@@ -82,13 +82,12 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('popOut') }),
   z.object({ kind: z.literal('popBack') }),
-  z.object({ kind: z.literal('openDashboard') }),
   z.object({ kind: z.literal('refreshCommits') }),
   z.object({ kind: z.literal('refreshFiles') }),
   z.object({
     kind: z.literal('openSettings'),
     section: z.enum(['agents', 'teams', 'models']),
-    sessionType: z.enum(['toolUse', 'workflow']).nullish(),
+    sessionType: SessionTypeSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
    *  `Surface.launch` field the paths return to. */
@@ -142,12 +141,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     ]),
     feedback: z.string().nullish(),
   }),
-  /** The sidebar port reports which state it shows, for the view-title
-   *  menus that differ between the New-task state and a conversation. */
-  z.object({
-    kind: z.literal('setActiveView'),
-    view: z.enum(['main', 'progress']),
-  }),
   /** An output file's verbs on a workflow run's file list. */
   z.object({
     kind: z.literal('fileAction'),
@@ -173,7 +166,6 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('apiKeyBanner'),
     action: z.enum(['set', 'guide']),
-    provider: z.string().nullish(),
   }),
   z.object({
     kind: z.literal('agentConfigBanner'),
@@ -183,10 +175,9 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('recheckDependencies') }),
   z.object({ kind: z.literal('openInstallGuide'), tool: z.string() }),
-  z.object({ kind: z.literal('signIn') }),
   z.object({
     kind: z.literal('dismissBanner'),
-    banner: z.enum(['login', 'gettingStarted', 'dependency']),
+    banner: z.enum(['gettingStarted', 'dependency']),
   }),
   z.object({
     kind: z.literal('gettingStarted'),

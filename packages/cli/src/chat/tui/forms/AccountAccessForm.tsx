@@ -1,10 +1,6 @@
 import { Box, Text } from 'ink';
-import { useState } from 'react';
 
-import {
-  loadCliModelAccessOverview,
-  type CliModelAccessOverview,
-} from '@cli/runtime/apiStatus';
+import { loadCliModelAccessOverview } from '@cli/runtime/apiStatus';
 import type {
   CliLogoutTarget,
   LoginFormValue,
@@ -19,7 +15,6 @@ import {
 } from '@cli/runtime/modelAccessRoute';
 
 import type { SelectItem } from '@cli/tui/ui/Select';
-import { useCancellableEffect } from '@cli/tui/useCancellableEffect';
 import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -31,6 +26,7 @@ import {
   RESEARCHER_ACCESS_AUTH,
 } from '@ui/copy/accountAuth';
 import { ListForm } from './_shared/ListForm';
+import { useAsyncResource } from './_shared/useAsyncListForm';
 
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }
@@ -51,10 +47,6 @@ interface AccountAccessFormProps {
   readonly onSelect: (value: AccountAccessFormValue) => void;
   readonly onCancel: () => void;
 }
-
-type AccountAccessFormStatus =
-  | { readonly state: 'loaded'; readonly overview: CliModelAccessOverview }
-  | { readonly state: 'failed'; readonly message: string };
 
 interface SignInTransport {
   readonly target: LoginFormValue;
@@ -138,7 +130,7 @@ function buildAccountAccessFormItems(
   if (input.kind !== 'loaded') {
     if (input.state === 'failed') {
       // Account state is unknown, so the form keeps every provider's sign-in
-      // transports — this same form backs /login and /logout, and recovery
+      // transports — this form is where every sign-in and sign-out lives, and recovery
       // actions matter most exactly when account state failed to load.
       return [
         ...toggleItems,
@@ -189,43 +181,27 @@ function buildAccountAccessFormItems(
 export function AccountAccessForm(
   props: AccountAccessFormProps,
 ): React.JSX.Element {
-  const [status, setStatus] = useState<AccountAccessFormStatus | null>(null);
-
-  useCancellableEffect(
-    (isCancelled) => {
-      setStatus(null);
-      void props.runtime
-        .runPromise(loadCliModelAccessOverview(props.stores, props.secrets))
-        .then((overview) => {
-          if (!isCancelled()) setStatus({ state: 'loaded', overview });
-        })
-        .catch((error: unknown) => {
-          if (!isCancelled()) {
-            setStatus({
-              state: 'failed',
-              message: String(error),
-            });
-          }
-        });
-    },
-    [props.secrets],
-  );
+  const overview = useAsyncResource({
+    load: () => loadCliModelAccessOverview(props.stores, props.secrets),
+    runtime: props.runtime,
+  });
+  const { data, error } = overview;
 
   const items = buildAccountAccessFormItems(
-    status?.state === 'loaded'
-      ? { kind: 'loaded', access: status.overview.access }
-      : { kind: 'pending', state: status?.state ?? 'loading' },
+    data !== undefined
+      ? { kind: 'loaded', access: data.access }
+      : { kind: 'pending', state: error === undefined ? 'loading' : 'failed' },
   );
   let detailLines: readonly string[] | undefined;
-  if (status?.state === 'loaded') {
+  if (data !== undefined) {
     // The rows already describe each preference and account; the detail block
     // only carries what no row says.
     detailLines = [
       `Otherwise: ${formatCliModelAccessRoute('api-key')}`,
-      ...(status.overview.note ? [status.overview.note] : []),
+      ...(data.note ? [data.note] : []),
     ];
-  } else if (status?.state === 'failed') {
-    detailLines = [status.message];
+  } else if (error !== undefined) {
+    detailLines = [error];
   }
 
   return (

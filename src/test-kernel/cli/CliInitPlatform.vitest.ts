@@ -70,12 +70,9 @@ const mocks = vi.hoisted(() => ({
     // roots' own `globalState` slot, which is the store the init opened.
     globalState: mocks.cliGlobalState,
   })),
-  initializeCliSupabaseAuth: vi.fn(),
   initializeNodeRuntimeSkills: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
-  tryPlatform: vi.fn(),
-  publishPlatform: vi.fn(),
   // Collects the programs registered via the (mocked) lifecycle host's
   // onShutdown so a test can run them and assert the agent shutdown drain
   // was wired.
@@ -86,7 +83,6 @@ vi.mock('@cli/runtime/supabaseAuth', async () => {
   const { Effect } = await import('effect');
   const { fakeSupabaseAuth } = await import('@test/support/fakeSupabaseAuth');
   return {
-    initializeCliSupabaseAuth: mocks.initializeCliSupabaseAuth,
     signInCliSupabase: mocks.signInCliSupabase,
     // The runtime install's account plane, steerable per test: the probe
     // reads the flag when it runs, not when the plane is built.
@@ -123,15 +119,6 @@ vi.mock('@logger/logUtils', () => ({
   warn: vi.fn(),
 }));
 
-vi.mock('@platform/platform', () => ({
-  initPlatform: mocks.publishPlatform,
-  tryPlatform: mocks.tryPlatform,
-  platform: () => ({
-    config: { get: (_key: string, def: unknown) => def },
-    globalState: mocks.cliGlobalState,
-  }),
-}));
-
 // initCliPlatform delegates shared Node-host construction and runtime wiring to
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
@@ -140,9 +127,9 @@ vi.mock('@platform/defaults/nodeHost', () => ({
   initializeNodeRuntimeSkills: mocks.initializeNodeRuntimeSkills,
 }));
 
-// First-init dependencies: only exercised when tryPlatform() returns undefined.
-// Most cases keep tryPlatform truthy and skip this block, so these stubs are
-// inert there and only drive the "first init" tests below.
+// First-init dependencies: only exercised while no earlier init in the same
+// module instance installed its roots, so these stubs only drive the "first
+// init" tests below.
 vi.mock('@platform/defaults/lifecycleHost', async () => {
   const { Effect: effect } = await import('effect');
   return {
@@ -160,23 +147,12 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
 
-vi.mock('@cli/runtime/cliStateStores', () => ({
-  openCliWorkspaceState: vi.fn(() =>
-    Effect.succeed({
-      workspaceState: {},
-      storage: {
-        getStoragePath: () => '/workspace/.texra/storage',
-        getGlobalStoragePath: () => '/tmp/texra-global',
-      },
-    }),
-  ),
-}));
-
 // The global state store the CLI's process-runtime install opens before it
-// installs the runtime that serves it: this suite runs that real install, so
-// the open is what it stubs.
+// installs the runtime that serves it, and the project store the first init
+// opens: this suite runs that real install, so the opens are what it stubs.
 vi.mock('@controllers/session/appStateStore', () => ({
   appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
+  openProjectStateStore: vi.fn(() => Effect.succeed({})),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
@@ -197,17 +173,6 @@ function cliContext(
     // roots' config, handed over rather than opened a second time here.
     config: new MemoryConfigProvider(),
     ...overrides,
-  };
-}
-
-function stubGlobalState(
-  get: (key: string, defaultValue: unknown) => unknown = (_key, def) => def,
-) {
-  return {
-    get: vi.fn((key: string, defaultValue: unknown) =>
-      Effect.sync(() => get(key, defaultValue)),
-    ),
-    update: vi.fn(() => Effect.void),
   };
 }
 
@@ -260,21 +225,14 @@ describe('CLI platform init', () => {
     // default is one too; a bare `vi.fn()` returns undefined and `yield*`
     // fails on it.
     mocks.cliGlobalState.update.mockReturnValue(Effect.void);
-    mocks.tryPlatform.mockReset();
-    mocks.tryPlatform.mockReturnValue({ globalState: stubGlobalState() });
     mocks.authenticated = false;
   });
 
   it.effect(
-    'retries after seed failure without publishing platform, session, or signals',
+    'retries after seed failure without publishing roots, session, or signals',
     () =>
       withFreshSignalCapture(({ registered, initPlatform }) =>
         Effect.gen(function* () {
-          mocks.tryPlatform.mockReset();
-          mocks.tryPlatform
-            .mockReturnValueOnce(undefined)
-            .mockReturnValueOnce(undefined)
-            .mockReturnValue({ globalState: stubGlobalState() });
           const storeFailure = new Error(
             'disabled-tool defaults could not be seeded',
           );
@@ -303,7 +261,6 @@ describe('CLI platform init', () => {
           const { tryDefaultSession } = yield* Effect.promise(
             () => import('@agent/runtime'),
           );
-          expect(mocks.publishPlatform).not.toHaveBeenCalled();
           expect(tryDefaultSession()).toBeUndefined();
           expect(registered).toEqual([]);
 
@@ -311,7 +268,6 @@ describe('CLI platform init', () => {
           expect(services).toEqual(
             expect.objectContaining({ roots: expect.anything() }),
           );
-          expect(mocks.publishPlatform).toHaveBeenCalledOnce();
           expect(tryDefaultSession()).toBeUndefined();
           expect(registered).toEqual([
             { event: 'SIGINT', kind: 'once' },
@@ -331,7 +287,6 @@ describe('CLI platform init', () => {
       // init installs the process runtime the session graph runs on, so the
       // session is built after it, not on a runtime an earlier case's shutdown
       // disposed.
-      mocks.tryPlatform.mockReturnValueOnce(undefined);
       yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
@@ -407,13 +362,6 @@ describe('CLI platform init', () => {
 describe('CLI platform interactive signal ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.tryPlatform.mockReset();
-    // First call drives the once-per-process first-init block; later calls see
-    // an initialized platform.
-    mocks.tryPlatform.mockReturnValueOnce(undefined);
-    mocks.tryPlatform.mockReturnValue({
-      globalState: stubGlobalState(() => undefined),
-    });
   });
 
   it.effect(

@@ -94,16 +94,15 @@ function installTestPlatform(): Promise<void> {
 
 /**
  * The write side of the workspace: `accept_run_files` writes through the
- * session's rooted workspace view now that the `WorkspaceFS` facade is gone,
- * so a case stubs that one method of the real service rather than the deleted
- * static.
+ * session's rooted `WorkspaceFs` view, so a case stubs that one method of the
+ * real service.
  */
 const workspaceWrites = vi.fn<(target: string, content: string) => void>();
 const workspaceReads = new Map<string, { exists: boolean; content: string }>();
 
 /**
- * The absolute-path half: the process filesystem is what the deleted
- * `AbsoluteFS` reached. A path in `absoluteFilePaths` answers as a file, and
+ * The absolute-path half, read through the process `FileSystem`. A path in
+ * `absoluteFilePaths` answers as a file, and
  * `absoluteContents` (falling back to `absoluteContentFallback`) is what a
  * read of it returns.
  */
@@ -204,7 +203,7 @@ function stubWorkspaceFiles(exists: boolean, content: string) {
 }
 
 function runAccept(
-  tool: AcceptRunFilesTool,
+  tool: typeof AcceptRunFilesTool,
   files: { path: string; original: string }[],
   tracker = new FileInteractionState(),
 ) {
@@ -269,7 +268,7 @@ describe('accept_run_files progress events', () => {
   it.live('publishes accepted workspace files through app signals', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       const tracker = new FileInteractionState();
       const { written, delivered } = yield* recordWrittenFiles();
 
@@ -299,7 +298,7 @@ describe('accept_run_files progress events', () => {
     'reports an all-file user rejection without calling it a cancellation',
     () =>
       Effect.gen(function* () {
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
 
         setRunStorageEntries({
           [`executions/${runId}/output.tex`]: 'File',
@@ -328,7 +327,7 @@ describe('accept_run_files progress events', () => {
     'preserves a cause-free cancellation while aggregating rejections',
     () =>
       Effect.gen(function* () {
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
 
         setRunStorageEntries({
           [`executions/${runId}/output.tex`]: 'File',
@@ -350,7 +349,7 @@ describe('accept_run_files progress events', () => {
 
   it.live('preserves mixed policy-denial and cancellation details', () =>
     Effect.gen(function* () {
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
 
       setRunStorageEntries({
         [`executions/${runId}/first.tex`]: 'File',
@@ -382,7 +381,7 @@ describe('accept_run_files progress events', () => {
 
   it.live('uses the pre-run snapshot for same-path workspace outputs', () =>
     Effect.gen(function* () {
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       let approvalOriginal = '';
       let approvalProposed = '';
       const snapshotPath = path.join(
@@ -428,7 +427,7 @@ describe('accept_run_files progress events', () => {
           workspace: '/project',
           storage: '/project-storage',
         };
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
         const tracker = new FileInteractionState();
         const snapshotPath = path.join(
           projectRoots.storage,
@@ -492,7 +491,7 @@ describe('accept_run_files progress events', () => {
   it.live('reports unchanged same-path fallbacks without approval', () =>
     Effect.gen(function* () {
       const explicit = createRecordingHost();
-      const tool = new AcceptRunFilesTool();
+      const tool = AcceptRunFilesTool;
       let approvals = 0;
 
       setRunStorageEntries();
@@ -521,7 +520,7 @@ describe('accept_run_files progress events', () => {
     () =>
       Effect.gen(function* () {
         const explicit = createRecordingHost();
-        const tool = new AcceptRunFilesTool();
+        const tool = AcceptRunFilesTool;
         let approvals = 0;
 
         setRunStorageEntries({

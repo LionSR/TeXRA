@@ -11,7 +11,7 @@ export const THREE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
 // Debounce delay constants for UI responsiveness
 export const DEBOUNCE_OPTIONS_MS = 300; // Dropdown options refresh
 
-// Tool groups marked `toggleable: true` in EXTERNAL_TOOL_DEFS are treated
+// Tool plugins marked `toggleable: true` in TOOL_PLUGINS are treated
 // as opt-in: they're disabled on first install, and the Tools dashboard shows
 // a toggle so the user can turn them on. Seeding happens in
 // `seedDisabledToolDefaults()` during host startup and is keyed on the
@@ -41,7 +41,7 @@ export function setToolEnabled(
   store: StateStore,
 ) {
   return Effect.gen(function* () {
-    const set = new Set(yield* getDisabledToolIds(store));
+    const set = yield* getDisabledToolIds(store);
     if (enabled) {
       set.delete(toolId);
     } else {

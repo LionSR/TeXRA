@@ -1,11 +1,16 @@
-import { Deferred, Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  LogLevel,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { CliNdjsonRecord } from '@cli/schemas/cliOutput';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import { runIdentityName, type RunId } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import type { RunView } from '@shared/session/sessionView';
+import { isLiveRun, type RunView } from '@shared/session/sessionView';
 import { writeNdjsonStdout } from './logSinks';
 
 export type CliNdjsonProgressRecordWriter = (record: CliNdjsonRecord) => void;
@@ -42,7 +47,10 @@ function childRow(child: RunView) {
  * written only when that derivation changes, so it carries no channel of its
  * own. It is ordered against the lines by the fold's own cursor: a view that
  * has folded past the tail's last written row waits for the tail, so a
- * roster never precedes a row it already reports.
+ * roster never precedes a row it already reports. Like the tail, it is scoped
+ * to the attach boundary: the rosters the fold holds at attach seed the
+ * comparison without being written, so a resumed session does not replay
+ * its earlier parents.
  *
  * Detaching drains: the tail runs to the ordinal captured at detach, so the
  * last line published before the run settled is on the wire before the
@@ -52,15 +60,22 @@ function childRow(child: RunView) {
  * store no longer holds emits nothing, and the ordinal captured at detach may
  * be exactly that row's.
  *
- * The tail and its coordinate are fibers of the process runtime the caller
- * holds: this projection lives for the length of one headless run, so it
- * takes that runtime once here rather than looking it up per fork.
+ * The tail, its coordinate and the roster are child fibers of the fiber that
+ * attaches: the projection lives for the length of one headless run, so the
+ * launch owns them, and they start before attach returns so the first commit
+ * after it is already being read. The returned Effect is the detach; the
+ * launch fiber's exit is the backstop that interrupts them when no detach ran.
  */
-export function attachCliSessionProgressProjection(
-  runtime: ProcessRuntime,
+export const attachCliSessionProgressProjection = Effect.fn(
+  'attachCliSessionProgressProjection',
+)(function* (
   session: Pick<SessionHandle, 'events' | 'now' | 'view'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
-): () => Effect.Effect<void> {
+) {
+  // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
+  // wire only under the process's own minimum log level, which `--verbose`
+  // lowers to `Debug` — the one place the CLI decides what a debug line is.
+  const includeDebugLogs = yield* LogLevel.isEnabled('Debug');
   function emit(event: string, payload: unknown): void {
     writeRecord({
       kind: 'progress',
@@ -76,7 +91,12 @@ export function attachCliSessionProgressProjection(
   let stopAt: number | undefined;
   const drained = Deferred.makeUnsafe<void>();
 
-  /** The roster last written per parent, so an unchanged one writes no line. */
+  /** The ordinal the projection attached at: the tail's own boundary. */
+  const attachedAt = delivered;
+  /** The roster last derived per parent, so an unchanged one writes no line.
+   *  A fold level at or below `attachedAt` only seeds it: a resumed session's
+   *  earlier parents, settled or not, are history the tail does not replay
+   *  either, so only a roster a post-attach row changes is written. */
   const writtenRosters = new Map<RunId, string>();
   /** A fold ahead of the tail: its roster waits for the lines that produced
    *  it, so a roster never precedes the row it reports. */
@@ -94,16 +114,18 @@ export function attachCliSessionProgressProjection(
         const child = view.runs.get(childId);
         // A live child only: the roster reports who is still going, and a
         // child that ended carries its outcome on its own `run.end` line.
-        return child === undefined || isTerminalOutcomePhase(child.status)
-          ? []
-          : [childRow(child)];
+        return child !== undefined && isLiveRun(child) ? [childRow(child)] : [];
       });
       const wire = JSON.stringify(children);
       if (writtenRosters.get(parentRunId) === wire) continue;
       writtenRosters.set(parentRunId, wire);
-      emit('run.children', { runId: parentRunId, children });
+      if (view.cursor > attachedAt)
+        emit('run.children', { runId: parentRunId, children });
     }
   };
+  // Seed from the fold as it stands at attach, before any fiber can see a
+  // later level: the plane's ordinal bounds the fold, so this writes nothing.
+  emitRosters();
 
   const settleIfDrained = (): void => {
     if (stopAt === undefined || delivered < stopAt) return;
@@ -121,40 +143,41 @@ export function attachCliSessionProgressProjection(
   // The tail's coordinate: set to the commit each forward read covered once
   // that read's events have all been handled below, so a value here never
   // runs ahead of an event this fiber has yet to write.
-  const drainedTo = runtime.runSync(SubscriptionRef.make(delivered));
-  const fiber = runtime.runFork(
-    Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
-      Effect.sync(() => {
-        if (stopAt !== undefined && event.commit > stopAt) return;
-        const { type, ...payload } = event;
-        emit(type, payload);
-        passed(event.commit);
-      }),
+  const drainedTo = yield* SubscriptionRef.make(delivered);
+  const fork = Effect.forkChild({ startImmediately: true });
+  const fibers = [
+    yield* fork(
+      Stream.runForEach(session.events.all(delivered, drainedTo), (event) =>
+        Effect.sync(() => {
+          if (stopAt !== undefined && event.commit > stopAt) return;
+          const { type, ...payload } = event;
+          if (includeDebugLogs || type !== 'log' || event.level !== 'debug') {
+            emit(type, payload);
+          }
+          passed(event.commit);
+        }),
+      ),
     ),
-  );
-  const coordinateFiber = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
-      Effect.sync(() => passed(commit)),
+    yield* fork(
+      Stream.runForEach(SubscriptionRef.changes(drainedTo), (commit) =>
+        Effect.sync(() => passed(commit)),
+      ),
     ),
-  );
-  // The roster's own source: the fold, whose every level is a candidate.
-  const rosterFiber = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(session.view), () =>
-      Effect.sync(emitRosters),
+    // The roster's own source: the fold, whose every level is a candidate.
+    yield* fork(
+      Stream.runForEach(SubscriptionRef.changes(session.view), () =>
+        Effect.sync(emitRosters),
+      ),
     ),
-  );
+  ];
 
-  return () =>
-    Effect.gen(function* () {
-      const first = stopAt === undefined;
-      if (first) {
-        stopAt = session.now();
-        settleIfDrained();
-      }
-      yield* Deferred.await(drained);
-      if (!first) return;
-      runtime.runFork(Fiber.interrupt(fiber));
-      runtime.runFork(Fiber.interrupt(coordinateFiber));
-      runtime.runFork(Fiber.interrupt(rosterFiber));
-    });
-}
+  return Effect.gen(function* () {
+    const first = stopAt === undefined;
+    if (first) {
+      stopAt = session.now();
+      settleIfDrained();
+    }
+    yield* Deferred.await(drained);
+    if (first) yield* Fiber.interruptAll(fibers);
+  });
+});

@@ -17,7 +17,6 @@ import {
   PROVIDER_DISPLAY_NAMES,
   MODEL_SOURCE_ORDER,
   EXPENSIVE_MODEL_HINT,
-  isExpensiveModel,
 } from '@shared/constants/providers';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -228,7 +227,7 @@ export class ModelSelectionList extends LitElement {
           }
           ${this.renderAvailabilityIcon(model, isLastEnabledModel)}
           ${
-            isExpensiveModel(model.provider, model.name)
+            model.isExpensive
               ? waIcon('triangle-exclamation', {
                   className: 'model-row-icon model-row-icon--warning',
                   label: EXPENSIVE_MODEL_HINT,
@@ -361,18 +360,14 @@ export class ModelSelectionList extends LitElement {
 
     return html`
       <div class="helper-model-row">
-        <span class="helper-model-label" aria-hidden="true"
-          >Model for quick fixes</span
-        >
+        <span class="helper-model-label" aria-hidden="true">Helper model</span>
         <wa-select
           id="helper-model-select"
           class="helper-model-select form-control-fill"
           .value=${this.helperModel}
           @change=${this.handleHelperModelChange}
         >
-          <span slot="label" class="visually-hidden"
-            >Model for quick fixes</span
-          >
+          <span slot="label" class="visually-hidden">Helper model</span>
           <span slot="hint" class="visually-hidden"
             >Used for quick background tasks, such as intelligent merge.</span
           >

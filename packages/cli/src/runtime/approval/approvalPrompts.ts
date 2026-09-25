@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
+import type { TexraRetryApprovalDecision } from '@shared/approvalPolicy';
 import { getExhaustionReason } from '@shared/schemas';
 import type { RequestDecision, RetryPermission, RunId } from '@shared/schemas';
 import {
@@ -9,7 +10,7 @@ import {
   type QuotaFallbackRoute,
 } from '@shared/quotaFallbackRoutes';
 import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import { type CliContext, type CliPromptRequest } from '../cliContext';
@@ -33,20 +34,95 @@ export interface CliApprovalContent {
  * from it at once. Keyed weakly by the context, whose lifetime bounds it.
  */
 const cliPromptLanes = new WeakMap<CliContext, PerKeyLane>();
-/** Runs already warned per context; `undefined` stands for a runless caller
- *  (no run id, or a payload's runless `''`). */
-const warnedApprovalRuns = new WeakMap<CliContext, Set<RunId | undefined>>();
+/** Denials already warned per context, keyed by run and denial kind;
+ *  a runless caller (no run id, or a payload's runless `''`) keys as `''`. */
+const warnedApprovalRuns = new WeakMap<CliContext, Set<string>>();
 
 function onCliPromptLane(context: CliContext) {
   return withPerKeyLane(cliPromptLanes, context);
 }
 
+/** What the policy closed, as the operator warning names it. */
+export type CliApprovalDenial =
+  /** A Bash command or tool edit settled as denied. */
+  | { readonly kind: 'executable' }
+  /** Approval-gated tools withheld from the model when the run started. */
+  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
+  /** The human retry permit after a model error. */
+  | {
+      readonly kind: 'retry';
+      readonly deny: Exclude<TexraRetryApprovalDecision, 'present'>['deny'];
+    }
+  /** A question the model asked the user. */
+  | { readonly kind: 'humanInput' };
+
+/** The denial an `onApprovalPolicyDenial` report names: the withheld tools
+ *  when it carries them, else a denied request. */
+export function policyDenialOf(
+  withheldTools: readonly string[] | undefined,
+): CliApprovalDenial {
+  return withheldTools
+    ? { kind: 'withheldTools', tools: withheldTools }
+    : { kind: 'executable' };
+}
+
+/** Why no prompt could answer, from the live policy and this run's mode. */
+function promptUnavailableReason(
+  policy: SessionHandle['approvalPolicy'],
+  context: CliContext,
+): string {
+  if (policy === 'never') return 'the approval policy is "never"';
+  if (policy === 'ask' && context.mode === 'headless') {
+    return 'no interactive prompt is available (approval policy "ask", headless run)';
+  }
+  return `the approval policy is "${policy}"`;
+}
+
+function retryDenialReason(
+  deny: Extract<CliApprovalDenial, { kind: 'retry' }>['deny'],
+  reason: string,
+): string {
+  switch (deny) {
+    case 'credential':
+      return 'the credential is exhausted or unauthorized';
+    case 'yolo-retry':
+      return 'automatic retries are exhausted, and the yolo policy does not approve a retry past them';
+    case 'policy':
+    case 'unpresentable':
+      return `${reason}; a retry past the automatic attempts needs an interactive approval`;
+  }
+}
+
+function approvalDenialMessage(
+  denial: CliApprovalDenial,
+  policy: SessionHandle['approvalPolicy'],
+  context: CliContext,
+): string {
+  const reason = promptUnavailableReason(policy, context);
+  const allow =
+    context.mode === 'headless'
+      ? 'Use --approval-policy yolo to allow'
+      : 'Change the policy with /approval to allow';
+  switch (denial.kind) {
+    case 'executable':
+      return `Command or edit denied: ${reason}. ${allow} it.`;
+    case 'withheldTools':
+      return `Not offering ${denial.tools.join(', ')} to the model: they need approval, and ${reason}. ${allow} them.`;
+    case 'retry':
+      return `Model error retry not attempted: ${retryDenialReason(denial.deny, reason)}.`;
+    case 'humanInput':
+      return `Question for the user not asked: ${reason}.`;
+  }
+}
+
 /**
- * Tell the operator, once per run, that the policy closed a gate. Keyed by
- * `runId` within one context, so concurrent runs sharing the chat TUI's
- * session context each warn once; a runless caller warns once per context. The model
- * already receives the denial as tool feedback and routes around it, so this
- * is diagnostics only — a denied gate never changes the process exit code.
+ * Tell the operator, once per run and denial kind (for withheld tools, once
+ * per distinct tool list), that the policy closed a gate, what it closed, and
+ * why. Keyed by `runId` within one context, so
+ * concurrent runs sharing the chat TUI's session context each warn once; a
+ * runless caller warns once per context. The model already receives the
+ * denial as tool feedback and routes around it, so this is diagnostics only —
+ * a denied gate never changes the process exit code.
  *
  * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
  * frozen CliContext.approvalPolicy can be stale — the warning names the live
@@ -56,17 +132,19 @@ function onCliPromptLane(context: CliContext) {
 export function warnApprovalDenied(
   session: SessionHandle,
   context: CliContext,
-  gate?: string,
+  denial: CliApprovalDenial,
   runId?: RunId | '',
 ): void {
   let warned = warnedApprovalRuns.get(context);
   if (!warned) warnedApprovalRuns.set(context, (warned = new Set()));
-  const key = runId || undefined;
+  // Withheld tools key by their names too: a delegated child reports through
+  // its parent's callback, and the tools it adds are a new denial.
+  const detail = denial.kind === 'withheldTools' ? denial.tools.join(',') : '';
+  const key = `${runId ?? ''}\0${denial.kind}\0${detail}`;
   if (warned.has(key)) return;
   warned.add(key);
-  const policy = session.approvalPolicy;
   writeTextStderr(
-    `[warn] [cli-approval] ${gate?.trim() || 'Approval gate'} denied under policy "${policy}".`,
+    `[warn] [cli-approval] ${approvalDenialMessage(denial, session.approvalPolicy, context)}`,
   );
 }
 
@@ -195,7 +273,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
       // leaves interruption free to propagate.
       const beforePrompt = Effect.try({
         try: () => hooks.beforePrompt?.(),
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       while (true) {
         yield* beforePrompt;
@@ -210,7 +288,7 @@ export const askApproval = Effect.fn('approvalPrompts.askApproval')(function* (
         }
         yield* Effect.try({
           try: () => writeTextStderr(safeTerminalText(details())),
-          catch: (cause) => cause,
+          catch: ensureError,
         });
       }
 

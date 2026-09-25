@@ -1,10 +1,9 @@
 /**
  * A `FileSystem` confined to one root.
  *
- * The retired `StorageFS` facade resolved every path against the process's
- * ambient roots at call time, which is why a caller that wanted a different
- * root had to enter an AsyncLocalStorage scope around its I/O. A rooted view
- * inverts that: the root is captured when the view is built, the
+ * The root is captured when the view is built rather than read from ambient
+ * process state at call time, so a caller that wants a different root builds
+ * a different view instead of entering a scope around its I/O. The
  * view resolves relative paths against it, refuses paths that escape it, and
  * delegates every operation to the standard library's `FileSystem`. A
  * consumer takes the view from context and never reads a root.

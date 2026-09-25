@@ -1,9 +1,6 @@
 import * as vscode from 'vscode';
 
-import { createLog } from '@logger/logUtils';
 import { REFRESH_THRESHOLD_MS } from '@utils/config/constants';
-
-const log = createLog('DiffRefresh');
 
 interface DiffInfo {
   left: vscode.Uri;
@@ -31,7 +28,6 @@ function refreshDiff(): void {
     diffInfo.title,
     { preserveFocus: true } satisfies vscode.TextDocumentShowOptions,
   );
-  log.debug('Refreshed diff view');
 }
 
 export function registerDiffRefresh(
@@ -45,12 +41,10 @@ export function registerDiffRefresh(
   // timestamp would swallow this diff's first refresh.
   lastRefresh = 0;
   refreshListener = vscode.window.onDidChangeTextEditorViewColumn(refreshDiff);
-  log.debug('Registered diff refresh listeners');
 }
 
 export function disposeDiffRefresh(): void {
   refreshListener?.dispose();
   refreshListener = undefined;
   diffInfo = undefined;
-  log.debug('Disposed diff refresh listeners');
 }

@@ -3,14 +3,11 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
-import {
-  resolveRunStoragePath,
-  RUNS_STORAGE_DIR,
-} from '@platform/defaults/workspaceStorage';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { RunId } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { runDirUnder } from '@utils/files/runStorageFs';
+import { resolveRunStoragePath, runDirUnder } from '@utils/files/runStorageFs';
 import { workspaceAbsolutePath } from '@utils/files/workspaceFS';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
@@ -97,9 +94,12 @@ export function maybeSaveDebugObject({
     if (runId) {
       // `ensureRunDir`: the runs directory and the run's own, both created
       // tolerantly (a directory that already exists is the post-condition).
-      yield* fs.makeDirectory(path.join(roots.storage, RUNS_STORAGE_DIR), {
-        recursive: true,
-      });
+      yield* fs.makeDirectory(
+        path.join(roots.storage, WORKSPACE_STORAGE_LAYOUT.runs),
+        {
+          recursive: true,
+        },
+      );
       yield* fs.makeDirectory(runDirUnder(roots.storage, runId), {
         recursive: true,
       });

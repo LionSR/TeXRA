@@ -14,11 +14,8 @@ consequences worth knowing before you touch a file here:
 
 - **Nothing in this directory runs a fiber.** A caller runs the program at
   its own boundary: a tool's `execute()`, a VS Code command, a desktop
-  request handler, or a CLI command. The exceptions are named debt, not a
-  pattern to copy — `MediaExtractionNode`, `TeXCountNode` and
-  `LatexDiffManager` each keep one `runPromise` against the Promise-shaped
-  reflection flow, and `config/ratchets/effect-migration-baseline.json`
-  names the lane that deletes them.
+  request handler, or a CLI command. The `Effect.run*` row of
+  `scripts/check-effect-migration-ratchet.mjs` fails a run added here.
 - **Cancellation is interruption, not a threaded `AbortSignal`.** `texcount`
   and the latexdiff executors spawn their subprocess inside
   `Effect.tryPromise`, whose thunk receives the signal that aborts when the
@@ -107,8 +104,8 @@ The files have distinct roles:
   diff via `outputDiscovery.ts`/`executionDiscovery.ts` (the latter's narrow
   port lets `latex` stay out of `@agent/storage`), then builds and dispatches
   the diff operations via `diffOperations.ts`/`diffCommandExecutor.ts`, naming
-  output files with `diffFileNameManager.ts` (math markup options come from
-  `mathMarkup.ts`). `diffFileProcessor.ts` is the post-processor
+  output files with `diffFileNameManager.ts` (the math markup mode is the
+  `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to
   restore flattened bibliography directives and sanitize latexdiff's
   `\DIFadd`/`\DIFdel` markup. `types.ts` holds the types those

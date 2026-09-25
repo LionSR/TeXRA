@@ -22,11 +22,11 @@ import {
   type ConfigProvider,
   type ConfigTarget,
   ConfigWriteFailed,
+  type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
-import type { Platform } from '@platform/platform';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
@@ -367,16 +367,10 @@ export class FakeStateStore implements StateStore {
 export class FakeSecrets implements PlatformSecrets {
   private readonly values = new Map<string, string>();
 
-  private readonly env: Record<string, string>;
-
-  constructor(
-    values: Record<string, string> = {},
-    env: Record<string, string> = {},
-  ) {
+  constructor(values: Record<string, string> = {}) {
     for (const [key, value] of Object.entries(values)) {
       this.values.set(key, value);
     }
-    this.env = env;
   }
 
   get(key: string): Effect.Effect<string | undefined, SecretsFailed> {
@@ -401,10 +395,6 @@ export class FakeSecrets implements PlatformSecrets {
 
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
     return Effect.sync(() => [...this.values.keys()]);
-  }
-
-  getEnv(name: string): string | undefined {
-    return this.env[name];
   }
 }
 
@@ -433,8 +423,11 @@ export interface FakePlatformOptions {
    */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
-  /** Conventional env-var fallbacks (e.g. `ANTHROPIC_API_KEY`) surfaced via `PlatformSecrets.getEnv`. */
-  secretsEnv?: Record<string, string>;
+  /**
+   * The process environment the harness ConfigProvider serves; `{}` when
+   * absent, so no suite reads the developer's shell.
+   */
+  env?: Record<string, string>;
   /**
    * The workspace root, as a real path: `fakePath('workspace')` by default.
    * A suite pointing the workspace elsewhere passes a real directory it owns
@@ -447,14 +440,21 @@ export interface FakePlatformOptions {
   globalStoragePath?: string;
 }
 
+/** The two process ports a fake host serves as `Lifecycle` and
+ *  `AgentDirectories`, held per host because hosts change per test. */
+export interface FakeProcessPorts {
+  readonly lifecycle: LifecycleHost;
+  readonly agentDirectories: AgentDirectoriesPort;
+}
+
 /**
- * Overrides for one fake host: the process platform's ports, the two
+ * Overrides for one fake host: the process ports above, the two
  * workspace-root ports a suite substitutes (a scoped config provider, a
  * hand-built state store), the process ports a root hands
  * `installProcessRuntime`, and the setup platform a setup-tool suite
  * provides. The workspace and storage paths come from `FakePlatformOptions`.
  */
-export type FakeHostOverrides = Partial<Platform> &
+export type FakeHostOverrides = Partial<FakeProcessPorts> &
   Partial<Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>> & {
     /** The store the host's `Secrets` service reads, as a root's own local. */
     readonly secrets?: PlatformSecrets;
@@ -497,13 +497,12 @@ const FAKE_AGENT_DIRECTORIES: AgentDirectoriesPort = {
 
 export function createFakePlatform(
   options: FakePlatformOptions = {},
-  overrides: Partial<Platform> = {},
-): Platform {
+  overrides: Partial<FakeProcessPorts> = {},
+): FakeProcessPorts {
   seedFakeRoot(options.files ?? {});
   return {
     lifecycle: createLifecycleHost(),
     agentDirectories: FAKE_AGENT_DIRECTORIES,
-    toolMissingHandler: () => {},
     ...overrides,
   };
 }

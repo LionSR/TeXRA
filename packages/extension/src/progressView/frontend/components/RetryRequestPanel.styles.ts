@@ -5,14 +5,8 @@ import { css, type CSSResult } from 'lit';
 import { sp } from '@ui/styles';
 
 export const retryRequestPanelStyles: CSSResult = css`
-  .retry-request__operation {
-    margin: 0;
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-sm);
-    color: var(--wa-color-text-normal);
-    font-weight: var(--font-weight-medium);
-    line-height: var(--line-height-normal);
-    overflow-wrap: anywhere;
+  :host {
+    --request-accent: var(--color-warning);
   }
 
   /* No local clip. A max-height of 4em with overflow hidden cut the message
@@ -21,11 +15,10 @@ export const retryRequestPanelStyles: CSSResult = css`
      text-overflow: ellipsis beside it never applied either — that needs
      white-space: nowrap or a line clamp, so the text was hard-cut without
      even an ellipsis to show it. Length is already handled one level up,
-     where retry-request__details scrolls at min(34vh, 26rem).
+     where the card's details scroll.
 
-     Sized with its sibling __operation rather than a step below it: this is
-     the text explaining why the call failed, and it was the smallest text in
-     the panel at 10.4px. */
+     Body size rather than a step below it: this is the text explaining why
+     the call failed. */
   .retry-request__error {
     font-size: var(--font-size-sm);
     color: var(--color-error);

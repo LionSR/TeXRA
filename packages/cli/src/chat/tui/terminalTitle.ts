@@ -1,6 +1,8 @@
-import { writeSync } from 'node:fs';
 import { basename } from 'node:path';
 
+import { computed } from '@lit-labs/signals';
+
+import { osc } from '@cli/runtime/ansiEscapes';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { subscribeToPolling } from '@cli/tui/usePollingInterval';
 import {
@@ -9,18 +11,14 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
+import { RUN_PHASE } from '@shared/schemas';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
-import { claimedRunId, rootRunId, rootRunPending } from './state/cliState';
+import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
-import {
-  anyRunRunning,
-  sessionView,
-  runPhaseOf,
-  runViewOf,
-} from './state/sessionView';
-import { chatTuiCanStopActiveRun } from './state/sessionRunState';
-import { terminalCapabilities } from './state/terminalCapabilities';
+import { sessionView } from './state/sessionView';
+import { writeOsc } from './notifications/terminalNotifier';
+import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
 
 // Directory names can contain characters that would prematurely terminate
 // the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
@@ -52,32 +50,17 @@ export function terminalTitleText(
   });
 }
 
-/** Write the title only when terminal capability discovery admitted OSC. */
-function writeTerminalTitle(title: string): void {
-  if (!terminalCapabilities.get().oscColorReports) return;
-  try {
-    writeSync(1, `\x1b]0;${title}\x07`);
-  } catch {
-    // The tab title is cosmetic; a write failure here isn't actionable.
-  }
-}
-
-function currentTerminalTitleState(): SessionTitleState {
-  const view = sessionView().get();
-  if (attentionRequests(view).length > 0) return 'approval';
-  const runId = claimedRunId.get();
+const terminalTitleState = computed((): SessionTitleState => {
+  if (attentionRequests.get().length > 0) return 'approval';
+  const { runs } = sessionView().get();
   if (
-    chatTuiCanStopActiveRun({
-      runPending: rootRunPending.get(),
-      runId,
-      status: runPhaseOf(runViewOf(view, runId)),
-    }) ||
-    anyRunRunning(view, rootRunId.get())
+    chatTuiCanStopActiveRun(runStopFacts.get()) ||
+    rootRunIds.get().some((id) => runs.get(id)?.status === RUN_PHASE.RUNNING)
   ) {
     return 'running';
   }
   return 'idle';
-}
+});
 
 interface TerminalTitleController {
   readonly suspend: () => void;
@@ -97,10 +80,12 @@ export function installTerminalTitleUpdates(
     stopSharedTick?.();
     stopSharedTick = undefined;
   };
-  const updateTitle = (title: string): void => {
-    if (title === lastTitle) return;
+  /** False when the terminal takes no OSC title, so nothing animates it. */
+  const updateTitle = (title: string): boolean => {
+    if (title === lastTitle) return true;
+    if (!writeOsc(osc(`0;${title}`))) return false;
     lastTitle = title;
-    writeTerminalTitle(title);
+    return true;
   };
   // Frame is derived from wall time via `loadingFrameAt`, the same 1 Hz
   // rotation `LoadingIndicator` and the status bar use, so the tab title
@@ -108,20 +93,14 @@ export function installTerminalTitleUpdates(
   const runningTitle = (): string =>
     terminalTitleText(cwd, 'running', loadingFrameAt(Date.now(), TITLE_FRAMES));
   const startRunningAnimation = (): void => {
-    if (stopSharedTick !== undefined) return;
-    if (!terminalCapabilities.get().oscColorReports) return;
-    updateTitle(runningTitle());
-    stopSharedTick = subscribeToPolling(1000, () => {
-      if (!terminalCapabilities.get().oscColorReports) {
-        stopRunningAnimation();
-        return;
-      }
-      updateTitle(runningTitle());
-    });
+    if (stopSharedTick !== undefined || !updateTitle(runningTitle())) return;
+    stopSharedTick = subscribeToPolling(1000, () =>
+      updateTitle(runningTitle()),
+    );
   };
   const synchronize = (): void => {
     if (suspended) return;
-    const state = currentTerminalTitleState();
+    const state = terminalTitleState.get();
     if (state === 'running') {
       startRunningAnimation();
       return;
@@ -134,21 +113,10 @@ export function installTerminalTitleUpdates(
     updateTitle(terminalTitleText(cwd));
   };
   const unsubscribe = subscribeToSignalChanges(
-    [sessionView(), claimedRunId, rootRunPending, rootRunId],
+    [terminalTitleState],
     synchronize,
   );
   synchronize();
-  // Synchronous signal exits bypass the normal disposer loop, but still emit
-  // `exit`; restore the title there as well as during graceful teardown.
-  process.on('exit', restoreIdleTitle);
-
-  const dispose = (): void => {
-    if (disposed) return;
-    disposed = true;
-    unsubscribe();
-    process.off('exit', restoreIdleTitle);
-    restoreIdleTitle();
-  };
 
   return {
     suspend: () => {
@@ -161,6 +129,11 @@ export function installTerminalTitleUpdates(
       suspended = false;
       synchronize();
     },
-    dispose,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      unsubscribe();
+      restoreIdleTitle();
+    },
   };
 }

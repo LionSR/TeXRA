@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import {
-  isCliRunResumable as isCliRunResumableEffect,
-  type CliRunResumabilityFacts,
+  cliRunStanding,
+  type CliRunFacts,
 } from '@cli/runtime/toolUseResumeData';
 import {
   aggregateId,
@@ -30,13 +30,13 @@ const config = {
 /** A failed workflow row: the one shape whose snapshot is still read. */
 function listingFacts(
   runId: RunId,
-  overrides: Partial<CliRunResumabilityFacts> = {},
-): CliRunResumabilityFacts {
+  overrides: Partial<CliRunFacts> = {},
+): CliRunFacts {
   return {
     id: runId,
     checkpointPresent: true,
     agentCategory: config.agentCategory,
-    outcome: RUN_OUTCOME.FAILED,
+    phase: RUN_OUTCOME.FAILED,
     ...overrides,
   };
 }
@@ -57,12 +57,13 @@ type ReflectionState = Extract<
 /** The reflection snapshot a round writes, minus the fields a case sets. */
 function reflectionSnapshot(
   state: Partial<ReflectionState>,
+  round = 0,
 ): FlowSnapshotPayload {
   return {
     family: 'reflection',
     runtime: {
       phase: 'initial',
-      round: 0,
+      round,
       turn: 0,
       continuationIndex: 0,
       modelId: config.model,
@@ -71,21 +72,16 @@ function reflectionSnapshot(
       declinedRoutes: [],
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      continueRounds: true,
-      endTurn: false,
       ...state,
     },
   };
 }
 
-/** A round that ended on a rejection with no round left to clear it. */
+/** A round that ended on a rejection with no round left to clear it: the
+ *  last of two rounds (`runtime.round` 1). */
 const TERMINAL_REJECTION: Partial<ReflectionState> = {
-  currentRound: 1,
   totalRounds: 2,
   unresolvedCompileRejection: true,
 };
@@ -96,14 +92,19 @@ describe('CLI listing resumability', () => {
     session = await Effect.runPromise(createProcessSession());
   });
 
-  function isCliRunResumable(facts: CliRunResumabilityFacts): Promise<boolean> {
-    return Effect.runPromise(isCliRunResumableEffect(facts, session));
+  function resumableOf(facts: CliRunFacts): Promise<boolean> {
+    return Effect.runPromise(
+      cliRunStanding(facts, session).pipe(
+        Effect.map((standing) => standing.resumable),
+      ),
+    );
   }
 
   /** Open the run aggregate the way a reflection round does. */
   async function writeSnapshot(
     runId: RunId,
     state: Partial<ReflectionState>,
+    round = 0,
   ): Promise<void> {
     publishTestRunStart(session, runId);
     await Effect.runPromise(session.settlePublications());
@@ -113,7 +114,7 @@ describe('CLI listing resumability', () => {
         {
           type: 'flow.snapshot',
           aggregateId: aggregateId('run', runId),
-          payload: reflectionSnapshot(state),
+          payload: reflectionSnapshot(state, round),
         },
       ]),
     );
@@ -125,11 +126,11 @@ describe('CLI listing resumability', () => {
       const runId = mintRunId();
       // A continuable snapshot is on the aggregate, so reading it would answer
       // `true`. Only the free fact can produce the `false` asserted below.
-      await writeSnapshot(runId, { currentRound: 0, totalRounds: 4 });
+      await writeSnapshot(runId, { totalRounds: 4 });
 
-      await expect(
-        isCliRunResumable(listingFacts(runId, overrides)),
-      ).resolves.toBe(false);
+      await expect(resumableOf(listingFacts(runId, overrides))).resolves.toBe(
+        false,
+      );
     },
   );
 
@@ -138,25 +139,25 @@ describe('CLI listing resumability', () => {
       'a tool-use row',
       { agentCategory: 'toolUse' as AgentConfig['agentCategory'] },
     ],
-    ['a workflow row that did not fail', { outcome: RUN_OUTCOME.CANCELLED }],
+    ['a workflow row that did not fail', { phase: RUN_OUTCOME.CANCELLED }],
   ])(
     'advertises %s without reading its snapshot',
     async (_description, overrides) => {
       const runId = mintRunId();
       // A terminal rejection is on the aggregate, so a read would answer
       // `false`. Only the short-circuit can produce the `true` asserted below.
-      await writeSnapshot(runId, TERMINAL_REJECTION);
+      await writeSnapshot(runId, TERMINAL_REJECTION, 1);
 
-      await expect(
-        isCliRunResumable(listingFacts(runId, overrides)),
-      ).resolves.toBe(true);
+      await expect(resumableOf(listingFacts(runId, overrides))).resolves.toBe(
+        true,
+      );
     },
   );
 
   it('does not advertise a failed workflow with a terminal rejection', async () => {
     const runId = mintRunId();
-    await writeSnapshot(runId, TERMINAL_REJECTION);
+    await writeSnapshot(runId, TERMINAL_REJECTION, 1);
 
-    await expect(isCliRunResumable(listingFacts(runId))).resolves.toBe(false);
+    await expect(resumableOf(listingFacts(runId))).resolves.toBe(false);
   });
 });

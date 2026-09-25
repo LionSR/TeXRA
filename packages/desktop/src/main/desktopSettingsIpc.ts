@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { formatError } from '@common/errors';
@@ -10,14 +10,17 @@ import {
   type SettingsViewInboundHandlerRegistry,
 } from '@controllers/settingsView/settingsViewDispatch';
 import { SettingsMemoryController } from '@controllers/settingsView/SettingsMemoryController';
+import { sharedSettingsCommands } from '@controllers/settingsView/sharedSettingsCommands';
 import {
   listGitHubSubscriptionEntries,
   noActiveGitHubSubscriptionMessage,
   unsubscribeGitHubKey,
 } from '@controllers/settingsView/githubSubscriptions';
+import { onAppSignal } from '@eventBus/AppSignals';
 import {
   NotificationFailed,
   PromptFailed,
+  type ExternalOpener,
   type MessageHost,
 } from '@hosts/uiHosts';
 import { apiProviderOfSecretName } from '@model/apiProviders';
@@ -37,18 +40,11 @@ import {
   applyStateSettingUpdate,
   type SettingsSnapshotPosters,
 } from '@shared/settingsView/handlers/stateSettingWrite';
-import {
-  unsupported,
-  unsupportedCommands,
-  UnsupportedCommandError,
-} from '@shared/utils/dispatcher';
+import { unsupported, UnsupportedCommandError } from '@shared/utils/dispatcher';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { goalList } from '@tools/goal';
-import { refreshToolAvailability } from '@tools/toolAvailability';
 import {
-  GITHUB_TOKEN_CREATE_URL,
   GITHUB_TOKEN_PROMPT,
   GITHUB_TOKEN_REMOVED_MESSAGE,
   GITHUB_TOKEN_SAVED_MESSAGE,
@@ -57,8 +53,6 @@ import {
   resolveGitHubTokenSource,
 } from '@tools/github/githubAuth';
 import { ensureError } from '@utils/errors/errorMessage';
-import { subscribeDesktopAppSignal } from './desktopAppSignalSubscription.js';
-import { subscribeDesktopGoalChanges } from './desktopGoalSubscription.js';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -72,11 +66,6 @@ export interface DesktopSettingsUiHost extends Pick<
   'showInfoMessage' | 'showErrorMessage'
 > {
   openPath(filePath: string): Effect.Effect<void, Error>;
-  /**
-   * Select the run as the window's active run. `'unavailable'` covers a
-   * presentation that could not be reached at all; the reveal is then reported
-   * through {@link DesktopSettingsUiHost.onError} rather than here.
-   */
   /** Select a run in the shown paper's surface: `missing` when the view
    *  no longer holds it, `unavailable` when no paper is shown. */
   revealRun(runId: RunId): Promise<'revealed' | 'missing' | 'unavailable'>;
@@ -91,8 +80,10 @@ export interface DesktopSettingsUiHost extends Pick<
     title: string;
     prompt: string;
   }): Effect.Effect<string | undefined>;
-  openExternal(url: string): Promise<void>;
-  confirmAction(message: string, confirmLabel?: string): Promise<boolean>;
+  confirmAction(
+    message: string,
+    confirmLabel?: string,
+  ): Effect.Effect<boolean, PromptFailed>;
   onError(error: unknown): void;
 }
 
@@ -109,6 +100,9 @@ export interface DesktopSettingsIpcOptions {
    * removed.
    */
   secrets: PlatformSecrets;
+  /** The browser hand-off behind every settings URL: provider docs, tool
+   *  install pages, the GitHub token page. */
+  externalOpener: ExternalOpener;
   ui: DesktopSettingsUiHost;
   /**
    * The session of the paper this settings surface serves. Its roots supply
@@ -127,20 +121,20 @@ export interface DesktopSettingsIpc extends DesktopMessageHandler {
   refreshAuthDependentData(options?: {
     deferAgentCatalogRefresh?: boolean;
   }): Effect.Effect<void, Error, ProcessServices>;
-  signInChatGpt(): Effect.Effect<void, unknown, ProcessServices>;
-  /**
-   * Releases the goal and app-signal subscriptions. They are scoped to the
-   * window that built this IPC, not to the process: `createWindow` runs again
-   * on macOS dock reactivation, so an undisposed listener would post to a
-   * destroyed window's renderer — and, for `githubTokenInvalid`, raise a
-   * dialog against a `BrowserWindow` that no longer exists.
-   */
-  dispose(): void;
+  signInChatGpt(): Effect.Effect<void, Error, ProcessServices>;
 }
 
+/**
+ * The settings surface of one project, with its goal, app-signal and tool
+ * availability subscriptions forked into the caller's scope. They belong to
+ * the window's project binding, not to the process: `createWindow` runs again
+ * on macOS dock reactivation, so a listener that outlived its scope would
+ * post to a destroyed window's renderer — and, for `githubTokenInvalid`,
+ * raise a dialog against a `BrowserWindow` that no longer exists.
+ */
 export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
-): DesktopSettingsIpc {
+): Effect.Effect<DesktopSettingsIpc, never, Scope.Scope> {
   const { globalState, runtime } = options;
   const { roots } = options.session;
   const { workspaceState, config } = roots;
@@ -151,17 +145,7 @@ export function createDesktopSettingsIpc(
   const memoryController = new SettingsMemoryController({
     prompt: {
       confirm: (message, promptOptions) =>
-        Effect.tryPromise({
-          try: async () =>
-            options.ui.confirmAction(message, promptOptions?.confirmLabel),
-          catch: (cause) =>
-            new PromptFailed({
-              reason: 'host-unavailable',
-              member: 'confirm',
-              message: 'The desktop window would not show the confirmation.',
-              cause,
-            }),
-        }),
+        options.ui.confirmAction(message, promptOptions?.confirmLabel),
       warning: (message) =>
         options.ui.showInfoMessage(message).pipe(Effect.map(() => undefined)),
     },
@@ -203,21 +187,18 @@ export function createDesktopSettingsIpc(
    * arrive.
    */
   function postMemoryPreview(storagePath: string) {
-    return Effect.map(
-      Effect.exit(memoryController.getMemoryPreviewMessage(storagePath)),
-      (previewed) => {
-        if (Exit.isSuccess(previewed)) {
-          options.postToRenderer(previewed.value);
-          return;
-        }
-        // A disposed runtime interrupts this read; the view it would repaint
-        // is going away with it, so there is no placeholder to post.
-        if (Cause.hasInterrupts(previewed.cause)) return;
-        options.ui.onError(Cause.squash(previewed.cause));
-        options.postToRenderer(
-          memoryController.getMemoryPreviewErrorMessage(storagePath),
-        );
-      },
+    // An interrupt (a disposed runtime) passes through: the view it would
+    // repaint is going away with it, so there is no placeholder to post.
+    return memoryController.getMemoryPreviewMessage(storagePath).pipe(
+      Effect.map((preview) => options.postToRenderer(preview)),
+      Effect.catch((error) =>
+        Effect.sync(() => {
+          options.ui.onError(error);
+          options.postToRenderer(
+            memoryController.getMemoryPreviewErrorMessage(storagePath),
+          );
+        }),
+      ),
     );
   }
 
@@ -267,41 +248,10 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function postGoalList() {
-    return Effect.gen(function* () {
-      // The list is read from memory and the view repainted before this
-      // program suspends, as the synchronous `try` it replaces was.
-      const listed = yield* Effect.exit(
-        Effect.try({
-          try: () => goalList(options.session),
-          catch: (cause) => cause,
-        }),
-      );
-      if (Exit.isSuccess(listed)) {
-        options.postToRenderer({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-          items: listed.value,
-        });
-        return;
-      }
-      if (Cause.hasInterrupts(listed.cause)) return;
-      const error = Cause.squash(listed.cause);
-      options.ui.onError(error);
-      yield* options.ui.showErrorMessage(
-        formatError('Failed to load goals', error),
-      );
-    });
-  }
-
   function postInitialSettingsData() {
     return Effect.gen(function* () {
       yield* postSettingsSnapshot('git-author');
-      yield* options.toolingSettingsController.postLatexConfigValues();
-      // Forked, not yielded: `runFork` runs the goal read on this turn, so the
-      // list still repaints ahead of the snapshots below, and the dialog a
-      // failed read raises does not hold them up. Nothing waits on it, as
-      // nothing waited on the eagerly started promise it replaces.
-      runAsync(postGoalList());
+      yield* postSettingsSnapshot('latex');
       yield* postSettingsSnapshot('multi-agent');
       yield* postSettingsSnapshot('approval');
       yield* postSettingsSnapshot('skills');
@@ -323,15 +273,6 @@ export function createDesktopSettingsIpc(
     });
   }
 
-  function updateModelEnabled(input: { modelName: string; enabled: boolean }) {
-    return Effect.gen(function* () {
-      yield* modelSelectionController.setModelEnabled(input);
-      yield* postModelSelectionData();
-      // The options cache is invalidated by the writer itself.
-      yield* options.credentialSettingsController.refreshModelOptions();
-    });
-  }
-
   function refreshAuthDependentData(
     refreshOptions: { deferAgentCatalogRefresh?: boolean } = {},
   ): Effect.Effect<void, Error, ProcessServices> {
@@ -347,7 +288,7 @@ export function createDesktopSettingsIpc(
   > = {
     approval: () => postSettingsSnapshot('approval'),
     'git-author': () => postSettingsSnapshot('git-author'),
-    latex: () => options.toolingSettingsController.postLatexConfigValues(),
+    latex: () => postSettingsSnapshot('latex'),
     memory: () => postSettingsSnapshot('memory'),
     models: () => postModelSelectionData(),
     'multi-agent': () => postSettingsSnapshot('multi-agent'),
@@ -393,51 +334,47 @@ export function createDesktopSettingsIpc(
   }
 
   /**
-   * The window's own fork point for work nobody awaits: a settled cause is
-   * reported through `onError`, exactly as the rejection of the promise this
-   * replaces was.
+   * Work nobody awaits, settled: a failed cause is reported through
+   * `onError`, exactly as the rejection of the promise this replaces was.
    */
-  function runAsync<E>(
+  function settled<E>(
     work: Effect.Effect<void, E, StorageFs | ProcessServices>,
-  ): void {
-    runtime.runFork(
-      withSessionFs(roots, work).pipe(
-        Effect.catchCause(
-          (cause): Effect.Effect<void, E | NotificationFailed> => {
-            if (Cause.hasInterruptsOnly(cause)) return Effect.void;
-            const error = Cause.squash(cause);
-            return error instanceof UnsupportedCommandError
-              ? options.ui.showInfoMessage(error.reason)
-              : Effect.failCause(cause);
-          },
-        ),
-        Effect.catchCause((cause) => {
+  ): Effect.Effect<void, never, ProcessServices> {
+    return withSessionFs(roots, work).pipe(
+      Effect.catchCause(
+        (cause): Effect.Effect<void, E | NotificationFailed> => {
           if (Cause.hasInterruptsOnly(cause)) return Effect.void;
           const error = Cause.squash(cause);
-          return Effect.sync(() =>
-            options.ui.onError(
-              error instanceof NotificationFailed ? error.cause : error,
-            ),
-          );
-        }),
+          return error instanceof UnsupportedCommandError
+            ? options.ui.showInfoMessage(error.reason)
+            : Effect.failCause(cause);
+        },
       ),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause)) return Effect.void;
+        const error = Cause.squash(cause);
+        return Effect.sync(() =>
+          options.ui.onError(
+            error instanceof NotificationFailed ? error.cause : error,
+          ),
+        );
+      }),
     );
   }
 
-  // Agent runs execute in this same main process and the settings panel shares
-  // the app window with run progress, so a Goals tab left open during a run
-  // needs the push. The session outlives the window, so the subscription is
-  // window-scoped and released in `dispose` below.
-  //
-  // App signals and goal changes deliver on their own fiber of this window's
-  // runtime, not on the emitter's stack. Every refresh a signal triggers reads
-  // this paper's own session, which these posters take from `options.session`.
-  const subscriptions = [
-    subscribeDesktopGoalChanges(
-      options.session,
-      () => runAsync(postGoalList()),
-      runtime,
-    ),
+  /** The window's own fork point for a subscription's settled work. */
+  function runAsync<E>(
+    work: Effect.Effect<void, E, StorageFs | ProcessServices>,
+  ): void {
+    runtime.runFork(settled(work));
+  }
+
+  // App signals deliver on their own fiber, not on the emitter's stack; each
+  // refresh they trigger still forks through `runAsync`, so one slow refresh
+  // never holds the next event. Every refresh reads this paper's own session,
+  // which these posters take from `options.session`.
+  const subscriptions: Array<Effect.Effect<void>> = [
+    options.toolingSettingsController.followToolAvailability,
   ];
 
   // ── GitHub token + PR/repo/issue subscriptions (Git tab) ──
@@ -492,14 +429,14 @@ export function createDesktopSettingsIpc(
   // releases a PR, repo or issue subscription changes the list the Git tab is
   // showing, which the desktop used to re-read only when the user asked.
   subscriptions.push(
-    subscribeDesktopAppSignal(runtime, 'githubSubscriptionsChanged', () =>
+    onAppSignal('githubSubscriptionsChanged', () =>
       runAsync(postGitHubSubscriptions()),
     ),
     // `apply_team` writes the roster straight from the setup agent, so the
     // open view is showing agents and a team it just replaced. The signal
     // comes from whichever paper's run applied the team; the catalog is
     // rebuilt from this paper's presets, not the emitter's.
-    subscribeDesktopAppSignal(runtime, 'agentRosterChanged', () =>
+    onAppSignal('agentRosterChanged', () =>
       runAsync(options.agentSettingsController.refreshCatalogData()),
     ),
     // Outside VS Code a rejected token left the pollers failing in silence.
@@ -507,31 +444,24 @@ export function createDesktopSettingsIpc(
     // which store holds a token, and rejection leaves the secret in place, so
     // re-posting the status would repaint the same "token set" badge. Marking
     // a stored token as rejected would need a new status on the wire.
-    subscribeDesktopAppSignal(runtime, 'githubTokenInvalid', ({ message }) =>
+    onAppSignal('githubTokenInvalid', ({ message }) =>
       runAsync(
         options.ui.showErrorMessage(gitHubTokenRejectedMessage(message)),
       ),
     ),
     // The secret store announces every committed write, whoever wrote it: the
     // settings round-trip, the setup agent's `unset_api_key`, another window.
-    // A provider key repaints this window's credential surfaces; the GitHub
-    // token gates the `github_subscription` tool group, so it re-probes, and
-    // `toolAvailabilityChanged` repaints the Tools tab. Other entries (OAuth
-    // tokens, sign-in nonces) are ignored.
-    subscribeDesktopAppSignal(runtime, 'credentialChanged', ({ key }) => {
+    // A provider key repaints this window's credential surfaces. A key a tool
+    // plugin declares (the GitHub token) is re-probed by the shared bootstrap,
+    // and `toolAvailabilityChanged` repaints the Tools tab. Other entries
+    // (OAuth tokens, sign-in nonces) are ignored.
+    onAppSignal('credentialChanged', ({ key }) => {
       const provider = apiProviderOfSecretName(key);
       if (provider !== undefined) {
         runAsync(
           options.credentialSettingsController.refreshAfterProviderKeyChange(
             provider,
           ),
-        );
-      } else if (key === GITHUB_TOKEN_STORAGE_KEY) {
-        runAsync(
-          refreshToolAvailability({
-            workspaceRoot: roots.workspace,
-            config: roots.config,
-          }),
         );
       }
     }),
@@ -558,31 +488,22 @@ export function createDesktopSettingsIpc(
 
   function unsubscribeGitHub(data: { key: string }) {
     return Effect.gen(function* () {
-      yield* Effect.gen(function* () {
-        const removed = yield* unsubscribeGitHubKey(data.key);
-        const absent = noActiveGitHubSubscriptionMessage(data.key);
-        yield* removed === 0
-          ? options.ui.showInfoMessage(absent)
-          : postGitHubSubscriptions();
-      });
+      const removed = yield* unsubscribeGitHubKey(data.key);
+      yield* removed === 0
+        ? options.ui.showInfoMessage(
+            noActiveGitHubSubscriptionMessage(data.key),
+          )
+        : postGitHubSubscriptions();
     });
   }
 
   const settingsHandlers: SettingsViewInboundHandlerRegistry<
     ProcessServices | StorageFs
   > = {
-    // The settings webview announcing itself: answer with the capabilities
-    // this host's registry declares unsupported, then its opening data. The
-    // other views share the command and want neither.
+    // The settings webview announcing itself: answer with its opening data.
+    // The other views share the command and want none of it.
     webviewReady: (message) =>
-      Effect.gen(function* () {
-        if (message.view !== 'settings') return;
-        options.postToRenderer({
-          command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-          commands: unsupportedCommands(settingsHandlers),
-        });
-        yield* postInitialSettingsData();
-      }),
+      message.view === 'settings' ? postInitialSettingsData() : Effect.void,
     getMemoryData: () => postMemoryData(),
     getMemoryPreview: (message) => postMemoryPreview(message.storagePath),
     openMemoryFile,
@@ -598,26 +519,28 @@ export function createDesktopSettingsIpc(
         memoryController.setMemoryPinned(message.storagePath, false),
       ),
     ...options.credentialSettingsController.profileHandlers,
-    setModelEnabled: (message) => updateModelEnabled(message),
-    setModelReasoningLevel: (message) =>
-      Effect.andThen(
-        modelSelectionController.setReasoningLevel(message),
-        postModelSelectionData(),
-      ),
+    ...sharedSettingsCommands({
+      profileKeys: options.credentialSettingsController.profileKeyController,
+      modelSelection: modelSelectionController,
+      externalOpener: options.externalOpener,
+      toolProbes: { workspaceRoot: roots.workspace, config },
+      host: {
+        postModelSelection: postModelSelectionData,
+        refreshModelCatalog: () =>
+          options.credentialSettingsController.refreshModelOptions(),
+        reportProviderKeyFailure: (error) =>
+          options.credentialSettingsController.reportProviderKeyFailure(error),
+      },
+    }),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
     ...options.agentSettingsController.handlers,
     // Mirrors the extension's `GitHubSubscriptionHandlers`. The token store and
     // the subscription registry are host-agnostic (`@tools/github`); only the
-    // secret prompt, the browser hand-off, and the run reveal differ here.
+    // secret prompt and the run reveal differ here.
     getGitHubTokenStatus: () => postGitHubTokenStatus(),
     setGitHubToken: () => setGitHubToken(),
     removeGitHubToken: () => removeGitHubToken(),
-    openGitHubTokenUrl: () =>
-      Effect.tryPromise({
-        try: () => options.ui.openExternal(GITHUB_TOKEN_CREATE_URL),
-        catch: ensureError,
-      }),
     getPRSubscriptions: () => postGitHubSubscriptions(),
     unsubscribePR: unsubscribeGitHub,
     openPRSubscriptionStream: (message) => revealRun(message.runId),
@@ -631,35 +554,27 @@ export function createDesktopSettingsIpc(
       updateStateSetting(message.key, message.value),
     ...options.toolingSettingsController.toolHandlers,
     ...options.toolingSettingsController.latexHandlers,
-    // Inline criticism renders `\criticize{...}` annotations as editor
-    // squiggles and Problems-panel entries. Both are VS Code editor surfaces
-    // with no desktop counterpart, so this stays host-specific rather than
-    // "not yet ported".
-    getInlineCriticismEnabled: unsupported(
-      'Inline criticism needs the VS Code editor and Problems panel.',
-    ),
-    setInlineCriticismEnabled: unsupported(
-      'Inline criticism needs the VS Code editor and Problems panel.',
-    ),
-    getGoalList: () => postGoalList(),
-    revealGoalRun: (message) => revealRun(message.runId),
   };
 
-  return {
+  const settingsIpc: DesktopSettingsIpc = {
     refreshAuthDependentData,
     signInChatGpt: () => options.credentialSettingsController.signInChatGpt(),
 
-    dispose() {
-      for (const unsubscribe of subscriptions.splice(0)) unsubscribe();
-    },
-
     handleMessage(message: DesktopCommandMessage) {
       const parsed = SettingsViewInboundMessageSchema.safeParse(message);
-      if (!parsed.success) return false;
-      runAsync(
+      if (!parsed.success) return undefined;
+      return settled(
         settingsViewProgram(parsed.data, settingsHandlers).pipe(Effect.asVoid),
       );
-      return true;
     },
   };
+  return Effect.as(
+    Effect.forEach(
+      subscriptions,
+      (subscription) =>
+        Effect.forkScoped(subscription, { startImmediately: true }),
+      { discard: true },
+    ),
+    settingsIpc,
+  );
 }

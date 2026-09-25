@@ -152,7 +152,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 **Solutions**:
 
 1. **Verify API keys**:
-   - VS Code extension: open the **Dashboard → Models** tab and re-enter the key for the affected provider
+   - VS Code extension: open **Dashboard → Models → API keys** and re-enter the key for the affected provider
    - CLI: set the provider's API-key environment variable (or connect a provider subscription with `texra auth chatgpt login`)
 
 2. **Check API key validity**:
@@ -175,7 +175,7 @@ Opening VS Code from a configured terminal provides the most reliable environmen
 
 1. **OpenRouter configuration**:
    - Verify your OpenRouter API key is set correctly
-   - Check that "Use OpenRouter for all models" is enabled in the Dashboard → Providers & Models tab → OpenRouter settings
+   - Check that "Use OpenRouter for all models" is enabled in Dashboard → Models → API keys → OpenRouter row
 
 2. **Model availability**:
    - Make sure the requested model is available via OpenRouter
@@ -517,7 +517,7 @@ Key points for troubleshooting:
 1. **Access ProgressBoard**:
    - The ProgressBoard shares the TeXRA view in the Secondary Side Bar with the
      launcher: select the TeXRA icon, then switch to the Progress view
-   - If it is not visible, open it from the Command Palette: "TeXRA: Show Progress"
+   - If it is not visible, open it from the Command Palette: "TeXRA: Show Sessions"
 
 2. **Interpreting logs**: entries are color-coded by severity, and nested
    entries expand to reveal detail: green for information and successful

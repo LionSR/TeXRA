@@ -1,45 +1,55 @@
-import { Effect } from 'effect';
+import { Duration, Effect } from 'effect';
+import { HttpClient, HttpClientRequest } from 'effect/unstable/http';
 import { StatusCodes } from 'http-status-codes';
-import ky, { HTTPError } from 'ky';
 
 import { SUPABASE_CONFIG } from '@auth/config';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { errorDataToString, FETCH_TIMEOUT_MS } from './errorData';
+import { FETCH_TIMEOUT_MS } from './errorData';
 import { EdgeFunctionResponseSchema } from './types';
 
 /**
  * Fetch raw remote-agent YAML from the edge function. The edge function is
  * this file's one foreign edge, wrapped here so its readers compose instead
- * of each re-adopting the same promise.
+ * of each re-adopting the same request.
  */
 export const fetchRemoteAgentConfigYaml = (
   agentName: string,
   accessToken: string,
-): Effect.Effect<string, Error> =>
-  Effect.tryPromise({
-    try: async () => {
-      const data = await ky
-        .post(SUPABASE_CONFIG.edgeFunctionUrl, {
-          json: { agentName },
-          headers: { Authorization: `Bearer ${accessToken}` },
-          timeout: false,
-          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        })
-        .json<unknown>();
-      return EdgeFunctionResponseSchema.parse(data).config;
-    },
-    catch: (error) =>
-      error instanceof HTTPError
-        ? new Error(
-            mapRemoteAgentConfigHttpError(
-              error.response.status,
-              agentName,
-              errorDataToString(error.data) ?? 'Unknown error',
+): Effect.Effect<string, Error, HttpClient.HttpClient> =>
+  HttpClient.execute(
+    HttpClientRequest.post(SUPABASE_CONFIG.edgeFunctionUrl).pipe(
+      HttpClientRequest.bearerToken(accessToken),
+      HttpClientRequest.acceptJson,
+      HttpClientRequest.bodyJsonUnsafe({ agentName }),
+    ),
+  ).pipe(
+    Effect.flatMap((response): Effect.Effect<string, Error> =>
+      response.status >= 200 && response.status < 300
+        ? response.json.pipe(
+            Effect.flatMap((body) =>
+              Effect.try({
+                try: () => EdgeFunctionResponseSchema.parse(body).config,
+                catch: ensureError,
+              }),
             ),
           )
-        : ensureError(error),
-  });
+        : response.text.pipe(
+            Effect.flatMap((text) =>
+              Effect.fail(
+                new Error(
+                  mapRemoteAgentConfigHttpError(
+                    response.status,
+                    agentName,
+                    text || 'Unknown error',
+                  ),
+                ),
+              ),
+            ),
+          ),
+    ),
+    Effect.timeout(Duration.millis(FETCH_TIMEOUT_MS)),
+  );
 
 /** Maps edge-function HTTP status codes to user-friendly error messages. */
 function mapRemoteAgentConfigHttpError(

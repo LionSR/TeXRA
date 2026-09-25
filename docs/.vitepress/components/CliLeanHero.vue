@@ -4,7 +4,7 @@
 // `lake env lean --server` (one per Lake project, as the section explains),
 // then the same lean_* tools run against it. The tool name and the chat-TUI
 // row vocabulary (`● tool (preview)` + dim `⎿ ` output) are real
-// (packages/extension/resources/tool_use_agents/lean.yaml,
+// (packages/extension/resources/plugins/lean4/agents/lean.yaml,
 // packages/cli/src/chat/tui/panes/toolRenderers.tsx).
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.

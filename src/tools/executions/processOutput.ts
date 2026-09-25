@@ -1,15 +1,11 @@
 /**
- * Projection of a background command's transcript rows into the display lines
- * `/executions/{id}/output` serves, plus the window bounds that read applies.
+ * Projection of a background command's durable `log` rows into the display
+ * lines `/executions/{id}/output` serves, plus the window bounds that read
+ * applies.
  */
 
 // Local imports
-import {
-  LOG_LEVELS,
-  MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
-  type StreamLogEntry,
-} from '@shared/schemas';
+import { LOG_LEVELS, MESSAGE_TYPES, type SessionEvent } from '@shared/schemas';
 import {
   type BackgroundBashOutputSource,
   getBackgroundBashOutputSource,
@@ -38,17 +34,17 @@ interface ProcessOutputProjection {
 }
 
 /**
- * Flatten a background command's transcript rows into display lines.
+ * Flatten a background command's run rows into display lines.
  *
- * Tagged stdout/stderr chunks stay in append order and concatenate only while
- * their source remains compatible, so chunk-split lines are reconstructed
- * without crossing a stream switch. Untagged lifecycle and legacy rows flush
- * any pending command fragment and render standalone. Structured rows (usage,
- * context state, tool frames) carry a non-default `messageType` and are
- * dropped: this endpoint projects command output, not run bookkeeping.
+ * Only plain `log` rows count: stages, usage and every row with a typed
+ * `messageType` are run bookkeeping, not command output, and a debug-level
+ * line is a diagnostic. Tagged stdout/stderr chunks stay in commit order and
+ * concatenate only while their source remains compatible, so chunk-split
+ * lines are reconstructed without crossing a stream switch. Untagged lifecycle
+ * rows flush any pending command fragment and render standalone.
  */
 export function projectProcessOutput(
-  entries: readonly StreamLogEntry[],
+  events: readonly SessionEvent[],
 ): ProcessOutputProjection {
   const lines: string[] = [];
   let chars = 0;
@@ -71,19 +67,20 @@ export function projectProcessOutput(
     pendingSource = undefined;
   };
 
-  for (const entry of entries) {
-    if (entry.type !== STREAM_LOG_ENTRY_TYPES.LOG) continue;
-    if (entry.messageType !== MESSAGE_TYPES.DEFAULT) continue;
-    const text = entry.text;
+  for (const event of events) {
+    if (event.type !== 'log' || event.level === LOG_LEVELS.DEBUG) continue;
+    if ((event.messageType ?? MESSAGE_TYPES.DEFAULT) !== MESSAGE_TYPES.DEFAULT)
+      continue;
+    const text = event.message;
     if (!text) continue;
 
     chars += text.length;
-    const source = getBackgroundBashOutputSource(entry.data);
+    const source = getBackgroundBashOutputSource(event.data);
     if (!source) {
       flushPending();
       emitText(
         text,
-        entry.level === LOG_LEVELS.WARN || entry.level === LOG_LEVELS.ERROR,
+        event.level === LOG_LEVELS.WARN || event.level === LOG_LEVELS.ERROR,
       );
       continue;
     }

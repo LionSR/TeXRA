@@ -37,9 +37,7 @@ import type { ChildRun } from './childRun';
 
 /**
  * Register a native agent child and take its run's claim. The identity
- * derives from the canonical config's `agent`, never from `agentName`, which
- * callers resolve differently (an approved override's display name vs. its
- * registry name) and which reaches only the durable launch label.
+ * derives from the canonical config's `agent`.
  */
 export const registerChildRun = Effect.fn('registerChildRun')(function* (
   session: SessionHandle,
@@ -47,13 +45,12 @@ export const registerChildRun = Effect.fn('registerChildRun')(function* (
     readonly runId: RunId;
     /** Canonical config, already parsed by the launch site. */
     readonly config: AgentConfig;
-    readonly agentName: string;
     readonly userFollowUpSupport: UserFollowUpSupport;
     readonly parentRunId?: RunId;
   },
 ): Effect.fn.Return<void, Error> {
   const { runId, config } = input;
-  yield* registerRun(session, runId, config, input.agentName, {
+  yield* registerRun(session, runId, config, {
     identity: { kind: 'agent', agent: config.agent },
     userFollowUpSupport: input.userFollowUpSupport,
     parentRunId: input.parentRunId,
@@ -68,7 +65,7 @@ export interface DetachedChildRunLaunch<TTurn, R = never> {
    * Attach a completion error trace so a late loop failure is diagnosed. Omit
    * when the caller awaits completion in-band (no unhandled rejection).
    */
-  readonly onLoopFailed?: (error: unknown) => void;
+  readonly onLoopFailed?: (error: unknown) => Effect.Effect<void>;
 }
 
 /**
@@ -133,7 +130,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
     input.runId,
     Effect.gen(function* () {
       let childRun: ChildRun | undefined;
-      let autoCloseOnLaunchFailure = false;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           let launch: DetachedChildRunLaunch<TTurn, R>;
@@ -143,7 +139,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
           } else {
             launch = yield* input.buildLaunch();
           }
-          autoCloseOnLaunchFailure = launch.strategy.autoCloseChildRun === true;
           const {
             createChildRun: _createChildRun,
             buildLaunch: _buildLaunch,
@@ -167,7 +162,6 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
             childRun.finalize({
               outcome: RUN_OUTCOME.FAILED,
               error,
-              autoClose: autoCloseOnLaunchFailure,
             }),
           );
           if (Exit.isFailure(finalized)) {
@@ -186,9 +180,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
         const onLoopFailed = launch.onLoopFailed;
         yield* Effect.forkDetach(
           Fiber.join(completion).pipe(
-            Effect.catchCause((cause) =>
-              Effect.sync(() => onLoopFailed(Cause.squash(cause))),
-            ),
+            Effect.catchCause((cause) => onLoopFailed(Cause.squash(cause))),
           ),
         );
       }

@@ -24,9 +24,10 @@ export interface ToolCallShape {
   };
   /**
    * Absent for a standalone host invocation outside an agent run. What the run
-   * already answers for (its model, its delegation scope, its approval-denial
-   * observer, its trace, its tool policy) is read from here rather than copied
-   * onto the call.
+   * already answers for (its model, its delegation scope, its composition,
+   * its approval-denial observer, its trace, its tool policy, its scope) is read from here rather
+   * than copied onto the call. A tool that starts something the run should
+   * stop at its end registers that stop on the run's scope.
    */
   readonly run:
     | Pick<
@@ -37,7 +38,9 @@ export interface ToolCallShape {
         | 'config'
         | 'logger'
         | 'delegationAgentScope'
+        | 'composition'
         | 'onApprovalPolicyDenial'
+        | 'scope'
       >
     | undefined;
 }

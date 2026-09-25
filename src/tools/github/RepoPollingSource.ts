@@ -184,7 +184,7 @@ class RepoPollingSource extends PollingSourceBase<RepoKey, SubscriptionState> {
   protected pollOne(
     _key: RepoKey,
     state: SubscriptionState,
-  ): Effect.Effect<void, unknown, Secrets> {
+  ): Effect.Effect<void, Error, Secrets> {
     return this.pollRepo(state);
   }
 

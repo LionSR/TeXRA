@@ -10,6 +10,7 @@ import {
   formatCliSkillIssue,
   formatCliSkillList,
   readCliSkills,
+  readCliSkillsOffNotice,
 } from '../runtime/skills';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -33,7 +34,7 @@ function listSkills(
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
     const roots = services.roots;
-    const result = yield* readCliSkills(context, roots, options);
+    const result = yield* readCliSkills(context.cwd, roots, options);
     const exitCode = result.errors.some(
       (issue) =>
         issue.code === 'missing_source' ||
@@ -50,6 +51,11 @@ function listSkills(
       for (const issue of result.errors) {
         writeTextStderr(formatCliSkillIssue(issue));
       }
+      const offNotice = yield* readCliSkillsOffNotice(
+        roots,
+        '`texra config edit`',
+      );
+      if (offNotice !== undefined) writeTextStderr(offNotice);
     }
 
     // Emit the bare-array JSON / per-line NDJSON shape every other

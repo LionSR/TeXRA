@@ -1,8 +1,10 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 // Third-party imports
+import { Effect } from 'effect';
 import { useInput, useStdin, useWindowSize } from 'ink';
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -23,18 +25,17 @@ import {
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { type RunId, type WorkflowControlAction } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
+import { acceptsFollowUp } from '@shared/session/sessionView';
+import { type RunId } from '@shared/schemas';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
+  APPROVAL_FOREGROUND_MAX_ROWS,
   approvalVisibleForSelection,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
-  foregroundEscapeAction,
-  foregroundMaxRowsForKind,
+  FORM_FOREGROUND_MAX_ROWS,
   foregroundSurfaceKind,
-  triggerAppCtrlC,
-  type EscapeInterruptState,
+  type ForegroundSurfaceKind,
 } from './appInteractionPolicy';
 import { ApprovalModal } from './modals/ApprovalModal';
 import { InfoPane } from './panes/InfoPane';
@@ -72,7 +73,10 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
 } from './state/cliState';
-import { appendLocalAssistantTranscript } from './state/transcript';
+import {
+  appendLocalAssistantTranscript,
+  describeRequestError,
+} from './state/transcript';
 import {
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
@@ -80,10 +84,11 @@ import {
 import {
   currentView,
   killableRunId,
+  resumableRunId,
   sessionView,
   runLabelOf,
   runViewOf,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
   runningChildCount,
 } from './state/sessionView';
 import { useSignal } from './state/useSignal';
@@ -109,17 +114,6 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
   promoteApprovalsForRun(runId);
 }
 
-/** Labels for child executions whose label differs from the id. */
-function runLabelsOf(view: SessionView): RunLabels {
-  const labels = new Map<string, string>();
-  for (const run of view.runs.values()) {
-    if (run.parentId !== null && run.label !== run.id) {
-      labels.set(run.id, run.label);
-    }
-  }
-  return labels;
-}
-
 export interface AppProps {
   /**
    * The secret store the status bar's subscription probes read, threaded from
@@ -129,12 +123,12 @@ export interface AppProps {
   /** The session's three setting slots, for the status bar's route probe. */
   readonly stores: SettingsStores;
   /**
-   * The process runtime the input bar's history write and image paste run
-   * on, threaded from the same chat surface — this component runs no Effect.
+   * The process runtime the input bar's history write, image paste and run
+   * requests run on, threaded from the same chat surface.
    */
   readonly runtime: ProcessRuntime;
-  /** The chat's session: the approval modal's decisions land on it and the
-   *  work-plan reader renders from it, threaded from the chat surface that
+  /** The chat's session: approval decisions and run requests land on it and
+   *  the work-plan reader renders from it, threaded from the chat surface that
    *  opened it. */
   readonly session: SessionHandle;
   readonly onSubmit: (
@@ -142,18 +136,8 @@ export interface AppProps {
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
   ) => void;
-  readonly onKillRun: (runId: RunId) => void;
-  /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onWorkflowControl: (
-    runId: RunId,
-    action: WorkflowControlAction,
-  ) => void;
-  /** Whether bare Escape may stop the identified focused run. */
-  readonly canInterruptRun: (runId: RunId) => boolean;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
-  /** Stop only the focused run captured by bare Escape. */
-  readonly onInterruptRun: (runId: RunId) => void;
   readonly onStaticTranscriptChange?: () => void;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
    *  policy. Required: the App owns draft discard, never process lifecycle. */
@@ -189,7 +173,6 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
-  const subagentRunLabels = useMemo(() => runLabelsOf(view), [view]);
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
     selectedRunId: activeRunId,
@@ -206,13 +189,13 @@ export function App(props: AppProps): React.JSX.Element {
     formBusy,
     infoPaneOpen: infoPane !== undefined,
     pendingApproval: activeApprovalVisible,
-    readerKind: foregroundReader?.kind,
+    readerOpen: foregroundReader !== undefined,
   });
   const foregroundOpen = foregroundKind !== undefined;
   const childInputHidden =
     activeRun !== undefined &&
     activeRun.parentId !== null &&
-    !focusedChildAcceptsFollowUps(activeRun);
+    !acceptsFollowUp(activeRun, CLI_FOLLOW_UP_HOST);
   const unavailableDetail = activeRun?.readOnly
     ? (activeRun.statusDetail ?? activeRun.statusLabel)
     : undefined;
@@ -229,14 +212,11 @@ export function App(props: AppProps): React.JSX.Element {
   // both derive from these same three facts.
   const focusShortcutsActive =
     !appInputDisabled && !slashPaletteOpen && !reverseSearchOpen;
-  const escapeInterruptState: EscapeInterruptState = {
-    shortcutsActive: focusShortcutsActive,
-    canInterruptRun: props.canInterruptRun,
-    onInterruptRun: props.onInterruptRun,
-  };
-  const escapeInterruptStateRef = useRef(escapeInterruptState);
+  // Bare Escape's deferred chord timer reads the committed render's gate
+  // through this ref.
+  const focusShortcutsActiveRef = useRef(focusShortcutsActive);
   useLayoutEffect(() => {
-    escapeInterruptStateRef.current = escapeInterruptState;
+    focusShortcutsActiveRef.current = focusShortcutsActive;
   });
   const inputBarVisible =
     !foregroundOpen &&
@@ -268,10 +248,6 @@ export function App(props: AppProps): React.JSX.Element {
     view,
     runViewOf(view, childListTarget),
   );
-  const workflowPopupRunId =
-    foregroundReader?.kind === 'workflow' ? foregroundReader.runId : undefined;
-  const workflowPopupRoot = runViewOf(view, workflowPopupRunId);
-  const workflowPopupModel = workflowPopupRoot?.transcript.run ?? undefined;
   const workflowPopup = useSignal(workflowPopupViewSignal);
   const childListValues = sessions;
   const childListAvailable = childListValues.length > 0;
@@ -315,41 +291,120 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
+  // Kill, skip and retry; a refusal (a settled call) reads into the transcript.
+  const request = (req: RuntimeRequest): void => {
+    props.runtime.runFork(
+      Effect.catch(props.session.requests.request(req), (error) =>
+        Effect.sync(() =>
+          appendLocalAssistantTranscript(describeRequestError(error)),
+        ),
+      ),
+    );
+  };
   const focusSession = (runId: RunId): void => {
     dispatchChildListSelection({ kind: 'focusRun', runId });
-    const run = view.runs.get(runId)!;
-    if (run.group === 'interrupted' && run.resumeEligible) {
-      props.onSubmit(`/resume ${run.id}`);
+    if (resumableRunId(view.runs.get(runId))) {
+      props.onSubmit(`/resume ${runId}`);
     } else {
       focusRunAndPromoteApprovals(runId);
     }
   };
-  const approvalKind =
-    foregroundKind === 'approval' ? pending?.payload.kind : undefined;
-  const foregroundMaxRows = foregroundMaxRowsForKind({
-    approvalKind,
-    kind: foregroundKind,
-  });
   const archiveInfoPane = useCallback((lines: readonly string[]) => {
     if (infoPaneSignal.get()?.lines !== lines) return;
     closeInfoPane();
     appendLocalAssistantTranscript(lines.join('\n'));
   }, []);
-  function renderForegroundSurface(availableRows: number): React.ReactNode {
-    switch (foregroundKind) {
-      case 'form':
-        return foregroundForm?.render(() => {
-          formProgressSignal.set(undefined);
-          // Through the slot owner, which hands the slot to whichever form
-          // queued behind this one. A form that already lost the slot can
-          // still run this from an in-flight operation, and the owner ignores
-          // that close rather than unmounting whatever took its place, which
-          // would leave a host dialog's fiber with no form to answer it and
-          // its lane permit held for the session.
-          closeActiveForm(foregroundForm);
-        }, availableRows);
-      case 'infoPane':
-        return infoPane ? (
+  function renderReader(
+    reader: NonNullable<typeof foregroundReader>,
+    availableRows: number,
+  ): React.ReactNode {
+    const run = runViewOf(view, reader.runId);
+    const label = run ? runLabelOf(run) : reader.runId;
+    switch (reader.kind) {
+      case 'transcript':
+        return (
+          <TranscriptReader
+            availableRows={availableRows}
+            onClose={() => {
+              // A workflow's log is only ever opened from its popup (a
+              // workflow is never a viewport), so closing it goes back there.
+              if (isWorkflowScriptRun(view, reader.runId)) {
+                openWorkflowPopup(reader.runId);
+              } else {
+                closeForegroundReader();
+              }
+            }}
+            runId={reader.runId}
+            title={`Transcript: ${label}`}
+          />
+        );
+      case 'workflow': {
+        const model = run?.transcript.run ?? undefined;
+        if (model === undefined) return null;
+        return (
+          <WorkflowPopup
+            availableRows={availableRows}
+            model={model}
+            onClose={closeForegroundReader}
+            onFocusRun={(runId) => {
+              closeForegroundReader();
+              focusRunAndPromoteApprovals(runId);
+            }}
+            onOpenTranscript={openTranscriptReader}
+            onRequest={request}
+            onViewChange={updateWorkflowPopupView}
+            runId={reader.runId}
+            view={workflowPopup}
+          />
+        );
+      }
+      case 'workPlan':
+        return (
+          <WorkPlanReader
+            availableRows={availableRows}
+            loading={reader.loading === true}
+            onClose={closeForegroundReader}
+            runId={reader.runId}
+            session={props.session}
+            title={`Work plan: ${label}`}
+          />
+        );
+    }
+  }
+  // One row per foreground surface: its row cap and how it renders. Which
+  // surface is up is `foregroundSurfaceKind`'s precedence. A reader, like the
+  // info pane, takes every row the layout can spare.
+  const foregroundSurfaces: Record<
+    ForegroundSurfaceKind,
+    {
+      readonly maxRows: number | undefined;
+      readonly render: (availableRows: number) => React.ReactNode;
+    }
+  > = {
+    form: {
+      maxRows: FORM_FOREGROUND_MAX_ROWS,
+      render: (availableRows) =>
+        foregroundForm && (
+          // Keyed on the slot entry, so a form that takes or regains the slot
+          // mounts its own state instead of inheriting the last occupant's.
+          <Fragment key={foregroundForm.id}>
+            {foregroundForm.render(() => {
+              formProgressSignal.set(undefined);
+              // Through the slot owner, which hands the slot to whichever form
+              // queued behind this one. A form that already lost the slot can
+              // still run this from an in-flight operation, and the owner ignores
+              // that close rather than unmounting whatever took its place, which
+              // would leave a host dialog's fiber with no form to answer it and
+              // its lane permit held for the session.
+              closeActiveForm(foregroundForm);
+            }, availableRows)}
+          </Fragment>
+        ),
+    },
+    infoPane: {
+      maxRows: undefined,
+      render: (availableRows) =>
+        infoPane ? (
           <InfoPane
             availableRows={availableRows}
             colorEnabled={props.colorEnabled}
@@ -358,9 +413,12 @@ export function App(props: AppProps): React.JSX.Element {
             onOverflow={archiveInfoPane}
             title={infoPane.title}
           />
-        ) : null;
-      case 'approval':
-        return activeApprovalVisible && pending ? (
+        ) : null,
+    },
+    approval: {
+      maxRows: pending && APPROVAL_FOREGROUND_MAX_ROWS[pending.payload.kind],
+      render: (availableRows) =>
+        pending ? (
           <ApprovalModal
             runtime={props.runtime}
             session={props.session}
@@ -368,73 +426,18 @@ export function App(props: AppProps): React.JSX.Element {
             goalAutoApproveAll={goalAutoApproveAll}
             pending={pending}
           />
-        ) : null;
-      case 'transcriptReader': {
-        if (foregroundReader?.kind !== 'transcript') return null;
-        const run = runViewOf(view, foregroundReader.runId);
-        const label = run ? runLabelOf(run) : foregroundReader.runId;
-        return (
-          <TranscriptReader
-            availableRows={availableRows}
-            runLabels={subagentRunLabels}
-            onClose={() => {
-              // A workflow's log is only ever opened from its popup (a
-              // workflow is never a viewport), so closing it goes back there.
-              if (isWorkflowScriptRun(view, foregroundReader.runId)) {
-                openWorkflowPopup(foregroundReader.runId);
-              } else {
-                closeForegroundReader();
-              }
-            }}
-            runId={foregroundReader.runId}
-            title={`Transcript: ${label}`}
-          />
-        );
-      }
-      case 'workflowPopup': {
-        if (
-          foregroundReader?.kind !== 'workflow' ||
-          workflowPopupModel === undefined
-        ) {
-          return null;
-        }
-        return (
-          <WorkflowPopup
-            availableRows={availableRows}
-            model={workflowPopupModel}
-            onClose={closeForegroundReader}
-            onFocusRun={(runId) => {
-              closeForegroundReader();
-              focusRunAndPromoteApprovals(runId);
-            }}
-            onKillRun={props.onKillRun}
-            onOpenTranscript={openTranscriptReader}
-            onViewChange={updateWorkflowPopupView}
-            onWorkflowControl={props.onWorkflowControl}
-            runId={foregroundReader.runId}
-            view={workflowPopup}
-          />
-        );
-      }
-      case 'workPlanReader': {
-        if (foregroundReader?.kind !== 'workPlan') return null;
-        const run = runViewOf(view, foregroundReader.runId);
-        const label = run ? runLabelOf(run) : foregroundReader.runId;
-        return (
-          <WorkPlanReader
-            availableRows={availableRows}
-            loading={foregroundReader.loading === true}
-            onClose={closeForegroundReader}
-            runId={foregroundReader.runId}
-            session={props.session}
-            title={`Work plan: ${label}`}
-          />
-        );
-      }
-      case undefined:
-        return null;
-    }
-  }
+        ) : null,
+    },
+    reader: {
+      maxRows: undefined,
+      render: (availableRows) =>
+        foregroundReader && renderReader(foregroundReader, availableRows),
+    },
+  };
+  const foregroundSurface =
+    foregroundKind === undefined
+      ? undefined
+      : foregroundSurfaces[foregroundKind];
 
   const pendingEscapeInterrupt = useRef<
     | {
@@ -463,29 +466,20 @@ export function App(props: AppProps): React.JSX.Element {
     return true;
   };
 
-  const appOwnsEscape = (): boolean =>
-    escapeInterruptStateRef.current.shortcutsActive;
+  const appOwnsEscape = (): boolean => focusShortcutsActiveRef.current;
 
   const parentIdOf = (runId: RunId): RunId | undefined =>
     runViewOf(currentView(), runId)?.parentId ?? undefined;
+  // Bare Escape only navigates: it never stops a run (Ctrl-C does), so an
+  // extra Escape after closing a panel cannot cost the user their turn.
   const bareEscapeActive = (runId: RunId): boolean =>
-    appOwnsEscape() &&
-    (parentIdOf(runId) !== undefined ||
-      escapeInterruptStateRef.current.canInterruptRun(runId));
+    appOwnsEscape() && parentIdOf(runId) !== undefined;
 
   const handleBareEscape = (runId: RunId): boolean => {
     if (selectedRunIdSignal.get() !== runId || !bareEscapeActive(runId)) {
       return false;
     }
-    const parentId = parentIdOf(runId);
-    if (parentId !== undefined) {
-      focusRunAndPromoteApprovals(parentId);
-      return true;
-    }
-    // `bareEscapeActive` already proved `canInterruptRun(runId)` for a
-    // parentless run: `parentRun` never stores an undefined value, so
-    // once `.get()` returned undefined the `has` disjunct is false too.
-    escapeInterruptStateRef.current.onInterruptRun(runId);
+    focusRunAndPromoteApprovals(parentIdOf(runId)!);
     return true;
   };
 
@@ -569,21 +563,13 @@ export function App(props: AppProps): React.JSX.Element {
     // exitOnCtrlC: false (see runChatTui), so Ink neither auto-exits nor filters
     // Ctrl+C out of useInput. Draft discard is the App's half; everything past
     // it is the mount's SIGINT policy, wired through the required `onCtrlC`.
+    // A background draft never consumes Ctrl+C: only the focused input, the
+    // one registered with the draft registry, discards.
     if (key.ctrl && input === 'c') {
       if (formBusy) {
         formProgress?.cancel();
-      } else {
-        triggerAppCtrlC({
-          // A background draft never consumes Ctrl+C: only the composer the
-          // keyboard is on discards.
-          discardDraft: () =>
-            activeDraftRegistry.discard() ||
-            (!inputDisabled &&
-              !reverseSearchOpen &&
-              !childListFocused &&
-              (inputBarRef.current?.discardDraft() ?? false)),
-          onCtrlC: props.onCtrlC,
-        });
+      } else if (!activeDraftRegistry.discard()) {
+        props.onCtrlC();
       }
       return;
     }
@@ -623,22 +609,20 @@ export function App(props: AppProps): React.JSX.Element {
       return;
     }
 
-    // Bare Escape walks to the immediate parent before falling back to the
-    // root run's existing interruption behavior.
+    // Bare Escape walks to the immediate parent. It is deferred even where
+    // it has nowhere to go, so an `Esc 1..9` chord on the root still resolves;
+    // `handleBareEscape` re-checks for a parent when the timer fires.
     if (
       isEscapeInput(input, key) &&
       activeRunId !== undefined &&
-      bareEscapeActive(activeRunId)
+      appOwnsEscape()
     ) {
       deferOrHandleBareEscape(activeRunId);
     }
   });
 
   return (
-    <ActiveDraftScope
-      active={foregroundOpen || reverseSearchOpen}
-      registry={activeDraftRegistry}
-    >
+    <ActiveDraftScope registry={activeDraftRegistry}>
       <ConversationRegion
         colorEnabled={props.colorEnabled}
         columns={columns}
@@ -665,41 +649,33 @@ export function App(props: AppProps): React.JSX.Element {
                 !childInputHidden && unavailableDetail === undefined
               }
               commandName={props.commandName}
-              foregroundEscapeAction={foregroundEscapeAction({
-                activeFormEscapeAction: formBusy
-                  ? 'cancel'
-                  : foregroundForm?.escapeAction,
-                approvalKind,
-                foregroundKind,
-              })}
               foregroundInputActive={
                 foregroundOpen || reverseSearchOpen || slashPaletteOpen
               }
               childListFocused={childListFocused}
               childListSelectionKillable={selectedChildKillable}
               childListSelectionResumable={
-                selectedChild?.group === 'interrupted' &&
-                selectedChild.resumeEligible
+                resumableRunId(selectedChild) !== undefined
               }
               childNavigationAvailable={childListAvailable}
               runningSessions={childRunningCount}
-              runFocusAvailable={sessions.length > 0}
               transcriptAvailable={(activeRun?.transcript.rows.length ?? 0) > 0}
             />
           </>
         )}
-        renderForegroundSurface={renderForegroundSurface}
+        renderForegroundSurface={(availableRows) =>
+          foregroundSurface?.render(availableRows)
+        }
         rows={rows}
         snapshot={{
-          foregroundMaxRows,
+          foregroundMaxRows: foregroundSurface?.maxRows,
           foregroundKind,
           childListFocused,
           selectedChildValue,
-          subagentRunLabels,
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
-        onKillRun={props.onKillRun}
+        onKillRun={(runId) => request({ kind: 'run.stop', runId })}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

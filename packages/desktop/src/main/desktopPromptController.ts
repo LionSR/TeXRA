@@ -59,10 +59,15 @@ export class DesktopPromptController implements DesktopPromptIpc {
     });
   }
 
-  handleMessage(message: DesktopCommandMessage): boolean {
+  handleMessage(message: DesktopCommandMessage) {
     const parsed = DesktopSettlePromptMessageSchema.safeParse(message);
-    if (!parsed.success) return false;
-    return this.settle(parsed.data.requestId, parsed.data.value ?? undefined);
+    const { requestId, value } = parsed.success ? parsed.data : {};
+    // A settlement for no pending request (a duplicate, or one whose asker
+    // was interrupted) is not this controller's to run.
+    if (requestId == null || !this.pending.has(requestId)) return undefined;
+    return Effect.sync(() => {
+      this.settle(requestId, value ?? undefined);
+    });
   }
 
   dispose(): void {

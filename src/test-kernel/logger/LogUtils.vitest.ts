@@ -94,14 +94,25 @@ describe('logUtils', () => {
   it('redacts a long secret before truncating its rendered payload', () => {
     const entries = captureEntries();
     const password = `visible-secret-prefix-${'x'.repeat(3_000)}`;
+    // A deep stack sorts ahead of `runId`; it renders last and capped, so the
+    // bound cannot cut the field that identifies the failure.
+    const error = new Error('boom');
+    error.stack = [
+      'Error: boom',
+      ...Array.from(
+        { length: 50 },
+        (_, i) => `    at frame${i} (${'/deep'.repeat(40)}.ts:1:1)`,
+      ),
+    ].join('\n');
 
     logger.debug('test', 'long request metadata', {
-      data: { password },
+      data: { password, error, runId: 'run-7' },
     });
 
     const payload = payloadOf(entries[0]);
     expect(payload).not.toContain('visible-secret-prefix');
     expect(payload).toContain('"password": "[redacted]"');
+    expect(payload).toContain('"runId": "run-7"');
   });
 
   it.effect(

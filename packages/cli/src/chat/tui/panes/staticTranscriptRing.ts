@@ -1,20 +1,13 @@
 // The bounded static-scrollback ring behind `StaticConversationTranscript`:
-// what the retained tail contains (session header, finalized entries,
-// duplicate-row markers), what it costs in rows and bytes, and how an
-// incremental tick advances it. Everything here is plain data over the
-// transcript fold — no React, no Ink — so the component file holds only the
-// component.
+// what the retained tail contains (session header and finalized entries),
+// what it costs in rows and bytes, and how an incremental tick advances it.
+// Everything here is plain data over the transcript fold — no React, no Ink —
+// so the component file holds only the component.
 
-import { randomUUID } from 'node:crypto';
-
-import { createLog } from '@logger/logUtils';
 import type { RunPhase } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
-import { transcriptText, type TranscriptRow } from '@ui/transcript';
-import { createBoundedIdSet } from '@utils/core/boundedIdSet';
+import type { TranscriptRow } from '@ui/transcript';
 
-import { registerCliStateResetHook, type SessionMeta } from '../state/cliState';
 import {
   incrementalStaticTranscriptEntries,
   orderedStaticTranscriptEntries,
@@ -24,6 +17,7 @@ import {
   transcriptEntryLayout,
   transcriptEntryMarginBottomRows,
 } from './transcriptEntryLayout';
+import type { SessionMeta } from '../state/cliState';
 
 export type StaticTranscriptItem =
   | {
@@ -43,13 +37,10 @@ export interface StaticTranscriptState {
   readonly ownerKey: string;
   readonly items: readonly StaticTranscriptItem[];
   /** Cumulative row/byte estimates for `items`, maintained incrementally. */
-  readonly rowCount: number;
-  readonly byteCount: number;
+  readonly totals: StaticTranscriptTotals;
   readonly scan: StaticTranscriptScanCursor;
-  /** The layout width `rowCount`/`byteCount` were measured under. */
+  /** The layout width `totals` were measured under. */
   readonly layoutWidth: number | undefined;
-  /** The run labels `rowCount`/`byteCount` were measured under. */
-  readonly runLabels: RunLabels | undefined;
   /** Incremented whenever items change non-append-only (trim, header insert,
    *  hard reset, fold rebuild) so the `<Static>` identity remounts and
    *  `onRenderKeyChange` repaints the bounded tail with replace semantics. */
@@ -81,6 +72,19 @@ export const DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS: StaticTranscriptRingBudgets
 interface StaticTranscriptTotals {
   readonly rows: number;
   readonly bytes: number;
+}
+
+const EMPTY_TOTALS: StaticTranscriptTotals = Object.freeze({
+  rows: 0,
+  bytes: 0,
+});
+
+/** A retained ring tail with its totals, and whether building it dropped
+ *  anything. */
+interface RingTail {
+  readonly items: readonly StaticTranscriptItem[];
+  readonly totals: StaticTranscriptTotals;
+  readonly trimmed: boolean;
 }
 
 /** The header facts of a child run scrollback, read from the fold. */
@@ -161,7 +165,6 @@ interface StaticTranscriptItemMetrics {
 function staticTranscriptItemMetrics(
   item: StaticTranscriptItem,
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptItemMetrics {
   if (item.kind === 'header') {
     return {
@@ -180,7 +183,6 @@ function staticTranscriptItemMetrics(
   }
 
   const layout = transcriptEntryLayout(item.entry, {
-    runLabels,
     mode: 'scrollback-budget',
     previousEntry: undefined,
     width,
@@ -233,7 +235,7 @@ class StaticTranscriptTotalsAccumulator {
   private rowTotal: number;
   private byteTotal: number;
 
-  constructor(initial: StaticTranscriptTotals = { rows: 0, bytes: 0 }) {
+  constructor(initial: StaticTranscriptTotals = EMPTY_TOTALS) {
     this.rowTotal = initial.rows;
     this.byteTotal = initial.bytes;
   }
@@ -299,12 +301,11 @@ class StaticTranscriptTotalsAccumulator {
 function staticTranscriptItemsTotals(
   items: readonly StaticTranscriptItem[],
   width?: number,
-  runLabels?: RunLabels,
 ): StaticTranscriptTotals {
   const totals = new StaticTranscriptTotalsAccumulator();
   let aboveMarginBottomRows = 0;
   for (const item of items) {
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
   }
@@ -320,15 +321,10 @@ export function trimStaticTranscriptItems(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly totals: StaticTranscriptTotals;
     readonly width?: number;
   },
-): {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly totals: StaticTranscriptTotals;
-  readonly trimmed: boolean;
-} {
+): RingTail {
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   if (
     options.totals.rows <= budgets.rowHighWater &&
@@ -341,7 +337,7 @@ export function trimStaticTranscriptItems(
   const totals = new StaticTranscriptTotalsAccumulator(options.totals);
   const headerCount = nextItems[0]?.kind === 'header' ? 1 : 0;
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
   // Only the oldest non-header item is ever dropped, so the item above the
   // trim point stays the header (or nothing) for every pass.
   const aboveMarginBottomRows = itemMarginBottomRows(
@@ -382,25 +378,16 @@ function retainedStaticTranscriptTail(
   items: readonly StaticTranscriptItem[],
   options: {
     readonly budgets?: StaticTranscriptRingBudgets;
-    readonly runLabels?: RunLabels;
     readonly width?: number;
   },
-): {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly totals: StaticTranscriptTotals;
-  readonly trimmed: boolean;
-} {
+): RingTail {
   if (items.length === 0) {
-    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+    return { items, totals: EMPTY_TOTALS, trimmed: false };
   }
   const budgets = options.budgets ?? DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS;
   const headerCount = items[0]?.kind === 'header' ? 1 : 0;
   if (items.length <= headerCount) {
-    const totals = staticTranscriptItemsTotals(
-      items,
-      options.width,
-      options.runLabels,
-    );
+    const totals = staticTranscriptItemsTotals(items, options.width);
     return { items, totals, trimmed: false };
   }
 
@@ -408,7 +395,7 @@ function retainedStaticTranscriptTail(
   // a seam from the neighbour's bottom margin alone, so growing the tail never
   // triggers a second layout pass for an item that is already measured.
   const metricsOf = (item: StaticTranscriptItem): StaticTranscriptItemMetrics =>
-    staticTranscriptItemMetrics(item, options.width, options.runLabels);
+    staticTranscriptItemMetrics(item, options.width);
 
   const headerItem = headerCount > 0 ? items[0] : undefined;
   const headerMarginBottomRows = itemMarginBottomRows(headerItem);
@@ -420,7 +407,7 @@ function retainedStaticTranscriptTail(
   let start = items.length - 1;
   const newest = items[start];
   if (newest === undefined) {
-    return { items, totals: { rows: 0, bytes: 0 }, trimmed: false };
+    return { items, totals: EMPTY_TOTALS, trimmed: false };
   }
   let firstMetrics = metricsOf(newest);
   totals.insert(headerMarginBottomRows, firstMetrics, undefined);
@@ -449,7 +436,6 @@ function retainedStaticTranscriptTail(
       : items.slice(start);
   const retained = trimStaticTranscriptItems(candidateItems, {
     budgets,
-    runLabels: options.runLabels,
     totals: totals.totals,
     width: options.width,
   });
@@ -458,23 +444,6 @@ function retainedStaticTranscriptTail(
     totals: retained.totals,
     trimmed: candidateItems.length < items.length || retained.trimmed,
   };
-}
-
-/** The run-label map is a `computed()` signal that can return a fresh
- *  `Map` for unrelated child-roster churn (elapsed timers, active/inactive
- *  flips). Only a content change affects transcript layout, so compare the
- *  label projection semantically instead of by reference. */
-function runLabelsEqual(
-  left: RunLabels | undefined,
-  right: RunLabels | undefined,
-): boolean {
-  if (left === right) return true;
-  if (left === undefined || right === undefined) return false;
-  if (left.size !== right.size) return false;
-  for (const [key, value] of left) {
-    if (right.get(key) !== value) return false;
-  }
-  return true;
 }
 
 /** Rendering-relevant item equality: entries compare by reference (they are
@@ -510,34 +479,27 @@ function staticTranscriptItemsEquivalent(
 }
 
 function ensureStaticSessionHeader({
-  byteCount,
-  runLabels,
   items,
   maxRows,
   meta,
-  rowCount,
   source,
+  totals: current,
   width,
 }: {
-  readonly byteCount: number;
-  readonly runLabels?: RunLabels;
   readonly items: readonly StaticTranscriptItem[];
   readonly maxRows?: number;
   readonly meta: SessionMeta;
-  readonly rowCount: number;
   readonly source: StaticScrollbackSource;
+  readonly totals: StaticTranscriptTotals;
   readonly width?: number;
 }): {
   readonly items: readonly StaticTranscriptItem[];
-  readonly rowCount: number;
-  readonly byteCount: number;
+  readonly totals: StaticTranscriptTotals;
   readonly inserted: boolean;
 } {
-  if (items[0]?.id === SESSION_HEADER_ID) {
-    return { items, rowCount, byteCount, inserted: false };
-  }
-  if (source.waitingForChildIdentity) {
-    return { items, rowCount, byteCount, inserted: false };
+  const unchanged = { items, totals: current, inserted: false };
+  if (items[0]?.id === SESSION_HEADER_ID || source.waitingForChildIdentity) {
+    return unchanged;
   }
   const compact = maxRows !== undefined && maxRows < FULL_SESSION_HEADER_ROWS;
   const header: StaticTranscriptItem = {
@@ -548,267 +510,63 @@ function ensureStaticSessionHeader({
     meta,
   };
   const firstItem = items[0];
-  const totals = new StaticTranscriptTotalsAccumulator({
-    rows: rowCount,
-    bytes: byteCount,
-  });
+  const totals = new StaticTranscriptTotalsAccumulator(current);
   // The header goes in at the very top, so nothing sits above it.
   totals.insert(
     0,
-    staticTranscriptItemMetrics(header, width, runLabels),
+    staticTranscriptItemMetrics(header, width),
     firstItem === undefined
       ? undefined
-      : staticTranscriptItemMetrics(firstItem, width, runLabels),
+      : staticTranscriptItemMetrics(firstItem, width),
   );
   const fitsBudget = maxRows === undefined || totals.rows <= maxRows;
-  if (!fitsBudget) {
-    return { items, rowCount, byteCount, inserted: false };
-  }
+  if (!fitsBudget) return unchanged;
 
-  return {
-    items: [header, ...items],
-    rowCount: totals.rows,
-    byteCount: totals.bytes,
-    inserted: true,
-  };
+  return { items: [header, ...items], totals: totals.totals, inserted: true };
 }
 
 interface BuildStaticTranscriptItemsOptions {
   readonly source: StaticScrollbackSource;
-  readonly runLabels?: RunLabels;
   readonly meta: SessionMeta;
   readonly maxRows?: number;
   readonly width?: number;
   readonly ringBudgets?: StaticTranscriptRingBudgets;
 }
 
-interface StaticTranscriptBuildResult {
-  readonly items: readonly StaticTranscriptItem[];
-  readonly rowCount: number;
-  readonly byteCount: number;
-  readonly trimmed: boolean;
-}
-
-const log = createLog('StaticConversationTranscript');
-const DUPLICATE_ROW_LOG_CAP = 1000;
-/** Row ids already logged as duplicates, so a persistently-colliding id is
- *  logged once instead of once per rebuild. `upsertRow` (sessionFold) and
- *  the local-notice counter (`transcript.ts`) both guarantee unique ids; a
- *  collision here means one of those invariants broke upstream. This gates
- *  only the log call — the inline marker is re-derived on every pass that
- *  still finds the collision (see {@link duplicateRowWarningItems}), so a
- *  later repaint (which replaces all of `<Static>`'s printed output from
- *  the current `items`) never silently drops a marker it already showed. */
-const duplicateRowIdsLogged = createBoundedIdSet(DUPLICATE_ROW_LOG_CAP);
-// `/clear` resets `localEntrySeq` (`transcript.ts`) back to 0 without
-// terminating the TUI, so a local-notice id like `local:0:cli-local` is
-// reusable across the reset. Without this hook, a genuinely new collision
-// after `/clear` that happens to reuse an already-logged id would be
-// mistaken for the old one and suppressed.
-registerCliStateResetHook(() => duplicateRowIdsLogged.clear());
-
-/**
- * A fresh, unguessable per-process token, not a fixed string: entry ids are
- * wire content (`z.string().min(1)`, no format constraint), so a marker id
- * built only from a literal prefix and a counter is a string an upstream
- * producer could — in principle, however unlikely — happen to reproduce.
- * Nothing outside this module ever sees or influences `randomUUID()`'s
- * output, so no entry id can be engineered (accidentally or otherwise) to
- * collide with `${DUPLICATE_ROW_WARNING_NAMESPACE}:`.
- */
-const DUPLICATE_ROW_WARNING_NAMESPACE = `duplicate-row-warning:${randomUUID()}`;
-let duplicateRowWarningSeq = 0;
-
-function nextDuplicateRowWarningId(entryId: string): string {
-  return `${DUPLICATE_ROW_WARNING_NAMESPACE}:${duplicateRowWarningSeq++}:${entryId}`;
-}
-
-/** The source row id a marker's own item id represents, or `undefined` for
- *  anything that isn't one of this module's markers (namespaced above). */
-function duplicateRowWarningSourceId(itemId: string): string | undefined {
-  const prefix = `${DUPLICATE_ROW_WARNING_NAMESPACE}:`;
-  if (!itemId.startsWith(prefix)) return undefined;
-  const rest = itemId.slice(prefix.length);
-  const counterEnd = rest.indexOf(':');
-  return counterEnd === -1 ? undefined : rest.slice(counterEnd + 1);
-}
-
-interface PendingDuplicateRow {
-  readonly entry: TranscriptRow;
-  readonly markerId: string;
-}
-
-interface DuplicateRowScan {
-  /** The rows that may join the list, in arrival order, repeats dropped. */
-  readonly accepted: readonly TranscriptRow[];
-  /** One marker per colliding id this pass is the first to see. */
-  readonly pending: readonly PendingDuplicateRow[];
-}
-
-/**
- * Split `entries` into the rows a list already holding `existing` can take and
- * the duplicate-id rows that get a marker instead. Both the ids already taken
- * and the collisions already marked are read from `existing`, so a collision
- * spread across ticks (one occurrence arrives now, another arrived several
- * ticks ago and already got its marker) never grows a second marker, while a
- * marker that was later trimmed away is free to reappear — the same
- * requirement as the tail placement in {@link duplicateRowWarningItems}. A
- * repeat within one call is likewise marked once.
- *
- * A full rebuild passes an empty list: it starts from nothing but the session
- * header, which is not a row and holds no row id.
- */
-function scanDuplicateRowIds(
-  entries: readonly TranscriptRow[],
-  existing: readonly StaticTranscriptItem[],
-): DuplicateRowScan {
-  const taken = new Set(existing.map((item) => item.id));
-  const alreadyMarked = new Set(
-    existing.flatMap((item) => {
-      const sourceId = duplicateRowWarningSourceId(item.id);
-      return sourceId === undefined ? [] : [sourceId];
-    }),
-  );
-  const markedThisPass = new Set<string>();
-  const accepted: TranscriptRow[] = [];
-  const pending: PendingDuplicateRow[] = [];
-  for (const entry of entries) {
-    if (taken.has(entry.id)) {
-      if (!markedThisPass.has(entry.id) && !alreadyMarked.has(entry.id)) {
-        markedThisPass.add(entry.id);
-        pending.push({
-          entry,
-          markerId: nextDuplicateRowWarningId(entry.id),
-        });
-      }
-      continue;
-    }
-    taken.add(entry.id);
-    accepted.push(entry);
-  }
-  return { accepted, pending };
-}
-
-/**
- * Visible markers for the duplicate-id rows that were dropped, shaped like the
- * local notices `transcript.ts` synthesizes (`origin: 'local'`, host-assigned
- * id). `log.warn` alone is not enough here: while the TUI owns the terminal,
- * `initCliPlatform` installs a no-op log sink (every interactive launch sets
- * `quietLogs: true`), so logging is a best-effort record for non-interactive
- * hosts and this inline row — matching `EntryErrorBoundary`'s convention of
- * surfacing a render-time defect in the transcript itself — is what an
- * interactive user actually sees.
- *
- * Callers append these at the true tail rather than beside the historical
- * duplicate: retention trims from the front, so a marker here is the last
- * thing a long session's ring budget would ever drop, and a diagnostic
- * surfacing "now" for an old collision is at least as legible as one backdated
- * into scrollback that may already be gone. Derived on every pass that still
- * finds the collision (not gated by whether it was logged before), so a later
- * repaint — which replaces all printed output from the current `items` —
- * doesn't drop a marker it already showed.
- */
-function duplicateRowWarningItems(
-  pending: readonly PendingDuplicateRow[],
-): readonly StaticTranscriptItem[] {
-  return pending.map(({ entry, markerId }): StaticTranscriptItem => ({
-    id: markerId,
-    kind: 'entry',
-    entry: {
-      id: markerId,
-      origin: 'local',
-      timestamp: Date.now(),
-      level: 'error',
-      kind: 'error',
-      summary: transcriptText(
-        `Duplicate transcript row id (kind ${entry.kind}); dropped a repeat. This points at an upsert or local-notice bug upstream.`,
-      ),
-      details: [],
-      detailText: transcriptText(''),
-    },
-  }));
-}
-
-/**
- * Log each pending duplicate once — never more, and only for the ones whose
- * marker row is still present after ring-budget trimming. A marker trimmed
- * away in the same pass it was inserted never reached the reader, so logging
- * it here would suppress every future retry and the collision would go
- * unlogged for the rest of a long session (the bug this whole warning path
- * exists to avoid, just moved one step later). The marker itself already
- * rendered regardless of this gate — see {@link duplicateRowWarningItems}.
- */
-function logSurvivingDuplicates(
-  pending: readonly PendingDuplicateRow[],
-  survivingItems: readonly StaticTranscriptItem[],
-  context: string,
-): void {
-  if (pending.length === 0) return;
-  const survivingIds = new Set(survivingItems.map((item) => item.id));
-  for (const { entry, markerId } of pending) {
-    if (!survivingIds.has(markerId)) continue;
-    if (duplicateRowIdsLogged.has(entry.id)) continue;
-    duplicateRowIdsLogged.add(entry.id);
-    log.warn(
-      `Duplicate transcript row id ${entry.id} (kind ${entry.kind}) in ${context}; dropping the repeat. Row ids should be unique — this points at an upsert or local-notice bug upstream.`,
-    );
-  }
-}
-
 export function buildStaticTranscriptItems(
   options: BuildStaticTranscriptItemsOptions,
-): StaticTranscriptBuildResult {
+): RingTail {
   const {
     source,
-    runLabels,
     meta,
     maxRows,
     width,
     ringBudgets = DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   } = options;
   if (source.waitingForChildIdentity) {
-    return { items: [], rowCount: 0, byteCount: 0, trimmed: false };
+    return { items: [], totals: EMPTY_TOTALS, trimmed: false };
   }
   const header = ensureStaticSessionHeader({
-    byteCount: 0,
-    runLabels,
     items: [],
     maxRows,
     meta,
-    rowCount: 0,
     source,
+    totals: EMPTY_TOTALS,
     width,
   });
   const items: StaticTranscriptItem[] = [...header.items];
-  const duplicates = scanDuplicateRowIds(
-    orderedStaticTranscriptEntries(
-      source.entries ?? [],
-      source.settledRows,
-      source.status,
-    ),
-    [],
-  );
-  for (const entry of duplicates.accepted) {
+  for (const entry of orderedStaticTranscriptEntries(
+    source.entries ?? [],
+    source.settledRows,
+    source.status,
+  )) {
     items.push({ id: entry.id, kind: 'entry', entry });
   }
-  items.push(...duplicateRowWarningItems(duplicates.pending));
 
-  const retained = retainedStaticTranscriptTail(items, {
+  return retainedStaticTranscriptTail(items, {
     budgets: ringBudgets,
-    runLabels,
     width,
   });
-  logSurvivingDuplicates(
-    duplicates.pending,
-    retained.items,
-    'a static rebuild',
-  );
-  return {
-    items: retained.items,
-    rowCount: retained.totals.rows,
-    byteCount: retained.totals.bytes,
-    trimmed: retained.trimmed,
-  };
 }
 
 function scanStaticTranscriptFromStart(
@@ -826,7 +584,6 @@ function scanStaticTranscriptFromStart(
 }
 
 export function buildStaticTranscriptState({
-  runLabels,
   eraseRequest,
   maxRows,
   meta,
@@ -836,7 +593,6 @@ export function buildStaticTranscriptState({
   source,
   width,
 }: {
-  readonly runLabels?: RunLabels;
   readonly maxRows?: number;
   readonly meta: SessionMeta;
   readonly ownerKey: string;
@@ -848,7 +604,6 @@ export function buildStaticTranscriptState({
 }): StaticTranscriptState {
   const built = buildStaticTranscriptItems({
     source,
-    runLabels,
     meta,
     maxRows,
     ringBudgets,
@@ -869,11 +624,9 @@ export function buildStaticTranscriptState({
   return {
     ownerKey,
     items: built.items,
-    rowCount: built.rowCount,
-    byteCount: built.byteCount,
+    totals: built.totals,
     scan,
     layoutWidth: width,
-    runLabels,
     repaintEpoch,
     eraseRequest: eraseRequest ?? 0,
   };
@@ -882,7 +635,6 @@ export function buildStaticTranscriptState({
 export function advanceStaticTranscriptState(
   current: StaticTranscriptState,
   {
-    runLabels,
     eraseRequest = current.eraseRequest,
     maxRows,
     meta,
@@ -891,7 +643,6 @@ export function advanceStaticTranscriptState(
     source,
     width,
   }: {
-    readonly runLabels?: RunLabels;
     readonly eraseRequest?: number;
     readonly maxRows?: number;
     readonly meta: SessionMeta;
@@ -908,7 +659,6 @@ export function advanceStaticTranscriptState(
   const rebuildState = (repaintEpoch: number): StaticTranscriptState =>
     buildStaticTranscriptState({
       eraseRequest,
-      runLabels,
       maxRows,
       meta,
       ownerKey,
@@ -930,13 +680,12 @@ export function advanceStaticTranscriptState(
     // while the replace-semantics repaint cannot fire yet (the first effect
     // cascade still runs inside Ink's initial render(), before the instance
     // is available to the viewport controller), doubling the header. Only
-    // render inputs are compared: `rowCount`/`byteCount` are deterministic
+    // render inputs are compared: `totals` are deterministic
     // functions of those fields, and a stale `scan` cursor is recovered by
     // `incrementalStaticTranscriptEntries` on the next non-empty advance.
     if (
       rebuilt.ownerKey === current.ownerKey &&
       rebuilt.layoutWidth === current.layoutWidth &&
-      runLabelsEqual(rebuilt.runLabels, current.runLabels) &&
       staticTranscriptItemsEquivalent(rebuilt.items, current.items)
     ) {
       return current;
@@ -955,29 +704,23 @@ export function advanceStaticTranscriptState(
     return current;
   }
 
-  // A label-content change (a child's human label arriving after its
-  // executions row printed) rewrites rows already in scrollback, so it repaints
-  // from a known origin; a bare width change is repainted by Ink's resize path.
-  const labelsChanged = !runLabelsEqual(runLabels, current.runLabels);
-  const layoutChanged = width !== current.layoutWidth || labelsChanged;
+  // A bare width change is repainted by Ink's resize path.
+  const layoutChanged = width !== current.layoutWidth;
   let nextItems = current.items;
-  let nextRowCount = current.rowCount;
-  let nextByteCount = current.byteCount;
+  let nextTotals = current.totals;
   let nextRepaintEpoch = current.repaintEpoch;
   let changed = layoutChanged;
 
   if (layoutChanged) {
-    const recomputed = staticTranscriptItemsTotals(nextItems, width, runLabels);
+    const recomputed = staticTranscriptItemsTotals(nextItems, width);
     const trimmed = trimStaticTranscriptItems(nextItems, {
       budgets: ringBudgets,
-      runLabels,
       totals: recomputed,
       width,
     });
     nextItems = trimmed.items;
-    nextRowCount = trimmed.totals.rows;
-    nextByteCount = trimmed.totals.bytes;
-    if (trimmed.trimmed || labelsChanged) {
+    nextTotals = trimmed.totals;
+    if (trimmed.trimmed) {
       nextRepaintEpoch += 1;
     }
   }
@@ -993,66 +736,43 @@ export function advanceStaticTranscriptState(
   }
 
   const header = ensureStaticSessionHeader({
-    byteCount: nextByteCount,
-    runLabels,
     items: nextItems,
     maxRows,
     meta,
-    rowCount: nextRowCount,
     source,
+    totals: nextTotals,
     width,
   });
   if (header.inserted) {
     nextItems = header.items;
-    nextRowCount = header.rowCount;
-    nextByteCount = header.byteCount;
+    nextTotals = header.totals;
     nextRepaintEpoch += 1;
     changed = true;
   }
 
-  const totals = new StaticTranscriptTotalsAccumulator({
-    rows: nextRowCount,
-    bytes: nextByteCount,
-  });
+  const totals = new StaticTranscriptTotalsAccumulator(nextTotals);
   let aboveMarginBottomRows = itemMarginBottomRows(nextItems.at(-1));
-  const appendItem = (item: StaticTranscriptItem): void => {
-    const metrics = staticTranscriptItemMetrics(item, width, runLabels);
+  for (const entry of plan.appended) {
+    const item: StaticTranscriptItem = { id: entry.id, kind: 'entry', entry };
+    const metrics = staticTranscriptItemMetrics(item, width);
     totals.insert(aboveMarginBottomRows, metrics, undefined);
     aboveMarginBottomRows = metrics.marginBottomRows;
     nextItems = [...nextItems, item];
     changed = true;
-  };
-  const duplicates =
-    plan.appended.length > 0
-      ? scanDuplicateRowIds(plan.appended, nextItems)
-      : { accepted: [], pending: [] };
-  for (const entry of duplicates.accepted) {
-    appendItem({ id: entry.id, kind: 'entry', entry });
   }
-  for (const item of duplicateRowWarningItems(duplicates.pending)) {
-    appendItem(item);
-  }
-  nextRowCount = totals.rows;
-  nextByteCount = totals.bytes;
+  nextTotals = totals.totals;
 
   const trimmed = trimStaticTranscriptItems(nextItems, {
     budgets: ringBudgets,
-    runLabels,
-    totals: { rows: nextRowCount, bytes: nextByteCount },
+    totals: nextTotals,
     width,
   });
   if (trimmed.trimmed) {
     nextItems = trimmed.items;
-    nextRowCount = trimmed.totals.rows;
-    nextByteCount = trimmed.totals.bytes;
+    nextTotals = trimmed.totals;
     nextRepaintEpoch += 1;
     changed = true;
   }
-  logSurvivingDuplicates(
-    duplicates.pending,
-    nextItems,
-    'an incremental append',
-  );
 
   const cursor = plan.cursor;
   const cursorChanged =
@@ -1065,11 +785,9 @@ export function advanceStaticTranscriptState(
   return {
     ownerKey,
     items: nextItems,
-    rowCount: nextRowCount,
-    byteCount: nextByteCount,
+    totals: nextTotals,
     scan: cursor,
     layoutWidth: width,
-    runLabels,
     repaintEpoch: nextRepaintEpoch,
     eraseRequest,
   };

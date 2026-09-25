@@ -1,7 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import {
   afterEach,
   beforeAll,
@@ -23,7 +23,7 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
-import type { ModelOptionData, RunId } from '@shared/schemas';
+import type { ModelOptionData } from '@shared/schemas';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -34,12 +34,7 @@ import {
   FakeSecrets,
   FakeStateStore,
 } from '@test/support/FakePlatform';
-import {
-  createTestSession,
-  publishTestRunStart,
-} from '@test/support/sessionTestUtils';
-import { setupPlatform } from '@test/support/setupPlatform';
-import { startGoal } from '@tools/goal';
+import { createTestSession } from '@test/support/sessionTestUtils';
 
 import {
   commandOf,
@@ -89,9 +84,7 @@ type CapturedSettingsFixtureOverrides = Omit<
 
 let createDesktopSettingsIpc!: DesktopSettingsIpcModule['createDesktopSettingsIpc'];
 
-const liveSettingsIpcs: ReturnType<
-  DesktopSettingsIpcModule['createDesktopSettingsIpc']
->[] = [];
+const liveScopes: Scope.Closeable[] = [];
 
 function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   const {
@@ -120,39 +113,47 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   if (overrides.session === undefined) {
     onTestFinished(() => Effect.runPromise(session.dispose()));
   }
-  const settings = createDesktopSettingsIpc({
-    runtime: testRuntime(),
-    ...settingsOverrides,
-    agentSettingsController:
-      overrides.agentSettingsController ??
-      createStubDesktopAgentSettingsController(),
-    credentialSettingsController:
-      overrides.credentialSettingsController ??
-      createStubDesktopCredentialSettingsController({
-        globalState,
-        workspaceState,
-      }),
-    toolingSettingsController:
-      overrides.toolingSettingsController ??
-      createStubDesktopToolingSettingsController({
-        postLatexConfigValues: () =>
-          Effect.sync(() =>
-            postToRenderer({
-              command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
-              snapshot: 'latex',
-              values: {},
-            }),
-          ),
-      }),
-    globalState,
-    secrets,
-    ui: createStubDesktopSettingsUiHost(ui),
-    session,
-    postToRenderer,
-  });
-  // The IPC subscribes to its session's goal facts and the process app-signal
-  // bus, so a fixture left undisposed would keep reacting to later tests' emits.
-  liveSettingsIpcs.push(settings);
+  // The IPC subscribes to the process app-signal bus, so a fixture whose scope stayed open would keep reacting to later
+  // tests' emits.
+  const scope = Scope.makeUnsafe();
+  liveScopes.push(scope);
+  const settings = testRuntime().runSync(
+    createDesktopSettingsIpc({
+      runtime: testRuntime(),
+      ...settingsOverrides,
+      agentSettingsController:
+        overrides.agentSettingsController ??
+        createStubDesktopAgentSettingsController(),
+      credentialSettingsController:
+        overrides.credentialSettingsController ??
+        createStubDesktopCredentialSettingsController({
+          globalState,
+          workspaceState,
+        }),
+      toolingSettingsController:
+        overrides.toolingSettingsController ??
+        createStubDesktopToolingSettingsController(),
+      globalState,
+      secrets,
+      externalOpener: overrides.externalOpener ?? {
+        openExternal: () => Effect.void,
+      },
+      ui: createStubDesktopSettingsUiHost(ui),
+      session,
+      postToRenderer,
+    }).pipe(
+      // Runs an owned command's program the way the window's router does.
+      Effect.map((ipc) => ({
+        ...ipc,
+        handleMessage(message: Parameters<typeof ipc.handleMessage>[0]) {
+          const program = ipc.handleMessage(message);
+          if (program) testRuntime().runFork(program);
+          return program !== undefined;
+        },
+      })),
+      Scope.provide(scope),
+    ),
+  );
   return { globalState, session, settings, workspaceState };
 }
 
@@ -174,29 +175,35 @@ function findPosted(
   return posted.find((message) => commandOf(message) === command);
 }
 
+function isSnapshot(
+  message: RendererMessage,
+  snapshot: DerivedSettingsSnapshot,
+): boolean {
+  return (
+    commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT &&
+    (message as { snapshot?: unknown }).snapshot === snapshot
+  );
+}
+
 function findSnapshot(
   posted: readonly RendererMessage[],
   snapshot: DerivedSettingsSnapshot,
 ): RendererMessage | undefined {
-  return posted.find(
-    (message) =>
-      commandOf(message) === SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT &&
-      (message as { snapshot?: unknown }).snapshot === snapshot,
-  );
+  return posted.find((message) => isSnapshot(message, snapshot));
+}
+
+function latexSnapshotCount(posted: readonly RendererMessage[]): number {
+  return posted.filter((message) => isSnapshot(message, 'latex')).length;
 }
 
 function createFailureReportingFixture(workspaceState: FakeStateStore) {
   const onError = vi.fn();
   const showErrorMessage = vi.fn(() => Effect.void);
-  const postLatexConfigValues = vi.fn(() => Effect.void);
-  const { settings } = createCapturedSettingsFixture({
+  const { settings, posted } = createCapturedSettingsFixture({
     workspaceState,
-    toolingSettingsController: createStubDesktopToolingSettingsController({
-      postLatexConfigValues,
-    }),
     ui: { onError, showErrorMessage },
   });
-  return { settings, onError, showErrorMessage, postLatexConfigValues };
+  return { settings, onError, showErrorMessage, posted };
 }
 
 function flushAsyncWork(): Promise<void> {
@@ -219,7 +226,8 @@ describe('desktop settings IPC', () => {
   });
 
   afterEach(() => {
-    for (const settings of liveSettingsIpcs.splice(0)) settings.dispose();
+    for (const scope of liveScopes.splice(0))
+      testRuntime().runFork(Scope.close(scope, Exit.void));
     vi.clearAllMocks();
   });
 
@@ -249,16 +257,6 @@ describe('desktop settings IPC', () => {
       }),
     ).toBe(true);
     await flushAsyncWork();
-    // First post is the derived capability broadcast (commands this host's
-    // registry declares `unsupported(...)`); asserted structurally rather
-    // than as an exact list so it doesn't need updating every time a
-    // command's per-host support decision changes.
-    expect(posted[0]).toMatchObject({
-      command: SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS,
-      commands: expect.arrayContaining([
-        SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
-      ]),
-    });
     expect(findSnapshot(posted, 'git-author')).toEqual({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,
       snapshot: 'git-author',
@@ -469,78 +467,6 @@ describe('desktop settings IPC', () => {
       }),
   );
 
-  it('serves the goal list instead of the desktop "not available" stub (issue #7751 FS6)', async () => {
-    const { settings, posted } = createCapturedSettingsFixture();
-
-    // The desktop serves this command, so it must stay out of the derived
-    // capability broadcast (SET_UNSUPPORTED_COMMANDS).
-    settings.handleMessage({
-      command: SETTINGS_VIEW_COMMANDS.WEBVIEW_READY,
-      view: 'settings',
-    });
-    await flushAsyncWork();
-    const capabilities = posted[0] as { commands?: string[] };
-    expect(capabilities.commands).not.toContain(
-      SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-    );
-    posted.length = 0;
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.GET_GOAL_LIST,
-      }),
-    ).toBe(true);
-
-    expect(posted.at(-1)).toEqual({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-      items: [],
-    });
-  });
-
-  describe('goal-state pushes', () => {
-    setupPlatform();
-
-    it.effect('reposts the goal list when a run mutates a goal', () =>
-      Effect.gen(function* () {
-        const runId = 'd5e77190' as RunId;
-        const { posted, session } = createCapturedSettingsFixture();
-        publishTestRunStart(session, runId);
-
-        // A run mutates goals on its paper's session, as the desktop does.
-        yield* startGoal(session, runId, 'Finish the proof');
-        yield* Effect.promise(() => flushAsyncWork());
-
-        expect(posted.at(-1)).toMatchObject({
-          command: SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST,
-          items: [expect.objectContaining({ objective: 'Finish the proof' })],
-        });
-      }),
-    );
-  });
-
-  it('routes revealGoalRun to the window-owned progress bridge (issue #7751 FS6)', async () => {
-    const revealed: string[] = [];
-
-    const { settings } = createSettingsFixture({
-      ui: {
-        revealRun: async (runId) => {
-          revealed.push(runId);
-          return 'revealed';
-        },
-      },
-    });
-
-    expect(
-      settings.handleMessage({
-        command: SETTINGS_VIEW_COMMANDS.REVEAL_GOAL_RUN,
-        runId: 'a0a1b2c3',
-      }),
-    ).toBe(true);
-    await flushAsyncWork();
-
-    expect(revealed).toEqual(['a0a1b2c3']);
-  });
-
   it('shows unsupported-command reasons without reporting an error', async () => {
     const showInfoMessage = vi.fn(() => Effect.void);
     const onError = vi.fn();
@@ -606,12 +532,8 @@ describe('desktop settings IPC', () => {
     'round-trips the LaTeX formatter through workspace state and refreshes config values',
     () =>
       Effect.gen(function* () {
-        const postLatexConfigValues = vi.fn(() => Effect.void);
-        const toolingSettingsController =
-          createStubDesktopToolingSettingsController({ postLatexConfigValues });
-        const { settings, workspaceState } = createSettingsFixture({
-          toolingSettingsController,
-        });
+        const { settings, workspaceState, posted } =
+          createCapturedSettingsFixture();
 
         expect(
           settings.handleMessage({
@@ -628,7 +550,7 @@ describe('desktop settings IPC', () => {
             workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
           ),
         ).toBe('none');
-        expect(postLatexConfigValues).toHaveBeenCalledOnce();
+        expect(latexSnapshotCount(posted)).toBe(1);
 
         expect(
           settings.handleMessage({
@@ -644,7 +566,7 @@ describe('desktop settings IPC', () => {
             workspaceState.get(WorkspaceStateKey.LATEX_FORMATTER),
           ),
         ).toBeUndefined();
-        expect(postLatexConfigValues).toHaveBeenCalledTimes(2);
+        expect(latexSnapshotCount(posted)).toBe(2);
       }),
   );
 
@@ -692,12 +614,6 @@ describe('desktop settings IPC', () => {
         enabledExtras: [],
         disabledDefaults: [],
       });
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          globalState.get(GlobalStateKey.HELPER_MODEL),
-        ),
-      ).toBe(DEFAULT_HELPER_MODEL);
       expect(errors).toEqual([]);
       expect(
         posted.findLast(
@@ -743,10 +659,8 @@ describe('desktop settings IPC', () => {
     const postAgentStartupData = vi.fn(() => Effect.void);
     agentSettingsController.postStartupData = postAgentStartupData;
     const postToolingStartupData = vi.fn(() => Effect.void);
-    const postLatexConfigValues = vi.fn(() => Effect.void);
     const toolingSettingsController =
       createStubDesktopToolingSettingsController({
-        postLatexConfigValues,
         postStartupData: postToolingStartupData,
       });
     const { settings, posted } = createCapturedSettingsFixture({
@@ -765,7 +679,7 @@ describe('desktop settings IPC', () => {
     ).toBe(true);
     await flushAsyncWork();
 
-    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+    expect(latexSnapshotCount(posted)).toBe(1);
     expect(postToolingStartupData).toHaveBeenCalledOnce();
     expect(postAgentStartupData).toHaveBeenCalledOnce();
 
@@ -835,7 +749,7 @@ describe('desktop settings IPC', () => {
     vi.spyOn(workspaceState, 'update').mockReturnValueOnce(
       Effect.fail(failure),
     );
-    const { settings, onError, showErrorMessage, postLatexConfigValues } =
+    const { settings, onError, showErrorMessage, posted } =
       createFailureReportingFixture(workspaceState);
 
     expect(
@@ -849,22 +763,22 @@ describe('desktop settings IPC', () => {
 
     expect(onError).toHaveBeenCalledWith(failure);
     expect(showErrorMessage).toHaveBeenCalledWith(
-      `Failed to update "${WorkspaceStateKey.LATEX_FORMATTER}": workspace write failed`,
+      'Failed to update "LaTeX formatter": workspace write failed',
     );
-    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+    expect(latexSnapshotCount(posted)).toBe(1);
   });
 
   it('reports rejected setting values and restores the authoritative snapshot', async () => {
     const workspaceState = new FakeStateStore();
     const update = vi.spyOn(workspaceState, 'update');
-    const { settings, onError, showErrorMessage, postLatexConfigValues } =
+    const { settings, onError, showErrorMessage, posted } =
       createFailureReportingFixture(workspaceState);
 
     expect(
       settings.handleMessage({
         command: SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING,
-        key: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-        value: 1000.5,
+        key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+        value: 'bogus',
       }),
     ).toBe(true);
     await flushAsyncWork();
@@ -872,11 +786,9 @@ describe('desktop settings IPC', () => {
     expect(update).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(showErrorMessage).toHaveBeenCalledWith(
-      expect.stringContaining(
-        `Invalid value for "${WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS}":`,
-      ),
+      expect.stringContaining('Invalid value for "Math markup in diffs":'),
     );
-    expect(postLatexConfigValues).toHaveBeenCalledOnce();
+    expect(latexSnapshotCount(posted)).toBe(1);
   });
 
   it('writes the agent-skills toggle and returns the skills settings', async () => {
@@ -905,6 +817,7 @@ describe('desktop settings IPC', () => {
         [AGENT_SKILLS_CONFIG_KEY]: false,
         [WorkspaceStateKey.DISABLED_SKILLS]: [],
         [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
+        [GlobalStateKey.INSTALLED_PLUGINS]: [],
       },
     });
   });
@@ -962,7 +875,7 @@ describe('desktop settings IPC', () => {
   );
 
   it('requires UI confirmation before deleting memory', async () => {
-    const confirmAction = vi.fn(async () => false);
+    const confirmAction = vi.fn(() => Effect.succeed(false));
     const { settings, posted } = createCapturedSettingsFixture({
       ui: { confirmAction },
     });

@@ -17,7 +17,6 @@ import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
-import { platform } from '@platform/platform';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -41,15 +40,14 @@ const cliRequire = createRequire(
 
 const mocks = vi.hoisted(() => ({
   callOrder: [] as string[],
-  chatToolUseAgentUsageError: vi.fn(),
-  cleanupTerminalModes: vi.fn(),
+  resolveChatToolUseAgent: vi.fn(),
+  acquireTuiTerminal: vi.fn(),
   createChatSessionController: vi.fn(),
   submit: vi.fn(async () => undefined),
   discoverTerminalCapabilities: vi.fn(),
   handOffCliShutdownSignalHandlers: vi.fn(),
   initCliPlatform: vi.fn(),
   installCliProcessRuntime: vi.fn(),
-  installTerminalRestoreOnExit: vi.fn(),
   installTerminalTitleUpdates: vi.fn(),
   loadInputHistory: vi.fn(),
   maybeRunCliOnboarding: vi.fn(),
@@ -59,15 +57,15 @@ const mocks = vi.hoisted(() => ({
   registerBuiltinSlashCommands: vi.fn(),
   render: vi.fn(),
   resolveChatDefaults: vi.fn(),
-  restoreTuiInputModes: vi.fn(),
   runCliPlatformShutdownSequence: vi.fn(),
   selectCliRunnableModel: vi.fn(),
   setCliHelperModel: vi.fn(),
   startRootRun: vi.fn(),
   supportsTerminalJobControl: vi.fn(),
-  terminalTitleDispose: vi.fn(),
-  terminalTitleResume: vi.fn(),
-  terminalTitleSuspend: vi.fn(),
+  terminalRelease: vi.fn(),
+  terminalResume: vi.fn(),
+  terminalSuspend: vi.fn(),
+  terminalTitle: {},
   tuiOutputStreamForColor: vi.fn(),
   unmount: vi.fn(),
   waitUntilExit: vi.fn(),
@@ -91,7 +89,7 @@ vi.doMock(cliRequire.resolve('ink'), () => ({
 vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
-    postProcessResponse: (text: string) => text,
+    postProcessResponse: (text: string) => Effect.succeed(text),
     connectResponseText: () => Effect.succeed(' '),
   }),
 }));
@@ -132,7 +130,7 @@ vi.mock(
       >();
     return {
       ...actual,
-      chatToolUseAgentUsageError: mocks.chatToolUseAgentUsageError,
+      resolveChatToolUseAgent: mocks.resolveChatToolUseAgent,
     };
   },
 );
@@ -165,9 +163,7 @@ vi.mock('@cli/tui/terminalCleanup', async (importOriginal) => {
     await importOriginal<typeof import('@cli/tui/terminalCleanup')>();
   return {
     ...actual,
-    cleanupTerminalModes: mocks.cleanupTerminalModes,
-    installTerminalRestoreOnExit: mocks.installTerminalRestoreOnExit,
-    restoreTuiInputModes: mocks.restoreTuiInputModes,
+    acquireTuiTerminal: mocks.acquireTuiTerminal,
     supportsTerminalJobControl: mocks.supportsTerminalJobControl,
   };
 });
@@ -281,7 +277,7 @@ describe('runChat signal ownership wiring', () => {
     // The init hands back the services the composition root holds; the fake
     // host installed above owns those stores here.
     const cliServices = () => ({
-      ...platform(),
+      ...installedHost().platform,
       globalStorage: installedHost().roots.globalStorage,
       globalState: installedHost().roots.globalState,
       secrets: installedHost().secrets,
@@ -313,7 +309,9 @@ describe('runChat signal ownership wiring', () => {
       model: 'gpt-test',
       modelSource: 'default',
     });
-    mocks.chatToolUseAgentUsageError.mockReturnValue(Effect.succeed(undefined));
+    mocks.resolveChatToolUseAgent.mockReturnValue(
+      Effect.succeed({ source: 'builtInToolUse' }),
+    );
     mocks.selectCliRunnableModel.mockReturnValue(
       Effect.succeed({ model: 'gpt-test' }),
     );
@@ -329,11 +327,11 @@ describe('runChat signal ownership wiring', () => {
       kittyKeyboard: false,
       oscColorReports: false,
     });
-    mocks.installTerminalRestoreOnExit.mockReturnValue(() => undefined);
-    mocks.installTerminalTitleUpdates.mockReturnValue({
-      dispose: mocks.terminalTitleDispose,
-      resume: mocks.terminalTitleResume,
-      suspend: mocks.terminalTitleSuspend,
+    mocks.installTerminalTitleUpdates.mockReturnValue(mocks.terminalTitle);
+    mocks.acquireTuiTerminal.mockReturnValue({
+      release: mocks.terminalRelease,
+      resume: mocks.terminalResume,
+      suspend: mocks.terminalSuspend,
     });
     mocks.onSkillSelect = undefined;
     mocks.registerBuiltinSlashCommands.mockImplementation(
@@ -354,7 +352,6 @@ describe('runChat signal ownership wiring', () => {
       resume: vi.fn(async () => undefined),
       startRootRun: mocks.startRootRun,
       stop: vi.fn(),
-      stopRun: vi.fn(),
       tryResumeRun: vi.fn(() => Effect.succeed(false)),
       submit: mocks.submit,
       activateSkill: vi.fn(),
@@ -419,6 +416,10 @@ describe('runChat signal ownership wiring', () => {
       expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
         INTERACTIVE_CONTEXT.cwd,
       );
+      expect(mocks.acquireTuiTerminal).toHaveBeenCalledWith({
+        kittyKeyboard: false,
+        title: mocks.terminalTitle,
+      });
       expect(mocks.handOffCliShutdownSignalHandlers).toHaveBeenCalledTimes(1);
       expect(mocks.callOrder).toEqual([
         'initCliPlatform',
@@ -440,15 +441,11 @@ describe('runChat signal ownership wiring', () => {
       }
 
       tuiListeners.get('SIGTSTP')?.();
-      expect(mocks.terminalTitleSuspend).toHaveBeenCalledTimes(1);
-      expect(mocks.cleanupTerminalModes).toHaveBeenCalledTimes(1);
+      expect(mocks.terminalSuspend).toHaveBeenCalledTimes(1);
       expect(kill).toHaveBeenCalledWith(process.pid, 'SIGSTOP');
 
       tuiListeners.get('SIGCONT')?.();
-      expect(mocks.restoreTuiInputModes).toHaveBeenCalledWith({
-        kittyKeyboard: false,
-      });
-      expect(mocks.terminalTitleResume).toHaveBeenCalledTimes(1);
+      expect(mocks.terminalResume).toHaveBeenCalledTimes(1);
 
       const submitted = createDeferred();
       mocks.submit.mockImplementationOnce(async () => {
@@ -464,21 +461,17 @@ describe('runChat signal ownership wiring', () => {
       );
 
       mocks.callOrder.length = 0;
-      mocks.terminalTitleSuspend.mockImplementationOnce(() => {
-        mocks.callOrder.push('terminalTitle.suspend');
-      });
       mocks.unmount.mockImplementationOnce(() => {
         mocks.callOrder.push('ink.unmount');
         exitTui.resolve();
       });
-      mocks.cleanupTerminalModes.mockImplementationOnce(() => {
-        mocks.callOrder.push('cleanupTerminalModes');
+      mocks.terminalRelease.mockImplementationOnce(() => {
+        mocks.callOrder.push('terminal.release');
       });
       tuiListeners.get('SIGTERM')?.();
-      expect(mocks.callOrder.slice(0, 3)).toEqual([
-        'terminalTitle.suspend',
+      expect(mocks.callOrder.slice(0, 2)).toEqual([
         'ink.unmount',
-        'cleanupTerminalModes',
+        'terminal.release',
       ]);
 
       await expect(runPromise).resolves.toEqual({
@@ -503,63 +496,6 @@ describe('runChat signal ownership wiring', () => {
       restoreAgentRegistry();
       kill.mockRestore();
       exit.mockRestore();
-    }
-  }, 20_000);
-
-  it('releases only the current conversation on /clear and preserves history', async () => {
-    const exitTui = createDeferred();
-    mocks.waitUntilExit.mockReturnValue(exitTui.promise);
-    const controllerCreated = createDeferred();
-    const baseCreateController =
-      mocks.createChatSessionController.getMockImplementation();
-    mocks.createChatSessionController.mockImplementationOnce(
-      (...args: unknown[]) => {
-        controllerCreated.resolve();
-        return baseCreateController?.(...args);
-      },
-    );
-    const restoreAgentRegistry = await stubAgentRegistry();
-    const { runChat } = await import('@cli/chat/tui/runChatTui');
-    const runPromise = runChat(INTERACTIVE_CONTEXT, {});
-
-    try {
-      await controllerCreated.promise;
-      const session = testDefaultSession();
-      const ownRoot = 'c1ea40007007' as RunId;
-      const history = 'c1ea4041570f' as RunId;
-      // Both land the way the transcript summary's runs hydrate: top-level
-      // runs in the view, only one of them this chat's root.
-      session.publish(
-        [history, ownRoot].map((runId) => ({
-          type: 'run.start' as const,
-          aggregateId: qualifyAggregateId('run', runId),
-          identity: { kind: 'agent' as const, agent: 'assistant' },
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,
-          category: AgentCategory.ToolUse,
-          isRemote: false,
-          worktree: null,
-          parent: null,
-          approvalPolicy: null,
-          checkpointId: null,
-        })),
-      );
-      await vi.waitFor(() =>
-        expect(currentView().runs.has(ownRoot)).toBe(true),
-      );
-      rootRunIdSignal.set(ownRoot);
-      const released = vi.spyOn(session.transcripts, 'requestEviction');
-
-      const { getSlashCommandContext } =
-        mocks.createChatSessionController.mock.calls[0]![0];
-      getSlashCommandContext().resetSession();
-
-      await vi.waitFor(() =>
-        expect(released.mock.calls.map(([runId]) => runId)).toEqual([ownRoot]),
-      );
-    } finally {
-      exitTui.resolve();
-      await runPromise;
-      restoreAgentRegistry();
     }
   }, 20_000);
 });

@@ -14,6 +14,11 @@ export function clampModalWidth(
   return Math.max(min, width);
 }
 
+/** Content width inside a bordered ConfirmCard at `columns`. */
+export function confirmCardContentWidth(columns: number): number {
+  return clampModalWidth(columns - CONFIRM_CARD_HORIZONTAL_DECORATION);
+}
+
 /**
  * Shared "below N rows, switch to compact chrome" predicate. Each modal/form
  * still owns its own threshold constant (chrome differs per widget) and

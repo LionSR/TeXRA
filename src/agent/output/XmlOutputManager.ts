@@ -7,7 +7,9 @@ import { debugInternal, logInternal, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 import type { ConfigProvider } from '@platform/interfaces';
-import replacementEngine from '@replacement/engine';
+import replacementEngine, {
+  logReplacementDiagnostics,
+} from '@replacement/engine';
 import type { FileLocation, OutputFileInfo } from '@shared/schemas';
 import {
   OUTPUT_DOCUMENT_TAG,
@@ -283,14 +285,15 @@ export class XmlOutputManager {
         },
         catch: ensureError,
       }).pipe(
-        Effect.tap((parsed) =>
-          Effect.sync(() => {
-            if (!parsed) {
+        Effect.flatMap((parsed) =>
+          Effect.sync((): NamedDocument[] | null => {
+            if (parsed.documents === null) {
               debugInternal(
                 this.logger,
-                `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML, attempting fallback extraction...`,
+                `No ${OUTPUT_DOCUMENTS_TAG} found in parsed XML (${parsed.reason}), attempting fallback extraction...`,
               );
             }
+            return parsed.documents;
           }),
         ),
         Effect.catch((err) =>
@@ -505,11 +508,13 @@ export class XmlOutputManager {
       const originalContent = normalizeLineEndings(
         yield* fs.readFileString(fileLocation.absolutePath),
       );
-      let content = replacementEngine.applyFor(
+      const replaced = replacementEngine.applyFor(
         originalContent,
         'xml-content',
         (key) => this.config.get(key),
       );
+      yield* logReplacementDiagnostics(replaced.diagnostics);
+      let content = replaced.text;
 
       const closeTag = `</${OUTPUT_DOCUMENTS_TAG}>`;
       const openTag = `<${OUTPUT_DOCUMENTS_TAG}>`;

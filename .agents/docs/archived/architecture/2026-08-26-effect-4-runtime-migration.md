@@ -1022,12 +1022,13 @@ The present runtime repeats the same information through `Platform`,
 `BaseFlowContextInit`, and each PocketFlow service field. The target has one
 carrier at each actual lifetime:
 
-| Lifetime | Target carrier                 | Existing structures absorbed or deleted                                                                                     |
-| -------- | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Process  | Host-managed Effect runtime    | Global `platform()` lookup and per-subsystem runtime construction                                                           |
-| Session  | Session service/value          | Separate interaction, execution-registry, and follow-up carriers when they have the same owner                              |
-| Run      | `AgentRun` service             | `AgentLaunchContext` as a dependency bag, ambient `RunContext`, `AgentCore`, `BaseFlowContextInit`, and PocketFlow services |
-| Call     | Lexically scoped Effect values | Ad hoc abort controllers, disposable stores, and callback cleanup ledgers                                                   |
+| Lifetime    | Target carrier                                                         | Existing structures absorbed or deleted                                                                                     |
+| ----------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Process     | Host-managed Effect runtime                                            | Global `platform()` lookup and per-subsystem runtime construction                                                           |
+| Composition | `Compositions` entry per composition hash (2026-09-23, rulings ledger) | A plugin resource held for the whole process, and a delegated child re-resolving the plugin set its parent already fixed    |
+| Session     | Session service/value                                                  | Separate interaction, execution-registry, and follow-up carriers when they have the same owner                              |
+| Run         | `AgentRun` service                                                     | `AgentLaunchContext` as a dependency bag, ambient `RunContext`, `AgentCore`, `BaseFlowContextInit`, and PocketFlow services |
+| Call        | Lexically scoped Effect values                                         | Ad hoc abort controllers, disposable stores, and callback cleanup ledgers                                                   |
 
 `RunScope` may survive as the immutable identity value inside `AgentRun`; it
 does not also travel through several public context shapes. Agent definition,

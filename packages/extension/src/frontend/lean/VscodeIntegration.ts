@@ -38,7 +38,7 @@ import {
 } from '@tools/lean/leanServerRegistry';
 import type { LeanLanguageServicesShape } from '@tools/lean/leanLanguageServices';
 import { isStrictlyWithin } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'VscodeLeanIntegration';
 
@@ -370,7 +370,7 @@ function sendPositionRequest<T>(
     const found = yield* Effect.result(
       Effect.try({
         try: () => provider.success.findClient(leanUri),
-        catch: (cause) => cause,
+        catch: ensureError,
       }),
     );
     if (Result.isFailure(found)) {

@@ -1,4 +1,4 @@
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 
 export interface CommandKeybinding {
   key: string;
@@ -15,12 +15,12 @@ export interface CommandCatalogEntry {
   enablement?: string;
   keybinding?: CommandKeybinding;
   /**
-   * Settings panel this command opens. Single source of truth for the
-   * command → settings-tab mapping: both hosts derive their `showSettings`
+   * Settings page, or `page/section`, this command opens. Single source of
+   * truth for the command → settings-tab mapping: both hosts derive their `showSettings`
    * handler rows from {@link settingsTabByCommand} instead of hand-mirroring
    * the tab per host.
    */
-  settingsTab?: SettingsTabPanelName;
+  settingsTab?: SettingsTarget;
   /**
    * Set on entries whose VS Code extension registration goes through the
    * shared `dispatchCommandFromRegistry` handler map (see
@@ -66,17 +66,9 @@ export const commandCatalog = [
   {
     id: 'texra.cleanBuild',
     extensionRegistry: true,
-    title: 'Clean All Build Files (Workspace-wide)',
-    shortTitle: 'Clean Build Files',
+    title: 'Delete All build/ Folders in Workspace',
     category: 'TeXRA',
     icon: '$(close-all)',
-  },
-  {
-    id: 'texra.indentTeX',
-    extensionRegistry: true,
-    title: 'Indent All LaTeX Files',
-    category: 'TeXRA',
-    icon: '$(indent)',
   },
   {
     id: 'texra.cloneOverleafProject',
@@ -88,7 +80,7 @@ export const commandCatalog = [
   {
     id: 'texra.indentCurrentTeX',
     extensionRegistry: true,
-    title: 'Indent Current TeX',
+    title: 'Format Current LaTeX File',
     category: 'TeXRA',
     icon: '$(indent)',
     enablement: '!virtualWorkspace',
@@ -128,13 +120,6 @@ export const commandCatalog = [
     category: 'TeXRA',
   },
   {
-    id: 'texra.showImportOptions',
-    extensionRegistry: true,
-    title: 'Import or Create LaTeX Project',
-    category: 'TeXRA',
-    icon: '$(cloud-download)',
-  },
-  {
     id: 'texra.execute',
     extensionRegistry: true,
     title: 'Execute Agent',
@@ -144,22 +129,6 @@ export const commandCatalog = [
       mac: 'cmd+option+e',
       when: 'texra.activated',
     },
-  },
-  {
-    id: 'texra.pack',
-    extensionRegistry: true,
-    title: 'Pack Output into History Folder',
-    shortTitle: 'Pack Output',
-    category: 'TeXRA',
-    icon: '$(archive)',
-  },
-  {
-    id: 'texra.clean',
-    extensionRegistry: true,
-    title: 'Clean Agent Output Files',
-    shortTitle: 'Clean Output',
-    category: 'TeXRA',
-    icon: '$(trash)',
   },
   {
     id: 'texra.createAgentWithAI',
@@ -183,7 +152,7 @@ export const commandCatalog = [
   {
     id: 'texra.auth.signIn',
     extensionRegistry: true,
-    title: 'Sign In',
+    title: 'Sign In to TeXRA Account (Remote Agents)',
     category: 'TeXRA',
     icon: '$(sign-in)',
   },
@@ -191,13 +160,6 @@ export const commandCatalog = [
     id: 'texra.auth.chatgpt.signIn',
     extensionRegistry: true,
     title: 'Sign In with ChatGPT Subscription',
-    category: 'TeXRA',
-    icon: '$(comment-discussion)',
-  },
-  {
-    id: 'texra.auth.grok.signIn',
-    extensionRegistry: true,
-    title: 'Sign In with Grok Subscription',
     category: 'TeXRA',
     icon: '$(comment-discussion)',
   },
@@ -211,28 +173,15 @@ export const commandCatalog = [
   {
     id: 'texra.auth.viewProfile',
     extensionRegistry: true,
-    title: 'View Profile',
+    title: 'Account Settings',
     category: 'TeXRA',
     icon: '$(account)',
-  },
-  {
-    id: 'texra.openDoc',
-    extensionRegistry: true,
-    title: 'Open TeXRA Documentation',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.mainView.reset',
-    extensionRegistry: true,
-    title: 'New Session',
-    shortTitle: 'New',
-    category: 'TeXRA',
-    icon: '$(new-file)',
+    settingsTab: 'general/account',
   },
   {
     id: 'texra.showMemory',
     extensionRegistry: true,
-    title: 'Show Memory',
+    title: 'Memory Settings',
     category: 'TeXRA',
     icon: '$(database)',
     settingsTab: 'memory',
@@ -240,46 +189,47 @@ export const commandCatalog = [
   {
     id: 'texra.showModels',
     extensionRegistry: true,
-    title: 'Show Models',
+    title: 'Model Settings',
     category: 'TeXRA',
     icon: '$(hubot)',
-    settingsTab: 'models',
+    settingsTab: 'models/models',
   },
   {
     id: 'texra.showAgents',
     extensionRegistry: true,
-    title: 'Show Agents',
+    title: 'Agent Settings',
     category: 'TeXRA',
     icon: '$(symbol-method)',
-    settingsTab: 'agents',
+    settingsTab: 'agents/library',
   },
   {
     id: 'texra.showTools',
     extensionRegistry: true,
-    title: 'Show Tool Dashboard',
+    title: 'Tool Settings',
     category: 'TeXRA',
     icon: '$(tools)',
-    settingsTab: 'tools',
+    settingsTab: 'tools/tools',
   },
   {
     id: 'texra.showMultiAgent',
     extensionRegistry: true,
-    title: 'Show Multi-Agent Settings',
+    title: 'Agent Team Settings',
     category: 'TeXRA',
     icon: '$(organization)',
-    settingsTab: 'multi-agent',
+    settingsTab: 'agents/teams',
   },
   {
     id: 'texra.showGitSettings',
     extensionRegistry: true,
-    title: 'Show Git Settings',
+    title: 'Git Settings',
     category: 'TeXRA',
     icon: '$(git-branch)',
-    settingsTab: 'git',
+    settingsTab: 'general/git',
   },
   {
     id: 'texra.showMainView',
-    title: 'Show Launcher',
+    extensionRegistry: true,
+    title: 'New Task',
     category: 'TeXRA',
     icon: '$(edit)',
     keybinding: {
@@ -291,7 +241,7 @@ export const commandCatalog = [
   {
     id: 'texra.showProgressView',
     extensionRegistry: true,
-    title: 'Show Progress',
+    title: 'Show Sessions',
     category: 'TeXRA',
     icon: '$(eye)',
     keybinding: {
@@ -301,29 +251,17 @@ export const commandCatalog = [
     },
   },
   {
-    id: 'texra.toggleView',
-    extensionRegistry: true,
-    title: 'Toggle Sessions Drawer',
-    category: 'TeXRA',
-    icon: '$(split-horizontal)',
-    keybinding: {
-      key: 'ctrl+alt+t',
-      mac: 'cmd+option+t',
-      when: 'texra.activated && focusedView == texra.mainView',
-    },
-  },
-  {
     id: 'texra.openProgressViewInTab',
     extensionRegistry: true,
-    title: 'Open Progress in Editor Tab',
-    shortTitle: 'Open in Tab',
+    title: 'Open Sessions in Editor',
+    shortTitle: 'Open in Editor',
     category: 'TeXRA',
     icon: '$(multiple-windows)',
   },
   {
     id: 'texra.showDashboard',
     extensionRegistry: true,
-    title: 'Show Settings Dashboard',
+    title: 'Open Settings',
     shortTitle: 'Settings',
     category: 'TeXRA',
     icon: '$(gear)',
@@ -416,6 +354,7 @@ export const commandCatalog = [
     id: 'texra.desktop.showCommands',
     host: 'desktop',
     title: 'Show Commands',
+    shortTitle: 'Commands',
     category: 'TeXRA',
     keybinding: { key: 'ctrl+k', mac: 'cmd+k' },
   },
@@ -432,13 +371,6 @@ export const commandCatalog = [
     title: 'Toggle Side Panel',
     category: 'View',
     keybinding: { key: 'ctrl+alt+b', mac: 'cmd+option+b' },
-  },
-  {
-    id: 'texra.desktop.toggleSummaryBar',
-    host: 'desktop',
-    title: 'Toggle Summary Bar',
-    category: 'View',
-    keybinding: { key: 'ctrl+alt+s', mac: 'cmd+option+s' },
   },
   {
     id: 'texra.desktop.saveFile',
@@ -508,7 +440,7 @@ export const commandCatalogById = new Map<CommandId, CommandCatalogEntry>(
 /** Ids of the catalog entries that open the settings view on a specific tab. */
 export type SettingsTabCommandId = Extract<
   (typeof commandCatalog)[number],
-  { settingsTab: SettingsTabPanelName }
+  { settingsTab: SettingsTarget }
 >['id'];
 
 /**
@@ -519,12 +451,11 @@ export const settingsTabByCommand = Object.fromEntries(
   commandCatalog.flatMap((entry) =>
     'settingsTab' in entry ? [[entry.id, entry.settingsTab]] : [],
   ),
-) as Record<SettingsTabCommandId, SettingsTabPanelName>;
+) as Record<SettingsTabCommandId, SettingsTarget>;
 
 const commandKeybindingOrder = [
   'texra.showMainView',
   'texra.showProgressView',
-  'texra.toggleView',
   'texra.execute',
 ] as const satisfies readonly CommandId[];
 

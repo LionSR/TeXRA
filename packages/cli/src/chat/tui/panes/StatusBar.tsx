@@ -1,34 +1,25 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Cause, Effect, Exit } from 'effect';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { resolveCliModelAccessRoute } from '@cli/runtime/modelAccessRoute';
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { usePollingInterval } from '@cli/tui/usePollingInterval';
 import { SubscriptionUsageService } from '@controllers/modelAccess/subscriptionUsage/SubscriptionUsageService';
-import { activeSubscriptionUsageRoute } from '@model/codingPlanSubscriptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  isEmptyUsage,
-  type SubscriptionUsageProvider,
-  type SubscriptionUsageSnapshot,
-  type UsageRoute,
-} from '@shared/schemas';
-import { descendantRuns } from '@shared/session/sessionView';
+import { isEmptyUsage } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { terminalCapabilities } from '../state/terminalCapabilities';
 import {
   codexPreferenceVersion as codexPreferenceVersionSignal,
   transientNotice as transientNoticeSignal,
   selectedRunId as selectedRunIdSignal,
-  claimedRunId as claimedRunIdSignal,
-  rootRunPending as rootRunPendingSignal,
-  rootRunId as rootRunIdSignal,
+  rootRunIds as rootRunIdsSignal,
   sessionMeta as sessionMetaSignal,
 } from '../state/cliState';
 import {
@@ -40,8 +31,9 @@ import {
 import {
   chatTuiCanStopActiveRun,
   chatTuiCanStopVisibleRun,
+  runStopFacts as runStopFactsSignal,
 } from '../state/sessionRunState';
-import { attentionRequests } from '../state/approvalQueue';
+import { attentionRequests as attentionRequestsSignal } from '../state/approvalQueue';
 import { useSignal } from '../state/useSignal';
 import {
   approvalQueueStatusKind,
@@ -70,10 +62,52 @@ interface StatusBarProps {
   readonly runningSessions?: number;
   readonly childNavigationAvailable: boolean;
   readonly commandName?: string;
-  readonly foregroundEscapeAction?: string;
   readonly foregroundInputActive?: boolean;
-  readonly runFocusAvailable: boolean;
   readonly transcriptAvailable?: boolean;
+}
+
+/**
+ * Poll `read` every `intervalMs` on the shared poll registry, and at once when
+ * `key` changes. One rule governs staleness: a key already in flight is not
+ * re-read, and only the latest request settles, so a superseded read never
+ * overwrites a newer one. The settled exit is returned only while its key is
+ * still current; an undefined key reads nothing.
+ */
+function usePolledRead<K extends string, A, E>(
+  runtime: ProcessRuntime,
+  key: K | undefined,
+  read: (key: K) => Effect.Effect<A, E, ProcessServices>,
+  intervalMs: number,
+): Exit.Exit<A, E> | undefined {
+  const [settled, setSettled] = useState<{
+    readonly key: K;
+    readonly exit: Exit.Exit<A, E>;
+  }>();
+  const requestRef = useRef<{ generation: number; inFlightKey?: K }>({
+    generation: 0,
+  });
+  usePollingInterval(
+    () => {
+      const request = requestRef.current;
+      if (key !== undefined && request.inFlightKey === key) return;
+      const generation = ++request.generation;
+      request.inFlightKey = key;
+      if (key === undefined) {
+        setSettled(undefined);
+        return;
+      }
+      runtime.runFork(read(key)).addObserver((exit) => {
+        if (request.generation !== generation) return;
+        request.inFlightKey = undefined;
+        setSettled({ key, exit });
+      });
+    },
+    intervalMs,
+    key,
+  );
+  return settled !== undefined && settled.key === key
+    ? settled.exit
+    : undefined;
 }
 
 export function StatusBar(props: StatusBarProps): React.JSX.Element {
@@ -88,26 +122,15 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   const { write: writeStderr } = useStderr();
   const activeRunId = useSignal(selectedRunIdSignal);
   const view = useSignal(sessionView());
-  const rootRunId = useSignal(rootRunIdSignal);
   const sessionMeta = useSignal(sessionMetaSignal);
   const transientNotice = useSignal(transientNoticeSignal);
-  const caps = useSignal(terminalCapabilities);
   const { columns } = useWindowSize();
-  // The Ctrl-C stop/exit hint derives from published run-state signals, never
-  // from impure session closures: memoized renders cache a closure's result
-  // on the closure's identity, which froze the hint at its boot-time value
-  // for the whole run (#8273).
-  const rootRunPending = useSignal(rootRunPendingSignal);
-  const claimedRunId = useSignal(claimedRunIdSignal);
-  const runStopFacts = {
-    runPending: rootRunPending,
-    runId: claimedRunId,
-    status: runPhaseOf(runViewOf(view, claimedRunId)),
-  };
-  const ownedRunIds = useMemo(
-    () => descendantRuns(view, rootRunId, { includeRoot: true }),
-    [view, rootRunId],
-  );
+  // The Ctrl-C stop/exit hint derives from the run-claim signal, never from
+  // impure session closures: memoized renders cache a closure's result on the
+  // closure's identity, which froze the hint at its boot-time value for the
+  // whole run (#8273).
+  const runStopFacts = useSignal(runStopFactsSignal);
+  const ownedRunIds = useSignal(rootRunIdsSignal);
   const target = statusBarRunTarget({
     activeRunId,
     canStopActiveRun: chatTuiCanStopVisibleRun(runStopFacts),
@@ -134,143 +157,61 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
   // next request. The completed usage snapshot supersedes this prospective
   // value in the display. Polling re-reads external config changes; an
   // in-process access change also bumps `codexPreferenceVersion` for an
-  // immediate refresh.
+  // immediate refresh. A probe failure is reported once per read key until
+  // that key probes successfully.
   const codexPreferenceVersion = useSignal(codexPreferenceVersionSignal);
-  const [subscriptionResolution, setSubscriptionResolution] = useState<{
-    readonly model: string;
-    readonly preferenceVersion: number;
-    readonly route?: UsageRoute;
-    readonly failed?: true;
-  }>();
-  const resolutionCurrent =
-    subscriptionResolution?.model === accessModel &&
-    subscriptionResolution.preferenceVersion === codexPreferenceVersion;
-  const prospectiveRoute = resolutionCurrent
-    ? subscriptionResolution?.route
-    : undefined;
-  const subscriptionProbeFailed =
-    resolutionCurrent &&
-    subscriptionResolution?.failed === true &&
-    displayUsage?.usageRoute === undefined;
-  const modelAccess = resolveCliModelAccessRoute({
-    usageRoute: displayUsage?.usageRoute,
-    prospectiveRoute,
-  });
-
-  // Both periodic reads run on the shared poll registry (`usePollingInterval`)
-  // so cadence and cleanup live in one place; the `resetKey` re-fires
-  // immediately when the read's inputs change, matching the old effect deps.
-  // Scope the in-flight guard by read key so a pending lookup for the old
-  // model/preference cannot suppress the reset-triggered re-fire. Completions
-  // also check the latest desired key and request generation so a superseded
-  // promise cannot overwrite a newer resolution, including when a key is reused.
-  // Failure reports stay latched per key until that key probes successfully.
-  const subscriptionInFlightKeyRef = useRef<string | null>(null);
-  const subscriptionRequestGenerationRef = useRef(0);
-  const reportedSubscriptionProbeFailureKeysRef = useRef(new Set<string>());
-  const subscriptionReadKey = `${accessModel}:${codexPreferenceVersion}`;
-  const subscriptionDesiredKeyRef = useRef(subscriptionReadKey);
-  useLayoutEffect(() => {
-    if (subscriptionDesiredKeyRef.current !== subscriptionReadKey) {
-      subscriptionDesiredKeyRef.current = subscriptionReadKey;
-      subscriptionRequestGenerationRef.current += 1;
-    }
-  }, [subscriptionReadKey]);
-  usePollingInterval(
-    () => {
-      const readKey = subscriptionReadKey;
-      if (subscriptionInFlightKeyRef.current === readKey) return;
-      subscriptionInFlightKeyRef.current = readKey;
-      const requestGeneration = ++subscriptionRequestGenerationRef.current;
-      void props.runtime
-        .runPromise(
-          activeSubscriptionUsageRoute(
-            { ...props.stores, secrets: props.secrets },
-            accessModel,
-          ),
-        )
-        .then((route) => {
-          if (
-            subscriptionDesiredKeyRef.current !== readKey ||
-            subscriptionRequestGenerationRef.current !== requestGeneration
-          ) {
-            return;
-          }
-          reportedSubscriptionProbeFailureKeysRef.current.delete(readKey);
-          setSubscriptionResolution({
-            model: accessModel,
-            preferenceVersion: codexPreferenceVersion,
-            route,
-          });
-        })
-        .catch((error: unknown) => {
-          if (
-            subscriptionDesiredKeyRef.current !== readKey ||
-            subscriptionRequestGenerationRef.current !== requestGeneration
-          ) {
-            return;
-          }
-          if (!reportedSubscriptionProbeFailureKeysRef.current.has(readKey)) {
-            reportedSubscriptionProbeFailureKeysRef.current.add(readKey);
-            writeStderr(
-              `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(error)}\n`,
-            );
-          }
-          setSubscriptionResolution({
-            model: accessModel,
-            preferenceVersion: codexPreferenceVersion,
-            failed: true,
-          });
-        })
-        .finally(() => {
-          if (subscriptionRequestGenerationRef.current === requestGeneration) {
-            subscriptionInFlightKeyRef.current = null;
-          }
-        });
-    },
+  const reportedProbeFailureKeysRef = useRef(new Set<string>());
+  const routeReadKey = `${accessModel}:${codexPreferenceVersion}`;
+  const routeRead = usePolledRead(
+    props.runtime,
+    routeReadKey,
+    () =>
+      readProspectiveUsageRoute(
+        { ...props.stores, secrets: props.secrets },
+        accessModel,
+      ),
     CODEX_SUBSCRIPTION_REFRESH_MS,
-    subscriptionReadKey,
   );
+  // Only a read of the current key settles here, so a probe that a newer key
+  // overtook neither reports nor latches its failure.
+  useEffect(() => {
+    if (routeRead === undefined) return;
+    const reported = reportedProbeFailureKeysRef.current;
+    if (Exit.isSuccess(routeRead)) {
+      reported.delete(routeReadKey);
+      return;
+    }
+    if (reported.has(routeReadKey)) return;
+    reported.add(routeReadKey);
+    writeStderr(
+      `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(Cause.squash(routeRead.cause))}\n`,
+    );
+  }, [routeRead, routeReadKey, accessModel, writeStderr]);
+  const prospectiveRoute =
+    routeRead !== undefined && Exit.isSuccess(routeRead)
+      ? routeRead.value
+      : undefined;
+  const subscriptionProbeFailed =
+    routeRead !== undefined &&
+    Exit.isFailure(routeRead) &&
+    displayUsage?.usageRoute === undefined;
+  const modelAccess = displayUsage?.usageRoute ?? prospectiveRoute;
 
+  // `getUsage` always succeeds with a snapshot (see its class doc): an
+  // `unavailable` snapshot is the designed carrier of a transport failure.
   const subscriptionUsageProvider = subscriptionUsageProviderForStatus({
     usageRoute: displayUsage?.usageRoute,
     prospectiveRoute,
   });
-  const [subscriptionQuotaRead, setSubscriptionQuotaRead] = useState<{
-    readonly provider: SubscriptionUsageProvider;
-    readonly snapshot: SubscriptionUsageSnapshot;
-  }>();
-  const desiredUsageProviderRef = useRef(subscriptionUsageProvider);
-  desiredUsageProviderRef.current = subscriptionUsageProvider;
-  usePollingInterval(
-    () => {
-      if (subscriptionUsageProvider === undefined) {
-        setSubscriptionQuotaRead(undefined);
-        return;
-      }
-      const provider = subscriptionUsageProvider;
-      // `getUsage` is a program that always succeeds with a snapshot (see its
-      // class doc), and an `unavailable` snapshot is the designed carrier of a
-      // transport failure — so there is no rejection arm to write here. It
-      // settles on the runtime this view was opened with, like the route probe
-      // above.
-      void props.runtime
-        .runPromise(subscriptionUsage.getUsage(provider))
-        .then((snapshot) => {
-          if (desiredUsageProviderRef.current !== provider) return;
-          setSubscriptionQuotaRead({
-            provider,
-            snapshot,
-          });
-        });
-    },
-    SUBSCRIPTION_QUOTA_REFRESH_MS,
+  const quotaRead = usePolledRead(
+    props.runtime,
     subscriptionUsageProvider,
+    (provider) => subscriptionUsage.getUsage(provider),
+    SUBSCRIPTION_QUOTA_REFRESH_MS,
   );
   const subscriptionQuota =
-    subscriptionQuotaRead !== undefined &&
-    subscriptionQuotaRead.provider === subscriptionUsageProvider
-      ? subscriptionQuotaRead.snapshot
+    quotaRead !== undefined && Exit.isSuccess(quotaRead)
+      ? quotaRead.value
       : undefined;
 
   const runStartedAt =
@@ -279,10 +220,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       : undefined;
   const now = useLiveNowMsSince([runStartedAt]);
 
-  const subagentCount = displayRun?.rollup.total ?? 0;
   // Every request awaiting the user: the fold's pending approvals, the
   // same list the modal and the title read.
-  const attention = attentionRequests(view);
+  const attention = useSignal(attentionRequestsSignal);
 
   // Nested-session location: the nearest ancestor's open phase or loop
   // position, then the focused stream's label.
@@ -296,30 +236,14 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       ? undefined
       : ancestorPositionLabel(view, focusedRunId);
 
-  const display = buildStatusBarDisplay({
-    status: displayStatus,
-    statusLabel: displayRun?.statusLabel,
+  const display = buildStatusBarDisplay(displayRun, view, {
     turn: {
       elapsedMs: runStartedAt !== undefined ? now - runStartedAt : undefined,
       runningFrame:
         runStartedAt !== undefined ? loadingFrameAt(now) : undefined,
-      thinkingActive: displayRun?.thinkingActive ?? false,
-      compactingActive: displayRun?.compactingActive ?? false,
     },
     transientNotice,
     commandName: props.commandName,
-    bypass:
-      displayRunId === undefined
-        ? undefined
-        : view.policy.get(displayRunId)?.bypasses,
-    queuedFollowUpMessages: (displayRunId === undefined
-      ? []
-      : (view.queuedFollowUps.get(displayRunId) ?? [])
-    ).map((followUp) => followUp.text),
-    usage: displayUsage,
-    contextState: displayRun?.context ?? undefined,
-    flow: displayRun?.flow ?? undefined,
-    subagents: subagentCount,
     runningSessions: props.runningSessions ?? 0,
     approvalDepth: attention.length,
     approvalKind: approvalQueueStatusKind(
@@ -331,14 +255,12 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
     approvalPolicy: sessionMeta.approvalPolicy,
     width: columns,
     ctrlCAction: target.ctrlCAction,
-    isChildRun: target.isChildRun,
     location:
       focusedLabel === undefined
         ? undefined
         : { context: focusedRoundHeading, label: focusedLabel },
     foreground: {
       inputActive: props.foregroundInputActive,
-      escapeAction: props.foregroundEscapeAction,
     },
     childList: {
       focused: props.childListFocused,
@@ -346,12 +268,9 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       selectionResumable: props.childListSelectionResumable,
     },
     shortcuts: {
-      agentSelectionAvailable: !rootRunPending,
       chatInputAvailable: props.chatInputAvailable,
       childNavigationAvailable: props.childNavigationAvailable,
       parentNavigationAvailable: runViewOf(view, activeRunId)?.parentId != null,
-      runFocusAvailable: props.runFocusAvailable,
-      shiftEnterNewline: caps.kittyKeyboard,
       transcriptAvailable: props.transcriptAvailable,
     },
   });

@@ -6,9 +6,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import { createPdfPane } from '@desktop/renderer/pdfPane.js';
 import { subagentsPaneTemplate } from '@desktop/renderer/subagentsPane.js';
 import {
-  conversationDockTemplate,
-  projectChipTemplate,
   shellSidebarTemplate,
+  subagentsButtonTemplate,
   workbenchTabsTemplate,
   type RailProject,
 } from '@desktop/renderer/desktopShell.js';
@@ -123,7 +122,7 @@ function project(
   selected: RunId | null = null,
 ): RailProject {
   const surface: Surface = { ...emptySurface(displayRecord.key), selected };
-  return { display: displayRecord, view, surface };
+  return { display: displayRecord, view, surface, unseen: new Set() };
 }
 
 const LP = display('LP', 'LDT-Lean-Paper', 'Lean formalization · with JZF');
@@ -140,41 +139,30 @@ const shellOf = (
 const noop = () => {};
 const sidebarCallbacks = {
   onNewTask: noop,
-  onSearch: noop,
-  onToggleFiles: noop,
+  onOpenCommands: noop,
   onOpenFolder: noop,
   onSelectProject: noop,
-  onCloseProject: noop,
+  onProjectAction: noop,
   onToggleProjectCollapsed: noop,
-  onOpenTerminal: noop,
-  onOpenBrowser: noop,
   onOpenSettings: noop,
-  onOpenLogs: noop,
-  onOpenSubagents: noop,
 };
 const workbenchCallbacks = {
+  onOpenKind: noop,
   onActivate: noop,
   onClose: noop,
   onHide: noop,
   onMove: noop,
 };
-const filesPlaceholder = document.createElement('div');
 
 // ── real chrome over the fixtures ─────────────────────────────────────────
 
-const rail = (
-  projects: readonly RailProject[],
-  shell: Shell,
-  options: { subagentsOpen?: boolean } = {},
-) =>
+const rail = (projects: readonly RailProject[], shell: Shell) =>
   shellSidebarTemplate(
     {
-      files: filesPlaceholder,
-      filesExpanded: false,
       projects,
       shell,
-      subagentsOpen: options.subagentsOpen ?? false,
       commandsLabel: 'Commands',
+      commandsTitle: 'Commands - ⌘K',
     },
     sidebarCallbacks,
   );
@@ -204,9 +192,7 @@ const conversationPane = (
         >${iconBtn('chevron-left', 'Hide sidebar')}</span
       >
       ${
-        options.chip === false
-          ? nothing
-          : projectChipTemplate(projects, active, noop)
+        options.chip === false ? nothing : subagentsButtonTemplate(active, noop)
       }
       <span class="shell-header-spacer"></span>
       ${iconBtn('circle-stop', 'Stop')}${iconBtn('window-maximize', 'Layout')}${iconBtn('ellipsis', 'More')}
@@ -223,7 +209,6 @@ const conversationPane = (
                   .run=${run ?? null}
                   .surface=${active.surface}
                 ></session-composer>
-                ${conversationDockTemplate()}
               </div>`
         }
       </section>
@@ -385,7 +370,7 @@ function sceneDesktopSubagents(): TemplateResult {
   ];
   return desktopFrame(
     '288px minmax(0,1fr) 400px',
-    rail(projects, shellOf('LP', ['LP', 'CT', 'TN']), { subagentsOpen: true }),
+    rail(projects, shellOf('LP', ['LP', 'CT', 'TN'])),
     conversationPane(
       projects,
       lp,

@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -13,20 +13,21 @@ import {
   getVisibleAgent,
   getVisibleAgents,
   invalidateRemoteAgentsAfterSignOut,
-  isRemoteAgent,
   loadAgents,
   refresh,
 } from '@agent/index/agentRegistry';
+import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
-import * as logger from '@logger/logUtils';
+import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
+import { setLogSink } from '@logger/logSink';
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
-import { AgentCategory } from '@shared/schemas';
+import type { AgentCatalogServices } from '@platform/processRuntime';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -36,6 +37,7 @@ import {
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import { captureLogEntries } from '@test/support/logSinkCapture';
 import type * as vscode from 'vscode';
 
 /**
@@ -44,17 +46,14 @@ import type * as vscode from 'vscode';
  * reads the view the readers name in their requirements.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-  >,
+  program: Effect.Effect<A, E, AgentCatalogServices>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
+      testHttpClientLayer,
       AgentDirectories.layer(mutableAgentDirectories),
     ),
   );
@@ -62,8 +61,8 @@ function onGlobalStorage<A, E>(
 
 const { listRemoteAgents, ORCHESTRATOR_AGENT } = vi.hoisted(() => {
   const ORCHESTRATOR_AGENT = {
-    id: 'remote-orchestrator',
-    name: 'orchestrator',
+    id: 'remote-lead',
+    name: 'remoteLead',
     description: 'Remote team root',
     tools: ['delegate_agent'],
     agentCategory: 'toolUse',
@@ -206,11 +205,28 @@ describe('agent registry', () => {
       }),
   );
 
-  it('treats lookup category as priority, not a filter', () => {
-    const workflow = getAgent('builtInWorkflow:polish', AgentCategory.ToolUse);
-    expect(workflow?.name).toBe('polish');
-    expect(workflow?.category).toBe(AgentCategory.Workflow);
-  });
+  it.effect(
+    'pools tool plugin agent directories into the builtInToolUse source',
+    () =>
+      Effect.gen(function* () {
+        installPluginAgentDirectories(resourcesPath, ['lean4']);
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        const lean = getAgent('lean');
+        expect(lean?.source).toBe('builtInToolUse');
+        expect(lean?.path).toBe(
+          resolve(resourcesPath, 'plugins/lean4/agents/lean.yaml'),
+        );
+        installPluginAgentDirectories(resourcesPath, []);
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        expect(getAgent('lean')).toBeUndefined();
+      }).pipe(
+        // The install is module state: a failed assertion must not leave the
+        // plugin directory installed for the rest of the file.
+        Effect.ensuring(
+          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
+        ),
+      ),
+  );
 
   it.effect(
     'keeps the current cache visible while a refresh is pending',
@@ -266,7 +282,11 @@ describe('agent registry', () => {
               yield* Deferred.await(staleLoadGate);
               return [remoteAgentFixture('stale-agent', 'staleAgent', 'Stale')];
             }
-            return [remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh')];
+            return [
+              remoteAgentFixture('fresh-agent', 'freshAgent', 'Fresh'),
+              // A hosted row left behind for a name the bundle now ships.
+              remoteAgentFixture('hosted-orchestrator', 'orchestrator', 'Old'),
+            ];
           }),
         );
 
@@ -289,6 +309,7 @@ describe('agent registry', () => {
         expect(listRemoteAgents).toHaveBeenCalledTimes(2);
         expect(getAgent('freshAgent')?.source).toBe('remote');
         expect(getAgent('staleAgent')).toBeUndefined();
+        expect(getAgent('orchestrator')?.source).toBe('builtInToolUse');
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
@@ -306,16 +327,48 @@ describe('agent registry', () => {
     },
   );
 
+  it.effect(
+    'rescans locally without refetching or superseding a remote refetch',
+    () =>
+      Effect.gen(function* () {
+        useAgentDirectories();
+        yield* onGlobalStorage(refresh({ includeRemote: false }));
+        const fetchesBefore = listRemoteAgents.mock.calls.length;
+        const remoteStarted = yield* Deferred.make<void>();
+        const remoteGate = yield* Deferred.make<void>();
+        listRemoteAgents.mockImplementationOnce(() =>
+          Deferred.succeed(remoteStarted, undefined).pipe(
+            Effect.andThen(Deferred.await(remoteGate)),
+            Effect.as([ORCHESTRATOR_AGENT]),
+          ),
+        );
+
+        const remote = yield* Effect.forkChild(
+          onGlobalStorage(refresh({ includeRemote: true })),
+        );
+        yield* Deferred.await(remoteStarted);
+        const local = yield* Effect.forkChild(onGlobalStorage(refresh()), {
+          startImmediately: true,
+        });
+        yield* Deferred.succeed(remoteGate, undefined);
+        yield* Fiber.join(remote);
+        yield* Fiber.join(local);
+
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
+        expect(listRemoteAgents).toHaveBeenCalledTimes(fetchesBefore + 1);
+      }),
+  );
+
   it.effect('reloads local-only definitions after sign-out invalidation', () =>
     Effect.gen(function* () {
       useAgentDirectories();
       yield* onGlobalStorage(refresh({ includeRemote: true }));
-      expect(isRemoteAgent('orchestrator')).toBe(true);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
       const remoteFetchCount = listRemoteAgents.mock.calls.length;
 
       yield* onGlobalStorage(invalidateRemoteAgentsAfterSignOut());
 
-      expect(isRemoteAgent('orchestrator')).toBe(false);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
       expect(listRemoteAgents).toHaveBeenCalledTimes(remoteFetchCount);
     }),
   );
@@ -323,11 +376,11 @@ describe('agent registry', () => {
   it.effect(
     'removes remote definitions even when the local rebuild fails',
     () => {
-      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      const logs = captureLogEntries();
       return Effect.gen(function* () {
         useAgentDirectories();
         yield* onGlobalStorage(refresh({ includeRemote: true }));
-        expect(isRemoteAgent('orchestrator')).toBe(true);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(true);
         useAgentDirectories({
           builtIn: () =>
             Effect.fail(
@@ -345,15 +398,16 @@ describe('agent registry', () => {
           onGlobalStorage(invalidateRemoteAgentsAfterSignOut()),
           { startImmediately: true },
         );
-        expect(isRemoteAgent('orchestrator')).toBe(false);
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
         expect(yield* Fiber.join(invalidation)).toBeUndefined();
-        expect(isRemoteAgent('orchestrator')).toBe(false);
-        expect(warn).toHaveBeenCalledWith(
-          'agentRegistry',
-          expect.stringContaining(
+        expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
+        expect(
+          logs.has(
+            'WARN',
+            'agentRegistry',
             'Local agent catalog rebuild failed after sign-out',
           ),
-        );
+        ).toBe(true);
       }).pipe(
         Effect.ensuring(
           Effect.gen(function* () {
@@ -361,9 +415,10 @@ describe('agent registry', () => {
             yield* onGlobalStorage(refresh({ includeRemote: false })).pipe(
               Effect.orDie,
             );
-            warn.mockRestore();
+            setLogSink(null);
           }),
         ),
+        Effect.provide(effectDiagnosticsLayer('Trace')),
       );
     },
   );
@@ -415,7 +470,7 @@ describe('agent registry', () => {
       yield* Fiber.join(staleLoad);
 
       expect(getAgent('lateRemote')).toBeUndefined();
-      expect(isRemoteAgent('orchestrator')).toBe(false);
+      expect(getAgent('remoteLead')?.source === 'remote').toBe(false);
 
       localRebuild.resolve();
       yield* Fiber.join(invalidation);
@@ -465,14 +520,14 @@ describe('agent registry', () => {
           (yield* getVisibleAgents(hostStores(), 'toolUse')).map(
             (agent) => agent.name,
           ),
-        ).not.toContain('orchestrator');
+        ).not.toContain('remoteLead');
 
         const options = yield* onGlobalStorage(
           computeAgentOptionsData(hostStores()),
         );
 
         expect(options.toolUse.map((option) => option.label)).toContain(
-          'orchestrator',
+          'remoteLead',
         );
       }).pipe(
         Effect.ensuring(
@@ -509,7 +564,7 @@ describe('agent registry', () => {
         const result = yield* Fiber.join(options);
 
         expect(result.toolUse.map((option) => option.label)).toContain(
-          'orchestrator',
+          'remoteLead',
         );
       }).pipe(
         Effect.ensuring(

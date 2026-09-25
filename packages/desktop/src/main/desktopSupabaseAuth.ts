@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 import { z } from 'zod';
 
 import { SerializedWrites, settleFailure } from '@auth/authProgram';
@@ -8,10 +8,7 @@ import {
   type OAuthProvider,
 } from '@auth/config';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import type {
-  SupabaseSession,
-  SupabaseSessionLog,
-} from '@auth/SupabaseSession';
+import type { SupabaseSession } from '@auth/SupabaseSession';
 import {
   PendingOAuthStore,
   withCallbackNonce,
@@ -23,6 +20,7 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import type { MessageHost } from '@hosts/uiHosts';
+import { withLogChannel } from '@logger/effectLog';
 import type { StateStore, StateReadFailed } from '@platform/interfaces';
 import {
   withProcessServices,
@@ -33,6 +31,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { TEXRA_PROTOCOL } from '../shared/desktopProtocol.js';
 import type { DesktopProtocolCallbackRouter } from './desktopProtocolCallbacks.js';
 
+const CHANNEL = 'DesktopAuth';
 const DESKTOP_PENDING_OAUTH_STATE_KEY = 'texra.desktop.pendingOAuthState';
 
 /** The stored records, keyed by nonce; each value is one pending record. */
@@ -48,11 +47,9 @@ interface DesktopSupabaseAuth {
     provider?: OAuthProvider,
     options?: { timeoutMs?: number },
   ): Effect.Effect<boolean>;
-  signOut(): Promise<void>;
+  signOut(): Effect.Effect<void, Error>;
   dispose(): void;
 }
-
-type DesktopAuthLog = Pick<Console, 'debug' | 'info' | 'warn' | 'error'>;
 
 export interface DesktopSupabaseAuthHost extends Pick<
   MessageHost,
@@ -60,10 +57,10 @@ export interface DesktopSupabaseAuthHost extends Pick<
 > {
   /** The window's `openExternal` with its own "could not open" dialog
    *  suppressed: this flow words a missing browser itself. */
-  openExternalUrl(url: string): Effect.Effect<void, unknown>;
+  openExternalUrl(url: string): Effect.Effect<void, Error>;
   /** Repaint every surface an account change touches. A program, so the
    *  callback that commits a session runs it inside its own fiber. */
-  onSessionChanged(): Effect.Effect<void, unknown, ProcessServices>;
+  onSessionChanged(): Effect.Effect<void, Error, ProcessServices>;
 }
 
 interface DesktopSupabaseAuthOptions {
@@ -75,7 +72,6 @@ interface DesktopSupabaseAuthOptions {
    *  launched the app can still be claimed. */
   store: PendingOAuthStore;
   host: DesktopSupabaseAuthHost;
-  log: DesktopAuthLog;
   /** The process runtime the composition root built; every callback and
    *  forked attempt below settles on it. */
   runtime: ProcessRuntime;
@@ -89,13 +85,12 @@ interface DesktopSupabaseAuthOptions {
  * replaced it.
  */
 export function createDesktopPendingOAuthStore(
-  log: DesktopAuthLog,
   store?: Pick<StateStore, 'get' | 'update'>,
 ): PendingOAuthStore {
   let memoryRecords: Record<string, string> = {};
   const writes = new SerializedWrites();
   const read = (): Effect.Effect<Record<string, string>, StateReadFailed> =>
-    store ? readPendingRecords(log, store) : Effect.sync(() => memoryRecords);
+    store ? readPendingRecords(store) : Effect.sync(() => memoryRecords);
   const change = (
     transform: (
       records: Record<string, string>,
@@ -124,7 +119,7 @@ export function createDesktopPendingOAuthStore(
 }
 
 const readPendingRecords = Effect.fn('desktopAuth.readPendingRecords')(
-  function* (log: DesktopAuthLog, store: Pick<StateStore, 'get' | 'update'>) {
+  function* (store: Pick<StateStore, 'get' | 'update'>) {
     const persisted = yield* store.get<unknown>(
       DESKTOP_PENDING_OAUTH_STATE_KEY,
       null,
@@ -132,9 +127,9 @@ const readPendingRecords = Effect.fn('desktopAuth.readPendingRecords')(
     if (persisted == null) return {};
     const parsed = PendingRecordsSchema.safeParse(persisted);
     if (!parsed.success) {
-      log.warn(
+      yield* Effect.logWarning(
         'Stored desktop OAuth callback state is malformed and will be ignored',
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return {};
     }
     return parsed.data;
@@ -144,7 +139,7 @@ const readPendingRecords = Effect.fn('desktopAuth.readPendingRecords')(
 export function createDesktopSupabaseAuth(
   options: DesktopSupabaseAuthOptions,
 ): DesktopSupabaseAuth {
-  const { auth, host, log, router, runtime, store } = options;
+  const { auth, host, router, runtime, store } = options;
 
   const warnOnNotificationFailure = <A, E, R>(
     notify: Effect.Effect<A, E, R>,
@@ -152,9 +147,9 @@ export function createDesktopSupabaseAuth(
   ): Effect.Effect<void, never, R> =>
     notify.pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() => {
-          log.warn(`${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`);
-        }),
+        Effect.logWarning(
+          `${failureMessage}: ${toErrorMessage(Cause.squash(cause))}`,
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
 
@@ -176,7 +171,9 @@ export function createDesktopSupabaseAuth(
     message: string,
   ): Effect.Effect<void, never, ProcessServices> =>
     Effect.gen(function* () {
-      log.error(`Desktop sign-in failed: ${message}`);
+      yield* Effect.logError(`Desktop sign-in failed: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+      );
       yield* warnOnNotificationFailure(
         host.showErrorMessage(`Sign-in failed: ${message}`),
         'Desktop sign-in error notification failed',
@@ -188,8 +185,9 @@ export function createDesktopSupabaseAuth(
   ): Effect.Effect<void, never, ProcessServices> => {
     if (outcome.kind === 'committed') return reportSignedIn(outcome.session);
     if (outcome.kind === 'failed') return reportSignInFailure(outcome.message);
-    log.debug(`Desktop auth callback ignored: ${outcome.reason}`);
-    return Effect.void;
+    return Effect.logDebug(
+      `Desktop auth callback ignored: ${outcome.reason}`,
+    ).pipe(withLogChannel(CHANNEL));
   };
 
   const transport: AuthCallbackTransport = {
@@ -245,8 +243,9 @@ export function createDesktopSupabaseAuth(
           // Declining consent in the browser is the user's own decision, not
           // something to raise a dialog about.
           if (failure instanceof SignInCancelled) {
-            log.info('Desktop sign-in was cancelled in the system browser');
-            return Effect.succeed(false);
+            return Effect.logInfo(
+              'Desktop sign-in was cancelled in the system browser',
+            ).pipe(withLogChannel(CHANNEL), Effect.as(false));
           }
           return Effect.as(reportSignInFailure(toErrorMessage(failure)), false);
         }),
@@ -262,8 +261,9 @@ export function createDesktopSupabaseAuth(
       waitOptions = {},
     ) => runAttempt(provider, waitOptions.timeoutMs),
 
-    async signOut() {
-      const cleared = await runtime.runPromiseExit(
+    signOut: () =>
+      withProcessServices(
+        runtime,
         Effect.gen(function* () {
           yield* coordinator.signOut();
           yield* warnOnNotificationFailure(
@@ -271,9 +271,11 @@ export function createDesktopSupabaseAuth(
             'Desktop auth surface refresh failed',
           );
         }),
-      );
-      if (Exit.isFailure(cleared)) throw settleFailure(cleared.cause);
-    },
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.fail(ensureError(settleFailure(cause))),
+        ),
+      ),
 
     /**
      * Closing this window unsubscribes it from the protocol router, and
@@ -287,18 +289,5 @@ export function createDesktopSupabaseAuth(
     dispose() {
       subscription.dispose();
     },
-  };
-}
-
-export function createSessionLog(log: DesktopAuthLog): SupabaseSessionLog {
-  return {
-    debug: (source, message, options) =>
-      log.debug(`[${source}] ${message}`, options?.data),
-    info: (source, message, options) =>
-      log.info(`[${source}] ${message}`, options?.data),
-    warn: (source, message, options) =>
-      log.warn(`[${source}] ${message}`, options?.data),
-    error: (source, message, options) =>
-      log.error(`[${source}] ${message}`, options?.data),
   };
 }

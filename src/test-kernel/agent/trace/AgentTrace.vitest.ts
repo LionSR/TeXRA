@@ -7,8 +7,8 @@ import {
   TraceEmitter,
 } from '@agent/trace';
 import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
-import { StreamLog } from '@shared/session/traceEntries';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
+import type { FileListRow } from '@ui/transcript';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
@@ -114,12 +114,10 @@ describe('emitToolUseCard', () => {
 describe('logFileCategory', () => {
   let logger: AgentTrace;
   let disposeTrace: () => void;
-  let store: StreamLog;
+  let runTrace: ReturnType<typeof createTestRunTrace>;
 
   beforeEach(async () => {
-    store = new StreamLog();
-
-    const runTrace = createTestRunTrace('TestFileListLogger' as RunId, store);
+    runTrace = createTestRunTrace('TestFileListLogger' as RunId);
     logger = runTrace.trace;
     disposeTrace = runTrace.dispose;
   });
@@ -130,17 +128,19 @@ describe('logFileCategory', () => {
     disposeTrace();
   });
 
-  function capturedMessages(): any[] {
-    return store.toJSON();
+  function fileRows(): FileListRow[] {
+    return runTrace
+      .rows()
+      .flatMap((row) => (row.kind === 'fileList' ? [row] : []));
   }
 
   it('handles empty file array gracefully (no-op)', () => {
     logFileCategory(logger, 'Input Files', []);
-    expect(capturedMessages()).toHaveLength(0);
+    expect(runTrace.rows()).toHaveLength(0);
   });
 
   // Only files with `ok === true` count as loaded; missing/false/undefined
-  // `ok` are excluded from the numerator of the "Loading X (n/m)" label.
+  // `ok` are excluded from the numerator of the row's summary.
   it.each<{
     label: string;
     files: { path: string; ok?: boolean }[];
@@ -149,7 +149,7 @@ describe('logFileCategory', () => {
     {
       label: 'Input Files',
       files: [{ path: '/path/to/file.tex', ok: true }],
-      expected: 'Loading Input Files (1/1)',
+      expected: 'Files (1/1 loaded)',
     },
     {
       label: 'Reference Files',
@@ -158,7 +158,7 @@ describe('logFileCategory', () => {
         { path: '/path/missing.tex', ok: false },
         { path: '/path/also-exists.tex', ok: true },
       ],
-      expected: 'Loading Reference Files (2/3)',
+      expected: 'Files (2/3 loaded, 1 not found)',
     },
     {
       label: 'Auxiliary Files',
@@ -166,7 +166,7 @@ describe('logFileCategory', () => {
         { path: '/path/exists.tex', ok: true },
         { path: '/path/unknown.tex' }, // ok is undefined → not loaded
       ],
-      expected: 'Loading Auxiliary Files (1/2)',
+      expected: 'Files (1/2 loaded, 1 not found)',
     },
     {
       label: 'Media Files',
@@ -174,15 +174,15 @@ describe('logFileCategory', () => {
         { path: '/path/missing1.png', ok: false },
         { path: '/path/missing2.png', ok: false },
       ],
-      expected: 'Loading Media Files (0/2)',
+      expected: 'Files (0/2 loaded, 2 not found)',
     },
   ])('logs "$expected"', ({ label, files, expected }) => {
     logFileCategory(logger, label, files);
 
-    const messages = capturedMessages();
-    expect(messages).toHaveLength(1);
-    expect(messages[0].messageType).toBe(MESSAGE_TYPES.FILE_LIST);
-    expect(messages[0].text).toBe(expected);
+    const rows = fileRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].messageType).toBe(MESSAGE_TYPES.FILE_LIST);
+    expect(rows[0].summary).toBe(expected);
   });
 
   it('includes source and sourceDisplay in entry data', () => {
@@ -190,7 +190,7 @@ describe('logFileCategory', () => {
       { path: '/path/file.tex', ok: true },
     ]);
 
-    const entries = capturedMessages()[0].data;
+    const entries = fileRows()[0].files;
     expect(entries).toHaveLength(1);
     expect(entries[0].source).toBe('Input Files');
     expect(entries[0].sourceDisplay).toBe('Input Files');
@@ -205,7 +205,7 @@ describe('logFileCategory', () => {
       { path: '/c' }, // undefined
     ]);
 
-    const entries = capturedMessages()[0].data;
+    const entries = fileRows()[0].files;
     expect(entries[0].ok).toBe(true);
     expect(entries[1].ok).toBe(false);
     expect(entries[2].ok).toBe(false);

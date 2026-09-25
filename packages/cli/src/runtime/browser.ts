@@ -1,6 +1,13 @@
-import { execa } from 'execa';
+import { Data, Effect } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { PlatformError } from 'effect/PlatformError';
 
-import { extractErrorMessage } from '@utils/errors/errorMessage';
+/** The OS browser launcher could not open the URL. The message never
+ *  carries the URL, which can be a sign-in link. */
+class BrowserLaunchFailed extends Data.TaggedError('BrowserLaunchFailed')<{
+  readonly message: string;
+}> {}
 
 interface BrowserLaunchCommand {
   readonly command: string;
@@ -36,44 +43,52 @@ function resolveBrowserLaunch(
  * Hand one URL to the OS browser, or fail with what the launch faulted with.
  * Exported for `CliExternalOpener`, which words the failure as the
  * host-neutral `ExternalOpenFailed` the {@link ExternalOpener} port carries;
- * the two sign-in callers below keep their own manual-URL wording.
+ * the sign-in callers keep their own manual-URL wording.
+ *
+ * The launcher stays in our process group: in its own group, the scope's
+ * release after `xdg-open` exits 0 would signal that group, which can hold
+ * the browser it just forked.
  */
-export async function launchBrowser(url: string): Promise<void> {
-  const launch = resolveBrowserLaunch(url);
-  // reject: false — a spawn failure (no `xdg-open` on a headless box) and a
-  // non-zero exit are the same "could not open a browser" outcome here.
-  const result = await execa(launch.command, launch.args, {
-    stdio: 'ignore',
-    reject: false,
-  });
-  if (!result.failed) return;
-  // `cause` carries the spawn error ("spawn xdg-open ENOENT"); execa's own
-  // `message` is not used because it embeds the argv, and the argv is the
-  // sign-in URL.
-  const message =
-    extractErrorMessage(result.cause) ??
-    `${launch.command} exited with code ${result.exitCode ?? 'unknown'}`;
-  throw new Error(`Could not open the browser automatically: ${message}`);
-}
-
-export function openBrowser(
+export const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
-  manualBrowserHint: string,
-): Promise<void> {
-  return launchBrowser(url).catch((error: unknown) => {
-    const message =
-      extractErrorMessage(error) ?? 'unknown browser launch error';
-    throw new Error(
-      `${message}. Run ${manualBrowserHint} to open the sign-in URL manually.`,
+): Effect.fn.Return<void, BrowserLaunchFailed, ChildProcessSpawner> {
+  const launch = resolveBrowserLaunch(url);
+  const spawner = yield* ChildProcessSpawner;
+  // Never the `PlatformError` message: it embeds the argv, and the argv is
+  // the URL.
+  const code = yield* spawner
+    .exitCode(
+      ChildProcess.make(launch.command, launch.args, {
+        stdin: 'ignore',
+        stdout: 'ignore',
+        stderr: 'ignore',
+        detached: false,
+        forceKillAfter: '5 seconds',
+      }),
+    )
+    .pipe(
+      Effect.mapError(
+        (error: PlatformError) =>
+          new BrowserLaunchFailed({
+            message: `Could not open the browser automatically: ${launch.command} could not start (${error.reason._tag})`,
+          }),
+      ),
     );
-  });
-}
-
-export async function tryOpenBrowser(url: string): Promise<boolean> {
-  try {
-    await launchBrowser(url);
-    return true;
-  } catch {
-    return false;
+  if (code !== 0) {
+    return yield* new BrowserLaunchFailed({
+      message: `Could not open the browser automatically: ${launch.command} exited with code ${code}`,
+    });
   }
-}
+});
+
+/** Open `url`, answering false (logged) when no browser could be launched;
+ *  every caller then prints the URL for the person to open. */
+export const tryOpenBrowser = (
+  url: string,
+): Effect.Effect<boolean, never, ChildProcessSpawner> =>
+  launchBrowser(url).pipe(
+    Effect.as(true),
+    Effect.catch((error: BrowserLaunchFailed) =>
+      Effect.logDebug(error.message).pipe(Effect.as(false)),
+    ),
+  );

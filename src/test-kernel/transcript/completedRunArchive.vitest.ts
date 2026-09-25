@@ -1,6 +1,6 @@
 import { it } from '@effect/vitest';
 /** Completed conversation reads and task reads through the archive facade. */
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
@@ -11,7 +11,6 @@ const launchMocks = vi.hoisted(() => ({
 
 vi.mock('@agent/index', async (importActual) => ({
   ...(await importActual<typeof import('@agent/index')>()),
-  isRemoteAgent: () => false,
   resolveAgentForLaunch: launchMocks.resolveAgent,
 }));
 vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
@@ -33,36 +32,22 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { resumeRun } from '@agent/runtime/resumeRun';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import {
-  readCliHistoryDetails,
-  formatCliHistoryDetailsText,
-  cliHistoryDetailNdjsonRecord,
-} from '@cli/runtime/history';
-import { createHostRunActions } from '@controllers/session/hostRunActions';
 import { withProcessServices } from '@platform/processRuntime';
-import { Secrets } from '@platform/secrets';
 import {
   LOG_LEVELS,
   MESSAGE_TYPES,
-  STREAM_LOG_ENTRY_TYPES,
   AgentCategory,
   aggregateId,
   FlowSnapshotPayloadSchema,
 } from '@shared/schemas';
-import type { RunId, TodoItem } from '@shared/schemas';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import type { LogLevel, RunId, TodoItem } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import {
-  fakeProcessServices,
-  installedHost,
-  setupPlatform,
-} from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import {
   createProcessSession,
   createTestSession,
@@ -72,8 +57,6 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
-  assembleTrace,
-  injectStandaloneTrace,
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation as readCompletedRunConversationEffect,
 } from '@transcript';
@@ -140,23 +123,19 @@ async function seedTasks(runId: RunId, todos: TodoItem[]): Promise<void> {
   await settleSessionEvents();
 }
 
-type LogRow = StreamLogAppendInput;
-
-let entryCounter = 0;
+/** One `log` fact a fixture publishes. */
+interface LogRow {
+  readonly level: LogLevel;
+  readonly messageType: string;
+  readonly text?: string;
+  readonly data?: unknown;
+}
 
 function logRow(
   messageType: string,
   fields: { text?: string; data?: unknown },
 ): LogRow {
-  entryCounter += 1;
-  return {
-    id: `entry-${entryCounter}`,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
-    level: LOG_LEVELS.INFO,
-    timestamp: 1000 + entryCounter,
-    messageType: messageType as never,
-    ...fields,
-  };
+  return { level: LOG_LEVELS.INFO, messageType, ...fields };
 }
 
 /** Seed recorded transcript rows through the durable log fact. */
@@ -194,12 +173,7 @@ async function writeArchiveFixture(runId: RunId): Promise<void> {
       text: 'Consider the boundary terms.',
     }),
     logRow(MESSAGE_TYPES.WEB_SEARCH, {
-      data: {
-        query: 'sobolev constant',
-        results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-        provider: 'anthropic',
-        status: 'completed',
-      },
+      data: { query: 'sobolev constant' },
     }),
     logRow(MESSAGE_TYPES.TOOL_USE, {
       data: {
@@ -232,103 +206,6 @@ describe('completedRunArchive facade', () => {
   afterEach(async () => {
     vi.restoreAllMocks();
   });
-
-  it.effect(
-    'keeps private metadata exact while public events and exports redact its secrets',
-    () =>
-      Effect.gen(function* () {
-        yield* closeTestSession(taskSession);
-        taskSession = yield* createProcessSession({
-          transcriptMode: { kind: 'persistent' },
-        });
-        const runId = 'abc654abc654' as RunId;
-        const secret = 'sk-private-export-key-1234567890';
-        const content = `  retained text ${secret}  `;
-        yield* Effect.promise(() => stampRun(runId));
-        const records = getRunRecords(taskSession, runId);
-        const config = {
-          ...runConfig('orchestrator'),
-          instruction: content,
-          inputFiles: [`paper-${secret}.tex`],
-        };
-        yield* records.writeRunRecord(config);
-        yield* records.writeReport(content);
-        yield* taskSession.commit([
-          {
-            type: 'run.description',
-            aggregateId: aggregateId('run', runId),
-            description: content,
-          },
-          {
-            type: 'run.config',
-            aggregateId: aggregateId('run', runId),
-            config,
-          },
-          {
-            type: 'response.finalized',
-            aggregateId: aggregateId('run', runId),
-            text: 'A public proof.',
-          },
-        ]);
-        expect(yield* records.readConfig()).toEqual(config);
-        expect(yield* records.readReport()).toBe(content);
-        // The run's one `run.description` row is redacted on the way into the
-        // event table, so every reader of it — the view's fold included, asserted
-        // below — sees the redacted text; the private sidecars above stay exact.
-        const runAgentRequest = vi.fn(() => Effect.void);
-        const actions = yield* createHostRunActions({
-          session: taskSession,
-          runAgentRequest,
-          loadModelOptions: () => Effect.succeed([]),
-          promptForApiKey: () => Effect.void,
-          showInfo: () => Effect.void,
-          showWarning: () => Effect.void,
-        }).pipe(
-          Effect.provide(
-            Layer.merge(
-              Secrets.layer(installedHost().secrets),
-              nodePlatformLayer,
-            ),
-          ),
-        );
-        yield* actions.runNew(runId);
-        expect(runAgentRequest).toHaveBeenCalledWith({ config });
-        const trace = yield* assembleTrace(runId, taskSession);
-        expect(trace.status).toBe('ok');
-        if (trace.status !== 'ok') throw new Error('Expected trace export');
-        const exportInput = yield* Effect.promise(() =>
-          loadChatExportInput(runId),
-        );
-        const details = yield* readCliHistoryDetails(
-          Effect.succeed(taskSession),
-          runId,
-        ).pipe(Effect.provide(fakeProcessServices()));
-        expect(details).not.toBeNull();
-        if (!details) throw new Error('Expected history details');
-        const publicRows = yield* Stream.runCollect(
-          taskSession.events.aggregate(aggregateId('run', runId), 1),
-        );
-        const outputs = [
-          injectStandaloneTrace('<script type="module"></script>', trace.trace),
-          JSON.stringify(exportInput.exportInput),
-          formatCliHistoryDetailsText(details),
-          JSON.stringify(cliHistoryDetailNdjsonRecord(details)),
-          JSON.stringify(publicRows),
-          JSON.stringify(
-            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
-              ?.inputFiles,
-          ),
-          JSON.stringify(
-            SubscriptionRef.getUnsafe(taskSession.view).runs.get(runId)
-              ?.description,
-          ),
-        ];
-        for (const output of outputs) {
-          expect(output).not.toContain(secret);
-          expect(output).toContain('[redacted]');
-        }
-      }),
-  );
 
   // it.live: the release at the end of this test closes both sessions through
   // `closeSession`, whose settlement budget is
@@ -441,10 +318,6 @@ describe('completedRunArchive facade', () => {
           { kind: 'thinking', text: 'Consider the boundary terms.' },
           { kind: 'web-search', query: 'sobolev constant' },
           {
-            kind: 'web-search-results',
-            results: [{ url: 'https://example.org/a', title: 'Sobolev notes' }],
-          },
-          {
             kind: 'tool-call',
             name: 'write_file',
             input: { path: 'notes/lemma.tex' },
@@ -503,9 +376,6 @@ describe('completedRunArchive facade', () => {
           },
         ]);
         yield* session.settlePublications();
-        const logs = session.transcripts;
-        logs.requestEviction(runId);
-        expect(logs.get(runId)).toBeUndefined();
 
         const launchFailure = new Error(
           'stop after resumed writer acquisition',
@@ -538,35 +408,36 @@ describe('completedRunArchive facade', () => {
                 lastError: null,
                 declinedRoutes: [],
               },
-              state: { shouldSkipCycle: false, stateSlices: null },
+              state: {
+                stateSlices: null,
+                offeredTools: [],
+                toolsetHash: '0'.repeat(64),
+              },
             }),
           },
         ]);
 
-        const acquireRunResidency = logs.acquireRunResidency.bind(logs);
+        const attachRunTrace = session.attachRunTrace.bind(session);
         const resumedWriter = vi
-          .spyOn(logs, 'acquireRunResidency')
-          .mockImplementationOnce((requestedRunId) =>
-            Effect.gen(function* () {
-              const writer = yield* acquireRunResidency(requestedRunId);
-              session.publish([
-                {
-                  type: 'log',
-                  aggregateId: aggregateId('run', runId),
-                  level: 'info',
-                  messageType: MESSAGE_TYPES.USER_MESSAGE,
-                  message: 'Now prove the second lemma.',
-                },
-                {
-                  type: 'response.finalized',
-                  aggregateId: aggregateId('run', runId),
-                  text: 'Second proof.',
-                },
-              ]);
-              yield* session.settlePublications().pipe(Effect.orDie);
-              return writer;
-            }),
-          );
+          .spyOn(session, 'attachRunTrace')
+          .mockImplementationOnce((trace, requestedRunId) => {
+            const detach = attachRunTrace(trace, requestedRunId);
+            session.publish([
+              {
+                type: 'log',
+                aggregateId: aggregateId('run', runId),
+                level: 'info',
+                messageType: MESSAGE_TYPES.USER_MESSAGE,
+                message: 'Now prove the second lemma.',
+              },
+              {
+                type: 'response.finalized',
+                aggregateId: aggregateId('run', runId),
+                text: 'Second proof.',
+              },
+            ]);
+            return detach;
+          });
 
         expect(
           yield* Effect.flip(
@@ -577,7 +448,7 @@ describe('completedRunArchive facade', () => {
           ),
         ).toBe(launchFailure);
 
-        expect(resumedWriter).toHaveBeenCalledWith(runId);
+        expect(resumedWriter).toHaveBeenCalledWith(expect.anything(), runId);
         const released = yield* Effect.result(
           getRunRecords(session, runId).writeReport('late write'),
         );
@@ -622,11 +493,9 @@ describe('completedRunArchive facade', () => {
           roots: taskSession.roots,
         });
 
-        const endpoint = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-          })
-          .pipe(Effect.provide(toolLayer));
+        const endpoint = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+        }).pipe(Effect.provide(toolLayer));
         expect(endpoint.status).toBe('executed');
         expect(endpoint.output).toContain('Conversation (4 messages)');
         expect(endpoint.output).toContain('Prove the first lemma.');
@@ -634,20 +503,16 @@ describe('completedRunArchive facade', () => {
         expect(endpoint.output).toContain('Now prove the second lemma.');
         expect(endpoint.output).toContain('Second proof.');
 
-        const firstPage = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            offset: 0,
-            limit: 2,
-          })
-          .pipe(Effect.provide(toolLayer));
-        const secondPage = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            offset: 2,
-            limit: 2,
-          })
-          .pipe(Effect.provide(toolLayer));
+        const firstPage = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          offset: 0,
+          limit: 2,
+        }).pipe(Effect.provide(toolLayer));
+        const secondPage = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          offset: 2,
+          limit: 2,
+        }).pipe(Effect.provide(toolLayer));
         expect(firstPage.output).toContain('Source: streamLog');
         expect(firstPage.output).toContain('Returned message interval: [0, 2)');
         expect(firstPage.output).toContain('Next offset: 2');
@@ -673,18 +538,16 @@ describe('completedRunArchive facade', () => {
           ).toHaveLength(2);
         }
 
-        const lineRange = yield* new ExecutionsTool()
-          .call({
-            path: `/executions/${runId}/conversation`,
-            view_range: [1, 10],
-          })
-          .pipe(Effect.provide(toolLayer));
+        const lineRange = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/conversation`,
+          view_range: [1, 10],
+        }).pipe(Effect.provide(toolLayer));
         expect(lineRange.status).toBe('error');
         expect(lineRange.error).toContain(
           'Conversation pagination is message-based. Use offset and limit',
         );
         // Use the installed session owner's services, including its persistent
-        // project database map and the resume path's ToolInjections.
+        // project database map.
       }).pipe((program) => withProcessServices(testRuntime(), program)),
   );
 
@@ -774,18 +637,16 @@ describe('completedRunArchive facade', () => {
       });
       expect(hasCompletedRunConversationEvidence(result)).toBe(false);
 
-      const endpoint = yield* new ExecutionsTool()
-        .call({
-          path: `/executions/${runId}/conversation`,
-        })
-        .pipe(
-          Effect.provide(
-            nativeToolTestLayer({
-              run: { session: taskSession, runId, toolPolicy: {} },
-              roots: taskSession.roots,
-            }),
-          ),
-        );
+      const endpoint = yield* ExecutionsTool.call({
+        path: `/executions/${runId}/conversation`,
+      }).pipe(
+        Effect.provide(
+          nativeToolTestLayer({
+            run: { session: taskSession, runId, toolPolicy: {} },
+            roots: taskSession.roots,
+          }),
+        ),
+      );
       expect(endpoint.status).toBe('executed');
       expect(endpoint.output).toContain('Conversation (0 messages)');
     }),

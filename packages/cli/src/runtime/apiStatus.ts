@@ -46,7 +46,7 @@ function formatAccountStatusLine(
   return `${label}: ${formatAccountStatus(signedIn, accountLabel)}`;
 }
 
-export interface CliModelAccessOverview {
+interface CliModelAccessOverview {
   readonly access: CliAccountStatus;
   readonly lines: readonly string[];
   /** Stale-metadata warning from the auth profile, when any. */
@@ -134,7 +134,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     ] as const,
     { concurrency: 'unbounded' },
   );
-  // Detailed /api status is user-invoked, so reopening it is the manual refresh
+  // Detailed `/login status` is user-invoked, so reopening it is the manual refresh
   // path. Ordinary chat startup and the status bar never call this service, and
   // every read below forces a refresh, so the service is built over the caller's
   // secret store here rather than held as a module singleton.

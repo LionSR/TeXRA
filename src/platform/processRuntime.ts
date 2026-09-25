@@ -1,7 +1,7 @@
 /**
  * The process's Effect runtime (PRD one-fold-three-renderers, 7.7): one
- * `ManagedRuntime` per process, made at the composition root beside
- * `initPlatform()` and disposed on the existing shutdown path. `runPromise`,
+ * `ManagedRuntime` per process, made at the composition root and disposed
+ * on the existing shutdown path. `runPromise`,
  * `runFork`, and `runSync` appear at the entries and at the outermost
  * Promise-facing methods; inside, cancellation is fiber interruption.
  *
@@ -19,7 +19,6 @@ import {
   type ManagedRuntime,
   type Path,
 } from 'effect';
-import type { ToolInjections } from '@agent/runtime/toolInjection';
 import type { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SupabaseAuth } from '@auth/SupabaseAuth';
 import type { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -33,7 +32,10 @@ import type { UsageLog } from '@shared/usageLog';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
+import type { Compositions } from '@tools/compositions';
+import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import type {
   AgentDirectories,
@@ -50,21 +52,25 @@ import type { Secrets } from './secrets';
  * cohort-A tags beside the records, the account plane, the resume port, the
  * language-model bridge, the Lean port and the HTTP client, merged once in
  * `installProcessRuntime`'s `services` layer, plus the standard library's
- * `FileSystem` and `Path`, which the same install provides from
- * `@effect/platform-node` so a program that reads or resolves a file takes
- * them from context instead of building a Node layer of its own, and
+ * `FileSystem`, `Path` and `ChildProcessSpawner`, which the same install
+ * provides from `@effect/platform-node` so a program that reads a file or
+ * starts a child process takes them from context instead of building a Node
+ * layer of its own, and
  * `GlobalStorageFs`, the cross-workspace storage view every session of the
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph, and
+ * connection between application state and a session graph,
  * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
- * the settings Git tab share.
+ * the settings Git tab share, `ToolRegistry`, the plugin table every run's
+ * offered tools are rebuilt from, and `Compositions`, the open compositions
+ * the runs pin over it.
  */
 export type ProcessServices =
   | ProcessIdentity
   | FileSystem.FileSystem
   | Path.Path
+  | ChildProcessSpawner
   | GlobalStorageFs
   | GlobalDatabase
   | ProjectDatabases
@@ -78,12 +84,24 @@ export type ProcessServices =
   | AgentDirectories
   | Lifecycle
   | SetupPlatform
-  | ToolInjections
   | AgentEngine
   | LeanLanguageServices
   | GitHubSubscriptions
   | UsageLog
-  | SupabaseAuth;
+  | SupabaseAuth
+  | ToolRegistry
+  | Compositions;
+
+/**
+ * The services an agent catalog load reads: the global and filesystem views
+ * the local agent directories are scanned through, and the HTTP client the
+ * remote catalog is listed with.
+ */
+export type AgentCatalogServices =
+  | GlobalStorageFs
+  | FileSystem.FileSystem
+  | AgentDirectories
+  | HttpClient.HttpClient;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,
@@ -110,10 +128,30 @@ export function withProcessServices<A, E>(
 }
 
 /**
+ * An exit the fiber's interruption produced. Interrupting a consumer of a
+ * PubSub-backed stream (`SubscriptionRef.changes`, `Stream.fromPubSub`) adds
+ * Effect's end-of-stream `Done` failure beside the interrupt: the channel
+ * ends its subscription on interrupt by signalling `Done`. That is the stream
+ * closing, not a failure, so an interrupt accompanied only by `Done` counts
+ * as an interruption too.
+ */
+function isInterruption(cause: Cause.Cause<unknown>): boolean {
+  return (
+    cause.reasons.some(Cause.isInterruptReason) &&
+    cause.reasons.every(
+      (reason) =>
+        Cause.isInterruptReason(reason) ||
+        (Cause.isFailReason(reason) && Cause.isDone(reason.error)),
+    )
+  );
+}
+
+/**
  * A runtime whose `runFork` reports a fiber's failure or defect on exit
  * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still
- * delivered to the joiner. A success or an interrupts-only exit stays silent.
+ * delivered to the joiner. A success stays silent, as does an exit made of
+ * interrupts alone or of interrupts beside Effect's end-of-stream `Done`.
  * `runPromise` and `runSync` hand their exits to the caller already.
  */
 export function withForkFailureReporting<R, ER>(
@@ -125,7 +163,7 @@ export function withForkFailureReporting<R, ER>(
     fiberId: number,
     exit: Exit.Exit<unknown, unknown>,
   ): void => {
-    if (Exit.isSuccess(exit) || Cause.hasInterruptsOnly(exit.cause)) return;
+    if (Exit.isSuccess(exit) || isInterruption(exit.cause)) return;
     runtime.runFork(
       Effect.logError('Unhandled failure in forked fiber', exit.cause).pipe(
         Effect.annotateLogs({ forkedFiber: fiberId }),

@@ -28,7 +28,7 @@ import type {
   PromptMessageOptions,
 } from '@hosts/uiHosts';
 
-import { CredentialEntryForm } from '../forms/ApiKeyEntryForm';
+import { TextEntryForm } from '../forms/_shared/TextEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';
 import { closeActiveForm, openActiveForm } from '../state/formSlot';
 import {
@@ -59,7 +59,6 @@ function labelOf<T extends string>(item: PromptMessageItem<T>): T {
  */
 function openDialog<T>(
   commandName: string,
-  escapeAction: string,
   render: (
     answer: (value: T | undefined) => void,
     availableRows: number,
@@ -71,9 +70,8 @@ function openDialog<T>(
       // latched: a second keypress landing between the answer and the
       // unmount must not resume this fiber twice.
       let settled = false;
-      const form = {
+      const form = openActiveForm({
         commandName,
-        escapeAction,
         render: (onDone: () => void, availableRows: number) =>
           render((value) => {
             if (settled) return;
@@ -81,8 +79,7 @@ function openDialog<T>(
             onDone();
             resume(Effect.succeed(value));
           }, availableRows),
-      };
-      openActiveForm(form);
+      });
       return Effect.sync(() => closeActiveForm(form));
     }),
   );
@@ -94,7 +91,7 @@ function chooseItem<T extends string>(
   options: PromptMessageOptions<T>,
   items: readonly PromptMessageItem<T>[],
 ): Effect.Effect<T | undefined> {
-  return openDialog<T>('message', 'dismiss', (answer, availableRows) => (
+  return openDialog<T>('message', (answer, availableRows) => (
     <ListForm<T>
       title={title}
       availableRows={availableRows}
@@ -180,12 +177,12 @@ class TuiUiHost implements MessageHost, PromptHost {
   input(
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
-    return openDialog<string>('input', 'cancel', (answer) => (
-      <CredentialEntryForm
+    return openDialog<string>('input', (answer) => (
+      <TextEntryForm
         title={options.prompt ?? 'Enter a value'}
         masked={options.password ?? false}
         placeholder={options.placeHolder ?? ''}
-        savedHint="Press Enter to submit."
+        hint="Press Enter to submit."
         onSubmit={answer}
         onCancel={() => answer(undefined)}
       />

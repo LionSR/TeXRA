@@ -26,12 +26,13 @@ import {
   type SlashCommandContext,
 } from './slashContext';
 
-export function chatToolUseAgentUsageError(
+/** Resolve the chat root agent once: the entry the run pins, or the refusal. */
+export function resolveChatToolUseAgent(
   stores: AgentRosterStores,
   agentName: string,
 ) {
   return Effect.gen(function* () {
-    const launch = yield* checkCliAgentLaunch(
+    return yield* checkCliAgentLaunch(
       stores,
       agentName,
       yield* resolveCliAgentInCategory(
@@ -41,7 +42,6 @@ export function chatToolUseAgentUsageError(
       ),
       'chat',
     );
-    return launch instanceof CliUsageError ? launch.message : undefined;
   });
 }
 
@@ -58,12 +58,9 @@ export function applyInitialCliAgentSelection(
     }
 
     const nextAgent = agentName.trim();
-    const usageError = yield* chatToolUseAgentUsageError(
-      context.stores,
-      nextAgent,
-    );
-    if (usageError) {
-      setTransientNotice(usageError);
+    const entry = yield* resolveChatToolUseAgent(context.stores, nextAgent);
+    if (entry instanceof CliUsageError) {
+      setTransientNotice(entry.message);
       return;
     }
     // State validation can yield while another input claims the root run.
@@ -73,6 +70,7 @@ export function applyInitialCliAgentSelection(
     }
     patchSessionMeta({
       agent: nextAgent,
+      agentSource: entry.source,
       teamName: undefined,
       cliMultiAgentPresetId: undefined,
       delegationAgentScope: undefined,
@@ -102,16 +100,14 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    if (!context.canSelectModel()) {
+    if (!context.session.canSelectModel()) {
       appendLocalAssistantTranscript(
         'Finish the active response before switching models.',
       );
       return;
     }
 
-    const activeFlow = context.session.runId
-      ? context.runtimeSession.runs.getToolUseFlowContext(context.session.runId)
-      : undefined;
+    const activeFlow = context.session.activeToolUseFlow();
     if (!activeFlow) {
       appendLocalAssistantTranscript(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',

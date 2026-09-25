@@ -840,9 +840,10 @@ return [cached, live]`,
               yield* sleep(5);
               order.push(`checkpoint:${entry.index}`);
             }),
-          onJournalEntryConsumed: (entry) => {
-            order.push(`consumed:${entry.index}`);
-          },
+          onJournalEntryConsumed: (entry) =>
+            Effect.sync(() => {
+              order.push(`consumed:${entry.index}`);
+            }),
           onEvent: (event) => {
             if (event.type === 'log') order.push(event.message);
           },

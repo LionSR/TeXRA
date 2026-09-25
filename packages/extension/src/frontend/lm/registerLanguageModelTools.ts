@@ -13,12 +13,12 @@ import * as vscode from 'vscode';
 import { Effect, Fiber } from 'effect';
 
 import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import { getDefaultToolRegistry } from '@tools/registry';
+import { TOOL_TABLE } from '@tools/registry';
 
 // Local imports - language model tools
 import {
@@ -26,7 +26,7 @@ import {
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
 
-const log = createLog('LanguageModelTools');
+const CHANNEL = 'LanguageModelTools';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {
@@ -47,21 +47,22 @@ function toResultText(result: ToolResult): string {
  * Register the curated TeXRA tools with the VS Code Language Model Tool API,
  * invoked on `session`: its roots and its runs.
  */
-export function registerLanguageModelTools(
+export const registerLanguageModelTools = Effect.fn(
+  'registerLanguageModelTools',
+)(function* (
   context: vscode.ExtensionContext,
   runtime: ProcessRuntime,
   session: SessionHandle,
-): void {
+) {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
 
-  const registry = getDefaultToolRegistry();
   for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-    const tool = registry.get(toolName);
+    const tool = TOOL_TABLE.get(toolName);
     if (!tool) {
-      log.warn(
+      yield* Effect.logWarning(
         `Tool "${toolName}" missing from registry; skipping LM registration for "${lmName}".`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       continue;
     }
     const disposable = lm.registerTool(lmName, {
@@ -128,4 +129,4 @@ export function registerLanguageModelTools(
     });
     context.subscriptions.push(disposable);
   }
-}
+});

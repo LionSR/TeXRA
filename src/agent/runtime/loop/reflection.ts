@@ -75,6 +75,7 @@ import {
   AgentCategory,
   fileLocationDisplayPath,
   MESSAGE_TYPES,
+  isTerminalCompileRejection,
   OUTPUT_END_TAG,
   RUN_OUTCOME,
   SCRATCHPAD_TAG,
@@ -117,10 +118,13 @@ import {
   settleRun,
   stagedBy,
   stoppedBy,
-  usageSnapshot,
   type RunCell,
 } from './runProgram';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { HttpClient } from 'effect/unstable/http';
+
+/** The services a round prepares, compiles and diffs on. */
+type RoundServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
 // Reflection owns conversation limits and document completion, not the provider.
 /** Length for preview slices of tool output and responses. */
@@ -154,7 +158,7 @@ interface OutputExecResult {
 
 type RoundExit = {
   readonly state: RunState;
-  readonly kind: 'completed' | 'failed' | 'cancelled';
+  readonly kind: RunOutcome;
 };
 
 /** The finish reason of a completed turn; the editor arm reports none. */
@@ -183,6 +187,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | WorkspaceFs
   | LanguageModel
   | HttpClient.HttpClient
+  | ChildProcessSpawner
   | Runs
 > {
   const run = yield* AgentRun;
@@ -261,21 +266,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  /**
-   * One forced-compaction recovery per round: a turn that overflowed the
-   * context window is retried once against a compacted history, and a second
-   * overflow in the same round stops rather than paying for a futile retry.
-   */
-  let contextWindowRecoveryAttempted = false;
-  // The scalar family state; the snapshot re-derives the collections below.
+  // The family state no row carries: the round budget and the compile
+  // rejection facts. The round is the folded `state.round`.
   let flow: ReflectionFlowState = {
-    currentRound: 0,
     totalRounds,
     workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-    outputLocation: null,
-    runStateSnapshot: { totalRounds, totalResponseTimeMs: 0 },
-    continueRounds: true,
-    endTurn: false,
   };
   /** The family state every snapshot of this run carries. */
   const flowState = (): ReflectionFlowState => ({
@@ -298,19 +293,38 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     delete flow.unresolvedCompileRejection;
     delete flow.compileFailureContext;
   });
-  const terminalCompileRejection = (): boolean =>
-    flow.unresolvedCompileRejection === true &&
-    flow.currentRound + 1 >= flow.totalRounds;
   const resolveOutcome = (state: RunState): RunOutcome =>
     deriveRunOutcome({
-      failed: state.lastError !== null || terminalCompileRejection(),
+      failed:
+        state.lastError !== null ||
+        isTerminalCompileRejection(flow, state.round),
       cancelled: false,
     });
   /** The round loop's single continue/finalize decision. */
   const shouldContinueNextRound = (state: RunState): boolean =>
-    state.lastError === null &&
-    flow.continueRounds &&
-    flow.currentRound + 1 < flow.totalRounds;
+    state.lastError === null && state.round + 1 < totalRounds;
+
+  /**
+   * A committed response's text as the round writes it, and whether it ended
+   * the turn: a stop with text, or text that closes the documents. The turn
+   * sends no stop sequence — the Google, OpenAI Chat and OpenAI Responses
+   * protocols refuse one — so the closing tag stays in the text, and a model
+   * that writes it and is then cut off (`length`) has still finished: the
+   * continuation check stops on the same tag, so the output must be processed.
+   */
+  const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
+    Effect.map(
+      session.responseTextProcessing.postProcessResponse(
+        turnText(turn),
+        session.roots.config,
+      ),
+      (text) => {
+        const finish = finishReasonOf(turn);
+        const endTurn =
+          text !== '' && (finish === 'stop' || text.includes(OUTPUT_END_TAG));
+        return { finish, text, endTurn };
+      },
+    );
 
   /** The files a round works on: inputs first, then the previous outputs. */
   const filesForRound = (round: number): FileLocation[] => {
@@ -382,7 +396,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       workspace.assembly.lastResponse = content;
     }
     logger.debug(
-      `Resuming reflection run from round ${flow.currentRound}/${flow.totalRounds}`,
+      `Resuming reflection run from round ${state.round}/${totalRounds}`,
     );
   });
 
@@ -391,16 +405,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
-    const round = flow.currentRound;
+  ): Effect.fn.Return<RunState, Error, RoundServices> {
+    const round = initial.round;
     const bound = yield* SynchronizedRef.get(run.model);
-    contextWindowRecoveryAttempted = false;
     workspace = AgentWorkspaceState.create();
-    flow = {
-      ...flow,
-      outputLocation: outputLocationFor(round),
-      endTurn: false,
-    };
     const files = filesForRound(round);
     const content: InputPart[] = [];
 
@@ -569,23 +577,13 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         new Error('A response is processed only after its row and its round.'),
       );
     }
-    const finish = finishReasonOf(turn);
-    let text = session.responseTextProcessing.postProcessResponse(
-      turnText(turn),
-      session.roots.config,
-    );
-    // A provider stop sequence strips the tag it matched; restore it so
-    // extraction sees the document it closed.
-    if (finish === 'stop-sequence' && !text.includes(OUTPUT_END_TAG)) {
-      text = `${text}\n${OUTPUT_END_TAG}`;
-    }
+    const { finish, text, endTurn } = yield* responseOf(turn);
     logger.debug(`Stop reason: ${finish}`);
     const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
     if (scratchpad) {
       logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
 
-    let endTurn = false;
     let continueCycle = false;
     // The state the continuation is issued against: an overflow retry
     // replaces it with the compacted history the retry needs.
@@ -596,18 +594,18 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     /**
      * A context-window overflow is recoverable once per round: force the
      * compaction the history needs and retry the cycle against it. A second
-     * overflow, or a compaction that shortened nothing, stops, because the
-     * same history would overflow again.
+     * overflow in the round (the fold records the round of its
+     * `context-window` compaction), or a compaction that shortened nothing,
+     * stops, because the same history would overflow again.
      */
     const admitOverflowRetry = Effect.fn('reflection.overflowRetry')(
       function* (): Effect.fn.Return<boolean, Error> {
-        if (contextWindowRecoveryAttempted) {
+        if (base.overflowRecoveredAtRound === base.round) {
           logger.warn(
             'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
           );
           return false;
         }
-        contextWindowRecoveryAttempted = true;
         const bound = yield* SynchronizedRef.get(run.model);
         // The retry pays for a summary first: the compaction row is committed
         // before the continuation prompt, so the retried request is issued
@@ -621,7 +619,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             stores: session.roots,
             system: undefined,
             tools: [],
-            force: true,
+            force: 'overflow',
           }),
         );
         if (compacted === base) {
@@ -666,7 +664,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const inputTokenLimitExceeded =
         totals.totalInputTokens > INPUT_TOKEN_LIMIT;
       const encounterDocumentTag = text.includes(OUTPUT_END_TAG);
-      endTurn = finish === 'stop' || finish === 'stop-sequence';
       // Warn-only by design: this multiplier has never stopped a run, it
       // flags one whose output has run away relative to its first input.
       if (totals.totalOutputTokens > maxOutputTokens) {
@@ -713,7 +710,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       );
       const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
       const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
-      flow = { ...flow, endTurn: false };
       const progressed = { ...base, continuationIndex: next };
       return yield* cell.append([
         appendRow(runId, [
@@ -734,7 +730,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     // `output.pending` is committed before any output file is touched, so
     // a re-entry at this phase knows the pipeline may have started.
-    flow = { ...flow, endTurn };
     return yield* cell.append([
       snapshot(initial, {
         phase: 'output.pending',
@@ -751,11 +746,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     round: number,
     outputLocation: AgentFileLocation,
     endTurn: boolean,
-  ): Effect.fn.Return<
-    OutputExecResult,
-    Error,
-    FileSystem.FileSystem | WorkspaceFs
-  > {
+  ): Effect.fn.Return<OutputExecResult, Error, RoundServices> {
     const diffBaseFiles = yield* resolveBaseFilesForDiff(
       baseFiles,
       runId,
@@ -907,12 +898,16 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<RunState, Error, FileSystem.FileSystem | WorkspaceFs> {
-    const round = flow.currentRound;
-    const location = flow.outputLocation;
-    if (location === null) {
-      return yield* Effect.die(new Error('Output needs the round location.'));
+  ): Effect.fn.Return<RunState, Error, RoundServices> {
+    const round = state.round;
+    const location = outputLocationFor(round);
+    if (state.lastTurn === null) {
+      return yield* Effect.die(new Error('Output needs the round response.'));
     }
+    // Whether the round's last response ended the turn, from the folded
+    // turn: the same rule `processResponse` applied before committing
+    // `output.pending`.
+    const { endTurn } = yield* responseOf(state.lastTurn);
     // The canonical raw output the pipeline reads is the round's cycle files
     // concatenated in index order; re-entry rewrites it whole from the same
     // coordinates.
@@ -922,7 +917,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       recursive: true,
     });
     yield* fs.writeFileString(location.absolutePath, raw);
-    const endTurn = flow.endTurn;
     const result = yield* processOutput(round, location, endTurn).pipe(
       // The pipeline's own steps recover what they can; anything that still
       // reaches here — a failed step or a defect in one — costs the round its
@@ -969,9 +963,9 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   ): Effect.fn.Return<
     RoundExit,
     Error,
-    FileSystem.FileSystem | WorkspaceFs | LanguageModel | HttpClient.HttpClient
+    RoundServices | LanguageModel | HttpClient.HttpClient
   > {
-    const round = flow.currentRound;
+    const round = (yield* cell.current).round;
     const body = Effect.gen(function* () {
       let state = yield* cell.current;
       if (state.phase === 'round.ready')
@@ -990,39 +984,21 @@ export const runReflection = Effect.fn('reflection.run')(function* (
             run.userVarChannels,
             roots.workspace,
           );
-          const outcome = yield* invoker.invoke(state, {
+          const outcome = yield* invoker.invoke(cell, {
             system,
             tools: [],
             toolChoice: undefined,
-            stopSequences: [OUTPUT_END_TAG],
             round,
             debugName: `r${round}`,
           });
-          state = yield* cell.adopt(outcome.state);
+          state = outcome.state;
           if (outcome.kind === 'cancelled') {
             return { state, kind: 'cancelled' } as const;
           }
           if (outcome.kind === 'failed') {
             return { state, kind: 'failed' } as const;
           }
-          flow = {
-            ...flow,
-            runStateSnapshot: {
-              ...flow.runStateSnapshot,
-              totalResponseTimeMs:
-                flow.runStateSnapshot.totalResponseTimeMs +
-                outcome.responseTimeMs,
-            },
-          };
-          yield* recordServedUsage(
-            run,
-            usageSnapshot(
-              state,
-              flow.currentRound,
-              flow.runStateSnapshot.totalResponseTimeMs,
-              outcome.usage,
-            ),
-          );
+          yield* recordServedUsage(run, state, outcome.usage);
         }
         state = yield* processResponse(state, cell);
       }
@@ -1037,7 +1013,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           parent: run.parentStage,
           kind: 'round',
           index: round,
-          total: flow.totalRounds,
+          total: totalRounds,
         }),
       (exit: RoundExit) => exit.kind,
     )(body);
@@ -1091,18 +1067,12 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         current: RunState,
         closePrevious: boolean,
       ): Effect.fn.Return<RunState, Error> {
-        flow = {
-          ...flow,
-          currentRound: flow.currentRound + 1,
-          endTurn: false,
-          outputLocation: null,
-        };
         workspace = AgentWorkspaceState.create();
         return yield* cell.append([
           ...(closePrevious ? [stepRow(runId, current, 'round.end')] : []),
           snapshot(current, {
             phase: 'round.ready',
-            round: flow.currentRound,
+            round: current.round + 1,
             continuationIndex: 0,
             runtime: { lastError: null },
           }),
@@ -1111,7 +1081,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       const finish = Effect.fn('reflection.finish')(function* (
         current: RunState,
         roundEnded: boolean,
-      ): Effect.fn.Return<LoopExit, Error> {
+      ): Effect.fn.Return<LoopExit, Error, ChildProcessSpawner> {
         yield* normalizeCompileRejectionPolicy();
         const outcome = resolveOutcome(current);
         const state = yield* cell.append([
@@ -1127,9 +1097,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           // A finished run launched again continues only if rounds remain
           // under the current configuration. The restored error fact does not
           // decide this: relaunching is the admission of a new attempt.
-          if (!(
-            flow.continueRounds && flow.currentRound + 1 < flow.totalRounds
-          )) {
+          if (state.round + 1 >= totalRounds) {
             return {
               state,
               outcome: resolveOutcome(state),
@@ -1139,7 +1107,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         }
         // The configured total may have been lowered since the snapshot; the
         // hard round limit takes precedence over continuing that round.
-        if (flow.currentRound >= flow.totalRounds) {
+        if (state.round >= totalRounds) {
           return yield* finish(state, false);
         }
         const exit = yield* runRound(cell);

@@ -207,7 +207,7 @@ the same POLICY implemented per host, the simplification is to hoist it:
 - **Policy belongs to the core; wiring belongs to the host.** Approval
   policy, queue semantics, run/session lifecycle, model-access resolution,
   retry/classification rules: one owner in `src/` (host-agnostic), hosts
-  reach it through typed `Platform` ports. Three host copies of one policy
+  reach it through a typed port the process runtime serves. Three host copies of one policy
   are three future divergences.
 - **Host-prefixed names are a smell detector, not a verdict.**
   `cliXxx`/`desktopXxx`/`vscodeXxx` on *policy* logic (e.g. a
@@ -236,7 +236,7 @@ the same POLICY implemented per host, the simplification is to hoist it:
 ## TeXRA-specific constraints (violations fail review even when "cleaner")
 
 - VS Code-free zones (`VSCODE_FREE_ZONE_DIRS` in `eslint.config.mjs`) never
-  gain `vscode` imports; host capabilities arrive via typed `Platform` ports.
+  gain `vscode` imports; host capabilities arrive as typed services the process runtime serves.
 - Zod v4: tool-input optionals use `.nullish()` (check `== null` at use
   sites); `.prefault()`/`.default()`/`.catch()` are not interchangeable.
   Schemas are SSOT — derive types, never hand-write parallel ones.

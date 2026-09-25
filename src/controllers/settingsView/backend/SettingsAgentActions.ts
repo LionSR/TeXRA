@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { Effect, FileSystem } from 'effect';
 
 // Local imports - controllers
+import { builtInToolUseRoots } from '@agent/index/BundledAgentDirectories';
 import type { MessageHost } from '@hosts/uiHosts';
 import type { ProcessServices } from '@platform/processRuntime';
 // Local imports - shared
@@ -156,8 +157,17 @@ export function createSettingsAgentActions(
           ],
           { concurrency: 'unbounded' },
         );
-        const relativePath = sourceDir
-          ? path.relative(sourceDir, entryPath)
+        // A tool plugin's bundled tool-use agent sits in its own root, not
+        // under the core source directory, so it is relativized against the
+        // root that holds it.
+        const sourceRoot =
+          sourceDir && message.agentSource === 'builtInToolUse'
+            ? (builtInToolUseRoots(sourceDir).find((root) =>
+                isStrictlyWithin(root, entryPath),
+              ) ?? sourceDir)
+            : sourceDir;
+        const relativePath = sourceRoot
+          ? path.relative(sourceRoot, entryPath)
           : path.basename(entryPath);
         const targetPath = path.join(customDir, relativePath);
         if (!isStrictlyWithin(customDir, targetPath)) {

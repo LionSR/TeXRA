@@ -42,7 +42,6 @@ const mocks = vi.hoisted(() => ({
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
   appendLocalUserTranscript: vi.fn(),
@@ -75,10 +74,6 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   reportRequestDefect: mocks.reportRequestDefect,
 }));
 
-vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
-  notify: mocks.notify,
-}));
-
 import {
   describeFollowUpFailure,
   type FollowUpRecoveryLease,
@@ -102,8 +97,6 @@ import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import {
   patchSessionMeta,
-  rootRunPending,
-  claimedRunId,
   draftRestoreRequest,
   rootRunId,
   sessionMeta,
@@ -111,11 +104,8 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
-  chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
-  chatTuiCanStopActiveRun,
-  chatTuiIsResumableIdleOnExit,
-  chatTuiSigintAction,
+  runStopFacts,
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
@@ -131,14 +121,16 @@ import {
 } from '@shared/schemas';
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { testRunHandle } from '@test/support/runHandleFixtures';
+import {
+  admitInterruptibleRun,
+  testRunHandle,
+} from '@test/support/runHandleFixtures';
 import {
   createTestSession,
   publishTestRunStart,
@@ -158,7 +150,7 @@ import {
 
 // The state stores the controller's setting reads land on, as ports of the
 // installed fake host rather than a module mock of `platform()`: the setting
-// path (`detachSubagentsOnStop`) reads the session's own roots, which this
+// reads (the multi-agent preset name) take the session's own roots, which this
 // file's stub takes from the installed host, and the kernel's setup file
 // installs a host before this file's mocks are registered.
 setupPlatform(
@@ -183,7 +175,7 @@ interface SessionFixture {
 }
 
 function makeSession(overrides: SessionFixture = {}): TuiSession {
-  const session = new TuiSession();
+  const session = new TuiSession(() => undefined);
   if (overrides.runSettled) session.markRunPending(overrides.runSettled);
   if (overrides.runCompleted) session.markRunCompleted();
   if (overrides.runId) session.runId = overrides.runId;
@@ -236,7 +228,7 @@ function pendingRunClaim(): {
    *  continuations before the next assertion reads what they wrote. */
   readonly settle: () => Promise<void>;
 } {
-  const claim = Deferred.makeUnsafe<void, unknown>();
+  const claim = Deferred.makeUnsafe<void, Error>();
   return {
     settled: Deferred.await(claim),
     settle: async (): Promise<void> => {
@@ -289,7 +281,8 @@ function makeInit(
   const scope = Scope.makeUnsafe();
   onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
-    session: makeSession(),
+    // Only when the test brings none: a new session resets the one claim.
+    session: overrides.session ?? makeSession(),
     runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
@@ -394,7 +387,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     },
     approvals: { registerRunParent: vi.fn() },
     runs,
-    transcripts: { ensureLoaded: vi.fn(() => Effect.void) },
     // The parent edge the resume path reads cold, off the same seeded view
     // the TUI renders.
     readView: () => Effect.succeed(currentView()),
@@ -634,15 +626,13 @@ describe('createChatSessionController', () => {
       Effect.succeed<Outcome>({ kind: 'done' }),
     );
     mocks.reportRequestDefect.mockReturnValue(
-      'The request failed inside TeXRA; see the log.',
+      Effect.succeed('The request failed inside TeXRA; see the log.'),
     );
     installSession();
     mocks.resumeRun.mockImplementation(defaultResumeRun);
     installResumeRunStore();
     seedView(viewWith([]));
     rootRunId.set(undefined);
-    rootRunPending.set(false);
-    claimedRunId.set(undefined);
   });
 
   it('does not surface an intentional stop as an error', async () => {
@@ -664,61 +654,6 @@ describe('createChatSessionController', () => {
 
     expect(mocks.appendLocalErrorTranscript).not.toHaveBeenCalled();
     expect(session.runExitCode).toBe(CliExitCode.Success);
-  });
-
-  it('reads the shared detach-subagents setting key when stopping an active run', () => {
-    const session = makeSession({
-      runId: 'a11111' as RunId,
-    });
-    holdRun('a11111' as RunId);
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    mocks.globalGet.mockReturnValue(Effect.succeed(true));
-    ctrl.stop();
-
-    expect(mocks.globalGet).toHaveBeenCalledWith(
-      GlobalStateKey.DETACH_SUBAGENTS_ON_STOP,
-    );
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'a11111',
-      detachActiveChildren: true,
-    });
-  });
-
-  it('stops the focused root while preserving its agent children', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('b00001' as RunId);
-
-    expect(session.stopRequested).toBe(true);
-    expect(session.interruptedRunId).toBe('b00001');
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'b00001',
-      detachActiveChildren: true,
-    });
-    expect(mocks.workspaceGet).not.toHaveBeenCalled();
-  });
-
-  it('stops one focused child without stopping the root session', () => {
-    const session = makeSession({
-      runId: 'b00001' as RunId,
-    });
-    const ctrl = createChatSessionController(makeInit({ session }));
-
-    ctrl.stopRun('ca0001' as RunId);
-
-    expect(session.stopRequested).toBe(false);
-    expect(session.interruptedRunId).toBeUndefined();
-    expect(mocks.request).toHaveBeenCalledWith({
-      kind: 'run.stop',
-      runId: 'ca0001',
-      detachActiveChildren: true,
-    });
   });
 
   it.live(
@@ -760,16 +695,6 @@ describe('createChatSessionController', () => {
               parent: runId,
               agent: 'child',
             });
-            rootHandle.attachInterruptHandler({
-              interrupt: () => {
-                runs.untrack(runId);
-                rootRunResult.resolve({
-                  category: 'toolUse',
-                  runId,
-                  outcome: RUN_OUTCOME.CANCELLED,
-                });
-              },
-            });
             // A launch states both runs in the plane before it tracks them: the
             // stop publishes `run.detach` on the child's own aggregate, and a run
             // aggregate opens with its `run.start` and nothing else.
@@ -777,6 +702,17 @@ describe('createChatSessionController', () => {
             publishTestRunStart(runtimeSession, childRun, { parent: runId });
             runs.track(rootHandle);
             runs.track(childHandle);
+            // The root run's stop is its roster fiber's interruption: the
+            // stop lands there, untracks the root, and the run resolves
+            // cancelled through its own result.
+            admitInterruptibleRun(runs, runId, () => {
+              runs.untrack(runId);
+              rootRunResult.resolve({
+                category: 'toolUse',
+                runId,
+                outcome: RUN_OUTCOME.CANCELLED,
+              });
+            });
             options.onRunResolved?.(runId);
             return rootRunResult.promise;
           },
@@ -794,7 +730,14 @@ describe('createChatSessionController', () => {
           vi.waitFor(() => expect(runs.getHandle(childRun)).toBeDefined()),
         );
 
-        ctrl.stopRun(rootRun);
+        // The stop Ctrl-C sends under "Keep subagents running": the root
+        // stops and its live children detach.
+        const owner = mocks.sessionStub() as SessionHandle;
+        yield* owner.requests.request({
+          kind: 'run.stop',
+          runId: rootRun,
+          detachActiveChildren: true,
+        });
         yield* Effect.promise(() => awaitRunSettled(session));
 
         expect(session.runCompleted).toBe(true);
@@ -886,7 +829,7 @@ describe('createChatSessionController', () => {
     const config = makeRunRequest('Check presenter ownership.');
     ctrl.startRootRun(config);
     session.runId = 'a0000a' as RunId;
-    ctrl.stopRun('a0000a' as RunId);
+    ctrl.stop();
     for (const present of resultPresenters) present('Failure A');
     runA.resolve({
       category: 'toolUse',
@@ -1094,7 +1037,6 @@ describe('createChatSessionController', () => {
     await awaitRunSettled(session);
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
   it('manual resume supersedes stale interrupted recovery state', async () => {
@@ -1183,13 +1125,7 @@ describe('createChatSessionController', () => {
     // rehydration window, resume() must notice `session.stopRequested` and bail
     // out instead of silently starting the resumed run once the
     // awaits finish.
-    const ensureLoaded = createDeferred<void>();
-    installSession({
-      transcripts: {
-        ensureLoaded: () => Effect.promise(() => ensureLoaded.promise),
-      },
-    });
-
+    const rehydrated = createDeferred<void>();
     const session = makeSession({
       interruptedRunId: 'e11111' as RunId,
       runCompleted: true,
@@ -1198,6 +1134,7 @@ describe('createChatSessionController', () => {
       (_id: RunId, options: ResumeRunOptions) =>
         Effect.gen(function* () {
           if (options.onResumeResolved) yield* options.onResumeResolved();
+          yield* Effect.promise(() => rehydrated.promise);
           return options.isCancellationRequested?.()
             ? { failed: 'not_resumable' as const }
             : STARTED;
@@ -1208,40 +1145,25 @@ describe('createChatSessionController', () => {
     holdRun('aaaaaa' as RunId);
     const resumed = runResume(ctrl, 'aaaaaa' as RunId);
     // resume() has claimed the slot synchronously; once the durable record
-    // resolves it suspends inside session.transcripts.ensureLoaded()
-    // with session.runId already set to the resumed run.
+    // resolves it suspends inside the resume, after adoption, with
+    // session.runId already set to the resumed run.
     expect(session.runSettled).toBeDefined();
     await vi.waitFor(() => expect(session.runId).toBe('aaaaaa'));
     // #8273 regression: the controller must publish the run facts so status
     // rendering can derive the Ctrl-C hint from signals instead of calling
     // impure session closures that memoized renders cache stale.
-    expect(rootRunPending.get()).toBe(true);
-    expect(claimedRunId.get()).toBe('aaaaaa');
+    expect(runStopFacts.get().runPending).toBe(true);
+    expect(runStopFacts.get().runId).toBe('aaaaaa');
 
-    const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
-    const canStopActiveRun = chatTuiCanStopActiveRun({
-      runPending: Boolean(session.runSettled && !session.runCompleted),
-      runId: session.runId,
-      status: RUN_PHASE.WAITING,
-    });
-    const resumableIdle = chatTuiIsResumableIdleOnExit({
-      canInterruptActiveRun,
-      canStopActiveRun,
-      hasActiveToolUseFlow: false,
-    });
-    expect(
-      chatTuiSigintAction({
-        exitArmed: false,
-        canStopActiveRun,
-        resumableIdle,
-      }),
-    ).toBe('clean-exit');
+    // No live tool-use flow yet, so a Ctrl-C now is a clean exit, never a
+    // resumable-idle one.
+    expect(session.isResumableIdle()).toBe(false);
 
     // Ctrl-C fires while resume() is still rehydrating.
     ctrl.stop();
     expect(session.stopRequested).toBe(true);
 
-    ensureLoaded.resolve();
+    rehydrated.resolve();
     await resumed;
     await awaitRunSettled(session);
 
@@ -1497,7 +1419,6 @@ describe('createChatSessionController', () => {
     session.stopRequested = true;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
     expect(rootRunId.get()).toBe('a11111');
-    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
@@ -1806,7 +1727,6 @@ describe('createChatSessionController', () => {
     await expect(runTryResume(ctrl, child)).resolves.toBe(true);
 
     expect(rootRunId.get()).toBe(root);
-    expect(mocks.notify).toHaveBeenCalledWith('agentFinished');
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {

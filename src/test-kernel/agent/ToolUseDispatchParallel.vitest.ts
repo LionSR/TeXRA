@@ -27,6 +27,7 @@ import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { TestClock } from 'effect/testing';
 import { describe, expect } from 'vitest';
+import { z } from 'zod';
 import {
   TurnResultSchema,
   type Model,
@@ -48,6 +49,7 @@ import type {
   RuntimeToolRegistry,
   ToolServices,
 } from '@agent/runtime/ToolServices';
+import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
@@ -65,7 +67,9 @@ import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+  EMPTY_RUN_USAGE_TOTALS,
+  formatZodIssuesForDiagnostics,
   type RunId,
   type ToolResult,
 } from '@shared/schemas';
@@ -73,7 +77,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
@@ -184,7 +191,6 @@ function boundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -219,9 +225,10 @@ const freshState = (): RunState => ({
   requests: {},
   followUps: [],
   followUpIds: new Set(),
-  usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+  usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 const INVOCATION = {
@@ -264,6 +271,8 @@ function agentRun(
     fileService: new RunFileService(runId, session.roots),
     tools,
     finalToolName: null,
+    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -280,7 +289,6 @@ function agentRun(
       { agentName: config.agent, agentCategory: setting.agentCategory },
     ),
     callbacks: { onModelChanged: () => undefined },
-    interrupt: () => undefined,
   };
 }
 
@@ -311,7 +319,6 @@ interface HarnessOptions {
 
 /** The slices of a run that has yet to touch a file. */
 const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
-  runStateSnapshot: { totalRounds: 0, totalResponseTimeMs: 0 },
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
@@ -341,8 +348,9 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       state: {
         family: 'toolUse',
         state: {
-          shouldSkipCycle: false,
           stateSlices: options.stateSlices ?? null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
         },
       },
     }),
@@ -400,10 +408,15 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 
 /** Dispatch the pending response of an opened run. */
 const dispatch = (kit: DispatchKit, userInstruction?: string) =>
-  dispatchPendingResponse(kit.state, {
-    workspace: kit.workspace,
-    userInstruction,
-  }).pipe(Effect.provide(kit.layer));
+  makeRunCell(kit.runId, kit.state).pipe(
+    Effect.flatMap((cell) =>
+      dispatchPendingResponse(cell, {
+        workspace: kit.workspace,
+        userInstruction,
+      }),
+    ),
+    Effect.provide(kit.layer),
+  );
 
 /** The one tool group the dispatch delivers, in call order. */
 function deliveredResults(
@@ -497,6 +510,39 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
+      yield* kit.session.dispose();
+    }),
+  );
+
+  it.live('settles a tool-input validation failure as a tool error', () =>
+    Effect.gen(function* () {
+      // An empty object against a required array: the issue names no
+      // `received` value, and the settled row must still be JSON.
+      const parsed = z.object({ files: z.array(z.string()) }).safeParse({});
+      const invalidInputTool: ITool = {
+        definition: { name: 'texcount', description: 'texcount' },
+        call: () =>
+          Effect.succeed<ToolResult>({
+            status: 'error',
+            error: 'Invalid input',
+            diagnostics: {
+              type: DIAGNOSTIC_TYPE_VALIDATION_ERROR,
+              formatted: formatZodIssuesForDiagnostics(
+                parsed.error?.issues ?? [],
+              ),
+            },
+          }),
+      };
+      const kit = yield* openDispatch({
+        tools: { texcount: invalidInputTool },
+        calls: [makeCall('c1', 'texcount', {})],
+      });
+
+      const { state } = yield* dispatch(kit);
+
+      const [delivered] = deliveredResults(state);
+      expect(delivered?.status).toBe('error');
+      expect(delivered?.text).toMatch(/Invalid input/);
       yield* kit.session.dispose();
     }),
   );

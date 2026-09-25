@@ -10,8 +10,7 @@ import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
-import type { AgentRunHandle } from '@agent/runtime/RunHandle';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import type {
   ChildRunPorts,
   ChildRunStrategy,
@@ -24,7 +23,7 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
-import { onAbort, unique } from '@utils/core';
+import type { CompositionKey } from '@tools/compositions';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -47,10 +46,12 @@ export interface ChildRunLaunchOptions {
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
-  readonly onApprovalPolicyDenial?: () => void;
-  readonly runtimeUnavailableTools?: readonly string[];
-  /** Caller cancellation for a durable in-band launch. */
-  readonly signal?: AbortSignal;
+  /**
+   * The parent's composition, which a fresh child joins; a resumed child
+   * resolves its own.
+   */
+  readonly composition?: CompositionKey;
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }
@@ -73,7 +74,11 @@ interface NativeSubagentStrategyBase extends ChildRunLaunchOptions {
 
 type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
   (
-    | { readonly definition: PreparedAgentDefinition; readonly resume?: never }
+    | {
+        readonly definition: PreparedAgentDefinition;
+        readonly resume?: never;
+        readonly composition: CompositionKey;
+      }
     | {
         readonly definition?: never;
         readonly resume: {
@@ -82,23 +87,6 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
         };
       }
   );
-
-/** Bind every distinct caller/turn cancellation source to one live run handle. */
-function bindAbortSignals(
-  signals: readonly (AbortSignal | undefined)[],
-  handle: AgentRunHandle,
-): () => void {
-  // One listener per source, no `AbortSignal.any`: a composite built on the
-  // parent run's signal stays reachable from it (listener and all) until it
-  // aborts, which for a long-lived parent is never — one retained turn per
-  // subagent (see `linkAbortSignals`).
-  const detachers = unique(
-    signals.filter((signal): signal is AbortSignal => signal !== undefined),
-  ).map((signal) => onAbort(signal, () => handle.interrupt()));
-  return () => {
-    for (const detach of detachers) detach();
-  };
-}
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
@@ -121,22 +109,13 @@ export function createNativeSubagentStrategy(
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
-    signal: AbortSignal,
-    call: (
-      onRun: (handle: AgentRunHandle) => Effect.Effect<void>,
-    ) => Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
+    call: Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
   ) {
     lastErr = undefined;
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
-    let detachAbort = (): void => {};
-    return yield* call((handle) =>
-      Effect.sync(() => {
-        detachAbort();
-        detachAbort = bindAbortSignals([params.signal, signal], handle);
-      }),
-    ).pipe(
+    return yield* call.pipe(
       Effect.tap((result) =>
         Effect.sync(() => {
           lastResult = result;
@@ -145,7 +124,6 @@ export function createNativeSubagentStrategy(
           ports.recordCost(result.usage?.totalCost);
         }),
       ),
-      Effect.ensuring(Effect.sync(() => detachAbort())),
     );
   });
 
@@ -185,8 +163,9 @@ export function createNativeSubagentStrategy(
     }),
 
     continuous: true,
-    launch: (ports, signal, turns) =>
-      runNative(ports, signal, (onRun) =>
+    launch: (ports, _signal, turns) =>
+      runNative(
+        ports,
         Effect.gen(function* () {
           const engine = yield* AgentEngine;
           const executeOptions: ExecuteAgentOptions & {
@@ -195,28 +174,27 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
+            composition: params.composition,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
-            runtimeUnavailableTools: params.runtimeUnavailableTools,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),
             onRunError: (err: unknown) => {
               lastErr = err;
             },
-            onRun,
             turns: {
-              run: (operation) =>
+              turnPermit: (turn) =>
                 Effect.suspend(() => {
                   lastErr = undefined;
-                  return turns.run(operation);
+                  return turns.turnPermit(turn);
                 }),
-              complete: (turn: AgentFlowResult) =>
-                Effect.gen(function* () {
+              onTurnBoundary: (turn: AgentFlowResult) =>
+                Effect.suspend(() => {
                   lastResult = turn;
                   cachedBuilt = undefined;
                   cachedDelivery = undefined;
                   ports.recordCost(turn.usage?.totalCost);
-                  yield* turns.complete(turn);
+                  return turns.onTurnBoundary(turn);
                 }),
             },
           };

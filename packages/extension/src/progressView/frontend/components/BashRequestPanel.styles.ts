@@ -3,7 +3,11 @@
 import { css, type CSSResult } from 'lit';
 
 export const bashRequestPanelStyles: CSSResult = css`
-  .bash-approval-request__command {
+  :host {
+    --request-accent: var(--wa-color-terminal-ansi-yellow);
+  }
+
+  .bash-request__command {
     font-family: var(--wa-font-family-mono);
     font-size: var(--font-size-sm);
     font-variant-ligatures: none;
@@ -11,26 +15,8 @@ export const bashRequestPanelStyles: CSSResult = css`
     text-align: start;
   }
 
-  .bash-approval-request__command .tool-command-input {
+  .bash-request__command .tool-command-input {
     direction: ltr;
     text-align: left;
-  }
-
-  /* The directory a command will run in is the security-relevant field of
-     this prompt, so it is not the smallest, faintest text in it.
-     --font-size-xs resolves to 10.4px (13px x 0.8), under the ~12px floor,
-     and --wa-color-text-quiet measured 4.40:1 on Light Modern, under AA. The
-     label stays quiet; the path itself takes the normal text colour so the
-     value outranks its label. */
-  .bash-approval-request__cwd {
-    color: var(--wa-color-text-quiet);
-    font-family: var(--wa-font-family-mono);
-    font-size: var(--font-size-sm);
-    margin-bottom: var(--wa-space-xs);
-    overflow-wrap: anywhere;
-  }
-
-  .bash-approval-request__cwd bdi {
-    color: var(--wa-color-text-normal);
   }
 `;

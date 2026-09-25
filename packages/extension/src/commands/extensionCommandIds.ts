@@ -5,7 +5,7 @@
  * registry (`extensionCommandHandlers.ts`), which already guarantees the
  * registered IDs match `commandCatalog`. These constants are the mirror for
  * the *call* sites that dispatch or reference the same commands by literal —
- * the import quick-pick (`mainViewCommands.ts`), the welcome-view buttons,
+ * the welcome-view buttons,
  * the status-bar CTA, and the setup assistant. Referencing the constant keeps
  * a renamed ID a compile error instead of a silent runtime no-op.
  */
@@ -18,4 +18,5 @@ export const EXTENSION_COMMANDS = {
   RUN_SETUP_ASSISTANT: 'texra.runSetupAssistant',
   OPEN_GETTING_STARTED: 'texra.openGettingStarted',
   SET_API_KEY: 'texra.setApiKey',
+  SHOW_MAIN_VIEW: 'texra.showMainView',
 } as const satisfies Record<string, CommandId>;

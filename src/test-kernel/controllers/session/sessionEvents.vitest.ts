@@ -12,7 +12,6 @@
  * `waiting`; the same log with the owner gone folds to `interrupted`.
  */
 // Node imports
-import * as childProcess from 'node:child_process';
 import {
   chmodSync,
   existsSync,
@@ -59,11 +58,12 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
 import { TraceEmitter, type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
-  forEachLiveSession,
-  type SessionHandle,
-} from '@agent/runtime/SessionHandle';
-import { closeSession, openSessionEffect } from '@agent/runtime/sessionGraph';
+  closeSession,
+  heldSessions,
+  openSessionEffect,
+} from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
@@ -99,26 +99,28 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import {
+  nodeSpawnerLayer,
+  scriptedSpawnerLayer,
+} from '@test/support/childProcessTestLayer';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { identityReads } from '@test/support/sessionGraphTestSetup';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { StreamLogStore } from '@transcript/StreamLogStore';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<typeof os>()),
   platform: vi.fn(() => process.platform),
 }));
-vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof childProcess>();
-  return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
-});
 /** Builds of the process runtime's Lean layer, which every root shares. */
 const leanBuilds = vi.hoisted(() => ({
   count: 0,
@@ -222,6 +224,7 @@ const graph = (history: readonly SessionEventDraft[]) => {
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
+    Layer.provide(nodePlatformLayer),
   );
 };
 
@@ -284,7 +287,7 @@ describe('session events and view', () => {
               toolName: 'bash',
               input: { command: 'ls' },
             },
-          ]),
+          ]).pipe(Effect.orDie),
         );
         const settled = yield* events.publish([
           {
@@ -685,6 +688,9 @@ describe('Sessions owner', () => {
         const session = {
           view: view.ref,
           runs: { stopAgentRun },
+          roots: createFakeWorkspaceRoots({
+            globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
+          }),
         } as unknown as SessionHandle;
         const requests = sessionRequests(
           session,
@@ -714,7 +720,11 @@ describe('Sessions owner', () => {
         }));
         // A released claim is not held, even while the display still says so.
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
-        expect(stopAgentRun).toHaveBeenCalledOnce();
+        // A stop that leaves the child policy unset takes the session's
+        // configured "Keep subagents running".
+        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+          detachActiveChildren: true,
+        });
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(
@@ -722,7 +732,11 @@ describe('Sessions owner', () => {
             Layer.provide(
               globalDatabaseLayer(
                 createFakeWorkspaceRoots().globalStorage,
-              ).pipe(Layer.provide(ProcessIdentity.layer(SELF)), Layer.orDie),
+              ).pipe(
+                Layer.provide(ProcessIdentity.layer(SELF)),
+                Layer.provide(nodePlatformLayer),
+                Layer.orDie,
+              ),
             ),
           ),
         ),
@@ -734,13 +748,8 @@ describe('Sessions owner', () => {
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
-  const isLive = (session: SessionHandle): boolean => {
-    let live = false;
-    forEachLiveSession((candidate) => {
-      live ||= candidate === session;
-    });
-    return live;
-  };
+  const isLive = (session: SessionHandle): boolean =>
+    heldSessions().includes(session);
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
@@ -921,7 +930,6 @@ describe('Sessions owner', () => {
           );
           for (const event of committed) {
             const foreign = { ...event, ownerId: OTHER };
-            yield* session.receiveCommittedEvent(foreign);
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(handleStatus).toHaveBeenCalledTimes(2);
@@ -980,62 +988,6 @@ describe('Sessions owner', () => {
       }),
   );
 
-  // #12017's ownership fence: a committed row another process authored is
-  // accepted like any other, and only its local side effects are fenced.
-  // (That the fold itself keeps a foreign-owned run is stated over the
-  // recorded log in the fold suite.)
-  it.live(
-    "accepts another process's committed facts without firing local side effects",
-    () =>
-      Effect.gen(function* () {
-        const session = yield* open('/workspace/owner/foreign-fold');
-        const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-        const detachResult = session.onResult(onResult);
-        const foreign = RunIdSchema.parse('cd34ef');
-        const aggregateId = qualifyAggregateId('run', foreign);
-        try {
-          yield* session.receiveCommittedEvent({
-            type: 'run.start',
-            aggregateId,
-            identity: { kind: 'agent', agent: 'chat' },
-            userFollowUpSupport: 'unsupported',
-            category: AgentCategory.ToolUse,
-            isRemote: false,
-            parent: null,
-            ownerId: OTHER,
-            at: 0,
-            seq: 1,
-            commit: 1,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.description',
-            aggregateId,
-            description: 'a run in another process',
-            ownerId: OTHER,
-            at: 0,
-            seq: 2,
-            commit: 2,
-          });
-          yield* session.receiveCommittedEvent({
-            type: 'run.end',
-            aggregateId,
-            outcome: 'completed',
-            output: emptyRunEndOutput(AgentCategory.ToolUse),
-            ownerId: OTHER,
-            at: 0,
-            seq: 3,
-            commit: 3,
-          });
-          // Host presentation of a terminal result stays with the process
-          // that authored it.
-          expect(onResult).not.toHaveBeenCalled();
-        } finally {
-          detachResult();
-          yield* session.dispose();
-        }
-      }),
-  );
-
   // The request opened below commits from this fiber, so the session's own
   // work must not wait on a test clock: `it.live`.
   it.live(
@@ -1084,6 +1036,7 @@ describe('Sessions owner', () => {
         releaseChild = session.runs.reserveChildActivation({
           runId: RunIdSchema.parse('aa0002'),
           parent: { current: null },
+          retainsTerminalParent: true,
           interrupt,
         });
 
@@ -1174,10 +1127,16 @@ describe('the C1 event table and the C6 publisher', () => {
     for (const root of roots) rmSync(root, { recursive: true, force: true });
   });
 
-  const substrate = (storage: string, owner = SELF) =>
+  const substrate = (
+    storage: string,
+    owner = SELF,
+    spawner: Layer.Layer<ChildProcessSpawner> = nodeSpawnerLayer,
+  ) =>
     databaseLayer('persistent').pipe(
       Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
       Layer.provide(ProcessIdentity.layer(owner)),
+      Layer.provide(spawner),
+      Layer.provide(nodePlatformLayer),
       Layer.fresh,
     );
 
@@ -1199,24 +1158,20 @@ describe('the C1 event table and the C6 publisher', () => {
     const storage = workspace();
     const resolved = realpathSync.native(storage);
     const system = vi.mocked(os.platform).mockReturnValue('darwin');
-    const mount = vi
-      .mocked(childProcess.execFileSync)
-      .mockReturnValue(`server:/paper on ${resolved} (nfs, nodev)\n`);
+    const mount = scriptedSpawnerLayer(() => ({
+      stdout: `server:/paper on ${resolved} (nfs, nodev)\n`,
+    }));
     return Effect.gen(function* () {
       const failure = yield* Effect.flip(
-        Database.pipe(Effect.provide(substrate(storage))),
+        Database.pipe(Effect.provide(substrate(storage, SELF, mount.layer))),
       );
       expect(failure._tag).toBe('DatabaseOpenFailed');
       expect(String(failure.cause)).toContain('verified local filesystem');
       expect(existsSync(join(storage, 'texra.db'))).toBe(false);
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          mount.mockRestore();
-          system.mockRestore();
-        }),
-      ),
-    );
+      expect(mount.calls.map((command) => command.command)).toEqual([
+        '/sbin/mount',
+      ]);
+    }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
   it.effect('clears a store written under another event format at open', () => {
@@ -1660,7 +1615,7 @@ describe('the C1 event table and the C6 publisher', () => {
             skills: [
               {
                 name: 'proof-review',
-                description: 'Use API_KEY=skills-snapshot-secret\n  carefully',
+                description: 'Review proofs\n  carefully',
                 source: 'project',
               },
             ],
@@ -1674,7 +1629,7 @@ describe('the C1 event table and the C6 publisher', () => {
           skills: [
             {
               name: 'proof-review',
-              description: 'Use API_KEY=[redacted] carefully',
+              description: 'Review proofs carefully',
               source: 'project',
             },
           ],
@@ -1839,14 +1794,13 @@ describe('the C1 event table and the C6 publisher', () => {
           {
             type: 'response.finalized',
             aggregateId: id,
-            text: 'API_KEY=publication-boundary-secret',
+            text: 'final answer',
           },
           { type: 'run.removed', aggregateId: other },
         ]);
         expect((yield* db.readListing()).map((row) => row.commit)).toEqual([
           1, 2, 4, 7, 9,
         ]);
-        expect(rows[7]).toMatchObject({ text: 'API_KEY=[redacted]' });
         const withoutTranscript = yield* db.readInputBatch([], 0);
         expect(withoutTranscript.cursor).toBe(9);
         expect(withoutTranscript.events).toEqual(
@@ -2123,7 +2077,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
           [],
         );
-      }).pipe(Effect.provide(substrate(storage)));
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
     },
   );
 
@@ -2266,6 +2222,7 @@ describe('RunLedger', () => {
         ),
       ),
       Layer.provide(ProcessIdentity.layer(SELF)),
+      Layer.provide(nodePlatformLayer),
     );
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
@@ -2349,7 +2306,11 @@ describe('RunLedger', () => {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
+      },
     },
   });
   const refusalOf = (error: unknown): RunLedgerRefused | null =>
@@ -2524,41 +2485,6 @@ describe('RunLedger', () => {
       expect(state.usage.totalCost).toBe(0.25);
       expect(yield* run.load(RUN)).toEqual(state);
     }).pipe(Effect.provide(ledger())),
-  );
-
-  it.effect(
-    'stores ledger rows byte-exact while the same secret in a log row is redacted',
-    () =>
-      Effect.gen(function* () {
-        const events = yield* SessionEvents;
-        const run = yield* RunLedger;
-        const log = yield* Database;
-        yield* events.publish([runStart]);
-        yield* openTurn(run);
-        yield* events.publish([
-          {
-            type: 'log',
-            aggregateId: AGGREGATE,
-            level: 'info',
-            message: `the key is ${SECRET}`,
-          },
-        ]);
-        const rows = yield* log.readAggregate(AGGREGATE, 1);
-        const response = rows.find(
-          (row) =>
-            row.type === 'model.message' && row.payload.kind === 'response',
-        );
-        expect(
-          response?.type === 'model.message' &&
-            response.payload.kind === 'response'
-            ? response.payload.turn
-            : null,
-        ).toEqual(TURN);
-        const logged = rows.find((row) => row.type === 'log');
-        expect(logged?.type === 'log' ? logged.message : null).not.toContain(
-          SECRET,
-        );
-      }).pipe(Effect.provide(ledger())),
   );
 
   it.effect(

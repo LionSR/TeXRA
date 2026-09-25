@@ -16,7 +16,6 @@ import { Data, Deferred, Duration, Effect, FileSystem } from 'effect';
 
 // Local imports
 import {
-  deriveResumability,
   getRunRecords,
   listRunWorkspaceFiles,
   unwrapResultMeta,
@@ -36,7 +35,6 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
@@ -45,7 +43,6 @@ import {
   readCompletedRunConversation,
 } from '@transcript';
 import { assertNever, unique } from '@utils/core';
-import { readSettingFrom } from '@utils/config/platformSettings';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { findExistingRunStoragePathUnder } from '@utils/files/runStorageFs';
 import { getPathSegments } from '@utils/core/pathCore';
@@ -72,6 +69,7 @@ import {
 } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
+import { orchestratorKillDenial } from './executions/killPolicy';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
 import {
   OUTPUT_MAX_LINES,
@@ -169,190 +167,163 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
   });
 }
 
-export class ExecutionsTool extends defineTool({
-  name: 'executions',
-  slow: true,
-  description: `View run history and manage live runs.
+/**
+ * Every line of logic below is one Effect program. Fatal storage and
+ * filesystem failures remain failures for the invocation boundary.
+ */
+const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
+  input: ExecutionsToolInput,
+) {
+  const run = yield* requireToolRun('executions', yield* ToolCall);
+  const context: RunToolContext = {
+    session: run.session,
+    runId: run.runId,
+  };
+  return yield* runExecutions(context, input).pipe(
+    Effect.catchTag('ExecutionsReadFailed', (error) => Effect.die(error.cause)),
+  );
+});
 
-Paths:
-${EXECUTION_PATH_LIST}
+const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
+  context: RunToolContext,
+  input: ExecutionsToolInput,
+): Effect.fn.Return<
+  ToolResult,
+  Error | ExecutionsReadFailed,
+  Runs | FileSystem.FileSystem | StorageFs
+> {
+  const segments = getPathSegments(input.path);
+  const [namespace, id, resource, ...rest] = segments;
 
-Use "current" as {id} to access the active run.
-Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
-Use view_range: [start, end] to paginate file and background-command output content.
-Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
-Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
-Use action: "kill" on /executions/{id} to terminate a live run.
-Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
-  schema: ExecutionsToolInputSchema,
-}) {
-  /**
-   * Every line of logic below is one Effect program. Fatal storage and
-   * filesystem failures remain failures for the invocation boundary.
-   */
-  protected readonly execute = Effect.fn('ExecutionsTool.call')(function* (
-    this: ExecutionsTool,
-    input: ExecutionsToolInput,
-  ) {
-    const run = yield* requireToolRun('executions', yield* ToolCall);
-    const context: RunToolContext = {
-      session: run.session,
-      runId: run.runId,
-    };
-    return yield* this.run(context, input).pipe(
-      Effect.catchTag('ExecutionsReadFailed', (error) =>
-        Effect.die(error.cause),
-      ),
+  if (namespace !== 'executions') {
+    return yield* Effect.fail(
+      new ToolError(`Path must start with /executions. Got: ${input.path}`),
     );
-  });
+  }
 
-  private readonly run = Effect.fn('ExecutionsTool.run')(function* (
-    this: ExecutionsTool,
-    context: RunToolContext,
-    input: ExecutionsToolInput,
-  ): Effect.fn.Return<
-    ToolResult,
-    Error | ExecutionsReadFailed,
-    Runs | FileSystem.FileSystem | StorageFs
-  > {
-    const segments = getPathSegments(input.path);
-    const [namespace, id, resource, ...rest] = segments;
-
-    if (namespace !== 'executions') {
-      return yield* Effect.fail(
-        new ToolError(`Path must start with /executions. Got: ${input.path}`),
-      );
-    }
-
-    // /executions - list all runs
-    if (!id) {
-      if (input.action === 'kill') {
-        return yield* Effect.fail(
-          new ToolError(
-            `action='${input.action}' requires a specific run: use /executions/{id}.`,
-          ),
-        );
-      }
-      if (input.action === 'wait') {
-        yield* this.waitForAnyChange(context, input.timeout, input.ids);
-      }
-      return yield* this.listRuns(context, input.offset, input.limit);
-    }
-
-    const runId = yield* this.resolveRunId(context, id);
-
-    // /executions/{id} - run summary or actions
-    if (!resource) {
-      switch (input.action) {
-        case 'kill':
-          return yield* this.handleKill(context, runId);
-        case 'wait':
-          yield* this.waitForAnyChange(context, input.timeout, [runId]);
-          return yield* this.showSummary(context, runId, {
-            suppressAutoDeliveredSubagentReport: true,
-          });
-        case 'view':
-          return yield* this.showSummary(context, runId, {
-            suppressAutoDeliveredSubagentReport: false,
-          });
-        default:
-          return assertNever(input, 'Unrecognized executions action');
-      }
-    }
-
-    // Sub-resource paths (config, conversation, files, ...) only support
-    // reading — wait/kill operate on /executions or /executions/{id}, never a
-    // deeper resource.
-    if (input.action !== 'view') {
+  // /executions - list all runs
+  if (!id) {
+    if (input.action === 'kill') {
       return yield* Effect.fail(
         new ToolError(
-          `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
+          `action='${input.action}' requires a specific run: use /executions/{id}.`,
         ),
       );
     }
-
-    const viewRange = input.view_range ?? undefined;
-
-    switch (resource) {
-      case 'config':
-        return yield* this.showConfig(context, runId);
-      case 'conversation': {
-        if (viewRange) {
-          return yield* Effect.fail(
-            new ToolError(
-              'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
-            ),
-          );
-        }
-        return yield* this.showConversation(
-          context,
-          runId,
-          input.offset,
-          input.limit,
-        );
-      }
-      case 'todos':
-        return yield* this.showTodos(context, runId);
-      case 'report':
-        return yield* this.showReport(context, runId);
-      case 'result':
-        return yield* this.showResultMeta(context, runId);
-      case 'children':
-        return yield* this.showChildren(context, runId);
-      case 'output':
-        return yield* this.showOutput(context, runId, viewRange);
-      case 'files':
-        if (rest.length === 0) {
-          return yield* this.listFiles(context, runId);
-        }
-        return yield* this.readFile(context, runId, rest.join('/'), viewRange);
-      case 'workspace-files':
-        if (rest.length === 0) {
-          return yield* this.listWorkspaceFiles(context, runId);
-        }
-        return yield* this.readWorkspaceFile(
-          context,
-          runId,
-          rest.join('/'),
-          viewRange,
-        );
+    if (input.action === 'wait') {
+      yield* waitForAnyChange(context, input.timeout, input.ids);
     }
+    return yield* listRuns(context, input.offset, input.limit);
+  }
 
+  const runId = yield* resolveRunId(context, id);
+
+  // /executions/{id} - run summary or actions
+  if (!resource) {
+    switch (input.action) {
+      case 'kill':
+        return yield* handleKill(context, runId);
+      case 'wait':
+        yield* waitForAnyChange(context, input.timeout, [runId]);
+        return yield* showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: true,
+        });
+      case 'view':
+        return yield* showSummary(context, runId, {
+          suppressAutoDeliveredSubagentReport: false,
+        });
+      default:
+        return assertNever(input, 'Unrecognized executions action');
+    }
+  }
+
+  // Sub-resource paths (config, conversation, files, ...) only support
+  // reading — wait/kill operate on /executions or /executions/{id}, never a
+  // deeper resource.
+  if (input.action !== 'view') {
     return yield* Effect.fail(
       new ToolError(
-        `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
+        `action='${input.action}' is only valid on /executions or /executions/{id}; use action='view' to read /executions/${id}/${resource}.`,
       ),
     );
-  });
+  }
 
-  private resolveRunId(
-    context: RunToolContext,
-    id: string,
-  ): Effect.Effect<RunId, ToolError> {
-    if (id === 'current') {
-      const runId = context.runId;
-      if (!runId) {
-        return Effect.fail(
+  const viewRange = input.view_range ?? undefined;
+
+  switch (resource) {
+    case 'config':
+      return yield* showConfig(context, runId);
+    case 'conversation': {
+      if (viewRange) {
+        return yield* Effect.fail(
           new ToolError(
-            'No active run. Use a specific run ID instead of "current".',
+            'Conversation pagination is message-based. Use offset and limit; view_range applies only to file and background-command output.',
           ),
         );
       }
-      return Effect.succeed(runId);
+      return yield* showConversation(context, runId, input.offset, input.limit);
     }
-    const result = RunIdSchema.safeParse(id);
-    if (!result.success) {
-      return Effect.fail(
-        new ToolError(`Invalid run ID format: ${id}. Expected hex string.`),
+    case 'todos':
+      return yield* showTodos(context, runId);
+    case 'report':
+      return yield* showReport(context, runId);
+    case 'result':
+      return yield* showResultMeta(context, runId);
+    case 'children':
+      return yield* showChildren(context, runId);
+    case 'output':
+      return yield* showOutput(context, runId, viewRange);
+    case 'files':
+      if (rest.length === 0) {
+        return yield* listFiles(context, runId);
+      }
+      return yield* readFile(context, runId, rest.join('/'), viewRange);
+    case 'workspace-files':
+      if (rest.length === 0) {
+        return yield* listWorkspaceFiles(context, runId);
+      }
+      return yield* readWorkspaceFile(
+        context,
+        runId,
+        rest.join('/'),
+        viewRange,
       );
-    }
-    return Effect.succeed(result.data);
   }
 
-  /** Wait for runs to change status, with timeout. */
-  private readonly waitForAnyChange = Effect.fn(
-    'ExecutionsTool.waitForAnyChange',
-  )(function* (
+  return yield* Effect.fail(
+    new ToolError(
+      `Unknown path: ${input.path}.\nValid paths:\n${EXECUTION_PATH_LIST}`,
+    ),
+  );
+});
+
+function resolveRunId(
+  context: RunToolContext,
+  id: string,
+): Effect.Effect<RunId, ToolError> {
+  if (id === 'current') {
+    const runId = context.runId;
+    if (!runId) {
+      return Effect.fail(
+        new ToolError(
+          'No active run. Use a specific run ID instead of "current".',
+        ),
+      );
+    }
+    return Effect.succeed(runId);
+  }
+  const result = RunIdSchema.safeParse(id);
+  if (!result.success) {
+    return Effect.fail(
+      new ToolError(`Invalid run ID format: ${id}. Expected hex string.`),
+    );
+  }
+  return Effect.succeed(result.data);
+}
+
+/** Wait for runs to change status, with timeout. */
+const waitForAnyChange = Effect.fn('ExecutionsTool.waitForAnyChange')(
+  function* (
     context: RunToolContext,
     timeout: number,
     ids?: readonly RunId[] | null,
@@ -367,293 +338,284 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     yield* awaitStatusChange(context, timeout, pendingIds, () =>
       pendingIds.every((id) => shouldSkipWait(runs, id)),
     );
-  });
+  },
+);
 
-  private readonly listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
-    context: RunToolContext,
-    offset: number,
-    limit: number,
-  ) {
-    // One cold fold of the log's listing tier: every run's identity, model,
-    // description, parentage and status, already decided. Nothing per row.
-    const view = yield* context.session.readView([]);
-    const entries = [...view.runs.values()].toSorted(
-      (left, right) =>
-        right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
+const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
+  context: RunToolContext,
+  offset: number,
+  limit: number,
+) {
+  // One cold fold of the log's listing tier: every run's identity, model,
+  // description, parentage and status, already decided. Nothing per row.
+  const view = yield* context.session.readView([]);
+  const entries = [...view.runs.values()].toSorted(
+    (left, right) =>
+      right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
+  );
+
+  if (entries.length === 0) {
+    return executed('No run history found.');
+  }
+
+  const { page, start, end, total } = paginateToolListing(
+    entries,
+    offset,
+    limit,
+  );
+
+  return executed(
+    `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map(formatListingLine).join('\n')}${formatPaginationHint(end, total)}`,
+  );
+});
+
+/**
+ * One line set for a live run and a finished one alike: the fold answers
+ * for both, so there is no second summary shape to keep in step.
+ *
+ * The view is folded cold rather than read off the live projection, which
+ * deliberately keeps only a bounded transcript for inactive runs: a
+ * workflow's board would otherwise lose its terminal cards and its
+ * board-level opened state. That board is why this is the one read on the
+ * surface that names its run's aggregate; every other path here takes the
+ * listing tier alone.
+ */
+const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
+  context: RunToolContext,
+  runId: RunId,
+  options: {
+    readonly suppressAutoDeliveredSubagentReport?: boolean;
+  } = {},
+) {
+  const session = context.session;
+  const view = yield* session.readView([runId]);
+  const run = view.runs.get(runId);
+
+  // Every open run is in the view: its `run.start` is seq 1 of its aggregate
+  // (the database refuses anything else there), so no checkpoint exists
+  // without the row that lists the run, and a closed run reads no snapshot.
+  if (!run) {
+    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+  }
+
+  // The report is a private record row, never part of the display fold.
+  const report = yield* getRunRecords(session, runId).readReport();
+  const lines = buildSummaryLines(run);
+
+  // Non-null exactly for a workflow-script run: the fold derives the
+  // board every host paints, and this bounds it for a model's context.
+  if (run.transcript.run !== null) {
+    lines.push(
+      '',
+      'Workflow:',
+      JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
     );
+  }
 
-    if (entries.length === 0) {
-      return executed('No run history found.');
-    }
+  const children = childRunViews(view, runId);
+  if (children.length > 0) {
+    lines.push('', `Children (${children.length}):`);
+    lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
+  }
 
-    const { page, start, end, total } = paginateToolListing(
-      entries,
-      offset,
-      limit,
+  // A report the caller already received as a follow-up is elided. Only a
+  // handle this process still tracks proves the child-run loop delivered
+  // it, so a finished run keeps its report inline. Deliberately
+  // identity-agnostic: a background bash run (`process`, category
+  // toolUse) auto-delivers exactly like a delegated agent.
+  const suppressReport =
+    options.suppressAutoDeliveredSubagentReport === true &&
+    run.category === AgentCategory.ToolUse &&
+    context.runId !== undefined &&
+    run.parentId === context.runId &&
+    (yield* Runs).getHandle(runId) !== undefined;
+
+  lines.push(
+    ...buildSummaryTailLines(
+      runId,
+      runDisplayCategory(run),
+      children.length > 0,
+      runTodos(run),
+      report,
+      { suppressReport },
+    ),
+  );
+
+  return executed(lines.join('\n'));
+});
+
+const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  const callerRunId = context.runId;
+
+  if (context.runId === runId) {
+    return yield* Effect.fail(
+      new ToolError(`Cannot kill your own run (${runId}).`),
     );
+  }
 
+  const runs = yield* Runs;
+  const target = runs.getHandle(runId);
+  if (!target) {
+    return yield* Effect.fail(
+      new ToolError(`Run ${runId} not found or already completed.`),
+    );
+  }
+
+  // Scope: can only kill your own children. Deny if no context.
+  if (!target.isOwnedBy(callerRunId)) {
+    return yield* Effect.fail(
+      new ToolError(`Cannot kill run ${runId}: not a child of this session.`),
+    );
+  }
+
+  // The permission gate: off, or a stored value that fails its schema,
+  // denies (the guard above has already narrowed `target` to an owned
+  // RunHandle).
+  const killDenial = yield* orchestratorKillDenial(context.session.roots);
+  if (killDenial !== undefined) {
+    return yield* Effect.fail(new ToolError(killDenial));
+  }
+
+  const detachActiveChildren = yield* detachSubagentsOnStop(
+    context.session.roots,
+  );
+  const success = yield* Effect.suspend(() => {
+    const stop = runs.kill(runId, {
+      detachActiveChildren,
+    });
+    // Asked after the settlement: a detaching stop interrupts the run
+    // only once its children have left it, so that is when it knows
+    // whether a live target took the stop.
+    return stop.settlement.pipe(
+      Effect.andThen(Effect.sync(() => stop.accepted())),
+    );
+  }).pipe(Effect.uninterruptible);
+  if (success) {
+    return executed(`Run ${runId} terminated.`);
+  }
+  return yield* Effect.fail(
+    new ToolError(`Run ${runId} could not be terminated.`),
+  );
+});
+
+/**
+ * The same fold `/executions/{id}` reads its task lines from, so this
+ * endpoint can never disagree with the summary about which tasks are
+ * still pending.
+ */
+const showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  // A task list is a listing fact (`run.fact` keyed `todos`), so this names
+  // no aggregate: reading a task list never folds a transcript.
+  const run = (yield* context.session.readView([])).runs.get(runId);
+  const todos = run === undefined ? [] : runTodos(run);
+
+  if (todos.length === 0) {
+    return executed(`No task list found for run ${runId}.`);
+  }
+
+  return executed(
+    `${formatTodoHeader(runId, todos)}\n\n${formatTodoSection(todos).join('\n')}`,
+  );
+});
+
+const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  const records = getRunRecords(context.session, runId);
+  const [report, note] = yield* Effect.all(
+    [records.readReport(), turnAttributionNote(runId, context.session)],
+    { concurrency: 2 },
+  );
+  if (!report) {
     return executed(
-      `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map(formatListingLine).join('\n')}${formatPaginationHint(end, total)}`,
+      `No report found for run ${runId}. Reports are persisted when subagents or background processes complete.`,
     );
-  });
+  }
+  return executed(note ? `${note}\n\n${report}` : report);
+});
 
-  /**
-   * One line set for a live run and a finished one alike: the fold answers
-   * for both, so there is no second summary shape to keep in step.
-   *
-   * The view is folded cold rather than read off the live projection, which
-   * deliberately keeps only a bounded transcript for inactive runs: a
-   * workflow's board would otherwise lose its terminal cards and its
-   * board-level opened state. That board is why this is the one read on the
-   * surface that names its run's aggregate; every other path here takes the
-   * listing tier alone.
-   */
-  private readonly showSummary = Effect.fn('ExecutionsTool.showSummary')(
-    function* (
-      context: RunToolContext,
-      runId: RunId,
-      options: {
-        readonly suppressAutoDeliveredSubagentReport?: boolean;
-      } = {},
-    ) {
-      const session = context.session;
-      const view = yield* session.readView([runId]);
-      const run = view.runs.get(runId);
-
-      if (!run) {
-        const resumability = yield* deriveResumability(runId, session);
-        if (resumability.kind !== 'checkpoint') {
-          return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-        }
-        return executed(
-          `Run: ${runId}\nStatus: resumable\n(No metadata available - use /executions/${runId}/conversation to view messages)`,
-        );
-      }
-
-      // The report is a private record row, never part of the display fold.
-      const report = yield* getRunRecords(session, runId).readReport();
-      const lines = buildSummaryLines(run);
-
-      // Non-null exactly for a workflow-script run: the fold derives the
-      // board every host paints, and this bounds it for a model's context.
-      if (run.transcript.run !== null) {
-        lines.push(
-          '',
-          'Workflow:',
-          JSON.stringify(workflowBoardView(run.transcript.run), null, 2),
-        );
-      }
-
-      const children = childRunViews(view, runId);
-      if (children.length > 0) {
-        lines.push('', `Children (${children.length}):`);
-        lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
-      }
-
-      // A report the caller already received as a follow-up is elided. Only a
-      // handle this process still tracks proves the child-run loop delivered
-      // it, so a finished run keeps its report inline. Deliberately
-      // identity-agnostic: a background bash run (`process`, category
-      // toolUse) auto-delivers exactly like a delegated agent.
-      const suppressReport =
-        options.suppressAutoDeliveredSubagentReport === true &&
-        run.category === AgentCategory.ToolUse &&
-        context.runId !== undefined &&
-        run.parentId === context.runId &&
-        (yield* Runs).getHandle(runId) !== undefined;
-
-      lines.push(
-        ...buildSummaryTailLines(
-          runId,
-          runDisplayCategory(run),
-          children.length > 0,
-          runTodos(run),
-          report,
-          { suppressReport },
-        ),
-      );
-
-      return executed(lines.join('\n'));
-    },
+/**
+ * Machine-readable final result for chaining a completed run into a
+ * later stage without parsing the prose report.
+ */
+const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  const records = getRunRecords(context.session, runId);
+  const [resultMeta, runEnd, note] = yield* Effect.all(
+    [
+      records.readResultMeta(),
+      records.readRunEnd(),
+      turnAttributionNote(runId, context.session),
+    ],
+    { concurrency: 3 },
   );
-
-  private readonly handleKill = Effect.fn('ExecutionsTool.handleKill')(
-    function* (context: RunToolContext, runId: RunId) {
-      const callerRunId = context.runId;
-
-      if (context.runId === runId) {
-        return yield* Effect.fail(
-          new ToolError(`Cannot kill your own run (${runId}).`),
-        );
-      }
-
-      const runs = yield* Runs;
-      const target = runs.getHandle(runId);
-      if (!target) {
-        return yield* Effect.fail(
-          new ToolError(`Run ${runId} not found or already completed.`),
-        );
-      }
-
-      // Scope: can only kill your own children. Deny if no context.
-      if (!target.isOwnedBy(callerRunId)) {
-        return yield* Effect.fail(
-          new ToolError(
-            `Cannot kill run ${runId}: not a child of this session.`,
-          ),
-        );
-      }
-
-      // Only block kills when the toggle is disabled (the guard above has
-      // already narrowed `target` to an owned RunHandle).
-      if (
-        !(yield* readSettingFrom<boolean>(
-          context.session.roots,
-          GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
-        ))
-      ) {
-        return yield* Effect.fail(
-          new ToolError(
-            'Killing subagents is disabled. Enable it in Settings > Multi-Agent.',
-          ),
-        );
-      }
-
-      const detachActiveChildren = yield* detachSubagentsOnStop(
-        context.session.roots,
-      );
-      const success = yield* Effect.suspend(() => {
-        const stop = runs.kill(runId, {
-          detachActiveChildren,
-        });
-        // Asked after the settlement: a detaching stop interrupts the run
-        // only once its children have left it, so that is when it knows
-        // whether a live target took the stop.
-        return stop.settlement.pipe(
-          Effect.andThen(Effect.sync(() => stop.accepted())),
-        );
-      }).pipe(Effect.uninterruptible);
-      if (success) {
-        return executed(`Run ${runId} terminated.`);
-      }
-      return yield* Effect.fail(
-        new ToolError(`Run ${runId} could not be terminated.`),
-      );
-    },
-  );
-
-  /**
-   * The same fold `/executions/{id}` reads its task lines from, so this
-   * endpoint can never disagree with the summary about which tasks are
-   * still pending.
-   */
-  private readonly showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
-    context: RunToolContext,
-    runId: RunId,
-  ) {
-    // A task list is a listing fact (`run.fact` keyed `todos`), so this names
-    // no aggregate: reading a task list never folds a transcript.
-    const run = (yield* context.session.readView([])).runs.get(runId);
-    const todos = run === undefined ? [] : runTodos(run);
-
-    if (todos.length === 0) {
-      return executed(`No task list found for run ${runId}.`);
-    }
-
+  if (!resultMeta) {
     return executed(
-      `${formatTodoHeader(runId, todos)}\n\n${formatTodoSection(todos).join('\n')}`,
+      `No structured result recorded for ${runId} yet. It is written when the run completes.`,
     );
-  });
+  }
+  const result = unwrapResultMeta(resultMeta, runEnd);
+  // The note rides INSIDE the JSON: /result is the machine-readable
+  // chaining endpoint, so prefixed prose would break JSON.parse
+  // consumers precisely in the interrupted-turn case it describes.
+  const payload = note ? { turnAttribution: note, ...result } : result;
+  return executed(JSON.stringify(payload, null, 2));
+});
 
-  private readonly showReport = Effect.fn('ExecutionsTool.showReport')(
-    function* (context: RunToolContext, runId: RunId) {
-      const records = getRunRecords(context.session, runId);
-      const [report, note] = yield* Effect.all(
-        [records.readReport(), turnAttributionNote(runId, context.session)],
-        { concurrency: 2 },
-      );
-      if (!report) {
-        return executed(
-          `No report found for run ${runId}. Reports are persisted when subagents or background processes complete.`,
-        );
-      }
-      return executed(note ? `${note}\n\n${report}` : report);
-    },
+const showChildren = Effect.fn('ExecutionsTool.showChildren')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  // Parentage and a child's line are listing facts, so this names no
+  // aggregate: no transcript is folded to list children.
+  const view = yield* context.session.readView([]);
+  const children = childRunViews(view, runId);
+  if (children.length === 0) {
+    return executed(`No child runs found for ${runId}.`);
+  }
+
+  return executed(
+    `Children of ${runId} (${children.length}):\n\n${children.map(formatChildLine).join('\n')}`,
   );
+});
 
-  /**
-   * Machine-readable final result for chaining a completed run into a
-   * later stage without parsing the prose report.
-   */
-  private readonly showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(
-    function* (context: RunToolContext, runId: RunId) {
-      const records = getRunRecords(context.session, runId);
-      const [resultMeta, runEnd, note] = yield* Effect.all(
-        [
-          records.readResultMeta(),
-          records.readRunEnd(),
-          turnAttributionNote(runId, context.session),
-        ],
-        { concurrency: 3 },
-      );
-      if (!resultMeta) {
-        return executed(
-          `No structured result recorded for ${runId} yet. It is written when the run completes.`,
-        );
-      }
-      const result = unwrapResultMeta(resultMeta, runEnd);
-      // The note rides INSIDE the JSON: /result is the machine-readable
-      // chaining endpoint, so prefixed prose would break JSON.parse
-      // consumers precisely in the interrupted-turn case it describes.
-      const payload = note ? { turnAttribution: note, ...result } : result;
-      return executed(JSON.stringify(payload, null, 2));
-    },
+const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  const records = getRunRecords(context.session, runId);
+  const record = yield* records.readRunRecord();
+
+  if (!record) {
+    return yield* Effect.fail(
+      new ToolError(`Config not found for run: ${runId}.`),
+    );
+  }
+
+  // Filter out fields irrelevant to this run's display category, which
+  // the fold decides from the stamped identity. Read from the fold's
+  // listing tier rather than the live view, so a run no port holds is
+  // filtered by the same rule as one that is.
+  const run = (yield* context.session.readView([])).runs.get(runId);
+  return executed(
+    serializeFilteredConfig(
+      record,
+      run === undefined ? undefined : runDisplayCategory(run),
+    ),
   );
+});
 
-  private readonly showChildren = Effect.fn('ExecutionsTool.showChildren')(
-    function* (context: RunToolContext, runId: RunId) {
-      // Parentage and a child's line are listing facts, so this names no
-      // aggregate: no transcript is folded to list children.
-      const view = yield* context.session.readView([]);
-      const children = childRunViews(view, runId);
-      if (children.length === 0) {
-        return executed(`No child runs found for ${runId}.`);
-      }
-
-      return executed(
-        `Children of ${runId} (${children.length}):\n\n${children.map(formatChildLine).join('\n')}`,
-      );
-    },
-  );
-
-  private readonly showConfig = Effect.fn('ExecutionsTool.showConfig')(
-    function* (context: RunToolContext, runId: RunId) {
-      const records = getRunRecords(context.session, runId);
-      const record = yield* records.readRunRecord();
-
-      if (!record) {
-        return yield* Effect.fail(
-          new ToolError(`Config not found for run: ${runId}.`),
-        );
-      }
-
-      // Filter out fields irrelevant to this run's display category, which
-      // the fold decides from the stamped identity. Read from the fold's
-      // listing tier rather than the live view, so a run no port holds is
-      // filtered by the same rule as one that is.
-      const run = (yield* context.session.readView([])).runs.get(runId);
-      return executed(
-        serializeFilteredConfig(
-          record,
-          run === undefined ? undefined : runDisplayCategory(run),
-        ),
-      );
-    },
-  );
-
-  private readonly showConversation = Effect.fn(
-    'ExecutionsTool.showConversation',
-  )(function* (
+const showConversation = Effect.fn('ExecutionsTool.showConversation')(
+  function* (
     context: RunToolContext,
     runId: RunId,
     offset: number,
@@ -667,12 +629,10 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     const { conversation, source } = conversationResult;
 
     if (!conversation) {
-      // Match the top-level run lookup: a flow-only record is found only
-      // when the shared storage decision says it is resumable.
-      const resumability = yield* deriveResumability(runId, context.session);
+      // A checkpoint implies the `run.start` `exists` reads: it is seq 1 of
+      // the run's aggregate.
       const exists =
         (yield* records.exists()) ||
-        resumability.kind === 'checkpoint' ||
         hasCompletedRunConversationEvidence(conversationResult);
       if (!exists) {
         return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
@@ -703,157 +663,146 @@ Delegated subagent and workflow results are delivered automatically as follow-up
     });
 
     return executed(output);
-  });
+  },
+);
 
-  /**
-   * stdout/stderr of a background command, projected from the transcript log
-   * its child run already writes (`createChildRun` in `tools/bash.ts`).
-   *
-   * This is the only route readable *while the command runs*: `/report` and
-   * `/result` are written at completion, and the completion follow-up carries
-   * only a 20-line preview, so without this the middle of a long build log is
-   * unreachable even after the run ends. Restricted to process runs —
-   * an agent run's rows are a model transcript, which `/conversation` already
-   * renders properly.
-   */
-  private readonly showOutput = Effect.fn('ExecutionsTool.showOutput')(
-    function* (
-      context: RunToolContext,
-      runId: RunId,
-      viewRange?: [number, number],
-    ) {
-      const run = context.session.runView(runId);
-      if (run === undefined) {
-        return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
-      }
-      if (run.identity.kind !== 'process') {
-        return executed(
-          `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
-            `Use /executions/${runId}/conversation for an agent run's message history.`,
-        );
-      }
+/**
+ * stdout/stderr of a background command, projected from the transcript log
+ * its child run already writes (`createChildRun` in `tools/bash.ts`).
+ *
+ * This is the only route readable *while the command runs*: `/report` and
+ * `/result` are written at completion, and the completion follow-up carries
+ * only a 20-line preview, so without this the middle of a long build log is
+ * unreachable even after the run ends. Restricted to process runs —
+ * an agent run's rows are a model transcript, which `/conversation` already
+ * renders properly.
+ */
+const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
+  context: RunToolContext,
+  runId: RunId,
+  viewRange?: [number, number],
+) {
+  const run = context.session.runView(runId);
+  if (run === undefined) {
+    return yield* Effect.fail(new ToolError(`Run not found: ${runId}`));
+  }
+  if (run.identity.kind !== 'process') {
+    return executed(
+      `/executions/${runId}/output is only available for background commands (bash with run_in_background). ` +
+        `Use /executions/${runId}/conversation for an agent run's message history.`,
+    );
+  }
 
-      // The row above already proved the run is in the session's view; its
-      // transcript is read from the same rows.
-      const entries = yield* context.session.transcripts
-        .readEntries(runId)
-        .pipe(readFailed);
+  // The row above already proved the run is in the session's view; its
+  // output is read from the run's own committed rows.
+  const { lines, chars } = projectProcessOutput(
+    yield* context.session.readRunEvents(runId).pipe(readFailed),
+  );
+  // The row above was read before the transcript, and a command that
+  // finished during that read must not be judged against it: the view is
+  // in memory, so one read of one run can afford a fresh row. Only a
+  // tombstone takes a run out of the view, and then the row this call
+  // already holds is the last honest reading of it.
+  const current = context.session.runView(runId) ?? run;
+  // The footer states the same reading as the header, and both come from
+  // the fold: "no handle in this process" alone never justifies calling a
+  // command finished, and a run whose owner is gone reads as interrupted
+  // rather than as one that recorded how it ended.
+  const lead = isTerminalOutcomePhase(current.status)
+    ? 'finished:'
+    : (current.statusDetail ??
+      `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
+  const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
+  const out: string[] = [
+    `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
+  ];
 
-      const { lines, chars } = projectProcessOutput(entries);
-      // The row above was read before the transcript, and a command that
-      // finished during that read must not be judged against it: the view is
-      // in memory, so one read of one run can afford a fresh row. Only a
-      // tombstone takes a run out of the view, and then the row this call
-      // already holds is the last honest reading of it.
-      const current = context.session.runView(runId) ?? run;
-      // The footer states the same reading as the header, and both come from
-      // the fold: "no handle in this process" alone never justifies calling a
-      // command finished, and a run whose owner is gone reads as interrupted
-      // rather than as one that recorded how it ended.
-      const lead = isTerminalOutcomePhase(current.status)
-        ? 'finished:'
-        : (current.statusDetail ??
-          `still running: re-read for more output, or use action='wait' on /executions/${runId} to block until it finishes;`);
-      const footer = `[${lead} this is the retained log; /executions/${runId}/report has the result summary]`;
-      const out: string[] = [
-        `Output for ${runId} (process, ${formatRunStatus(current)}): ${chars.toLocaleString()} retained transcript chars; command-output cap ${BASH_BACKGROUND_LOG_CAP_CHARS.toLocaleString()} chars, ${lines.length.toLocaleString()} lines.`,
-      ];
+  if (lines.length === 0) {
+    out.push('', footer);
+    return executed(out.join('\n'));
+  }
+  out.push('Lines are in arrival order; `err:` marks one written to stderr.');
 
-      if (lines.length === 0) {
-        out.push('', footer);
-        return executed(out.join('\n'));
-      }
-      out.push(
-        'Lines are in arrival order; `err:` marks one written to stderr.',
-      );
+  // Default to the tail, where a live build's news is; a view_range window
+  // is clamped so a wide request still can't return an unbounded log.
+  const first =
+    viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
+  const requestedLast = Math.min(viewRange?.[1] ?? lines.length, lines.length);
+  const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
 
-      // Default to the tail, where a live build's news is; a view_range window
-      // is clamped so a wide request still can't return an unbounded log.
-      const first =
-        viewRange?.[0] ?? Math.max(lines.length - OUTPUT_TAIL_LINES, 0) + 1;
-      const requestedLast = Math.min(
-        viewRange?.[1] ?? lines.length,
-        lines.length,
-      );
-      const last = Math.min(requestedLast, first + OUTPUT_MAX_LINES - 1);
+  if (first > last) {
+    out.push(
+      `No lines in the requested range; the log has ${lines.length} lines.`,
+      '',
+      footer,
+    );
+    return executed(out.join('\n'));
+  }
 
-      if (first > last) {
-        out.push(
-          `No lines in the requested range; the log has ${lines.length} lines.`,
-          '',
-          footer,
-        );
-        return executed(out.join('\n'));
-      }
-
-      let hint = '';
-      if (last < requestedLast) {
-        hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read; continue from view_range: [${last + 1}, …])`;
-      } else if (!viewRange && first > 1) {
-        hint = ` (the last ${OUTPUT_TAIL_LINES} by default; use view_range to page earlier ones)`;
-      }
-      out.push(
-        `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
-        '',
-        lines.slice(first - 1, last).join('\n'),
-        '',
-        footer,
-      );
-
-      return executed(
-        out.join('\n'),
-        `Read lines ${first}-${last} of /executions/${runId}/output`,
-      );
-    },
+  let hint = '';
+  if (last < requestedLast) {
+    hint = ` (capped at ${OUTPUT_MAX_LINES} lines per read; continue from view_range: [${last + 1}, …])`;
+  } else if (!viewRange && first > 1) {
+    hint = ` (the last ${OUTPUT_TAIL_LINES} by default; use view_range to page earlier ones)`;
+  }
+  out.push(
+    `Showing lines ${first}-${last} of ${lines.length}${hint}.`,
+    '',
+    lines.slice(first - 1, last).join('\n'),
+    '',
+    footer,
   );
 
-  private readonly listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
-    context: RunToolContext,
-    runId: RunId,
-  ) {
-    const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-      readFailed,
-    );
-    if (files.length === 0) {
-      return executed('No files generated for this run.');
-    }
+  return executed(
+    out.join('\n'),
+    `Read lines ${first}-${last} of /executions/${runId}/output`,
+  );
+});
 
-    const lines = formatSizedEntryLines(files);
+const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
+  context: RunToolContext,
+  runId: RunId,
+) {
+  const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
+    readFailed,
+  );
+  if (files.length === 0) {
+    return executed('No files generated for this run.');
+  }
 
-    return executed(
-      `Files in /executions/${runId}/files:\n\n${lines.join('\n')}`,
-    );
+  const lines = formatSizedEntryLines(files);
+
+  return executed(
+    `Files in /executions/${runId}/files:\n\n${lines.join('\n')}`,
+  );
+});
+
+const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
+  context: RunToolContext,
+  runId: RunId,
+  filePath: string,
+  viewRange?: [number, number],
+) {
+  const displayPath = `/executions/${runId}/files/${filePath}`;
+  yield* assertNoParentTraversal(filePath);
+  const fullPath = yield* findExistingRunStoragePathUnder(
+    context.session.roots.storage,
+    runId,
+    filePath,
+  ).pipe(readFailed);
+  if (!fullPath) {
+    return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
+  }
+
+  return yield* readFileContent(yield* StorageFs, fullPath, {
+    directoryErrorPath: displayPath,
+    resultPath: displayPath,
+    viewRange,
   });
+});
 
-  private readonly readFile = Effect.fn('ExecutionsTool.readFile')(function* (
-    context: RunToolContext,
-    runId: RunId,
-    filePath: string,
-    viewRange?: [number, number],
-  ) {
-    const displayPath = `/executions/${runId}/files/${filePath}`;
-    assertNoParentTraversal(filePath);
-    const fullPath = yield* findExistingRunStoragePathUnder(
-      context.session.roots.storage,
-      runId,
-      filePath,
-    ).pipe(readFailed);
-    if (!fullPath) {
-      return yield* Effect.fail(
-        new ToolError(`File not found: ${displayPath}`),
-      );
-    }
-
-    return yield* readFileContent(yield* StorageFs, fullPath, {
-      directoryErrorPath: displayPath,
-      resultPath: displayPath,
-      viewRange,
-    });
-  });
-
-  private readonly listWorkspaceFiles = Effect.fn(
-    'ExecutionsTool.listWorkspaceFiles',
-  )(function* (context: RunToolContext, runId: RunId) {
+const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
+  function* (context: RunToolContext, runId: RunId) {
     const records = getRunRecords(context.session, runId);
     const [record, paths] = yield* Effect.all(
       [records.readRunRecord(), records.readWorkspaceFiles()],
@@ -873,11 +822,11 @@ Delegated subagent and workflow results are delivered automatically as follow-up
       `Workspace files for /executions/${runId}/workspace-files:\n\n` +
         lines.join('\n'),
     );
-  });
+  },
+);
 
-  private readonly readWorkspaceFile = Effect.fn(
-    'ExecutionsTool.readWorkspaceFile',
-  )(function* (
+const readWorkspaceFile = Effect.fn('ExecutionsTool.readWorkspaceFile')(
+  function* (
     context: RunToolContext,
     runId: RunId,
     filePath: string,
@@ -929,8 +878,27 @@ Delegated subagent and workflow results are delivered automatically as follow-up
         viewRange,
       },
     );
-  });
-}
+  },
+);
+
+export const ExecutionsTool = defineTool({
+  name: 'executions',
+  slow: true,
+  description: `View run history and manage live runs.
+
+Paths:
+${EXECUTION_PATH_LIST}
+
+Use "current" as {id} to access the active run.
+Use offset/limit to paginate the /executions listing or conversation messages (default: offset 0, limit 100).
+Use view_range: [start, end] to paginate file and background-command output content.
+Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
+Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
+Use action: "kill" on /executions/{id} to terminate a live run.
+Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
+  schema: ExecutionsToolInputSchema,
+  execute: executeExecutionsTool,
+});
 
 /**
  * Shared stat → directory-guard → read → format tail for `readFile` and

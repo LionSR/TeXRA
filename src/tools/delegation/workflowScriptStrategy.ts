@@ -15,7 +15,7 @@ import { Cause, Effect, Exit, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import type {
   WorkflowAgentInvocation,
@@ -27,7 +27,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type {
   RunId,
   WorkflowScriptDeliverySummary,
@@ -52,7 +52,6 @@ import {
 const RUN_LOG_MAX_LINES = 80;
 const RUN_LOG_MAX_LINE_LENGTH = 500;
 const SUMMARY_CHANNEL = 'WorkflowDeliverySummary';
-const summaryLog = createLog(SUMMARY_CHANNEL);
 
 /** One model-facing reference for editing and rerunning a persisted script. */
 export function formatWorkflowScriptReference(scriptPath: string): string {
@@ -99,8 +98,7 @@ export interface WorkflowScriptStrategyParams {
   readonly session: SessionHandle;
   /**
    * The host's dependency fingerprint. It reads file bytes through the process
-   * `FileSystem` now that the `AbsoluteFS` facade is gone, so its `R` names
-   * that service rather than nothing.
+   * `FileSystem`, so its `R` names that service.
    */
   readonly fingerprintAgentDependencies: (
     options: Parameters<
@@ -191,44 +189,47 @@ export function createWorkflowScriptStrategy(
       >;
     },
     costUsd: number,
-  ) => {
-    settledCostUsd = costUsd;
-    phaseCount = run.board.phaseCount;
-    taskDone = run.board.calls.filter(
-      (call) =>
-        call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
-        call.status === WORKFLOW_CALL_STATUS.CACHED,
-    ).length;
-    taskTotal = run.board.calls.length;
-    for (const entry of run.journal) {
-      const parsed = RunEndSchema.safeParse(entry.result);
-      if (!parsed.success) {
-        // Presentation tolerates what accounting does not: the cost path
-        // (`workflowJournalEntryCost`) throws on this same corruption because
-        // a mis-billed run is a correctness fault, while a delivery line that
-        // omits one entry's files is merely incomplete. Loud either way — a
-        // silently short file list is how corruption goes unreported.
-        summaryLog.warn(
-          `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
-          { data: parsed.error },
-        );
-        continue;
-      }
-      if (parsed.data.output.category === 'workflow') {
-        for (const output of parsed.data.output.outputs) {
-          summaryFiles.set(output.relativePath, {
-            path: output.relativePath,
-            added: output.added,
-            removed: output.removed,
-          });
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      settledCostUsd = costUsd;
+      phaseCount = run.board.phaseCount;
+      taskDone = run.board.calls.filter(
+        (call) =>
+          call.status === WORKFLOW_CALL_STATUS.COMPLETED ||
+          call.status === WORKFLOW_CALL_STATUS.CACHED,
+      ).length;
+      taskTotal = run.board.calls.length;
+      for (const entry of run.journal) {
+        const parsed = RunEndSchema.safeParse(entry.result);
+        if (!parsed.success) {
+          // Presentation tolerates what accounting does not: the cost path
+          // (`workflowJournalEntryCost`) throws on this same corruption because
+          // a mis-billed run is a correctness fault, while a delivery line that
+          // omits one entry's files is merely incomplete. Loud either way — a
+          // silently short file list is how corruption goes unreported.
+          yield* Effect.logWarning(
+            `Workflow '${params.name}' journal entry ${entry.index} is not a run result; its delivered files are omitted from the summary: ${toErrorMessage(parsed.error)}`,
+          ).pipe(
+            Effect.annotateLogs({ data: parsed.error }),
+            withLogChannel(SUMMARY_CHANNEL),
+          );
+          continue;
         }
-      } else {
-        for (const path of parsed.data.output.files) {
-          summaryFiles.set(path, { path, added: null, removed: null });
+        if (parsed.data.output.category === 'workflow') {
+          for (const output of parsed.data.output.outputs) {
+            summaryFiles.set(output.relativePath, {
+              path: output.relativePath,
+              added: output.added,
+              removed: output.removed,
+            });
+          }
+        } else {
+          for (const path of parsed.data.output.files) {
+            summaryFiles.set(path, { path, added: null, removed: null });
+          }
         }
       }
-    }
-  };
+    });
 
   const formatSummaryLine = (
     outcome: 'completed' | 'failed',
@@ -316,14 +317,15 @@ export function createWorkflowScriptStrategy(
             // This invocation's consumed results are the only entries its cost
             // and delivery summary may claim. The engine fires after durable
             // commit for live results and after validation for cache hits.
-            onJournalEntryConsumed: (entry) => {
-              attemptJournalByKey.set(entry.key, entry);
-              const journal = attemptJournal();
-              settleSummary(
-                { journal, board: projection.board() },
-                attemptCost.total(journal),
-              );
-            },
+            onJournalEntryConsumed: (entry): Effect.Effect<void> =>
+              Effect.suspend(() => {
+                attemptJournalByKey.set(entry.key, entry);
+                const journal = attemptJournal();
+                return settleSummary(
+                  { journal, board: projection.board() },
+                  attemptCost.total(journal),
+                );
+              }),
             // The engine's control is already keyed by the grandchild run
             // id a host targets, so the run registers it as-is.
             onControl: (control) => {
@@ -334,12 +336,19 @@ export function createWorkflowScriptStrategy(
         // Settle only entries consumed by this invocation: the durable union may
         // hold superseded or malformed untouched recovery history, and baseline
         // history is irrelevant to this invocation's cost and delivered files.
-        const settleAttempt = (): void => {
-          const journal = attemptJournal();
-          const costUsd = attemptCost.total(journal);
-          ports.recordCost(costUsd);
-          settleSummary({ journal, board: projection.board() }, costUsd);
-        };
+        const settleAttempt = Effect.try({
+          try: () => {
+            const journal = attemptJournal();
+            const costUsd = attemptCost.total(journal);
+            ports.recordCost(costUsd);
+            return { journal, board: projection.board(), costUsd };
+          },
+          catch: ensureError,
+        }).pipe(
+          Effect.flatMap(({ journal, board, costUsd }) =>
+            settleSummary({ journal, board }, costUsd),
+          ),
+        );
         // The child-run loop cancels a turn through `signal` (it runs the
         // turn uninterruptibly); the engine cancels by interruption. This is
         // the one edge between them: the abort interrupts the run, which
@@ -387,7 +396,7 @@ export function createWorkflowScriptStrategy(
           }
           return yield* Effect.failCause(result.cause);
         }
-        yield* Effect.try({ try: settleAttempt, catch: ensureError });
+        yield* settleAttempt;
         return result.value;
       }),
 

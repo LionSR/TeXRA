@@ -9,14 +9,14 @@ vi.mock('@shared/hostBridge', () => ({
   },
 }));
 
-import type { SettingsNavGroup } from '@settingsView/frontend/settingsNav';
+import type { SettingsNavEntry } from '@settingsView/frontend/settingsNav';
 import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
 
 import { useLitComponentTestDom } from './litComponentTestUtils';
 
 type LitElementLike = HTMLElement & { updateComplete: Promise<unknown> };
 
-let navGroups: readonly SettingsNavGroup[] = [];
+let navEntries: readonly SettingsNavEntry[] = [];
 let settingsState: typeof import('@settingsView/frontend/settingsState');
 
 function setSelectedPanel(panel: SettingsTabPanelName): void {
@@ -28,7 +28,7 @@ function getSelectedPanel(): SettingsTabPanelName {
 }
 
 async function mountSettingsApp(
-  initialTab: SettingsTabPanelName = 'account',
+  initialTab: SettingsTabPanelName = 'models',
 ): Promise<LitElementLike> {
   const app = document.createElement('settings-app') as LitElementLike;
   app.setAttribute('data-desktop-view', 'settings');
@@ -36,16 +36,6 @@ async function mountSettingsApp(
   document.body.append(app);
   await app.updateComplete;
   return app;
-}
-
-function categoryButton(app: LitElementLike, label: string): HTMLElement {
-  const button = [
-    ...(app.shadowRoot?.querySelectorAll<HTMLElement>(
-      '.settings-category-button',
-    ) ?? []),
-  ].find((candidate) => candidate.getAttribute('aria-label') === label);
-  expect(button, `missing settings category "${label}"`).not.toBeNull();
-  return button!;
 }
 
 function pageButton(app: LitElementLike, panel: string): HTMLElement {
@@ -56,76 +46,106 @@ function pageButton(app: LitElementLike, panel: string): HTMLElement {
   return button!;
 }
 
+function sectionTabs(app: LitElementLike): HTMLElement[] {
+  return [
+    ...(app.shadowRoot?.querySelectorAll<HTMLElement>(
+      '.settings-section-button',
+    ) ?? []),
+  ];
+}
+
+function activeSection(app: LitElementLike): string | undefined {
+  return sectionTabs(app).find(
+    (tab) => tab.getAttribute('aria-selected') === 'true',
+  )?.dataset.section;
+}
+
 function activePanelLabel(app: LitElementLike): string | null | undefined {
   return app.shadowRoot
     ?.querySelector('.settings-panel')
     ?.getAttribute('aria-label');
 }
 
-describe('hierarchical settings navigation', () => {
+describe('settings navigation', () => {
   useLitComponentTestDom(async () => {
     await import('@settingsView/frontend/SettingsApp');
     const nav = await import('@settingsView/frontend/settingsNav');
     settingsState = await import('@settingsView/frontend/settingsState');
-    navGroups = nav.SETTINGS_NAV_GROUPS;
+    navEntries = nav.SETTINGS_NAV_ENTRIES;
   });
 
   beforeEach(() => {
-    setSelectedPanel('account');
+    setSelectedPanel('models');
   });
 
-  it('selects the first page when changing category, then any page within it', async () => {
+  it('shows every page in one strip and a sub-tab row only for multi-section pages', async () => {
     const app = await mountSettingsApp();
 
-    for (const group of navGroups) {
-      categoryButton(app, group.label).click();
+    expect(
+      app.shadowRoot?.querySelectorAll('.settings-page-nav [role="tab"]'),
+    ).toHaveLength(navEntries.length + navEntries[0].sections.length);
+    for (const entry of navEntries) {
+      pageButton(app, entry.panel).click();
       await app.updateComplete;
-
-      expect(getSelectedPanel()).toBe(group.entries[0]!.panel);
-      expect(activePanelLabel(app)).toBe(group.entries[0]!.label);
-      expect(
-        app.shadowRoot?.querySelectorAll('.settings-page-button'),
-      ).toHaveLength(group.entries.length);
-
-      for (const entry of group.entries) {
-        pageButton(app, entry.panel).click();
-        await app.updateComplete;
-        expect(getSelectedPanel()).toBe(entry.panel);
-        expect(activePanelLabel(app)).toBe(entry.label);
-      }
+      expect(getSelectedPanel()).toBe(entry.panel);
+      expect(activePanelLabel(app)).toBe(entry.label);
+      expect(pageButton(app, entry.panel).getAttribute('aria-selected')).toBe(
+        'true',
+      );
+      expect(sectionTabs(app).map((tab) => tab.dataset.section)).toEqual(
+        entry.sections.length < 2
+          ? []
+          : entry.sections
+              .map((s) => s.section)
+              // Mounted as the desktop, which has no VS Code settings.
+              .filter((section) => section !== 'vscode'),
+      );
     }
   });
 
-  it('activates the page addressed by a wire panel name', async () => {
-    const app = await mountSettingsApp('latex');
-
-    expect(activePanelLabel(app)).toBe('LaTeX');
-    expect(
-      app.shadowRoot?.querySelector(
-        '.settings-page-button[data-panel="latex"][data-active="true"]',
-      ),
-    ).not.toBeNull();
-    expect(app.shadowRoot?.querySelector('latex-tab')).not.toBeNull();
-  });
-
-  it('keeps account key management in the models page', async () => {
+  it('lands a page/section link on its sub-tab, remembers it, and moves with arrow keys', async () => {
     const app = await mountSettingsApp();
+    window.dispatchEvent(
+      new window.MessageEvent('message', {
+        data: { command: 'setTab', tab: 'agents/teams' },
+      }),
+    );
+    await app.updateComplete;
 
-    const account =
-      app.shadowRoot?.querySelector<LitElementLike>('account-tab');
-    await account?.updateComplete;
-    account?.dispatchEvent(
-      new CustomEvent('manage-provider-keys', {
+    expect(activePanelLabel(app)).toBe('Agents');
+    expect(activeSection(app)).toBe('teams');
+    expect(
+      app.shadowRoot
+        ?.querySelector('agents-tab')
+        ?.shadowRoot?.querySelector('slot[name="teams"]'),
+    ).not.toBeNull();
+
+    // Leaving the page and coming back keeps the sub-tab.
+    pageButton(app, 'models').click();
+    await app.updateComplete;
+    expect(activeSection(app)).toBe('keys');
+    pageButton(app, 'agents').click();
+    await app.updateComplete;
+    expect(activeSection(app)).toBe('teams');
+
+    // Roving focus: only the selected tab is in the tab order, and an arrow
+    // key selects the next one.
+    const teams = sectionTabs(app).find((t) => t.dataset.section === 'teams')!;
+    expect(sectionTabs(app).map((t) => t.getAttribute('tabindex'))).toEqual([
+      '-1',
+      '0',
+      '-1',
+      '-1',
+    ]);
+    teams.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'ArrowRight',
         bubbles: true,
         composed: true,
       }),
     );
     await app.updateComplete;
-
-    expect(getSelectedPanel()).toBe('models');
-    expect(activePanelLabel(app)).toBe('Providers & Models');
-    expect(app.shadowRoot?.querySelector('models-tab')).not.toBeNull();
-    expect(app.shadowRoot?.querySelector('account-tab')).toBeNull();
+    expect(activeSection(app)).toBe('skills');
   });
 
   it('keeps desktop-only shortcuts out of the extension navigation', async () => {
@@ -139,7 +159,7 @@ describe('hierarchical settings navigation', () => {
         '.settings-page-button[data-panel="shortcuts"]',
       ),
     ).toBeNull();
-    expect(activePanelLabel(app)).toBe('Account & Usage');
+    expect(activePanelLabel(app)).toBe('Models');
     expect(app.shadowRoot?.querySelector('shortcuts-tab')).toBeNull();
   });
 });

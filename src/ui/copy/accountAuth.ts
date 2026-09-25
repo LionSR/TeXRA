@@ -88,7 +88,6 @@ export const RESEARCHER_ACCESS_AUTH = {
   statusExample: `show ${RESEARCHER_ACCESS.label} sign-in status`,
   authDescription: `Sign in with ${CHATGPT_AUTH.label} or ${GROK_AUTH.label}, or sign in to your ${RESEARCHER_ACCESS.label}; check status`,
   /** `/login` slash-command description. */
-  slashLoginDescription: `Sign in with ${CHATGPT_AUTH.label} or ${GROK_AUTH.label}, or sign in to your ${RESEARCHER_ACCESS.label}`,
   chatLoginDescription: `manage ${CHATGPT_AUTH.label}, ${GROK_AUTH.label}, and your ${RESEARCHER_ACCESS.label} sign-ins`,
   startingDevice: `Starting device-code sign-in to your ${RESEARCHER_ACCESS.label}.`,
   startingNoBrowser: (provider: string): string =>

@@ -1,6 +1,12 @@
 /** Provider API key statuses with set/remove/get-URL actions and per-provider settings. */
 
-import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import {
+  LitElement,
+  html,
+  nothing,
+  type PropertyValues,
+  type TemplateResult,
+} from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 // Local imports - shared styles
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -9,7 +15,10 @@ import type {
   ProviderKeyStatus,
   ProviderSetting,
 } from '@shared/settingsView/settingsViewMessages';
-import { PROVIDER_STATE_ENTRIES } from '@shared/constants/providers';
+import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
+import { TickerController } from '@shared/litControllers/TickerController';
+import type { SubscriptionUsageSnapshots } from '@shared/schemas';
 import { createEvent } from '@shared/utils/events';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
@@ -26,6 +35,7 @@ import '@awesome.me/webawesome/dist/components/switch/switch.js';
 import { postStateSetting } from '../shared/stateSettingRows';
 import { providerKeyListStyles } from './ProviderKeyList.styles';
 import { resolveProviderKeyRows } from './providerKeyRows';
+import './SubscriptionUsageRow';
 import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
 import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
 
@@ -40,7 +50,17 @@ export class ProviderKeyList extends LitElement {
 
   @property({ attribute: false }) providerKeyStatuses: ProviderKeyStatus[] = [];
 
+  /** Plan usage for the coding-plan providers (Kimi Code, GLM Coding Plan). */
+  @property({ attribute: false }) usage: SubscriptionUsageSnapshots | null =
+    null;
+
   @state() private expandedProvider: string | null = null;
+
+  private readonly ticker = new TickerController(this, 60_000);
+
+  protected override willUpdate(changedProperties: PropertyValues<this>): void {
+    if (changedProperties.has('usage')) this.ticker.refresh();
+  }
 
   private toggleExpanded(provider: string): void {
     this.expandedProvider =
@@ -108,8 +128,8 @@ export class ProviderKeyList extends LitElement {
               placeholder="Leave blank for default"
               @change=${(e: Event) => {
                 const value = (e.target as WaInput).value?.trim() ?? '';
-                const key = PROVIDER_STATE_ENTRIES.find(
-                  ({ id }) => id === entry.provider,
+                const key = findModelProviderPlugin(
+                  entry.provider,
                 )?.endpointKey;
                 if (key) postStateSetting(key, value);
               }}
@@ -122,8 +142,19 @@ export class ProviderKeyList extends LitElement {
       <div class="settings-disclosure-content provider-settings">
         ${endpointInput}
         ${entry.providerSettings.map((s) => this.renderProviderSetting(s))}
+        ${this.renderPlanUsage(entry.provider)}
       </div>
     `;
+  }
+
+  /** The plan's usage meter, on the provider row whose key the plan uses. */
+  private renderPlanUsage(provider: string): TemplateResult | typeof nothing {
+    const plan = codingPlanForApiProvider(provider);
+    if (!plan) return nothing;
+    return html`<subscription-usage-row
+      .snapshot=${this.usage?.[plan.usageProvider] ?? null}
+      .now=${this.ticker.now}
+    ></subscription-usage-row>`;
   }
 
   private renderProviderSetting(setting: ProviderSetting): TemplateResult {
@@ -201,12 +232,12 @@ export class ProviderKeyList extends LitElement {
     const rows = resolveProviderKeyRows(this.providerKeyStatuses);
 
     const description =
-      "Chat subscriptions do not include API access. Codex models connected through ChatGPT are the exception. Add keys from each provider's developer console.";
+      "Add a key from each provider's developer console. Kimi Code and GLM Coding Plan keys go on their rows; a ChatGPT or Grok plan signs in below instead.";
 
     return html`
       <div class="provider-keys-section">
         ${renderSettingsSectionHeading({
-          title: 'API configuration',
+          title: 'API keys',
           description,
           icon: 'key',
         })}

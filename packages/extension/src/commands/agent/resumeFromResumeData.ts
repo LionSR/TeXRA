@@ -11,7 +11,7 @@ import {
   resumeCancellationLatch,
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
   AgentResumeFailed,
@@ -22,7 +22,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { runExecuteCommand } from './executeCommand';
 
-const logger = createLog('resumeFromResumeData');
+const CHANNEL = 'resumeFromResumeData';
 
 export function tryResumeFromResumeData(
   runId: RunId,
@@ -35,6 +35,9 @@ export function tryResumeFromResumeData(
     (event) => event.runId === runId,
   );
   const isCancellationRequested = resumeCancellationLatch(session, runId);
+  // The refusal callback is synchronous; it records the reason and the
+  // program logs it once the attempt settles, whichever way it settles.
+  let refusal: string | undefined;
   const attempt = resumeRunWithRefusalNotice(
     runId,
     {
@@ -52,8 +55,14 @@ export function tryResumeFromResumeData(
         ),
     },
     (failure) => {
-      logger.warn(`Run ${runId} was not resumed: ${failure}`);
+      refusal = `Run ${runId} was not resumed: ${failure}`;
     },
+  ).pipe(
+    Effect.onExit(() =>
+      refusal === undefined
+        ? Effect.void
+        : Effect.logWarning(refusal).pipe(withLogChannel(CHANNEL)),
+    ),
   );
   // The resume is composed, not awaited. Its program takes the services the
   // port's Effect may not require, so they come from this runtime's context on
@@ -67,17 +76,23 @@ export function tryResumeFromResumeData(
     Effect.catchCause((cause) => {
       if (isCancellationRequested()) return Effect.succeed(false);
       const error = Cause.squash(cause);
-      logger.error(`Failed to resume run: ${runId}`, { data: error });
       const message = `Resume failed: ${toErrorMessage(error)}`;
-      return Effect.tryPromise({
-        try: async () => {
-          await terminalResult.reportUnhandled(() =>
-            vscode.window.showWarningMessage(message),
-          );
-        },
-        catch: (reportCause) =>
-          new AgentResumeFailed({ runId, message, cause: reportCause }),
-      }).pipe(Effect.as(false));
+      return Effect.logError(`Failed to resume run: ${runId}`).pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.tryPromise({
+            try: async () => {
+              await terminalResult.reportUnhandled(() =>
+                vscode.window.showWarningMessage(message),
+              );
+            },
+            catch: (reportCause) =>
+              new AgentResumeFailed({ runId, message, cause: reportCause }),
+          }),
+        ),
+        Effect.as(false),
+      );
     }),
     Effect.ensuring(Effect.sync(() => terminalResult.dispose())),
   );

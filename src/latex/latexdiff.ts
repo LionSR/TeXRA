@@ -5,6 +5,7 @@ import { Effect, FileSystem, PlatformError } from 'effect';
 import { formatError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import type { FileLocation } from '@shared/schemas';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -16,7 +17,7 @@ import {
 } from './latexdiff/diffFileNameManager';
 import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
-import type { MathMarkupOption } from './latexdiff/mathMarkup';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export type LaTeXdiffResult =
   | {
@@ -119,7 +120,7 @@ export class LaTeXdiffService {
     inputLocation: FileLocation,
     editedLocation: FileLocation,
     suffix = '_diff',
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: {
       /**
        * Directory latexdiff runs in. Required so the caller names the root it
@@ -130,7 +131,11 @@ export class LaTeXdiffService {
       subtype?: string;
       outputDirectory?: string;
     },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       const editedFile = editedLocation.absolutePath;
@@ -204,8 +209,12 @@ export class LaTeXdiffService {
   runDiffVc(
     inputLocation: FileLocation,
     commitHash: string,
-    mathMarkup?: MathMarkupOption,
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+    mathMarkup?: LatexdiffMathMarkupValue,
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       const inputFile = inputLocation.absolutePath;
       if (!hasDocumentEnvironment(yield* this.read(inputFile))) {
@@ -262,9 +271,13 @@ export class LaTeXdiffService {
     baseLocation: FileLocation,
     outputLocation: FileLocation,
     round: number,
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(baseLocation, outputLocation))) {
         const message = `Could not generate latexdiff for round ${round}. Files not found: ${baseLocation.absolutePath} or ${outputLocation.absolutePath}`;
@@ -290,9 +303,13 @@ export class LaTeXdiffService {
     secondLocation: FileLocation,
     fromRound: number,
     toRound: number,
-    mathMarkup: MathMarkupOption | undefined,
+    mathMarkup: LatexdiffMathMarkupValue | undefined,
     options: { cwd: string | undefined; outputDirectory?: string },
-  ): Effect.Effect<LaTeXdiffResult, never, FileSystem.FileSystem> {
+  ): Effect.Effect<
+    LaTeXdiffResult,
+    never,
+    FileSystem.FileSystem | ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       if (!(yield* this.bothFilesExist(firstLocation, secondLocation))) {
         const message = `Could not generate latexdiff between rounds. Files not found: ${firstLocation.absolutePath} or ${secondLocation.absolutePath}`;
@@ -334,7 +351,9 @@ export class LaTeXdiffService {
     });
   }
 
-  private getGitRoot(cwd: string): Effect.Effect<string | null> {
+  private getGitRoot(
+    cwd: string,
+  ): Effect.Effect<string | null, never, ChildProcessSpawner> {
     return executeCommand(['git', 'rev-parse', '--show-toplevel'], {
       channel: this.channel,
       cwd,

@@ -125,7 +125,6 @@ vi.mock('@tools/delegation/childRun', () => ({
 
 vi.mock('@tools/approval', () => ({
   configureDelegatedChildApprovals: mocks.configureDelegatedChildApprovals,
-  proposalApprovals: () => ({ isBypassed: () => false }),
 }));
 
 vi.mock('@tools/delegation/proposalFlow', async (importOriginal) => ({
@@ -142,7 +141,6 @@ vi.mock('@tools/delegation/delegationAvailability', async (importOriginal) => ({
 }));
 
 import { WorkflowScriptTool } from '@tools/delegation/WorkflowScriptTool';
-import { getDefaultToolRegistry } from '@tools/registry';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const parentRunId = '7154c4700700' as RunId;
@@ -298,9 +296,9 @@ function callToolInput(
   },
   stopAfterCycle = false,
 ) {
-  return new WorkflowScriptTool()
-    .call(input)
-    .pipe(Effect.provide(toolLayer(stopAfterCycle)));
+  return WorkflowScriptTool.call(input).pipe(
+    Effect.provide(toolLayer(stopAfterCycle)),
+  );
 }
 
 beforeEach(async () => {
@@ -513,7 +511,7 @@ return null`;
   );
 
   it('pins the provider schema shape at the model-facing boundary', () => {
-    const definition = new WorkflowScriptTool().definition;
+    const definition = WorkflowScriptTool.definition;
     const providerSchema = convertToolSchema(definition);
     const providerProperties = providerSchema?.properties as
       Record<string, { description?: string }> | undefined;
@@ -553,14 +551,12 @@ return null`;
 
   it.effect('rejects invalid JSON arguments at the schema boundary', () =>
     Effect.gen(function* () {
-      const result = yield* new WorkflowScriptTool()
-        .call({
-          agent: 'correct',
-          script,
-          scriptPath: null,
-          args: { invalid: undefined },
-        })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const result = yield* WorkflowScriptTool.call({
+        agent: 'correct',
+        script,
+        scriptPath: null,
+        args: { invalid: undefined },
+      }).pipe(Effect.provide(nativeToolTestLayer()));
 
       expect(result.status).toBe('error');
       expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
@@ -570,16 +566,14 @@ return null`;
 
   it.effect('requires a launched tool context', () =>
     Effect.gen(function* () {
-      const outside = yield* new WorkflowScriptTool()
-        .call({
-          agent: 'correct',
-          script,
-          scriptPath: null,
-        })
-        .pipe(Effect.provide(nativeToolTestLayer()));
+      const outside = yield* WorkflowScriptTool.call({
+        agent: 'correct',
+        script,
+        scriptPath: null,
+      }).pipe(Effect.provide(nativeToolTestLayer()));
       expect(outside).toMatchObject({
         status: 'error',
-        error: expect.stringContaining('active launched agent session'),
+        error: expect.stringContaining('active run context'),
       });
       expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
     }),
@@ -601,7 +595,6 @@ return null`;
           // The durable record is honest: workflow name, launch summary, and the
           // real delegation model. It has no fabricated agent identity or category.
           registrationRecordFor('tool-test'),
-          'tool-test',
           registrationOptionsFor('tool-test'),
         );
         expect(mocks.createChildRun).toHaveBeenCalledWith(
@@ -701,7 +694,6 @@ return null`;
         testDefaultSession(),
         runIdFor('edited-tool-test'),
         registrationRecordFor('edited-tool-test'),
-        'edited-tool-test',
         registrationOptionsFor('edited-tool-test'),
       );
     }),
@@ -762,9 +754,9 @@ return null`;
           scriptPath: '.texra/workflow-scripts/stale.mjs',
         },
       ]) {
-        const result = yield* new WorkflowScriptTool()
-          .call(input)
-          .pipe(Effect.provide(nativeToolTestLayer()));
+        const result = yield* WorkflowScriptTool.call(input).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
         expect(result).toMatchObject({
           status: 'error',
           diagnostics: { type: 'validation_error' },
@@ -944,7 +936,6 @@ return null`;
         testDefaultSession(),
         runIdFor('tool-test'),
         registrationRecordFor('tool-test', 'served-model'),
-        'tool-test',
         registrationOptionsFor('tool-test'),
       );
     }),
@@ -1114,11 +1105,6 @@ return null`;
             isRemote: false,
             parent: { id: parentRunId },
             checkpointId: checkpointIdFor('tool-test'),
-          },
-          {
-            type: 'run.launchLabel',
-            aggregateId: aggregateId('run', runId),
-            label: 'tool-test',
           },
           {
             type: 'run.activate',

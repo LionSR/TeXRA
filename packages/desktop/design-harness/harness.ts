@@ -23,21 +23,10 @@ import '@awesome.me/webawesome/dist/components/divider/divider.js';
 import '@progressView/frontend/ProgressApp';
 import { html, render, type TemplateResult } from 'lit';
 
-import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { desktopScenes } from './scenes/desktop';
 import { extensionScenes } from './scenes/extension';
 import { RUN_BOARD_FIXTURES, runBoardScene } from './scenes/runBoard';
 // ── small pieces ────────────────────────────────────────────────────────
-const iconBtn = (name: Parameters<typeof waIcon>[0], label: string) =>
-  html` <wa-button
-    appearance="plain"
-    size="s"
-    class="icon-button"
-    aria-label=${label}
-    title=${label}
-    >${waIcon(name)}</wa-button
-  >`;
-
 const extFrame = (inner: TemplateResult) =>
   html` <div class="h-ext" id="frame">
     <div class="h-vscode-strip">
@@ -51,7 +40,7 @@ const extFrame = (inner: TemplateResult) =>
 const runBoardScenes = Object.fromEntries(
   Object.entries(RUN_BOARD_FIXTURES).map(([name, fold]) => [
     name,
-    () => extFrame(runBoardScene(fold, iconBtn)),
+    () => extFrame(runBoardScene(fold)),
   ]),
 );
 

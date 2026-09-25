@@ -114,6 +114,13 @@
   pointer-events: none;
 }
 
+/* A closed pane's split panel is disabled with a zero-width divider; its
+   grip would otherwise float free in the canvas. */
+wa-split-panel[disabled] > .shell-split-handle,
+wa-split-panel[disabled] > .shell-bottom-split-handle {
+  display: none;
+}
+
 /* ── Project/task sidebar ─────────────────────────────────────────────── */
 
 .shell-sidebar-slot {
@@ -172,20 +179,11 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   letter-spacing: -0.015em;
 }
 
-.shell-sidebar-brand-menu {
-  display: block;
-  font-size: var(--font-size-xs);
-  -webkit-app-region: no-drag;
-}
-
-.shell-sidebar-brand-menu wa-icon,
-.shell-project-chevron,
 .shell-section-split-handle wa-icon,
 .shell-split-handle wa-icon,
 .shell-bottom-split-handle wa-icon,
 .shell-header-button wa-icon,
 .shell-layout-toggle wa-icon,
-.shell-environment-button wa-icon,
 .shell-workbench-tab-close wa-icon,
 .shell-workbench-close wa-icon {
   display: grid;
@@ -222,10 +220,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   text-align: left;
 }
 
-.shell-sidebar-action[data-primary='true'] {
-  font-weight: var(--font-weight-medium);
-}
-
 .shell-sidebar-action-icon {
   display: grid;
   place-items: center;
@@ -235,10 +229,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   color: var(--wa-color-text-quiet);
   font-size: var(--shell-frame-icon-size);
   line-height: 1;
-}
-
-.shell-sidebar-action[data-primary='true'] .shell-sidebar-action-icon {
-  color: var(--wa-color-text-normal);
 }
 
 .shell-sidebar-scroll {
@@ -310,26 +300,74 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding: 0 8px;
 }
 
-.shell-sidebar-section-count {
-  margin-left: auto;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
-.shell-sidebar-section-count::part(base) {
-  display: inline-grid;
-  min-height: 22px;
-  min-width: 22px;
-  place-items: center;
-  padding: 1px 6px;
-  line-height: 1;
-}
-
 .shell-project-item {
   display: flex;
   align-items: center;
   gap: 2px;
   margin-top: 4px;
+}
+
+/* The shown project reads as selected; every other row keeps the same
+   shape, so nothing about a row moves when the selection does. */
+.shell-project-item.is-active .shell-project-row::part(base) {
+  background: color-mix(in srgb, var(--wa-color-text-normal) 7%, transparent);
+}
+
+.shell-project-item.is-active .shell-project-copy strong {
+  font-weight: var(--font-weight-semibold);
+}
+
+/* One dot per project, always present when the project has news: what
+   needs the user, what is running, what finished while they were away. */
+.shell-project-status {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  margin: 0 4px;
+  border-radius: 50%;
+}
+
+.shell-project-status[data-tone='waiting'],
+.shell-project-status[data-tone='interrupted'] {
+  background: var(--wa-color-warning-fill-loud);
+}
+
+.shell-project-status[data-tone='running'] {
+  background: var(--wa-color-success-fill-loud);
+}
+
+.shell-project-status[data-tone='unseen'] {
+  background: var(--wa-color-brand-fill-loud);
+}
+
+/* The row's own actions, shown while the row is hovered or focused. */
+.shell-project-new,
+.shell-project-close {
+  flex: 0 0 auto;
+  opacity: 0;
+  color: var(--wa-color-text-quiet);
+}
+
+.shell-project-item:hover :is(.shell-project-new, .shell-project-close),
+.shell-project-item:focus-within :is(.shell-project-new, .shell-project-close) {
+  opacity: 1;
+}
+
+.shell-project-add {
+  margin-left: auto;
+  color: var(--wa-color-text-quiet);
+}
+
+.shell-project-empty {
+  display: block;
+  width: 100%;
+  color: var(--wa-color-text-quiet);
+}
+
+.shell-project-empty::part(base) {
+  justify-content: flex-start;
+  width: 100%;
+  padding: 4px 8px;
 }
 
 .shell-project-row {
@@ -350,21 +388,9 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   color: var(--wa-color-text-quiet);
 }
 
-/* Shown while the row is hovered or the control itself has focus. */
-.shell-project-close {
-  flex: 0 0 auto;
-  opacity: 0;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-item:hover .shell-project-close,
-.shell-project-item:focus-within .shell-project-close {
-  opacity: 1;
-}
-
 .shell-project-row::part(base) {
   width: 100%;
-  min-height: 48px;
+  min-height: 36px;
   padding: 5px 8px;
 }
 
@@ -409,76 +435,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-size: var(--font-size-xs);
 }
 
-.shell-project-chevron {
-  flex: 0 0 auto;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
-/* The project this window shows reads as a section heading: its runs sit
-   beneath it and the header's project chip names it, so the row itself stays
-   plain and only its name firms up. */
-.shell-project-row.is-active .shell-project-copy strong {
-  font-weight: var(--font-weight-semibold);
-}
-
-.shell-project-add {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-add::part(base) {
-  width: 100%;
-  justify-content: flex-start;
-  padding: 4px 8px;
-  border-style: dashed;
-}
-
-.shell-project-files {
-  min-height: 0;
-  margin: 3px 0 2px 14px;
-  padding-left: 10px;
-  border-left: 1px solid var(--wa-color-surface-border);
-}
-
-.shell-project-files[hidden] {
-  display: none;
-}
-
-.shell-project-files .desktop-editor-tree-header {
-  display: none;
-}
-
-.shell-project-files .desktop-editor-tree-list {
-  display: block;
-  max-height: none;
-  padding: 0;
-  overflow: visible;
-}
-
-.shell-project-files .desktop-editor-tree-row {
-  --indent-size: 1.15em;
-}
-
-.shell-project-files .desktop-editor-tree-row::part(item) {
-  min-height: 26px;
-  padding: 0 4px;
-  border-radius: 6px;
-}
-
-.shell-project-files .desktop-editor-tree-row::part(expand-button) {
-  width: 1.5em;
-  height: 1.5em;
-}
-
-.shell-project-files .desktop-editor-tree-empty {
-  padding: 8px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-}
-
 .shell-sidebar-sessions {
   min-height: 0;
 }
@@ -516,8 +472,11 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-conversation {
   position: relative;
-  display: grid;
-  grid-template-rows: var(--shell-frame-header-height) minmax(0, 1fr);
+  /* A column whose body takes what is left: with a folder open the
+     conversation's own header is the one row, and only the no-folder screen
+     puts a header row here. */
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -528,7 +487,49 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   container-type: inline-size;
 }
 
+/* The body takes the rest of the column; the conversation surface fills
+   it, so the transcript scrolls inside the window and the composer sits at
+   its foot rather than under however much content there happens to be. */
+.shell-conversation-body {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.shell-conversation-pane {
+  display: grid;
+  grid-area: 1 / 1;
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+}
+
+.shell-conversation-pane[hidden] {
+  display: none;
+}
+
+.shell-conversation-pane > *,
+.shell-launcher-surface {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* A flex column: <progress-app> sizes itself as a flex item (flex: 1), so
+   its parent must be a flex container for it to take the height. */
+.shell-launcher-surface {
+  display: flex;
+  flex-direction: column;
+}
+
 .shell-header {
+  flex: 0 0 var(--shell-frame-header-height);
   position: relative;
   z-index: 5;
   display: flex;
@@ -595,158 +596,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-layout-toggle {
   display: block;
-}
-
-.shell-environment-button {
-  display: block;
-  max-width: min(260px, 32vw);
-  font-size: var(--font-size-sm);
-}
-
-.shell-environment-button::part(label) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-environment-popover {
-  --max-width: min(360px, calc(100vw - 28px));
-  -webkit-app-region: no-drag;
-}
-
-.shell-environment-popover::part(body) {
-  width: 340px;
-  max-width: calc(100vw - 48px);
-  max-height: min(680px, calc(100vh - 72px));
-  padding: 10px 12px;
-  overflow-y: auto;
-}
-
-.shell-environment-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 36px;
-  padding: 0 5px 5px 8px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-lg);
-  font-weight: var(--font-weight-medium);
-  letter-spacing: -0.01em;
-}
-
-.shell-environment-refresh[disabled] wa-icon {
-  animation: spin 0.9s linear infinite;
-}
-
-.shell-environment-section {
-  padding: 6px 0;
-  border-top: 1px solid var(--wa-color-surface-border);
-}
-
-.shell-environment-section:first-of-type {
-  border-top: 0;
-}
-
-.shell-environment-section-title {
-  padding: 7px 8px 4px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-}
-
-.shell-environment-row {
-  display: grid;
-  grid-template-columns: 24px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
-  min-height: 32px;
-  padding: 0 8px;
-  color: var(--wa-color-text-normal);
-  font-size: var(--font-size);
-}
-
-.shell-environment-row > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shell-environment-row-icon {
-  display: grid;
-  place-items: center;
-  width: var(--shell-frame-icon-box);
-  height: var(--shell-frame-icon-box);
-  color: var(--wa-color-text-quiet);
-  font-size: var(--shell-frame-icon-size);
-  line-height: 1;
-}
-
-.shell-environment-trailing {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  max-width: 150px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  text-overflow: ellipsis;
-}
-
-.shell-environment-trailing.is-success {
-  color: var(--color-success);
-}
-
-.shell-environment-diff {
-  font-variant-numeric: tabular-nums;
-}
-
-.shell-environment-diff .is-added {
-  color: var(--color-success);
-}
-
-.shell-environment-diff .is-deleted {
-  color: var(--color-error);
-}
-
-.shell-environment-more {
-  padding: 3px 8px 4px 40px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-}
-
-.shell-environment-popover .is-muted {
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-conversation-body {
-  position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.shell-conversation-pane {
-  display: grid;
-  grid-area: 1 / 1;
-  grid-template-rows: minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-}
-
-.shell-conversation-pane[hidden] {
-  display: none;
-}
-
-.shell-conversation-pane > *,
-.shell-launcher-surface {
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
 }
 
 /* ── Optional workbench ───────────────────────────────────────────────── */
@@ -926,8 +775,26 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   -webkit-app-region: no-drag;
 }
 
-body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
+body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header,
+body[data-desktop-platform='darwin']
+  .shell-frame-collapsed
+  .shell-header-start {
   padding-left: var(--macos-titlebar-safe-inset);
+}
+
+/* The desktop's controls slotted into the conversation's header row. */
+.shell-header-title {
+  overflow: hidden;
+  font-weight: var(--font-weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-header-start,
+.shell-header-end {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .shell-workbench-body,
@@ -989,35 +856,6 @@ body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
   }
 }
 
-@container shell-conversation (max-width: 560px) {
-  .shell-environment-button {
-    width: var(--control-size-l);
-  }
-
-  .shell-environment-button::part(base) {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--control-size-l);
-    min-width: 0;
-    padding: 0;
-  }
-
-  .shell-environment-button::part(start) {
-    margin: 0;
-  }
-
-  .shell-environment-button wa-icon {
-    margin: 0;
-    line-height: 0;
-  }
-
-  .shell-environment-button::part(caret),
-  .shell-environment-button span {
-    display: none;
-  }
-}
-
 @container shell-conversation (max-width: 420px) {
   .shell-header {
     gap: 4px;
@@ -1058,74 +896,13 @@ body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
   scrollbar-width: thin;
 }
 
-/* A sibling of the row button, not its child: WebAwesome pins a badge
-   slotted into a button to the button's corner. */
-.shell-project-badge {
-  flex: 0 0 auto;
-  margin: 0 2px;
-  font-size: 10px;
-  line-height: 1;
-}
-
-.shell-project-badge::part(base) {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  line-height: 16px;
-}
-
 .shell-project-runs {
   margin: 2px 0 4px 10px;
-}
-
-.shell-project-files-toggle {
-  display: block;
-  width: 100%;
-  margin: 0 0 2px 10px;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-project-files-toggle::part(base) {
-  justify-content: flex-start;
-  min-height: 26px;
-  padding: 2px 8px;
-  font-size: var(--font-size-sm);
-}
-
-.shell-workflow-calls-note {
-  padding: 4px 10px 6px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-sm);
-}
-
-/* Opens the Subagents tab on the selected family: the way into a tree the
-   rail no longer nests. */
-.shell-subagents-open {
-  display: block;
-  width: 100%;
-  margin: 2px 0 4px;
-  color: var(--wa-color-text-quiet);
-}
-
-.shell-subagents-open::part(base) {
-  justify-content: flex-start;
-  min-height: 26px;
-  padding: 2px 8px;
-  font-size: var(--font-size-sm);
 }
 
 .shell-subagents-open-count {
   font-variant-numeric: tabular-nums;
   color: var(--wa-color-text-quiet);
-}
-
-/* The conversation pane's project chip and dock. */
-.shell-project-chip {
-  flex: 0 0 auto;
-}
-
-.shell-project-chip wa-button::part(base) {
-  gap: 6px;
 }
 
 .shell-conversation-dock {
@@ -1183,4 +960,49 @@ body[data-desktop-platform='darwin'] .shell-frame-collapsed .shell-header {
 .shell-project-workbench[hidden],
 .shell-workbench-retained-surface[hidden] {
   display: none;
+}
+
+.shell-subagents-open {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  -webkit-app-region: no-drag;
+}
+
+.shell-subagents-open-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--wa-color-text-quiet);
+}
+
+/* The Files tab: the tree alone; the tab names it, so its own heading
+   keeps only the refresh control. */
+.shell-files {
+  align-content: start;
+  padding: 6px 4px;
+}
+
+.shell-files .desktop-editor-tree-header > span {
+  visibility: hidden;
+}
+
+.shell-files .desktop-editor-tree-list {
+  display: block;
+  max-height: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.shell-files .desktop-editor-tree-row {
+  --indent-size: 1.15em;
+}
+
+.shell-files .desktop-editor-tree-row::part(item) {
+  min-height: 26px;
+  padding: 0 4px;
+  border-radius: 6px;
+}
+
+.shell-files .desktop-editor-tree-empty {
+  padding: 8px;
+  color: var(--wa-color-text-quiet);
+  font-size: var(--font-size-sm);
 }

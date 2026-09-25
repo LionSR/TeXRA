@@ -19,7 +19,6 @@
  * imports, suitable for both the CLI and the desktop main process.
  */
 
-import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -30,6 +29,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  FileSystem,
   Layer,
   type PlatformError,
   Ref,
@@ -44,14 +44,14 @@ import {
 
 import { withLogChannel } from '@logger/effectLog';
 import { info, warn } from '@logger/logUtils';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import {
   makeJsonRpcConnection,
   type JsonRpcConnection,
   type JsonRpcConnectionDisposed,
   type JsonRpcRequestError,
-} from './jsonRpc';
+} from '@tools/jsonRpc';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import type { DiagnosticSeverity } from '@utils/diagnostics/diagnosticFormatting';
 import type { LeanServerRoster } from '../leanServerRegistry';
 import type {
   LeanDiagnostic,
@@ -141,7 +141,7 @@ export class LeanServer extends Context.Service<
   ): Layer.Layer<
     LeanServer,
     LeanStartError,
-    ChildProcessSpawner.ChildProcessSpawner
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
   > => Layer.effect(LeanServer)(make(options));
 }
 
@@ -220,9 +220,10 @@ const make = ({
 }: LeanServerOptions): Effect.Effect<
   LeanServer['Service'],
   LeanStartError,
-  ChildProcessSpawner.ChildProcessSpawner | Scope.Scope
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Scope.Scope
 > =>
   Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     serverSequence += 1;
     const id = `direct:${root}#${serverSequence}`;
     const closed = yield* Deferred.make<void>();
@@ -418,17 +419,16 @@ const make = ({
     ) {
       yield* requireRpc;
       if (openFiles.has(absolute) && !forceReload) return;
-      // Uses fs/promises directly rather than a rooted `FileSystem` view:
-      // this must read the same real on-disk bytes the spawned `lean --server`
-      // process itself sees.
-      const text = yield* Effect.tryPromise({
-        try: (signal) => readFile(absolute, { encoding: 'utf8', signal }),
-        catch: (error) =>
-          new LeanFileReadError({
-            message: `Failed to read ${absolute}: ${toErrorMessage(error)}`,
-            cause: error,
-          }),
-      });
+      // The process FileSystem is unrooted: it reads the bytes lean sees.
+      const text = yield* fs.readFileString(absolute).pipe(
+        Effect.mapError(
+          (cause) =>
+            new LeanFileReadError({
+              message: `Failed to read ${absolute}: ${cause.message}`,
+              cause,
+            }),
+        ),
+      );
       const existing = openFiles.get(absolute);
       if (existing && !forceReload) return;
       // Re-check after the read: the server may have ended meanwhile.
@@ -591,7 +591,7 @@ function fileUriToPath(uri: string): Effect.Effect<string | null> {
   // escape and break diagnostics handling.
   return Effect.try({
     try: () => fileURLToPath(uri),
-    catch: (error) => error,
+    catch: ensureError,
   }).pipe(
     Effect.catch((error) =>
       Effect.logDebug(`Ignoring unmappable file URI ${uri}`).pipe(

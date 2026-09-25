@@ -25,9 +25,8 @@ TeXRA integrates into your editor and terminal to help you do good work: derivin
 5. Review the diff
 
 > 💡 **Tip:** Inside VS Code you can open the **Get started with TeXRA** walkthrough from the Get Started page
-> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (choose how
-> TeXRA should sign in; the setup assistant takes it from here; meet the orchestrator; or do it manually with the
-> sample project) and links directly to the relevant commands.
+> (or by running `TeXRA: Open Getting Started Walkthrough`). It tells the same story in four steps (connect a
+> model, open your paper, run the setup assistant, your first task) and links directly to the relevant commands.
 
 ::: tip Prefer the terminal?
 This guide walks through the VS Code extension. If you installed the
@@ -42,23 +41,23 @@ available.
 A credential is the one step no agent can do for you. On a fresh install, the **Welcome to TeXRA** card in the
 TeXRA panel offers the main access choices:
 
-1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Providers & Models** tab
+1. **Use your own provider API key**: Anthropic, OpenAI, Google, and more. Open the **Models** page
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
-   set your provider's key in the **API Configuration** table, or place a `.env` file in your workspace with
+   set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Subscriptions**
-   tab and use the **ChatGPT subscription** sign-in section.
+2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Models**
+   page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
-   already pay for. Connect them from the same **Subscriptions** tab.
-4. **Use GitHub Copilot in VS Code**: compatible models through a Copilot subscription. Open **Subscriptions →
+   already pay for. Connect them from the same **Models** page.
+4. **Use GitHub Copilot in VS Code**: compatible models through a Copilot subscription. Open **Models →
    Copilot in VS Code** and grant access through VS Code's native consent prompt. This source does not appear in
    the CLI or desktop applications.
 
 The full per-provider key reference (the API Configuration table, Set / Get / Remove actions, and per-provider toggles) lives in [Models → Setting API keys](./models.md#setting-api-keys).
 
 ::: tip Signing in to TeXRA
-**TeXRA: Sign In** is separate from model access: your TeXRA account unlocks the hosted
-research-agent catalog (remote agents such as the orchestrator), and those agents still run on the credential
+**TeXRA: Sign In to TeXRA Account (Remote Agents)** is separate from model access: your TeXRA account unlocks the hosted
+research-agent catalog (remote workflow agents such as `generic` and `devise`), and those agents still run on the credential
 you configured above. Read the [Remote agents guide](./remote-agents.md).
 :::
 
@@ -67,7 +66,7 @@ Once a credential is in place, the setup assistant takes it from here: one conve
 ::: tip CLI credentials
 The terminal uses the same paths: provider env vars for your own keys,
 `texra auth chatgpt login` for a ChatGPT subscription, `texra auth grok login`
-for a Grok (xAI) subscription, or `/api` in a chat to pick among connected
+for a Grok (xAI) subscription, or `/login` in a chat to pick among connected
 subscriptions. `texra setup` is the terminal counterpart of the setup
 assistant: it walks you through sign-in, ChatGPT, or an API key, then your
 environment, agent roster, and first task. Read the
@@ -83,10 +82,15 @@ cover the Launcher controls you'll use beyond that.
 
 ## The Launcher in detail
 
-Open the TeXRA panel from the brain icon in the sidebar, or press
-`Ctrl+Alt+M` (`Cmd+Option+M` on macOS).
+Open the TeXRA panel from the brain icon in the sidebar, or run **TeXRA: New Task**
+(`Ctrl+Alt+M`, `Cmd+Option+M` on macOS).
 
 ### Select files
+
+The **Input** and **Context** sections appear once you pick a document-pass
+agent such as `polish` or `correct`, because only those agents read them. An
+interactive agent (the orchestrator, the assistant) gets your instruction and
+any attachments, so the Launcher shows only **Media** for it.
 
 1. In the **Input** section, select <wa-icon library="texra" name="add"></wa-icon> **Add files** and pick your document from the file picker. You can also drag it from the OS file manager. If you have several `.tex` files open and want them all, use <wa-icon library="texra" name="folder-opened"></wa-icon> **Add opened files**; it appends every editor tab whose extension matches.
 2. (Optional) Use the same buttons in **Context** to add read-only references or preamble, and **Media** to add figure files.
@@ -102,7 +106,10 @@ Each category holds an ordered list. Add as many files as the task needs and dra
 ### Choose agent, model, and instruction
 
 The dropdown menus at the bottom of the instruction box pick the agent
-(e.g. `polish` for improving writing) and the model (e.g. `sonnet5`).
+(e.g. `polish` for improving writing) and the model (e.g. `sonnet5`). The
+agent menu lists interactive agents, document passes and teams in three
+sections, and the agent you pick decides what kind of run starts: there is
+no separate mode to set.
 Then write a specific instruction in the text area:
 
 ```
@@ -117,7 +124,7 @@ Be specific about your objectives: state both what the agent should improve and 
 
 ### Configure tools
 
-Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active.
+Two icon buttons sit in the file-group header rows of the file selector: one next to the **Input** label, one next to the **Media** label. They light up when a helper is active, and they appear only for a document-pass agent, the only kind that uses them.
 
 1. Select the <wa-icon library="texra" name="tools"></wa-icon> **Tool configuration options** button to:
    - **Attach TeX Count**: include document word-count statistics so the agent knows the document's size and structure

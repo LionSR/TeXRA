@@ -17,7 +17,7 @@ import type { Effect } from 'effect';
  * session's services from context instead of running its own edge, and its
  * failure is the dispatcher's to report.
  */
-export type SlashCommandEffect = Effect.Effect<void, unknown, ProcessServices>;
+export type SlashCommandEffect = Effect.Effect<void, Error, ProcessServices>;
 
 /** Shared context every slash-command handler receives from the chat TUI. */
 export interface SlashCommandContext {
@@ -45,9 +45,8 @@ export interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
-  readonly canSelectModel: () => boolean;
   readonly resetSession: () => void;
-  readonly resumeRun: (id: RunId) => Effect.Effect<void, unknown>;
+  readonly resumeRun: (id: RunId) => Effect.Effect<void, Error>;
 }
 
 /** Output boundary shared by direct slash dispatch and busy form submission. */

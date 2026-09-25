@@ -9,23 +9,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Local imports
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { overleafGitClone } from '@latex/overleafProject';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
+import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),
-  execa: vi.fn(),
-  executeCommandSync: vi.fn(),
   getSecret: vi.fn(),
   installCliProcessRuntime: vi.fn(),
   readCliAmbientState: vi.fn(),
   setSecret: vi.fn(),
 }));
-
-vi.mock('execa', () => ({ execa: mocks.execa }));
 
 // `clone` is a platform-less entry: its command entry installs the process
 // runtime and runs the clone program on what it gets back. Here that is the
@@ -61,14 +60,51 @@ vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({
   readCliAmbientState: mocks.readCliAmbientState,
 }));
 
-vi.mock('@utils/system/execCore', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@utils/system/execCore')>()),
-  executeCommandSync: mocks.executeCommandSync,
-}));
-
 const { runCli } = await import('@cli/commands/root');
 
 const PROJECT_ID = '0123456789abcdef01234567';
+
+type Answer = ReturnType<Parameters<typeof scriptedSpawnerLayer>[0]>;
+
+/**
+ * The process edge, scripted: `git --version` answers with `gitVersion`, the
+ * clone with `clone`. Every program the harness runtime runs gets the
+ * scripted spawner innermost, so nothing is spawned.
+ */
+const spawn: {
+  gitVersion: Answer;
+  clone: (command: ChildProcess.StandardCommand) => Answer;
+  calls: ChildProcess.StandardCommand[];
+  killed: ChildProcess.StandardCommand[];
+} = { gitVersion: {}, clone: () => ({}), calls: [], killed: [] };
+
+const isClone = (command: ChildProcess.StandardCommand) =>
+  command.command === 'git' && command.args.includes('clone');
+
+function cloneCalls(): ChildProcess.StandardCommand[] {
+  return spawn.calls.filter(isClone);
+}
+
+/**
+ * The clone ran against the tokenless remote with the token only in the
+ * helper's environment, then offered it to the user's credential helper.
+ */
+function expectClonedInto(cwd: string): void {
+  const clone = overleafGitClone(
+    { host: 'git.overleaf.com', path: `/${PROJECT_ID}`, isOverleaf: true },
+    'olp_secret',
+  );
+  const [command] = cloneCalls();
+  expect(command?.args).toEqual(clone.args);
+  expect(command?.options).toMatchObject({
+    cwd,
+    env: { ...makeMachineGitEnv(), ...clone.env },
+    extendEnv: false,
+  });
+  const approve = spawn.calls.find((call) => call.args[0] === 'credential');
+  expect(approve?.args).toEqual(['credential', 'approve']);
+  expect(approve?.options).toMatchObject({ cwd, extendEnv: false });
+}
 
 async function withProcessCwd<T>(
   cwd: string,
@@ -89,6 +125,8 @@ describe('CLI Overleaf clone command', () => {
   let stderr: string;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
   let stderrSpy: ReturnType<typeof vi.spyOn>;
+  let runtimeSpy: ReturnType<typeof vi.spyOn>;
+  let hostAbort: AbortController | undefined;
 
   beforeEach(async () => {
     workspacePath = await makeTempDir('texra-clone-', tempDirs);
@@ -105,13 +143,23 @@ describe('CLI Overleaf clone command', () => {
       Promise.resolve(testRuntime()),
     );
     mocks.deleteSecret.mockReturnValue(Effect.void);
-    mocks.execa.mockResolvedValue({});
-    mocks.executeCommandSync.mockReturnValue({
-      success: true,
-      exitCode: 0,
-      stdout: 'git version 2.50.0',
-      stderr: '',
-    });
+    spawn.gitVersion = { stdout: 'git version 2.50.0' };
+    spawn.clone = () => ({});
+    const scripted = scriptedSpawnerLayer((command) =>
+      isClone(command) ? spawn.clone(command) : spawn.gitVersion,
+    );
+    spawn.calls = scripted.calls;
+    spawn.killed = scripted.killed;
+    const runtime = testRuntime();
+    const runPromiseExit = runtime.runPromiseExit.bind(runtime);
+    runtimeSpy = vi
+      .spyOn(runtime, 'runPromiseExit')
+      .mockImplementation((program, options) =>
+        runPromiseExit(program.pipe(Effect.provide(scripted.layer)), {
+          ...options,
+          signal: options?.signal ?? hostAbort?.signal,
+        }),
+      );
     mocks.getSecret.mockReturnValue(Effect.succeed('olp_secret'));
     mocks.readCliAmbientState.mockReturnValue({
       isCi: false,
@@ -128,6 +176,8 @@ describe('CLI Overleaf clone command', () => {
   afterEach(async () => {
     stdoutSpy.mockRestore();
     stderrSpy.mockRestore();
+    runtimeSpy.mockRestore();
+    hostAbort = undefined;
   });
 
   it('clones into --cwd with a stored token and emits structured output', async () => {
@@ -149,20 +199,7 @@ describe('CLI Overleaf clone command', () => {
       minimumLogLevel: 'Info',
     });
     expect(mocks.getSecret).toHaveBeenCalledWith('overleaf.gitToken');
-    expect(mocks.execa).toHaveBeenCalledWith(
-      'git',
-      [
-        'clone',
-        'https://git:olp_secret@git.overleaf.com/0123456789abcdef01234567',
-        '.',
-      ],
-      {
-        cwd: workspacePath,
-        env: makeMachineGitEnv(),
-        extendEnv: false,
-        cancelSignal: expect.any(AbortSignal),
-      },
-    );
+    expectClonedInto(workspacePath);
     expect(JSON.parse(stdout)).toEqual({
       cloned: true,
       provider: 'overleaf',
@@ -186,70 +223,36 @@ describe('CLI Overleaf clone command', () => {
     );
 
     expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(mocks.execa).toHaveBeenCalledWith(
-      'git',
-      [
-        'clone',
-        'https://git:olp_secret@git.overleaf.com/0123456789abcdef01234567',
-        '.',
-      ],
-      {
-        cwd: destination,
-        env: makeMachineGitEnv(),
-        extendEnv: false,
-        cancelSignal: expect.any(AbortSignal),
-      },
-    );
+    expectClonedInto(destination);
     expect(JSON.parse(stdout)).toMatchObject({
       cloned: true,
       destination: destination,
     });
   });
 
-  it('cancels the Git process when the host interrupts cloning', async () => {
+  it('stops the Git process when the host interrupts cloning', async () => {
     const controller = new AbortController();
-    const runtime = testRuntime();
-    const runPromise = runtime.runPromise.bind(runtime);
-    const runSpy = vi
-      .spyOn(runtime, 'runPromise')
-      .mockImplementation((program, options) =>
-        runPromise(program, { ...options, signal: controller.signal }),
-      );
-    let cancelled = false;
-    mocks.execa.mockImplementation(
-      (_file, _args, options: { cancelSignal?: AbortSignal }) =>
-        new Promise((_resolve, reject) => {
-          options.cancelSignal?.addEventListener(
-            'abort',
-            () => {
-              cancelled = true;
-              reject(options.cancelSignal?.reason);
-            },
-            { once: true },
-          );
-          queueMicrotask(() => controller.abort());
-        }),
-    );
+    hostAbort = controller;
+    spawn.clone = () => {
+      queueMicrotask(() => controller.abort());
+      return 'hang';
+    };
 
-    try {
-      await expect(
-        runCli([
-          'clone',
-          PROJECT_ID,
-          '--cwd',
-          workspacePath,
-          '--output-format',
-          'json',
-          '--no-input',
-        ]),
-      ).rejects.toBeInstanceOf(Error);
+    const result = await runCli([
+      'clone',
+      PROJECT_ID,
+      '--cwd',
+      workspacePath,
+      '--output-format',
+      'json',
+      '--no-input',
+    ]);
 
-      expect(mocks.execa).toHaveBeenCalledOnce();
-      expect(cancelled).toBe(true);
-      expect(stdout).not.toContain('"cloned":true');
-    } finally {
-      runSpy.mockRestore();
-    }
+    expect(result.exitCode).toBe(CliExitCode.Interrupted);
+
+    expect(cloneCalls()).toHaveLength(1);
+    expect(spawn.killed.filter(isClone)).toHaveLength(1);
+    expect(stdout).not.toContain('"cloned":true');
   });
 
   it('does not create a positional destination when the token is missing', async () => {
@@ -261,16 +264,11 @@ describe('CLI Overleaf clone command', () => {
 
     expect(result.exitCode).toBe(CliExitCode.Usage);
     await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(cloneCalls()).toHaveLength(0);
   });
 
   it('does not create a positional destination when Git is unavailable', async () => {
-    mocks.executeCommandSync.mockReturnValue({
-      success: false,
-      exitCode: null,
-      stdout: '',
-      stderr: 'git not found',
-    });
+    spawn.gitVersion = { stderr: 'git not found', exitCode: 127 };
     const destination = path.join(workspacePath, 'missing-git');
     const result = await withProcessCwd(workspacePath, () =>
       runCli(['clone', PROJECT_ID, 'missing-git', '--no-input']),
@@ -279,7 +277,7 @@ describe('CLI Overleaf clone command', () => {
     expect(result.exitCode).toBe(CliExitCode.AgentError);
     expect(stderr).toContain('Git is not installed or is not on PATH.');
     await expect(access(destination)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(cloneCalls()).toHaveLength(0);
   });
 
   it('rejects ambiguous positional and --cwd destinations', async () => {
@@ -297,7 +295,7 @@ describe('CLI Overleaf clone command', () => {
       'either as the second argument or with --cwd, not both',
     );
     expect(mocks.getSecret).not.toHaveBeenCalled();
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(cloneCalls()).toHaveLength(0);
   });
 
   it.each([
@@ -320,7 +318,7 @@ describe('CLI Overleaf clone command', () => {
       expect(stderr).toContain('No saved Overleaf Git Token is available.');
       expect(stderr).toContain('https://www.overleaf.com/user/settings');
       expect(stderr).toContain('git-integration-authentication-tokens');
-      expect(mocks.execa).not.toHaveBeenCalled();
+      expect(cloneCalls()).toHaveLength(0);
     },
   );
 
@@ -353,15 +351,15 @@ describe('CLI Overleaf clone command', () => {
     expect(result.exitCode).toBe(CliExitCode.AgentError);
     expect(stderr).toContain(`destination directory ${canonicalWorkspacePath}`);
     expect(stderr).toContain('texra clone 0123456789abcdef01234567 ./paper');
-    expect(mocks.execa).not.toHaveBeenCalled();
+    expect(cloneCalls()).toHaveLength(0);
   });
 
   it('clears rejected credentials without printing them', async () => {
-    mocks.execa.mockRejectedValue(
-      new Error(
-        'fatal: authentication failed for https://git:olp_secret@git.overleaf.com',
-      ),
-    );
+    spawn.clone = () => ({
+      stderr:
+        "fatal: Authentication failed for 'https://git.overleaf.com/0123456789abcdef01234567/'",
+      exitCode: 128,
+    });
 
     const result = await runCli([
       'clone',

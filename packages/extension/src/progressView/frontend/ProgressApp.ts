@@ -1,11 +1,13 @@
 /**
  * `<progress-app>`: the one conversation shell of the extension (PRD 12.1).
  * It is the root, the only element that holds the three records, and it
- * renders exactly one of two states from `resolveSelected`: the New task
+ * renders exactly one of two states from `surface.selected`: the New task
  * empty state (hero, the context disclosure, the Active now strip, the
- * expanded composer) or the selected run's conversation. The Sessions
- * drawer, the docked list of the wide editor tab, the Tools sheet, and the
- * header overflow hang off the same element.
+ * expanded composer) or the selected run's conversation, under one header
+ * row: the run's own header when a run is selected. The Sessions drawer,
+ * the docked list of the wide editor tab, and the Tools sheet hang off the
+ * same element. The desktop draws its own shell (rail, header) around this
+ * element, so there it renders no Sessions button, New task, or drawer.
  *
  * `view`, `surface`, and `host` are properties: the design harness assigns
  * fixtures to them, and the live host assigns its signals to the same
@@ -40,12 +42,16 @@ import {
 import { installToolbarTooltips } from '@shared/litControllers/TooltipController';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { resolveSelected, type Surface } from '@shared/session/surface';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens } from '@ui/styles';
-import { renderIconActionButton } from '@ui/wa/actionButtons';
+import {
+  renderIconActionButton,
+  renderIconActionButtonParts,
+} from '@ui/wa/actionButtons';
 import { registerTeXRAWebAwesomeIcons } from '@ui/wa/webAwesomeIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { ONBOARDING_SETUP_HANDOFF } from '@ui/copy/onboarding';
 import { getBasename } from '@utils/core';
 
 // Local imports - progress view frontend
@@ -57,20 +63,12 @@ import './components/SessionComposer';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
 import './components/FileSelectGroup';
-import './components/OnboardingSetupCard';
+import './components/GettingStartedBanner';
 import './components/OnboardingWelcomeCard';
+import './components/RunHeader';
+import type { HeaderMenuItem } from './components/RunHeader';
 
 registerTeXRAWebAwesomeIcons();
-
-type OverflowItem =
-  | 'popOut'
-  | 'popBack'
-  | 'openDashboard'
-  | 'latexdiffs'
-  | 'figures'
-  | 'attachTexCount'
-  | 'pack'
-  | 'clean';
 
 @customElement('progress-app')
 export class ProgressApp extends LitElement {
@@ -95,63 +93,62 @@ export class ProgressApp extends LitElement {
     this.dispatchEvent(SessionUiEvents.surface({ kind: 'toggleDrawer' }));
   };
 
-  private stopRun(run: RunView): void {
-    this.dispatchEvent(
-      SessionUiEvents.runtime({ kind: 'run.stop', runId: run.id }),
-    );
+  private onboarding(action: 'runSetup' | 'skipSetup'): void {
+    this.dispatchEvent(SessionUiEvents.host({ kind: 'onboarding', action }));
   }
 
-  private handleOverflow(value: string, run: RunView | null): void {
-    const item = value as OverflowItem;
-    switch (item) {
-      case 'popOut':
-      case 'popBack':
-      case 'openDashboard':
-        this.dispatchEvent(SessionUiEvents.host({ kind: item }));
-        return;
-      case 'figures':
-        this.dispatchEvent(SessionUiEvents.host({ kind: 'extractFigures' }));
-        return;
-      case 'latexdiffs':
-        this.dispatchEvent(
-          SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
-        );
-        return;
-      case 'attachTexCount': {
-        const launch = this.surface?.launch;
-        if (!launch) return;
-        this.dispatchEvent(
-          SessionUiEvents.surface({
-            kind: 'launch',
-            patch: { attachTeXCount: !launch.attachTeXCount },
-          }),
-        );
-        return;
-      }
-      case 'pack':
-      case 'clean':
-        if (!run) return;
-        this.dispatchEvent(SessionUiEvents.host({ kind: item, runId: run.id }));
-        return;
-    }
+  /** The window's own items: pop the view out or back, the LaTeXDiffs
+   *  sheet, figure extraction. The New-task header shows them in its menu;
+   *  a run's header appends them to the run's. The desktop has neither an
+   *  editor to pop out into nor a figure extractor, and its LaTeXDiffs
+   *  chip sits under the composer, so it is given none. */
+  private windowItems(): HeaderMenuItem[] {
+    if (this.placement === 'desktop') return [];
+    const inEditor = this.placement === 'editor';
+    const host = (kind: 'popOut' | 'popBack' | 'extractFigures') => () =>
+      this.dispatchEvent(SessionUiEvents.host({ kind }));
+    return [
+      inEditor
+        ? {
+            value: 'popBack',
+            icon: 'backward-step',
+            label: 'Back to sidebar',
+            activate: host('popBack'),
+          }
+        : {
+            value: 'popOut',
+            icon: 'picture-in-picture',
+            label: 'Open sessions in editor',
+            activate: host('popOut'),
+          },
+      {
+        value: 'latexdiffs',
+        icon: 'code-compare',
+        label: 'LaTeXDiffs…',
+        activate: () =>
+          this.dispatchEvent(
+            SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
+          ),
+      },
+      {
+        value: 'figures',
+        icon: 'image',
+        label: 'Figures…',
+        activate: host('extractFigures'),
+      },
+    ];
   }
 
   override render(): TemplateResult | typeof nothing {
     const { view, surface, host } = this;
     if (!view || !surface || !host) return nothing;
-    const selected = resolveSelected(view, surface);
+    const { selected } = surface;
     const run = selected === null ? null : (view.runs.get(selected) ?? null);
     const docked = this.placement === 'editor';
 
     return html`
-      <div
-        class=${classMap({
-          shell: true,
-          'is-editor': docked,
-          'has-run': run !== null,
-        })}
-      >
-        ${this.renderHeader(run, host, surface)}
+      <div class=${classMap({ shell: true, 'is-editor': docked })}>
+        ${this.renderHeader(run, host, surface, view)}
         <div class="shell-body">
           ${docked ? this.renderDockedList(view, surface) : nothing}
           <main class="reading">
@@ -171,7 +168,7 @@ export class ProgressApp extends LitElement {
           </main>
         </div>
         ${
-          surface.drawerOpen
+          surface.drawerOpen && this.placement !== 'desktop'
             ? html`<session-drawer
                 .view=${view}
                 .surface=${surface}
@@ -244,14 +241,30 @@ export class ProgressApp extends LitElement {
     run: RunView | null,
     host: HostSnapshot,
     surface: Surface,
-  ): TemplateResult {
-    const canStop =
-      run !== null &&
-      !run.readOnly &&
-      (run.group === 'running' || run.group === 'waiting');
+    view: SessionView,
+  ): TemplateResult | typeof nothing {
+    const onDesktop = this.placement === 'desktop';
+    const sessions = renderIconActionButtonParts({
+      id: 'shell-sessions',
+      icon: 'list-ul',
+      label: 'Sessions',
+      tooltip: 'Sessions',
+      className: 'sessions-button',
+      slot: 'start',
+      pressed: surface.drawerOpen,
+      onClick: this.toggleDrawer,
+    });
+    const newTask = renderIconActionButtonParts({
+      id: 'shell-new-task',
+      icon: 'plus',
+      label: 'New task',
+      tooltip: 'New task',
+      slot: 'end',
+      onClick: this.selectNew,
+    });
     // One 38px row. Docked wide (the editor tab past 720px), the row is a
     // 300px + 1fr grid: the dock cell carries the project name and New task,
-    // the reading cell the run's actions; the sidebar and the narrow tab
+    // the reading cell the run's header; the sidebar and the narrow tab
     // show the sessions button and the title in one cell.
     return html`
       <header class="shell-header">
@@ -267,65 +280,37 @@ export class ProgressApp extends LitElement {
           })}
         </div>
         <div class="header-main">
-          ${renderIconActionButton({
-            id: 'shell-sessions',
-            icon: 'list-ul',
-            label: 'Sessions',
-            tooltip: 'Sessions',
-            className: 'sessions-button',
-            pressed: surface.drawerOpen,
-            onClick: this.toggleDrawer,
-          })}
-          <span class="shell-title header-main-title"
-            >${run ? host.project.name : 'New task'}</span
-          >
-          <span class="spacer"></span>
+          <slot name="header-start"></slot>
           ${
-            canStop
-              ? renderIconActionButton({
-                  id: 'shell-stop',
-                  icon: 'circle-stop',
-                  label: 'Stop',
-                  tooltip: 'Stop',
-                  className: 'stop-button',
-                  onClick: () => this.stopRun(run),
-                })
-              : nothing
+            run
+              ? html`<run-header
+                    class="header-run"
+                    .run=${run}
+                    .view=${view}
+                    .menuItems=${this.windowItems()}
+                    >${onDesktop ? nothing : [sessions.button, newTask.button]}</run-header
+                  >${onDesktop ? nothing : [sessions.tooltip, newTask.tooltip]}`
+              : html`${sessions.button}${sessions.tooltip}
+                  <span class="shell-title header-main-title">New task</span>
+                  <span class="spacer"></span>
+                  ${newTask.button}${newTask.tooltip} ${this.renderOverflow()}`
           }
-          ${renderIconActionButton({
-            id: 'shell-new-task',
-            icon: 'plus',
-            label: 'New task',
-            tooltip: 'New task',
-            onClick: this.selectNew,
-          })}
-          ${this.renderOverflow(run, host)}
+          <slot name="header-end"></slot>
         </div>
       </header>
     `;
   }
 
-  /** The overflow in both states, so Open dashboard and the Tools sheet
-   *  have one home reachable from the New-task state; the debug section
-   *  needs a run's output. */
-  private renderOverflow(
-    run: RunView | null,
-    host: HostSnapshot,
-  ): TemplateResult {
-    const inEditor = this.placement === 'editor';
-    // The desktop app has neither an editor to pop out into nor a figure
-    // extractor, and its host refuses both requests, so it is not offered
-    // them.
-    const onDesktop = this.placement === 'desktop';
-    const attachTexCount = this.surface?.launch.attachTeXCount === true;
+  /** The New-task state's menu: the window items alone. */
+  private renderOverflow(): TemplateResult {
+    const items = this.windowItems();
     return html`
       <wa-dropdown
         placement="bottom-end"
         @wa-select=${(event: Event) => {
-          const item = (event as CustomEvent<{ item?: { value?: unknown } }>)
-            .detail?.item;
-          const value = typeof item?.value === 'string' ? item.value : '';
-          this.handleOverflow(value, run);
+          const value = (event as CustomEvent<{ item?: { value?: unknown } }>)
+            .detail?.item?.value;
+          items.find((item) => item.value === value)?.activate();
         }}
       >
         <wa-button
@@ -339,38 +324,14 @@ export class ProgressApp extends LitElement {
           aria-label="More"
           >${waIcon('ellipsis')}</wa-button
         >
-        ${
-          onDesktop
-            ? nothing
-            : html`<wa-dropdown-item value=${inEditor ? 'popBack' : 'popOut'}
-                >${waIcon(inEditor ? 'backward-step' : 'picture-in-picture', {
-                  slot: 'icon',
-                })}${
-                  inEditor ? 'Back to sidebar' : 'Open sessions in editor'
-                }</wa-dropdown-item
-              >`
-        }
-        <wa-dropdown-item value="openDashboard"
-          >${waIcon('gear', { slot: 'icon' })}Open dashboard</wa-dropdown-item
-        >
-        <wa-divider></wa-divider>
-        <wa-dropdown-item value="latexdiffs"
-          >${waIcon('code-compare', { slot: 'icon' })}LaTeXDiffs…</wa-dropdown-item
-        >
-        ${
-          onDesktop
-            ? nothing
-            : html`<wa-dropdown-item value="figures"
-                >${waIcon('image', { slot: 'icon' })}Figures…</wa-dropdown-item
-              >`
-        }
-        <wa-dropdown-item
-          value="attachTexCount"
-          type="checkbox"
-          ?checked=${attachTexCount}
-          >${waIcon('list-check', { slot: 'icon' })}Attach TeX
-          Count</wa-dropdown-item
-        >
+        ${repeat(
+          items,
+          (item) => item.value,
+          (item) =>
+            html`<wa-dropdown-item value=${item.value}
+              >${waIcon(item.icon, { slot: 'icon' })}${item.label}</wa-dropdown-item
+            >`,
+        )}
       </wa-dropdown>
       <wa-tooltip for="shell-more">More</wa-tooltip>
     `;
@@ -405,11 +366,37 @@ export class ProgressApp extends LitElement {
     `;
   }
 
-  /** The hero, or the setup card in its place while the funnel is pending
-   *  (PRD 12.1); each card action leaves as the `onboarding` host arm. */
+  /** The hero slot holds one card (PRD 12.1): setup while the funnel is
+   *  pending, else the project starter while the folder has no LaTeX
+   *  files, else the prompt. Without a credential the welcome card
+   *  replaces the whole state (see below). */
   private renderHero(host: HostSnapshot): TemplateResult {
     if (host.onboarding === 'setup') {
-      return html`<onboarding-setup-card></onboarding-setup-card>`;
+      return html`<section class="hero" aria-labelledby="shell-hero-title">
+        <div class="hero-mark" aria-hidden="true">${waIcon('rocket')}</div>
+        <h1 id="shell-hero-title">Set up ${host.project.name}</h1>
+        <p>${ONBOARDING_SETUP_HANDOFF}</p>
+        <div class="hero-actions">
+          <wa-button
+            id="onboardingRunSetupButton"
+            variant="brand"
+            size="s"
+            @click=${() => this.onboarding('runSetup')}
+            >${waIcon('rocket', { slot: 'start' })}Run setup
+            assistant</wa-button
+          >
+          <wa-button
+            id="onboardingSkipSetupButton"
+            appearance="plain"
+            size="s"
+            @click=${() => this.onboarding('skipSetup')}
+            >Skip setup</wa-button
+          >
+        </div>
+      </section>`;
+    }
+    if (host.banners.gettingStarted) {
+      return html`<getting-started-banner></getting-started-banner>`;
     }
     return html`<section class="hero" aria-labelledby="shell-hero-title">
       <div class="hero-mark" aria-hidden="true">
@@ -438,7 +425,13 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
+    // Only a document pass reads Input and Context; an interactive agent
+    // gets the instruction and its attachments, so it shows only those.
+    const documentPass = launch.sessionType === 'workflow';
+    const fileGroups = documentPass
+      ? FILE_SELECT_CONFIGS
+      : FILE_SELECT_CONFIGS.filter((config) => config.type === 'media');
+    const selectedFiles = fileGroups.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
     const { rollup } = view;
@@ -447,9 +440,12 @@ export class ProgressApp extends LitElement {
       <div class="empty">
         <div class="hero-wrap">
           ${this.renderHero(host)}
-          <wa-details class="context">
+          <!-- A document pass cannot run without an input file, so picking
+            one opens the file groups. -->
+          <wa-details class="context" ?open=${documentPass}>
             <span slot="summary" class="context-summary"
-              >${waIcon('file-circle-plus')} Context and attachments
+              >${waIcon('file-circle-plus')}
+              ${documentPass ? 'Documents and attachments' : 'Attachments'}
               <span class="context-files"
                 >${
                   selectedFiles.length === 0
@@ -460,7 +456,7 @@ export class ProgressApp extends LitElement {
             >
             <div class="context-body">
               ${repeat(
-                FILE_SELECT_CONFIGS,
+                fileGroups,
                 (config) => config.type,
                 (config) => html`
                   <file-select-group

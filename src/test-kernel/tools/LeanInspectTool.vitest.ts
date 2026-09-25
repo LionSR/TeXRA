@@ -37,12 +37,10 @@ function callTool(
   input: typeof GOAL_INSPECT_INPUT,
   services: Partial<LeanLanguageServicesShape>,
 ) {
-  return new LeanInspectTool()
-    .call(input)
-    .pipe(
-      Effect.provideService(LeanLanguageServices, fakeServices(services)),
-      Effect.provide(nativeToolTestLayer()),
-    );
+  return LeanInspectTool.call(input).pipe(
+    Effect.provideService(LeanLanguageServices, fakeServices(services)),
+    Effect.provide(nativeToolTestLayer()),
+  );
 }
 
 describe('LeanInspectTool', () => {

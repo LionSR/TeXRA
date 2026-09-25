@@ -1,51 +1,23 @@
-/** Recommended LaTeX VS Code settings, dependency status, and TeXRA compile/diff options. */
+/** LaTeX settings page, one section at a time: dependencies, compile and
+ *  diff, formatting and review, and recommended VS Code settings. */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
-import '@awesome.me/webawesome/dist/components/input/input.js';
-import '@awesome.me/webawesome/dist/components/select/select.js';
-import '@awesome.me/webawesome/dist/components/option/option.js';
-import '@awesome.me/webawesome/dist/components/switch/switch.js';
-import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 import '@awesome.me/webawesome/dist/components/copy-button/copy-button.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
-import {
-  LitElement,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import '@awesome.me/webawesome/dist/components/button/button.js';
+import '@awesome.me/webawesome/dist/components/icon/icon.js';
+import { LitElement, html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 
 // Local imports - shared webview
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { postMessage } from '@shared/hostBridge';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { settingByKey } from '@shared/state/stateSettings';
+import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   type LatexSettingsStatus,
+  type SettingsSectionName,
   DEFAULT_LATEX_SETTINGS_STATUS,
 } from '@shared/settingsView/settingsViewMessages';
-
-// Web Awesome button + icon bundles (side-effect imports)
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-
-// Local imports - LaTeX config constants (shared with backend + readers)
-import {
-  DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-  DEFAULT_ENABLED_REPLACEMENTS,
-  NON_REGEX_REPLACEMENT_CATEGORIES,
-  REGEX_REPLACEMENT_CATEGORIES,
-  type NonRegexReplacementCategory,
-  type RegexReplacementCategory,
-} from '@shared/constants/replacementCategories';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_RANGES,
-  type LatexConfigValues,
-} from '@shared/constants/latexConfig';
 
 // Local imports - LaTeX toolchain (install guides + commands)
 import {
@@ -71,37 +43,22 @@ import {
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderLoadingState } from '@ui/wa/loadingState';
 import { renderSettingsBanner } from '@ui/wa/settingsBanner';
-import {
-  renderSettingsSectionHeading,
-  renderSettingsToggleRow,
-} from '@ui/wa/settingsSection';
+import { renderSettingsSectionHeading } from '@ui/wa/settingsSection';
 import { renderSetStatusIcon, statusCheckIconStyles } from '@ui/wa/statusIcons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { readSelectValue } from '@ui/wa/selectTemplates';
 
 // Local imports - shared utilities
-import { clampOptional, filterNotNullish } from '@utils/core';
+import { filterNotNullish } from '@utils/core';
 
 // Local imports - catalog-driven settings rows
 import {
-  catalogEnumChoices,
-  postStateSetting,
+  renderStateSettingSelectRow,
+  renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
 import { latexTabStyles } from './LaTeXTab.styles';
-import type WaSwitch from '@awesome.me/webawesome/dist/components/switch/switch.js';
-import type WaInput from '@awesome.me/webawesome/dist/components/input/input.js';
-import type WaCheckbox from '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
-import type WaTextarea from '@awesome.me/webawesome/dist/components/textarea/textarea.js';
 
 /** Path keys in LatexSettingsStatus for tool paths. */
-type ToolPathKey =
-  | 'pdflatexPath'
-  | 'latexmkPath'
-  | 'latexdiffPath'
-  | 'latexindentPath'
-  | 'texcountPath'
-  | 'ghostscriptPath'
-  | 'graphicsmagickPath';
+type ToolPathKey = Extract<keyof LatexSettingsStatus, `${string}Path`>;
 
 /** Metadata for a dependency shown in the Dependencies section. */
 interface DependencyInfo {
@@ -221,55 +178,23 @@ export class LaTeXTab extends LitElement {
   @property({ attribute: false })
   settings: LatexSettingsStatus = { ...DEFAULT_LATEX_SETTINGS_STATUS };
 
+  @property({ attribute: false }) section: SettingsSectionName<'latex'> =
+    'dependencies';
   @property({ type: Boolean }) loaded = false;
-
-  @property({ attribute: false })
-  configValues: LatexConfigValues = {};
-
-  @property({ type: Boolean }) inlineCriticismEnabled = false;
   @property({ type: Boolean, attribute: 'desktop-host' }) desktopHost = false;
 
-  /**
-   * Whether the active host's registry supports the inline-criticism
-   * commands (`GET_INLINE_CRITICISM_ENABLED`) — derived via
-   * `isKnownUnsupported` in `SettingsApp`, not the raw `desktopHost` flag,
-   * since this is command availability rather than host-specific UI
-   * (unlike the VS Code settings.json sections below, which genuinely don't
-   * exist on desktop and stay gated on `desktopHost`).
-   */
-  @property({ type: Boolean }) inlineCriticismSupported = false;
-
-  @state()
-  private replacementJsonErrors: Partial<
-    Record<
-      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
-      string
-    >
-  > = {};
-
-  protected override willUpdate(changed: PropertyValues<this>): void {
-    super.willUpdate(changed);
-    if (changed.has('configValues')) {
-      this.replacementJsonErrors = {};
-    }
-  }
-
-  protected override updated(changed: PropertyValues<this>): void {
-    super.updated(changed);
-    if (!changed.has('configValues')) return;
-
-    this.syncCustomReplacementControl('texra.latex.customReplacements');
-    this.syncCustomReplacementControl('texra.latex.customReplacementsRegex');
-  }
+  // Catalog-backed values, one per row the page renders.
+  @property({ type: Boolean }) autoCompile = true;
+  @property({ type: Boolean }) autoOpenPdf = true;
+  @property({ type: Boolean }) rejectOnCompileFailure = true;
+  @property({ type: Boolean }) diffBetweenRounds = false;
+  @property({ type: Boolean }) diffChangesOnly = true;
+  @property() diffMathMarkup = 'coarse';
+  @property() formatter = 'latexindent';
+  @property({ type: Boolean }) inlineCriticismEnabled = false;
 
   private handleApply(field?: SettingInfo['key'], reset = false): void {
     postMessage(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS, { field, reset });
-  }
-
-  private handleInlineCriticismToggle(event: Event): void {
-    postMessage(SETTINGS_VIEW_COMMANDS.SET_INLINE_CRITICISM_ENABLED, {
-      enabled: Boolean((event.target as WaSwitch | null)?.checked),
-    });
   }
 
   private allSettingsSet(): boolean {
@@ -527,662 +452,104 @@ export class LaTeXTab extends LitElement {
       `;
     }
 
+    const sections = {
+      dependencies: () => this.renderDependencies(),
+      compile: () => this.renderCompileDiffSettings(),
+      formatting: () => this.renderFormattingSettings(),
+      vscode: () => this.renderRecommendedSettings(),
+    };
     return html`
-      <div class="tab-content-container">
-        ${
-          !this.desktopHost && !this.allSettingsSet()
-            ? html`
-                <div class="latex-header">
-                  <wa-button
-                    appearance="outlined"
-                    variant="neutral"
-                    size="s"
-                    title="Apply all recommended settings"
-                    @click=${() => this.handleApply()}
-                  >
-                    ${waIcon('check-double', { slot: 'start' })} Apply All
-                  </wa-button>
-                </div>
-              `
-            : nothing
-        }
-        ${this.renderDependencies()}
-        ${
-          this.desktopHost
+      <div class="tab-content-container">${sections[this.section]()}</div>
+    `;
+  }
+
+  private renderRecommendedSettings(): TemplateResult {
+    return html`
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Recommended VS Code settings',
+          description:
+            'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
+          icon: 'gear',
+          actions: this.allSettingsSet()
             ? nothing
-            : html`
-                <div class="settings-section">
-                  ${renderSettingsSectionHeading({
-                    title: 'Recommended settings',
-                    description:
-                      'Keep generated files out of the VS Code sidebar and reduce noise during agent runs.',
-                    icon: 'gear',
-                  })}
-                  ${RECOMMENDED_SETTINGS.map((info) =>
-                    this.renderSettingCard(info),
-                  )}
-                </div>
-              `
-        }
-        ${
-          this.inlineCriticismSupported
-            ? this.renderInlineCriticismSetting()
-            : nothing
-        }
-        ${this.renderReplacementSettings()} ${this.renderCompileDiffSettings()}
+            : renderLabeledActionButton({
+                icon: 'check-double',
+                text: 'Apply all',
+                kind: 'secondary',
+                appearance: 'outlined',
+                title: 'Apply all recommended settings',
+                onClick: () => this.handleApply(),
+              }),
+        })}
+        ${RECOMMENDED_SETTINGS.map((info) => this.renderSettingCard(info))}
       </div>
     `;
-  }
-
-  private renderInlineCriticismSetting(): TemplateResult {
-    return html`
-      <div class="settings-section">
-        ${renderSettingsSectionHeading({
-          title: 'Inline criticism',
-          description:
-            'Control how TeXRA surfaces structured review annotations in LaTeX documents.',
-          icon: 'comments',
-        })}
-        ${renderSettingsToggleRow({
-          label: 'Surface \\criticize annotations',
-          description:
-            'Parse \\criticize{message}{severity}{confidence} annotations from agent-revised LaTeX files and show them as editor diagnostics.',
-          checked: this.inlineCriticismEnabled,
-          onChange: this.handleInlineCriticismToggle,
-        })}
-      </div>
-    `;
-  }
-
-  // ── Compile & Diff settings (TeXRA storage-backed) ──
-
-  private renderReplacementSettings(): TemplateResult {
-    const cv = this.configValues;
-    return html`
-      <div class="settings-section">
-        ${renderSettingsSectionHeading({
-          title: 'Replacement engine',
-          description:
-            'Choose the cleanup rules applied to LaTeX text and define project-specific replacements.',
-          icon: 'wand-magic-sparkles',
-        })}
-        ${this.renderBooleanSetting({
-          field: 'texra.latex.wrapCritiqueInAlign',
-          label: 'Protect criticism inside align environments',
-          description:
-            'Wrap bare \\critique and \\comment commands with \\intertext so align environments remain valid.',
-          defaultValue: true,
-          currentValue: cv['texra.latex.wrapCritiqueInAlign'],
-        })}
-        ${this.renderReplacementCategories({
-          field: 'texra.latex.enabledReplacements',
-          label: 'Direct replacement groups',
-          description:
-            'Cleanup groups that replace exact LaTeX text and characters.',
-          categories: NON_REGEX_REPLACEMENT_CATEGORIES,
-          defaultValue: DEFAULT_ENABLED_REPLACEMENTS,
-          currentValue: cv['texra.latex.enabledReplacements'],
-        })}
-        ${this.renderReplacementCategories({
-          field: 'texra.latex.enabledReplacementsRegex',
-          label: 'Pattern replacement groups',
-          description:
-            'Cleanup groups that recognize LaTeX structures and surrounding context.',
-          categories: REGEX_REPLACEMENT_CATEGORIES,
-          defaultValue: DEFAULT_ENABLED_REGEX_REPLACEMENTS,
-          currentValue: cv['texra.latex.enabledReplacementsRegex'],
-        })}
-        ${this.renderCustomReplacementSetting({
-          field: 'texra.latex.customReplacements',
-          label: 'Custom direct replacements',
-          description:
-            'A JSON object whose keys are exact source text and whose values are replacements.',
-          currentValue: cv['texra.latex.customReplacements'],
-        })}
-        ${this.renderCustomReplacementSetting({
-          field: 'texra.latex.customReplacementsRegex',
-          label: 'Custom pattern replacements',
-          description:
-            'A JSON object whose keys are regular expressions and whose values may use $1, $2, and later capture groups.',
-          currentValue: cv['texra.latex.customReplacementsRegex'],
-        })}
-      </div>
-    `;
-  }
-
-  private renderReplacementCategories<
-    F extends
-      | 'texra.latex.enabledReplacements'
-      | 'texra.latex.enabledReplacementsRegex',
-    C extends NonRegexReplacementCategory | RegexReplacementCategory,
-  >(opts: {
-    field: F;
-    label: string;
-    description: string;
-    categories: readonly C[];
-    defaultValue: readonly C[];
-    currentValue: C[] | undefined;
-  }): TemplateResult {
-    const effective = opts.currentValue ?? opts.defaultValue;
-    const enabled = new Set(effective);
-    const labelId = `latex-setting-${opts.field}-label`;
-    const descriptionId = `latex-setting-${opts.field}-description`;
-    const isCustom =
-      effective.length !== opts.defaultValue.length ||
-      effective.some((value) => !opts.defaultValue.includes(value));
-    return html`
-      <div class="settings-row replacement-groups-row">
-        <div class="settings-row-text">
-          <span id=${labelId} class="settings-row-label">${opts.label}</span>
-          <span id=${descriptionId} class="settings-row-help"
-            >${opts.description}</span
-          >
-          <div
-            class="replacement-category-grid"
-            role="group"
-            aria-labelledby=${labelId}
-            aria-describedby=${descriptionId}
-          >
-            ${opts.categories.map(
-              (category) => html`
-                <wa-checkbox
-                  ?checked=${enabled.has(category)}
-                  @change=${(event: Event) => {
-                    const next = new Set(effective);
-                    if ((event.target as WaCheckbox).checked) {
-                      next.add(category);
-                    } else {
-                      next.delete(category);
-                    }
-                    this.dispatchSetConfigValue(
-                      opts.field,
-                      opts.categories.filter((item) =>
-                        next.has(item),
-                      ) as LatexConfigValueFor<F>,
-                    );
-                  }}
-                  >${category.replaceAll('_', ' ')}</wa-checkbox
-                >
-              `,
-            )}
-          </div>
-        </div>
-        <div class="settings-row-control">
-          ${this.renderSettingStatusIcon(isCustom)}
-          ${
-            isCustom
-              ? this.renderResetButton(opts.field, 'release defaults')
-              : nothing
-          }
-        </div>
-      </div>
-    `;
-  }
-
-  private renderCustomReplacementSetting(opts: {
-    field:
-      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex';
-    label: string;
-    description: string;
-    currentValue: Record<string, string> | undefined;
-  }): TemplateResult {
-    const value = opts.currentValue ?? {};
-    const isCustom = Object.keys(value).length > 0;
-    const error = this.replacementJsonErrors[opts.field];
-    const controlId = `latex-setting-${opts.field}`;
-    const errorId = `${controlId}-error`;
-    return html`
-      <div class="settings-row replacement-map-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${controlId}
-            >${opts.label}</label
-          >
-          <span class="settings-row-help">${opts.description}</span>
-          <wa-textarea
-            id=${controlId}
-            class="setting-control-metadata"
-            rows="4"
-            resize="auto"
-            spellcheck="false"
-            aria-describedby=${error ? errorId : nothing}
-            aria-invalid=${error ? 'true' : 'false'}
-            .value=${JSON.stringify(value, null, 2)}
-            @change=${(event: Event) =>
-              this.handleCustomReplacementChange(
-                opts.field,
-                event.target as WaTextarea,
-              )}
-          >
-            <span slot="label" class="visually-hidden">${opts.label}</span>
-            <span slot="hint" class="visually-hidden"
-              >${
-                error ? `${opts.description} ${error}` : opts.description
-              }</span
-            >
-          </wa-textarea>
-          ${
-            error
-              ? html`<span
-                  id=${errorId}
-                  class="replacement-json-error"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  >${error}</span
-                >`
-              : nothing
-          }
-        </div>
-        <div class="settings-row-control">
-          ${this.renderSettingStatusIcon(isCustom)}
-          ${
-            isCustom
-              ? this.renderResetButton(opts.field, '{}', () =>
-                  this.clearCustomReplacementError(opts.field, '{}'),
-                )
-              : nothing
-          }
-        </div>
-      </div>
-    `;
-  }
-
-  private syncCustomReplacementControl(
-    field:
-      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
-  ): void {
-    const control = this.shadowRoot?.querySelector<WaTextarea>(
-      `[id="latex-setting-${field}"]`,
-    );
-    if (!control) return;
-
-    control.value = JSON.stringify(this.configValues[field] ?? {}, null, 2);
-    control.setCustomValidity('');
-  }
-
-  private clearCustomReplacementError(
-    field:
-      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
-    source?: string,
-  ): void {
-    const control = this.shadowRoot?.querySelector<WaTextarea>(
-      `[id="latex-setting-${field}"]`,
-    );
-    if (control) {
-      if (source !== undefined) control.value = source;
-      control.setCustomValidity('');
-    }
-    if (this.replacementJsonErrors[field] === undefined) return;
-
-    this.replacementJsonErrors = {
-      ...this.replacementJsonErrors,
-      [field]: undefined,
-    };
-  }
-
-  private handleCustomReplacementChange(
-    field:
-      'texra.latex.customReplacements' | 'texra.latex.customReplacementsRegex',
-    control: WaTextarea,
-  ): void {
-    const source = control.value ?? '';
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(source);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : undefined;
-      control.setCustomValidity(detail ?? 'Invalid JSON.');
-      this.replacementJsonErrors = {
-        ...this.replacementJsonErrors,
-        [field]: detail ? `Enter valid JSON. ${detail}` : 'Enter valid JSON.',
-      };
-      return;
-    }
-    const entry = settingByKey(field);
-    if (!entry) {
-      throw new Error(`Missing catalog entry for LaTeX setting "${field}"`);
-    }
-    const result = entry.schema.safeParse(parsed);
-    if (!result.success) {
-      const message = 'Enter a JSON object with string values.';
-      control.setCustomValidity(message);
-      this.replacementJsonErrors = {
-        ...this.replacementJsonErrors,
-        [field]: message,
-      };
-      return;
-    }
-    control.setCustomValidity('');
-    this.replacementJsonErrors = {
-      ...this.replacementJsonErrors,
-      [field]: undefined,
-    };
-    this.dispatchSetConfigValue(
-      field,
-      result.data as LatexConfigValueFor<typeof field>,
-    );
-  }
-
-  private dispatchSetConfigValue<F extends LatexConfigField>(
-    field: F,
-    value: LatexConfigValueFor<F> | undefined,
-  ): void {
-    postStateSetting(field, value ?? null);
   }
 
   private renderCompileDiffSettings(): TemplateResult {
-    const cv = this.configValues;
     return html`
       <div class="settings-section">
         ${renderSettingsSectionHeading({
           title: 'Compile and diff',
           description:
-            'Workspace-specific compilation, review, and formatting behavior.',
+            'What TeXRA does with the LaTeX an agent writes in this workspace.',
           icon: 'bolt',
         })}
-        ${this.renderBooleanSetting({
-          field: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
-          label: 'Auto-compile after each round',
-          description:
-            'After a workflow writes .tex outputs, attempt to compile each root document (latexmk, falling back to pdflatex) in run storage.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompile,
-          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+          checked: this.autoCompile,
         })}
-        ${this.renderNumberSetting({
-          field: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-          label: 'Auto-compile timeout (ms)',
-          description: `Per-file timeout for the post-workflow compile check. Minimum ${LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min}.`,
-          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
-          min: LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min,
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+          checked: this.autoOpenPdf,
+          disabled: !this.autoCompile,
         })}
-        ${this.renderBooleanSetting({
-          field: WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-          label: 'Open compiled PDF or log',
-          description:
-            'After auto-compile finishes, open the latest PDF on success or the truncated LaTeX log on failure.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.workflowAutoOpenPdf,
-          currentValue: cv[WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF],
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+          checked: this.rejectOnCompileFailure,
+          disabled: !this.autoCompile,
         })}
-        ${this.renderBooleanSetting({
-          field: WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-          label: 'Reject rounds when compile fails',
-          description:
-            'When a LaTeX compile check fails, use the next planned round to repair the output with the compile log.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.workflowRejectOnCompileFailure,
-          currentValue:
-            cv[WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE],
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+          checked: this.diffChangesOnly,
         })}
-        ${this.renderBooleanSetting({
-          field: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-          label: 'Generate diffs between consecutive rounds',
-          description:
-            'In addition to comparing each round to the original input, also generate diffs between consecutive agent rounds.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds,
-          currentValue: cv[WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS],
+        ${renderStateSettingSelectRow({
+          key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+          value: this.diffMathMarkup,
         })}
-        ${this.renderNumberSetting({
-          field: WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-          label: 'latexdiff timeout (ms)',
-          description: `Timeout for latexdiff invocations. Range ${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min}–${LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max}.`,
-          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffTimeoutMs,
-          currentValue: cv[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
-          min: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.min,
-          max: LATEX_CONFIG_RANGES.latexdiffTimeoutMs.max,
-        })}
-        ${this.renderEnumSetting({
-          field: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-          label: 'latexdiff math markup',
-          description: 'Granularity of markup in displayed math environments.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffMathMarkup,
-          currentValue: cv[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
-          withDescription: true,
-        })}
-        ${this.renderBooleanSetting({
-          field: WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
-          label: 'Show only changed pages in latexdiff PDFs',
-          description:
-            'Pass latexdiff the ONLYCHANGEDPAGE subtype so compiled diff PDFs focus on pages with edits.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.latexdiffChangesOnly,
-          currentValue: cv[WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY],
-        })}
-        ${this.renderEnumSetting({
-          field: WorkspaceStateKey.LATEX_FORMATTER,
-          label: 'LaTeX formatter',
-          description:
-            '"none" disables formatting; "latexindent" requires Perl; "tex-fmt" is a Rust-based alternative.',
-          defaultValue: LATEX_CONFIG_DEFAULTS.latexFormatter,
-          currentValue: cv[WorkspaceStateKey.LATEX_FORMATTER],
-          withDescription: false,
+        ${renderStateSettingToggleRow({
+          key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+          checked: this.diffBetweenRounds,
         })}
       </div>
     `;
   }
 
-  /** Shared row scaffold for the storage-backed compile and diff settings. */
-  private renderConfigRow(opts: {
-    label: string;
-    description: string;
-    /** Control id the row's `<label for>` points at; the control template
-     *  must carry the same id. A real `<label for>` is used because a host
-     *  aria-label on WA form-associated elements names the custom element,
-     *  not the inner control (see settingsSection.ts). */
-    controlId: string;
-    statusIcon?: TemplateResult | typeof nothing;
-    control: TemplateResult;
-    reset: TemplateResult | typeof nothing;
-  }): TemplateResult {
+  private renderFormattingSettings(): TemplateResult {
     return html`
-      <div class="settings-row">
-        <div class="settings-row-text">
-          <label class="settings-row-label" for=${opts.controlId}
-            >${opts.label}</label
-          >
-          <span class="settings-row-help">${opts.description}</span>
-        </div>
-        <div class="settings-row-control">
-          ${opts.statusIcon ?? nothing} ${opts.control} ${opts.reset}
-        </div>
+      <div class="settings-section">
+        ${renderSettingsSectionHeading({
+          title: 'Formatting and review',
+          icon: 'wand-magic-sparkles',
+        })}
+        ${renderStateSettingSelectRow({
+          key: WorkspaceStateKey.LATEX_FORMATTER,
+          value: this.formatter,
+        })}
+        ${
+          // Editor diagnostics are a VS Code surface; the desktop has none.
+          this.desktopHost
+            ? nothing
+            : renderStateSettingToggleRow({
+                key: GlobalStateKey.INLINE_CRITICISM_ENABLED,
+                checked: this.inlineCriticismEnabled,
+              })
+        }
       </div>
     `;
-  }
-
-  private renderBooleanSetting(opts: {
-    field:
-      | WorkspaceStateKey.WORKFLOW_AUTO_COMPILE
-      | WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF
-      | WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE
-      | WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS
-      | WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY
-      | 'texra.latex.wrapCritiqueInAlign';
-    label: string;
-    description: string;
-    defaultValue: boolean;
-    currentValue: boolean | undefined;
-  }): TemplateResult {
-    const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = effective !== opts.defaultValue;
-    // No status icon: the switch already carries the on/off state, matching
-    // the toggle rows in the other settings tabs.
-    const controlId = `latex-setting-${opts.field}`;
-    return this.renderConfigRow({
-      label: opts.label,
-      description: opts.description,
-      controlId,
-      control: html`
-        <wa-switch
-          id=${controlId}
-          class="setting-control-metadata"
-          ?checked=${effective}
-          @change=${(e: Event) => {
-            const checked = (e.target as WaSwitch).checked;
-            this.dispatchSetConfigValue(opts.field, checked);
-          }}
-        >
-          <span class="visually-hidden">${opts.label}</span>
-          <span slot="hint" class="visually-hidden">${opts.description}</span>
-        </wa-switch>
-      `,
-      reset: isCustom
-        ? this.renderResetButton(opts.field, opts.defaultValue ? 'On' : 'Off')
-        : nothing,
-    });
-  }
-
-  /**
-   * Icon for non-boolean settings (number/enum): an "edit" pencil when the
-   * value has been customized, a neutral gear when it's still the default.
-   * Boolean rows carry their state on the switch itself, so they render no
-   * status icon.
-   */
-  private renderSettingStatusIcon(isCustom: boolean): TemplateResult {
-    // `label` (not just `title`) so the state reaches assistive technology —
-    // a titled but aria-hidden icon is visual-only.
-    return waIcon(isCustom ? 'pencil' : 'gear', {
-      className: `setting-status-icon ${isCustom ? 'is-set' : 'is-default'}`,
-      label: isCustom ? 'Customized' : 'Using default',
-      title: isCustom ? 'Customized' : 'Using default',
-    });
-  }
-
-  /** Reset-to-default button shown when a config value has been customized. */
-  private renderResetButton(
-    field: LatexConfigField,
-    defaultDisplay: string,
-    beforeReset?: () => void,
-  ): TemplateResult {
-    return renderLabeledActionButton({
-      icon: 'arrow-rotate-left',
-      text: 'Reset',
-      kind: 'secondary',
-      appearance: 'outlined',
-      label: 'Reset to default',
-      title: `Reset to default (${defaultDisplay})`,
-      onClick: () => {
-        beforeReset?.();
-        this.dispatchSetConfigValue(field, undefined);
-      },
-    });
-  }
-
-  private renderNumberSetting(opts: {
-    field:
-      | WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS
-      | WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
-    label: string;
-    description: string;
-    defaultValue: number;
-    currentValue: number | undefined;
-    min: number;
-    max?: number;
-  }): TemplateResult {
-    const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = effective !== opts.defaultValue;
-    const controlId = `latex-setting-${opts.field}`;
-    return this.renderConfigRow({
-      label: opts.label,
-      description: opts.description,
-      statusIcon: this.renderSettingStatusIcon(isCustom),
-      controlId,
-      control: html`
-        <wa-input
-          id=${controlId}
-          class="setting-number-input setting-control-metadata"
-          type="number"
-          min=${opts.min}
-          max=${opts.max ?? nothing}
-          .value=${String(effective)}
-          @change=${(e: Event) => {
-            const value = (e.target as WaInput).value;
-            // Treat a cleared field as "no change" — `Number('')` would
-            // silently coerce to 0/min and overwrite the saved value.
-            if (typeof value !== 'string' || value.trim() === '') return;
-            const raw = Number(value);
-            if (Number.isNaN(raw)) return;
-            // Coerce to integer first — paste / spinner can produce decimals
-            // that the backend `.int()` schema would silently reject.
-            const integer = Math.round(raw);
-            const clamped = clampOptional(integer, opts.min, opts.max);
-            this.dispatchSetConfigValue(opts.field, clamped);
-          }}
-        >
-          <span slot="label" class="visually-hidden">${opts.label}</span>
-          <span slot="hint" class="visually-hidden">${opts.description}</span>
-        </wa-input>
-      `,
-      reset: isCustom
-        ? this.renderResetButton(opts.field, String(opts.defaultValue))
-        : nothing,
-    });
-  }
-
-  /**
-   * Enum row whose allowed values come from the shared `stateSettings` catalog
-   * entry for this field. The option label format stays this tab's own:
-   * `value — description` when `withDescription`, bare `value` otherwise, with
-   * ` (default)` appended to the default option.
-   */
-  private renderEnumSetting<
-    F extends
-      | WorkspaceStateKey.LATEXDIFF_MATH_MARKUP
-      | WorkspaceStateKey.LATEX_FORMATTER,
-  >(opts: {
-    field: F;
-    label: string;
-    description: string;
-    defaultValue: LatexConfigValueFor<F>;
-    currentValue: LatexConfigValueFor<F> | undefined;
-    withDescription: boolean;
-  }): TemplateResult {
-    const effective = opts.currentValue ?? opts.defaultValue;
-    const isCustom = effective !== opts.defaultValue;
-    const controlId = `latex-setting-${opts.field}`;
-    const options = catalogEnumChoices<LatexConfigValueFor<F>>(opts.field).map(
-      (choice) => {
-        const base =
-          opts.withDescription && choice.description
-            ? `${choice.value} — ${choice.description}`
-            : choice.value;
-        return {
-          value: choice.value,
-          label:
-            choice.value === opts.defaultValue ? `${base} (default)` : base,
-        };
-      },
-    );
-    return this.renderConfigRow({
-      label: opts.label,
-      description: opts.description,
-      statusIcon: this.renderSettingStatusIcon(isCustom),
-      controlId,
-      control: html`
-        <wa-select
-          id=${controlId}
-          class="setting-enum-select setting-control-metadata"
-          .value=${String(effective)}
-          @change=${(e: Event) => {
-            const v = readSelectValue(e) as LatexConfigValueFor<F>;
-            this.dispatchSetConfigValue(opts.field, v);
-          }}
-        >
-          <span slot="label" class="visually-hidden">${opts.label}</span>
-          <span slot="hint" class="visually-hidden">${opts.description}</span>
-          ${options.map(
-            (o) =>
-              html`<wa-option value=${String(o.value)}>${o.label}</wa-option>`,
-          )}
-        </wa-select>
-      `,
-      reset: isCustom
-        ? this.renderResetButton(opts.field, String(opts.defaultValue))
-        : nothing,
-    });
   }
 }
-
-type LatexConfigField = keyof LatexConfigValues;
-type LatexConfigValueFor<F extends LatexConfigField> = NonNullable<
-  LatexConfigValues[F]
->;
 
 declare global {
   interface HTMLElementTagNameMap {

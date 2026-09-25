@@ -1,13 +1,10 @@
 import { Text, useWindowSize } from 'ink';
 
 import { isCliApiSwitchableRetry } from '@cli/runtime/approval/approvalPrompts';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
 import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '@cli/tui/ui/theme';
+import { confirmCardContentWidth } from '@cli/tui/ui/theme';
 import { isApiProvider } from '@model/apiProviders';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
@@ -32,7 +29,7 @@ function retryGuidanceRows(
   width: number,
 ): number {
   if (!guidance) return 0;
-  return wrapAnsiToWidth(guidance, width).split('\n').length;
+  return wrappedRowCount(guidance, width);
 }
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
@@ -64,12 +61,10 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
     guidanceText = 'Press k to use your own API key for this retry.';
   }
 
-  const contentWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = confirmCardContentWidth(columns);
   // A provider stack trace can be arbitrarily tall. Budget the body the same
   // way the other approval cards do so the error scrolls instead of pushing
-  // retry/dismiss past the live region's clip.
+  // retry/stop run past the live region's clip.
   const maxSubjectRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
@@ -84,14 +79,14 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
       title={RETRY_REQUEST_TITLE}
       approveLabel="retry"
       approveDecision={retryDecision}
-      rejectLabel="dismiss"
+      rejectLabel="stop run"
       rejectionMode="immediate"
       extraActions={
         canSwitchToPersonalKey
           ? [
               {
                 key: 'k',
-                label: 'retry with your own API key',
+                action: 'retry with your own API key',
                 decision: switchDecision,
               },
             ]

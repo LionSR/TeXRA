@@ -17,19 +17,27 @@
 // ↑/↓ (line motion falling back to history recall), and Ctrl-V (async image
 // paste). Those stay explicit in BaseTextInput.
 
-import { isCtrlInput, metaChordInput } from '@cli/tui/inputKeys';
 import {
+  isCtrlInput,
+  isUnhandledControlInput,
+  metaChordInput,
+  SYNTHETIC_SHIFT_RETURN_INPUT,
+} from '@cli/tui/inputKeys';
+import {
+  clampCursor,
   deleteAtCursor,
   deleteBeforeCursor,
   deleteNextWord,
   deletePreviousWord,
   deleteToEnd,
   deleteToStart,
+  insertText,
   lineEndCursor,
   lineStartCursor,
   nextWordCursor,
   previousWordCursor,
   type CursorEdit,
+  type TextEdit,
 } from './textInputEditing';
 
 /** Structural subset of Ink's `Key` consulted by the keymap matchers. */
@@ -169,4 +177,54 @@ export function textInputEditingHelp(): string {
   return TEXT_INPUT_BINDINGS.filter((binding) => binding.advertise)
     .map((binding) => `\`${binding.keys}\` ${binding.action}`)
     .join(' · ');
+}
+
+export interface TextInputChunkEdit extends TextEdit {
+  readonly submit: boolean;
+}
+
+/** Apply a batched terminal input chunk. Raw control bytes dispatch through
+ *  the keymap above (Ctrl-A/E/U/K/W); other control bytes are dropped. */
+export function applyTerminalInputChunk(
+  value: string,
+  cursor: number,
+  input: string,
+): TextInputChunkEdit {
+  let edit: TextEdit = { value, cursor: clampCursor(cursor, value.length) };
+  let submit = false;
+
+  const chars = [...input];
+  for (let index = 0; index < chars.length; index += 1) {
+    const ch = chars[index];
+    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT || ch === '\n') {
+      edit = insertText(edit.value, edit.cursor, '\n');
+      continue;
+    }
+    if (ch === '\r') {
+      if (chars[index + 1] === '\n' && index + 2 < chars.length) {
+        edit = insertText(edit.value, edit.cursor, '\n');
+        index += 1;
+        continue;
+      }
+      submit = true;
+      break;
+    }
+
+    const binding = matchTextInputBinding(ch, {});
+    if (binding) {
+      edit =
+        'edit' in binding
+          ? binding.edit(edit.value, edit.cursor)
+          : {
+              value: edit.value,
+              cursor: binding.move(edit.value, edit.cursor),
+            };
+      continue;
+    }
+    if (!isUnhandledControlInput(ch)) {
+      edit = insertText(edit.value, edit.cursor, ch);
+    }
+  }
+
+  return { ...edit, submit };
 }

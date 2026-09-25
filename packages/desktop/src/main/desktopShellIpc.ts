@@ -6,7 +6,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -20,6 +20,7 @@ import {
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -58,10 +59,10 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openPath(filePath: string): Effect.Effect<void, PreviewUnavailable>;
   openWorkspaceFolder(): Effect.Effect<
     void,
-    unknown,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases
+    Error,
+    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
-  signIn(): Effect.Effect<void, unknown>;
+  signIn(): Effect.Effect<void, Error>;
   onAsyncError: (error: unknown) => void;
   /** The process runtime the composition root built; every shell action's
    *  program is forked on it rather than on a bare `Effect.run*`. */
@@ -95,7 +96,11 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs | FileSystem.FileSystem | Path.Path | ProjectDatabases
+      | GlobalStorageFs
+      | FileSystem.FileSystem
+      | Path.Path
+      | ProjectDatabases
+      | ChildProcessSpawner
     >,
   ): void {
     options.runtime.runFork(
@@ -114,10 +119,7 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(
-    tab?: SettingsTabPanelName,
-    agentSubTab?: AgentCategory,
-  ) {
+  function showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory) {
     postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
       tab,
@@ -133,15 +135,15 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      showSettings('agents');
+      showSettings('agents/library');
       return;
     }
     runShellAction(openCustomAgentDirectory);
   }
 
-  // New Session is the header's "+" (PRD 12.4): the New-task state with
-  // the launcher's selections as they are.
-  function resetMainView() {
+  // New Task, the header's "+" (PRD 12.4): the New-task state with the
+  // launcher's selections as they are.
+  function showLauncher() {
     renderer.postToRenderer({
       command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
     });
@@ -168,17 +170,11 @@ export function createDesktopShellActions(
         command: DESKTOP_SHELL_COMMANDS.SAVE_FILE,
       });
     },
-    resetMainView,
-    showLauncher: () => {
-      renderer.postToRenderer({
-        command: DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER,
-      });
-    },
+    showLauncher,
     openWorkbench,
     showSettings,
     toggleBottomBar: () => toggleLayout('bottomBar'),
     toggleSidePanel: () => toggleLayout('sidePanel'),
-    toggleSummaryBar: () => toggleLayout('summaryBar'),
     showFirstRunWalkthrough: () => {
       renderer.postToRenderer(buildDesktopOnboardingSetStateMessage(true));
     },
@@ -200,15 +196,16 @@ export function createDesktopShellIpc(
   actions: DesktopShellActions,
 ): DesktopMessageHandler {
   return {
-    handleMessage(message: DesktopCommandMessage): boolean {
+    handleMessage(message: DesktopCommandMessage) {
       const id = DESKTOP_SHELL_IPC_COMMANDS.find(
         (candidate) => candidate === message.command,
       );
-      if (id == null) return false;
-      // Every registry handler runs its action synchronously and returns
-      // `true`; `boolean | Promise<boolean>` is the shared dispatcher
-      // signature, so narrow it here rather than widening this contract.
-      return dispatchDesktopCommand(id, actions) === true;
+      if (id == null) return undefined;
+      // Every registry handler runs its action synchronously; an action that
+      // forks host work reports its own failure.
+      return Effect.sync(() => {
+        void dispatchDesktopCommand(id, actions);
+      });
     },
   };
 }

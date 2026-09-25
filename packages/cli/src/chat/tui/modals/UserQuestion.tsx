@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useWindowSize } from 'ink';
 
 import {
   parseUserQuestionAnswer,
   USER_QUESTION_SKIPPED_FEEDBACK,
 } from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import { isEscapeInput } from '@cli/tui/inputKeys';
 import {
   previousRowsText,
   selectVisibleInlineOverflowText,
@@ -18,7 +17,7 @@ import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
@@ -63,11 +62,9 @@ function wrappedUserQuestionPromptLines({
   readonly text: string;
   readonly width: number;
 }): UserQuestionPromptLine[] {
-  return text.split('\n').flatMap((line) =>
-    wrapAnsiToWidth(line, width)
-      .split('\n')
-      .map((wrapped): UserQuestionPromptLine => ({ kind, text: wrapped })),
-  );
+  return wrapAnsiToWidth(text, width)
+    .split('\n')
+    .map((wrapped): UserQuestionPromptLine => ({ kind, text: wrapped }));
 }
 
 function userQuestionInlineClipIndicator({
@@ -266,9 +263,7 @@ interface QuestionShellProps extends Omit<
 function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const compact = isCompactUserQuestionRows(props.availableRows);
-  const contentWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = confirmCardContentWidth(columns);
   const promptRows = userQuestionPromptRowsBudget({
     availableRows: props.availableRows,
     controlRows: props.controlRows,
@@ -371,9 +366,7 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
 function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
-  const contentWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = confirmCardContentWidth(columns);
   const optionRows = userQuestionFreeTextOptionRowsBudget({
     availableRows: props.availableRows,
     optionCount: props.question.options.length,
@@ -384,13 +377,6 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
     hiddenBefore: 0,
     showOverflow: false,
     visibleItemCount: visibleOptions.length,
-  });
-  useInput((input, key) => {
-    // Esc cancels; App clears a non-empty answer before applying its usual
-    // Ctrl+C stop or exit behavior.
-    if (isEscapeInput(input, key)) {
-      props.onCancel();
-    }
   });
 
   return (
@@ -428,6 +414,9 @@ function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
             maxDisplayRows={1}
             value={answer}
             onChange={setAnswer}
+            // Esc cancels; App clears a non-empty answer before applying its
+            // usual Ctrl+C stop or exit behavior.
+            onEscape={props.onCancel}
             onSubmit={(value) =>
               props.onSubmit(parseUserQuestionAnswer(value, props.question))
             }

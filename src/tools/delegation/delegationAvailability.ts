@@ -27,11 +27,7 @@
 import { Effect } from 'effect';
 
 // Local imports
-import {
-  findAgentByIdentifier,
-  resolveDelegationScopeAgents,
-  type AgentRosterStores,
-} from '@agent/index/agentRegistry';
+import { resolveDelegationScopeAgents } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   modelOptionsFrom,
@@ -149,43 +145,21 @@ export const readDelegationAnnotationState = Effect.fn(
   'readDelegationAnnotationState',
 )(function* (stores: SettingsStores, delegationScope?: AgentDelegationScope) {
   const agents = yield* Effect.all({
-    workflow: getDelegationAgents(
+    workflow: resolveDelegationScopeAgents(
       stores,
+      delegationScope,
       AgentCategory.Workflow,
-      delegationScope,
     ),
-    toolUse: getDelegationAgents(
+    toolUse: resolveDelegationScopeAgents(
       stores,
-      AgentCategory.ToolUse,
       delegationScope,
+      AgentCategory.ToolUse,
     ),
   });
   return {
     agents,
     worktreeEnabled: yield* isWorktreeSupportEnabled(stores),
   } satisfies DelegationAnnotationState;
-});
-
-/** Resolve targets from a pinned run scope or the current durable roster. */
-export function getDelegationAgents(
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  scope?: AgentDelegationScope,
-) {
-  return resolveDelegationScopeAgents(stores, scope, category);
-}
-
-/** Resolve one target from the same authoritative candidate set. */
-export const getDelegationAgent = Effect.fn('getDelegationAgent')(function* (
-  stores: AgentRosterStores,
-  category: AgentCategory,
-  identifier: string,
-  scope?: AgentDelegationScope,
-) {
-  return findAgentByIdentifier(
-    yield* getDelegationAgents(stores, category, scope),
-    identifier,
-  );
 });
 
 /* -------------------------------------------------------------------------
@@ -286,7 +260,7 @@ const WORKTREE_ENABLED_LINE =
   'Git worktree support: ENABLED. Pass `working_directory` (absolute path) to run a subagent rooted in a git worktree; every tool call in the subagent resolves paths against that directory. The subagent reports its working directory back in its delivery result.';
 
 const WORKTREE_DISABLED_LINE =
-  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because it will be rejected at schema validation. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
+  'Git worktree support: DISABLED in this workspace. Do not pass `working_directory` because the call will be rejected when the tool runs. Ask the user to turn on `texra.git.worktreeSupport` ("Subagent worktrees" on the Multi-Agent settings tab) if worktree operation is needed.';
 
 /* -------------------------------------------------------------------------
  * Annotation
@@ -310,9 +284,10 @@ const WORKTREE_DISABLED_LINE =
  * The roster block is appended when its anchor is missing; the worktree line is
  * replace-only, because a tool without that line (e.g. delegate_workflow, which
  * has no `working_directory`) takes no working directory and must never be told
- * it does. The schema's `working_directory` field already enforces the real
- * state at validation time; this only keeps the guidance in step with it. A `$`
- * in an agent description (e.g. inline LaTeX math) stays literal.
+ * it does. The tool rejects a `working_directory` it cannot use when it runs
+ * (`rejectUnusableWorkingDirectory`); this only keeps the guidance in step
+ * with that check. A `$` in an agent description (e.g. inline LaTeX math) stays
+ * literal.
  */
 export function annotateDelegationAvailability(
   tool: ToolDefinition,

@@ -51,13 +51,14 @@ export const DIAGNOSTIC_TYPE_VALIDATION_ERROR = 'validation_error' as const;
 
 /**
  * Formatted Zod issue for model consumption.
- * Provides structured information that helps models self-correct.
+ * Provides structured information that helps models self-correct. Every field
+ * is JSON by construction: the settled tool result is stored as a JSON value,
+ * and a present-but-undefined key there is a refused row, not a dropped key.
  */
 const FormattedZodIssueSchema = z.object({
   path: z.string(),
   message: z.string(),
-  expected: z.unknown().optional(),
-  received: z.unknown().optional(),
+  expected: z.string().optional(),
   code: z.string().optional(),
 });
 type FormattedZodIssue = z.infer<typeof FormattedZodIssueSchema>;
@@ -78,25 +79,18 @@ export type ValidationErrorDiagnostics = z.infer<
 
 /**
  * Format Zod issues into structured diagnostics for model consumption.
- * `expected`/`received` only exist on certain ZodIssue subtypes (e.g.
- * invalid_type), so we cast to access them.
+ * Only an `invalid_type` issue names an `expected` type, so only that issue
+ * carries the key; Zod 4 issues report no `received` value at all.
  */
 export function formatZodIssuesForDiagnostics(
   issues: ZodIssue[],
 ): FormattedZodIssue[] {
-  return issues.map((issue) => {
-    const extendedIssue = issue as ZodIssue & {
-      expected?: unknown;
-      received?: unknown;
-    };
-    return {
-      path: issue.path.join('.'),
-      message: issue.message,
-      expected: extendedIssue.expected,
-      received: extendedIssue.received,
-      code: issue.code,
-    };
-  });
+  return issues.map((issue) => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+    ...(issue.code === 'invalid_type' ? { expected: issue.expected } : {}),
+    code: issue.code,
+  }));
 }
 
 // ============================================================================
@@ -112,8 +106,6 @@ export function formatZodIssuesForDiagnostics(
 const ToolResultSharedFields = {
   /** User instruction that was processed */
   userInstruction: z.string().optional(),
-  /** User-provided patch content */
-  userPatch: z.string().optional(),
   /**
    * Additional diagnostic information. Deliberately `z.unknown()`: every tool
    * shapes its own payload here (validation issues, severity counts, an

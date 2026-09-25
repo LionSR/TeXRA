@@ -1,5 +1,5 @@
-// `/tools` form. It mirrors `texra tools list` inside an active TUI session
-// and toggles integrations that are marked toggleable in EXTERNAL_TOOL_DEFS.
+// `/config` → Tools form. It mirrors `texra tools list` inside an active TUI session
+// and toggles integrations that are marked toggleable in TOOL_PLUGINS.
 
 import { Text } from 'ink';
 
@@ -13,9 +13,7 @@ import type { ConfigProvider, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { toolDependencyStatusLabel } from '@shared/tools/toolDependencyStatusLabels';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { setTransientNotice } from '../state/cliState';
 import { AsyncListForm } from './_shared/ListForm';
 
 interface ToolsListFormProps {
@@ -67,17 +65,16 @@ function formatToolDescriptionForTui(tool: ToolDashboardItem): string {
 export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
   return (
     <AsyncListForm<readonly ToolDashboardItem[], string>
-      title="/tools"
-      compactTitle="/tools · Toggle available external integrations."
+      title="/config · Tools"
+      compactTitle="/config · Tools · Toggle external integrations."
       loadingLabel="Checking tool integrations..."
       load={() =>
-        props.runtime.runPromise(
-          readCliToolStatuses({
-            workspaceRoot: props.workspaceRoot,
-            config: props.config,
-          }),
-        )
+        readCliToolStatuses({
+          workspaceRoot: props.workspaceRoot,
+          config: props.config,
+        })
       }
+      runtime={props.runtime}
       items={(tools) =>
         tools.map((tool) => ({
           value: tool.id,
@@ -92,16 +89,12 @@ export function ToolsListForm(props: ToolsListFormProps): React.JSX.Element {
       }
       action="toggle"
       showTransientCloseHint={false}
-      onSelect={(id, { data: tools, reload }) => {
+      onSelect={(id, { data: tools, update }) => {
         const tool = tools.find((candidate) => candidate.id === id);
         const enabled = tool ? cliToolEnabled(tool) : null;
-        if (enabled === null) return;
-        void props.runtime
-          .runPromise(setCliToolEnabled(props.state, id, !enabled))
-          .then(reload)
-          .catch((error: unknown) => {
-            setTransientNotice(toErrorMessage(error));
-          });
+        if (enabled !== null) {
+          update(setCliToolEnabled(props.state, id, !enabled));
+        }
       }}
       onCancel={props.onClose}
     />

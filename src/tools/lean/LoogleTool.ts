@@ -19,6 +19,7 @@ import {
   formatResultCount,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const LOOGLE_TIMEOUT_MS = 10_000; // 10 s
 const LOOGLE_CHANNEL = 'lean_loogle';
@@ -124,7 +125,7 @@ const fetchLoogle = Effect.fn('LoogleTool.fetchLoogle')((query: string) =>
               retry: 0,
             })
             .json<unknown>(),
-        catch: (cause) => cause,
+        catch: ensureError,
       });
       // Validate the body at the boundary. A malformed shape is not
       // transient, so it is not retried; searchOne surfaces it as a tool
@@ -285,7 +286,7 @@ Returns: name, type signature, module (for imports), and documentation.
 
 Useful for finding the right lemma when you know roughly what type it should have.`,
   schema: LeanLoogleInputSchema,
-  execute: (input: LeanLoogleInput): Effect.Effect<ToolResult, unknown> => {
+  execute: (input: LeanLoogleInput): Effect.Effect<ToolResult, Error> => {
     // The owning agent run's cancellation enters here as interruption —
     // parallel batches must be able to abort in-flight Loogle requests and
     // their retry backoff.

@@ -4,7 +4,7 @@ import { Deferred, Effect, Fiber } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { TraceEmitter } from '@agent/trace';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
@@ -134,8 +134,8 @@ function launchStrategy(
 ) {
   return strategy
     .launch(ports, signal, {
-      run: (operation) => operation,
-      complete: () => Effect.void,
+      turnPermit: (turn) => turn,
+      onTurnBoundary: () => Effect.void,
     })
     .pipe(Effect.provide(nativeToolTestLayer()));
 }

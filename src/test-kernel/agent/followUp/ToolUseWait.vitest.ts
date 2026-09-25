@@ -2,6 +2,7 @@ import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import {
@@ -42,9 +43,10 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
-  AgentRunStateSnapshotSchema,
+  EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
@@ -59,7 +61,10 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
@@ -67,7 +72,12 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
+import {
+  clearGoal,
+  goalOf,
+  setGoalSessionAutoApproval,
+  startGoal,
+} from '@tools/goal';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -124,7 +134,6 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -150,11 +159,11 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const scripted = script[seen.length];
             seen.push(request);
             if (scripted === undefined) {
@@ -165,7 +174,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             if ('failWith' in scripted) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
-              const failed = yield* ledger.appendBatch(run.runId, state, [
+              const failed = yield* cell.append([
                 snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: scripted.failWith,
@@ -182,7 +191,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
             const bound = yield* SynchronizedRef.get(run.model);
             const invocation = { invocationId: randomUUID(), attempt: 1 };
             const responseId = randomUUID();
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -289,6 +298,8 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: init.finalToolName ?? null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
@@ -308,7 +319,6 @@ function agentRunTestLayer(init: LoopInit) {
           onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );
@@ -365,10 +375,10 @@ const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
 
 /**
  * Start a run that parks, for scenarios that drive it while it waits. The
- * loop calls `attachment.detach()` on its own fiber immediately before it
- * blocks for input, after the batch carrying the `waiting` step has
- * committed, so one Deferred per park is the loop's own 'parked for the Nth
- * time' signal: `park(n)` is what those scenarios wait on. The wait resumes
+ * loop calls `onIdle` on its own fiber immediately before it blocks for
+ * input, after the batch carrying the `waiting` step has committed, so one
+ * Deferred per park is the loop's own 'parked for the Nth time' signal:
+ * `park(n)` is what those scenarios wait on. The wait resumes
  * inside that callback, before the loop enters `followUps.wait`, so input a
  * scenario enqueues after `park` lands on the queue rather than on a waiting
  * consumer; the wait takes what is queued first, so both orders deliver the
@@ -382,14 +392,11 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
     loopProgram(
       {
         ...init,
-        attachment: {
-          attach: (context) => init.attachment?.attach(context),
-          detach: (context) => {
-            init.attachment?.detach(context);
-            const park = parks[parked];
-            parked += 1;
-            if (park) Deferred.doneUnsafe(park, Effect.void);
-          },
+        onIdle: () => {
+          init.onIdle?.();
+          const park = parks[parked];
+          parked += 1;
+          if (park) Deferred.doneUnsafe(park, Effect.void);
         },
       },
       requests,
@@ -461,9 +468,10 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       requests: {},
       followUps: [],
       followUpIds: new Set(),
-      usage: AgentRunStateSnapshotSchema.parse({}).usageAccumulator.totals,
+      usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
+      overflowRecoveredAtRound: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -474,7 +482,11 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         turn: 1,
         state: {
           family: 'toolUse',
-          state: { shouldSkipCycle: false, stateSlices: null },
+          state: {
+            stateSlices: null,
+            offeredTools: [],
+            toolsetHash: '0'.repeat(64),
+          },
         },
       }),
     ]);
@@ -1066,6 +1078,8 @@ describe('an active goal at the wait', () => {
         const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
+        // The grant an approved plan makes; pausing revokes what it granted.
+        setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
         try {
@@ -1171,7 +1185,7 @@ describe('the host wiring a run attaches', () => {
         const blockedFs = {
           ...processFs,
           exists: (target: string) =>
-            target.endsWith('/.texrarules')
+            path.basename(target) === '.texrarules'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>

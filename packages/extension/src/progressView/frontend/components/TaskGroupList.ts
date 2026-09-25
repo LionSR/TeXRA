@@ -9,9 +9,6 @@ import { repeat } from 'lit/directives/repeat.js';
 
 // Local imports - shared schemas
 import {
-  GETTING_STARTED_ACTION_PRESENTATION,
-  GettingStartedActionSchema,
-  type GettingStartedAction,
   type RunOutcome,
   type RunLifecycleStatus,
   type RunId,
@@ -24,7 +21,6 @@ import {
   formatRoundStageLabel,
   formatRunStatusLabel,
 } from '@shared/runs/runStatusDisplay';
-import { SessionUiEvents } from '@shared/session/uiEvents';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import type { TranscriptRow } from '@ui/transcript';
 import { designTokens } from '@ui/styles';
@@ -39,7 +35,6 @@ import '@awesome.me/webawesome/dist/components/details/details.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 
 import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { renderEmptyState } from '@ui/wa/emptyState';
 import { terminalStatusIcon } from '@ui/wa/statusIcons';
 import { groupBy } from '@utils/core';
 import { formatDuration, pluralize } from '@utils/text/stringUtils';
@@ -176,9 +171,6 @@ export class TaskGroupList extends LitElement {
 
   /** The stream these rows belong to; every group toggle names it. */
   @property({ attribute: false }) runId: RunId | null = null;
-
-  /** Whether there are any runs in the current filter (controls placeholder) */
-  @property({ attribute: false }) hasRuns = false;
 
   /** Status for the active stream, used while a run exists before logs arrive. */
   @property({ attribute: false }) runStatus: RunLifecycleStatus | undefined =
@@ -525,12 +517,6 @@ export class TaskGroupList extends LitElement {
     ></terminal-output>`;
   }
 
-  private handleGettingStartedAction(action: GettingStartedAction): void {
-    this.dispatchEvent(
-      SessionUiEvents.host({ kind: 'gettingStarted', action }),
-    );
-  }
-
   override render(): TemplateResult {
     return html`
       <div
@@ -544,22 +530,6 @@ export class TaskGroupList extends LitElement {
   }
 
   private renderLogContent(): TemplateResult {
-    // Show placeholder only when there are no runs in the current filter
-    if (!this.hasRuns) {
-      return renderEmptyState({
-        icon: 'terminal',
-        title: 'No runs yet',
-        body: 'Start an agent from the New tab or Commands.',
-        headingTag: 'h3',
-        className: 'log-placeholder',
-        actions: GettingStartedActionSchema.options.map((action) => ({
-          ...GETTING_STARTED_ACTION_PRESENTATION[action],
-          size: 's' as const,
-          onClick: () => this.handleGettingStartedAction(action),
-        })),
-      });
-    }
-
     // Pre-output placeholder, including terminal-mode (process-agent) runs:
     // with no output the terminal buffer is empty and would render a blank
     // pane, so show the same "Run is starting" / idle text instead.

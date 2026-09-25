@@ -1,9 +1,8 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
@@ -20,16 +19,14 @@ import {
   type CliOutputFormat,
 } from '@shared/schemas';
 import type { SkillSourceOptions } from '@skills/skillSources';
+import { readConfigSettingFrom } from '@utils/config/platformSettings';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
-import {
-  isCliSupportedModelId,
-  loadCliStartupConfig,
-  readCliConfigSetting,
-} from './cliConfig';
+import { isCliSupportedModelId, loadCliStartupConfig } from './cliConfig';
 import { resolveCliResourcesPath } from './resourcesPath';
-import type { Stats } from 'node:fs';
 
 type CliMode = 'headless' | 'interactive';
 
@@ -73,6 +70,8 @@ export interface CliContext {
    */
   readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
+  /** The `configWarnings` that `--quiet` does not hide; see `CliStartupConfig`. */
+  readonly configDegradations: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
   readonly skillSourceOptions: SkillSourceOptions;
@@ -85,6 +84,10 @@ export class CliUsageError extends Error {
     this.name = 'CliUsageError';
   }
 }
+
+/** Fail the command with a usage error. */
+export const failUsage = (message: string) =>
+  Effect.fail(new CliUsageError(message));
 
 export interface CliAmbientState {
   readonly isCi: boolean;
@@ -305,7 +308,6 @@ function cliMode(globalArgs: CliGlobalArgs, ambient: CliAmbientState): CliMode {
 export interface BuildCliContextInit {
   readonly globalArgs: CliGlobalArgs;
   readonly ambient?: CliAmbientState;
-  readonly env?: Record<string, string | undefined>;
   /**
    * Root of the shared TeXRA storage directory. Production leaves this unset
    * (`~/.texra`); tests point it at a scratch directory so the developer's own
@@ -314,53 +316,31 @@ export interface BuildCliContextInit {
   readonly storageRoot?: string;
 }
 
-function envValue(
-  env: Record<string, string | undefined>,
+/** One env-tier value from the ambient ConfigProvider, trimmed; blank reads as unset. */
+const envTier = (key: string): Effect.Effect<string | undefined> =>
+  Effect.map(envVar(key), (raw) => {
+    const value = raw?.trim();
+    return isNonEmptyString(value) ? value : undefined;
+  });
+
+/** An env-tier value through its own parse; an invalid one warns and yields nothing. */
+const pickEnv = <T extends string>(
   key: string,
-): string | undefined {
-  const value = env[key]?.trim();
-  return isNonEmptyString(value) ? value : undefined;
-}
-
-function pickEnvModel(
-  env: Record<string, string | undefined>,
+  parse: (candidate: string) => T | undefined,
   warnings: string[],
-): string | undefined {
-  const model = envValue(env, 'TEXRA_MODEL');
-  if (!model) return undefined;
-  if (isCliSupportedModelId(model)) return model;
-  warnings.push(`Ignoring invalid TEXRA_MODEL "${model}".`);
-  return undefined;
-}
+): Effect.Effect<T | undefined> =>
+  Effect.map(envTier(key), (candidate) => {
+    if (!candidate) return undefined;
+    const parsed = parse(candidate);
+    if (parsed === undefined) {
+      warnings.push(`Ignoring invalid ${key} "${candidate}".`);
+    }
+    return parsed;
+  });
 
-function pickEnvApprovalPolicy(
-  env: Record<string, string | undefined>,
-  warnings: string[],
-): TexraApprovalPolicy | undefined {
-  const candidate = envValue(env, 'TEXRA_APPROVAL_POLICY');
-  if (!candidate) return undefined;
-  const parsed = parseTexraApprovalPolicy(candidate);
-  if (parsed) return parsed;
-  warnings.push(`Ignoring invalid TEXRA_APPROVAL_POLICY "${candidate}".`);
-  return undefined;
-}
-
-function pickEnvOutputFormat(
-  env: Record<string, string | undefined>,
-  warnings: string[],
-): CliOutputFormat | undefined {
-  const candidate = envValue(env, 'TEXRA_OUTPUT_FORMAT');
-  if (!candidate) return undefined;
-  if ((CLI_OUTPUT_FORMATS as readonly string[]).includes(candidate)) {
-    return candidate as CliOutputFormat;
-  }
-  warnings.push(`Ignoring invalid TEXRA_OUTPUT_FORMAT "${candidate}".`);
-  return undefined;
-}
-
-export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
+const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
   cwdFlag: string | undefined,
-): Effect.fn.Return<string, CliUsageError> {
+): Effect.fn.Return<string, CliUsageError, FileSystem.FileSystem> {
   // When the user did not pass `--cwd`, `process.cwd()` is correct by
   // construction (the shell can't put us in a directory that doesn't exist).
   // When `--cwd` IS passed, validate it explicitly: a typo or stale path
@@ -370,16 +350,19 @@ export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
     return canonicalizeWorkspacePath(readCliCwd());
   }
   const requested = path.resolve(cwdFlag);
-  const info: Stats = yield* Effect.tryPromise({
-    try: () => stat(requested),
-    catch: (error: unknown) =>
-      isFileNotFoundError(error) || isNotADirectoryError(error)
-        ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
-        : new CliUsageError(
-            `--cwd: cannot access ${requested}: ${toErrorMessage(error)}`,
-          ),
-  });
-  if (!info.isDirectory()) {
+  const fs = yield* FileSystem.FileSystem;
+  const info = yield* fs
+    .stat(requested)
+    .pipe(
+      Effect.mapError((error) =>
+        absentReason(error)
+          ? new CliUsageError(`--cwd: path does not exist: ${requested}`)
+          : new CliUsageError(
+              `--cwd: cannot access ${requested}: ${toErrorMessage(error.reason.cause ?? error)}`,
+            ),
+      ),
+    );
+  if (info.type !== 'Directory') {
     return yield* Effect.fail(
       new CliUsageError(`--cwd: not a directory: ${requested}`),
     );
@@ -390,21 +373,28 @@ export const resolveCliCwd = Effect.fn('cliContext.resolveCliCwd')(function* (
 export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
   function* (
     init: BuildCliContextInit,
-  ): Effect.fn.Return<CliContext, CliUsageError | Error> {
+  ): Effect.fn.Return<
+    CliContext,
+    CliUsageError | Error,
+    FileSystem.FileSystem
+  > {
     const ambient = init.ambient ?? readCliAmbientState();
-    const env = init.env ?? process.env;
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
     // hosts — and, from `initCliPlatform` on, this host too. This is the
     // pre-runtime open, which is why it goes through `loadCliStartupConfig`
     // rather than the process runtime.
-    const { config, warnings } = yield* loadCliStartupConfig(
+    const { config, warnings, degradations } = yield* loadCliStartupConfig(
       cwd,
       init.storageRoot,
     );
     const configWarnings = [...warnings];
-    const envModel = pickEnvModel(env, configWarnings);
+    const envModel = yield* pickEnv(
+      'TEXRA_MODEL',
+      (model) => (isCliSupportedModelId(model) ? model : undefined),
+      configWarnings,
+    );
     // `--no-color` is an explicit force-disable: layer it onto the ambient
     // per-stream gates rather than recomputing them, so `NO_COLOR`/
     // `FORCE_COLOR`/TTY precedence stays in one place (`resolveStreamColor`).
@@ -417,19 +407,30 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // set one — the environment is the only tier that can still carry an
     // unvalidated string. `--no-input` skips the env and config tiers
     // entirely, so it also skips their warnings.
-    const approvalPolicy =
+    const approvalPolicy: TexraApprovalPolicy =
       init.globalArgs.approvalPolicy ??
       (noInput
         ? TEXRA_APPROVAL_POLICY_NO_INPUT_DEFAULT
-        : (pickEnvApprovalPolicy(env, configWarnings) ??
-          readCliConfigSetting<TexraApprovalPolicy>(
+        : ((yield* pickEnv(
+            'TEXRA_APPROVAL_POLICY',
+            parseTexraApprovalPolicy,
+            configWarnings,
+          )) ??
+          readConfigSettingFrom<TexraApprovalPolicy>(
             config,
             TEXRA_APPROVAL_POLICY_CONFIG_KEY,
           )));
     const outputFormat: CliOutputFormat =
       init.globalArgs.outputFormat ??
-      pickEnvOutputFormat(env, configWarnings) ??
-      readCliConfigSetting<CliOutputFormat>(
+      (yield* pickEnv(
+        'TEXRA_OUTPUT_FORMAT',
+        (format): CliOutputFormat | undefined =>
+          (CLI_OUTPUT_FORMATS as readonly string[]).includes(format)
+            ? (format as CliOutputFormat)
+            : undefined,
+        configWarnings,
+      )) ??
+      readConfigSettingFrom<CliOutputFormat>(
         config,
         CLI_OUTPUT_FORMAT_CONFIG_KEY,
       );
@@ -457,7 +458,8 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       resourcesPath: resolveCliResourcesPath(),
       config,
       configWarnings,
-      envAgent: envValue(env, 'TEXRA_AGENT'),
+      configDegradations: degradations,
+      envAgent: yield* envTier('TEXRA_AGENT'),
       envModel,
       skillSourceOptions: {
         includeInterop: init.globalArgs.includeInteropSkills === true,

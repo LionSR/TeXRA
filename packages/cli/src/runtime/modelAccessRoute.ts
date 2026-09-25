@@ -1,4 +1,4 @@
-import type { UsageRoute } from '@shared/schemas';
+import type { DeclinableUsageRoute, UsageRoute } from '@shared/schemas';
 import {
   CODING_PLAN_SUBSCRIPTIONS,
   type CodingPlanSubscription,
@@ -12,7 +12,7 @@ import {
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
-// Kept to one rendered row: the /api form and the account panel both
+// Kept to one rendered row: the /login form and the account panel both
 // budget a single line for this description (75 columns at most).
 export const CLI_ACCOUNT_ACCESS_DESCRIPTION =
   'Sign in or out, set subscription preferences, and how the rest is paid for.';
@@ -72,80 +72,12 @@ export type CliModelAccessItemsInput =
       readonly state: 'failed' | 'loading';
     };
 
-export function parseCliModelAccessSelection(
-  input: string,
-): CliModelAccessSelection | undefined {
-  const normalized = input.trim().toLowerCase();
-  const codingPlan = CODING_PLAN_SUBSCRIPTIONS.find((plan) =>
-    plan.cliAliases.includes(normalized),
-  );
-  if (codingPlan) {
-    return {
-      kind: 'subscription-preference',
-      provider: codingPlan.cliProvider,
-      state: 'on',
-    };
-  }
-
-  switch (normalized) {
-    case 'chatgpt':
-    case 'subscription':
-      return {
-        kind: 'subscription-preference',
-        provider: 'chatgpt',
-        state: 'on',
-      };
-    case 'grok':
-    case 'xai':
-    case 'supergrok':
-      return {
-        kind: 'subscription-preference',
-        provider: 'grok',
-        state: 'on',
-      };
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Pick the route the CLI reports for a model. Both inputs speak `UsageRoute`,
- * so this owns one precedence rule and no per-provider knowledge: a completed
- * request's route cannot change, so it always wins over the prospective route
- * `activeSubscriptionUsageRoute` reports for the next one. No route at all
- * means nothing has been paid for yet, which every label renders as own keys.
- */
-export function resolveCliModelAccessRoute({
-  usageRoute,
-  prospectiveRoute,
-}: {
-  /** Route stamped on completed usage, when the stream has any. */
-  readonly usageRoute?: UsageRoute;
-  /** Route that would serve the next request (`activeSubscriptionUsageRoute`). */
-  readonly prospectiveRoute?: UsageRoute;
-}): UsageRoute | undefined {
-  return usageRoute ?? prospectiveRoute;
-}
-
-/** Status-bar form of the access route. Width-critical, so every arm is a
- *  short display phrase; the enum value itself never reaches the screen. */
-export function shortCliModelAccessRoute(
+/** Own API keys (or no route yet) are the default; every other route is a
+ *  subscription the run can decline. */
+export function isSubscriptionRoute(
   route: UsageRoute | undefined,
-): string {
-  switch (route) {
-    case 'chatgpt-subscription':
-    case 'xai-subscription':
-    case 'kimi-code-subscription':
-    case 'glm-coding-plan-subscription':
-      // The bar names how the call is paid for, not which provider; the /api
-      // form and /status name the subscription itself.
-      return 'subscription';
-    case undefined:
-    case 'api-key':
-      return OWN_API_KEYS.compactLabel;
-    default:
-      return route satisfies never;
-  }
+): route is DeclinableUsageRoute {
+  return route !== undefined && route !== 'api-key';
 }
 
 export function formatCliModelAccessRoute(
@@ -174,9 +106,9 @@ export function formatCliModelAccessRouteInline(
 ): string {
   const label = formatCliModelAccessRoute(route);
   // Proper-noun labels keep their casing; plain labels lowercase like prose.
-  return route === undefined || route === 'api-key'
-    ? label.charAt(0).toLowerCase() + label.slice(1)
-    : label;
+  return isSubscriptionRoute(route)
+    ? label
+    : label.charAt(0).toLowerCase() + label.slice(1);
 }
 
 function formatCliSubscriptionPreference(

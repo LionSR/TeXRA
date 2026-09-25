@@ -7,10 +7,11 @@
  * read-then-act order, the same three- and six-way sub-switches -- so the
  * body lives here once and the difference is the table.
  *
- * A host keeps a `case` only for an arm it performs its own way (its file
- * pickers, its editor's current file, its tab pop-out, its launch path), so
- * its switch stays exhaustive over `HostRequest` and the compiler still
- * names a kind it forgot.
+ * A host routes every kind {@link isSharedHostRequest} admits here and keeps
+ * a `case` only for an arm it performs its own way (its file pickers, its
+ * editor's current file, its tab pop-out, its launch path). The guard narrows
+ * the host's switch to exactly those kinds, so it stays exhaustive and the
+ * compiler still names a kind it forgot.
  */
 import { Effect } from 'effect';
 
@@ -37,45 +38,55 @@ import type {
   SurfaceActionMessage,
 } from '@shared/session/sessionFrames';
 
-/** The requests {@link handleSharedHostRequest} answers. */
+/** The kinds {@link handleSharedHostRequest} answers. */
+const SHARED_HOST_REQUEST_KINDS = [
+  'agentConfigBanner',
+  'apiKeyBanner',
+  'clean',
+  'dismissBanner',
+  'exportTranscript',
+  'fileAction',
+  'gettingStarted',
+  'latexdiff',
+  'latexdiffs',
+  'onboarding',
+  'openFile',
+  'openInstallGuide',
+  'openLabel',
+  'openRunStorage',
+  'openSettings',
+  'pack',
+  'polish',
+  'recheckDependencies',
+  'record',
+  'refreshCommits',
+  'refreshFiles',
+  'restoreIntoLauncher',
+  'restoreProposalConfig',
+  'resume',
+  'runCompileFixer',
+  'runNew',
+  'savePastedImage',
+  'toolEdit',
+  'useOwnApiKey',
+] as const satisfies readonly HostRequest['kind'][];
+
 type SharedHostRequest = Extract<
   HostRequest,
-  {
-    kind:
-      | 'agentConfigBanner'
-      | 'apiKeyBanner'
-      | 'clean'
-      | 'dismissBanner'
-      | 'exportTranscript'
-      | 'fileAction'
-      | 'gettingStarted'
-      | 'latexdiff'
-      | 'latexdiffs'
-      | 'onboarding'
-      | 'openDashboard'
-      | 'openFile'
-      | 'openInstallGuide'
-      | 'openLabel'
-      | 'openRunStorage'
-      | 'openSettings'
-      | 'pack'
-      | 'polish'
-      | 'recheckDependencies'
-      | 'record'
-      | 'refreshCommits'
-      | 'refreshFiles'
-      | 'restoreIntoLauncher'
-      | 'restoreProposalConfig'
-      | 'resume'
-      | 'runCompileFixer'
-      | 'runNew'
-      | 'savePastedImage'
-      | 'setActiveView'
-      | 'signIn'
-      | 'toolEdit'
-      | 'useOwnApiKey';
-  }
+  { kind: (typeof SHARED_HOST_REQUEST_KINDS)[number] }
 >;
+
+const sharedHostRequestKinds: ReadonlySet<HostRequest['kind']> = new Set(
+  SHARED_HOST_REQUEST_KINDS,
+);
+
+/** Whether the shared body answers `request`. A host routes these to
+ *  {@link handleSharedHostRequest} and switches over what the guard leaves. */
+export function isSharedHostRequest(
+  request: HostRequest,
+): request is SharedHostRequest {
+  return sharedHostRequestKinds.has(request.kind);
+}
 
 /** A verb a host binds: it runs on the fiber the host's dispatch owns, and
  *  its failure is the value the arm answers with. */
@@ -133,15 +144,14 @@ export interface SharedHostRequestBindings {
   ): HostVerb<void>;
   mergeFiles(baseFile: string, editedFile: string): HostVerb<void>;
   latexdiffFiles(baseFile: string, editedFile: string): HostVerb<void>;
-  readonly openDashboard: HostVerb<void>;
   openSettings(
     section: OpenSettingsRequest['section'],
     sessionType: OpenSettingsRequest['sessionType'],
   ): HostVerb<void>;
   /** Ask for a provider API key: a prompt on one host, the Models tab on the
    *  other. The caller re-reads the secret store after this returns. */
-  setApiKey(provider: string | undefined): HostVerb<void>;
-  openApiKeyGuide(provider: string | undefined): HostVerb<void>;
+  readonly setApiKey: HostVerb<void>;
+  readonly openApiKeyGuide: HostVerb<void>;
   /** The agent settings, for the sub-tab a session type names or for none. */
   openAgentSettings(
     sessionType: AgentConfigBannerRequest['sessionType'] | undefined,
@@ -150,7 +160,6 @@ export interface SharedHostRequestBindings {
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   openInstallGuide(tool: string): HostVerb<void>;
-  readonly signIn: HostVerb<void>;
   gettingStarted(action: GettingStartedRequest['action']): HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
@@ -162,9 +171,6 @@ export interface SharedHostRequestBindings {
     readonly skipSetup: HostVerb<void>;
     readonly openGettingStarted: HostVerb<void>;
   };
-  /** Which state the port shows, for the view-title menus that differ
-   *  between the New-task state and a conversation. */
-  setActiveView(view: 'main' | 'progress', port: string): void;
 }
 
 /** The ports a host binds before these arms have anything left to decide. */
@@ -317,7 +323,7 @@ export function handleSharedHostRequest(
         return done;
       case 'restoreProposalConfig':
         yield* restoreIntoLauncher(
-          ports.runActions.restoreProposal(request.proposal),
+          yield* ports.runActions.restoreProposal(request.proposal),
         );
         return done;
       case 'latexdiff': {
@@ -338,16 +344,11 @@ export function handleSharedHostRequest(
       case 'latexdiffs':
         yield* latexdiffs(request);
         return done;
-      case 'openDashboard':
-        yield* host.openDashboard;
-        return done;
       case 'openSettings':
         yield* host.openSettings(request.section, request.sessionType);
         return done;
       case 'apiKeyBanner':
-        yield* request.action === 'set'
-          ? host.setApiKey(request.provider ?? undefined)
-          : host.openApiKeyGuide(request.provider ?? undefined);
+        yield* request.action === 'set' ? host.setApiKey : host.openApiKeyGuide;
         return done;
       case 'agentConfigBanner':
         switch (request.action) {
@@ -372,9 +373,6 @@ export function handleSharedHostRequest(
       case 'openInstallGuide':
         yield* host.openInstallGuide(request.tool);
         return done;
-      case 'signIn':
-        yield* host.signIn;
-        return done;
       case 'gettingStarted':
         yield* host.gettingStarted(request.action);
         return done;
@@ -384,7 +382,7 @@ export function handleSharedHostRequest(
             yield* host.onboarding.signInChatGpt;
             return done;
           case 'setApiKey':
-            yield* host.setApiKey(undefined);
+            yield* host.setApiKey;
             return done;
           case 'skip':
             yield* host.onboarding.skip;
@@ -399,9 +397,6 @@ export function handleSharedHostRequest(
             yield* host.onboarding.openGettingStarted;
             return done;
         }
-        return done;
-      case 'setActiveView':
-        host.setActiveView(request.view, port);
         return done;
     }
   });

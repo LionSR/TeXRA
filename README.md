@@ -84,7 +84,7 @@ Five built-in presets cover the most common research disciplines:
 | **Lean Project**       | Mathlib search, tactic simplification, blueprint-driven formalization            |
 | **Software Engineer**  | An engineer lead delegating implementation, review, debugging, and testing       |
 
-Pick a team in **Settings → Multi-Agent**, or with `texra multi-agent
+Pick a team in **Settings → Agents → Teams**, or with `texra multi-agent
 run <preset>`. Or define your own roster in YAML.
 
 ## Agents

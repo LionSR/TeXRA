@@ -25,6 +25,8 @@ export const REQUIRED_PACKAGED_PATHS = [
   'resources/examples',
   'resources/logo-128x128.svg',
   'resources/logo-512x512.png',
+  'resources/plugins',
+  'resources/plugins/lean4/agents',
   'resources/skills',
   'resources/templates',
   'resources/tool_use_agents',

@@ -3,15 +3,15 @@
  *
  * The session-facing surface: admission, the launch-time bookkeeping a
  * `track` does, the projections hosts read, and the stop gestures they call.
- * What this process holds for a run — its handle, its child activation, the
- * its lifecycle lane and the
- * generations holding it — is one entry in `runRoster.ts`, the single
- * in-process liveness authority; what a stop does with those records lives in
- * `runStopping.ts`.
+ * What this process holds for a run — the fiber running it, its handle, its
+ * child activation and its lifecycle lane — is one entry in `runRoster.ts`,
+ * the single in-process liveness authority; what a stop does with those
+ * records lives in `runStopping.ts`.
  */
 
 import { Context, Effect, Semaphore, type Scope } from 'effect';
 
+import type { ProcessServices } from '@platform/processRuntime';
 import {
   RUN_PHASE,
   RUN_SUBSTATE,
@@ -37,7 +37,7 @@ import type {
 } from './runRegistryTypes';
 
 /**
- * Session-owned registry of active runs and their change listeners. One
+ * Session-owned registry of active runs and their change waiters. One
  * instance belongs to each session, built by the session layer in that
  * session's scope and provided as {@link Runs}.
  */
@@ -54,7 +54,7 @@ export class RunRegistry {
 
   constructor(options: RunRegistryInit) {
     this.runView = options.runView;
-    this.roster = new RunRoster(options.approvals);
+    this.roster = new RunRoster(options.approvals, options.acquireRunClaim);
     this.stopper = new RunStopper(
       this.roster,
       options.commit,
@@ -101,6 +101,34 @@ export class RunRegistry {
     return this.roster.isLive(runId);
   }
 
+  /**
+   * The run's stop, by run id: interrupt the fiber the roster's entry names
+   * ({@link RunRoster.interrupt}). Synchronously callable from every host
+   * surface, and answered straight away: the entry has a fiber or it does
+   * not. This is the one stop for a running generation; a child loop's own
+   * signal ({@link ChildRunActivation.interrupt}) covers the inter-turn gap
+   * the fiber's turn settlement must survive.
+   */
+  interrupt(runId: RunId): boolean {
+    return this.roster.interrupt(runId);
+  }
+
+  /**
+   * Stop whatever of the run is live here, by run id: the child loop's
+   * activation when one is reserved — its interrupt aborts the foreign
+   * turn's signal and, for a native child, the run's fiber with it — and
+   * the run's fiber itself otherwise ({@link interrupt}, which stays the
+   * fiber-only primitive `ChildRunInterruptible.interrupt` composes).
+   */
+  interruptActive(runId: RunId): boolean {
+    const activation = this.roster.activation(runId);
+    if (activation !== undefined) {
+      activation.interrupt();
+      return true;
+    }
+    return this.roster.interrupt(runId);
+  }
+
   /** Reserve an inactive run for deletion; never wait for a live owner. */
   withInactiveRunStep<A, E, R>(
     runId: RunId,
@@ -132,7 +160,7 @@ export class RunRegistry {
    * resume that would otherwise start a second generation over a live one is
    * refused here rather than by a caller's earlier read of the same fact. The
    * claim that survives it lifts the run's stop marks ({@link
-   * RunRoster.clearStops}); a refused launch leaves the stop's gate intact.
+   * RunRoster.launch}); a refused launch leaves the stop's gate intact.
    */
   launchRun<A, E, R>(
     runId: RunId,
@@ -166,8 +194,6 @@ export class RunRegistry {
     this.assertActive();
     if (handle.parent !== null)
       this.assertAdmitsChild(handle.parent, handle.runId);
-    const previous = this.roster.handle(handle.runId);
-    if (previous?.stopRequested === true) handle.interrupt();
     this.roster.setHandle(handle);
     this.roster.notifyWaiters(handle.runId);
   }
@@ -235,7 +261,7 @@ export class RunRegistry {
     return this.roster.handle(runId);
   }
 
-  getStatus(handle: RunHandle): RunStatusInfo & { status: RunPhase } {
+  getStatus(handle: RunHandle): RunStatusInfo {
     const run = this.runView(handle.runId);
     // A tracked run whose activation has not folded yet is running: the
     // handle exists because its process is live.
@@ -295,7 +321,7 @@ export class RunRegistry {
       // terminal parent's continuation. A child-run handle is lifecycle
       // ownership, not authority to revive a parent that already finished.
       for (const activation of this.roster.activeChildActivations(runId)) {
-        return { kind: 'queue' };
+        if (activation.retainsTerminalParent) return { kind: 'queue' };
       }
       return { kind: 'no_session', runStatus: status };
     }
@@ -318,6 +344,22 @@ export class RunRegistry {
    *  caller owes the returned {@link RunStop}. */
   kill(runId: RunId, options: RunStopOptions = {}): RunStop {
     return this.stopper.kill(runId, options);
+  }
+
+  /** Stop every top-level run, cascading into its children: the sweep a
+   *  session close and a project close both run. A child with a handle is
+   *  stopped by its parent's cascade; a native child between turns has no
+   *  handle, and its kill interrupts the loop the registry retains for it.
+   *  The kills are issued now; the answer joins their settlements, and
+   *  fails as the first refused one does, for the caller to map into its
+   *  own error channel. */
+  stopAll(): Effect.Effect<void, Error> {
+    const settlements = this.getActiveIds().flatMap((runId) =>
+      this.getHandle(runId)?.isChild
+        ? []
+        : [this.kill(runId, { detachActiveChildren: false }).settlement],
+    );
+    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
   }
 
   /** Stop a visible agent run and apply the caller's declared child policy:
@@ -352,17 +394,15 @@ export class RunRegistry {
     return this.roster.activeIds();
   }
 
-  /**
-   * Kill only background OS processes (bash, codex) without touching agent run
-   * status. Agent runs are left in RUNNING: whether one is resumable is
-   * decided from its durable facts, never from a phase a later pass rewrites.
-   * `interruptBackgroundProcess()` fires only for a handle whose interrupt
-   * handler declares itself as owning a live background process, leaving every
-   * other `RunHandle` untouched (#8155).
+  /** Kill the background OS process of every run whose child loop declared
+   *  one (`RunHandle.backgroundProcess`), leaving every other run untouched
+   *  (#8155): an agent run is deliberately left running for restart recovery,
+   *  and its status is rewritten from its durable facts, never from a phase a
+   *  later pass rewrites.
    */
   killBackgroundProcesses(): void {
     for (const handle of this.roster.allHandles()) {
-      handle.interruptBackgroundProcess();
+      handle.backgroundProcess?.kill();
     }
   }
 
@@ -411,3 +451,12 @@ export class RunRegistry {
 export class Runs extends Context.Service<Runs, RunRegistry>()(
   '@texra/session/Runs',
 ) {}
+
+/**
+ * The services every step of an agent run reads on the way down: the process
+ * services (the global state store, the secret store, the tool table, ...)
+ * and the `Runs` of the session the run is launched on. Named once here
+ * because the launch, resume and delegation signatures all carry exactly
+ * these tags in their `R` channel.
+ */
+export type AgentRunServices = ProcessServices | Runs;

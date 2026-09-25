@@ -11,20 +11,21 @@ import {
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
+import { RunLive } from '@agent/runtime/runRoster';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
-import { withLogChannel } from '@logger/effectLog';
 import type { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
-import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
-  RUN_OUTCOME,
-} from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   resolveRunLiveness,
@@ -45,8 +46,6 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
-
-const CHANNEL = 'workflowScriptAgentRunner';
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -254,8 +253,6 @@ function livenessClause(liveness: RunLiveness): string {
       return liveness.reason;
     case 'live':
       return 'still running in this process';
-    case 'settled':
-      return `recorded as ${liveness.outcome}`;
     case 'interrupted':
       return 'interrupted';
   }
@@ -336,47 +333,34 @@ function probeJournal<A>(
  * for as long as its replacement is live, and the attempt whose result the
  * parent journals — recovered, or launched by this call and returned once its
  * loop released both — stays fenced until that result is durable. A claim
- * release that fails leaves every fact committed and only the claim behind, so
- * it is logged rather than failing a call whose child already answered.
+ * release that fails is a defect (`RunRoster.holdInactive` releases through
+ * `Effect.orDie`): the claim would stay behind with nothing left to release it.
+ * A claim acquisition that fails for any reason but a concurrent holder
+ * surfaces as its own error, not as a refusal.
  */
 const fenceSupersededRun = (
-  session: InBandSubagentLaunchOptions['session'],
   runId: RunId,
 ): Effect.Effect<void, Error, Runs | Scope.Scope> =>
-  Effect.gen(function* () {
-    yield* (yield* Runs)
-      .holdInactiveRun(runId)
-      .pipe(
-        Effect.mapError(
-          (cause) =>
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} is live in this session; refusing to repeat it.`,
-              { cause },
-            ),
-        ),
-      );
-    yield* Effect.acquireRelease(
-      session
-        .acquireClaims(qualifyAggregateId('run', runId))
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} could not be claimed against a concurrent resume; refusing to repeat it.`,
-                { cause },
-              ),
-          ),
-        ),
-      (release) =>
-        release.pipe(
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Workflow child ${runId} kept its claim after the call that fenced it: ${formatError('claim release failed', error)}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        ),
-    );
-  });
+  // One hold fences both: the in-process owner and the run's DB claim ride
+  // the same hold fiber's lifetime (`RunRoster.holdInactive`), so the two
+  // can never disagree about whether this run is fenced.
+  Effect.flatMap(Runs, (runs) => runs.holdInactiveRun(runId)).pipe(
+    Effect.mapError((cause) => {
+      const refuse = (holder: string) =>
+        new WorkflowRunAbortError(
+          `Workflow child ${runId} ${holder}; refusing to repeat it.`,
+          { cause },
+        );
+      if (cause instanceof RunLive) return refuse('is live in this session');
+      const claimHeld =
+        cause instanceof DatabaseNotOwner ||
+        cause instanceof DatabaseClaimRefused ||
+        (cause instanceof DatabaseWriteFailed &&
+          cause.cause instanceof DatabaseClaimRefused);
+      // Any other acquisition failure is the database's own, not a refusal.
+      return claimHeld ? refuse('is held by a concurrent resume') : cause;
+    }),
+  );
 
 /** Runaway backstop on the attempt probe, not a retry policy. */
 const MAX_WORKFLOW_CALL_ATTEMPTS = 1_024;
@@ -572,7 +556,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // refused here, and one that ran to its own end leaves a row this
         // reading no longer recognizes (an activate after the row reads as no
         // terminal row at all).
-        yield* fenceSupersededRun(session, runId);
+        yield* fenceSupersededRun(runId);
         const launched = yield* probeChild(runId, records.readRunEnd());
         // The outcome does not identify the lifecycle: a resume that reached
         // its own end usually ends `completed`, exactly as this one did, so a
@@ -606,7 +590,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // unsettled, so this refuses rather than repeating the work. It is
         // asked before the fence, because the claim the fence takes reads back
         // as an owner of this run's own.
-        const liveness = yield* resolveRunLiveness(runId, session, null);
+        const liveness = yield* resolveRunLiveness(runId, session);
         if (liveness.kind !== 'interrupted') {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
@@ -620,7 +604,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // true when they were read, and a completed row is resumable too, so
       // every decision below has to hold against a resume that starts one
       // instant later, here or in another process.
-      yield* fenceSupersededRun(session, runId);
+      yield* fenceSupersededRun(runId);
       // A user's retry of this child is the one authorization that closes an
       // attempt which already started work: the engine journals the next
       // attempt's mark naming this id before it asks for the replacement, so
@@ -838,9 +822,8 @@ export function createWorkflowScriptAgentRunner(
               session,
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
+              composition: parent.run.composition.key,
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
-              runtimeUnavailableTools:
-                parent.run.toolPolicy.runtimeUnavailableTools,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own
               // stream inherits from the orchestrator, so nested delegation remains

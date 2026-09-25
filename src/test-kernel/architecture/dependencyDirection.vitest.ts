@@ -18,7 +18,7 @@ import {
 /**
  * Architecture ratchet: the platform-independent ("VS Code-free") source zones
  * must never import the `vscode` module. They reach host services through
- * `platform()` / host adapters instead (see CLAUDE.md "Separation of Concerns").
+ * process-runtime services / host adapters instead (see CLAUDE.md "Separation of Concerns").
  *
  * This duplicates the guard already enforced by the `local/no-vscode-import-in-
  * free-zones` ESLint rule, on purpose: a stray `// eslint-disable` line can
@@ -126,18 +126,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // runs builds the whole `CliContext`, which opens the project and user
   // `config.json` stores BEFORE `initCliPlatform` (and with it
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
-  // program needs the filesystem and nothing else. `initCliPlatform` installs
+  // program needs the filesystem and the process environment (as a
+  // ConfigProvider). `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
   // here. Its four citty callers take the resolved context as a value.
   'packages/cli/src/commands/_helpers/context.ts': 1,
-  // The CLI's process-runtime install, which reads the process identity and
-  // opens the global state store it provides as `AppState` before it installs
-  // the runtime that serves them: both are values that install is given, so
-  // neither can run on the runtime it is being installed into. The program
-  // needs the filesystem and nothing else, and this module is the only place
-  // the CLI installs from.
-  'packages/cli/src/runtime/cliProcessRuntime.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
   // process-runtime install with the plane as one of the values that install
@@ -151,33 +145,28 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // begins, and an init that fails disposes the runtime it installed before it
   // re-raises (see `initPlatform.ts` above), leaving the degraded report —
   // node, workspace, resources, LaTeX, config and the platform-failure row —
-  // nothing to run on. That report reads no service and nothing in it logs
-  // through Effect; the healthy one settles on the context the init hands
-  // back.
+  // nothing to run on. That report provides the Node platform services (the
+  // filesystem its probes read, the spawner its LaTeX probes run on) itself,
+  // and nothing in it logs through Effect; the healthy one settles on the
+  // context the init hands back.
   'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
   // lifecycle host and no runtime — the drain it runs is what disposes the
   // process runtime — so the quit follows the drain on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
-  // The desktop entry's startup-failure path: a `whenReady` program that died
-  // before the window was wired runs the same shutdown an ordinary quit does,
-  // and that drain disposes the runtime it would otherwise borrow.
+  // The desktop entry: one program from `whenReady` to the wired window,
+  // which builds the process runtime (its stores and account plane resolve
+  // before `installProcessRuntime`, being the values that install is given)
+  // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
-  // The desktop composition root, for the same reason: its process identity
-  // and its four stores — global and workspace state, the config pair, and
-  // the secrets file — resolve before `installProcessRuntime`, because three
-  // of them are the values that install is given, and so does the account
-  // plane it hands that install.
-  'packages/desktop/src/main/platform/index.ts': 2,
-  // The VS Code entry's two pre-runtime folds, plus the account-plane and
-  // process-identity resolution in `initVscodePlatform`: `activate` reports a failed
+  // The VS Code entry's two pre-runtime folds, plus the account-plane
+  // resolution in `initVscodePlatform`: `activate` reports a failed
   // activation and runs the cleanup that disposes the process runtime, so it
   // cannot borrow the runtime it is tearing down (the reason
   // `initPlatform.ts` above is pinned), the workspace `.env` load happens
   // before `initVscodePlatform` installs a runtime at all, and the
   // account-plane build degrades a missing-credentials throw to the
-  // unavailable shape BEFORE the runtime that will serve it exists, and reads
-  // the process identity that install is given on the same run. All three
+  // unavailable shape BEFORE the runtime that will serve it exists. All three
   // programs are service-free. The fourth is `deactivate`'s shutdown: the
   // drain and the teardown that follows it dispose the process runtime, so
   // that one program cannot settle on it either. Every other Effect in this

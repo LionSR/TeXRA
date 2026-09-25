@@ -32,7 +32,8 @@ import type {
  * Which arms are reachable, and from where (D6 b):
  * - `not-owner`: from `acquire`, where `Database.acquireClaims` proves prior
  *   owners dead before moving the claim and a live foreign owner is the
- *   `DatabaseClaimRefused` verdict it fails with; and from `appendBatch`,
+ *   `DatabaseClaimRefused` verdict it fails with (a claim taken after that
+ *   proof is `DatabaseNotOwner`); and from `appendBatch`,
  *   where `SessionEvents.publish` refuses a target this process no longer
  *   holds open as `DatabaseNotOwner`, nothing written. It is never
  *   synthesised from any other write failure: a disk error stays a
@@ -56,7 +57,11 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
   readonly runId: RunId;
   readonly detail: string;
   readonly cause?: RunLedgerInconsistent;
-}> {}
+}> {
+  override get message(): string {
+    return `The run ledger refused a write (${this.reason}): ${this.detail}`;
+  }
+}
 
 export class RunLedger extends Context.Service<
   RunLedger,

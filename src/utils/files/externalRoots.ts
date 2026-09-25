@@ -36,7 +36,8 @@ import { isPathWithin } from '@utils/core/pathCore';
  *   different kind (e.g. if a user points the custom agents dir at the
  *   built-in agents dir).
  * - The registry keys on `ExternalRootKind`, not on the path — each kind
- *   gets exactly one slot. Two different kinds may canonicalise to the
+ *   gets exactly one slot, except `skill`, which holds one read-only slot per
+ *   skill directory (a run can import skills from several roots). Two different kinds may canonicalise to the
  *   same path (legitimate when a user overlays a custom dir on a built-in
  *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
  *   read-only one win for permission purposes.
@@ -45,7 +46,7 @@ import { isPathWithin } from '@utils/core/pathCore';
 /** Stable identifier for each registered root. Label strings are for display
  *  only and must not be used as keys. */
 export type ExternalRootKind =
-  'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'agentDocs';
+  'builtInWorkflow' | 'builtInToolUse' | 'custom' | 'agentDocs' | 'skill';
 
 export interface ExternalRoot {
   /** Stable key, independent of UI text. */
@@ -63,37 +64,73 @@ export interface MatchedExternalRoot extends ExternalRoot {
   readonly relative: string;
 }
 
-const roots = new Map<ExternalRootKind, ExternalRoot>();
+/** Keyed by kind; a `skill` root keys by its canonical path as well. */
+const roots = new Map<string, ExternalRoot>();
 
 /**
- * Canonicalise an absolute path: resolve `.`/`..` segments, then walk
- * symlinks via realpath. When the final segment does not exist yet
- * (ENOENT / ENOTDIR) we recursively canonicalise the longest existing
- * prefix and re-append the non-existent tail — writes that create new
- * files must still match.
+ * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
+ * realpath. When the final segment does not exist yet (ENOENT / ENOTDIR) we
+ * recursively canonicalise the longest existing prefix and re-append the
+ * non-existent tail, so writes that create new files still match. A dangling
+ * symlink on the way is followed to where it points, since that is where a
+ * write through it lands.
  *
  * Throws on permission errors (EACCES/EPERM) or any unexpected error so
  * callers can fail closed: a path we cannot verify must never be admitted
- * to the allowlist.
+ * to the allowlist. `canonicalizeWorkspacePath` is the one tolerant caller.
+ *
+ * Uses the JS `realpathSync`, not `.native`: on Windows the native call
+ * rewrites a mapped drive to its UNC target, and the workspace identity built
+ * on this function must keep the spelling the user opened.
  */
-function canonicalise(p: string): string {
+export function canonicalizePath(p: string): string {
+  return canonicalizeFollowingLinks(p, 0);
+}
+
+function canonicalizeFollowingLinks(p: string, linkHops: number): string {
   const resolved = path.resolve(p);
   try {
-    return fs.realpathSync.native(resolved);
+    return fs.realpathSync(resolved);
   } catch (err) {
     if (!isFileNotFoundError(err) && !isNotADirectoryError(err)) {
       throw err;
     }
+    // realpath fails the same way on a dangling link and on a missing entry;
+    // readlink tells them apart. The hop bound matches the kernel's ELOOP.
+    const target =
+      isFileNotFoundError(err) && linkHops < 32
+        ? readLinkOrUndefined(resolved)
+        : undefined;
+    if (target !== undefined) {
+      return canonicalizeFollowingLinks(
+        path.resolve(path.dirname(resolved), target),
+        linkHops + 1,
+      );
+    }
     const parent = path.dirname(resolved);
     if (parent === resolved) return resolved; // reached the filesystem root
-    return path.join(canonicalise(parent), path.basename(resolved));
+    return path.join(
+      canonicalizeFollowingLinks(parent, linkHops),
+      path.basename(resolved),
+    );
+  }
+}
+
+/** The target of `entry` when it is a symlink; `undefined` for anything else. */
+function readLinkOrUndefined(entry: string): string | undefined {
+  try {
+    return fs.readlinkSync(entry);
+  } catch {
+    // EINVAL (not a link) or ENOENT (nothing there): not a dangling link.
+    return undefined;
   }
 }
 
 /**
  * Register or replace the external root for the given kind. Calling again
  * with the same kind (e.g. when the custom agents dir changes) replaces
- * the previous entry for that kind in place.
+ * the previous entry for that kind in place; a `skill` root replaces only the
+ * entry for the same directory.
  */
 export function registerExternalRoot(
   absolutePath: string,
@@ -105,18 +142,18 @@ export function registerExternalRoot(
     );
   }
   // Canonicalise at registration so find-time canonicalisation lands in the
-  // same space. canonicalise tolerates non-existent trailing segments itself
+  // same space. canonicalizePath tolerates non-existent trailing segments itself
   // and only throws on permission errors or unexpected failures; per the
   // fail-closed contract in its JSDoc, let those propagate so an
   // un-verifiable path is never admitted to the allowlist. Registration is
   // setup-time and the caller already has a try/catch that surfaces a
   // meaningful error.
-  const canonicalPath = canonicalise(absolutePath);
+  const canonicalPath = canonicalizePath(absolutePath);
   // Frozen: the registry hands these entries to tool code and to
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.
   roots.set(
-    options.kind,
+    options.kind === 'skill' ? `skill:${canonicalPath}` : options.kind,
     Object.freeze({
       kind: options.kind,
       absolutePath: canonicalPath,
@@ -146,7 +183,7 @@ export function findExternalRoot(
 
   let resolved: string;
   try {
-    resolved = canonicalise(absolutePath);
+    resolved = canonicalizePath(absolutePath);
   } catch {
     // Permission error or unexpected failure — refuse to admit the path
     // rather than approve something we cannot verify.

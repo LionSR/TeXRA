@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Layer } from 'effect';
 import { it } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect } from 'vitest';
 
@@ -28,6 +28,7 @@ import {
   installPlatform,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 /** Resolve exactly as launch does: through the single launch resolver, by the
@@ -105,7 +106,7 @@ describe('cross-category agent resolution', () => {
         ).pipe(
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
         ),
-        nodePlatformLayer,
+        Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
     );
   });
@@ -173,6 +174,15 @@ describe('cross-category agent resolution', () => {
           'remote',
         );
         expect(stale?.source).toBe('builtInToolUse');
+
+        // A `source:name` key of the other category is no match: only an
+        // explicit `source` pins category-blind.
+        const crossCategory = yield* resolveAgentForLaunch(
+          hostStores(),
+          AgentCategory.ToolUse,
+          'custom:assistant',
+        );
+        expect(crossCategory).toBeUndefined();
       }),
   );
 

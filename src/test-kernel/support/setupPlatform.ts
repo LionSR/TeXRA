@@ -6,7 +6,7 @@
  * most suites need nothing else. Suites that need custom options/overrides (a
  * seeded workspace, stubbed secrets, etc.) should
  * call `setupPlatform(...)` once, at module scope or inside a `describe`,
- * instead of hand-wiring `initPlatform(...)` in a `beforeAll`/`beforeEach`.
+ * instead of hand-wiring `installFakeHost(...)` in a `beforeAll`/`beforeEach`.
  * It installs the requested platform before each test in the current suite
  * and restores the suite-default fake platform afterward, so overrides never
  * leak into later tests in the same file.
@@ -14,13 +14,13 @@
 // The two services by their own modules, not the package barrel: a setup
 // file loads before a suite's `vi.mock` registrations, and the barrel would
 // cache `NodeChildProcessSpawner`'s `node:child_process` ahead of a suite
-// that mocks it.
+// that mocks it. The harness spawner is lazy for the same reason
+// (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
-import { Effect, RcMap } from 'effect';
+import { ConfigProvider, Effect, RcMap } from 'effect';
 import { afterEach, beforeEach } from 'vitest';
 
-import type { ToolInjections } from '@agent/runtime/toolInjection';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import {
   unavailableSupabaseAuth,
@@ -39,7 +39,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
   type LanguageModelPort,
 } from '@platform/languageModel';
-import type { Platform } from '@platform/platform';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import type { PlatformSecrets, Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -60,32 +59,38 @@ import {
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
+import { toolTableLayer } from '@tools/compositions';
+import { toolTable } from '@tools/toolTable';
+import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
   FakeSecrets,
   type FakeHostOverrides,
+  type FakeProcessPorts,
   type FakePlatformOptions,
 } from './FakePlatform';
 import type { Layer } from 'effect';
 
 /**
- * A process platform and the workspace roots installed beside it, plus the
+ * A host's process ports and the workspace roots installed beside them, plus the
  * setup platform a setup-tool suite provides (absent on every other host:
  * a setup-tool call there is a test error).
  */
 export interface FakeHost {
-  readonly platform: Platform;
+  readonly platform: FakeProcessPorts;
   readonly roots: WorkspaceRoots;
   /** The store the host's `Secrets` service reads, as a root's own local. */
   readonly secrets: PlatformSecrets;
   /** The two ports a real root hands `installProcessRuntime`, held here as
-   *  its own locals because the platform object carries no copy. */
+   *  its own locals. */
   readonly agentResume: AgentResumePort;
   readonly languageModel: LanguageModelPort;
   readonly setup?: SetupPlatformShape;
   /** The host's account plane; absent hosts answer signed-out. */
   readonly auth?: SupabaseAuthShape;
+  /** The process environment the harness ConfigProvider serves; `{}` when absent. */
+  readonly env?: Record<string, string>;
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
@@ -165,7 +170,8 @@ export function createFakeHost(
       workspaceState,
       globalState,
     }),
-    secrets: secrets ?? new FakeSecrets(options.secrets, options.secretsEnv),
+    secrets: secrets ?? new FakeSecrets(options.secrets),
+    env: options.env ?? {},
     agentResume: agentResume ?? { tryResumeRun: () => Effect.succeed(false) },
     languageModel: languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     ...(setup ? { setup } : {}),
@@ -251,7 +257,6 @@ export const fakeHostSecrets: PlatformSecrets = {
   set: (key, value) => installedHost().secrets.set(key, value),
   delete: (key) => installedHost().secrets.delete(key),
   listStoredKeys: () => installedHost().secrets.listStoredKeys(),
-  getEnv: (name) => installedHost().secrets.getEnv(name),
 };
 
 export const fakeHostAppState: StateStore = {
@@ -360,6 +365,13 @@ type FakeProcessServicesLayer = Layer.Layer<FakeProcessServices>;
 let processServices: FakeProcessServicesLayer | undefined;
 
 /**
+ * The environment the harness runtime's ConfigProvider serves, reseeded from
+ * the installed host on every install. The provider looks leaves up live, so
+ * one record serves every host the memoized runtime outlives.
+ */
+const harnessEnv: Record<string, string> = {};
+
+/**
  * The process services over the installed fake host, as
  * `installFakeHost` builds them for the bare runtime: for a suite that builds
  * a process runtime of its own, or runs a program that requires them under
@@ -376,18 +388,15 @@ export function fakeProcessServices(): FakeProcessServicesLayer {
 }
 
 /**
- * Installs a fake host right now. `initPlatform` is restricted to composition
- * roots by lint, so this is the one place test helpers reach for it; suites
- * needing an ad hoc, one-off install (rather than the standard per-test
- * `setupPlatform` wiring below) call this instead.
+ * Installs a fake host right now. Suites needing an ad hoc, one-off install
+ * (rather than the standard per-test `setupPlatform` wiring below) call this.
  *
- * Both platform modules are imported at call time, not statically: a suite
+ * The harness modules are imported at call time, not statically: a suite
  * that calls `vi.resetModules()` gets fresh module instances, and the install
  * must land in the instances the code under test will import next.
  */
 export async function installFakeHost(host: FakeHost): Promise<void> {
   const [
-    { initPlatform },
     { initTestWorkspaceRoots },
     { initTestProcessRuntime, tryTestProcessRuntime },
     { Layer, ManagedRuntime },
@@ -396,10 +405,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { AgentDirectories, AgentResume, AppState, Lifecycle },
     { LanguageModel },
     { SetupPlatform },
-    { ToolInjections },
     { SupabaseAuth },
   ] = await Promise.all([
-    import('@platform/platform'),
     import('@test/support/testWorkspaceRoots'),
     import('./testProcessRuntime'),
     import('effect'),
@@ -408,10 +415,11 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     import('@platform/interfaces'),
     import('@platform/languageModel'),
     import('@tools/setup/platform'),
-    import('@agent/runtime/toolInjection'),
     import('@auth/SupabaseAuth'),
   ]);
   current = host;
+  for (const key of Object.keys(harnessEnv)) delete harnessEnv[key];
+  Object.assign(harnessEnv, host.env ?? {});
   // The process services, over whichever host is installed when a member is
   // called: hosts change per test, the runtime does not. These imports
   // stay eager: the process runtime is built synchronously by
@@ -422,11 +430,19 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
     // The same standard-library filesystem and path services the process
-    // roots provide, over the real temp roots the harness runs on.
+    // roots provide, over the real temp roots the harness runs on; the
+    // spawner is merged below, since the tool table's compositions take it.
     NodeFileSystem.layer,
     NodePath.layer,
+    // The process environment, hermetic: the installed host's `env`, never
+    // the developer's shell.
+    ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(AgentEngine, {}),
+    // An empty tool table (the real one loads every tool): a suite that
+    // resolves a run's tools runs on the session graph's runtime or provides
+    // `toolRegistryLayer`.
+    toolTableLayer(toolTable({})),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),
@@ -457,9 +473,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     AgentDirectories.layer(fakeHostAgentDirectories),
     Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
-    // No conditional injections on the bare fake host: a suite that
-    // exercises them passes its own list to `resolveAgentTools`.
-    ToolInjections.layer([]),
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly
     // provides its own view innermost.
@@ -467,8 +480,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       globalStorageFsLayer(current?.roots.globalStorage ?? ''),
       Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
     ),
-  );
-  initPlatform(host.platform);
+  ).pipe(Layer.provideMerge(nodeSpawnerLayer));
   initTestWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed

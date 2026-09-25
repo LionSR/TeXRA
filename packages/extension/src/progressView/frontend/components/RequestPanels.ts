@@ -1,59 +1,32 @@
 /**
- * Lightweight container for permission request panels.
+ * The run's pending requests, one card each, oldest first.
  *
- * Groups permissions by kind and renders section headers with
- * individual panel components. Manages keyboard shortcuts
- * (y=approve, n=reject, d=diff, r=retry, s=setup, Esc=dismiss)
- * by delegating to the panel matching the newest permission in the queue.
- * Single-character shortcuts fire only while focus is inside this component
- * (WCAG 2.1.4); see handleGlobalKeydown for the rationale. So those
- * shortcuts are actually reachable, a newly appeared request moves keyboard
- * focus to its primary action unless the user is typing elsewhere
- * (`updated` → `focusPanel`).
+ * A run usually has one pending request, but an external inquiry does not
+ * block the run, so an inquiry (or several) can wait beside a later
+ * approval. Every card answers its own keys: single-character shortcuts
+ * (y, a, n, d, …) fire only while focus is inside a card (WCAG 2.1.4), and
+ * act on that card. So the shortcuts are reachable, a newly appeared request
+ * moves focus to its primary action unless the user is typing elsewhere.
  */
 
 // Third-party imports
-import {
-  LitElement,
-  css,
-  html,
-  nothing,
-  type PropertyValues,
-  type TemplateResult,
-} from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
-import { keyed } from 'lit/directives/keyed.js';
+import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
+import { customElement, property } from 'lit/decorators.js';
 import { repeat } from 'lit/directives/repeat.js';
 import { html as staticHtml, literal } from 'lit/static-html.js';
 
-// Side-effect imports - register WA icon, button, and tooltip components
-import '@awesome.me/webawesome/dist/components/icon/icon.js';
-import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
-
-// Local imports - shared styles
-
 // Local imports - shared schemas
-import type { PermissionPayload, RunId } from '@shared/schemas';
-import type { SessionView } from '@shared/session/sessionView';
-import type { Surface } from '@shared/session/surface';
+import type { PermissionPayload } from '@shared/schemas';
 import {
-  commonViewStyles,
-  designTokens,
-  requestPanelSharedStyles,
-} from '@ui/styles';
-
-// Local imports - progress view helpers
-import type { TeXRAIconName } from '@ui/wa/iconNames';
-import { waIcon } from '@ui/wa/webAwesomeIcons';
-import { groupBy } from '@utils/core';
-import { isTextInput, selectExternalInquiryKey } from './RequestPanelsState';
+  requestAnswerability,
+  type RunView,
+} from '@shared/session/sessionView';
+import type { Surface } from '@shared/session/surface';
 
 // Local imports - progress view component types
-import type { ApproveSplitButton } from './ApproveSplitButton';
 import type { BaseRequestPanel } from './BaseRequestPanel';
 
-// Side-effect imports to register sub-panel custom elements
+// Side-effect imports to register the cards
 import './ToolEditRequestPanel';
 import './BashRequestPanel';
 import './RetryRequestPanel';
@@ -62,81 +35,28 @@ import './PlanApprovalRequestPanel';
 import './ExternalInquiryPanel';
 import './UserQuestionPanel';
 
-/** One section per permission kind: its chrome and the element rendering it. */
-interface SectionConfig {
-  readonly kind: PermissionPayload['kind'];
-  readonly tag: ReturnType<typeof literal>;
-  readonly cssClass: string;
-  readonly icon: TeXRAIconName;
-  readonly title: string;
-}
+/** The card element for each request kind. */
+const CARD_TAG: Record<
+  PermissionPayload['kind'],
+  ReturnType<typeof literal>
+> = {
+  toolEdit: literal`tool-edit-request-panel`,
+  bash: literal`bash-request-panel`,
+  retry: literal`retry-request-panel`,
+  proposal: literal`proposal-request-panel`,
+  planApproval: literal`plan-approval-request-panel`,
+  externalInquiry: literal`external-inquiry-panel`,
+  userQuestion: literal`user-question-panel`,
+};
 
-/** Sections in render order — one row per permission kind. */
-const SECTIONS: readonly SectionConfig[] = [
-  {
-    kind: 'toolEdit',
-    tag: literal`tool-edit-request-panel`,
-    cssClass: 'approval-requests',
-    icon: 'code-compare',
-    title: 'Tool edit approval',
-  },
-  {
-    kind: 'bash',
-    tag: literal`bash-request-panel`,
-    cssClass: 'bash-approval-requests',
-    icon: 'terminal',
-    title: 'Command approval',
-  },
-  {
-    kind: 'retry',
-    tag: literal`retry-request-panel`,
-    cssClass: 'retry-requests',
-    icon: 'rotate-right',
-    title: 'Retry request',
-  },
-  {
-    kind: 'proposal',
-    tag: literal`proposal-request-panel`,
-    cssClass: 'workflow-proposals',
-    icon: 'rocket',
-    title: 'Agent proposal',
-  },
-  {
-    kind: 'planApproval',
-    tag: literal`plan-approval-request-panel`,
-    cssClass: 'plan-approval-requests',
-    icon: 'list-check',
-    title: 'Plan approval',
-  },
-  {
-    kind: 'externalInquiry',
-    tag: literal`external-inquiry-panel`,
-    cssClass: 'external-inquiry-requests',
-    icon: 'globe',
-    title: 'External inquiry',
-  },
-  {
-    kind: 'userQuestion',
-    tag: literal`user-question-panel`,
-    cssClass: 'user-question-requests',
-    icon: 'circle-question',
-    title: 'Question',
-  },
-];
+/** Marks every rendered card so keyboard routing can find it. */
+const CARD_MARKER = 'data-request-panel';
 
 /**
- * Marks every rendered panel so keyboard delegation can find them without a
- * second list of element names to keep in sync with `SECTIONS`.
+ * Stable identity key for a pending request. Retry is keyed by `runId`
+ * instead of `requestId`: one pending retry per run, a new one replaces it.
  */
-const PANEL_MARKER_SELECTOR = '[data-request-panel]';
-
-/**
- * Stable identity key for a pending permission, used for selection/dedup.
- *
- * Retry is the one kind not keyed by `requestId`: it is keyed by `runId`
- * instead (one pending retry per stream, a new request replaces the old).
- */
-function getPermissionKey(permission: PermissionPayload): string {
+function requestKey(permission: PermissionPayload): string {
   const id =
     permission.kind === 'retry'
       ? permission.data.runId
@@ -144,514 +64,107 @@ function getPermissionKey(permission: PermissionPayload): string {
   return `${permission.kind}:${id}`;
 }
 
-function externalInquiryKeys(
-  permissions: readonly PermissionPayload[],
-): string[] {
-  return permissions
-    .filter((permission) => permission.kind === 'externalInquiry')
-    .map(getPermissionKey);
+/** True for a text field, looking through open shadow roots. */
+function isTextInput(el: Element | null): boolean {
+  if (!el) return false;
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    return true;
+  }
+  if ((el as HTMLElement).isContentEditable) return true;
+  const tagName = el.tagName.toLowerCase();
+  if (tagName.includes('textarea') || tagName.includes('input')) return true;
+  return isTextInput(el.shadowRoot?.activeElement ?? null);
 }
 
 @customElement('request-panels')
 export class RequestPanels extends LitElement {
-  static override styles = [
-    designTokens,
-    commonViewStyles,
-    requestPanelSharedStyles,
-    css`
-      /* Run caption above each request, only rendered when requests span
-         more than one run (see renderRequest). */
-      .request-run-group__label {
-        margin-block-end: var(--wa-space-3xs);
-        color: var(--color-text-secondary);
-        font-size: var(--font-size-sm);
-      }
-
-      /* Keep the inquiry title and its compact pager reachable when the dock
-         narrows or localized labels grow. */
-      .external-inquiry-requests__header {
-        flex-wrap: wrap;
-      }
-
-      /* Previous/next are logical directions, so mirror their directional
-         glyphs with the surrounding writing direction. */
-      :dir(rtl) .external-inquiry-requests__nav wa-icon {
-        transform: scaleX(-1);
-      }
-    `,
-  ];
+  static override styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      gap: var(--wa-space-xs);
+      margin-block: var(--wa-space-xs);
+    }
+  `;
 
   @property({ attribute: false }) permissions: PermissionPayload[] = [];
 
-  /** Canonical selection for the external-inquiry carousel. */
-  @state() private selectedExternalInquiryKey: string | null = null;
+  /** The run asking: each card reads whether this window can answer it. */
+  @property({ attribute: false }) run: RunView | null = null;
 
-  /**
-   * The session, for the run captions: `permissions` is already scoped to
-   * the selected stream, so the "more than one run is asking" question is
-   * answered by `view.requests`, the unfiltered set.
-   */
-  @property({ attribute: false }) view: SessionView | null = null;
-
-  /** The selected stream's `readOnly`; every panel's actions no-op. */
-  @property({ type: Boolean }) readOnly = false;
-
-  /** For the inquiry panels' drafts (`Surface.inquiryDrafts`). */
+  /** For the inquiry cards' drafts (`Surface.inquiryDrafts`). */
   @property({ attribute: false }) surface: Surface | null = null;
 
-  /** Memoized permission groups - recomputed in willUpdate() when permissions change. */
-  private permissionsByKind: ReadonlyMap<
-    PermissionPayload['kind'],
-    PermissionPayload[]
-  > = new Map();
-
-  /** True when pending requests belong to more than one identified run. */
-  private multiRunPending = false;
-
   /** Pending keys seen after the previous update — drives first-appearance focus. */
-  private seenPermissionKeys = new Set<string>();
+  private seenKeys = new Set<string>();
 
-  protected override willUpdate(changedProperties: PropertyValues): void {
-    if (changedProperties.has('permissions')) {
-      const previousKeys = externalInquiryKeys(
-        (changedProperties.get('permissions') as
-          PermissionPayload[] | undefined) ?? [],
-      );
-      this.permissionsByKind = groupBy(this.permissions, (p) => p.kind);
-      this.selectedExternalInquiryKey = selectExternalInquiryKey(
-        this.selectedExternalInquiryKey,
-        previousKeys,
-        externalInquiryKeys(this.permissions),
-      );
-    }
-
-    if (changedProperties.has('permissions') || changedProperties.has('view')) {
-      // Captions key off every pending run, not the stream-filtered prop.
-      const runIds = new Set<RunId>(
-        (this.view?.requests ?? []).map((request) => request.runId),
-      );
-      this.multiRunPending = runIds.size > 1;
-    }
-  }
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    document.addEventListener('keydown', this.handleGlobalKeydown);
-  }
-
-  override disconnectedCallback(): void {
-    document.removeEventListener('keydown', this.handleGlobalKeydown);
-    super.disconnectedCallback();
-  }
-
-  /**
-   * The request the y/n accelerators will act on.
-   *
-   * Single source of truth: `handleGlobalKeydown` resolves the DOM node from
-   * this via `findPanelFor`, and the renderers mark that same permission
-   * `data-armed`. Deriving the two separately let them disagree: the newest
-   * permission is not the target while the external-inquiry carousel is
-   * active, so an indicator keyed off the newest alone would ring a panel
-   * the carousel does not even render, while the keypress landed on the
-   * visible one. `permissions` is the fold's order, oldest first, so the
-   * newest is the last.
-   */
-  private get armedPermission(): PermissionPayload | null {
-    const newest = this.permissions.at(-1);
-    if (!newest) return null;
-    return (
-      (this.externalInquiryCarouselActive
-        ? this.externalInquiries[this.externalInquiryIndex]
-        : newest) ?? null
-    );
-  }
-
-  private armedPermissionKey(): string | null {
-    const armed = this.armedPermission;
-    return armed ? getPermissionKey(armed) : null;
+  constructor() {
+    super();
+    // Keyboard events are composed, so one listener on the host hears every
+    // key pressed inside any card's shadow tree, and only those.
+    this.addEventListener('keydown', this.handleKeydown);
   }
 
   override render(): TemplateResult | typeof nothing {
     if (this.permissions.length === 0) return nothing;
-
-    return html`
-      ${SECTIONS.map((section) => {
-        const permissions = this.permissionsFor(section.kind);
-        return section.kind === 'externalInquiry'
-          ? this.renderExternalInquirySection(section, permissions)
-          : this.renderSection(section, permissions);
-      })}
-    `;
+    return html`${repeat(
+      this.permissions,
+      requestKey,
+      (permission) => staticHtml`<${CARD_TAG[permission.kind]}
+        data-request-panel
+        .permission=${permission}
+        .answerability=${
+          this.run ? requestAnswerability(this.run, permission) : 'readOnly'
+        }
+        .surface=${this.surface}
+      ></${CARD_TAG[permission.kind]}>`,
+    )}`;
   }
 
-  private permissionsFor(kind: PermissionPayload['kind']): PermissionPayload[] {
-    return this.permissionsByKind.get(kind) ?? [];
-  }
-
-  // ===========================================================================
-  // Section rendering
-  // ===========================================================================
-
-  private renderSectionHeader(
-    config: SectionConfig,
-    extra: TemplateResult | typeof nothing = nothing,
-  ): TemplateResult {
-    // A heading element rather than a styled span, because that is what a
-    // section title is. Visual weight is unchanged — the shared header rule
-    // already sets font-weight and colour, and the h2 reset in
-    // requestPanelSharedStyles strips the UA margin and size.
-    return html`
-      <div class="${config.cssClass}__header">
-        ${waIcon(config.icon)}
-        <h2 id="${config.cssClass}-heading">${config.title}</h2>
-        ${extra}
-      </div>
-    `;
-  }
-
-  private renderSection(
-    config: SectionConfig,
-    permissions: PermissionPayload[],
-  ): TemplateResult | typeof nothing {
-    if (permissions.length === 0) return nothing;
-
-    const armedKey = this.armedPermissionKey();
-    // A workflow-script proposal (W0) is its own card, headed by what it
-    // proposes; the kind heading is for the sections whose cards need it.
-    const headless = permissions.every(
-      (permission) =>
-        permission.kind === 'proposal' &&
-        'workflowScript' in permission.data &&
-        permission.data.workflowScript !== undefined,
-    );
-    return html`
-      <section
-        class=${config.cssClass}
-        aria-labelledby=${headless ? nothing : `${config.cssClass}-heading`}
-        aria-label=${headless ? config.title : nothing}
-      >
-        ${headless ? nothing : this.renderSectionHeader(config)}
-        <div class="${config.cssClass}__list">
-          ${repeat(
-            permissions,
-            (p) => getPermissionKey(p),
-            (p) =>
-              this.renderRequest(config, p, getPermissionKey(p) === armedKey),
-          )}
-        </div>
-      </section>
-    `;
-  }
-
-  /**
-   * One request panel, captioned with its originating run's label when
-   * requests from more than one run are pending: sections group by kind,
-   * not by run, so the kind title alone cannot say which run is asking.
-   * A single pending run keeps the clean chrome.
-   */
-  private renderRequest(
-    config: SectionConfig,
-    permission: PermissionPayload,
-    armed: boolean,
-  ): TemplateResult {
-    // `armed` marks the panel the y/n accelerators will act on. Sections render
-    // in a fixed kind order while the accelerators target the newest request,
-    // so with mixed kinds pending the top panel on screen is not the one a
-    // keypress hits. Without a visible mark that divergence is invisible, and
-    // the action it triggers can be executing a shell command.
-    const panel = staticHtml`<${config.tag}
-      data-request-panel
-      ?data-armed=${armed}
-      .permission=${permission}
-      .readOnly=${this.readOnly}
-      .surface=${this.surface}
-    ></${config.tag}>`;
-    if (!this.multiRunPending) return panel;
-    const runId = permission.data.runId;
-    if (!runId) return panel;
-    // If the run's stream was evicted, skip the group caption rather than
-    // show the raw `agent#runId` handle.
-    const label = this.view?.runs.get(runId)?.label;
-    if (!label) return panel;
-    return html`
-      <div class="request-run-group">
-        <div class="request-run-group__label">${label}</div>
-        ${panel}
-      </div>
-    `;
-  }
-
-  // ===========================================================================
-  // External inquiry carousel
-  // ===========================================================================
-
-  /**
-   * Render external inquiries as a carousel when multiple are pending.
-   * Shows one panel at a time with (1/N) counter and prev/next navigation.
-   */
-  private renderExternalInquirySection(
-    config: SectionConfig,
-    perms: PermissionPayload[],
-  ): TemplateResult | typeof nothing {
-    if (perms.length === 0) return nothing;
-
-    // Single inquiry — render normally, no carousel chrome
-    if (perms.length === 1) {
-      return this.renderSection(config, perms);
-    }
-
-    const armedKey = this.armedPermissionKey();
-    const index = this.externalInquiryIndex;
-    const current = perms[index];
-    const currentKey = getPermissionKey(current);
-    const nav = html`
-      <div
-        class="external-inquiry-requests__nav"
-        role="group"
-        aria-label="External inquiry navigation"
-      >
-        <wa-button
-          id="ei-prev-btn"
-          appearance="plain"
-          size="s"
-          type="button"
-          aria-label="Previous inquiry"
-          ?disabled=${index === 0}
-          @click=${this.showPreviousInquiry}
-        >
-          ${waIcon('chevron-left')}
-        </wa-button>
-        <wa-tooltip for="ei-prev-btn">Previous inquiry</wa-tooltip>
-        <span
-          class="external-inquiry-requests__counter"
-          role="status"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          ${index + 1} of ${perms.length}
-        </span>
-        <wa-button
-          id="ei-next-btn"
-          appearance="plain"
-          size="s"
-          type="button"
-          aria-label="Next inquiry"
-          ?disabled=${index === perms.length - 1}
-          @click=${this.showNextInquiry}
-        >
-          ${waIcon('chevron-right')}
-        </wa-button>
-        <wa-tooltip for="ei-next-btn">Next inquiry</wa-tooltip>
-      </div>
-    `;
-
-    return html`
-      <section
-        class=${config.cssClass}
-        aria-labelledby="${config.cssClass}-heading"
-      >
-        ${this.renderSectionHeader(config, nav)}
-        <div class="${config.cssClass}__list">
-          ${keyed(
-            currentKey,
-            this.renderRequest(config, current, currentKey === armedKey),
-          )}
-        </div>
-      </section>
-    `;
-  }
-
-  private get externalInquiries(): PermissionPayload[] {
-    return this.permissionsFor('externalInquiry');
-  }
-
-  private get externalInquiryIndex(): number {
-    const index = this.externalInquiries.findIndex(
-      (permission) =>
-        getPermissionKey(permission) === this.selectedExternalInquiryKey,
-    );
-    return Math.max(index, 0);
-  }
-
-  /** True when the newest permission is one of several pending inquiries. */
-  private get externalInquiryCarouselActive(): boolean {
-    return (
-      this.permissions.at(-1)?.kind === 'externalInquiry' &&
-      this.externalInquiries.length > 1
-    );
-  }
-
-  /** Move the carousel selection by `delta`, clamped by the group bounds. */
-  private stepExternalInquiry(delta: number): void {
-    const permission =
-      this.externalInquiries[this.externalInquiryIndex + delta];
-    if (permission) {
-      this.selectedExternalInquiryKey = getPermissionKey(permission);
-    }
-  }
-
-  private showPreviousInquiry(): void {
-    this.stepExternalInquiry(-1);
-  }
-
-  private showNextInquiry(): void {
-    this.stepExternalInquiry(1);
-  }
-
-  // ===========================================================================
-  // Keyboard shortcuts
-  // ===========================================================================
-
-  /**
-   * Handle keyboard shortcuts for permission actions.
-   * Only active when permissions are visible and no text input is focused.
-   * Delegates to the panel matching the newest permission (the last one),
-   * or the currently visible carousel panel for external inquiries.
-   *
-   * Left/right arrow keys navigate the external inquiry carousel.
-   *
-   * WCAG 2.1.4 (Character Key Shortcuts): single-character shortcuts (y, n,
-   * d, r, s, k…) additionally require focus inside this component — the
-   * compliant mechanism chosen here is "active only on focus" (a settings
-   * opt-out would cross into settingsView/shared lanes; remapping is
-   * already impossible for hardwired keys). Without the gate, one stray
-   * keystroke anywhere in the view could approve or reject a run.
-   * Arrow navigation is also focus-scoped so it cannot intercept navigation
-   * in another control elsewhere in the progress view. Escape stays global
-   * because it dismisses the active request rather than selecting content.
-   */
-  private handleGlobalKeydown = (event: KeyboardEvent): void => {
-    if (isTextInput(document.activeElement)) return;
+  /** Route a key to the card that holds focus; text fields keep their keys. */
+  private handleKeydown = (event: KeyboardEvent): void => {
     if (event.ctrlKey || event.metaKey || event.altKey) return;
-    if (this.permissions.length === 0) return;
-
-    const key = event.key.toLowerCase();
-    const eventPath = event.composedPath();
-    const focusWithinPanels = eventPath.includes(this);
-    const focusWithinInquiry = eventPath.some(
-      (target) =>
-        target instanceof Element &&
-        target.classList.contains('external-inquiry-requests'),
+    const path = event.composedPath();
+    if (isTextInput((path[0] as Element | undefined) ?? null)) return;
+    const card = path.find(
+      (target): target is BaseRequestPanel =>
+        target instanceof Element && target.hasAttribute(CARD_MARKER),
     );
-
-    // Arrow keys navigate the visible carousel in its visual direction, but
-    // only while focus is within these request panels.
-    if (this.externalInquiryCarouselActive && focusWithinInquiry) {
-      const rtl = getComputedStyle(this).direction === 'rtl';
-      if (key === (rtl ? 'arrowright' : 'arrowleft')) {
-        this.showPreviousInquiry();
-        event.preventDefault();
-        return;
-      }
-      if (key === (rtl ? 'arrowleft' : 'arrowright')) {
-        this.showNextInquiry();
-        event.preventDefault();
-        return;
-      }
-    }
-
-    if (key.length === 1 && !focusWithinPanels) return;
-
-    const armed = this.armedPermission;
-    const panel = armed ? this.findPanelFor(armed) : null;
-    if (!panel) return;
-
-    if (panel.handleKeyboardShortcut(key)) {
+    if (card?.handleKeyboardShortcut(event.key.toLowerCase())) {
       event.preventDefault();
     }
   };
 
   /**
-   * Rendered panel node for a permission. We match by reference rather than
-   * querying DOM order, which follows the fixed SECTIONS ordering and would
-   * target the wrong panel when mixed kinds are pending.
-   */
-  private findPanelFor(permission: PermissionPayload): BaseRequestPanel | null {
-    const panels = this.renderRoot.querySelectorAll<BaseRequestPanel>(
-      PANEL_MARKER_SELECTOR,
-    );
-    for (const panel of panels) {
-      if (panel.permission === permission) return panel;
-    }
-    return null;
-  }
-
-  // ===========================================================================
-  // Focus management
-  // ===========================================================================
-
-  /**
    * Move keyboard focus to a newly appeared request's primary action, once
-   * per pending key. The WCAG 2.1.4 gate in handleGlobalKeydown makes
-   * single-char shortcuts fire only while focus is inside this component, so
-   * without this the y/n accelerators are unreachable until the user happens
-   * to Tab here. Two focus-stealing guards: never while the user is typing
-   * in a text control elsewhere, and never when focus is already inside this
-   * component (e.g. mid-decision on an earlier request — a second arrival
-   * must not yank focus away).
+   * per pending key. Never while the user is typing in a text control
+   * elsewhere, and never when focus is already inside a card (a second
+   * arrival must not yank focus away mid-decision).
    */
   protected override updated(): void {
-    const previousKeys = this.seenPermissionKeys;
-    this.seenPermissionKeys = new Set(this.permissions.map(getPermissionKey));
-    // `permissions` is the fold's order, oldest first, so this is the
-    // earliest request that just appeared.
+    const previousKeys = this.seenKeys;
+    this.seenKeys = new Set(this.permissions.map(requestKey));
     const firstNew = this.permissions.find(
-      (permission) => !previousKeys.has(getPermissionKey(permission)),
+      (permission) => !previousKeys.has(requestKey(permission)),
     );
     if (!firstNew) return;
-    if (isTextInput(document.activeElement)) return;
-    if (this.matches(':focus-within')) return;
-
-    const panel = this.findPanelFor(firstNew);
-    if (!panel) return;
-    // The panel (and nested <approve-split-button>) was just connected in this
-    // render pass — its first Lit update is a microtask that cannot run until
-    // this `updated()` returns. Wait like LogList does for TaskGroupList.
-    void panel.updateComplete.then(() => {
+    const card = [
+      ...this.renderRoot.querySelectorAll<BaseRequestPanel>(`[${CARD_MARKER}]`),
+    ].find((element) => element.permission === firstNew);
+    // A card this window cannot answer has nothing to put focus on.
+    if (!card || card.answerability !== 'answerable') return;
+    // The card was just connected in this render pass; its first Lit update
+    // is a microtask that cannot run until this `updated()` returns.
+    void card.updateComplete.then(() => {
       if (isTextInput(document.activeElement)) return;
       if (this.matches(':focus-within')) return;
-      void this.focusPanel(panel);
+      const target =
+        card.shadowRoot?.querySelector<HTMLElement>(
+          '[data-action="primary"]',
+        ) ?? card;
+      if (target === card) card.tabIndex = -1;
+      target.focus();
     });
-  }
-
-  /**
-   * Focus a panel's primary action: the Approve button where one exists
-   * (it lives one shadow level down inside <approve-split-button>), else the
-   * panel's first control, else the panel container itself as a focusable
-   * landmark.
-   */
-  private async focusPanel(panel: BaseRequestPanel): Promise<void> {
-    await panel.updateComplete;
-    const root = panel.shadowRoot;
-    if (!root) {
-      panel.tabIndex = -1;
-      panel.focus();
-      return;
-    }
-
-    const split = root.querySelector<ApproveSplitButton>(
-      'approve-split-button',
-    );
-    if (split) {
-      await split.updateComplete;
-      const approveButton =
-        split.shadowRoot?.querySelector<HTMLElement>('wa-button');
-      if (approveButton) {
-        approveButton.focus();
-        return;
-      }
-    }
-
-    const control = root.querySelector<HTMLElement>(
-      'wa-button, wa-radio-group, wa-checkbox, wa-textarea, wa-input, button, input, textarea, select',
-    );
-    if (control) {
-      control.focus();
-      return;
-    }
-
-    panel.tabIndex = -1;
-    panel.focus();
   }
 }
 

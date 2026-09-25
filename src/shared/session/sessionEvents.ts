@@ -86,16 +86,11 @@ export class SessionEvents extends Context.Service<
     ) => Effect.Effect<A, E>;
     /** Enqueue one job synchronously and return: the door for a producer
      *  with no fiber to wait on (a trace subscriber, a status transition).
-     *  Its order is the moment of this call. A refusal is logged as itself;
+     *  Its order is the moment of this call. The job settles its own
+     *  refusal, so it names no error (`SessionHandle` keeps a refused
+     *  publication for its run's drain); a defect is logged as itself, and
      *  a job enqueued after the plane closed goes nowhere. */
-    readonly detach: (
-      job: (
-        append: Append,
-      ) => Effect.Effect<
-        unknown,
-        DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
-      >,
-    ) => void;
+    readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
     /** Wait for every detached job enqueued before this call to run, and
      *  answer with the highest commit those jobs appended, or null when none
      *  appended. A barrier, never a reporter: a refused job is logged as

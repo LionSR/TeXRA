@@ -4,21 +4,21 @@ import {
   buildStatusBarDisplay,
   statusBarRunTarget,
   subscriptionUsageProviderForStatus,
-  type StatusBarDisplayInput,
+  type BypassState,
+  type StatusBarChrome,
 } from '@cli/chat/tui/panes/statusBarDisplay';
-import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
-import {
-  resolveCliModelAccessRoute,
-  shortCliModelAccessRoute,
-} from '@cli/runtime/modelAccessRoute';
 import { KEY_HINT_SEPARATOR } from '@cli/tui/ui/KeyHints';
-import { RUN_PHASE, type RunId, RUN_LIFECYCLE_READY } from '@shared/schemas';
-import { runStatusCopy } from '@shared/runs/runStatusDisplay';
+import {
+  RUN_PHASE,
+  type ContextStateData,
+  type RunId,
+  type RunPhase,
+  type TokenUsageStats,
+  RUN_LIFECYCLE_READY,
+} from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
+import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { makeRunView, viewWith } from './fixtures/sessionViewFixture';
-
-// The bar renders the short access-route label.
-const PERSONAL_API_MODE_LABEL = shortCliModelAccessRoute('api-key');
 
 type StatusBarDisplay = ReturnType<typeof buildStatusBarDisplay>;
 
@@ -26,30 +26,86 @@ function leftTexts(display: StatusBarDisplay): string[] {
   return display.left.map((segment) => segment.text);
 }
 
-// `StatusBarDisplayInput` with every field optional and its four grouped
-// members individually overridable, so a test still names one field at a time
-// without a flat mirror of the group members drifting alongside them.
+/**
+ * The run facts a test names one at a time, beside the chrome. `renderBar`
+ * states them as the `RunView` and view maps the bar reads, so each test
+ * keeps naming a single field.
+ */
+type StatusBarCase = Omit<StatusBarChrome, 'turn'> & {
+  readonly status: RunPhase;
+  /** The fold's label, when a test pins one the status alone would not give. */
+  readonly statusLabel?: string;
+  readonly isChildRun?: boolean;
+  readonly bypass?: BypassState;
+  readonly queuedFollowUpMessages: readonly string[];
+  readonly usage: TokenUsageStats | undefined;
+  readonly contextState: ContextStateData | undefined;
+  readonly flow: RunView['flow'] | undefined;
+  readonly subagents: number;
+  readonly turn?: StatusBarChrome['turn'] & {
+    readonly thinkingActive?: boolean;
+    readonly compactingActive?: boolean;
+  };
+};
+
+function renderBar(input: StatusBarCase): StatusBarDisplay {
+  const {
+    status,
+    statusLabel,
+    isChildRun,
+    bypass,
+    queuedFollowUpMessages,
+    usage,
+    contextState,
+    flow,
+    subagents,
+    turn,
+    ...chrome
+  } = input;
+  const { thinkingActive, compactingActive, ...clock } = turn ?? {};
+  const run = makeRunView({
+    id: 'shown' as RunId,
+    status,
+    ...(statusLabel === undefined ? {} : { statusLabel }),
+    parentId: isChildRun ? ('root' as RunId) : null,
+    usage: usage ?? { inputTokens: 0, outputTokens: 0, cost: 0 },
+    context: contextState ?? null,
+    flow: flow ?? null,
+    rollup: { total: subagents, running: 0, finished: 0 },
+    thinkingActive: thinkingActive ?? false,
+    compactingActive: compactingActive ?? false,
+  });
+  const view = viewWith([run]);
+  if (bypass) {
+    view.policy.set(run.id, { bypasses: bypass } as never);
+  }
+  if (queuedFollowUpMessages.length > 0) {
+    view.queuedFollowUps.set(
+      run.id,
+      queuedFollowUpMessages.map((text) => ({ text }) as never),
+    );
+  }
+  return buildStatusBarDisplay(run, view, { ...chrome, turn: clock });
+}
+
 type StatusInputOverrides = Omit<
-  Partial<StatusBarDisplayInput>,
+  Partial<StatusBarCase>,
   'foreground' | 'childList' | 'shortcuts' | 'turn'
 > & {
-  readonly foreground?: Partial<StatusBarDisplayInput['foreground']>;
-  readonly childList?: Partial<StatusBarDisplayInput['childList']>;
-  readonly shortcuts?: Partial<StatusBarDisplayInput['shortcuts']>;
-  readonly turn?: Partial<StatusBarDisplayInput['turn']>;
+  readonly foreground?: Partial<StatusBarCase['foreground']>;
+  readonly childList?: Partial<StatusBarCase['childList']>;
+  readonly shortcuts?: Partial<StatusBarCase['shortcuts']>;
+  readonly turn?: Partial<StatusBarCase['turn']>;
 };
 
 // Idle single-stream baseline; each test overrides only the fields it exercises.
 const NO_BYPASS = { bash: false, superYolo: false, toolEdit: false } as const;
 
-function statusInput(
-  overrides: StatusInputOverrides = {},
-): StatusBarDisplayInput {
+function statusInput(overrides: StatusInputOverrides = {}): StatusBarCase {
   const { foreground, childList, shortcuts, turn, ...rest } = overrides;
 
   return {
     status: RUN_PHASE.WAITING,
-    statusLabel: runStatusCopy(rest.status ?? RUN_PHASE.WAITING).statusLabel,
     transientNotice: undefined,
     bypass: NO_BYPASS,
     queuedFollowUpMessages: [],
@@ -67,8 +123,6 @@ function statusInput(
     shortcuts: {
       chatInputAvailable: true,
       childNavigationAvailable: false,
-      runFocusAvailable: false,
-      modifierLabel: 'Alt',
       ...shortcuts,
     },
   };
@@ -77,7 +131,6 @@ function statusInput(
 // Recurring shortcut bundles for the stream-navigation row.
 const STREAM_NAV_SHORTCUTS = {
   childNavigationAvailable: true,
-  runFocusAvailable: true,
 } as const;
 const TRANSCRIPT_SHORTCUTS = {
   ...STREAM_NAV_SHORTCUTS,
@@ -90,16 +143,14 @@ const EXIT_NOTICE = {
   kind: 'exit',
   text: 'Press Ctrl-C again to exit',
   resumeId: 'abc123',
-  expiresAt: 1,
 } as const;
 
 const UNKNOWN_COMMAND_NOTICE = {
   kind: 'message',
   text: 'Unknown command: /wat',
-  expiresAt: 1,
 } as const;
 
-type TokenUsage = NonNullable<StatusBarDisplayInput['usage']>;
+type TokenUsage = NonNullable<StatusBarCase['usage']>;
 type UsageRoute = NonNullable<TokenUsage['usageRoute']>;
 
 // One heavy usage reading reused across the context-window route tests.
@@ -147,75 +198,49 @@ describe('CLI StatusBar display model', () => {
 
   it('surfaces non-default approval policies in the durable status row', () => {
     const input = statusInput({ approvalPolicy: 'ask' });
-    const ask = buildStatusBarDisplay(input);
+    const ask = renderBar(input);
 
-    expect(leftTexts(ask)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
+    expect(leftTexts(ask)).toEqual(['◆', 'Idle']);
 
-    const deny = buildStatusBarDisplay({
+    const deny = renderBar({
       ...input,
       approvalPolicy: 'never',
     });
-    expect(leftTexts(deny)).toEqual([
-      '◆',
-      'Idle',
-      PERSONAL_API_MODE_LABEL,
-      'never',
-    ]);
+    expect(leftTexts(deny)).toEqual(['◆', 'Idle', 'never']);
     expect(deny.left.at(-1)).toMatchObject({ color: 'yellow' });
 
-    const yolo = buildStatusBarDisplay({
+    const yolo = renderBar({
       ...input,
       approvalPolicy: 'yolo',
     });
-    expect(leftTexts(yolo)).toEqual([
-      '◆',
-      'Idle',
-      PERSONAL_API_MODE_LABEL,
-      'yolo',
-    ]);
+    expect(leftTexts(yolo)).toEqual(['◆', 'Idle', 'auto-approve']);
     expect(yolo.left.at(-1)).toMatchObject({ color: 'red' });
   });
 
   it('keeps queued follow-up counts in the durable left status segments', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         queuedFollowUpMessages: ['Keep the proof under one page.'],
       }),
     );
 
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Running',
-      PERSONAL_API_MODE_LABEL,
-      'queued 1',
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'Running', 'queued 1']);
     expect(display.left.at(-1)).toMatchObject({ color: 'yellow' });
   });
 
   it('keeps idle state compact and omits static agent/model names', () => {
-    const display = buildStatusBarDisplay(statusInput());
+    const display = renderBar(statusInput());
 
-    expect(leftTexts(display)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
-    expect(display.bindings).toContain('/api api');
-    expect(display.bindings).toContain('/model models');
-    expect(display.bindings).not.toContain('/agent agents');
-    // Ctrl-J newline must stay advertised: the binding lives in BaseTextInput
-    // and the status row is its only discoverable surface.
-    expect(display.bindings).toContain('Ctrl-J newline');
-    expect(display.bindings).not.toContain('Shift-Enter newline');
-    expect(display.bindings).toContain('Ctrl-C exit');
-    expect(display.bindings).not.toContain('Ctrl-C stop');
-    expect(display.bindings).not.toContain('Alt-s');
-    // Stream-navigation hints stay hidden in a single-stream chat.
-    expect(display.bindings).not.toContain('Esc parent');
-    expect(display.bindings).not.toContain('Tab sessions');
-    expect(display.bindings).not.toContain('Alt-1..9 focus');
-    expect(leftTexts(display)).not.toContain('deepseekT');
+    // Own API keys are the default route, so they earn no segment; the bar
+    // names keys only, and stream-navigation hints stay hidden in a
+    // single-stream chat.
+    expect(leftTexts(display)).toEqual(['◆', 'Idle']);
+    expect(display.bindings).toBe('/ commands · Ctrl-C exit');
   });
 
   it('renders bindings in the shared KeyHints hint format', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
@@ -228,7 +253,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('advertises full output when the focused stream has history', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 80,
         shortcuts: TRANSCRIPT_SHORTCUTS,
@@ -241,7 +266,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('names the focused nested session and its workflow phase', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         isChildRun: true,
         location: { context: 'Survey (1/1)', label: 'Agent runtime' },
@@ -253,7 +278,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('declares the running session count as a status segment', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 80,
         runningSessions: 3,
@@ -265,19 +290,8 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Tab sessions');
   });
 
-  it('prioritizes Esc parent at the narrowest width where it fits', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        width: 12,
-        shortcuts: { parentNavigationAvailable: true },
-      }),
-    );
-
-    expect(display.bindings).toBe('Esc parent');
-  });
-
-  it('retains full output before dropping to the parent Ctrl-C pair', () => {
-    const display = buildStatusBarDisplay(
+  it('keeps the session list before dropping to the parent Ctrl-C pair', () => {
+    const display = renderBar(
       statusInput({
         ctrlCAction: 'stop root',
         width: 52,
@@ -290,16 +304,15 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc parent · Ctrl-T transcript · Ctrl-C stop root',
+      'Esc parent · Tab sessions · Ctrl-C stop root',
     );
   });
 
   it('prefers a richer transcript row in a medium-width parent view', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 80,
         shortcuts: {
-          agentSelectionAvailable: true,
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
           transcriptAvailable: true,
@@ -308,12 +321,12 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(display.bindings).toBe(
-      'Esc parent · Tab sessions · Ctrl-T transcript · /agent agents · Ctrl-C exit',
+      'Esc parent · Tab sessions · Ctrl-T transcript · / commands · Ctrl-C exit',
     );
   });
 
   it('falls back to Ctrl-C when a tiny terminal cannot fit Esc parent', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 9,
         shortcuts: { parentNavigationAvailable: true },
@@ -325,7 +338,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('advertises list-owned keys while the child list has focus', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 140,
         childList: {
@@ -335,7 +348,6 @@ describe('CLI StatusBar display model', () => {
         shortcuts: {
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
-          runFocusAvailable: true,
         },
       }),
     );
@@ -359,13 +371,13 @@ describe('CLI StatusBar display model', () => {
         selectionKillable: true,
       },
     });
-    const display = buildStatusBarDisplay(input);
+    const display = renderBar(input);
 
     expect(display.bindings).toBe(
       '↑/↓ select · k kill · Tab input · Esc input · Ctrl-C stop',
     );
     expect(
-      buildStatusBarDisplay({
+      renderBar({
         ...input,
         childList: { focused: true, selectionKillable: false },
       }).bindings,
@@ -373,7 +385,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('does not drop focus controls for a non-killable narrow selection', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 55,
         childList: {
@@ -387,13 +399,10 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows foreground actions while a list-owned surface is open', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 120,
-        foreground: {
-          escapeAction: 'close',
-          inputActive: true,
-        },
+        foreground: { inputActive: true },
         childList: {
           focused: true,
           selectionKillable: true,
@@ -402,13 +411,12 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(display.bindings).toContain('Esc close');
-    expect(display.bindings).not.toContain('Esc parent');
-    expect(display.bindings).not.toContain('↑/↓ select');
+    // The surface above prints its own keys; the bar names only Ctrl-C.
+    expect(display.bindings).toBe('Ctrl-C exit');
   });
 
   it('prefers full output over stream cycling when the bar is very narrow', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         width: 42,
         shortcuts: TRANSCRIPT_SHORTCUTS,
@@ -418,69 +426,12 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toBe('Tab sessions · Ctrl-C exit');
   });
 
-  it('advertises root agent selection while setup can still change it', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        width: 80,
-        shortcuts: { agentSelectionAvailable: true },
-      }),
-    );
-
-    expect(display.bindings).toBe(
-      '/agent agents · /model models · /api api · Ctrl-J newline · Ctrl-C exit',
-    );
-  });
-
-  it('does not let setup bindings hide full output when it fits', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        width: 100,
-        shortcuts: { agentSelectionAvailable: true, transcriptAvailable: true },
-      }),
-    );
-
-    expect(display.bindings).toContain('Ctrl-T transcript');
-    expect(display.bindings).toContain('/agent agents');
-  });
-
-  it('keeps child navigation ahead of setup bindings after a root run completes', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        width: 80,
-        shortcuts: {
-          agentSelectionAvailable: true,
-          ...TRANSCRIPT_SHORTCUTS,
-        },
-      }),
-    );
-
-    expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).not.toContain('Alt-s subagents');
-    expect(display.bindings).not.toContain('/model models');
-    expect(display.bindings).not.toContain('/api api');
-  });
-
-  it('keeps root agent selection visible when setup bindings get narrow', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        width: 50,
-        shortcuts: { agentSelectionAvailable: true },
-      }),
-    );
-
-    expect(display.bindings).toContain('/agent agents');
-    expect(display.bindings).toContain('Ctrl-C exit');
-    expect(display.bindings).not.toContain('/model models');
-    expect(display.bindings).not.toContain('/api api');
-  });
-
   it('does not advertise composer controls when chat input is unavailable', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         ctrlCAction: 'stop root',
         shortcuts: {
-          agentSelectionAvailable: true,
           chatInputAvailable: false,
           childNavigationAvailable: true,
           parentNavigationAvailable: true,
@@ -494,37 +445,15 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('keeps child navigation grouped with stream focus', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        turn: { elapsedMs: 12_000 },
-        subagents: 1,
-        modelAccess: 'api-key',
-        ctrlCAction: 'stop',
-        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
-      }),
-    );
-
-    expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).toContain('Option-1..9 focus');
-    expect(display.bindings.indexOf('Tab sessions')).toBeLessThan(
-      display.bindings.indexOf('/status details'),
-    );
-    expect(display.bindings.indexOf('Option-1..9 focus')).toBeLessThan(
-      display.bindings.indexOf('Ctrl-C stop'),
-    );
-  });
-
   it('does not advertise in-pane paging for focused child runs', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         subagents: 1,
         modelAccess: 'api-key',
         ctrlCAction: 'stop root',
         width: 100,
-        shortcuts: { ...STREAM_NAV_SHORTCUTS, modifierLabel: 'Option' },
+        shortcuts: STREAM_NAV_SHORTCUTS,
       }),
     );
 
@@ -535,17 +464,8 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display)).toContain('1 agent');
   });
 
-  it('advertises Shift-Enter for newline when the Kitty protocol is active', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({ shortcuts: { shiftEnterNewline: true } }),
-    );
-
-    expect(display.bindings).toContain('Shift-Enter newline');
-    expect(display.bindings).not.toContain('Ctrl-J newline');
-  });
-
   it('shows live running signals and approval depth', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         queuedFollowUpMessages: [
@@ -569,7 +489,6 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display)).toEqual([
       '◆',
       'Running',
-      PERSONAL_API_MODE_LABEL,
       'r2',
       '80k/1.0M (8%)',
       'queued 2',
@@ -580,11 +499,10 @@ describe('CLI StatusBar display model', () => {
     expect(display.bindings).toContain('Ctrl-C stop');
     // Stream-navigation hints appear once more than one stream is live.
     expect(display.bindings).toContain('Tab sessions');
-    expect(display.bindings).toContain('Alt-1..9 focus');
   });
 
-  it('shows a tool-use run its turn, not the round it never advances', () => {
-    const display = buildStatusBarDisplay(
+  it('shows a tool-use run neither its turn nor the round it never advances', () => {
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         // What the loop writes: the turn is one-based (`state.turn + 1`) and
@@ -593,12 +511,13 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(leftTexts(display)).toContain('t2');
+    // A chat's turn count is not something anyone acts on.
+    expect(leftTexts(display)).not.toContain('t2');
     expect(leftTexts(display)).not.toContain('r1');
   });
 
   it('leaves the flow slot empty until the loop reaches a coordinate', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         flow: { family: 'toolUse', step: 'waiting' },
@@ -612,7 +531,7 @@ describe('CLI StatusBar display model', () => {
     // gpt-5.6's raw registry window is 1.05M, but a Codex-subscription turn
     // runs under a 400k budget — and a compacted turn under something else
     // again. The handler stamps what it used; the bar renders that verbatim.
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         usage: heavyUsage('chatgpt-subscription'),
@@ -628,7 +547,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows a bare token count until the handler reports a window', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         usage: heavyUsage('chatgpt-subscription'),
@@ -649,12 +568,9 @@ describe('CLI StatusBar display model', () => {
         | 'api-key',
     ): string[] =>
       leftTexts(
-        buildStatusBarDisplay(
+        renderBar(
           statusInput({
-            modelAccess: resolveCliModelAccessRoute({
-              usageRoute,
-              prospectiveRoute: 'chatgpt-subscription',
-            }),
+            modelAccess: usageRoute,
             usage: {
               inputTokens: 1_000,
               outputTokens: 100,
@@ -670,12 +586,13 @@ describe('CLI StatusBar display model', () => {
     expect(accessLabel('glm-coding-plan-subscription')).toContain(
       'subscription',
     );
-    expect(accessLabel('api-key')).toContain(PERSONAL_API_MODE_LABEL);
+    // Own API keys are the default route: no access segment at all.
+    expect(accessLabel('api-key')).not.toContain(OWN_API_KEYS.compactLabel);
     expect(accessLabel('api-key')).not.toContain('subscription');
   });
 
   it('keeps critical controls visible in narrow subagent sessions', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
@@ -692,23 +609,33 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps the child list shortcut when the footer is narrow', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
         subagents: 3,
         ctrlCAction: 'stop',
         width: 44,
-        shortcuts: { ...TRANSCRIPT_SHORTCUTS, modifierLabel: 'Option' },
+        shortcuts: TRANSCRIPT_SHORTCUTS,
       }),
     );
 
     expect(display.bindings).toBe('Tab sessions · Ctrl-C stop');
-    expect(display.bindings).not.toContain('Option-s subagents');
+  });
+
+  it('prioritizes Esc parent at the narrowest width where it fits', () => {
+    const display = renderBar(
+      statusInput({
+        width: 12,
+        shortcuts: { parentNavigationAvailable: true },
+      }),
+    );
+
+    expect(display.bindings).toBe('Esc parent');
   });
 
   it('keeps child navigation discoverable below the combined footer width', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 88_000 },
@@ -724,7 +651,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses the Ctrl-C-only fallback when even compact child navigation cannot fit', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         subagents: 3,
@@ -738,7 +665,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('drops low-priority status details before narrow footers lose separators', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
@@ -750,20 +677,11 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Running',
-      '1m 15s',
-      PERSONAL_API_MODE_LABEL,
-      '3 sub',
-    ]);
-    expect(leftTexts(display).join(' ')).not.toContain(
-      `${PERSONAL_API_MODE_LABEL}3`,
-    );
+    expect(leftTexts(display)).toEqual(['◆', 'Running', '1m 15s', '3 agents']);
   });
 
   it('drops elapsed and access mode rather than overflowing the row', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
@@ -772,14 +690,14 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    // At 16 columns even `◆ running API keys` (18 cols + gaps) cannot fit —
-    // the fitting sweep now removes access mode too instead of returning an
-    // over-wide row that soft-wraps the 1-row status line.
+    // At 16 columns the elapsed segment cannot fit either — the fitting sweep
+    // removes it instead of returning an over-wide row that soft-wraps the
+    // 1-row status line.
     expect(leftTexts(display)).toEqual(['◆', 'Running']);
   });
 
   it('drops the queued count segment before durable status on narrow bars', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { elapsedMs: 75_000 },
@@ -794,7 +712,7 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'Running',
       '1m 15s',
-      PERSONAL_API_MODE_LABEL,
+      '3 approvals',
     ]);
   });
 
@@ -806,23 +724,18 @@ describe('CLI StatusBar display model', () => {
       ctrlCAction: 'stop root',
       shortcuts: STREAM_NAV_SHORTCUTS,
     });
-    const display = buildStatusBarDisplay(baseDisplayInput);
+    const display = renderBar(baseDisplayInput);
 
-    expect(leftTexts(display)).toEqual([
-      '◆',
-      'Stopped',
-      'root active',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(display)).toEqual(['◆', 'Stopped', 'root active']);
     expect(display.bindings).toContain('Ctrl-C stop root');
 
-    const liveChildDisplay = buildStatusBarDisplay({
+    const liveChildDisplay = renderBar({
       ...baseDisplayInput,
       status: RUN_PHASE.RUNNING,
     });
     expect(leftTexts(liveChildDisplay)).not.toContain('root active');
 
-    const stoppedRootDisplay = buildStatusBarDisplay({
+    const stoppedRootDisplay = renderBar({
       ...baseDisplayInput,
       ctrlCAction: 'stop',
     });
@@ -830,12 +743,12 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows the idle wording for a focused WAITING child and root alike', () => {
-    const rootDisplay = buildStatusBarDisplay(
+    const rootDisplay = renderBar(
       statusInput({ status: RUN_PHASE.WAITING, isChildRun: false }),
     );
     expect(leftTexts(rootDisplay)).toContain('Idle');
 
-    const childDisplay = buildStatusBarDisplay(
+    const childDisplay = renderBar(
       statusInput({
         status: RUN_PHASE.WAITING,
         isChildRun: true,
@@ -852,9 +765,7 @@ describe('CLI StatusBar display model', () => {
   ] as const)(
     'uses the canonical %s label for a focused child',
     (status, label) => {
-      const display = buildStatusBarDisplay(
-        statusInput({ status, isChildRun: true }),
-      );
+      const display = renderBar(statusInput({ status, isChildRun: true }));
 
       expect(leftTexts(display)).toContain(label);
     },
@@ -1128,14 +1039,14 @@ describe('CLI StatusBar display model', () => {
     });
   });
 
-  it('keeps status discoverable in narrow single-stream sessions', () => {
-    const display = buildStatusBarDisplay(statusInput({ width: 50 }));
+  it('keeps commands discoverable in narrow single-stream sessions', () => {
+    const display = renderBar(statusInput({ width: 50 }));
 
-    expect(display.bindings).toBe('/status details · Ctrl-C exit');
+    expect(display.bindings).toBe('/ commands · Ctrl-C exit');
   });
 
   it('hides inactive global bindings while a foreground panel owns input', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         subagents: 2,
@@ -1147,55 +1058,25 @@ describe('CLI StatusBar display model', () => {
     );
 
     expect(leftTexts(display)).toContain('1 approval');
-    expect(display.bindings).toBe(
-      'Keys go to the panel above · Esc close · Ctrl-C stop',
-    );
+    expect(display.bindings).toBe('Ctrl-C stop');
   });
 
   it('labels foreground user questions as questions instead of approvals', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         approvalDepth: 1,
         approvalKind: 'question',
-        foreground: { escapeAction: 'skip', inputActive: true },
+        foreground: { inputActive: true },
       }),
     );
 
     expect(leftTexts(display)).toContain('1 question');
     expect(leftTexts(display)).not.toContain('1 approval');
-    expect(display.bindings).toContain('Esc skip');
-  });
-
-  it('shows cancel for non-question approval foregrounds', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        approvalDepth: 1,
-        foreground: { escapeAction: 'cancel', inputActive: true },
-      }),
-    );
-
-    expect(display.bindings).toContain('Esc cancel');
-  });
-
-  it('keeps escape and Ctrl-C actions visible in narrow foreground panels', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        status: RUN_PHASE.RUNNING,
-        subagents: 3,
-        ctrlCAction: 'stop',
-        width: 40,
-        foreground: { inputActive: true },
-        shortcuts: STREAM_NAV_SHORTCUTS,
-      }),
-    );
-
-    expect(display.bindings).toBe('Esc close · Ctrl-C stop');
   });
 
   it('falls back to the bare Ctrl-C action in tiny foreground panels', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         subagents: 3,
@@ -1214,38 +1095,23 @@ describe('CLI StatusBar display model', () => {
       status: RUN_PHASE.RUNNING,
       turn: { elapsedMs: 110_000 },
     });
-    const running = buildStatusBarDisplay(runningInput);
+    const running = renderBar(runningInput);
 
-    expect(leftTexts(running)).toEqual([
-      '◆',
-      'Running',
-      '1m 50s',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(running)).toEqual(['◆', 'Running', '1m 50s']);
 
-    const resuming = buildStatusBarDisplay({
+    const resuming = renderBar({
       ...runningInput,
       statusLabel: 'Resuming',
     });
-    expect(leftTexts(resuming)).toEqual([
-      '◆',
-      'Resuming',
-      '1m 50s',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(resuming)).toEqual(['◆', 'Resuming', '1m 50s']);
 
-    const justStarted = buildStatusBarDisplay({
+    const justStarted = renderBar({
       ...runningInput,
       turn: { ...runningInput.turn, elapsedMs: -20_000 },
     });
-    expect(leftTexts(justStarted)).toEqual([
-      '◆',
-      'Running',
-      '0s',
-      PERSONAL_API_MODE_LABEL,
-    ]);
+    expect(leftTexts(justStarted)).toEqual(['◆', 'Running', '0s']);
 
-    const thinking = buildStatusBarDisplay({
+    const thinking = renderBar({
       ...runningInput,
       turn: { ...runningInput.turn, thinkingActive: true },
     });
@@ -1254,10 +1120,9 @@ describe('CLI StatusBar display model', () => {
       'Running',
       '1m 50s',
       'thinking...',
-      PERSONAL_API_MODE_LABEL,
     ]);
 
-    const compacting = buildStatusBarDisplay({
+    const compacting = renderBar({
       ...runningInput,
       turn: {
         ...runningInput.turn,
@@ -1270,11 +1135,10 @@ describe('CLI StatusBar display model', () => {
       'Running',
       '1m 50s',
       'compacting...',
-      PERSONAL_API_MODE_LABEL,
     ]);
 
     // The same elapsed reading is suppressed once the turn is no longer running.
-    const idle = buildStatusBarDisplay(
+    const idle = renderBar(
       statusInput({
         turn: {
           compactingActive: true,
@@ -1284,11 +1148,11 @@ describe('CLI StatusBar display model', () => {
       }),
     );
 
-    expect(leftTexts(idle)).toEqual(['◆', 'Idle', PERSONAL_API_MODE_LABEL]);
+    expect(leftTexts(idle)).toEqual(['◆', 'Idle']);
   });
 
   it('preserves distinct agent-task, bash, and edit bypass badges', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         bypass: { bash: true, superYolo: true, toolEdit: true },
@@ -1298,7 +1162,6 @@ describe('CLI StatusBar display model', () => {
     expect(leftTexts(display)).toEqual([
       '◆',
       'Running',
-      PERSONAL_API_MODE_LABEL,
       'AUTO-TASK',
       'AUTO-BASH',
       'AUTO-EDIT',
@@ -1318,7 +1181,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('shows the resume command while exit confirmation is armed', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
@@ -1329,7 +1192,6 @@ describe('CLI StatusBar display model', () => {
       '◆',
       'Running',
       'Press Ctrl-C again to exit',
-      PERSONAL_API_MODE_LABEL,
     ]);
     expect(display.bindings).toBe(
       'Resume this session with: texra resume abc123',
@@ -1337,7 +1199,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('uses the provided command name in the armed-exit resume command', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
@@ -1351,7 +1213,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('warns that queued follow-ups are discarded while exit is armed', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
@@ -1373,12 +1235,11 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('does not describe queued follow-ups as discarded for ordinary notices', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         transientNotice: {
           kind: 'message',
           text: 'Signed in successfully',
-          expiresAt: 1,
         },
         queuedFollowUpMessages: ['Continue with the proof.'],
       }),
@@ -1391,7 +1252,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps compact run liveness visible beside transient notices', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { runningFrame: '/', elapsedMs: 45_000 },
@@ -1404,7 +1265,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('keeps thinking status visible during transient notices', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         turn: { runningFrame: '/', elapsedMs: 45_000, thinkingActive: true },
@@ -1442,7 +1303,7 @@ describe('CLI StatusBar display model', () => {
       expected: ['◆', '1 queued follow-up will b…'],
     },
   ])('$name', ({ width, bypass, expected }) => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         bypass,
@@ -1450,7 +1311,6 @@ describe('CLI StatusBar display model', () => {
         transientNotice: {
           kind: 'exit',
           text: 'Press Ctrl-C again to exit',
-          expiresAt: 1,
         },
         queuedFollowUpMessages: ['Continue with the proof.'],
         width,
@@ -1471,19 +1331,19 @@ describe('CLI StatusBar display model', () => {
     });
 
     // Wide: the full usage segment fits.
-    expect(leftTexts(buildStatusBarDisplay({ ...input, width: 80 }))).toContain(
+    expect(leftTexts(renderBar({ ...input, width: 80 }))).toContain(
       '80k/1.0M (8%)',
     );
 
     // Narrow: the segment degrades to the bare percentage instead of
     // disappearing, keeping context pressure visible.
-    const narrow = leftTexts(buildStatusBarDisplay({ ...input, width: 24 }));
+    const narrow = leftTexts(renderBar({ ...input, width: 24 }));
     expect(narrow).not.toContain('80k/1.0M (8%)');
     expect(narrow).toContain('8%');
   });
 
   it('keeps the exit confirmation visible in very narrow footers', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         status: RUN_PHASE.RUNNING,
         transientNotice: EXIT_NOTICE,
@@ -1497,26 +1357,8 @@ describe('CLI StatusBar display model', () => {
     );
   });
 
-  it('uses portable Esc labels for meta shortcuts on macOS', () => {
-    const display = buildStatusBarDisplay(
-      statusInput({
-        shortcuts: {
-          ...STREAM_NAV_SHORTCUTS,
-          parentNavigationAvailable: true,
-          modifierLabel: defaultShortcutModifierLabel('darwin'),
-        },
-      }),
-    );
-
-    expect(display.bindings).toContain('Esc parent');
-    expect(display.bindings).toContain('Esc 1..9 focus');
-    expect(display.bindings).not.toContain('Esc p tasks');
-    expect(display.bindings).not.toContain('Esc s subagents');
-    expect(display.bindings).not.toContain('Option-p tasks');
-  });
-
   it('shows the limiting coding-plan quota in the persistent status row', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         modelAccess: 'glm-coding-plan-subscription',
         subscriptionQuota: {
@@ -1542,7 +1384,7 @@ describe('CLI StatusBar display model', () => {
   });
 
   it('does not render unavailable subscription quota as a false zero', () => {
-    const display = buildStatusBarDisplay(
+    const display = renderBar(
       statusInput({
         modelAccess: 'kimi-code-subscription',
         subscriptionQuota: {

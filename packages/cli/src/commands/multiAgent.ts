@@ -9,7 +9,7 @@ import { filterNotNullish } from '@utils/core';
 
 import { missingToolUseAgentMessage } from '../runtime/agents';
 import {
-  CliUsageError,
+  failUsage,
   readCliStdinText,
   type CliContext,
 } from '../runtime/cliContext';
@@ -129,7 +129,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   const hasInstruction = instruction.trim().length > 0;
   if (init.inputFiles.length === 0 && !hasInstruction) {
-    throw new CliUsageError(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
+    return yield* failUsage(MULTI_AGENT_TASK_REQUIRED_MESSAGE);
   }
   const services = yield* initCliPlatform({ ...context, quietLogs: true });
 
@@ -156,7 +156,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
     );
   }
   if (plan.missingAgentOverride) {
-    throw new CliUsageError(
+    return yield* failUsage(
       missingToolUseAgentMessage(plan.missingAgentOverride),
     );
   }
@@ -212,6 +212,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
             .join('\n\n');
         const config: AgentConfigPayload = {
           agent: rootAgent.name,
+          agentSource: rootAgent.source,
           model,
           inputFiles,
           contextFiles,

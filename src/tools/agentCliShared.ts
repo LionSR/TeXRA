@@ -20,7 +20,8 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
-import { AgentResume, type StateStore } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   emptyUsageStats,
   sumUsageStats,
@@ -74,9 +75,9 @@ class AgentCliCallFailed extends Data.TaggedError('AgentCliCallFailed')<{
  * chain's error channel — the shared dispatch/launch steps and each provider
  * tool's own setup (SDK import, binary lookup, thread creation).
  */
-export const agentCliCall = <A, E>(
-  call: Effect.Effect<A, E>,
-): Effect.Effect<A, AgentCliCallFailed> =>
+export const agentCliCall = <A, E, R>(
+  call: Effect.Effect<A, E, R>,
+): Effect.Effect<A, AgentCliCallFailed, R> =>
   Effect.mapError(call, (cause) => new AgentCliCallFailed({ cause }));
 
 /** The failures the agent-CLI dispatch/launch chain can raise. */
@@ -84,7 +85,7 @@ export type AgentCliToolFailure = ToolError | AgentCliCallFailed;
 
 /**
  * Re-raise a collaborator's rejection as its own cause: pipe this at the
- * tool's native `execute()` edge so BaseTool normalizes the original error
+ * tool's native `execute()` edge so defineTool normalizes the original error
  * without hiding the collaborator's diagnostics.
  */
 export const reraiseAgentCliCallFailure = <A, R>(
@@ -274,18 +275,12 @@ export const launchAgentCliSession = Effect.fn(
         tool: params.agentName,
       } as const;
 
-      yield* registerRun(
-        params.session,
-        runId,
-        params.config,
-        params.agentName,
-        {
-          identity,
-          userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-          parentRunId: params.parentRunId,
-          description: childRunDescription(params.description),
-        },
-      ).pipe(
+      yield* registerRun(params.session, runId, params.config, {
+        identity,
+        userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
+        parentRunId: params.parentRunId,
+        description: childRunDescription(params.description),
+      }).pipe(
         Effect.mapError(
           (error) =>
             new ToolError(
@@ -383,11 +378,11 @@ const withAgentCliRun = Effect.fn('agentCliShared.withAgentCliRun')(function* <
 export const agentCliApprovalCommand = (
   agentName: string,
   prompt: string,
-  mode: (workspaceState: StateStore) => Effect.Effect<string, Error>,
+  mode: (stores: SettingsStores) => Effect.Effect<string, Error>,
 ): Effect.Effect<string, Error, ToolCall> =>
   Effect.gen(function* () {
     const { roots } = yield* ToolCall;
-    const resolved = yield* mode(roots.workspaceState);
+    const resolved = yield* mode(roots);
     return `[${agentName} ${resolved}] ${prompt}`;
   });
 
@@ -632,9 +627,8 @@ export function buildAgentCliLaunch<TTurn>(
       // Nobody awaits an agent-CLI child: own a late loop failure here as a
       // trace diagnostic, since the loop already owns its one user-facing
       // result delivery.
-      onLoopFailed: (error: unknown): void => {
-        logger.error(loopFailedMessage, { data: error });
-      },
+      onLoopFailed: (error: unknown) =>
+        Effect.sync(() => logger.error(loopFailedMessage, { data: error })),
     };
   });
 }

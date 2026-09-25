@@ -13,11 +13,9 @@ const mocks = vi.hoisted(() => ({
   preferKimiCode: false,
   glmCodingPlan: false,
   notify: vi.fn(),
-  openRouter: false,
   setCliSubscriptionPreference: vi.fn(),
   setCliCodingPlanSubscription: vi.fn(),
   setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
-  updateGlobalState: vi.fn(),
 }));
 
 vi.mock('@model/codex/codexSubscription', () => ({
@@ -51,20 +49,6 @@ vi.mock('@model/apiProviders', async (importActual) => {
   };
 });
 
-vi.mock('@platform/platform', async () => {
-  const { GlobalStateKey } = await import('@shared/state/stateKeys');
-  return {
-    platform: () => ({
-      workspace: { getWorkspacePath: () => undefined },
-      globalState: {
-        get: (key: string, fallback: unknown) =>
-          key === GlobalStateKey.USE_OPENROUTER ? mocks.openRouter : fallback,
-        update: mocks.updateGlobalState,
-      },
-    }),
-  };
-});
-
 import { currentApproval } from '@cli/chat/tui/state/approvalQueue';
 import { bindSessionView } from '@cli/chat/tui/state/sessionView';
 import { resetCliState, rootRunId } from '@cli/chat/tui/state/cliState';
@@ -89,7 +73,6 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -99,7 +82,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
-import { proposalApprovals } from '@tools/approval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -376,18 +358,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   mocks.preferSubscription = true;
-  mocks.openRouter = false;
   mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
-  mocks.updateGlobalState.mockImplementation(
-    async (key: string, value: unknown) => {
-      if (key === GlobalStateKey.USE_OPENROUTER) {
-        mocks.openRouter = value === true;
-      }
-      if (key === GlobalStateKey.KIMI_CODE_PREFER) {
-        mocks.preferKimiCode = value === true;
-      }
-    },
-  );
   mocks.setCliSubscriptionPreference.mockImplementation((_id, enabled) => {
     mocks.preferSubscription = enabled;
     return Effect.void;
@@ -424,7 +395,6 @@ afterEach(async () => {
   mocks.setCliSubscriptionPreference.mockReset();
   mocks.setCliCodingPlanSubscription.mockReset();
   mocks.setGLMCodingPlan.mockReset();
-  mocks.updateGlobalState.mockReset();
 });
 
 describe('TUI request decisions', () => {
@@ -506,22 +476,23 @@ describe('TUI request decisions', () => {
   );
 
   it.effect(
-    'sets the run command bypass when goal auto-approval is enabled and cleared',
+    'sets the run command bypass for a goal and revokes only what the goal granted',
     () =>
       Effect.gen(function* () {
         tui();
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
+        const { approvals } = testDefaultSession();
         setGoalSessionAutoApproval(testDefaultSession(), runId, 'commands');
-        expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
-        ).toBe(true);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
+        // The user answers an edit prompt with "approve for this session"
+        // while the goal runs; ending the goal must not revoke that grant.
+        approvals.toolEdit.bypass.setBypass(runId, true);
 
         setGoalSessionAutoApproval(testDefaultSession(), runId, false);
-        expect(
-          testDefaultSession().approvals.bash.bypass.isBypassed(runId),
-        ).toBe(false);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(false);
+        expect(approvals.toolEdit.bypass.isBypassed(runId)).toBe(true);
       }),
   );
 
@@ -568,7 +539,7 @@ describe('TUI request decisions', () => {
         });
         yield* waitFor(() => {
           expect(
-            proposalApprovals(testDefaultSession()).isBypassed(runId),
+            testDefaultSession().approvals.proposal.isBypassed(runId),
           ).toBe(true);
           expect(
             testDefaultSession().approvals.toolEdit.bypass.isBypassed(runId),
@@ -647,7 +618,7 @@ describe('TUI request decisions', () => {
         decideCurrent({ action: 'approve' });
 
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
-        expect(proposalApprovals(testDefaultSession()).isBypassed(runId)).toBe(
+        expect(testDefaultSession().approvals.proposal.isBypassed(runId)).toBe(
           false,
         );
         expect(
@@ -710,7 +681,7 @@ describe('TUI request decisions', () => {
         {
           personalApiKeyAvailable: false,
           missingPersonalApiKeyMessage:
-            'TeXRA could not check whether the OpenAI API key is available. Press n to dismiss, then use `/key` to try again.',
+            'TeXRA could not check whether the OpenAI API key is available. Press n to stop the run, then use `/key` to try again.',
         },
       );
     }),

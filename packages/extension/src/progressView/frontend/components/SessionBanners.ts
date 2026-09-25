@@ -1,12 +1,13 @@
 /**
- * `<session-banners>`: the five host-owned banners (API key, agent config,
- * dependency, getting started, login) in one strip, host state read from
- * the `host` snapshot (8.1). Each banner dispatches its own `host.request`
- * arm, so the strip only hands each one the state it names. The empty state
- * renders it above the launch composer; a conversation renders it as the
- * thin strip above the follow-up (PRD 12.4).
+ * `<session-banners>`: the one warning slot above the launch composer. The
+ * host raises up to three warnings (no usable API key, a missing agent
+ * file, missing tools); the slot shows the first that is visible, in that
+ * order, because each blocks the next: without a key nothing runs, and a
+ * missing agent file fails the launch before a tool is ever needed. Each
+ * warning dispatches its own `host.request` arm. The onboarding and
+ * "no LaTeX files yet" cards are not warnings: they take the hero's place.
  */
-import { css, html, LitElement, type TemplateResult } from 'lit';
+import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { SessionType } from '@shared/schemas';
@@ -14,25 +15,15 @@ import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import './AgentConfigBanner';
 import './ApiKeyBanner';
 import './DependencyBanner';
-import './GettingStartedBanner';
-import './LoginBanner';
 
 @customElement('session-banners')
 export class SessionBanners extends LitElement {
-  /* Each banner hides itself (display: none through its `visible`
-     attribute), so the strip is zero height until one shows; the spacing
-     below it exists only then. */
   static override styles = css`
     :host {
       display: block;
       min-width: 0;
     }
-    .strip {
-      display: flex;
-      flex-direction: column;
-      gap: var(--wa-space-2xs);
-    }
-    .strip:has([visible]) {
+    .slot {
       padding-bottom: var(--wa-space-2xs);
     }
   `;
@@ -41,27 +32,27 @@ export class SessionBanners extends LitElement {
   /** The launcher's mode, which the agent-config banner's actions name. */
   @property() sessionType: SessionType = 'toolUse';
 
-  override render(): TemplateResult {
-    const { banners } = this;
-    // The agent the banner names owns its actions: a workflow agent's missing
-    // configuration opens the workflow catalog even while a tool-use
-    // conversation renders the strip. The launcher's mode stands in only for
-    // a banner raised without one.
-    const agentConfigType = banners.agentConfig.sessionType ?? this.sessionType;
-    return html`
-      <div class="strip">
-        <api-key-banner .state=${banners.apiKey}></api-key-banner>
-        <agent-config-banner
-          .state=${banners.agentConfig}
-          .sessionType=${agentConfigType}
-        ></agent-config-banner>
-        <dependency-banner .state=${banners.dependency}></dependency-banner>
-        <getting-started-banner
-          .visible=${banners.gettingStarted}
-        ></getting-started-banner>
-        <login-banner .visible=${banners.login}></login-banner>
-      </div>
-    `;
+  override render(): TemplateResult | typeof nothing {
+    const { apiKey, agentConfig, dependency } = this.banners;
+    let warning: TemplateResult;
+    if (apiKey.visible) {
+      warning = html`<api-key-banner></api-key-banner>`;
+    } else if (agentConfig.visible) {
+      // The agent the banner names owns its actions: a workflow agent's
+      // missing file opens the workflow catalog. The launcher's mode stands
+      // in only for a banner raised without one.
+      warning = html`<agent-config-banner
+        .state=${agentConfig}
+        .sessionType=${agentConfig.sessionType ?? this.sessionType}
+      ></agent-config-banner>`;
+    } else if (dependency.visible) {
+      warning = html`<dependency-banner
+        .state=${dependency}
+      ></dependency-banner>`;
+    } else {
+      return nothing;
+    }
+    return html`<div class="slot">${warning}</div>`;
   }
 }
 

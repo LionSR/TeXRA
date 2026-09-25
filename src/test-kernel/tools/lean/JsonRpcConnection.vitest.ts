@@ -8,7 +8,7 @@ import { it } from '@effect/vitest';
 import { Effect, Fiber, Queue, Sink, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { makeJsonRpcConnection } from '@tools/lean/direct/jsonRpc';
+import { makeJsonRpcConnection } from '@tools/jsonRpc';
 
 /** The peer's output as chunks; the listeners go when the consumer does. */
 const chunksOf = (stream: PassThrough) =>
@@ -198,6 +198,20 @@ describe('JsonRpcConnection', () => {
         ['a', 1],
         ['b', 2],
       ]);
+    }),
+  );
+
+  it.effect('closes the connection on a frame body that is not an object', () =>
+    Effect.gen(function* () {
+      const { connection, serverSends, collectClientFrames } = yield* makePair;
+      const pending = yield* Effect.forkChild(
+        Effect.flip(connection.request('waiting')),
+      );
+      yield* collectClientFrames;
+      serverSends(null);
+      expect(yield* Fiber.join(pending)).toMatchObject({
+        _tag: 'JsonRpcConnectionDisposed',
+      });
     }),
   );
 

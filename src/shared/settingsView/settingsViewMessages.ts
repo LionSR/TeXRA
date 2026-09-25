@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { ReasoningEffort } from 'llm-zoo';
 import { ReasoningEffortSchema } from 'llm-zoo/schemas';
 
-import { SETTINGS_VIEW_CMD, SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
+import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   createDispatcher,
   type HandlerRegistry,
@@ -21,7 +21,6 @@ import {
   AgentMetadataBaseSchema,
   AgentModePresetSchema,
   AgentSourceSchema,
-  GoalListItemSchema,
   ModelAvailabilityFieldsSchema,
   RunIdSchema,
   SkillDisplayIssueSchema,
@@ -52,10 +51,6 @@ import {
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
 
-// SETTINGS_VIEW_CMD is defined in ipc.ts to avoid a circular dependency;
-// re-exported here for consumers that expect it from the schema module.
-export { SETTINGS_VIEW_CMD } from '@shared/ipc';
-
 // Re-export the types and values needed by settings consumers from the
 // individual view-message modules so the historical settings surface (single
 // import site) stays intact. Keep this selective: the schemas themselves are
@@ -70,31 +65,25 @@ export {
 } from './profileViewMessages';
 
 /**
- * The set of settings tabs — single source of truth for tab names, spelled the
- * one way they travel: the panel name on the wire (`SET_TAB.tab`) and in every
- * `data-panel` selector. Order carries no meaning beyond stable iteration.
+ * The settings pages in nav order — single source of truth for tab names,
+ * spelled the one way they travel: the panel name on the wire (`SET_TAB.tab`)
+ * and in every `data-panel` selector. `shortcuts` is desktop-only.
  * Retired internal panels are removed together with their producers and
  * command surfaces so no stale IPC target remains.
  */
 export const SETTINGS_TAB_ORDER = [
-  'memory',
   'models',
   'agents',
-  'multi-agent',
   'tools',
-  'skills',
-  'ai-agents',
-  'git',
   'latex',
-  'goal',
-  'account',
+  'memory',
+  'general',
   'shortcuts',
-  'subscriptions',
 ] as const;
 
 /**
- * Webview panel-addressing key for a tab, e.g. `'multi-agent'`. A literal
- * union over {@link SETTINGS_TAB_ORDER}, so an appended tab widens it and
+ * Webview panel-addressing key for a tab, e.g. `'agents'`. A literal union
+ * over {@link SETTINGS_TAB_ORDER}, so an appended tab widens it and
  * exhaustiveness-checked switches (SettingsApp's `renderActivePanel`) become
  * compile errors until they add a case — the same effect the
  * `Record<SettingsTabPanelName, …>` metadata maps have.
@@ -102,30 +91,45 @@ export const SETTINGS_TAB_ORDER = [
 export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 
 /**
- * Presentation-only grouping for the settings top navigation. Groups address
- * panels by the same name that travels over IPC as `SET_TAB.tab`.
- *
- * Every tab must appear in exactly one group, or its panel becomes unreachable
- * from the nav while still being a valid IPC target. `SharedSchemas.vitest.ts`
- * asserts the flattened list is a permutation of `SETTINGS_TAB_ORDER`, so an
- * appended tab cannot ship without being placed here.
+ * Each page's sections in sub-tab order; a page with fewer than two shows no
+ * second nav row. `vscode` (LaTeX) exists on the extension only.
  */
-export const SETTINGS_TAB_GROUPS = [
-  { label: 'Account', tabs: ['account', 'subscriptions'] },
-  { label: 'Models', tabs: ['models'] },
-  { label: 'Agents', tabs: ['agents', 'multi-agent'] },
-  { label: 'Capabilities', tabs: ['tools', 'skills', 'ai-agents', 'latex'] },
-  { label: 'Workspace', tabs: ['git', 'shortcuts'] },
-  { label: 'Data & Activity', tabs: ['memory', 'goal'] },
-] as const satisfies readonly {
-  label: string;
-  tabs: readonly SettingsTabPanelName[];
-}[];
+export const SETTINGS_PAGE_SECTIONS = {
+  models: ['keys', 'subscriptions', 'models'],
+  agents: ['library', 'teams', 'skills', 'advanced'],
+  tools: ['approval', 'tools', 'integrations'],
+  latex: ['dependencies', 'compile', 'formatting', 'vscode'],
+  memory: [],
+  general: ['account', 'git'],
+  shortcuts: [],
+} as const satisfies Record<SettingsTabPanelName, readonly string[]>;
 
-/** Outbound schema to switch tabs, addressed by panel name. */
+/** A section of page `P`, e.g. `'teams'` for `'agents'`. */
+export type SettingsSectionName<
+  P extends SettingsTabPanelName = SettingsTabPanelName,
+> = (typeof SETTINGS_PAGE_SECTIONS)[P][number];
+
+/**
+ * Where a settings link lands: a page (on its remembered section), or one
+ * section of it spelled `page/section`, e.g. `'agents/teams'`.
+ */
+export type SettingsTarget =
+  | SettingsTabPanelName
+  | {
+      [P in SettingsTabPanelName]: `${P}/${SettingsSectionName<P>}`;
+    }[SettingsTabPanelName];
+
+export const SettingsTargetSchema = z.enum(
+  SETTINGS_TAB_ORDER.flatMap((page) => [
+    page,
+    ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),
+  ]) as [SettingsTarget, ...SettingsTarget[]],
+);
+
+/** Outbound schema to switch tabs, addressed by page or `page/section`. */
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
-  tab: z.enum(SETTINGS_TAB_ORDER),
+  tab: SettingsTargetSchema,
   agentSubTab: AgentCategorySchema.optional(),
 });
 
@@ -271,6 +275,8 @@ const ModelSelectionItemSchema = z.object({
   supportedReasoningLevels: z.array(ReasoningEffortSchema).optional(),
   /** Whether this model qualifies as a "fast first response" pick (price-based). */
   isFast: z.boolean().optional(),
+  /** Whether this model's API pricing earns the premium warning (price-based). */
+  isExpensive: z.boolean().optional(),
   // Resolved once by modelOptionsFrom and carried verbatim so the
   // Models tab renders availability without re-deriving it at render time.
   ...ModelAvailabilityFieldsSchema.shape,
@@ -356,7 +362,6 @@ const ToolDependencyStatusSchema = z.enum([
 ]);
 export type ToolDependencyStatus = z.infer<typeof ToolDependencyStatusSchema>;
 
-/** Category for grouping tools in the dashboard */
 const ToolCategorySchema = z.enum([
   'file',
   'latex',
@@ -389,7 +394,7 @@ const ToolInstallActionSchema = z.discriminatedUnion('kind', [
 ]);
 export type ToolInstallAction = z.infer<typeof ToolInstallActionSchema>;
 
-/** Single tool entry in the dashboard */
+/** One dashboard card; `settings` are its inline rows as [catalog key, label]. */
 const ToolDashboardItemSchema = z.strictObject({
   id: z.string(),
   name: z.string(),
@@ -405,6 +410,7 @@ const ToolDashboardItemSchema = z.strictObject({
   authNote: z.string().optional(),
   toggleable: z.boolean().optional(),
   enabled: z.boolean().optional(),
+  settings: z.array(z.tuple([z.string(), z.string()])).optional(),
 });
 export type ToolDashboardItem = z.infer<typeof ToolDashboardItemSchema>;
 
@@ -545,28 +551,6 @@ const UpdateLatexSettingsStatusMessageSchema = z.object({
   settings: LatexSettingsStatusSchema,
 });
 
-/** Outbound: backend → frontend inline criticism toggle state */
-const UpdateInlineCriticismEnabledMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_INLINE_CRITICISM_ENABLED),
-  enabled: z.boolean(),
-});
-
-/** Outbound: pushed when the list changes or in response to GET_GOAL_LIST. */
-const UpdateGoalListMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_GOAL_LIST),
-  items: z.array(GoalListItemSchema),
-});
-
-/**
- * Outbound: sent once at webview-ready with the commands this host's inbound
- * registry declares `unsupported(...)` — the derived capability view (see
- * `unsupportedCommands` in `@shared/utils/dispatcher`).
- */
-const SetUnsupportedCommandsMessageSchema = z.object({
-  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_UNSUPPORTED_COMMANDS),
-  commands: z.array(z.string()),
-});
-
 // ============================================================
 // Outbound messages (extension host → settings webview)
 // ============================================================
@@ -587,10 +571,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateSubscriptionUsageMessageSchema,
   UpdatePRSubscriptionsMessageSchema,
   UpdateLatexSettingsStatusMessageSchema,
-  UpdateInlineCriticismEnabledMessageSchema,
-  UpdateGoalListMessageSchema,
   UpdateProfileMessageSchema,
-  SetUnsupportedCommandsMessageSchema,
 ]);
 
 type SettingsViewOutboundMessage = z.infer<
@@ -603,8 +584,6 @@ export type SettingsViewOutboundHandlerRegistry =
 export const dispatchSettingsViewOutbound = createDispatcher(
   SettingsViewOutboundMessageSchema,
 );
-
-const CMD = SETTINGS_VIEW_CMD;
 
 /** Inbound message carrying a single boolean `enabled` toggle. */
 function enabledFlag<T extends string>(command: T) {
@@ -634,183 +613,184 @@ function agentCommand<T extends string>(command: T) {
 }
 
 // Provider key inbound messages (settings-only)
-const SetProviderKeyMessageSchema = providerCommand(CMD.SET_PROVIDER_KEY);
-
-const RemoveProviderKeyMessageSchema = providerCommand(CMD.REMOVE_PROVIDER_KEY);
-
-const OpenProviderKeyUrlMessageSchema = providerCommand(
-  CMD.OPEN_PROVIDER_KEY_URL,
+const SetProviderKeyMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.SET_PROVIDER_KEY,
 );
-
+const RemoveProviderKeyMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.REMOVE_PROVIDER_KEY,
+);
+const OpenProviderKeyUrlMessageSchema = providerCommand(
+  SETTINGS_VIEW_COMMANDS.OPEN_PROVIDER_KEY_URL,
+);
 const OpenExternalUrlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_EXTERNAL_URL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_EXTERNAL_URL),
   url: z.url(),
 });
 
 // Model selection inbound messages
-const SetModelEnabledMessageSchema = modelCommand(CMD.SET_MODEL_ENABLED).extend(
-  { enabled: z.boolean() },
-);
+const SetModelEnabledMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.SET_MODEL_ENABLED,
+).extend({ enabled: z.boolean() });
 
 const SetModelReasoningLevelMessageSchema = modelCommand(
-  CMD.SET_MODEL_REASONING_LEVEL,
+  SETTINGS_VIEW_COMMANDS.SET_MODEL_REASONING_LEVEL,
 ).extend({
   /** The reasoning level to set, or undefined/null to reset to model default. */
   level: ReasoningEffortSchema.nullable(),
 });
-
-const RequestModelAccessMessageSchema = modelCommand(CMD.REQUEST_MODEL_ACCESS);
-
-const ClearCopilotRouteMessageSchema = modelCommand(CMD.CLEAR_COPILOT_ROUTE);
-
-// Agent selection inbound messages
-const OpenAgentYamlMessageSchema = agentCommand(CMD.OPEN_AGENT_YAML);
-
-const SetAgentEnabledMessageSchema = agentCommand(CMD.SET_AGENT_ENABLED).extend(
-  { category: AgentCategorySchema, enabled: z.boolean() },
+const RequestModelAccessMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.REQUEST_MODEL_ACCESS,
+);
+const ClearCopilotRouteMessageSchema = modelCommand(
+  SETTINGS_VIEW_COMMANDS.CLEAR_COPILOT_ROUTE,
 );
 
+// Agent selection inbound messages
+const OpenAgentYamlMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.OPEN_AGENT_YAML,
+);
+const SetAgentEnabledMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.SET_AGENT_ENABLED,
+).extend({ category: AgentCategorySchema, enabled: z.boolean() });
+
 const SetAllAgentsEnabledMessageSchema = z.object({
-  command: z.literal(CMD.SET_ALL_AGENTS_ENABLED),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_ALL_AGENTS_ENABLED),
   category: AgentCategorySchema,
   source: AgentSourceSchema,
   enabled: z.boolean(),
 });
-
 const OpenAgentFolderMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_AGENT_FOLDER),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_AGENT_FOLDER),
   folderType: z.literal('custom'),
 });
-
 const CreateAgentMessageSchema = z.object({
-  command: z.literal(CMD.CREATE_AGENT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.CREATE_AGENT),
   category: AgentCategorySchema,
   mode: z.enum(['ai', 'template']).prefault('ai'),
 });
-
-const CustomizeAgentMessageSchema = agentCommand(CMD.CUSTOMIZE_AGENT);
-
+const CustomizeAgentMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.CUSTOMIZE_AGENT,
+);
 const DeleteCustomAgentMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_CUSTOM_AGENT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_CUSTOM_AGENT),
   agentName: z.string().min(1),
 });
-
-const RevealAgentFileMessageSchema = agentCommand(CMD.REVEAL_AGENT_FILE);
-
+const RevealAgentFileMessageSchema = agentCommand(
+  SETTINGS_VIEW_COMMANDS.REVEAL_AGENT_FILE,
+);
 const ViewRemoteAgentPromptMessageSchema = z.object({
-  command: z.literal(CMD.VIEW_REMOTE_AGENT_PROMPT),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.VIEW_REMOTE_AGENT_PROMPT),
   agentName: z.string().min(1),
 });
 
 // Custom agent directory inbound messages
-const SetCustomAgentDirMessageSchema = commandOnly(CMD.SET_CUSTOM_AGENT_DIR);
+const SetCustomAgentDirMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SET_CUSTOM_AGENT_DIR,
+);
 const ResetCustomAgentDirMessageSchema = commandOnly(
-  CMD.RESET_CUSTOM_AGENT_DIR,
+  SETTINGS_VIEW_COMMANDS.RESET_CUSTOM_AGENT_DIR,
 );
 
 // Agent team inbound messages
 const ApplyAgentModePresetMessageSchema = z.object({
-  command: z.literal(CMD.APPLY_AGENT_MODE_PRESET),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
 });
-
 const SaveAgentModePresetMessageSchema = commandOnly(
-  CMD.SAVE_AGENT_MODE_PRESET,
+  SETTINGS_VIEW_COMMANDS.SAVE_AGENT_MODE_PRESET,
 );
-
 const DeleteAgentModePresetMessageSchema = z.object({
-  command: z.literal(CMD.DELETE_AGENT_MODE_PRESET),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.DELETE_AGENT_MODE_PRESET),
   presetId: z.string().min(1),
 });
 
 // Tool dashboard inbound messages
 const OpenToolInstallUrlMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_TOOL_INSTALL_URL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_TOOL_INSTALL_URL),
   url: z.url(),
 });
-
 const InstallToolExtensionMessageSchema = z.object({
-  command: z.literal(CMD.INSTALL_TOOL_EXTENSION),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION),
   extensionId: z.string().min(1),
 });
-
-const RecheckToolStatusMessageSchema = commandOnly(CMD.RECHECK_TOOL_STATUS);
-
+const RecheckToolStatusMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS,
+);
 const ToggleToolMessageSchema = z.object({
-  command: z.literal(CMD.TOGGLE_TOOL),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.TOGGLE_TOOL),
   toolId: z.string().min(1),
   enabled: z.boolean(),
 });
-
 const RunToolCommandMessageSchema = z.object({
-  command: z.literal(CMD.RUN_TOOL_COMMAND),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_TOOL_COMMAND),
   toolId: z.string().min(1),
   kind: z.enum(['install', 'auth']),
 });
 export type ToolCommandKind = z.infer<
   typeof RunToolCommandMessageSchema
 >['kind'];
-
 // GitHub token messages (for PR subscription tool)
 const GetGitHubTokenStatusMessageSchema = commandOnly(
-  CMD.GET_GITHUB_TOKEN_STATUS,
+  SETTINGS_VIEW_COMMANDS.GET_GITHUB_TOKEN_STATUS,
 );
-
-const SetGitHubTokenMessageSchema = commandOnly(CMD.SET_GITHUB_TOKEN);
-
-const RemoveGitHubTokenMessageSchema = commandOnly(CMD.REMOVE_GITHUB_TOKEN);
-
-const OpenGitHubTokenUrlMessageSchema = commandOnly(CMD.OPEN_GITHUB_TOKEN_URL);
-
+const SetGitHubTokenMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SET_GITHUB_TOKEN,
+);
+const RemoveGitHubTokenMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.REMOVE_GITHUB_TOKEN,
+);
+const OpenGitHubTokenUrlMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
+);
 // ChatGPT subscription (Codex) sign-in messages
-const SignInChatGptMessageSchema = commandOnly(CMD.SIGN_IN_CHATGPT);
-const SignOutChatGptMessageSchema = commandOnly(CMD.SIGN_OUT_CHATGPT);
+const SignInChatGptMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
+);
+const SignOutChatGptMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
+);
 const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
-  CMD.SET_CHATGPT_PREFER_SUBSCRIPTION,
+  SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
 );
 // Grok (xAI) subscription sign-in messages
-const SignInGrokMessageSchema = commandOnly(CMD.SIGN_IN_GROK);
-const SignOutGrokMessageSchema = commandOnly(CMD.SIGN_OUT_GROK);
+const SignInGrokMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK,
+);
+const SignOutGrokMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK,
+);
 const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
-  CMD.SET_GROK_PREFER_SUBSCRIPTION,
+  SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,
 );
 const GetSubscriptionUsageMessageSchema = z.object({
-  command: z.literal(CMD.GET_SUBSCRIPTION_USAGE),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: z.boolean().optional(),
 });
-const GetPRSubscriptionsMessageSchema = commandOnly(CMD.GET_PR_SUBSCRIPTIONS);
-
+const GetPRSubscriptionsMessageSchema = commandOnly(
+  SETTINGS_VIEW_COMMANDS.GET_PR_SUBSCRIPTIONS,
+);
 const UnsubscribePRMessageSchema = z.object({
-  command: z.literal(CMD.UNSUBSCRIBE_PR),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UNSUBSCRIBE_PR),
   key: z.string().min(1),
 });
-
 const OpenPRSubscriptionStreamMessageSchema = z.object({
-  command: z.literal(CMD.OPEN_PR_SUBSCRIPTION_STREAM),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.OPEN_PR_SUBSCRIPTION_STREAM),
   runId: RunIdSchema,
 });
 
 // LaTeX settings inbound messages
 const ApplyLatexSettingsMessageSchema = z.object({
-  command: z.literal(CMD.APPLY_LATEX_SETTINGS),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS),
   field: z.enum(['outDir', 'autoRevealExclude']).optional(),
   reset: z.boolean().optional(),
 });
 const InstallLatexWorkshopMessageSchema = commandOnly(
-  CMD.INSTALL_LATEX_WORKSHOP,
+  SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP,
 );
 const RunInstallCommandMessageSchema = z.object({
-  command: z.literal(CMD.RUN_INSTALL_COMMAND),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND),
   installCommand: z.string().min(1),
 });
-
-// Experimental settings inbound messages
-const GetInlineCriticismEnabledMessageSchema = commandOnly(
-  CMD.GET_INLINE_CRITICISM_ENABLED,
-);
-const SetInlineCriticismEnabledMessageSchema = enabledFlag(
-  CMD.SET_INLINE_CRITICISM_ENABLED,
-);
 
 // Generic catalog-driven setting write. This boundary accepts exactly the
 // value shapes used by catalog entries; the selected entry's schema performs
@@ -826,18 +806,9 @@ const StateSettingValueSchema = z.union([
 export type StateSettingValue = z.infer<typeof StateSettingValueSchema>;
 
 const UpdateStateSettingMessageSchema = z.object({
-  command: z.literal(CMD.UPDATE_STATE_SETTING),
+  command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_STATE_SETTING),
   key: z.string().min(1),
   value: StateSettingValueSchema.optional(),
-});
-
-// Navigation inbound messages
-// Settings-tab IPC is read-only: state transitions are owned by the
-// agent-side plan tool, not the user. Don't add mutation commands here.
-const GetGoalListMessageSchema = commandOnly(CMD.GET_GOAL_LIST);
-const RevealGoalRunMessageSchema = z.object({
-  command: z.literal(CMD.REVEAL_GOAL_RUN),
-  runId: RunIdSchema,
 });
 
 // ============================================================
@@ -859,8 +830,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,
     RunInstallCommandMessageSchema,
-    GetInlineCriticismEnabledMessageSchema,
-    SetInlineCriticismEnabledMessageSchema,
     // Memory messages
     GetMemoryDataMessageSchema,
     GetMemoryPreviewMessageSchema,
@@ -918,8 +887,6 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SaveAgentModePresetMessageSchema,
     DeleteAgentModePresetMessageSchema,
     // Goal settings-tab messages (read-only)
-    GetGoalListMessageSchema,
-    RevealGoalRunMessageSchema,
   ],
 );
 

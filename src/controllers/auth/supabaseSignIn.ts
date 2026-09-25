@@ -10,18 +10,16 @@
  * that. It is the account-plane twin of `SubscriptionSignInPresenter`, which
  * already collapsed the ChatGPT and Grok flow across the same three hosts.
  */
-import { Deferred, Effect, Option, type Scope } from 'effect';
+import { Deferred, Effect, Option, type Scope, Semaphore } from 'effect';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
 import type { AuthCallbackUriParts } from '@auth/authCallback';
-import { refreshRemoteAgentCatalogAfterSignOut } from '@auth/authFlowEffects';
 import { callPort, SerializedWrites, settleFailure } from '@auth/authProgram';
 import { AUTH_CALLBACK_TIMEOUT_MS, type OAuthProvider } from '@auth/config';
 import {
   isPendingOAuthStateFresh,
   type PendingOAuthState,
 } from '@auth/pendingOAuthState';
-import { withPkcePermit } from '@auth/pkcePermit';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import type {
   SupabaseSession,
@@ -38,6 +36,14 @@ import {
 } from './pendingOAuthStore';
 
 const CHANNEL = 'supabaseSignIn';
+
+/**
+ * The shared PKCE permit. Auth-js keeps each verifier in a flow-specific slot,
+ * while this single permit prevents an older callback exchange from racing
+ * OAuth initialization in the same process. Module scope keeps it process-wide
+ * across coordinator instances.
+ */
+const pkceOperations = Semaphore.makeUnsafe(1);
 
 /**
  * The user declined consent in the browser. `signIn` fails with this rather
@@ -227,10 +233,7 @@ export class SupabaseSignInCoordinator {
           return session !== null;
         }),
       );
-      yield* refreshRemoteAgentCatalogAfterSignOut(
-        invalidateRemoteAgentsAfterSignOut(),
-        (message) => Effect.logWarning(message).pipe(withLogChannel(CHANNEL)),
-      );
+      yield* invalidateRemoteAgentsAfterSignOut();
       return signedIn;
     });
   }
@@ -253,7 +256,7 @@ export class SupabaseSignInCoordinator {
       yield* this.options.store.sweep();
       yield* this.ensureOwned(attempt);
 
-      const { data, error } = yield* withPkcePermit(
+      const { data, error } = yield* pkceOperations.withPermits(1)(
         callPort(() =>
           this.options.auth.client.auth.signInWithOAuth({
             provider: request.provider,
@@ -326,7 +329,7 @@ export class SupabaseSignInCoordinator {
         return { kind: 'ignored', reason: 'already signed in' } as const;
       }
 
-      const result = yield* withPkcePermit(
+      const result = yield* pkceOperations.withPermits(1)(
         this.session.createSessionFromCallback(uri, claimed.flowId),
       );
       if (!result.success) {

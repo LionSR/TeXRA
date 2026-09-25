@@ -4,7 +4,11 @@ import { Cause, Clock, Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports - canonical model contract
-import { admittedFingerprint, prefixFingerprint } from './prefixFingerprint.js';
+import {
+  admittedFingerprint,
+  canChain,
+  prefixFingerprint,
+} from './prefixFingerprint.js';
 import {
   BackgroundEventSchema,
   BackgroundSubmissionSchema,
@@ -22,9 +26,15 @@ import {
   completedTurn,
 } from './turn.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
-import { ModelError, enrichModelError } from './errors.js';
-import { authOrRejectionKind } from './errors.js';
-import { RemoteOperationSchema, type RemoteOperation } from './errors.js';
+import {
+  ModelError,
+  RemoteOperationSchema,
+  authOrRejectionKind,
+  boundOperation,
+  cancellationStatus,
+  enrichModelError,
+  type RemoteOperation,
+} from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
@@ -249,16 +259,16 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           }
           case 'reasoning':
+            // Omit another model's thoughts, as the Anthropic and Chat codecs do.
+            if (!sameModelOrigin(message.origin, origin)) break;
             if (
-              !sameModelOrigin(message.origin, origin) ||
               part.content !== undefined ||
               (part.evidence !== null &&
                 part.evidence.kind !== 'google-interactions-thought-signature')
             ) {
               return yield* new ModelError({
                 kind: 'unsupported',
-                message:
-                  'Google reasoning requires its original binding and supported thought evidence.',
+                message: 'Google reasoning needs supported thought evidence.',
               });
             }
             steps.push({
@@ -998,23 +1008,6 @@ export function googleInteractionsModel(
 
   const generateTurn: Model['generateTurn'] = (turn) =>
     completedTurn(streamTurn(turn));
-  const boundOperation = Effect.fn('llm.google.boundOperation')(function* (
-    input: RemoteOperation,
-  ) {
-    const parsed = RemoteOperationSchema.safeParse(input);
-    if (
-      !parsed.success ||
-      parsed.data.origin.protocol !== 'google-interactions' ||
-      !sameModelOrigin(parsed.data.origin, origin)
-    ) {
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'The remote operation belongs to another model binding.',
-      });
-    }
-    return parsed.data;
-  });
-
   const snapshot = Effect.fn('llm.google.snapshot')(function* (
     raw: unknown,
     operation: RemoteOperation,
@@ -1151,7 +1144,7 @@ export function googleInteractionsModel(
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const operation = yield* boundOperation(input);
+        const operation = yield* boundOperation(input, origin);
         const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
         if (
           !parsedTurn.success ||
@@ -1166,22 +1159,7 @@ export function googleInteractionsModel(
           });
         }
         const turn = parsedTurn.data;
-        // The operation records what the provider was actually given. A
-        // resume rebuilds the turn from the caller's current system text, so
-        // a drifted rebuild still gets its result but must leave no anchor:
-        // the next round then resends the transcript instead of chaining on
-        // instructions the answer never saw.
-        // The admitted storage mode is part of what makes an anchor safe: a
-        // turn re-derived stored for a temporary operation must not chain.
-        const chains =
-          turn.controls.store === operation.store &&
-          admittedFingerprint(GOOGLE_PREFIX_DOMAIN, turn) ===
-            operation.admittedFingerprint;
-        if (!chains) {
-          yield* Effect.logWarning(
-            `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
-          );
-        }
+        const chain = yield* canChain(GOOGLE_PREFIX_DOMAIN, turn, operation);
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -1238,7 +1216,7 @@ export function googleInteractionsModel(
                 ...interaction,
                 model: returnedModel,
               });
-              const continuation = chains
+              const continuation = chain
                 ? yield* googleContinuation(turn, result, origin)
                 : undefined;
               return BackgroundEventSchema.parse({
@@ -1284,7 +1262,7 @@ export function googleInteractionsModel(
   const cancel: NonNullable<Model['background']>['cancel'] = Effect.fn(
     'llm.google.cancel',
   )(function* (input) {
-    const operation = yield* boundOperation(input);
+    const operation = yield* boundOperation(input, origin);
     return yield* Effect.gen(function* () {
       const raw = yield* ownedAbortSafeRequest(
         (signal) =>
@@ -1296,36 +1274,13 @@ export function googleInteractionsModel(
         { isAbortMatch: googleAbortMatch },
       );
       const interaction = yield* snapshot(raw, operation);
-      const identity = {
+      const evidence = CancellationEvidenceSchema.safeParse({
         providerResponseId: operation.providerResponseId,
         requestedOrigin: origin,
         returnedModel: interaction.model ?? null,
-      };
-      if (interaction.status === 'cancelled')
-        return CancellationEvidenceSchema.parse({
-          ...identity,
-          kind: 'confirmed-cancelled',
-        });
-      if (
-        [
-          'completed',
-          'requires_action',
-          'failed',
-          'incomplete',
-          'budget_exceeded',
-        ].includes(interaction.status)
-      )
-        return CancellationEvidenceSchema.parse({
-          ...identity,
-          kind: 'observed-terminal',
-          status: interaction.status,
-        });
-      if (IN_FLIGHT_STATUSES.includes(interaction.status))
-        return CancellationEvidenceSchema.parse({
-          ...identity,
-          kind: 'unconfirmed',
-          status: interaction.status,
-        });
+        ...cancellationStatus(interaction.status),
+      });
+      if (evidence.success) return evidence.data;
       return yield* new ModelError({
         kind: 'malformed-output',
         message: 'Google returned an unknown cancellation status.',

@@ -1,12 +1,9 @@
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
-import { isGlmOpenRouterRoute } from '@model/glmRouting';
 import {
   isKimiCodeExclusiveModel,
   type KimiSubscriptionModelFields,
 } from '@shared/model/kimiCodeRetryGate';
-
-import { isApiProvider, type ApiProvider } from './apiProviders';
 
 interface OpenRouterRoutingConfig {
   provider?: string;
@@ -47,31 +44,10 @@ export function isOpenRouterRoutingUnsupported(
   return openRouterSelected && config.capabilities?.reasoningMode !== undefined;
 }
 
-/** API-key owner for the route `modelRoutes` will use for this model. */
-export function resolveModelApiKeyProvider(
-  config: ModelRoutingConfig,
-  useOpenRouter: boolean,
-): ApiProvider | undefined {
-  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return 'openRouter';
-  }
-  return resolveDirectModelApiKeyProvider(config);
-}
-
-/** API-key owner for the direct route, independent of the global OpenRouter choice. */
-export function resolveDirectModelApiKeyProvider(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): ApiProvider | undefined {
-  if (isKimiCodeExclusiveModel(config)) return 'kimiCode';
-  return config.provider && isApiProvider(config.provider)
-    ? config.provider
-    : undefined;
-}
-
 /** Product-facing model source; direct managed services own their own group. */
 export function resolveModelSource(
-  config: Pick<ModelRoutingConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
-): string | undefined {
+  config: Pick<ModelConfig, 'provider' | 'kimiSubscription' | 'baseUrl'>,
+): string {
   return isKimiCodeExclusiveModel(config) ? 'kimiCode' : config.provider;
 }
 
@@ -83,8 +59,6 @@ export function shouldRouteModelThroughOpenRouter(
   if (config.requiresResponsesAPI) return false;
   const openRouterSelected = isOpenRouterAccessSelected(config, useOpenRouter);
   if (config.provider !== ModelProvider.GLM) return openRouterSelected;
-  return isGlmOpenRouterRoute({
-    baseUrl: config.baseUrl,
-    useOpenRouter: openRouterSelected,
-  });
+  // A per-model base URL outranks OpenRouter (`@model/routeEndpoint`).
+  return !config.baseUrl && openRouterSelected;
 }

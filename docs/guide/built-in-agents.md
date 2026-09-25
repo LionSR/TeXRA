@@ -174,7 +174,7 @@ informal outline, then produce Lean code and iterate until it compiles.
 
 ### `presenter`
 
-Creates LaTeX Beamer presentations from research papers. Point it at your paper and it reads through your work, extracts figures, bibliography entries, and TikZ diagrams, writes the deck from the bundled slide template, and refines individual slides with `edit_file`. For posters, use the `paper2poster` workflow agent instead.
+Builds and refines LaTeX Beamer presentations, posters, and other visual materials for scientific code, methods, and results, working interactively with you. It reads your project and any template you provide, plans the deck, writes and compiles the slides, generates figures by running code, and visually checks every compiled page (overflow, overlaps, unreadable text, broken TikZ) until the output is clean. To convert a finished paper into a deck in one pass, use the `paper2slide` workflow agent.
 
 **Best for:** Conference talks, seminar presentations, lightning talks
 
@@ -465,9 +465,10 @@ Help me build a custom agent that rewrites abstracts to a 150-word limit while
 preserving every numerical result. Draft the YAML and walk me through testing it.
 ```
 
-## Remote agents
+## Orchestration, search & audit agents
 
-The following agents are available as [remote agents](./remote-agents.md#remote-agent-access). Sign in to TeXRA to access them.
+These agents ship with TeXRA and need no sign-in. They lead and staff the
+[built-in teams](#built-in-teams).
 
 ### `search`
 
@@ -508,7 +509,7 @@ An end-of-session reviewer. It looks at what was just done and, when the session
 **Best for:** Auditing what a team run actually delivered versus the goal
 
 ::: tip
-Additional remote agents may be available depending on your access level. In the VS Code extension, run **TeXRA: Show Agents** from the Command Palette for the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
+Additional remote workflow agents may be available depending on your access level. In the VS Code extension, the Agents tab of Settings (**TeXRA: Open Settings**) has the full list. Read [Remote agents](./remote-agents.md) to sign in and sync them.
 :::
 
 ## Built-in teams
@@ -526,8 +527,9 @@ Teams are predefined collections of agents for a discipline. Pick one from the
 | Software Engineer  | A project's code: implementation, review, debugging, and testing across specialists                                   | `engineer`         |
 
 Every team except Software Engineer bundles the `progressCheck` audit helper
-and `latexFixer`. The Software Engineer
-lead and its specialists run locally; some specialists in other teams are
+and `latexFixer`. Every lead and tool-use specialist ships with TeXRA; the
+Physicist, Mathematician, and Computer Scientist teams also list the
+`generic`, `devise`, `apply`, and `criticize` workflow agents, which are
 [remote agents](./remote-agents.md) that sync after you sign in. Every lead
 can also run its specialists in parallel as a
 [multi-agent workflow](./multi-agent-workflows.md).

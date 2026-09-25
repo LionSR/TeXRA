@@ -289,11 +289,11 @@ TeXRA talks to model providers directly with an API key you supply. You need a k
 
 ### In the VS Code extension
 
-The shortest path: open the TeXRA Dashboard, go to the **Providers & Models** tab, and select the provider you want. Paste the key and it is saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
+The shortest path: open the TeXRA Dashboard, go to the **Models** page, and select the provider you want. Paste the key and it is saved in VS Code's secret storage. You can also run **TeXRA: Set API Key** from the Command Palette, or put the keys in a `.env` file in your project; the extension reads it on startup.
 
 <ApiKeysHero />
 
-<p class="hero-caption">The Dashboard's Providers & Models tab → API configuration: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
+<p class="hero-caption">The Dashboard's Models page → API keys: each provider shows its key status (Set · Env · Not set) with Set, Get, and Remove actions.</p>
 
 ### In the CLI
 
@@ -344,7 +344,7 @@ To verify that TeXRA and its dependencies are installed correctly:
 2. Select the TeXRA icon in the Secondary Side Bar
 3. The TeXRA panel should load without errors
 4. Create or open a LaTeX document
-5. Try a simple command like `TeXRA: Indent Current TeX` from the Command Palette (the editor title bar only shows TeXRA's Fix Compilation button for LaTeX files)
+5. Try a simple command like `TeXRA: Format Current LaTeX File` from the Command Palette (the editor title bar only shows TeXRA's Fix Compilation button for LaTeX files)
 
 If a component is missing, TeXRA shows an error message that names what needs to be installed.
 

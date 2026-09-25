@@ -1,6 +1,6 @@
 /**
- * The shared transcript model: one projection from a stream-log entry to a
- * row, one tool-row fold, and the untruncated-text/elision contract both
+ * The shared transcript model: the row builders the transcript fold writes
+ * through, one tool-row fold, and the untruncated-text/elision contract both
  * hosts paint against. This barrel is the module's public surface — the CLI
  * TUI and the progress view import from here, not from the files below.
  *
@@ -8,10 +8,19 @@
  * shapes stay unexported: a painter reaches them by narrowing `TranscriptRow`
  * or `ToolSection`, so re-exporting each one would be surface nobody imports.
  */
-export { projectTranscriptRow } from './projectTranscriptRow';
+export {
+  logPayloadRow,
+  phaseRow,
+  plainLogRow,
+  streamingTextRow,
+  toolRow,
+  workflowTaskRow,
+  type LogRowPayload,
+} from './projectTranscriptRow';
 export {
   compactionActivityRow,
   isSettledRow,
+  rowHeadline,
   type CompactionActivityRow,
   type ContextManagementRow,
   type ErrorRow,
@@ -33,7 +42,6 @@ export {
   type WorkflowTaskRow,
 } from './transcriptRow';
 export {
-  toolHeaderPreview,
   type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,

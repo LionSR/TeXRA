@@ -360,13 +360,8 @@ function reflectionSnapshot(
       ...runtime,
     },
     state: {
-      currentRound: 0,
       totalRounds: 4,
       workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      outputLocation: null,
-      runStateSnapshot: { totalRounds: 4, totalResponseTimeMs: 0 },
-      continueRounds: true,
-      endTurn: false,
       ...state,
     },
   };
@@ -560,13 +555,11 @@ describe('CLI run command, workflow agents', () => {
             ),
           );
 
-          // The command reports a usage error by throwing `CliUsageError` from
-          // its `Effect.fn` body, which Effect surfaces as a defect rather than
-          // a typed failure, so the assertion reads the cause.
+          // The command fails with the typed `CliUsageError`.
           expect(Exit.isFailure(exit)).toBe(true);
           expect(
             Exit.isFailure(exit) &&
-              exit.cause.reasons.find(Cause.isDieReason)?.defect,
+              exit.cause.reasons.find(Cause.isFailReason)?.error,
           ).toMatchObject({
             message: 'At least one workflow input file is required.',
           });
@@ -1436,18 +1429,16 @@ describe('CLI run command, workflow agents', () => {
         expect(
           canAdvertise?.({
             kind: 'checkpoint',
-            snapshot: reflectionSnapshot({
-              currentRound: 1,
-              totalRounds: 2,
-              unresolvedCompileRejection: true,
-            }),
+            snapshot: reflectionSnapshot(
+              { totalRounds: 2, unresolvedCompileRejection: true },
+              { round: 1 },
+            ),
           }),
         ).toBe(false);
         expect(
           canAdvertise?.({
             kind: 'checkpoint',
             snapshot: reflectionSnapshot({
-              currentRound: 0,
               totalRounds: 2,
               unresolvedCompileRejection: true,
             }),

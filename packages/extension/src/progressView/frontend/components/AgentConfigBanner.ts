@@ -1,23 +1,20 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, type TemplateResult } from 'lit';
+import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
-import {
-  AgentCategory,
-  type AgentConfigBannerState,
-  type SessionType,
-} from '@shared/schemas';
+import { AgentCategory, type SessionType } from '@shared/schemas';
+import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
-import { StateVisibleBanner } from './StateVisibleBanner';
 
 @customElement('agent-config-banner')
-export class AgentConfigBanner extends StateVisibleBanner<AgentConfigBannerState> {
+export class AgentConfigBanner extends LitElement {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
 
-  @property({ attribute: false }) state: AgentConfigBannerState = {
+  @property({ attribute: false })
+  state: HostSnapshot['banners']['agentConfig'] = {
     visible: false,
   };
 

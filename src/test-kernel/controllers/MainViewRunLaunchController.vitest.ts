@@ -1,11 +1,11 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { AgentDirectories } from '@platform/interfaces';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
@@ -13,6 +13,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 
@@ -22,17 +23,14 @@ import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
  * only satisfies the requirement the catalog readers name.
  */
 function onGlobalStorage<A, E>(
-  program: Effect.Effect<
-    A,
-    E,
-    GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-  >,
+  program: Effect.Effect<A, E, AgentCatalogServices>,
 ): Effect.Effect<A, E> {
   return Effect.provide(
     program,
     Layer.mergeAll(
       unusedGlobalStorageFs(),
       nodePlatformLayer,
+      testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
     ),
   );
@@ -104,7 +102,7 @@ describe('main-view run launch controller', () => {
     Effect.gen(function* () {
       const { config } = yield* onGlobalStorage(
         prepareSurfaceLaunch(
-          launchRequest({ agent: { toolUse: 'orchestrator' } }),
+          launchRequest({ agent: 'orchestrator' }),
           createHost(),
           workspaceState,
           STORAGE_ROOT,
@@ -138,7 +136,7 @@ describe('main-view run launch controller', () => {
 
         expect(error).toMatchObject({
           _tag: 'Rejected',
-          reason: 'Choose an agent, a model, and a run type first.',
+          reason: 'Choose an agent and a model first.',
         });
       }),
   );
@@ -148,7 +146,7 @@ describe('main-view run launch controller', () => {
       const error = yield* Effect.flip(
         onGlobalStorage(
           prepareSurfaceLaunch(
-            launchRequest({ sessionType: 'workflow' }),
+            launchRequest({ sessionType: 'workflow', agent: 'correct' }),
             createHost(),
             workspaceState,
             STORAGE_ROOT,
@@ -250,7 +248,7 @@ describe('main-view run launch controller', () => {
             launchRequest({
               launchTarget: 'team',
               selectedTeamId: 'physicist',
-              agent: { toolUse: 'stale-renderer-agent' },
+              agent: 'stale-renderer-agent',
             }),
             host,
             workspaceState,

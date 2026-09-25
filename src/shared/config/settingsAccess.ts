@@ -1,5 +1,6 @@
 // Third-party imports
 import { Effect } from 'effect';
+import { z } from 'zod';
 
 // Local imports
 import { createLog } from '@logger/logUtils';
@@ -16,7 +17,6 @@ import type {
   StateSettingEntry,
 } from '@shared/state/stateSettings';
 import { settingByKey } from '@shared/state/stateSettings';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const log = createLog('settingsAccess');
 
@@ -60,6 +60,17 @@ export function settingDefault(entry: StateSettingEntry): unknown {
 }
 
 /**
+ * A stored value classified against its row's schema. `value` is always
+ * schema-parsed: the stored value when it validates, the row's default when
+ * the key is absent. A present value that no longer validates is `invalid`
+ * and carries only the parse failure, never a substitute value, so a caller
+ * that must not read corruption as the default cannot pick one up by accident.
+ */
+export type StoredSetting<T = unknown> =
+  | { readonly kind: 'value'; readonly value: T }
+  | { readonly kind: 'invalid'; readonly cause: string };
+
+/**
  * Read a state-backed setting, falling back to (and validating against) the
  * entry's schema after the authoritative read completes.
  */
@@ -68,12 +79,30 @@ export function readSetting(
   stores: SettingsStores,
   host: SettingHost = 'vscode',
 ): Effect.Effect<unknown, StateReadFailed> {
+  return Effect.map(inspectSetting(entry, stores, host), (stored) =>
+    resolveStored(entry, stored),
+  );
+}
+
+/**
+ * {@link readSetting} without the snap to the default: a present value that
+ * fails the row's schema comes back as `invalid` with its cause. For a
+ * permission gate whose absent default is permissive, where corruption of a
+ * deliberate denial must deny rather than re-permit (#11797).
+ */
+export function inspectSetting(
+  entry: StateSettingEntry,
+  stores: SettingsStores,
+  host: SettingHost = 'vscode',
+): Effect.Effect<StoredSetting, StateReadFailed> {
   return Effect.suspend(() => {
     const slot = settingSlot(entry, host);
     return slot === 'config'
-      ? Effect.sync(() => readConfigSetting(entry, stores.config))
+      ? Effect.sync(() =>
+          classifyStored(entry, rawConfigValue(entry, stores.config)),
+        )
       : Effect.map(stores[slot].get<unknown>(entry.key), (raw) =>
-          validateStored(entry, raw),
+          classifyStored(entry, raw),
         );
   });
 }
@@ -89,33 +118,51 @@ export function readConfigSetting(
   entry: StateSettingEntry,
   config: ConfigProvider,
 ): unknown {
-  // Read the scope the row is written to: `writeSetting` targets
-  // `entry.configTarget`, so a global-target row read through the merged
-  // `get()` could report a workspace value the settings view can never write.
-  return validateStored(
+  return resolveStored(
     entry,
-    entry.configTarget === 'global'
-      ? config.inspect<unknown>(entry.key)?.globalValue
-      : config.get<unknown>(entry.key),
+    classifyStored(entry, rawConfigValue(entry, config)),
   );
 }
 
 /**
- * A stored value against the row's schema. Absent resolves to the schema
- * default; a stored value that no longer validates resolves to it too — but
- * only after warning, as #7470 established for the reader this replaced: an
- * invalid *persisted* value must not vanish without a trace.
+ * Read the scope the row is written to: `writeSetting` targets
+ * `entry.configTarget`, so a global-target row read through the merged
+ * `get()` could report a workspace value the settings view can never write.
  */
-function validateStored(entry: StateSettingEntry, raw: unknown): unknown {
+function rawConfigValue(
+  entry: StateSettingEntry,
+  config: ConfigProvider,
+): unknown {
+  return entry.configTarget === 'global'
+    ? config.inspect<unknown>(entry.key)?.globalValue
+    : config.get<unknown>(entry.key);
+}
+
+/** A stored value against the row's schema; absent resolves to its default. */
+function classifyStored(entry: StateSettingEntry, raw: unknown): StoredSetting {
   if (raw === undefined) {
-    return settingDefault(entry);
+    return { kind: 'value', value: settingDefault(entry) };
   }
   const result = entry.schema.safeParse(raw);
-  if (result.success) {
-    return result.data;
+  return result.success
+    ? { kind: 'value', value: result.data }
+    : { kind: 'invalid', cause: z.prettifyError(result.error) };
+}
+
+/**
+ * A stored value that no longer validates resolves to the schema default —
+ * but only after warning, as #7470 established for the reader this replaced:
+ * an invalid *persisted* value must not vanish without a trace.
+ */
+function resolveStored(
+  entry: StateSettingEntry,
+  stored: StoredSetting,
+): unknown {
+  if (stored.kind === 'value') {
+    return stored.value;
   }
   log.warn(
-    `Ignoring invalid persisted value for setting "${entry.key}": ${toErrorMessage(result.error)}`,
+    `Ignoring invalid persisted value for setting "${entry.key}": ${stored.cause}`,
   );
   return settingDefault(entry);
 }

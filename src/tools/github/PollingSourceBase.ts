@@ -13,6 +13,7 @@ import {
   Effect,
   Exit,
   FiberSet,
+  Result,
   Schedule,
   Scope,
 } from 'effect';
@@ -29,6 +30,7 @@ import {
 } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 import {
   type ConditionalResponse,
@@ -152,7 +154,7 @@ export abstract class PollingSourceBase<
   protected abstract pollOne(
     key: K,
     state: S,
-  ): Effect.Effect<void, unknown, Secrets>;
+  ): Effect.Effect<void, Error, Secrets>;
 
   /** Optional subclass hook that runs after all subscription polls settle. */
   protected afterTick(
@@ -213,7 +215,8 @@ export abstract class PollingSourceBase<
    *
    * The caller runs this Effect. Its short critical section commits the
    * binding and starts the source-owned poller together. A capacity refusal
-   * remains the same plain Error defect the tool already reports.
+   * remains the same plain Error defect the tool already reports, raised
+   * with `Effect.die` rather than a throw inside the suspend.
    */
   protected register(
     key: K,
@@ -224,8 +227,10 @@ export abstract class PollingSourceBase<
       Effect.flatMap(Lifecycle, (lifecycle) =>
         Effect.suspend(() => {
           if (lifecycle.shutdownRan) {
-            throw new Error(
-              `Cannot subscribe to ${this.config.name} after shutdown`,
+            return Effect.die(
+              new Error(
+                `Cannot subscribe to ${this.config.name} after shutdown`,
+              ),
             );
           }
           // A replacement host starts with fresh subscriptions. Stop the old
@@ -235,8 +240,10 @@ export abstract class PollingSourceBase<
           const created = !state;
           if (!state) {
             if (this.subscriptions.size >= this.config.maxConcurrent) {
-              throw new Error(
-                `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+              return Effect.die(
+                new Error(
+                  `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
+                ),
               );
             }
             state = initState();
@@ -400,10 +407,14 @@ export abstract class PollingSourceBase<
       // Disposable contract, invoked outside any fiber. A throwing listener is
       // logged and the remaining listeners still hear the change: it must not
       // leak into the subscribe path that called it.
-      try {
-        listener(keys);
-      } catch (err) {
-        this.syncLog.warn('Keys-changed listener threw', { data: err });
+      const notified = Result.try({
+        try: () => listener(keys),
+        catch: ensureError,
+      });
+      if (Result.isFailure(notified)) {
+        this.syncLog.warn('Keys-changed listener threw', {
+          data: notified.failure,
+        });
       }
     }
   }

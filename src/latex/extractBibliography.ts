@@ -52,7 +52,7 @@ const PROBE_CONCURRENCY = 8;
 
 /** Read a bibliography file, surfacing the read failure as a typed error.
  *  Decoded from bytes rather than `readFileString`, whose `TextDecoder`
- *  strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved. */
+ *  would strip a leading UTF-8 BOM the file carries. */
 const readBibliographyFile = Effect.fn('latex.readBibliographyFile')(function* (
   filePath: string,
 ) {

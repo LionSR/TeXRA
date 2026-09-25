@@ -13,11 +13,10 @@ import {
   type ArxivDownloadDestination,
 } from '@latex/arxivProcessor';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 
 const CHANNEL = 'arXivCommands';
-const log = createLog(CHANNEL);
 
 /**
  * Prompt for an arXiv ID and a destination, then download under a progress
@@ -91,9 +90,19 @@ export function downloadArXivSource(
       },
       (progress, token) =>
         Effect.gen(function* () {
-          token.onCancellationRequested(() => {
-            log.info('User cancelled the download');
-          });
+          // The token does not stop the download; a cancel request is only
+          // logged, on a fiber that ends with this body.
+          yield* Effect.forkScoped(
+            Effect.callback<void>((resume) => {
+              const listener = token.onCancellationRequested(() =>
+                resume(Effect.void),
+              );
+              return Effect.sync(() => listener.dispose());
+            }).pipe(
+              Effect.andThen(Effect.logInfo('User cancelled the download')),
+              withLogChannel(CHANNEL),
+            ),
+          );
 
           const downloadResult = yield* ArxivProcessor.downloadSource(arxivId, {
             progressCallback: (message, increment) =>
@@ -106,7 +115,7 @@ export function downloadArXivSource(
             destination,
           });
           return downloadResult.path;
-        }),
+        }).pipe(Effect.scoped),
     );
 
     const result = yield* Effect.promise(() =>

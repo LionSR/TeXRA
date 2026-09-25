@@ -2,7 +2,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
-import type { AgentTrace, StageHandle } from '@agent/trace';
+import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { finalizeRun } from '@agent/storage/runLifecycle';
@@ -17,7 +17,6 @@ import type {
   RunOutcome,
   UserFollowUpSupport,
 } from '@shared/schemas';
-import { createRunTrace } from '@transcript';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -42,15 +41,23 @@ interface FinalizeChildRunOptions {
   outcome: RunOutcome;
   /** Cause behind a FAILED outcome, for diagnosis. */
   error?: unknown;
+  /**
+   * The loop's own stop observation: a stop that reached the child before
+   * this finalize outranks the outcome report above — `finalizeRunTerminal`
+   * resolves the row and the stage to CANCELLED and drops the error facts
+   * the outranked failure classified.
+   */
+  stopped?: boolean;
   /** Session stage closed with the derived outcome (agent-CLI loop's stage). */
   stage?: Pick<StageHandle, 'end'>;
-  /** Release completed transcript residency while preserving command history. */
-  autoClose?: boolean;
 }
 
 export interface ChildRun {
   childRunId: RunId;
   logger: AgentTrace;
+  /** Track the run's handle; the child loop calls it once its activation
+   *  reserves the stop target (`startChildRunLoop`). */
+  track: () => void;
   /**
    * Complete the child run lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
@@ -83,8 +90,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
   const runs = yield* Runs;
-  const residency = yield* session.transcripts.acquireRunResidency(runId);
-  const runTrace = createRunTrace(residency);
+  const trace = new TraceEmitter();
   const handle = new RunHandle(
     {
       runId,
@@ -92,23 +98,20 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       category: options.config.agentCategory,
     },
     parentRunId,
-    runTrace.trace,
+    trace,
   );
   let detachSessionTrace: (() => void) | undefined;
   let started = false;
   const setup = yield* Effect.exit(
     Effect.sync(() => {
-      // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(runTrace.trace, runId);
-      const disposeTrace = () => {
-        detachSessionTrace?.();
-        runTrace.dispose();
-      };
-
       // Registration already committed the launch and activation together.
       started = true;
-      runs.track(handle);
-      runTrace.trace.emit({
+      // Attach the run's canonical event publication before activation. The
+      // handle is tracked by the loop (`track`) once its stop target exists,
+      // so a stop never finds this handle with nothing to interrupt.
+      detachSessionTrace = session.attachRunTrace(trace, runId);
+      const disposeTrace = () => detachSessionTrace?.();
+      trace.emit({
         type: 'run.config',
         runId,
         config: options.config,
@@ -116,12 +119,13 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
 
       return {
         childRunId: runId,
-        logger: runTrace.trace,
+        logger: trace,
+        track: () => runs.track(handle),
         finalize: (finalizeOptions) =>
           finalizeChildRun({
             handle,
             session,
-            logger: runTrace.trace,
+            logger: trace,
             disposeTrace,
             options: finalizeOptions,
           }),
@@ -164,7 +168,6 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
         runs.untrackIfCurrent(handle);
       }),
       Effect.sync(() => detachSessionTrace?.()),
-      Effect.sync(() => runTrace.dispose()),
     ];
     for (const cleanup of cleanups) {
       const cleaned = yield* Effect.exit(cleanup);
@@ -191,7 +194,7 @@ interface FinalizeChildRunArgs {
 /**
  * Finalize a child run: presentation logging plus the child's report of
  * its own exit, then the shared terminal finalizer (settle, untrack, terminal
- * run phase) and the autoClose residency release. Child runs never traverse
+ * run phase). Child runs never traverse
  * the run lifecycle, so this is their only settle point.
  *
  * No `output` is passed, by rule rather than by omission: a child loop's
@@ -206,8 +209,8 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
 
   // The failure prologue (error formatting, logging, classification) is
   // fallible. It must never prevent `finalizeRunTerminal` below from running:
-  // a throw here, past `claimTerminalFinalize`'s exactly-once guard, would
-  // otherwise strand the handle in the registry forever with no untrack.
+  // a throw here would otherwise strand the handle in the registry forever
+  // with no untrack and the run with no `run.end` row.
   let outcome: RunOutcome = options.outcome;
   let error: Parameters<typeof finalizeRunTerminal>[0]['error'];
   const prologue = yield* Effect.exit(
@@ -221,9 +224,10 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
       if (errorMessage) {
         logger.error(errorMessage);
       }
-      // What the child saw, in the shared vocabulary. The run phase decides
-      // which of this and an already-landed stop is the run's terminal fact;
-      // that resolution lives in `finalizeRunTerminal`.
+      // What the child saw, in the shared vocabulary. Which of this and an
+      // already-landed stop is the run's terminal fact is decided upstream:
+      // the loop derives the outcome from its own interrupted signal, and
+      // `finalizeRunTerminal` applies that stop precedence.
       outcome = options.outcome;
       error = failed
         ? {
@@ -244,16 +248,25 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     };
   }
 
-  yield* finalizeRunTerminal({
+  const finalized = yield* finalizeRunTerminal({
     session,
     handle,
     outcome,
     error,
     stage: options.stage,
+    stopped: options.stopped,
   });
   disposeTrace();
 
-  if (options.autoClose) {
-    session.transcripts.requestEviction(handle.runId);
+  // The port's contract is "resolves once the terminal finalizer has
+  // persisted": a `run.end` row that never wrote is this finalize's failure,
+  // so the loop's cleanup aggregation fails the loop over it rather than
+  // report a child whose terminal fact is gone.
+  if (finalized.persistFailure !== undefined) {
+    return yield* Effect.fail(
+      new Error(`Child run ${handle.runId} terminal state was not persisted`, {
+        cause: finalized.persistFailure,
+      }),
+    );
   }
 }, Effect.uninterruptible);

@@ -5,15 +5,23 @@ import * as path from 'node:path';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 
-import { discoverSkillSources as discoverSkillSourcesEffect } from '@skills/loadSkills';
+import {
+  discoverSkillSources as discoverSkillSourcesEffect,
+  type SkillSource,
+} from '@skills/loadSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
 
-const discoverSkillSources = (
-  sources: Parameters<typeof discoverSkillSourcesEffect>[0],
-) => Effect.runPromise(discoverSkillSourcesEffect(sources));
+/** One source-ordered tier: each root scanned in turn. */
+const discoverSkillSources = (sources: readonly SkillSource[]) =>
+  Effect.runPromise(
+    discoverSkillSourcesEffect([{ order: 'source', sources }]).pipe(
+      Effect.provide(nodePlatformLayer),
+    ),
+  );
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-skills-', tempRoots);

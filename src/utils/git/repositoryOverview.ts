@@ -21,9 +21,9 @@ import { Effect } from 'effect';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
-import { splitOutputLines } from '@utils/text/stringUtils';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat
@@ -59,7 +59,7 @@ const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   args: readonly string[],
   options: GitReadOptions,
   reportFailure = true,
-): Effect.fn.Return<string | undefined> {
+): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   const result = yield* executeCommand(['git', ...args], {
     cwd: workspace,
     settings: options.settings,
@@ -99,7 +99,7 @@ export const readRecentCommitLabels = Effect.fn(
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Effect.fn.Return<string[] | undefined> {
+): Effect.fn.Return<string[] | undefined, never, ChildProcessSpawner> {
   const output = yield* readGit(
     workspacePath,
     [
@@ -126,112 +126,10 @@ export const readRecentCommits = Effect.fn(
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Effect.fn.Return<GitRecentCommits> {
+): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
   if (!(yield* isGitRepository(workspacePath, options.settings))) {
     return { commits: [], isGitRepo: false };
   }
   const commits = yield* readRecentCommitLabels(workspacePath, limit, options);
   return { commits: commits ?? [], isGitRepo: true };
 });
-
-/**
- * Live repository state: branch, change totals, and upstream sync.
- * `isGitRepository` is the literal `true` — a non-repo workspace returns
- * `undefined` and the host maps that to its own wire constant.
- */
-export interface GitEnvironmentSummary {
-  isGitRepository: true;
-  branch?: string;
-  upstream?: string;
-  changedFiles: number;
-  additions: number;
-  deletions: number;
-  ahead: number;
-  behind: number;
-}
-
-/**
- * Probe and read the repository's environment summary. Returns `undefined`
- * when `workspacePath` is not inside a git working tree.
- */
-export const readGitEnvironmentSummary = Effect.fn(
-  'repositoryOverview.readGitEnvironmentSummary',
-)(function* (
-  workspacePath: string,
-  options: GitReadOptions,
-): Effect.fn.Return<GitEnvironmentSummary | undefined> {
-  if (!(yield* isGitRepository(workspacePath, options.settings))) {
-    return undefined;
-  }
-
-  const [branchOutput, statusOutput, numstatOutput, upstreamOutput] =
-    yield* Effect.all(
-      [
-        readGit(workspacePath, ['rev-parse', '--abbrev-ref', 'HEAD'], options),
-        readGit(
-          workspacePath,
-          ['status', '--short', '--untracked-files=normal'],
-          options,
-        ),
-        readGit(workspacePath, ['diff', '--numstat', 'HEAD', '--'], options),
-        readGit(
-          workspacePath,
-          ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'],
-          options,
-          false,
-        ),
-      ],
-      { concurrency: 'unbounded' },
-    );
-  const { additions, deletions } = parseNumstat(numstatOutput);
-  const changedFiles = splitOutputLines(statusOutput ?? '').length;
-  const branch =
-    branchOutput && branchOutput !== 'HEAD' ? branchOutput : undefined;
-  const upstream = upstreamOutput || undefined;
-  let ahead = 0;
-  let behind = 0;
-
-  if (upstream) {
-    const divergence = yield* readGit(
-      workspacePath,
-      ['rev-list', '--left-right', '--count', `HEAD...${upstream}`],
-      options,
-    );
-    [ahead, behind] = parseDivergence(divergence);
-  }
-
-  return {
-    isGitRepository: true,
-    ...(branch && { branch }),
-    ...(upstream && { upstream }),
-    changedFiles,
-    additions,
-    deletions,
-    ahead,
-    behind,
-  };
-});
-
-function parseNumstat(output: string | undefined): {
-  additions: number;
-  deletions: number;
-} {
-  let additions = 0;
-  let deletions = 0;
-  for (const line of splitOutputLines(output ?? '')) {
-    const [added = '', deleted = ''] = line.split('\t');
-    additions += parseGitCount(added);
-    deletions += parseGitCount(deleted);
-  }
-  return { additions, deletions };
-}
-
-function parseDivergence(output: string | undefined): [number, number] {
-  const [ahead = '', behind = ''] = output?.split(/\s+/) ?? [];
-  return [parseGitCount(ahead), parseGitCount(behind)];
-}
-
-function parseGitCount(value: string): number {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
-}

@@ -24,9 +24,7 @@ Memory is **not** a chat transcript. The agent doesn't replay old conversations;
 
 ## Enabling memory
 
-Memory is **on by default**. To turn it off, open the **Dashboard** (Command Palette → `TeXRA: Show Settings Dashboard`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
-
-You can also go straight to the tab with `TeXRA: Show Memory`.
+Memory is **on by default**. To turn it off, open the **Dashboard** (Command Palette → `TeXRA: Open Settings`), switch to the **Memory** tab, and flip the **Enable memory for chat agents** switch. The same switch turns it back on.
 
 When memory is on, every tool-use agent run has access to the `memory` tool: it can create, view, update, rename, delete, pin, and unpin notes under `/memories`.
 

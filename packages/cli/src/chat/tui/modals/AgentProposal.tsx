@@ -1,12 +1,8 @@
-import { useState } from 'react';
 import { Box, Text, useWindowSize } from 'ink';
 
 import { COLOR_ACCENT, COLOR_WARNING } from '@cli/tui/ui/colors';
-import {
-  clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
-} from '@cli/tui/ui/theme';
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { confirmCardContentWidth } from '@cli/tui/ui/theme';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
   AgentCategory,
@@ -36,10 +32,6 @@ interface AgentProposalProps {
 
 const FILE_LIMIT = 5;
 const AGENT_PROPOSAL_HIDDEN_NOUN = 'prompt rows';
-
-function wrappedRows(text: string, width: number): number {
-  return wrapAnsiToWidth(text, clampModalWidth(width)).split('\n').length;
-}
 
 interface MetadataSegment {
   readonly text: string;
@@ -131,17 +123,6 @@ function agentProposalMetadataLines({
         segments: [{ text: WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning }],
         tone: 'warning',
       },
-      {
-        segments: [
-          {
-            text:
-              workflow.tasks.length > 0
-                ? WORKFLOW_SCRIPT_PROPOSAL_COPY.declaredItemsNote
-                : WORKFLOW_SCRIPT_PROPOSAL_COPY.dynamicCallsNote,
-          },
-        ],
-        tone: 'dim',
-      },
       ...fileGroupLines(fileGroups, WORKFLOW_SCRIPT_PROPOSAL_COPY.filesHeading),
       {
         segments: [{ text: `Script: ${workflow.scriptPath}` }],
@@ -187,7 +168,7 @@ function metadataLinesRows(
       (rows, line) =>
         rows +
         (line.marginTop ? 1 : 0) +
-        wrappedRows(
+        wrappedRowCount(
           line.segments.map((segment) => segment.text).join(''),
           width,
         ),
@@ -239,7 +220,6 @@ function MetadataLineRow(props: {
 
 export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const [feedbackMode, setFeedbackMode] = useState(false);
   const fileGroups = getProposalFileGroups(props.payload);
   const workflowScript =
     props.payload.agentCategory === AgentCategory.Workflow
@@ -248,9 +228,7 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
   const title = workflowScript
     ? `Approve multi-agent workflow ${workflowScript.name}?`
     : `Spawn ${props.payload.agent}?`;
-  const instructionWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const instructionWidth = confirmCardContentWidth(columns);
   const metadataLines = agentProposalMetadataLines({
     fileGroups,
     payload: props.payload,
@@ -270,7 +248,6 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       title={title}
       rejectionMode="feedback"
       alwaysAllowLabel={DELEGATION_APPROVAL_COPY.cliAction}
-      onFeedbackModeChange={setFeedbackMode}
       onDecide={props.onDecide}
     >
       <Box marginTop={1} flexDirection="column">
@@ -281,7 +258,6 @@ export function AgentProposal(props: AgentProposalProps): React.JSX.Element {
       <ScrollableModalText
         hiddenNoun={AGENT_PROPOSAL_HIDDEN_NOUN}
         maxRows={maxInstructionRows}
-        scrollActive={!feedbackMode}
         scrollHint="scroll prompt"
         text={props.payload.instruction}
         width={instructionWidth}

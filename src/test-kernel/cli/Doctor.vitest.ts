@@ -1,11 +1,11 @@
 // Node.js imports
-import { constants as fsConstants, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { subset } from 'semver';
 import stripAnsi from 'strip-ansi';
@@ -19,19 +19,16 @@ import {
   writeDoctorReport,
 } from '@cli/runtime/doctor';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@cli/runtime/terminalRequirements';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { TEXRA_CLI_SUPPORTED_NODE_RANGE } from '@tools/externalToolDefs';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const context: CliContext = createTestCliContext({
   cwd: '/workspace',
   resourcesPath: '/resources',
 });
-
-const directory = {
-  isDirectory: () => true,
-};
 
 const latexProbe = {
   tools: [
@@ -100,10 +97,12 @@ type DoctorProbes = NonNullable<Parameters<typeof buildDoctorReport>[1]>;
 
 // A signed-in report on supported Node with no model available and a partially
 // installed LaTeX toolchain; tests override only the probes they care about.
-// The builder is a program, so this helper is where it is run.
+// The builder is a program, so this helper is where it is run, over a
+// filesystem where every probed path is an accessible directory.
 function buildReport(
   probes: Partial<DoctorProbes> = {},
   reportContext: CliContext = context,
+  fileSystem: Partial<FileSystem.FileSystem> = {},
 ): Promise<DoctorReport> {
   return Effect.runPromise(
     buildDoctorReport(reportContext, {
@@ -111,11 +110,19 @@ function buildReport(
       authProfile: Effect.succeed({ authenticated: true }),
       modelAccessList: Effect.succeed([]),
       latexToolchain: Effect.succeed(latexProbe),
-      pathStat: () => Effect.succeed(directory),
-      pathAccess: () => Effect.void,
       usageLoggingOptOut: () => null,
       ...probes,
-    }),
+    }).pipe(
+      Effect.provide([
+        FileSystem.layerNoop({
+          stat: () =>
+            Effect.succeed({ type: 'Directory' } as FileSystem.File.Info),
+          access: () => Effect.void,
+          ...fileSystem,
+        }),
+        nodeSpawnerLayer,
+      ]),
+    ),
   );
 }
 
@@ -188,17 +195,17 @@ describe('CLI doctor', () => {
   it('asks only for read access on the packaged resources directory', async () => {
     // `sudo npm install -g` leaves the package root-owned and unwritable,
     // which is the norm on Linux and WSL; the CLI only ever reads from it.
-    const modes = new Map<string, number | undefined>();
-    const report = await buildReport({
-      pathAccess: (filePath, mode) => {
-        modes.set(filePath, mode);
+    const writable = new Map<string, boolean | undefined>();
+    const report = await buildReport({}, context, {
+      access: (filePath, options) => {
+        writable.set(filePath, options?.writable);
         return Effect.void;
       },
     });
 
     expect(checkById(report, 'resources')?.status).toBe('pass');
-    expect((modes.get('/resources') ?? 0) & fsConstants.W_OK).toBe(0);
-    expect((modes.get('/workspace') ?? 0) & fsConstants.W_OK).not.toBe(0);
+    expect(writable.get('/resources')).toBe(false);
+    expect(writable.get('/workspace')).toBe(true);
   });
 
   it('matches the published Node engine range', async () => {

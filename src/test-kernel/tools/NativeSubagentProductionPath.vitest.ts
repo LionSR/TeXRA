@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Stream } from 'effect';
+import { Deferred, Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -43,7 +43,6 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
-import { RunHandle } from '@agent/runtime/RunHandle';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -63,7 +62,6 @@ import {
   AgentResumeFailed,
   type RecoveryContinuation,
 } from '@platform/interfaces';
-import type { Platform } from '@platform/platform';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
@@ -75,7 +73,10 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import {
+  nativeToolTestLayer,
+  emptyPinnedComposition,
+} from '@test/support/nativeToolTestLayer';
 import {
   createTempDirPlatform,
   makeTempDir,
@@ -91,6 +92,7 @@ import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
 } from '@test/support/fsTestUtils';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { executeSubagent } from '@tools/delegation/subagentRun';
@@ -283,7 +285,6 @@ function scriptedBoundModel(
       config.fullName,
       config.name,
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -385,8 +386,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 
 function interruptActiveRuns(session: SessionHandle): void {
   for (const runId of session.runs.getActiveIds()) {
-    const handle = session.runs.getHandle(runId);
-    if (handle instanceof RunHandle) handle.interrupt();
+    session.runs.interrupt(runId);
   }
 }
 
@@ -443,31 +443,29 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    new DelegateAgentTool()
-      .call({
-        agent: null,
-        model: null,
-        instruction,
-        memories: [],
-        working_directory: null,
-        execution_id: runId,
-      })
-      .pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            tracker: new FileInteractionState(),
-            run: {
-              runId: parentContext.runId,
-              session: parentContext.session,
-              config: AgentConfigSchema.parse({
-                agent: 'chat',
-                model: parentContext.model,
-              }),
-              toolPolicy: {},
-            },
-          }),
-        ),
+    DelegateAgentTool.call({
+      agent: null,
+      model: null,
+      instruction,
+      memories: [],
+      working_directory: null,
+      execution_id: runId,
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          tracker: new FileInteractionState(),
+          run: {
+            runId: parentContext.runId,
+            session: parentContext.session,
+            config: AgentConfigSchema.parse({
+              agent: 'chat',
+              model: parentContext.model,
+            }),
+            toolPolicy: {},
+          },
+        }),
       ),
+    ),
   );
   expect(resumed.status).toBe('executed');
   return resumed;
@@ -511,18 +509,23 @@ async function launchWaitingChild(options: {
     workingDirectory: process.cwd(),
   });
   await Effect.runPromise(
-    registerRun(session, PARENT_RUN_ID, parentConfig, PARENT_AGENT, {
+    registerRun(session, PARENT_RUN_ID, parentConfig, {
       identity: { kind: 'agent', agent: PARENT_AGENT },
       parentRunId: OUTER_RUN_ID,
     }),
   );
+  // Admitted on the run's lane like every production launch, so the run's
+  // fiber is its stop target by run id.
   parentFiber = testRuntime().runFork(
-    prepareAgentDefinition({ config: parentConfig, session }).pipe(
-      Effect.flatMap((definition) =>
-        executeAgent(definition, PARENT_RUN_ID, {
-          session,
-          parentRunId: OUTER_RUN_ID,
-        }),
+    session.runs.launchRun(
+      PARENT_RUN_ID,
+      prepareAgentDefinition({ config: parentConfig, session }).pipe(
+        Effect.flatMap((definition) =>
+          executeAgent(definition, PARENT_RUN_ID, {
+            session,
+            parentRunId: OUTER_RUN_ID,
+          }),
+        ),
       ),
     ),
   );
@@ -540,6 +543,7 @@ async function launchWaitingChild(options: {
     run: {
       runId: PARENT_RUN_ID,
       session,
+      scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
         model: PARENT_MODEL,
@@ -547,8 +551,8 @@ async function launchWaitingChild(options: {
       logger: noopTrace,
       toolPolicy: {
         approvalPromptsUnavailable: false,
-        runtimeUnavailableTools: [],
       },
+      composition: emptyPinnedComposition,
     },
   };
   const launch = await testRuntime().runPromise(
@@ -583,6 +587,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         Layer.mergeAll(
           unusedGlobalStorageFs(),
           nodePlatformLayer,
+          testHttpClientLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),
         ),
       ),
@@ -969,8 +974,17 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* waitForParentTurns(1);
 
         // The loop minted a stable logical identity for turn 1's delivery.
-        const turnState = yield* readChildTurnState(session, runId);
-        expect(turnState.active).toBeNull();
+        // The parent is admitted before the turn's settled row commits, so
+        // the parent's turn can land first.
+        const turnState = yield* Effect.promise(() =>
+          vi.waitFor(async () => {
+            const state = await Effect.runPromise(
+              readChildTurnState(session, runId),
+            );
+            expect(state.active).toBeNull();
+            return state;
+          }),
+        );
         const completed = turnState.lastCompleted;
         expect(completed).not.toBeNull();
         // The delivery id the loop derives from that turn's identity.
@@ -1042,9 +1056,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        const completed1 = (yield* readChildTurnState(session, runId))
-          .lastCompleted;
-        expect(completed1).not.toBeNull();
+        // Settled after the parent's admission, so polled like the above.
+        const completed1 = yield* Effect.promise(() =>
+          vi.waitFor(async () => {
+            const { lastCompleted } = await Effect.runPromise(
+              readChildTurnState(session, runId),
+            );
+            expect(lastCompleted).not.toBeNull();
+            return lastCompleted;
+          }),
+        );
 
         // Accept a follow-up: the loop runs turn 2, which hangs mid-model-call.
         yield* Effect.promise(() =>
@@ -1108,19 +1129,18 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             session,
             toolPolicy: {
               approvalPromptsUnavailable: false,
-              runtimeUnavailableTools: [],
             },
           },
         });
-        const reportView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/report` })
-          .pipe(Effect.provide(executionToolLayer));
+        const reportView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/report`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(reportView.status).toBe('executed');
         expect(reportView.output).toContain('Result A.');
         expect(reportView.output).toContain('interrupted');
-        const resultView = yield* new ExecutionsTool()
-          .call({ path: `/executions/${runId}/result` })
-          .pipe(Effect.provide(executionToolLayer));
+        const resultView = yield* ExecutionsTool.call({
+          path: `/executions/${runId}/result`,
+        }).pipe(Effect.provide(executionToolLayer));
         expect(resultView.status).toBe('executed');
         // /result is the machine-readable chaining endpoint: the attribution
         // rides inside the JSON, never as prefixed prose.

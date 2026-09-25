@@ -46,7 +46,7 @@ export class SettingsMemoryController {
     'SettingsMemoryController.getMemoryPreviewMessage',
   )(function* (storagePath: string) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const preview = yield* Effect.orDie(loadMemoryPreview(resolvedPath));
+    const preview = yield* loadMemoryPreview(resolvedPath);
     return {
       command: SETTINGS_VIEW_COMMANDS.UPDATE_MEMORY_PREVIEW,
       preview,

@@ -21,23 +21,33 @@ import type {
   FlowStep,
   PermissionPayload,
   RequestDecision,
+  RoundOutput,
   RunFamily,
   RunOutcome,
   SessionEvent,
 } from '@shared/schemas';
 
-/** The rows this module owns, and the only rows it accepts. */
+/** The rows this module owns, and the only rows it accepts. A type listed
+ *  here and not handled by `applyRunRow` is a compile error there. */
+const SHARED_RUN_ROW_TYPES = {
+  'flow.step': true,
+  'request.opened': true,
+  'request.decided': true,
+  'followup.queued': true,
+  'followup.consumed': true,
+  'output.produced': true,
+} as const satisfies Partial<Record<SessionEvent['type'], true>>;
+
 export type SharedRunRow = Extract<
   SessionEvent,
-  {
-    type:
-      | 'flow.step'
-      | 'request.opened'
-      | 'request.decided'
-      | 'followup.queued'
-      | 'followup.consumed';
-  }
+  { type: keyof typeof SHARED_RUN_ROW_TYPES }
 >;
+
+/** Whether `applyRunRow` owns this row: the one test both folds branch on. */
+export const isSharedRunRow = <E extends SessionEvent>(
+  row: E,
+): row is Extract<E, SharedRunRow> =>
+  Object.hasOwn(SHARED_RUN_ROW_TYPES, row.type);
 
 type RequestState = {
   readonly payload: PermissionPayload;
@@ -77,6 +87,8 @@ export type RunRows = {
    * under an id already here, and it is queued once, never twice.
    */
   readonly followUpIds: ReadonlySet<string>;
+  /** Complete output collection from the newest `output.produced` row. */
+  readonly roundOutputs: RoundOutput[];
 };
 
 /**
@@ -106,6 +118,7 @@ export const freshRunRows = (): RunRows => ({
   requests: byId([]),
   followUps: [],
   followUpIds: new Set(),
+  roundOutputs: [],
 });
 
 export type RunRowVerdict =
@@ -126,7 +139,7 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
 /**
  * Apply one shared row. `current` is `null` for a reader that holds no slice
  * for the run yet: queued input and the loop's own position open one, a
- * request or a consumption presupposes it and moves nothing.
+ * request, a consumption or an output presupposes it and moves nothing.
  */
 export function applyRunRow(
   current: RunRows | null,
@@ -139,10 +152,16 @@ export function applyRunRow(
       if (rows.family !== null && rows.family !== p.family) {
         return { kind: 'contradiction', detail: 'a step of another family' };
       }
+      // A continuation counts within its round: a reflection round opens at
+      // continuation 0, so the index is monotone only while the round holds.
+      const round = p.round ?? rows.round;
       const coordinates = [
         ['round', p.round],
         ['turn', p.turn],
-        ['continuationIndex', p.continuationIndex],
+        [
+          'continuationIndex',
+          round === rows.round ? p.continuationIndex : null,
+        ],
       ] as const;
       for (const [name, value] of coordinates) {
         if (value != null && value < rows[name]) {
@@ -155,7 +174,7 @@ export function applyRunRow(
       return applied({
         family: p.family,
         step: p.step,
-        round: p.round ?? rows.round,
+        round,
         turn: p.turn ?? rows.turn,
         continuationIndex: p.continuationIndex ?? rows.continuationIndex,
         outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,
@@ -232,5 +251,9 @@ export function applyRunRow(
         followUpIds: new Set([...current.followUpIds, row.followUpId]),
       });
     }
+    case 'output.produced':
+      // Each row carries the run's whole collection: the newest replaces it.
+      if (current === null) return { kind: 'unchanged' };
+      return applied({ roundOutputs: row.rounds });
   }
 }

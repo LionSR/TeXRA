@@ -121,8 +121,8 @@ export const MODEL_AVAILABILITY_STATUS = {
     available: false,
     requiresKey: false,
   },
-  // Only the OpenRouter route produces this kind (`computeModelOptions`
-  // resolves it from `isOpenRouterRoutingUnsupported`), so the one label the
+  // Only the OpenRouter route produces this kind (`computeModelOptions` maps
+  // the decided `openrouter-unsupported` route to it), so the one label the
   // kind carries names that route.
   'provider-unavailable': {
     label: 'Unavailable through OpenRouter',
@@ -216,21 +216,8 @@ export const TeamOptionDataSchema = PickerOptionBaseSchema.extend({
 export type TeamOptionData = z.infer<typeof TeamOptionDataSchema>;
 
 // ============================================================
-// Banner State Schemas
+// Banner Data Schemas
 // ============================================================
-
-const BannerStateSchema = z.object({
-  visible: z.boolean(),
-});
-export type BannerState = z.infer<typeof BannerStateSchema>;
-
-export const ApiKeyBannerDataSchema = z.object({
-  provider: z.string().nullish(),
-});
-const ApiKeyBannerStateSchema = BannerStateSchema.extend(
-  ApiKeyBannerDataSchema.shape,
-);
-export type ApiKeyBannerState = z.infer<typeof ApiKeyBannerStateSchema>;
 
 export const AgentConfigBannerDataSchema = z.object({
   agentName: z.string().nullish(),
@@ -239,12 +226,6 @@ export const AgentConfigBannerDataSchema = z.object({
   sessionType: SessionTypeSchema.nullish(),
   customDirSet: z.boolean().nullish(),
 });
-const AgentConfigBannerStateSchema = BannerStateSchema.extend(
-  AgentConfigBannerDataSchema.shape,
-);
-export type AgentConfigBannerState = z.infer<
-  typeof AgentConfigBannerStateSchema
->;
 
 /**
  * One missing dependency as the host reports it: already labeled for
@@ -256,16 +237,14 @@ const MissingToolSchema = z.object({
   id: z.string(),
   label: z.string(),
   interchangeable: z.boolean(),
+  /** What TeXRA can't do without it, completing "TeXRA can't …". */
+  usedFor: z.string(),
 });
 export type MissingTool = z.infer<typeof MissingToolSchema>;
 
 export const DependencyBannerDataSchema = z.object({
   missingTools: z.array(MissingToolSchema).nullish(),
 });
-const DependencyBannerStateSchema = BannerStateSchema.extend(
-  DependencyBannerDataSchema.shape,
-);
-export type DependencyBannerState = z.infer<typeof DependencyBannerStateSchema>;
 
 // ============================================================
 // File State Schemas

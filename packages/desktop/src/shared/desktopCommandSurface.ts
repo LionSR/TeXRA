@@ -1,5 +1,5 @@
 import type { AgentCategory, GettingStartedAction } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import {
   toElectronAccelerator,
@@ -30,7 +30,6 @@ export const DESKTOP_LOCAL_COMMANDS = {
   SHOW_LOGS: 'texra.desktop.showLogs',
   TOGGLE_BOTTOM_BAR: 'texra.desktop.toggleBottomBar',
   TOGGLE_SIDE_PANEL: 'texra.desktop.toggleSidePanel',
-  TOGGLE_SUMMARY_BAR: 'texra.desktop.toggleSummaryBar',
   OPEN_LOG_FOLDER: 'texra.desktop.openLogFolder',
   OPEN_WORKSPACE_FOLDER: 'texra.desktop.openWorkspaceFolder',
   SAVE_FILE: 'texra.desktop.saveFile',
@@ -72,17 +71,16 @@ export const DESKTOP_MENU_GROUPS = [
     DESKTOP_LOCAL_COMMANDS.SHOW_LOGS,
     DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER,
     'texra.showDashboard',
-    DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR,
     DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL,
-    'texra.mainView.reset',
   ],
+  // One row per settings page that has a command, in nav order. Teams are a
+  // section of Agents, so texra.showMultiAgent gets no row of its own.
   [
-    'texra.showMemory',
     'texra.showModels',
     'texra.showAgents',
     'texra.showTools',
-    'texra.showMultiAgent',
+    'texra.showMemory',
     'texra.showGitSettings',
   ],
 ] as const satisfies readonly (readonly CommandId[])[];
@@ -95,7 +93,7 @@ export const DESKTOP_FILE_COMMANDS = [
 /**
  * The desktop-local commands the renderer is allowed to post over IPC. Narrower
  * than `DESKTOP_LOCAL_COMMANDS` on purpose: the main-process actions for
- * `SAVE_FILE` and the three `TOGGLE_*` commands post *back* to the renderer, so
+ * `SAVE_FILE` and the two `TOGGLE_*` commands post *back* to the renderer, so
  * accepting them here would let a renderer message bounce.
  */
 export const DESKTOP_SHELL_IPC_COMMANDS = [
@@ -185,15 +183,12 @@ const DESKTOP_COMMAND_ICONS = {
   [DESKTOP_LOCAL_COMMANDS.SHOW_LOGS]: 'file-lines',
   [DESKTOP_LOCAL_COMMANDS.OPEN_LOG_FOLDER]: 'folder',
   'texra.showDashboard': 'gear',
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: 'list-ul',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_BOTTOM_BAR]: 'window-maximize',
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: 'picture-in-picture',
-  'texra.mainView.reset': 'file-circle-plus',
   'texra.showMemory': 'database',
   'texra.showModels': 'server',
   'texra.showAgents': 'robot',
   'texra.showTools': 'screwdriver-wrench',
-  'texra.showMultiAgent': 'diagram-project',
   'texra.showGitSettings': 'code-branch',
   [DESKTOP_LOCAL_COMMANDS.SHOW_FIRST_RUN_WALKTHROUGH]: 'users',
   [DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS]: 'book',
@@ -218,21 +213,19 @@ export interface DesktopCommandMenuEntry {
 export interface DesktopCommandActions {
   showLauncher(): void;
   openWorkbench(kind: DesktopWorkbenchKind): void;
-  showSettings(tab?: SettingsTabPanelName, agentSubTab?: AgentCategory): void;
+  showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
   openDesktopDocs(): void;
   openLogFolder(): void;
   openWorkspaceFolder(): void;
   saveFile(): void;
   showFirstRunWalkthrough(): void;
-  resetMainView(): void;
   toggleBottomBar(): void;
   toggleSidePanel(): void;
-  toggleSummaryBar(): void;
 }
 
 interface DesktopSettingsTabMessage {
   command: typeof SETTINGS_VIEW_COMMANDS.SET_TAB;
-  tab: SettingsTabPanelName;
+  tab: SettingsTarget;
   agentSubTab?: AgentCategory;
 }
 
@@ -278,18 +271,14 @@ const DESKTOP_COMMAND_HANDLERS = {
   [DESKTOP_LOCAL_COMMANDS.TOGGLE_SIDE_PANEL]: action((a) =>
     a.toggleSidePanel(),
   ),
-  [DESKTOP_LOCAL_COMMANDS.TOGGLE_SUMMARY_BAR]: action((a) =>
-    a.toggleSummaryBar(),
-  ),
   'texra.showDashboard': action((a) => a.showSettings()),
-  'texra.mainView.reset': action((a) => a.resetMainView()),
   // `texra.show*` rows derived from the catalog's `settingsTab` field
   // (`settingsTabByCommand`) — same source the extension handler map uses.
   ...(Object.fromEntries(
     (
       Object.entries(settingsTabByCommand) as [
         SettingsTabCommandId,
-        SettingsTabPanelName,
+        SettingsTarget,
       ][]
     ).map(([id, tab]) => [id, action((a) => a.showSettings(tab))]),
   ) as Record<SettingsTabCommandId, DesktopCommandHandler>),
@@ -330,7 +319,7 @@ export function dispatchDesktopCommand(
 }
 
 export function buildDesktopSettingsTabMessage(
-  tab: SettingsTabPanelName,
+  tab: SettingsTarget,
   agentSubTab?: AgentCategory,
 ): DesktopSettingsTabMessage {
   return {
@@ -347,7 +336,7 @@ export function buildDesktopSettingsTabMessage(
  */
 export function postDesktopSettingsView(
   postToRenderer: (message: unknown) => void,
-  tab?: SettingsTabPanelName,
+  tab?: SettingsTarget,
   agentSubTab?: AgentCategory,
 ): void {
   postToRenderer({

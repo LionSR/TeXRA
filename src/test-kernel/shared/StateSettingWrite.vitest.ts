@@ -4,6 +4,7 @@ import { Effect } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { BASH_APPROVAL_CONFIG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { applyStateSettingUpdate } from '@shared/settingsView/handlers/stateSettingWrite';
@@ -98,6 +99,38 @@ describe('applyStateSettingUpdate', () => {
   );
 
   it.effect(
+    'lets CLI /config write its rows that the settings view does not render',
+    () =>
+      Effect.gen(function* () {
+        const fake = makeFakeSettingsStores();
+        const key = WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS;
+
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied', entry: { key } });
+        expect(yield* fake.workspaceState.get(key)).toBe(20000);
+        expect(
+          yield* applyStateSettingUpdate(key, null, {
+            stores: fake.stores,
+            host: 'cli',
+          }),
+        ).toMatchObject({ kind: 'applied' });
+        expect(yield* isStored(fake.workspaceState, key)).toBe(false);
+
+        // The settings view still cannot write a row it does not render.
+        expect(
+          yield* applyStateSettingUpdate(key, 20000, {
+            stores: fake.stores,
+            host: 'vscode',
+          }),
+        ).toEqual({ kind: 'ignored' });
+      }),
+  );
+
+  it.effect(
     'ignores unknown keys and preserves catalog validation errors',
     () =>
       Effect.gen(function* () {
@@ -112,18 +145,37 @@ describe('applyStateSettingUpdate', () => {
 
         expect(
           yield* applyStateSettingUpdate(
-            WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            1000.5,
+            WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            'bogus',
             ports,
           ),
         ).toMatchObject({
           kind: 'rejected',
           entry: {
-            key: WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS,
-            surfaces: { settingsView: 'latex', cliConfig: true },
+            key: WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+            surfaces: { settingsView: 'latex' },
           },
           error: expect.any(Error),
         });
       }),
+  );
+
+  it.effect('reports a throwing approval-policy hook with its own error', () =>
+    Effect.gen(function* () {
+      const thrown = new Error('hook failed');
+      expect(
+        yield* applyStateSettingUpdate(
+          TEXRA_APPROVAL_POLICY_CONFIG_KEY,
+          'ask',
+          {
+            stores: makeFakeSettingsStores().stores,
+            host: 'vscode',
+            onApprovalPolicyChanged: () => {
+              throw thrown;
+            },
+          },
+        ),
+      ).toMatchObject({ kind: 'failed', error: thrown });
+    }),
   );
 });

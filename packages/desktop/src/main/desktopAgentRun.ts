@@ -20,13 +20,13 @@ import {
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
-import {
-  ToolEditApprovalController,
-  type ToolEditApprovalHost,
-} from '@controllers/approval/ToolEditApprovalController';
+import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
 import { RunLaunchFailed } from '@controllers/session/hostRunActions';
 import { withLogChannel } from '@logger/effectLog';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import {
+  type ProcessRuntime,
+  withProcessServices,
+} from '@platform/processRuntime';
 import type {
   AgentCategory,
   RequestOpenFilePayload,
@@ -43,7 +43,6 @@ import {
   DesktopToolEditApprovalHost,
   type DesktopToolEditApprovalUi,
 } from './desktopToolEditApproval.js';
-import { toLogData } from './desktopLogUtils.js';
 import {
   launchDesktopAgent,
   type DesktopAgentLaunchOptions as DesktopRunOptions,
@@ -57,8 +56,8 @@ export interface DesktopAgentRunOptions {
   /** Preview operations reject; the approval controller presents failures. */
   toolEditPreview: Omit<DesktopToolEditApprovalUi, 'showErrorMessage'>;
   session: SessionHandle;
-  /** A run loaded an agent from the custom directory: the New-task
-   *  state's agent-config banner (`HostSnapshot.banners`). */
+  /** A launch could not find its agent: the New-task state's
+   *  agent-config banner (`HostSnapshot.banners`). */
   showAgentConfigBanner(data: {
     agentName: string;
     category: AgentCategory;
@@ -68,11 +67,11 @@ export interface DesktopAgentRunOptions {
   /** The process runtime this window was handed; the run and its approval
    *  wiring settle on it. */
   runtime: ProcessRuntime;
-  /** Fired when a launch this window started settles. That is after
+  /** Runs when a launch this window started settles. That is after
    *  `AgentRunLifecycle` writes `firstRunDone` on a successful run, so the
    *  host can recompute the onboarding funnel from the updated flag. The
    *  refresh is idempotent and runs on every settle. */
-  onRunCompleted?: () => void;
+  onRunCompleted?: Effect.Effect<void>;
 }
 
 export interface DesktopAgentRun {
@@ -150,21 +149,16 @@ export function createDesktopAgentRun(
   // (`request.opened` folds into the view), and a surface's `request.decide`
   // settles it there; the staged preview is discarded when the request
   // resolves, whichever way.
-  const decideRequest: ToolEditApprovalHost['decide'] = (
-    runId,
-    requestId,
-    decision,
-  ) =>
-    session.requests
-      .request({ kind: 'request.decide', runId, requestId, decision })
-      .pipe(Effect.asVoid);
   const toolEditApprovals = new ToolEditApprovalController({
     host: new DesktopToolEditApprovalHost({
       ui: {
         ...options.toolEditPreview,
         showErrorMessage: host.showErrorMessage,
       },
-      decide: decideRequest,
+      decide: (runId, requestId, decision) =>
+        session.requests
+          .request({ kind: 'request.decide', runId, requestId, decision })
+          .pipe(Effect.asVoid),
       runtime,
     }),
   });
@@ -190,7 +184,7 @@ export function createDesktopAgentRun(
             .pipe(
               Effect.catchCause((cause) =>
                 Effect.logWarning('Failed to stage the tool-edit preview').pipe(
-                  Effect.annotateLogs({ data: toLogData(Cause.squash(cause)) }),
+                  Effect.annotateLogs({ data: Cause.squash(cause) }),
                   withLogChannel(CHANNEL),
                 ),
               ),
@@ -204,9 +198,7 @@ export function createDesktopAgentRun(
       // services from the runtime's context, which the session that composes
       // them does not carry.
       releaseToolEdit: (requestId) =>
-        Effect.flatMap(runtime.contextEffect, (context) =>
-          Effect.provideContext(toolEditApprovals.release(requestId), context),
-        ),
+        withProcessServices(runtime, toolEditApprovals.release(requestId)),
     }),
   );
 
@@ -227,7 +219,7 @@ export function createDesktopAgentRun(
         onRunResolved: options.onLaunched,
         ...runOptions,
       },
-    ).pipe(Effect.ensuring(Effect.sync(() => options.onRunCompleted?.())));
+    ).pipe(Effect.ensuring(options.onRunCompleted ?? Effect.void));
   }
 
   return {

@@ -2,15 +2,12 @@
  * The transcript row model both hosts render.
  *
  * One row kind per thing a run says, carrying the typed payload and the
- * complete text. Rows never cross the wire — the frontend already receives
- * whole `StreamLogEntry` values and imports `@shared/*` — so this is a plain
- * type, not a schema: nothing parses it, and a schema would own no boundary.
+ * complete text. Rows are a fold output built from already-decoded values
+ * (`@shared/session/transcriptFold`), so this is a plain type, not a schema:
+ * nothing parses it, and a schema would own no boundary.
  *
- * Three rules the shape encodes:
- *  - Text is untruncated. Elision is measurement ({@link TranscriptText}),
- *    applied by the painter at its own width.
- *  - Redaction happens once, at the Database write boundary
- *    (`redactTraceDraft`). Nothing here or in the fold redacts.
+ * Text is untruncated. Elision is measurement ({@link TranscriptText}),
+ * applied by the painter at its own width.
  */
 import {
   TOOL_CALL_STATUS,
@@ -21,8 +18,10 @@ import {
   type FileListEntry,
   type LoadedMediaMetadata,
   type LogLevel,
+  type MediaAttachmentKind,
   type MessageType,
   type NormalizedToolUse,
+  type ToolUseLog,
   type WorkflowCallProgress,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
@@ -31,6 +30,7 @@ import {
   type CompactionActivityBlock,
 } from '@shared/runs/compactionActivityProjection';
 import { assertNever } from '@utils/core';
+import { formatCompactTokenCount } from '@utils/text/stringUtils';
 
 import type { ToolRowModel } from './toolRowModel';
 import type { TranscriptText } from './transcriptText';
@@ -40,14 +40,16 @@ import type { TranscriptText } from './transcriptText';
 // ---------------------------------------------------------------------------
 
 /**
- * Fields every row carries, projected from the source entry's envelope.
- * Optional keys are spread-omitted rather than set to `undefined`, so a row
- * built from the same entry twice is structurally identical.
+ * Fields every row carries, stamped by the transcript fold from the event
+ * that wrote it. Optional keys are spread-omitted rather than set to
+ * `undefined`, so a row built from the same facts twice is structurally
+ * identical.
  */
 export interface TranscriptRowBase {
-  /** Same id as the source `StreamLogEntry.id` — stable across deltas. */
+  /** The writing event's id (a card's, a stream's, a stage's) or its durable
+   *  coordinates; stable across deltas. */
   readonly id: string;
-  /** Wire append order of the source entry. */
+  /** First-appearance order of the row within its run's transcript. */
   readonly seqNo?: number;
   /** Order in which the source row became printable, when it has settled. */
   readonly settlementSeqNo?: number;
@@ -59,8 +61,8 @@ export interface TranscriptRowBase {
   /** Source vocabulary. Absent on the two rows with no message type of their
    *  own: `phase` (a group row) and `compactionActivity` (a projection). */
   readonly messageType?: MessageType;
-  /** Present when a host synthesized this row rather than projecting it from a
-   *  `StreamLogEntry` — a local notice the run itself never recorded. Such a
+  /** Present when a host synthesized this row rather than the fold building
+   *  it from an event: a local notice the run itself never recorded. Such a
    *  row is immutable from birth, carries the host's own id, and anchors into
    *  the merged order through the {@link seqNo}/{@link settlementSeqNo} the
    *  host captured when it appended it. */
@@ -90,6 +92,8 @@ export interface UserRow extends TranscriptRowBase {
    *  truncation of `text`: hosts choose which of the two to paint. */
   readonly summary: TranscriptText;
   readonly workflowSummary?: WorkflowScriptDeliverySummary;
+  /** Media that was sent to the model beside the text, by kind (no bytes). */
+  readonly attachments?: readonly MediaAttachmentKind[];
 }
 
 /**
@@ -116,22 +120,16 @@ export interface ToolRow extends TranscriptRowBase {
   readonly kind: 'tool';
   readonly toolUse: NormalizedToolUse;
   readonly model: ToolRowModel;
-}
-
-interface WebSearchResultRef {
-  readonly url?: string;
-  readonly title?: string;
-  readonly domain?: string;
+  /** The decoded durable payload the row was built from, without live
+   *  output: what a conversation export formats. */
+  readonly log: ToolUseLog;
 }
 
 export interface WebSearchRow extends TranscriptRowBase {
   readonly kind: 'webSearch';
-  /** `Anthropic Search: "quantum error correction" (searching...)` */
+  /** `Web Search: "quantum error correction"` */
   readonly label: string;
-  readonly results: readonly WebSearchResultRef[];
-  readonly status?: string;
-  readonly failed: boolean;
-  readonly inProgress: boolean;
+  readonly query?: string;
 }
 
 /** A file that came through the media pipeline as visual/audio model input. */
@@ -322,7 +320,6 @@ export function isSettledRow(
     case 'compactionActivity':
       return row.block.finalized;
     case 'webSearch':
-      return !row.inProgress;
     case 'user':
     case 'error':
     case 'fileList':
@@ -336,6 +333,40 @@ export function isSettledRow(
       return true;
     default:
       return assertNever(row, 'Unhandled transcript row kind');
+  }
+}
+
+/** The headline a row leads with: its own text, untrimmed and unsanitized;
+ *  a host sanitizes for its surface at paint. */
+export function rowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
+    case 'assistant':
+    case 'log':
+      return row.text.full;
+    case 'user':
+    case 'error':
+    case 'progressStatus':
+      return row.summary.full;
+    case 'workflowTask':
+      return row.line;
+    case 'phase':
+      return row.heading;
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
+    case 'webSearch':
+    case 'statistics':
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'tool':
+      return '';
   }
 }
 
@@ -358,6 +389,11 @@ export function compactionActivityRow(
     timestamp: block.startedAt,
     level: 'info',
     block,
-    label: COMPACTION_ACTIVITY_LABEL[block.status],
+    // `Context compacted · freed 41k tokens (78% → 22%)`: the one row
+    // carries the figures its stats entry used to repeat as a second row.
+    label:
+      block.freed && block.freed.tokens > 0
+        ? `${COMPACTION_ACTIVITY_LABEL[block.status]} · freed ${formatCompactTokenCount(block.freed.tokens)} tokens (${block.freed.utilizationBefore.toFixed(0)}% → ${block.freed.utilizationAfter.toFixed(0)}%)`
+        : COMPACTION_ACTIVITY_LABEL[block.status],
   };
 }

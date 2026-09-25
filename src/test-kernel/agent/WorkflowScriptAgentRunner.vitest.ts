@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, FileSystem } from 'effect';
+import { Cause, Deferred, Effect, Exit, FileSystem, Scope } from 'effect';
 
 import { beforeEach, describe, expect, vi } from 'vitest';
 
@@ -14,9 +14,20 @@ import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
+import {
+  aggregateId,
+  RunUsageTotalsSchema,
+  type RunEnd,
+  type RunId,
+} from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
@@ -36,6 +47,18 @@ const storagePath = (...segments: string[]) =>
 const canonicalPath = (...segments: string[]) =>
   path.join(CANONICAL_PATH, ...segments);
 
+/** The claim acquisition's refusal when another live owner holds the run. */
+const claimHeldElsewhere = () =>
+  Effect.fail(
+    new DatabaseWriteFailed({
+      path: 'session.db',
+      cause: new DatabaseClaimRefused({
+        ownerId: JSON.stringify(['owner-2', 2, '1']),
+        verdict: 'alive',
+      }),
+    }),
+  );
+
 function createWorkflowScriptAgentRunner(
   ...args: Parameters<typeof createNativeWorkflowScriptAgentRunner>
 ) {
@@ -49,8 +72,9 @@ function createWorkflowScriptAgentRunner(
 
 // The deleted facade's `exists` probe read a `stat` that treated `ENOENT` and
 // `ENOTDIR` as absent; the conversion reads the process `FileSystem` instead,
-// so the stub replaces that one method of the real service (as the fingerprint
-// stub below does for `readFile`) rather than mocking a `stat` module.
+// so the stub replaces that method, and the `realPath` that
+// `resolveInvocationFileList` canonicalizes through, on the real service (as
+// the fingerprint stub below does for `readFile`) rather than mocking a module.
 function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -58,14 +82,21 @@ function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
       Effect.provideService(FileSystem.FileSystem, {
         ...fs,
         exists: (target: string) => mocks.exists(target),
+        realPath: (target: string) => mocks.realPath(target),
       }),
     );
   });
 }
 
-// The fingerprint now reads through the process `FileSystem` rather than the
-// deleted `AbsoluteFS` facade, so the stub replaces one method of the real
-// service (as GlobTool's suite does) instead of mocking a module.
+/** The node `realPath`, for a case that canonicalizes real temp files. */
+const nodeRealPath = (file: string) =>
+  FileSystem.FileSystem.use((real) => real.realPath(file)).pipe(
+    Effect.provide(nodePlatformLayer),
+  );
+
+// The fingerprint reads through the process `FileSystem`, so the stub
+// replaces one method of the real service (as GlobTool's suite does) instead
+// of mocking a module.
 function fingerprintWorkflowAgentDependencies(
   ...args: Parameters<typeof fingerprintInputDependencies> extends [
     unknown,
@@ -84,6 +115,7 @@ function fingerprintWorkflowAgentDependencies(
         ...fs,
         readFile: (file: string) => mocks.readFileBytes(file),
         exists: (target: string) => mocks.exists(target),
+        realPath: (target: string) => mocks.realPath(target),
       }),
     );
   }).pipe(Effect.provide(fakeProcessServices()));
@@ -106,7 +138,7 @@ const mocks = vi.hoisted(() => ({
   exists: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
-  realpath: vi.fn(),
+  realPath: vi.fn(),
   readFileBytes: vi.fn(),
 }));
 
@@ -166,14 +198,6 @@ vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
 }));
 
-// `resolveInvocationFileList` canonicalizes through `node:fs/promises.realpath`
-// now that the `WorkspaceFS` facade is gone, so the stub stands in for that one
-// export.
-vi.mock('node:fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs/promises')>()),
-  realpath: mocks.realpath,
-}));
-
 const parentRunId = 'aaaaaa111111' as RunId;
 // The detached workflow-run's own identity — grandchild agent() calls re-root
 // here, not on the orchestrator (#8712).
@@ -227,10 +251,15 @@ const structuredResult: RunEnd = {
   },
 };
 
-// The in-process half of the fence, real: a case makes a run live here by
-// taking its lane, exactly as a launch or a resume of that run would. One
-// registry stub for every stub session, so sessions compare equal.
-let lanes = new RunRoster(createSessionApprovals());
+// The fence, real: a case makes a run live here by taking its lane, exactly
+// as a launch or a resume of that run would, and the hold carries the run's
+// claim, which the stub session answers. One registry stub for every stub
+// session, so sessions compare equal.
+const fenceRoster = () =>
+  new RunRoster(createSessionApprovals(), (runId) =>
+    mocks.acquireClaims(aggregateId('run', runId)),
+  );
+let lanes = fenceRoster();
 const runs = {
   holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
 };
@@ -257,6 +286,7 @@ function parentContext(): DelegationParent {
     run: {
       runId: parentRunId,
       session,
+      scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
         model: PARENT_MODEL,
@@ -268,8 +298,8 @@ function parentContext(): DelegationParent {
       },
       toolPolicy: {
         approvalPromptsUnavailable: true,
-        runtimeUnavailableTools: ['user_question'],
       },
+      composition: emptyPinnedComposition,
     },
   };
 }
@@ -393,7 +423,7 @@ function useToolUseAgentEntries(): void {
 describe('createWorkflowScriptAgentRunner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    lanes = new RunRoster(createSessionApprovals());
+    lanes = fenceRoster();
     mocks.preparedOptions.length = 0;
     mocks.probedRunIds.length = 0;
     launchedRows.clear();
@@ -435,7 +465,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.rejectOversizedBibAttachments.mockReturnValue(Effect.succeed(null));
     mocks.runStorageLocation.mockReturnValue(undefined);
     sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
-    mocks.realpath.mockImplementation(async (file: string) => file);
+    mocks.realPath.mockImplementation((file: string) => Effect.succeed(file));
     mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
   });
 
@@ -501,9 +531,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             try: () => fs.symlink(privateFile, link),
             catch: ensureError,
           });
-          mocks.realpath.mockImplementation((file: string) =>
-            fs.realpath(file),
-          );
+          mocks.realPath.mockImplementation(nodeRealPath);
           const spellings = {
             absolute: privateFile,
             'relative traversal': path.relative(workspace, privateFile),
@@ -563,9 +591,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             try: () => fs.symlink(target, requested),
             catch: ensureError,
           });
-          mocks.realpath.mockImplementation((file: string) =>
-            fs.realpath(file),
-          );
+          mocks.realPath.mockImplementation(nodeRealPath);
 
           yield* defaultRunner()(
             invocation({ inputFiles: ['chapters/current.tex'] }),
@@ -629,7 +655,6 @@ describe('createWorkflowScriptAgentRunner', () => {
           agentName: 'correct',
           parentRunId: runId,
           approvalPromptsUnavailable: true,
-          runtimeUnavailableTools: ['user_question'],
           configPayload: expect.objectContaining({
             agent: 'correct',
             agentSource: 'builtInWorkflow',
@@ -759,10 +784,10 @@ describe('createWorkflowScriptAgentRunner', () => {
           runId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
         }),
       );
-      mocks.realpath.mockImplementation(async (file: string) => {
-        if (file === firstRequested) return firstCanonical;
-        if (file === secondRequested) return secondCanonical;
-        return file;
+      mocks.realPath.mockImplementation((file: string) => {
+        if (file === firstRequested) return Effect.succeed(firstCanonical);
+        if (file === secondRequested) return Effect.succeed(secondCanonical);
+        return Effect.succeed(file);
       });
       const runner = defaultRunner();
 
@@ -1519,17 +1544,13 @@ describe('createWorkflowScriptAgentRunner', () => {
         // The claim is what the resume takes, so an acquire it refuses is the
         // fact that a new owner is starting this child right now.
         probeAnswers({ exists: true }, { exists: false });
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1547,17 +1568,13 @@ describe('createWorkflowScriptAgentRunner', () => {
           { exists: true, runEnd: { ...result, outcome: 'failed' } },
           { exists: false },
         );
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1577,17 +1594,13 @@ describe('createWorkflowScriptAgentRunner', () => {
           runEnd: result,
           resultMeta: { producer: 'subagent', output: result.output },
         });
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       }),
@@ -1602,17 +1615,13 @@ describe('createWorkflowScriptAgentRunner', () => {
         // write belongs to whoever takes them next. The launched attempt is
         // fenced and re-read like every other: an acquire a resume refuses
         // stops the parent journaling a result from the lifecycle before it.
-        mocks.acquireClaims.mockReturnValueOnce(
-          Effect.fail(new Error('held by owner-2 (alive)')),
-        );
+        mocks.acquireClaims.mockReturnValueOnce(claimHeldElsewhere());
 
         const error = yield* Effect.flip(defaultRunner()(invocation()));
 
         expect(error).toMatchObject({
           name: 'WorkflowRunAbortError',
-          message: expect.stringContaining(
-            'could not be claimed against a concurrent resume',
-          ),
+          message: expect.stringContaining('held by a concurrent resume'),
         });
         expect(mocks.executeSubagentInBand).toHaveBeenCalledOnce();
       }),

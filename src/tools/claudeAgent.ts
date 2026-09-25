@@ -18,7 +18,7 @@
  *   - OAuth session from `claude login` (Pro/Max subscription)
  *   - Bedrock / Vertex (configured via CLI/env vars)
  *
- * Requires the native `claude` CLI, checked in externalToolDefs.ts.
+ * Requires the native `claude` CLI, checked in pluginAvailability.ts.
  */
 
 // Third-party imports
@@ -44,14 +44,16 @@ import {
 } from '@shared/schemas';
 import type {
   ClaudeAgentEffort,
+  ClaudeAgentModel,
   ClaudeAgentPermissionMode,
   RunId,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { buildSyntheticToolUseConfig } from '@tools/core/syntheticAgentConfig';
-import { parseWorkingDirectory } from '@tools/pathResolution';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { linkAbortSignals } from '@utils/core';
 import {
   formatWallTimeSeconds,
@@ -89,6 +91,7 @@ import {
   modelSupportsAdaptiveThinking,
   type ClaudeTurnUsage,
 } from './claudeAgentShared';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
 // Third-party type imports (import/order places these after local imports)
@@ -526,7 +529,62 @@ function buildClaudeAgentLaunch(params: {
 // Tool
 // ============================================================================
 
-export class ClaudeAgentTool extends defineTool({
+function executeClaudeAgentTool(input: ClaudeAgentInput) {
+  return Effect.gen(function* () {
+    return yield* reraiseAgentCliCallFailure(run(input, yield* ToolCall));
+  });
+}
+
+const run = Effect.fn('ClaudeAgentTool.run')(function* (
+  input: ClaudeAgentInput,
+  toolCall: ToolCallShape,
+): Effect.fn.Return<
+  ToolResult,
+  AgentCliToolFailure,
+  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
+> {
+  const { roots } = toolCall;
+  const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
+  const permissionMode = yield* claudeAgentPermissionMode(input, roots);
+  const model =
+    input.model ??
+    (yield* readSettingFrom<ClaudeAgentModel>(roots, CLAUDE_AGENT_MODEL));
+  const effort =
+    input.effort ??
+    (yield* readSettingFrom<ClaudeAgentEffort>(roots, CLAUDE_AGENT_EFFORT));
+  const sessionId = input.session_id ?? undefined;
+  const isFork = input.fork_session === true;
+
+  return yield* dispatchAgentCliTool({
+    toolCall,
+    agentName: CLAUDE_AGENT_NAME,
+    store: claudeAgentSessionsFor,
+    // A fork always launches a distinct TeXRA child. Queueing onto the
+    // source session would mutate the original instead of branching it.
+    resumeId: isFork ? undefined : sessionId,
+    sourceId: isFork ? sessionId : undefined,
+    prompt: input.prompt,
+    labels: {
+      notActiveLabel: 'Claude Code CLI session',
+      idParamName: 'session_id',
+      summaryLabel: 'Claude Code CLI',
+      queuedLabel: 'Claude Code session',
+    },
+    launch: (context) =>
+      launchClaudeAgentSession(
+        input,
+        permissionMode,
+        model,
+        effort,
+        context.parentRunId,
+        context.parentWorkingDirectory,
+        context.releaseFallbackClaim,
+        context.session,
+      ),
+  });
+});
+
+export const ClaudeAgentTool = defineTool({
   name: CLAUDE_AGENT_NAME,
   requiresApproval: true,
   description:
@@ -536,74 +594,16 @@ export class ClaudeAgentTool extends defineTool({
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
     'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
-    'Set fork_session to branch from that session while leaving the original unchanged.',
+    'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: ClaudeAgentInputSchema,
   guard: {
     bash: (input: ClaudeAgentInput) =>
-      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (state) =>
-        claudeAgentPermissionMode(input, state),
+      agentCliApprovalCommand(CLAUDE_AGENT_NAME, input.prompt, (stores) =>
+        claudeAgentPermissionMode(input, stores),
       ),
   },
-}) {
-  protected execute(input: ClaudeAgentInput) {
-    return Effect.gen({ self: this }, function* () {
-      return yield* reraiseAgentCliCallFailure(
-        this.run(input, yield* ToolCall),
-      );
-    });
-  }
-
-  private readonly run = Effect.fn('ClaudeAgentTool.run')(function* (
-    this: ClaudeAgentTool,
-    input: ClaudeAgentInput,
-    toolCall: ToolCallShape,
-  ): Effect.fn.Return<
-    ToolResult,
-    AgentCliToolFailure,
-    Secrets | ToolCall | Runs | AgentResume
-  > {
-    const config = yield* getClaudeAgentConfig;
-    const { workspaceState } = toolCall.roots;
-    const permissionMode = yield* claudeAgentPermissionMode(
-      input,
-      workspaceState,
-    );
-    const model =
-      input.model ?? (yield* config.getClaudeAgentModel(workspaceState));
-    const effort =
-      input.effort ?? (yield* config.getClaudeAgentEffort(workspaceState));
-    const sessionId = input.session_id ?? undefined;
-    const isFork = input.fork_session === true;
-
-    return yield* dispatchAgentCliTool({
-      toolCall,
-      agentName: CLAUDE_AGENT_NAME,
-      store: claudeAgentSessionsFor,
-      // A fork always launches a distinct TeXRA child. Queueing onto the
-      // source session would mutate the original instead of branching it.
-      resumeId: isFork ? undefined : sessionId,
-      sourceId: isFork ? sessionId : undefined,
-      prompt: input.prompt,
-      labels: {
-        notActiveLabel: 'Claude Code CLI session',
-        idParamName: 'session_id',
-        summaryLabel: 'Claude Code CLI',
-        queuedLabel: 'Claude Code session',
-      },
-      launch: (context) =>
-        launchClaudeAgentSession(
-          input,
-          permissionMode,
-          model,
-          effort,
-          context.parentRunId,
-          context.parentWorkingDirectory,
-          context.releaseFallbackClaim,
-          context.session,
-        ),
-    });
-  });
-}
+  execute: executeClaudeAgentTool,
+});
 
 const launchClaudeAgentSession = Effect.fn(
   'claudeAgent.launchClaudeAgentSession',
@@ -619,24 +619,21 @@ const launchClaudeAgentSession = Effect.fn(
 ): Effect.fn.Return<
   ToolResult,
   AgentCliToolFailure,
-  Secrets | ToolCall | Runs | AgentResume
+  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const config = yield* getClaudeAgentConfig;
   const { roots } = yield* ToolCall;
-  const workingDir = parseWorkingDirectory(parentWorkingDirectory);
-  // Mirrors codex behavior so subagents can see the project: when the call
-  // is made from inside the workspace, the agent runs in that directory but
-  // is also granted read access to the workspace root so it can inspect
-  // sibling files. Out-of-workspace cwds run isolated (matches codex). The
-  // claude-agent-sdk's `Options` type names these fields `cwd` /
-  // `additionalDirectories`, unlike codex's `workingDirectory`.
+  // Mirrors codex so subagents can see the project: a call from inside the
+  // workspace runs in that directory with read access to the workspace root
+  // for sibling files; an out-of-workspace cwd runs isolated. The SDK's
+  // `Options` names these `cwd` / `additionalDirectories`, unlike codex.
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(roots.workspace, workingDir);
+    buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
   // The env block reads only the process environment and the `Secrets`
   // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
   const pathToClaudeCodeExecutable = yield* agentCliCall(
-    Effect.try({ try: findClaudeBinaryPath, catch: ensureError }),
+    findClaudeBinaryPath(),
   );
   // Synthetic run metadata for the child run: the Claude Code CLI runs outside
   // the normal run loop, so the tool-use category and a stable model label are

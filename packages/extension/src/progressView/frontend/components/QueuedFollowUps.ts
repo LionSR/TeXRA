@@ -107,7 +107,7 @@ export class QueuedFollowUps extends LitElement {
   }
 
   override render(): TemplateResult | typeof nothing {
-    // Empty queue renders nothing. The layout fix lives in FollowUpInput,
+    // Empty queue renders nothing. The layout fix lives in SessionComposer,
     // which only mounts this element when messages exist — Lit's `nothing`
     // clears shadow content but the host stays in the parent's layout, so a
     // mounted-but-empty host would still consume the parent's flex gap.

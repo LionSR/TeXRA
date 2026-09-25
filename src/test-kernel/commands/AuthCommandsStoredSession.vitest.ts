@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, FileSystem, Layer } from 'effect';
+import { Effect, Layer } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 const authMocks = vi.hoisted(() => ({
@@ -49,8 +49,9 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { signIn, signOut } from '@commands/auth/authCommands';
 import { AgentDirectories } from '@platform/interfaces';
-import { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import {
   nodePlatformLayer,
   unusedGlobalStorageFs,
@@ -60,18 +61,20 @@ import { fakeHostAgentDirectories } from '@test/support/setupPlatform';
 /** Run the command against the fake account plane. */
 const withAuth = <A>(
   auth: SupabaseAuthShape,
-  program: Effect.Effect<
-    A,
-    never,
-    GlobalStorageFs | SupabaseAuth | FileSystem.FileSystem | AgentDirectories
-  >,
+  program: Effect.Effect<A, never, AgentCatalogServices | SupabaseAuth>,
 ): Effect.Effect<A> =>
   Effect.provideService(program, SupabaseAuth, auth).pipe(
     Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
     // The sign-out path rebuilds the local agent catalog, which names the
     // process's global storage view and the filesystem its scan reads
     // through; this suite's catalog read is mocked.
-    Effect.provide(Layer.merge(unusedGlobalStorageFs(), nodePlatformLayer)),
+    Effect.provide(
+      Layer.mergeAll(
+        unusedGlobalStorageFs(),
+        nodePlatformLayer,
+        testHttpClientLayer,
+      ),
+    ),
   );
 
 describe('auth commands for unavailable stored sessions', () => {

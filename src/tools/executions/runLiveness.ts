@@ -1,41 +1,32 @@
 import { Effect } from 'effect';
 /**
- * Whether a run is still going, decided from facts that outlive this process.
+ * Whether a run is still going, decided from facts that outlive this process:
+ * the gate a caller asks before advancing past a run that recorded no
+ * outcome. A caller that holds a `run.end` row decides from it first; this
+ * answers only for a run without one. Display surfaces read the session fold
+ * instead, which has already decided all of this for every run at once.
  *
  * "No handle in this process" is not liveness. A run this shell never
  * launched, one another TeXRA process owns, and one whose owner crashed all
- * look identical from the registry, so a missing handle (or a missing
- * `run.end` row) can never on its own justify telling a model that a run
- * finished — or that it is still running. The ladder below asks the cheapest
- * durable fact that can decide the question, and stops there:
+ * look identical from the registry, so a missing handle can never on its own
+ * justify calling a run interrupted. The ladder:
  *
- * 1. a handle in this process — the registry's phase is the live truth;
- * 2. the `run.end` row's outcome — the run recorded how it ended, which is its
- *    own durable fact and outranks a claim this process is merely slow to
- *    release (#8093);
- * 3. the run claim — held by a live foreign owner, or by this process with no
+ * 1. a handle in this process: the run is live here;
+ * 2. the run claim: held by a live foreign owner, or by this process with no
  *    run behind it: nothing terminal may be claimed, and the reason is shown;
- * 4. no owner and no recorded outcome — the run stopped without recording how
- *    it ended: interrupted (a crash, or a host that quit).
+ * 3. no owner: the run stopped without recording how it ended: interrupted
+ *    (a crash, or a host that quit).
  *
  * The claim alone is the liveness authority (R6): single-owner sessions make
  * ownership the fact that says whether anything is still running, and the
  * existence of a `flow.snapshot` says only whether there is something to
  * continue, which is the resume path's question, not this one.
- *
- * The cost is the point: a caller asks this per run, so it must stay at one
- * metadata read (skipped entirely when the caller already holds the row) and,
- * for a row with no recorded outcome, one claim read. A row that recorded its
- * outcome pays neither. A surface listing many runs reads the session fold
- * instead, which has already decided all of this for every run at once.
  */
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import type { RunStatusInfo } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
-import { getRunRecords } from '@agent/storage/runRecords';
 import { withLogChannel } from '@logger/effectLog';
-import { type RunId, type RunOutcome, type RunPhase } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
 import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import { claimStanding } from '@shared/session/database';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -44,69 +35,33 @@ const CHANNEL = 'RunLiveness';
 
 /**
  * What may be said about a run right now. `unsettled` carries a mid-sentence
- * clause naming the fact that forbids a terminal reading, so each surface can
- * word it in its own voice. `settled` carries the recorded outcome, so every
- * surface renders the same durable value.
+ * clause naming the fact that forbids a terminal reading, so each caller can
+ * word it in its own voice.
  */
 export type RunLiveness =
-  | { readonly kind: 'live'; readonly info: LiveRunStatusInfo }
+  | { readonly kind: 'live' }
   | { readonly kind: 'unsettled'; readonly reason: string }
-  | { readonly kind: 'interrupted' }
-  | { readonly kind: 'settled'; readonly outcome: RunOutcome };
+  | { readonly kind: 'interrupted' };
 
 /**
- * A tracked run's status line. Its phase is a real one — the registry answers
- * with the stream's phase, never the `unknown` the persisted arms fall back to
- * — so a reader may ask whether it is still in flight.
- */
-type LiveRunStatusInfo = RunStatusInfo & { status: RunPhase };
-
-/**
- * The run's recorded outcome as a caller that just read it holds it: `null`
- * when the read found no terminal row. `undefined` (the argument omitted)
- * means the caller has none and this module reads it, so "run present
- * without an outcome" never costs a second read.
- *
- * Only a row read for this same request may be passed: an older snapshot would
- * let two surfaces disagree about how one run ended.
- */
-export type KnownRunOutcome = RunOutcome | null;
-
-/**
- * This process holds the claim, tracks no run for it, and no outcome was ever
- * written: the registry and the claim disagree with nothing durable to fall
- * back on, which is a leak to report, never a run to call settled.
+ * This process holds the claim and tracks no run for it: the registry and the
+ * claim disagree with nothing durable to fall back on, which is a leak to
+ * report, never a run to call interrupted.
  */
 const OWNED_HERE_REASON = "held by this process's claim with no live run";
 
 export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
   runId: RunId,
   session: SessionHandle,
-  knownOutcome?: KnownRunOutcome,
 ): Effect.fn.Return<RunLiveness, never, Runs> {
   const runs = yield* Runs;
-  const handle = runs.getHandle(runId);
-  if (handle) return { kind: 'live', info: runs.getStatus(handle) };
+  if (runs.getHandle(runId)) return { kind: 'live' };
 
-  return yield* Effect.gen(function* (): Effect.fn.Return<
-    RunLiveness,
-    unknown
-  > {
-    const outcome =
-      knownOutcome === undefined
-        ? ((yield* getRunRecords(session, runId).readRunEnd())?.outcome ?? null)
-        : knownOutcome;
-    // A recorded outcome is the run's own fact, not the claim's: a finished
-    // child untracks its handle and writes the outcome long before its loop
-    // releases the run claim, and the parent reads the run inside
-    // exactly that window (#8093).
-    if (outcome !== null) {
-      return { kind: 'settled', outcome };
-    }
+  return yield* Effect.gen(function* (): Effect.fn.Return<RunLiveness, Error> {
     const standing = claimStanding(yield* session.claimOwner(runId));
     if (standing.kind === 'self') {
       yield* Effect.logWarning(
-        `Run ${runId} holds this process's claim with no tracked run and no recorded outcome; reporting it as unsettled rather than finished`,
+        `Run ${runId} holds this process's claim with no tracked run and no recorded outcome; reporting it as unsettled rather than interrupted`,
       ).pipe(withLogChannel(CHANNEL));
       return { kind: 'unsettled', reason: OWNED_HERE_REASON };
     }

@@ -19,9 +19,11 @@ import type {
   MessageHost,
   NotificationFailed,
 } from '@hosts/uiHosts';
+import { withLogChannel } from '@logger/effectLog';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId } from '@shared/schemas';
 import type { Rejected } from '@shared/session/requestErrors';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { TranscriptExportFailed } from './transcriptExportFailure';
 import type {
   ChatExportController,
@@ -79,7 +81,6 @@ interface TranscriptExportPorts {
   showError(
     message: string,
   ): Effect.Effect<void, NotificationFailed | Rejected>;
-  reportDetail?(message: string, data?: unknown): void;
   /** The host's controller. The memo lives on the host -- the desktop loads
    *  the controller's module graph on the first export -- and a failed load
    *  is not memoized, so the next export retries. */
@@ -89,6 +90,8 @@ interface TranscriptExportPorts {
   >;
   getTraceViewerTemplate(): string;
 }
+
+const CHANNEL = 'ExportTranscript';
 
 const RUN_NOT_FOUND_MESSAGE = 'This run has no saved data to export.';
 
@@ -159,7 +162,7 @@ export const exportRunTranscript = Effect.fn('exportRunTranscript')(function* (
 ): Effect.fn.Return<
   void,
   TranscriptExportFailure,
-  FileSystem.FileSystem | StorageFs | WorkspaceFs
+  FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
 > {
   const format = yield* ports.pickFormat;
   if (!format) return;
@@ -203,7 +206,7 @@ const exportLatex = Effect.fn('exportLatex')(function* (
 ): Effect.fn.Return<
   void,
   ExternalOpenFailed | NotificationFailed | PlatformError.PlatformError,
-  FileSystem.FileSystem | StorageFs | WorkspaceFs
+  FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
 > {
   const result = yield* controller.exportAsLatex(runId, input);
   if (result.pdfPath) {
@@ -216,9 +219,13 @@ const exportLatex = Effect.fn('exportLatex')(function* (
     return;
   }
   if (result.logTail) {
-    ports.reportDetail?.(
+    yield* Effect.logError(
       `LaTeX export compilation failed for ${result.storagePath}:\n${result.logTail}`,
-      { storagePath: result.storagePath, logTail: result.logTail },
+    ).pipe(
+      Effect.annotateLogs({
+        data: { storagePath: result.storagePath, logTail: result.logTail },
+      }),
+      withLogChannel(CHANNEL),
     );
   }
   yield* ports.openPath(result.absolutePath, 'text');

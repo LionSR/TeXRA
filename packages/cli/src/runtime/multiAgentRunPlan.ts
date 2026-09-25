@@ -1,18 +1,15 @@
 import { Effect } from 'effect';
 
-import { getAgentsByCategory, loadAgents, refresh } from '@agent/index';
+import { getCategoryAgent, loadAgents, refresh } from '@agent/index';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import {
-  findTeamPreset,
   planTeamRun,
   planTeamRuns,
   refreshRemoteCatalogForGaps,
   teamPlanHasGaps,
-  type TeamPreset,
 } from '@common/teams/TeamPlan';
+import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { StateStore } from '@platform/interfaces';
-import { byCategory } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { missingMultiAgentPresetMessage } from './agents';
 import { CliUsageError } from './cliContext';
@@ -43,7 +40,7 @@ function planCurrentMultiAgentRun(
   init: MultiAgentRunPlanInit,
 ): CliMultiAgentPresetRunPlan {
   return planTeamRun(preset, {
-    agents: byCategory((category) => getAgentsByCategory(category)),
+    resolveAgent: getCategoryAgent,
     agentOverride: init.agent,
   });
 }
@@ -51,9 +48,7 @@ function planCurrentMultiAgentRun(
 function planLoadedCliMultiAgentPresets(
   presets: readonly TeamPreset[],
 ): CliMultiAgentPresetRunPlan[] {
-  return planTeamRuns(presets, {
-    agents: byCategory((category) => getAgentsByCategory(category)),
-  });
+  return planTeamRuns(presets, { resolveAgent: getCategoryAgent });
 }
 
 /**
@@ -120,14 +115,10 @@ function reloadRemoteAgentsForGaps<T>(
   hasGaps: (value: T) => boolean,
   replan: () => T,
 ) {
-  // The gap-refresh port widens its refresh failure to `unknown`; the only
-  // thing this one raises is the catalog load's own `AgentCatalogLoadError`,
-  // so naming it `Error` here loses nothing and keeps the commands' failure
-  // channel the `Error` it has always been.
   return refreshRemoteCatalogForGaps(value, hasGaps, replan, {
     canAccessRemoteCatalog: () => supabaseAuthenticated,
     refreshRemote: () => refresh({ includeRemote: true }),
-  }).pipe(Effect.mapError(ensureError));
+  });
 }
 
 export function writeMissingPresetAgents(

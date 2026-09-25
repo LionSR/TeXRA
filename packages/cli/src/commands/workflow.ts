@@ -1,14 +1,18 @@
 import * as path from 'node:path';
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
+import {
+  AgentCategory,
+  isTerminalCompileRejection,
+  RUN_OUTCOME,
+  type RunId,
+} from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
-import { snapshotHoldsTerminalCompileRejection } from '../runtime/toolUseResumeData';
 
 import {
-  CliUsageError,
+  failUsage,
   readCliStdinText,
   type CliContext,
 } from '../runtime/cliContext';
@@ -105,7 +109,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   init: HeadlessRunInit,
 ): Effect.fn.Return<number, Error, CliRunServices> {
   if (init.output && init.outputDir) {
-    throw new CliUsageError('Use either --output or --output-dir, not both.');
+    return yield* failUsage('Use either --output or --output-dir, not both.');
   }
   const instruction = yield* resolveFileBackedInstruction(init, context.cwd);
   // Neither category can run this: a workflow agent needs at least one input
@@ -113,34 +117,31 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
   // platform init keeps a plain usage error off the agent-catalog fetch a
   // signed-in session would otherwise pay for.
   if (!instruction && init.inputFiles.length === 0) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Provide --instruction or --instruction-file for a tool-use agent, or --input for a workflow agent.',
     );
   }
 
   const services = yield* initCliPlatform({ ...context, quietLogs: true });
-  // Pre-validate the resolved agent so usage errors land before stdin is read
-  // or the runtime host starts.
-  const agent = yield* resolveCliRunAgent(services, init.agent);
-  if (agent.category === AgentCategory.ToolUse) {
-    return yield* runToolUseAgent(context, init, instruction, services);
+  // Resolve once, before stdin is read or the runtime host starts; the run
+  // pins the resolved source.
+  const { category, source } = yield* resolveCliRunAgent(services, init.agent);
+  if (category === AgentCategory.ToolUse) {
+    return yield* runToolUseAgent(context, init, source, instruction, services);
   }
 
   // A workflow agent with no `--input` cannot run, and the output probes below
   // `mkdir -p` their destination before `withExpandedRunInputs` would report
   // it. Refuse first so an invalid command leaves nothing on disk.
   if (init.inputFiles.length === 0) {
-    throw new CliUsageError(WORKFLOW_INPUT_REQUIRED_MESSAGE);
+    return yield* failUsage(WORKFLOW_INPUT_REQUIRED_MESSAGE);
   }
-  // Reject `--output-dir <path>` early when the path already points at a
-  // non-directory (else we'd run the full workflow and EEXIST at the end).
+  // Fast-fail an `--output-dir` or `--output` path the final copy would reject
+  // (`EEXIST` / `EISDIR`) only after the full agent run.
   yield* assertOutputDirAvailable(init.outputDir, context.cwd);
-  // Same fast-fail for `--output <path>`: existing directory or file-typed
-  // parent component blows up at copy time (`EISDIR` / `EEXIST`) after the
-  // full agent run otherwise.
   yield* assertOutputFileAvailable(init.output, context.cwd);
   if (init.output && hasMixedStdinWorkflowInputSpecs(init.inputFiles)) {
-    throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
+    return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
   }
 
   return yield* withExpandedRunInputs(
@@ -151,7 +152,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     ({ inputFiles, contextFiles, stdinInputPath }) =>
       Effect.gen(function* () {
         if (init.output && inputFiles.length > 1) {
-          throw new CliUsageError(MULTI_INPUT_OUTPUT_MESSAGE);
+          return yield* failUsage(MULTI_INPUT_OUTPUT_MESSAGE);
         }
 
         const model = yield* selectCliRunModel(
@@ -180,6 +181,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         );
         const config: AgentConfigPayload = {
           agent: init.agent,
+          agentSource: source,
           model,
           inputFiles,
           contextFiles,
@@ -217,6 +219,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
 const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
   context: CliContext,
   init: HeadlessRunInit,
+  agentSource: AgentConfigPayload['agentSource'],
   instruction: string,
   services: CliPlatformServices,
 ): Effect.fn.Return<number, Error, CliRunServices> {
@@ -226,12 +229,12 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
     ? '--output'
     : init.outputDir && '--output-dir';
   if (workflowOnlyFlag) {
-    throw new CliUsageError(
+    return yield* failUsage(
       `${workflowOnlyFlag} is only available for workflow agents; "${init.agent}" is a ${AgentCategory.ToolUse} agent.`,
     );
   }
   if (!instruction) {
-    throw new CliUsageError('Provide --instruction or --instruction-file.');
+    return yield* failUsage('Provide --instruction or --instruction-file.');
   }
 
   const model = yield* selectCliRunModel(context, init.model, 'chat', services);
@@ -250,6 +253,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
       Effect.gen(function* () {
         const config: AgentConfigPayload = {
           agent: init.agent,
+          agentSource,
           model,
           inputFiles,
           contextFiles,
@@ -310,6 +314,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* options.session;
+    const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
     let resumeHintWritten = false;
@@ -331,7 +336,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       if (snapshot.family !== 'reflection') return false;
       return (
         snapshot.runtime.lastError == null &&
-        !snapshotHoldsTerminalCompileRejection(snapshot)
+        !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
       );
     };
     const writeResumeHint = (
@@ -376,12 +381,11 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         tryCommitPublication,
       ) =>
         Effect.gen(function* () {
-          // Handed over by the launch, which is the only load of this run's
-          // definition: the defaults this run actually executed, not a reread
-          // of a catalog entry a nested refresh may have replaced with a
-          // remote listing that carries none. `cli.expectedOutputFiles` holds
-          // the input-derived names the launch computed, which stand in when
-          // the agent declares none.
+          // Handed over by the launch (the only load of this run's definition):
+          // the defaults this run actually executed, not a reread of a catalog
+          // entry a nested refresh may have swapped for a remote listing that
+          // carries none. The input-derived `cli.expectedOutputFiles` the
+          // launch computed stand in when the agent declares none.
           const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
           const expectedOutputFiles = declaredOutputFiles.length
             ? declaredOutputFiles
@@ -391,7 +395,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               expectedOutputFiles,
               storageRoot: session.roots.storage,
               tryCommitPublication,
-            }),
+            }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
           let outcome = result.outcome;
           if (Result.isFailure(outputResult)) {
@@ -402,7 +406,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
           }
           yield* getRunRecords(session, result.runId).writeResultMeta({
             producer: 'cliWorkflow',
-            output: result.output,
+            output: workflowResult?.output ?? result.output,
             ...(workflowResult?.copiedOutput !== undefined && {
               copiedOutput: workflowResult.copiedOutput,
             }),

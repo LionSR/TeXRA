@@ -10,14 +10,13 @@ import {
   type SessionHandle,
 } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
-import {
-  resolveSetupLaunchModel,
-  SETUP_INSTRUCTION,
-} from '@controllers/onboarding/setupLaunch';
+import { SETUP_INSTRUCTION } from '@controllers/onboarding/setupLaunch';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
+import {
+  hasUsableSetupCredential,
+  resolveSetupLaunchModel,
+} from '@model/setupCredentialAccess';
 import type {
   StateReadFailed,
   StateStore,
@@ -38,37 +37,6 @@ import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'SetupAssistant';
-const log = createLog(CHANNEL);
-const credentialLog = createLog('Setup Credentials');
-
-interface LaunchModelResolution {
-  model: string;
-  requiresOpenRouter: boolean;
-}
-
-/**
- * The extension additionally offers the OpenRouter access-list model as a
- * last resort (`ensureRoutingConfigured` already prompted the user, so the
- * fallback's flag flip is expected, unlike desktop's silent-launch path).
- */
-function selectLaunchModel(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<LaunchModelResolution | null, StateReadFailed, LanguageModel> {
-  return resolveSetupLaunchModel(stores, secrets, true).pipe(
-    Effect.map((resolution) =>
-      resolution
-        ? {
-            model: resolution.model,
-            requiresOpenRouter:
-              resolution.reason === 'router-config' ||
-              resolution.reason === 'access-list-default',
-          }
-        : null,
-    ),
-  );
-}
-
 /**
  * Temporarily flip `useOpenRouter` on for the OR-only launch path and always
  * restore it, including failures before `executeAgent` starts. The flip is the
@@ -124,7 +92,9 @@ export function hasAnyUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  return hasUsableSetupCredential(stores, secrets, credentialLog.warn);
+  return hasUsableSetupCredential(stores, secrets).pipe(
+    withLogChannel('Setup Credentials'),
+  );
 }
 
 const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
@@ -190,10 +160,7 @@ const ensureCredentialOrPrompt = Effect.fn('ensureCredentialOrPrompt')(
 // Routing is fine when the current configuration resolves any setup model.
 // A managed direct route can remain runnable even when global OpenRouter is
 // enabled without an OpenRouter key.
-function isRoutingConfigured(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-): Effect.Effect<boolean, StateReadFailed, LanguageModel> {
+function isRoutingConfigured(stores: SettingsStores, secrets: PlatformSecrets) {
   return Effect.gen(function* () {
     if (!(yield* getUseOpenRouter(stores))) return true;
     return (yield* resolveSetupLaunchModel(stores, secrets, false)) !== null;
@@ -222,7 +189,7 @@ const ensureRoutingConfigured = Effect.fn('ensureRoutingConfigured')(function* (
   );
   if (choice === 'Open Models tab') {
     yield* Effect.promise(() =>
-      vscode.commands.executeCommand('texra.showModels'),
+      vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
     );
   } else if (choice === 'Add OpenRouter key') {
     yield* Effect.promise(() =>
@@ -262,7 +229,7 @@ export function launchSetupAssistant(
         .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
     ) {
       void vscode.window.showInformationMessage(
-        'The setup assistant is already running. Follow it in the Progress view.',
+        'The setup assistant is already running. Follow it in the TeXRA panel.',
       );
       yield* Effect.promise(() =>
         vscode.commands.executeCommand('texra.showProgressView'),
@@ -272,12 +239,11 @@ export function launchSetupAssistant(
 
     // Check routing configuration before credentials: a ChatGPT-
     // subscription user whose "Use OpenRouter" flag is on without an OR
-    // key would otherwise fall into the credential prompt first because
-    // isCodexSubscriptionActive returns false because
-    // shouldUseCodexSubscription short-circuits when useOpenRouter is true.
+    // key would otherwise fall into the credential prompt first, because the
+    // picker never routes through the subscription while OpenRouter is on.
     if (!(yield* ensureRoutingConfigured(session.roots, secrets))) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Dashboard → Models, then run `TeXRA: Run Setup Assistant` again.',
+        'Setup assistant cancelled. Fix the "Use OpenRouter" setting in Settings → Models, then run `TeXRA: Run Setup Assistant` again.',
       );
       return 'not-started' as const;
     }
@@ -285,12 +251,16 @@ export function launchSetupAssistant(
     const proceed = yield* ensureCredentialOrPrompt(session.roots, secrets);
     if (!proceed) {
       void vscode.window.showInformationMessage(
-        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in, turned on your ChatGPT subscription, or set an API key.',
+        'Setup assistant cancelled. Run `TeXRA: Run Setup Assistant` again once you have signed in with your ChatGPT subscription or set an API key.',
       );
       return 'not-started' as const;
     }
 
-    const resolution = yield* selectLaunchModel(session.roots, secrets);
+    const resolution = yield* resolveSetupLaunchModel(
+      session.roots,
+      secrets,
+      true,
+    );
     if (!resolution) {
       // Edge case: no setup-model candidate is usable with the current
       // credentials. Refuse launch rather than pick a model that crashes at
@@ -305,7 +275,7 @@ export function launchSetupAssistant(
       );
       if (choice === 'Open Models tab') {
         yield* Effect.promise(() =>
-          vscode.commands.executeCommand('texra.showModels'),
+          vscode.commands.executeCommand('texra.showDashboard', 'models/keys'),
         );
       } else if (choice === 'Set API key') {
         yield* Effect.promise(() =>
@@ -347,14 +317,19 @@ export function launchSetupAssistant(
       // That is a cancellation, not a launch failure: re-raise it so no
       // error notification appears during teardown.
       if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
-      return Effect.sync(() => {
-        const error = Cause.squash(cause);
-        log.error('Setup assistant failed to launch.', { data: error });
-        void vscode.window.showErrorMessage(
-          `Failed to launch setup assistant: ${toErrorMessage(error)}`,
-        );
-        return 'not-started' as const;
-      });
+      const error = Cause.squash(cause);
+      return Effect.logError('Setup assistant failed to launch.').pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel(CHANNEL),
+        Effect.andThen(
+          Effect.sync(() => {
+            void vscode.window.showErrorMessage(
+              `Failed to launch setup assistant: ${toErrorMessage(error)}`,
+            );
+          }),
+        ),
+        Effect.as('not-started' as const),
+      );
     }),
   );
 }

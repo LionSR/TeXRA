@@ -29,12 +29,12 @@
  *
  * The run model (`transcript.run`) is derived only when one of its inputs
  * moved: the run's own `run.start`, a status change, a transcript entry the
- * model reads (a workflow card, a group boundary, a plan marker), or a
+ * model reads (a workflow card, a group boundary, a plan), or a
  * direct child's progress. Folding a frame defers that derivation to the
  * end of the frame, so a replay of R events derives each board once.
  *
  * Publication (D5): returned views are immutable; untouched branches retain
- * identity. writableMap/writableTranscriptArray copy each changed container
+ * identity. writableMap and the transcript fold copy each changed container
  * at most once per fold, and writes stop when fold returns. No-op writes keep
  * the previous branch. RunView, TranscriptView, and SessionView are replaced
  * on change, preserving older views and identity-based host comparisons.
@@ -50,8 +50,6 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   MESSAGE_TYPES,
-  TOOL_CALL_STATUS,
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
@@ -68,26 +66,14 @@ import {
   type ExistenceReconciliation,
   type LocalRuntimeState,
   type DisplaySessionEvent,
-  type StreamLogEntry,
+  type RoundOutput,
   type RunId,
-  type TaskGroup,
   type TextChunk,
   type TranscriptSubscription,
-  type WorkflowDeclaredPlan,
 } from '@shared/schemas';
-import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
-import {
-  applyCompactionActivityEntry,
-  createCompactionActivityProjection,
-  settleCompactionActivities,
-  type CompactionActivityProjection,
-} from '@shared/runs/compactionActivityProjection';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
-import {
-  compareByNewestCreationTime,
-  compareBySeqNo,
-} from '@shared/runs/runOrdering';
+import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
   isTerminalOutcomePhase,
@@ -99,53 +85,40 @@ import {
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
 import {
-  isTaskGroupLifecycleEntry,
-  upsertTaskGroupFromStreamLog,
-} from '@shared/runs/taskGroupProjection';
-import {
-  workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
 } from '@shared/runs/workflowRunModel';
-import {
-  appendTranscriptText,
-  transcriptText,
-  type TranscriptText,
-} from '@ui/transcript/transcriptText';
-import {
-  compactionActivityRow,
-  isSettledRow,
-  projectTranscriptRow,
-  type TranscriptRow,
-  type TranscriptRowKind,
-} from '@ui/transcript';
-import { isObject } from '@utils/core';
+import { isSettledRow, rowHeadline, type TranscriptRow } from '@ui/transcript';
 import {
   applyRunRow,
   freshRunRows,
+  isSharedRunRow,
   type RunRows,
   type SharedRunRow,
 } from './runRows';
-import { applyTraceRow, createTranscriptFold } from './traceFold';
-import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
+import { foldTranscriptEvent } from './transcriptFold';
+import {
+  clearLiveText,
+  foldLiveText,
+  runModelInputs,
+  settleTranscript,
+  transcriptActivity,
+} from './transcriptReads';
+import {
+  emptyTranscript,
+  lifecycleToTaskGroups,
+  replaceTranscript,
+  resetTranscriptOwnership,
+  type TranscriptContext,
+} from './transcriptState';
 
-import { emptySessionView } from './sessionView';
+import { emptySessionView, isLiveRun } from './sessionView';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
 
 /** Workflow-script run ids whose run model a batch derives at its end. */
 type DeferredRunModels = Set<RunId> | null;
-/** Canonical dashboard rows a workflow-script run model reads. */
-const WORKFLOW_DASHBOARD_KINDS = new Set<TranscriptRowKind>([
-  'compactionActivity',
-  'phase',
-  'workflowTask',
-]);
-
-/** Residency cap on one run model's dashboard rows (PRD 5.2). */
-const MAX_RUN_MODEL_DASHBOARD_ROWS = 2_000;
-
 /** One input, or a frame of them (the transport's unit, 7.4 and 8.1) or a
  *  replay: every input in order, with each touched workflow board's run
  *  model derived once at the end instead of once per event. */
@@ -155,6 +128,7 @@ export function fold(
 ): SessionView {
   // One call publishes one level: nothing this call did not copy is written.
   owned = new WeakSet();
+  resetTranscriptOwnership();
   if (!Array.isArray(input)) return foldWith(view, input as FoldInput, null);
   const deferred = new Set<RunId>();
   let next = view;
@@ -269,19 +243,14 @@ interface SessionIndexes {
   /** Current sequence-row claims for the checked resident scope. */
   readonly claims: Map<AggregateId, string | null>;
   /** What the rows both folds read say about each run (`runRows.ts`);
-   *  `view.requests`, `view.queuedFollowUps` and `RunView.flow` project it. */
+   *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
+   *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
    *  final when a read replays the `run.start` beneath it. */
   readonly latest: Map<string, number>;
-  /** Live text per `${run}/${row}`, beside the rows rather than inside
-   *  them: a chunk can reach the fold before its row (5.2). A row paints
-   *  its durable text joined with this entry; the entry goes when the row
-   *  finalizes, the run ends, the run is removed, or its transcript
-   *  tier is evicted. */
-  readonly inflight: Map<string, string>;
   /** This process's local truth, the snapshot the next one diffs against:
    *  a fold input, never durable. */
   local: LocalRuntimeState;
@@ -301,7 +270,6 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       claims: new Map(),
       rows: new Map(),
       latest: new Map(),
-      inflight: new Map(),
       local: { self: [], dead: [], unreadable: [] },
     };
     SESSION_INDEXES.set(view.runs, indexes);
@@ -339,117 +307,6 @@ function writableMap<K extends ViewMapKey>(
   owned.add(copy);
   view[key] = copy;
   return copy;
-}
-
-type TranscriptArrayKey = 'rows' | 'taskGroups';
-
-/**
- * The transcript's array under `key`, copied once per call before its first
- * write and landed on the transcript value. Only a value this call built
- * (`replaceTranscript`) is passed here, so the copy never reaches a
- * published level, and a branch this call never writes stays the array the
- * previous level published.
- */
-function writableTranscriptArray<K extends TranscriptArrayKey>(
-  transcript: TranscriptView,
-  key: K,
-): TranscriptView[K] {
-  const current = transcript[key];
-  if (owned.has(current)) return current;
-  const copy = [...current] as TranscriptView[K];
-  owned.add(copy);
-  transcript[key] = copy;
-  return copy;
-}
-
-function inflightKey(runId: RunId, rowId: string): string {
-  return `${runId}/${rowId}`;
-}
-
-/** Drop a run's live text and its streaming cursors: the run ended,
- *  was removed, or lost its transcript tier (5.2, "In-flight text"). */
-function clearInflight(view: SessionView, run: RunView): void {
-  const prefix = `${run.id}/`;
-  const { inflight } = sessionIndexesOf(view);
-  for (const key of inflight.keys()) {
-    if (key.startsWith(prefix)) inflight.delete(key);
-  }
-  indexesOf(run.transcript).streaming.clear();
-}
-
-// ---------------------------------------------------------------------------
-// Transcript indexes (fold-owned, never on the view)
-// ---------------------------------------------------------------------------
-
-/** One streaming row's measured live text: the projection of its session
- *  `inflight` entry, extended per chunk rather than re-measured. */
-interface StreamingCursor {
-  /** The last durable entry for the row: a first chunk projects it when the
-   *  entry's own text was blank and gave no row. */
-  readonly entry: StreamLogEntry;
-  text: TranscriptText;
-}
-
-interface TranscriptIndexes {
-  readonly source: StreamLog;
-  readonly trace: ReturnType<typeof createTranscriptFold>;
-  /** Row position by row id. */
-  readonly rowIndex: Map<string, number>;
-  /** Task-group position by group id. */
-  readonly taskGroupIndex: Map<string, number>;
-  /** The compaction projection's working state; `compaction` is its blocks. */
-  readonly compactionState: CompactionActivityProjection;
-  /** Measured live text per streaming row id. */
-  readonly streaming: Map<string, StreamingCursor>;
-  /** The newest thinking row, for `thinkingActive`. */
-  thinkingRowId: string | undefined;
-  /** The newest workflow plan marker, for the run model. */
-  plan: WorkflowDeclaredPlan | undefined;
-  /** The newest attempt boundary, even when its plan was malformed. */
-  workflowAttemptId: string | undefined;
-}
-
-const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
-
-function indexesOf(transcript: TranscriptView): TranscriptIndexes {
-  const indexes = INDEXES.get(transcript);
-  if (!indexes) {
-    throw new Error('TranscriptView value was not created by the fold');
-  }
-  return indexes;
-}
-
-/** A replaced transcript value sharing the previous value's indexes. */
-function replaceTranscript(
-  transcript: TranscriptView,
-  patch: Partial<TranscriptView>,
-): TranscriptView {
-  const next: TranscriptView = { ...transcript, ...patch };
-  INDEXES.set(next, indexesOf(transcript));
-  return next;
-}
-
-function emptyTranscript(): TranscriptView {
-  const compactionState = createCompactionActivityProjection();
-  const transcript: TranscriptView = {
-    rows: [],
-    taskGroups: [],
-    settledRows: 0,
-    run: null,
-  };
-  const source = new StreamLog();
-  INDEXES.set(transcript, {
-    source,
-    trace: createTranscriptFold(source),
-    rowIndex: new Map(),
-    taskGroupIndex: new Map(),
-    compactionState,
-    streaming: new Map(),
-    thinkingRowId: undefined,
-    plan: undefined,
-    workflowAttemptId: undefined,
-  });
-  return transcript;
 }
 
 // ---------------------------------------------------------------------------
@@ -725,8 +582,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     const child = view.runs.get(childId);
     if (!child) continue;
     rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isInFlightPhase(child.status) ? 1 : 0) + child.rollup.running;
+    rollup.running += (isLiveRun(child) ? 1 : 0) + child.rollup.running;
     rollup.finished +=
       (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
@@ -813,38 +669,6 @@ function childProgressChanged(prev: RunView, next: RunView): boolean {
   );
 }
 
-/**
- * The run model's residency (PRD 5.2, section 4 of the build note): the
- * newest dashboard rows up to the cap, and the phase groups those rows still
- * name. A phase whose every card fell off the cap is not shown.
- */
-function runModelInputs(transcript: TranscriptView): {
-  rows: TranscriptRow[];
-  taskGroups: TaskGroup[];
-} {
-  const dashboard = transcript.rows.filter((row) =>
-    WORKFLOW_DASHBOARD_KINDS.has(row.kind),
-  );
-  const rows =
-    dashboard.length > MAX_RUN_MODEL_DASHBOARD_ROWS
-      ? dashboard.slice(-MAX_RUN_MODEL_DASHBOARD_ROWS)
-      : dashboard;
-  if (rows.length === dashboard.length) {
-    return { rows, taskGroups: transcript.taskGroups };
-  }
-  const retainedPhaseIds = new Set<string>();
-  for (const row of rows) {
-    if (row.kind === 'phase') retainedPhaseIds.add(row.id);
-    else if (row.groupId !== undefined) retainedPhaseIds.add(row.groupId);
-  }
-  return {
-    rows,
-    taskGroups: transcript.taskGroups.filter(
-      (group) => group.kind !== 'phase' || retainedPhaseIds.has(group.id),
-    ),
-  };
-}
-
 /** `transcript.run` for a workflow-script run, derived now. */
 function withRunModel(view: SessionView, run: RunView): RunView {
   if (!isWorkflowScriptRun(run)) return run;
@@ -854,11 +678,8 @@ function withRunModel(view: SessionView, run: RunView): RunView {
     if (child) childProgress.set(childId, childProgressOf(child));
   }
   const transcript = run.transcript;
-  const indexes = indexesOf(transcript);
   const runModel = workflowRunModel({
     ...runModelInputs(transcript),
-    workflowAttemptId: indexes.workflowAttemptId,
-    plan: indexes.plan,
     runPhase: run.status,
     // A terminal outcome with nothing left to settle its cards.
     runDurablyFinal: run.durableOutcome !== null,
@@ -908,245 +729,16 @@ function walkUp(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Transcript slice
-// ---------------------------------------------------------------------------
-
-function upsertRow(transcript: TranscriptView, row: TranscriptRow): void {
-  // The one writer of `rows`: the copy belongs to the write, so an entry
-  // that projects no row leaves the array the previous level published.
-  const rows = writableTranscriptArray(transcript, 'rows');
-  const { rowIndex } = indexesOf(transcript);
-  const at = rowIndex.get(row.id);
-  if (at !== undefined) {
-    rows[at] = row;
-    return;
-  }
-  const seqOf = (candidate: TranscriptRow) => candidate.seqNo;
-  const timeOf = (candidate: TranscriptRow) => candidate.timestamp;
-  let position = rows.length;
-  while (
-    position > 0 &&
-    compareBySeqNo(rows[position - 1], row, seqOf, timeOf) > 0
-  ) {
-    position -= 1;
-  }
-  if (position === rows.length) {
-    rowIndex.set(row.id, rows.length);
-    rows.push(row);
-    return;
-  }
-  rows.splice(position, 0, row);
-  for (let i = position; i < rows.length; i += 1) rowIndex.set(rows[i].id, i);
-}
-
-function rowById(
-  transcript: TranscriptView,
-  id: string,
-): TranscriptRow | undefined {
-  const at = indexesOf(transcript).rowIndex.get(id);
-  return at === undefined ? undefined : transcript.rows[at];
-}
-
-function reconcileCompactionRows(
-  transcript: TranscriptView,
-  changedIndices: readonly number[],
-): void {
-  const { compactionState } = indexesOf(transcript);
-  for (const blockIndex of changedIndices) {
-    const block = compactionState.blocks[blockIndex];
-    if (block) upsertRow(transcript, compactionActivityRow(block));
-  }
-}
-
-/** A tool card still running: what it prints reaches the fold as live text
- *  keyed by the card id, like a streaming row's chunks, and projects as the
- *  card's output until the terminal row replaces it (C3: never a row). */
-function isRunningToolEntry(entry: StreamLogEntry): boolean {
-  return (
-    entry.type === STREAM_LOG_ENTRY_TYPES.LOG &&
-    entry.messageType === MESSAGE_TYPES.TOOL_USE &&
-    isObject(entry.data) &&
-    entry.data.status === TOOL_CALL_STATUS.IN_PROGRESS
-  );
-}
-
-/** The card's entry with its live output in place of the durable one. */
-function withToolOutput(entry: StreamLogEntry, output: string): StreamLogEntry {
-  return {
-    ...entry,
-    data: { ...(isObject(entry.data) ? entry.data : {}), output },
-  } as StreamLogEntry;
-}
-
-type StreamingTextRow = Extract<
-  TranscriptRow,
-  { kind: 'assistant' | 'thinking' | 'scratchpad' }
->;
-
-function isStreamingTextRow(row: TranscriptRow): row is StreamingTextRow {
-  return (
-    row.kind === 'assistant' ||
-    row.kind === 'thinking' ||
-    row.kind === 'scratchpad'
-  );
-}
-
-/**
- * Whether a run's run, round, and session headings go to the task-group
- * surface rather than the rows (keyed on the identity, never the id format):
- * every workflow run and every plain agent run. The one exception is a
- * full-log child that is not a workflow run, a detached process or an
- * external-CLI session, whose verbatim log is the point of opening it.
- */
-function lifecycleToTaskGroups(run: RunView): boolean {
-  return (
-    run.category === AgentCategory.Workflow ||
-    isPlainAgentIdentity(run.identity)
-  );
-}
-
-function projectRow(
-  transcript: TranscriptView,
-  entry: StreamLogEntry,
-  projectLifecycleToTaskGroups: boolean,
-): void {
-  const row = projectTranscriptRow(entry, {
-    previousRow: rowById(transcript, entry.id),
-    projectLifecycleToTaskGroups,
-  });
-  if (row) upsertRow(transcript, row);
-}
-
-/**
- * Fold one transcript row into the slice: the row, task-group, compaction,
- * and run-marker reducers, each called unchanged. A streaming row joins its
- * durable fields with its session `inflight` entry, which may have arrived
- * first (5.2, "In-flight text"); a finalizing row drops that entry, so a
- * late chunk cannot reopen settled text.
- */
-function applyEntry(
-  view: SessionView,
-  run: RunView,
-  entry: StreamLogEntry,
-): TranscriptView {
-  const next = replaceTranscript(run.transcript, {});
-  const indexes = indexesOf(next);
-  // Task groups are copied by the entry that lands one, never by an
-  // ordinary model or log entry, which the projection would not write.
-  if (isTaskGroupLifecycleEntry(entry)) {
-    upsertTaskGroupFromStreamLog(
-      writableTranscriptArray(next, 'taskGroups'),
-      indexes.taskGroupIndex,
-      entry,
-    );
-  }
-  const marker = workflowMarkerOf(entry);
-  if (marker) {
-    indexes.workflowAttemptId = marker.attemptId ?? indexes.workflowAttemptId;
-    indexes.plan = marker.kind === 'plan' ? marker.plan : undefined;
-  }
-  reconcileCompactionRows(
-    next,
-    applyCompactionActivityEntry(indexes.compactionState, entry),
-  );
-  const key = inflightKey(run.id, entry.id);
-  const { inflight } = sessionIndexesOf(view);
-  // One holder of a row's live text, the session `inflight` index, whichever
-  // arrives first: chunks extend it, and an entry that folds before any chunk
-  // seeds it with the text it carried, so the chunk re-delivering that text
-  // from offset zero (the bridge seeds one for every running row it
-  // publishes) ends within the length held and is dropped (5.2, "In-flight
-  // text").
-  const streamingText = isRunningStreamingTextEntry(entry);
-  const runningTool = isRunningToolEntry(entry);
-  if (streamingText && entry.text && !inflight.has(key)) {
-    inflight.set(key, entry.text);
-  }
-  const live = streamingText || runningTool ? inflight.get(key) : undefined;
-  let projected = entry;
-  if (live !== undefined) {
-    projected = streamingText
-      ? { ...entry, text: live }
-      : withToolOutput(entry, live);
-  }
-  projectRow(next, projected, lifecycleToTaskGroups(run));
-  const row = rowById(next, entry.id);
-  if (row?.kind === 'thinking') {
-    const newest = indexes.thinkingRowId;
-    const at = indexes.rowIndex.get(row.id)!;
-    if (newest === undefined || indexes.rowIndex.get(newest)! <= at) {
-      indexes.thinkingRowId = row.id;
-    }
-  }
-  if (streamingText) {
-    const text = live ?? '';
-    indexes.streaming.set(entry.id, {
-      entry,
-      // The projected row already measured the text; a blank entry has none.
-      text: row && isStreamingTextRow(row) ? row.text : transcriptText(text),
-    });
-  } else if (runningTool) {
-    // A card's cursor holds the entry alone: its output projects from the
-    // held text, never from a measured cursor.
-    indexes.streaming.set(entry.id, { entry, text: transcriptText('') });
-  } else {
-    indexes.streaming.delete(entry.id);
-    inflight.delete(key);
-  }
-  return next;
-}
-
 /** Finalize unmatched compaction starts when the turn settles. */
 function withSettledTranscript(run: RunView, finishedAt: number): RunView {
   if (!isTranscriptSettlementPhase(run.status)) return run;
-  const changed = settleCompactionActivities(
-    indexesOf(run.transcript).compactionState,
-    finishedAt,
-  );
-  if (changed.length === 0) return run;
-  const transcript = replaceTranscript(run.transcript, {});
-  reconcileCompactionRows(transcript, changed);
-  return { ...run, transcript };
+  const transcript = settleTranscript(run.transcript, finishedAt);
+  return transcript === run.transcript ? run : { ...run, transcript };
 }
 
 // ---------------------------------------------------------------------------
 // Transcript-derived run facts (G4: derived in the fold, never by a host)
 // ---------------------------------------------------------------------------
-
-/** The headline a status line shows for a row: its own text, untrimmed and
- *  unsanitized; a host sanitizes for its surface at paint. */
-function rowHeadline(row: TranscriptRow): string {
-  switch (row.kind) {
-    case 'assistant':
-    case 'log':
-      return row.text.full;
-    case 'user':
-    case 'error':
-    case 'progressStatus':
-      return row.summary.full;
-    case 'workflowTask':
-      return row.line;
-    case 'phase':
-      return row.heading;
-    case 'thinking':
-      return 'Thinking';
-    case 'scratchpad':
-      return 'Scratchpad';
-    case 'webSearch':
-    case 'statistics':
-    case 'contextManagement':
-    case 'compactionActivity':
-      return row.label;
-    case 'fileList':
-    case 'missingOutputs':
-      return row.summary;
-    case 'latexdiff':
-      return `Latexdiff results (${row.entries.length})`;
-    case 'tool':
-      return '';
-  }
-}
 
 function nonEmpty(text: string | undefined): string | undefined {
   return text !== undefined && text.trim().length > 0 ? text : undefined;
@@ -1250,16 +842,7 @@ function withTranscriptFacts(run: RunView): RunView {
     transcript.settledRows,
     runFinal,
   );
-  const { thinkingRowId } = indexesOf(transcript);
-  const lastThinking =
-    thinkingRowId === undefined
-      ? undefined
-      : rowById(transcript, thinkingRowId);
-  const thinkingActive =
-    lastThinking?.kind === 'thinking' && lastThinking.streaming;
-  const compactingActive = indexesOf(transcript).compactionState.blocks.some(
-    (block) => block.status === 'running',
-  );
+  const { thinkingActive, compactingActive } = transcriptActivity(transcript);
   const latestLine =
     (run.category === AgentCategory.Workflow
       ? workflowOperationalLatestLine(transcript.rows)
@@ -1284,74 +867,15 @@ function withTranscriptFacts(run: RunView): RunView {
   };
 }
 
-/**
- * Apply one live chunk (5.2, "Live text"): ignored when its `to` is not past
- * the text held, otherwise the held text is truncated at `from` and the
- * chunk appended, so a redelivery in any order is a no-op and a `from: 0`
- * chunk replaces the row. An append costs the chunk, never the row; the
- * embedded-followup flag is the one whole-text scan, and it runs only while
- * a block is open or the chunk could open one. A chunk for a run the
- * view does not hold is dropped, and durable text wins: a row whose
- * finalizing event has folded is never reopened. Returns whether the chunk
- * changed anything.
- */
+/** Apply one live chunk (5.2, "Live text") to its run's transcript; a chunk
+ *  for a run the view does not hold is dropped. Returns whether the chunk
+ *  changed anything. */
 function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   const run = view.runs.get(chunk.runId);
   if (!run) return false;
-  const indexes = indexesOf(run.transcript);
-  const cursor = indexes.streaming.get(chunk.rowId);
-  if (!cursor && rowById(run.transcript, chunk.rowId)) return false;
-  const key = inflightKey(chunk.runId, chunk.rowId);
-  const { inflight } = sessionIndexesOf(view);
-  const held = inflight.get(key) ?? '';
-  if (chunk.to <= held.length) return false;
-  if (chunk.from > held.length) {
-    throw new Error(
-      `text chunk for ${key} starts at ${chunk.from}, past the ${held.length} characters held`,
-    );
-  }
-  const text = held.slice(0, chunk.from) + chunk.text;
-  inflight.set(key, text);
-  // The row projects when its entry folds, joined with this entry.
-  if (!cursor) return true;
-  if (isRunningToolEntry(cursor.entry)) {
-    const transcript = replaceTranscript(run.transcript, {});
-    projectRow(
-      transcript,
-      withToolOutput(cursor.entry, text),
-      lifecycleToTaskGroups(run),
-    );
-    setRun(view, { ...run, transcript });
-    return true;
-  }
-  cursor.text =
-    chunk.from === held.length
-      ? appendTranscriptText(cursor.text, chunk.text, held.at(-1) ?? '')
-      : transcriptText(text);
-  const transcript = replaceTranscript(run.transcript, {});
-  const at = indexes.rowIndex.get(chunk.rowId);
-  const row = at === undefined ? undefined : transcript.rows[at];
-  if (at !== undefined && row && isStreamingTextRow(row)) {
-    const { pendingEmbeddedFollowup: wasPending, ...rest } = row;
-    const pending =
-      row.kind === 'assistant' && (wasPending || chunk.text.includes('<'))
-        ? hasIncompleteEmbeddedSubagentFollowup(cursor.text.full)
-        : wasPending;
-    writableTranscriptArray(transcript, 'rows')[at] = {
-      ...rest,
-      text: cursor.text,
-      ...(pending ? { pendingEmbeddedFollowup: true } : {}),
-    };
-  } else {
-    // The entry's own text was blank and projected no row; the chunk that
-    // gives it one projects it once.
-    projectRow(
-      transcript,
-      { ...cursor.entry, text: cursor.text.full },
-      lifecycleToTaskGroups(run),
-    );
-  }
-  setRun(view, { ...run, transcript });
+  const transcript = foldLiveText(run.transcript, chunk, view.runs);
+  if (transcript === null) return false;
+  if (transcript !== run.transcript) setRun(view, { ...run, transcript });
   return true;
 }
 
@@ -1367,9 +891,12 @@ function wrongArm(run: RunView, name: string): never {
   );
 }
 
-/** The event's own arm applied to its run (topology, session slices, the
- *  transcript tier and the shared rows' own position are the caller's). */
-function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
+/** A durable event `runRows.ts` does not own. */
+type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow>;
+
+/** The event's own arm applied to its run (topology, session slices and the
+ *  transcript tier are the caller's). */
+function applyOwnArm(run: RunView, event: OwnEvent): RunView {
   switch (event.type) {
     case 'log':
     case 'stage.start':
@@ -1387,14 +914,8 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
     case 'approval.policy':
     case 'inquiryThreadUpdated':
     case 'run.removed':
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed':
       // Existence cannot become more true (5.2, "Duplicates"): a second
-      // start is a no-op. The rest move session slices alone, or are the
-      // shared rows `runRows.ts` owns; the caller projects their position.
+      // start is a no-op. The rest move session slices alone.
       return run;
     case 'run.activate': {
       // Every activation, the launch and each resume, opens a running
@@ -1455,27 +976,6 @@ function applyOwnArm(run: RunView, event: DisplaySessionEvent): RunView {
           ),
         },
       };
-    case 'output.produced': {
-      const files = nonEmptyRounds(
-        Object.fromEntries(
-          event.rounds.map((round) => [round.round, round.outputs]),
-        ),
-      );
-      return {
-        ...run,
-        ...(run.category === AgentCategory.Workflow
-          ? { files }
-          : { outputs: files }),
-        compileFailures: nonEmptyRounds(
-          Object.fromEntries(
-            event.rounds.map((round) => [round.round, round.compileFailures]),
-          ),
-        ),
-        missingOutputs: Object.fromEntries(
-          event.rounds.map((round) => [round.round, round.missingOutputs]),
-        ),
-      };
-    }
     case 'run.fact': {
       // Every family is a latest-only listing key of its own, so a cold
       // read delivers one row per family and each row carries the run's
@@ -1542,13 +1042,12 @@ function parked(run: RunView, atRest: boolean, at: number): RunView {
 }
 
 /** Session-level slices, applied before the run arm so the arm's aggregates
- *  see them. Returns the run's row slice when a shared row moved the loop's
- *  position, the only part of it the run arm projects. */
+ *  see them. */
 function applySessionSlices(
   view: SessionView,
   runId: RunId | null,
   event: DisplaySessionEvent,
-): RunRows | null {
+): void {
   switch (event.type) {
     case 'run.start':
       // The initial snapshot rides the existence fact (PRD 6, item 2).
@@ -1557,19 +1056,11 @@ function applySessionSlices(
       if (event.approvalPolicy && runId !== null) {
         writableMap(view, 'policy').set(runId, event.approvalPolicy);
       }
-      return null;
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed':
-      // One application, in `runRows.ts`; the containers are its
-      // projections. A replayed row is below the pair's `latest` entry.
-      return runId === null ? null : applyRowFacts(view, runId, event);
+      return;
     case 'approval.policy':
       if (runId !== null)
         writableMap(view, 'policy').set(runId, event.snapshot);
-      return null;
+      return;
     case 'inquiryThreadUpdated': {
       const {
         type: _type,
@@ -1587,35 +1078,50 @@ function applySessionSlices(
         at === -1
           ? [...view.inquiries, thread]
           : view.inquiries.with(at, thread);
-      return null;
+      return;
     }
     default:
-      return null;
+      return;
   }
 }
 
 /** One shared row, applied by `runRows.ts` and projected onto the session's
- *  containers. `unresolved` is the partial read, not a defect: a cold
- *  listing delivers one request row per run, so the opening a decision
- *  answers may never have reached this view. */
+ *  containers and the run. `unresolved` is the partial read, not a defect: a
+ *  cold listing delivers one request row per run, so the opening a decision
+ *  answers may never have reached this view. A replayed row is below the
+ *  pair's `latest` entry and never reaches here. */
 function applyRowFacts(
   view: SessionView,
-  runId: RunId,
+  run: RunView,
   event: SharedRunRow,
-): RunRows | null {
+): RunView {
   const { rows } = sessionIndexesOf(view);
-  const before = rows.get(runId) ?? freshRunRows();
+  const before = rows.get(run.id) ?? freshRunRows();
   const verdict = applyRunRow(before, event);
   if (verdict.kind === 'contradiction') {
-    throw new Error(`${event.type} on ${runId}: ${verdict.detail}`);
+    throw new Error(`${event.type} on ${run.id}: ${verdict.detail}`);
   }
-  if (verdict.kind !== 'applied') return null;
-  const after: RunRows = { ...before, ...verdict.rows };
-  rows.set(runId, after);
-  if (verdict.rows.requests !== undefined) projectRequests(view, runId, after);
-  if (verdict.rows.followUps !== undefined)
-    projectFollowUps(view, runId, after);
-  return verdict.rows.step === undefined ? null : after;
+  if (verdict.kind !== 'applied') return run;
+  const moved = verdict.rows;
+  const after: RunRows = { ...before, ...moved };
+  rows.set(run.id, after);
+  if (moved.requests !== undefined) projectRequests(view, run.id, after);
+  if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
+  const next =
+    moved.step === undefined ? run : withPosition(run, after, event.at);
+  const rounds = moved.roundOutputs;
+  if (rounds === undefined) return next;
+  const byRound = <T>(pick: (round: RoundOutput) => T) =>
+    Object.fromEntries(rounds.map((r) => [r.round, pick(r)]));
+  const files = nonEmptyRounds(byRound((r) => r.outputs));
+  return {
+    ...next,
+    ...(run.category === AgentCategory.Workflow
+      ? { files }
+      : { outputs: files }),
+    compileFailures: nonEmptyRounds(byRound((r) => r.compileFailures)),
+    missingOutputs: byRound((r) => r.missingOutputs),
+  };
 }
 
 /** `view.requests` is every run's open requests, in the order the rows
@@ -1745,16 +1251,20 @@ function foldDurable(
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 
-  // The rows both folds read are applied once, in `runRows.ts`; the only
-  // part of that slice the run itself carries is the loop's position.
-  const moved = applySessionSlices(view, runId, event);
-  const arm = applyOwnArm(before, event);
-  const own = moved === null ? arm : withPosition(arm, moved, event.at);
+  // The rows both folds read are applied once, in `runRows.ts`; every other
+  // row is the session's own.
+  let own: RunView;
+  if (isSharedRunRow(event)) {
+    own = applyRowFacts(view, before, event);
+  } else {
+    applySessionSlices(view, runId, event);
+    own = applyOwnArm(before, event);
+  }
   if (event.type === 'run.end') {
     // The run ended; a terminal phase ends every live row (5.2, "In-flight
     // text": a run can end with a row unfinalized).
     sessionIndexesOf(view).ended.add(runId);
-    clearInflight(view, own);
+    clearLiveText(own.transcript);
   }
   // A fresh incarnation can end again.
   if (event.type === 'run.activate') {
@@ -1799,7 +1309,19 @@ function foldDurable(
   return true;
 }
 
-/** Replay and live durable inputs use one trace projection for each resident aggregate. */
+/** The transcript context a run folds under. */
+function transcriptContextOf(
+  view: SessionView,
+  run: RunView,
+): TranscriptContext {
+  return {
+    debug: view.debug,
+    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    runLabels: view.runs,
+  };
+}
+
+/** One trace or lifecycle row onto a resident run's transcript. */
 function foldTraceEvent(
   view: SessionView,
   event: DisplaySessionEvent,
@@ -1808,23 +1330,22 @@ function foldTraceEvent(
   const retained = view.folded.get(event.aggregateId);
   if (retained === undefined || event.seq <= retained) return false;
   const runId = runIdOf(event.aggregateId);
-  let run = runId === null ? undefined : view.runs.get(runId);
+  const run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
-  const indexes = indexesOf(run.transcript);
-  applyTraceRow(indexes.trace, event, view.debug);
-  const change = indexes.source.drainEmission();
-  for (const entry of [...change.appended, ...change.dirtied]) {
-    run = { ...run, transcript: applyEntry(view, run, entry) };
-  }
+  const transcript = foldTranscriptEvent(
+    run.transcript,
+    event,
+    transcriptContextOf(view, run),
+  );
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
-  if (change.appended.length === 0 && change.dirtied.length === 0) return true;
+  if (transcript === run.transcript) return true;
   setRun(
     view,
     runModelAt(
       view,
-      withTranscriptFacts({ ...run, lastTimestamp: event.at }),
+      withTranscriptFacts({ ...run, transcript, lastTimestamp: event.at }),
       deferred,
     ),
   );
@@ -1846,7 +1367,7 @@ function foldRunRemoved(
   const run = view.runs.get(runId);
   if (!run) return false;
   dropRun(view, run);
-  clearInflight(view, run);
+  clearLiveText(run.transcript);
   // A map that never held this run is left alone: a delete that removes
   // nothing must not copy the map it publishes.
   if (view.policy.has(run.id)) writableMap(view, 'policy').delete(run.id);
@@ -1955,7 +1476,7 @@ function foldSubscriptions(
     const target = aggregateTarget(id);
     const run = target.kind === 'run' ? view.runs.get(target.id) : undefined;
     if (!run) continue;
-    clearInflight(view, run);
+    clearLiveText(run.transcript);
     const evicted = withTranscriptFacts({
       ...run,
       transcript: emptyTranscript(),

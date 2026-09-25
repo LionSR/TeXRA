@@ -57,10 +57,10 @@ export function registerCommands(
       settingsViewProvider,
       progressViewProvider,
       secrets,
-      runtime,
       session,
     ),
     runtime,
+    session,
   );
 
   context.subscriptions.push(
@@ -72,11 +72,6 @@ export function registerCommands(
           retainContextWhenHidden: true,
         },
       },
-    ),
-    // Registered here rather than through the shared registry because the
-    // handler needs the provider instance.
-    vscode.commands.registerCommand('texra.showMainView', () =>
-      runtime.runPromise(progressViewProvider.showLauncher()),
     ),
   );
 }

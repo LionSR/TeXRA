@@ -43,12 +43,12 @@ export interface ToolGuard<T, R = never> {
 
 /**
  * Contract for tool implementations.
- * BaseTool provides the canonical implementation with Zod validation. Expected
+ * `defineTool` provides the canonical implementation with Zod validation. Expected
  * tool failures are returned as literal `{ status: 'error', error: ... }`
  * ToolResult values; unexpected/programmer failures should throw and let
- * BaseTool convert them at the boundary.
+ * `defineTool` convert them at the boundary.
  */
-export interface ITool<E = unknown, R = never> {
+export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
   readonly unavailableHosts?: readonly ToolHost[];
@@ -78,13 +78,13 @@ export interface ITool<E = unknown, R = never> {
 }
 
 /** Tool lookup abstraction — supports dependency injection and mock tools. */
-export interface IToolRegistry<E = unknown, R = never> {
+export interface IToolRegistry<E = Error, R = never> {
   get(name: string): ITool<E, R> | undefined;
   has(name: string): boolean;
 }
 
 /** Map- or Record-backed IToolRegistry. */
-export class MapToolRegistry<E = unknown, R = never> implements IToolRegistry<
+export class MapToolRegistry<E = Error, R = never> implements IToolRegistry<
   E,
   R
 > {

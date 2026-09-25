@@ -14,10 +14,8 @@ export type { AgentSource } from '@shared/schemas';
 export {
   AgentDirectoryService,
   agentSourceDirectory,
-  type AgentDirectoryEntry,
 } from './AgentDirectoryService';
 
-export { createPlatformAgentDirectories } from './platformAgentDirectories';
 export { BUNDLED_AGENT_DIRECTORY_NAMES } from './BundledAgentDirectories';
 
 export {
@@ -30,6 +28,7 @@ export type { AgentEntry } from './agentEntry';
 export {
   loadAgents,
   getAgent,
+  getCategoryAgent,
   resolveAgentForLaunch,
   getAgentsByCategory,
   getCustomAgentScanIssues,
@@ -37,8 +36,6 @@ export {
   invalidateRemoteAgentsAfterSignOut,
   // Typed data options
   computeAgentOptionsData,
-  // Source helpers
-  isRemoteAgent,
   // Visible agents (for dropdowns and tools)
   getVisibleAgents,
   createWorkspaceAgentRosterController,

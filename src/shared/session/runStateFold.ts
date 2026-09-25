@@ -2,7 +2,6 @@
  * Pure run-state replay for ledger load, appendBatch, and the trace stepper:
  * state at a commit is exactly the state resume continues from, without IO,
  * clocks, platform reads, synthetic ids, or output-order dependence on Maps.
- * Rows remain unredacted for provider history; display redaction is separate.
  * sessionFold produces the view; this fold produces the loop's continuation.
  */
 import { Data, Result } from 'effect';
@@ -16,6 +15,7 @@ import {
   type TurnResult,
 } from '@texra-ai/llm/turn';
 import {
+  addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
   FlowSnapshotPayloadSchema,
   RunUsageTotalsSchema,
@@ -25,11 +25,10 @@ import {
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
-  type NormalizedUsage,
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
-  type RoundOutput,
+  type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
   type SnapshotRuntime,
@@ -37,7 +36,14 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
-import { applyRunRow, byId, freshRunRows, type RunRows } from './runRows';
+import {
+  applyRunRow,
+  byId,
+  freshRunRows,
+  isSharedRunRow,
+  type RunRows,
+  type SharedRunRow,
+} from './runRows';
 import type { z } from 'zod';
 
 /**
@@ -95,7 +101,6 @@ const FlowStateSchema = FlowSnapshotPayloadSchema.options.map((arm) =>
   arm.pick({ family: true, state: true }),
 );
 type FlowState = z.output<(typeof FlowStateSchema)[number]>;
-type RunUsageTotals = z.output<typeof RunUsageTotalsSchema>;
 type Message = z.output<typeof MessageSchema>;
 
 /**
@@ -181,23 +186,32 @@ export type RunState = RunRows & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** Complete output collection from the newest output.produced row. */
-  readonly roundOutputs: RoundOutput[];
+  /** The round of the last `context-window` compaction: a turn that
+   *  overflowed the window is retried once per round against it. */
+  readonly overflowRecoveredAtRound: number | null;
   readonly flow: FlowState | null;
 };
 
-type LedgerRowType = RunLedgerDraft['type'];
+/** The card rows a batch commits beside its settlement or its `waiting`
+ *  step: the ledger row beside each is the fact, so the loop ignores them. */
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
+
+/** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
+type FoldedRowType =
+  SharedRunRow['type'] | Exclude<RunLedgerDraft['type'], CardRowType>;
 
 /**
  * Display rows ignored by name. Anything on the run aggregate that is neither
- * here nor a folded arm (a ledger arm, or `followup.queued`, which its
- * producer publishes outside `appendBatch`) is `unknown-run-row`, never a
- * quiet `default`. The record is total over the event vocabulary, so a new
- * display arm is a compile error here until it is classified.
+ * here nor a folded row is `unknown-run-row`, never a quiet `default`. The
+ * record is total over the event vocabulary, so a new display arm is a
+ * compile error here until it is classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], LedgerRowType | 'followup.queued'>, true>
+  Record<Exclude<SessionEvent['type'], FoldedRowType>, true>
 > = {
+  'tool.start': true,
+  'tool.end': true,
+  'stream.end': true,
   'run.start': true,
   'run.activate': true,
   'run.config': true,
@@ -223,7 +237,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'response.finalized': true,
   domain: true,
   'run.record': true,
-  'run.launchLabel': true,
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,
@@ -258,7 +271,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
-  roundOutputs: [],
+  overflowRecoveredAtRound: null,
 });
 
 /** The recovery bindings the rows carry (R5): the `model.retry` permit's
@@ -307,43 +320,6 @@ const refuse = (
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
-
-/**
- * The priced usage the writer stamped on one completed turn, summed into the
- * run totals. The package's `turn.usage` is deliberately not the input: it
- * carries token counts and provider-specific extras but no runtime price, so
- * folding it would make a resumed run's `totalCost` the sum of `tool.result`
- * add operations alone. Every field of the totals is named here, so a new
- * metric on either schema is a compile error rather than a silent zero;
- * `RunUsageAccumulator` sums the same pairs on the live path.
- */
-function addTurnUsage(
-  totals: RunUsageTotals,
-  usage: NormalizedUsage | null,
-): RunUsageTotals {
-  if (usage === null) return totals;
-  return {
-    firstInputTokens:
-      totals.firstInputTokens === 0
-        ? usage.inputTokens
-        : totals.firstInputTokens,
-    totalInputTokens: totals.totalInputTokens + usage.inputTokens,
-    totalOutputTokens: totals.totalOutputTokens + usage.outputTokens,
-    totalCost: totals.totalCost + usage.cost,
-    totalCacheReadInputTokens:
-      totals.totalCacheReadInputTokens + (usage.cachedInputTokens ?? 0),
-    totalCacheMissInputTokens:
-      totals.totalCacheMissInputTokens + (usage.cacheMissInputTokens ?? 0),
-    totalCacheCreationInputTokens:
-      totals.totalCacheCreationInputTokens + (usage.cacheCreationTokens ?? 0),
-    totalReasoningTokens:
-      totals.totalReasoningTokens + (usage.reasoningTokens ?? 0),
-    totalToolUsePromptTokens:
-      totals.totalToolUsePromptTokens + (usage.toolUsePromptTokens ?? 0),
-    totalServerToolRequests:
-      totals.totalServerToolRequests + (usage.serverToolRequests ?? 0),
-  };
-}
 
 /** One state operation over a JSON document, immutably. */
 function mutate(
@@ -442,43 +418,46 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       commit,
     );
   }
-  switch (row.type) {
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed': {
-      // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
-      // `unresolved` is a malformed aggregate here — this fold reads a run's
-      // whole history, so a decision always follows the opening it answers.
-      const verdict = applyRunRow(current, row);
-      if (verdict.kind === 'unchanged') return null;
-      if (verdict.kind === 'unresolved') {
-        return refuse(
-          'out-of-order',
-          `decision names no request ${verdict.requestId}`,
-          commit,
-        );
-      }
-      if (verdict.kind === 'contradiction') {
-        return refuse('out-of-order', verdict.detail, commit);
-      }
-      const state = current ?? freshRunState(commit);
-      return Result.succeed({
-        ...state,
+  /** A row that presupposes the opening snapshot, folded before it. */
+  const beforeOpening = (what: string) =>
+    refuse('out-of-order', `${what} before the opening flow.snapshot`, commit);
+  /** The state with this ledger row counted in. */
+  const advance = (state: RunState): RunState => ({
+    ...state,
+    commit,
+    rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+  });
+  if (isSharedRunRow(row)) {
+    // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
+    // `unresolved` is a malformed aggregate here: this fold reads a run's
+    // whole history, so a decision always follows the opening it answers.
+    if (row.type === 'output.produced' && !opened(current)) {
+      return refuse('out-of-order', 'output before opening snapshot', commit);
+    }
+    const verdict = applyRunRow(current, row);
+    if (verdict.kind === 'unchanged') return null;
+    if (verdict.kind === 'unresolved') {
+      return refuse(
+        'out-of-order',
+        `decision names no request ${verdict.requestId}`,
         commit,
-        // Only the loop's own step is a ledger row; queued input and the
-        // requests a session opens do not open a run.
-        rowsBeforeSnapshot:
-          state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
-        ...verdict.rows,
-      });
+      );
     }
-    case 'output.produced': {
-      if (!opened(current))
-        return refuse('out-of-order', 'output before opening snapshot', commit);
-      return Result.succeed({ ...current, commit, roundOutputs: row.rounds });
+    if (verdict.kind === 'contradiction') {
+      return refuse('out-of-order', verdict.detail, commit);
     }
+    const state = current ?? freshRunState(commit);
+    return Result.succeed({
+      ...state,
+      commit,
+      // Only the loop's own step is a ledger row; queued input, output and
+      // the requests a session opens do not open a run.
+      rowsBeforeSnapshot:
+        state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
+      ...verdict.rows,
+    });
+  }
+  switch (row.type) {
     case 'flow.snapshot': {
       // Family state and the coordinates the loop owns, and nothing else: no
       // reference set to reconcile, so there is no way for a snapshot to
@@ -489,10 +468,8 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         return refuse('out-of-order', 'a snapshot of another family', commit);
       }
       return Result.succeed({
-        ...state,
-        commit,
+        ...advance(state),
         snapshotCommit: commit,
-        rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
         family: p.family,
         ...p.runtime,
         flow: flowOf(p),
@@ -503,24 +480,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       if (p.kind === 'append' && p.sourceResponse === null) {
         const state = current ?? freshRunState(commit);
         return Result.succeed({
-          ...state,
-          commit,
-          rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
+          ...advance(state),
           messages: [...state.messages, ...p.messages],
         });
       }
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} ${p.kind} before the opening flow.snapshot`,
-          commit,
-        );
-      }
-      const state: RunState = {
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
-      };
+      if (!opened(current)) return beforeOpening(`${row.type} ${p.kind}`);
+      const state = advance(current);
       switch (p.kind) {
         case 'attempt': {
           const open = state.openAttempt;
@@ -657,30 +622,19 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return p satisfies never;
     }
     case 'model.compaction': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
+        ...(p.cause === 'context-window'
+          ? { overflowRecoveredAtRound: current.round }
+          : {}),
       });
     }
     case 'tool.intent': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
       if (pending === null || pending.responseId !== p.responseId) {
@@ -718,20 +672,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         };
       }
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingIntents,
       });
     }
     case 'tool.binding': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       // The approval that guards one outcome-unknown call, committed with
       // the `request.opened` it names: the intent it binds is the one the
       // rows already hold, at the attempt the approval admits.
@@ -745,9 +691,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         );
       }
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingIntents: byId([
           ...Object.entries(current.pendingIntents),
           [p.callId, { ...intent, approvalRequestId: p.requestId }],
@@ -755,13 +699,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       });
     }
     case 'model.retry': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;
       // A permit presupposes the request.opened it names.
       if (permit !== null && current.requests[permit.requestId] === undefined) {
@@ -769,20 +707,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       }
       // The retry owner's durable gate, its one carrier: `null` retires it.
       return Result.succeed({
-        ...current,
-        commit,
-        rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+        ...advance(current),
         pendingRetry: permit,
       });
     }
     case 'tool.result': {
-      if (!opened(current)) {
-        return refuse(
-          'out-of-order',
-          `${row.type} before the opening flow.snapshot`,
-          commit,
-        );
-      }
+      if (!opened(current)) return beforeOpening(row.type);
       const p = row.payload;
       const pending = current.pendingResponse;
       if (
@@ -834,9 +764,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             );
       return applyMutations(
         {
-          ...current,
-          commit,
-          rowsBeforeSnapshot: current.rowsBeforeSnapshot + 1,
+          ...advance(current),
           pendingResponse: {
             ...pending,
             settled: byId([
@@ -859,12 +787,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
       );
     }
-    case 'tool.start':
-    case 'tool.end':
-    case 'stream.end':
-      // Committed with its `tool.result` or its `waiting` step; the ledger
-      // row beside it is the fact.
-      return null;
     default:
       if (IGNORED.has(row.type)) return null;
       return refuse('unknown-run-row', row.type, commit);

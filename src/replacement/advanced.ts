@@ -2,11 +2,16 @@
  * Utilities for managing text replacements in the codebase.
  */
 
-// Local imports - log
-import { createLog } from '@logger/logUtils';
 import { findBraceBalancedMacroCalls } from '@utils/text/braceBalancedMacro';
 
-const log = createLog('ReplacementEngine');
+/**
+ * A fact a replacement pass reports rather than logs: the passes are pure, so
+ * the program that runs them writes these on its own log.
+ */
+export interface ReplacementDiagnostic {
+  readonly level: 'debug' | 'error';
+  readonly message: string;
+}
 
 /**
  * Applies LaTeX quotes formatting to a LaTeX document.
@@ -17,15 +22,22 @@ const log = createLog('ReplacementEngine');
  * - Quotes within braces like in {\"o}
  *
  * @param text LaTeX document text
- * @returns Text with quotes replaced
+ * @returns Text with quotes replaced, and the narration of what changed
  */
-export function applyLatexQuotesFormatting(text: string): string {
+export function applyLatexQuotesFormatting(text: string): {
+  readonly text: string;
+  readonly diagnostics: readonly ReplacementDiagnostic[];
+} {
   // Fast path: nothing to do without a document block containing a quote.
   if (!text.includes('\\begin{document}') || !text.includes('"')) {
-    return text;
+    return { text, diagnostics: [] };
   }
 
-  log.debug('Starting LaTeX quotes formatting');
+  const diagnostics: ReplacementDiagnostic[] = [];
+  const debug = (message: string): void => {
+    diagnostics.push({ level: 'debug', message });
+  };
+  debug('Starting LaTeX quotes formatting');
 
   // Extract document content (everything between \begin{document} and \end{document})
   const documentRegex = /\\begin\{document\}([\s\S]*?)\\end\{document\}/g;
@@ -54,7 +66,7 @@ export function applyLatexQuotesFormatting(text: string): string {
         },
       );
 
-      log.debug(`Removed ${tikzCounter} tikzpicture environments`);
+      debug(`Removed ${tikzCounter} tikzpicture environments`);
 
       // Process quotes in the remaining content
       let replacementCount = 0;
@@ -62,12 +74,12 @@ export function applyLatexQuotesFormatting(text: string): string {
         /(?<!\\"|\{)"([^"]{3,16})"(?!\})/g,
         (_match, quotedText) => {
           replacementCount++;
-          log.debug(`Converting quote: "${quotedText}" → \`\`${quotedText}''`);
+          debug(`Converting quote: "${quotedText}" → \`\`${quotedText}''`);
           return `\`\`${quotedText}''`;
         },
       );
 
-      log.debug(
+      debug(
         `Made ${replacementCount} quote replacements in document #${documentCount}`,
       );
       totalReplacements += replacementCount;
@@ -86,11 +98,11 @@ export function applyLatexQuotesFormatting(text: string): string {
     },
   );
 
-  log.debug(
+  debug(
     `Finished LaTeX quotes formatting: processed ${documentCount} document blocks, made ${totalReplacements} replacements`,
   );
 
-  return processedText;
+  return { text: processedText, diagnostics };
 }
 
 /**

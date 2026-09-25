@@ -34,7 +34,7 @@ async function setupTool(
     timedOut: false,
   },
 ): Promise<{
-  tool: InstanceType<typeof SendToTerminalTool>;
+  tool: typeof SendToTerminalTool;
   runs: RunRecord[];
   runId: ReturnType<typeof publishTestRunStart>;
 }> {
@@ -52,11 +52,11 @@ async function setupTool(
   );
   const runId = publishTestRunStart(testDefaultSession());
   await Effect.runPromise(testDefaultSession().settlePublications());
-  return { tool: new SendToTerminalTool(), runs, runId };
+  return { tool: SendToTerminalTool, runs, runId };
 }
 
 const callTool = (
-  tool: InstanceType<typeof SendToTerminalTool>,
+  tool: typeof SendToTerminalTool,
   runId: ReturnType<typeof publishTestRunStart>,
   input: unknown,
 ) =>

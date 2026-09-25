@@ -14,7 +14,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { AgentSource } from '@shared/schemas';
 import type { AgentScanIssue } from '@shared/settingsView/settingsViewMessages';
 import { AgentCategory } from '@shared/schemas';
@@ -24,12 +23,11 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import type { AgentEntry } from './agentEntry';
 
 const CHANNEL = 'agentRegistry';
-const log = createLog(CHANNEL);
 
 /**
  * One file- or directory-level scan failure. Scanning is a best-effort
  * projection: a bad YAML file becomes an issue entry and an unreadable
- * directory becomes an empty scan with one issue, so the error never escapes
+ * root becomes one issue that contributes no files, so the error never escapes
  * `scanDirectory`'s channel — it exists to be recovered from, and the channel
  * is `never` at the export. Defects (programming errors) stay defects.
  */
@@ -47,6 +45,8 @@ interface AgentDirectoryScan {
 interface ParsedAgentYaml {
   readonly name: string;
   readonly path: string;
+  /** The scanned root the file was found under; issues name paths from it. */
+  readonly root: string;
   readonly definition: AgentDefinition;
 }
 
@@ -64,32 +64,56 @@ export function extractToolNames(
   });
 }
 
+/**
+ * Scan one agent source. A source can span several roots (the bundled
+ * tool-use source is the core directory plus each tool plugin's), and they are
+ * pooled into one scan, so names stay unique and `inherits` resolves across
+ * the whole source. Files list in absolute-path order, as one directory holding
+ * them all would list them. A root that cannot be listed is one issue and
+ * drops only its own files.
+ */
 export function scanDirectory(
-  dir: string,
+  roots: readonly string[],
   source: AgentSource,
 ): Effect.Effect<AgentDirectoryScan, never, FileSystem.FileSystem> {
-  if (!dir) return Effect.succeed({ entries: [], issues: [] });
+  const dirs = roots.filter((root) => root !== '');
+  if (dirs.length === 0) return Effect.succeed({ entries: [], issues: [] });
 
   return Effect.gen(function* () {
-    const files = (yield* Effect.tryPromise({
-      try: () =>
-        glob('**/*.yaml', {
-          cwd: dir,
-          absolute: true,
-          nodir: true,
-        }),
-      catch: (cause) =>
-        new AgentScanError({
-          path: dir,
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    })).toSorted();
     const issues: AgentScanIssue[] = [];
+    // Each file with the root it was found under; a path two roots share
+    // keeps the first.
+    const rootOf = new Map<string, string>();
+    for (const root of dirs) {
+      const listed = yield* Effect.result(
+        Effect.tryPromise({
+          try: () =>
+            glob('**/*.yaml', { cwd: root, absolute: true, nodir: true }),
+          catch: (cause) =>
+            new AgentScanError({
+              path: root,
+              message: toErrorMessage(cause),
+              cause,
+            }),
+        }),
+      );
+      if (Result.isFailure(listed)) {
+        const { message } = listed.failure;
+        yield* Effect.logError(`Failed to scan ${root}: ${message}`).pipe(
+          withLogChannel(CHANNEL),
+        );
+        issues.push({ path: root, message });
+        continue;
+      }
+      for (const yamlPath of listed.success) {
+        if (!rootOf.has(yamlPath)) rootOf.set(yamlPath, root);
+      }
+    }
     const parsed: ParsedAgentYaml[] = [];
     for (const result of yield* Effect.forEach(
-      files,
-      (yamlPath) => Effect.result(readYamlDefinition(yamlPath, dir)),
+      // Code-unit order, which the default sort gave one directory's paths.
+      [...rootOf].toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
+      ([yamlPath, root]) => Effect.result(readYamlDefinition(yamlPath, root)),
       { concurrency: 8 },
     )) {
       if (Result.isSuccess(result)) parsed.push(result.success);
@@ -100,7 +124,7 @@ export function scanDirectory(
         });
       }
     }
-    const unique = entriesWithUniqueNames(parsed, dir, issues);
+    const unique = yield* entriesWithUniqueNames(parsed, issues);
     const definitions = new Map(
       unique.map((entry) => [entry.name, entry] as const),
     );
@@ -117,7 +141,7 @@ export function scanDirectory(
         `Failed to scan ${entry.path}: ${scanned.failure.message}`,
       ).pipe(withLogChannel(CHANNEL));
       issues.push({
-        path: path.relative(dir, entry.path),
+        path: path.relative(entry.root, entry.path),
         message: scanned.failure.message,
       });
     }
@@ -126,44 +150,35 @@ export function scanDirectory(
       `Scanned ${entries.length} agents from ${source}`,
     ).pipe(withLogChannel(CHANNEL));
     return { entries, issues };
-  }).pipe(
-    Effect.catch((error: AgentScanError) =>
-      Effect.logError(`Failed to scan ${dir}: ${error.message}`).pipe(
-        withLogChannel(CHANNEL),
-        Effect.as({
-          entries: [],
-          issues: [{ path: dir, message: error.message }],
-        }),
-      ),
-    ),
-  );
+  });
 }
 
 function entriesWithUniqueNames(
   entries: readonly ParsedAgentYaml[],
-  dir: string,
   issues: AgentScanIssue[],
-): ParsedAgentYaml[] {
-  const byName = groupBy(entries, (entry) => entry.name);
+): Effect.Effect<ParsedAgentYaml[]> {
+  return Effect.gen(function* () {
+    const byName = groupBy(entries, (entry) => entry.name);
 
-  const unique: ParsedAgentYaml[] = [];
-  for (const [name, matches] of byName) {
-    if (matches.length > 1) {
-      const paths = matches.map((entry) => entry.path).join(', ');
-      log.warn(
-        `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
-      );
-      for (const match of matches) {
-        issues.push({
-          path: path.relative(dir, match.path),
-          message: `Duplicate agent name "${name}".`,
-        });
+    const unique: ParsedAgentYaml[] = [];
+    for (const [name, matches] of byName) {
+      if (matches.length > 1) {
+        const paths = matches.map((entry) => entry.path).join(', ');
+        yield* Effect.logWarning(
+          `Duplicate agent name "${name}" in ${paths}; skipping all duplicates.`,
+        ).pipe(withLogChannel(CHANNEL));
+        for (const match of matches) {
+          issues.push({
+            path: path.relative(match.root, match.path),
+            message: `Duplicate agent name "${name}".`,
+          });
+        }
+        continue;
       }
-      continue;
+      unique.push(matches[0]);
     }
-    unique.push(matches[0]);
-  }
-  return unique;
+    return unique;
+  });
 }
 
 function readYamlDefinition(
@@ -189,6 +204,7 @@ function readYamlDefinition(
       return Effect.succeed({
         name: parsed.success.name,
         path: yamlPath,
+        root: dir,
         definition: parsed.success,
       });
     }),
@@ -266,6 +282,9 @@ function scanYaml(
   source: AgentSource,
   definitions: Map<string, ParsedAgentYaml>,
 ): Effect.Effect<AgentEntry, AgentScanError> {
+  // A malformed `rounds` is dropped, not fatal: the scan reports it once the
+  // entry is built.
+  let malformedRounds: string | undefined;
   return Effect.try({
     try: () => {
       const settingsBlock = inheritedDefinitionBlock(
@@ -305,9 +324,7 @@ function scanYaml(
             userRequestTemplateCount(rawPrompts.userRequest),
           );
         } else {
-          log.warn(
-            `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`,
-          );
+          malformedRounds = `Ignoring malformed rounds in ${entry.path}: ${toErrorMessage(parsedRounds.error)}`;
         }
       }
 
@@ -330,5 +347,11 @@ function scanYaml(
         message: toErrorMessage(cause),
         cause,
       }),
-  });
+  }).pipe(
+    Effect.tap(() =>
+      malformedRounds === undefined
+        ? Effect.void
+        : Effect.logWarning(malformedRounds).pipe(withLogChannel(CHANNEL)),
+    ),
+  );
 }

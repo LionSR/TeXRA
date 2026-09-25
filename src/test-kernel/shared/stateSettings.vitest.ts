@@ -38,7 +38,6 @@ import {
   settingByKey,
   settingsViewSettingByKey,
   settingsViewSnapshotEntries,
-  stateSettingByKey,
 } from '@shared/state/stateSettings';
 import {
   dispatchSettingsViewOutbound,
@@ -61,10 +60,7 @@ import {
   settingDefault,
   writeSetting,
 } from '@shared/config/settingsAccess';
-import {
-  LATEX_CONFIG_DEFAULTS,
-  LATEX_CONFIG_KEYS,
-} from '@shared/constants/latexConfig';
+import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   FakeScopedConfigProvider,
@@ -76,6 +72,7 @@ import {
   isStored,
   makeFakeSettingsStores,
 } from '@test/support/settingsStoresFake';
+import { orchestratorKillDenial } from '@tools/executions/killPolicy';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 const VALID_STORES: ReadonlySet<SettingStore> = new Set<SettingStore>([
@@ -89,7 +86,7 @@ const SETTING_HOSTS: readonly SettingHost[] = ['vscode', 'cli', 'desktop'];
 const CLI_RUNTIME_COMMAND_PATTERN = /^texra\s+(?:chat|run|multi-agent run)\b/;
 
 function entryByKey(key: string): StateSettingEntry {
-  const entry = stateSettingByKey(key);
+  const entry = settingByKey(key);
   assert.ok(entry, `missing catalog entry ${key}`);
   return entry;
 }
@@ -140,7 +137,7 @@ const EXPECTED_DEFAULTS: Record<string, unknown> = {
   [GlobalStateKey.PREFER_SHORT_MODEL_NAMES]: false,
   [GlobalStateKey.USE_OPENROUTER]: false,
   [GlobalStateKey.KIMI_CODE_PREFER]: false,
-  // Region defaults mirror the PROVIDER_REGISTRY `region.default` facts the
+  // Region defaults: the provider plugins' `region.default`, which the
   // `regionSet()` getter reads through `readSettingFrom`.
   [GlobalStateKey.MOONSHOT_USE_CHINA]: true,
   [GlobalStateKey.DASHSCOPE_USE_CHINA]: false,
@@ -158,15 +155,6 @@ const STATE_SETTING_KEYS: readonly string[] = STATE_SETTINGS.map(
 );
 
 describe('state settings catalog', () => {
-  it('backs every rendered LaTeX setting with a catalog entry', () => {
-    for (const key of Object.keys(LATEX_CONFIG_KEYS)) {
-      assert.ok(
-        settingByKey(key),
-        `the LaTeX tab renders a key with no catalog entry: ${key}`,
-      );
-    }
-  });
-
   it('uses unique canonical keys', () => {
     assert.equal(new Set(STATE_SETTING_KEYS).size, STATE_SETTING_KEYS.length);
   });
@@ -356,10 +344,6 @@ describe('catalog-derived settings snapshots', () => {
           false,
         );
         yield* workspaceState.update(
-          WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS,
-          25000,
-        );
-        yield* workspaceState.update(
           WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
           'stale-bogus-value',
         );
@@ -379,14 +363,6 @@ describe('catalog-derived settings snapshots', () => {
           assert.equal(
             message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE],
             false,
-          );
-          assert.equal(
-            message.values[WorkspaceStateKey.WORKFLOW_AUTO_COMPILE_TIMEOUT_MS],
-            LATEX_CONFIG_DEFAULTS.workflowAutoCompileTimeoutMs,
-          );
-          assert.equal(
-            message.values[WorkspaceStateKey.LATEXDIFF_TIMEOUT_MS],
-            25000,
           );
           assert.equal(
             message.values[WorkspaceStateKey.LATEXDIFF_MATH_MARKUP],
@@ -679,5 +655,20 @@ describe('settingsAccess', () => {
           warn.mockRestore();
         }
       }),
+  );
+
+  // #11797: the kill gate's permissive default answers only for an absent
+  // key; a stored value that fails the schema denies, loudly.
+  it.effect('denies orchestrator kills on an invalid stored policy', () =>
+    Effect.gen(function* () {
+      const { stores, globalState } = makeFakeSettingsStores();
+      assert.equal(yield* orchestratorKillDenial(stores), undefined);
+      yield* globalState.update(
+        GlobalStateKey.ALLOW_ORCHESTRATOR_KILL,
+        'false',
+      );
+      const denial = yield* orchestratorKillDenial(stores);
+      assert.match(String(denial), /denied: .* is invalid/);
+    }),
   );
 });

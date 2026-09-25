@@ -8,7 +8,6 @@
 
 import { Cause, Effect, Exit } from 'effect';
 
-import { isRemoteAgent } from '@agent/index';
 import {
   isAgentRunRecord,
   type RunRecord,
@@ -70,7 +69,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
   session: SessionHandle,
   runId: RunId,
   record: RunRecord,
-  agentName: string,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
   let releaseClaims: Effect.Effect<void, Error> = Effect.void;
@@ -103,6 +101,10 @@ export const registerRun = Effect.fn('registerRun')(function* (
       const category = isAgentRunRecord(pinned)
         ? pinned.agentCategory
         : (options.category ?? AgentCategory.ToolUse);
+      // The launch stamped the resolved source on the record; the registry is
+      // not consulted again.
+      const isRemote =
+        isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
       const events: SessionEventDraft[] = [];
       if (!prior) {
         // The worktree the fold spells is the run's working directory as a
@@ -116,9 +118,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           userFollowUpSupport:
             options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
           category,
-          isRemote:
-            options.identity.kind === 'agent' &&
-            isRemoteAgent(options.identity.agent),
+          isRemote,
           worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
           parent:
             options.parentRunId === undefined
@@ -130,11 +130,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
       }
       events.push(
         {
-          type: 'run.launchLabel',
-          aggregateId: target,
-          label: agentName,
-        },
-        {
           type: 'run.record',
           aggregateId: target,
           record: pinned,
@@ -145,7 +140,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
           category,
           ...(options.identity.kind === 'agent' &&
           options.identity.tool === undefined
-            ? { isRemote: isRemoteAgent(options.identity.agent) }
+            ? { isRemote }
             : {}),
         },
       );
@@ -185,12 +180,8 @@ export const acquireResumedRunOwnership = Effect.fn(
   session: SessionHandle,
   runId: RunId,
 ): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const claims = yield* Effect.exit(
-    session.acquireClaims(aggregateId('run', runId)),
-  );
-  if (Exit.isFailure(claims))
-    return yield* Effect.fail(ensureError(Cause.squash(claims.cause)));
-  return claims.value.pipe(
+  const release = yield* session.acquireClaims(aggregateId('run', runId));
+  return release.pipe(
     Effect.mapError(
       (error) =>
         new Error(`Run admission rollback failed for ${runId}`, {
@@ -266,37 +257,39 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
   const status = yield* Effect.exit(
-    session.updateRecordFacts(runId, (rows) => {
-      const target = aggregateId('run', runId);
-      const start = rows.find(
-        (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
-          row.type === 'run.start' && row.aggregateId === target,
-      );
-      if (!start) throw new Error(`Run start not found for ${runId}`);
-      // "Already ended" is a fact about the run's current lifecycle, not about
-      // the aggregate (`runEndFromEvents` states the rule, and every reader
-      // shares it): a resumed run has to end again even when it ends the same
-      // way, or the fold, history and every `durableOutcome` reader keep it
-      // RUNNING for want of a terminal row.
-      const ended = runEndFromEvents(rows, runId)?.outcome;
-      const persisted =
-        keepExistingOutcome === true && ended !== undefined ? ended : outcome;
-      if (ended === persisted) return { events: [], value: persisted };
-      return {
-        events: [
-          ...session.streamClosureFacts(runId),
-          {
-            type: 'run.end' as const,
-            aggregateId: target,
-            outcome: persisted,
-            ...(input.error !== undefined ? { error: input.error } : {}),
-            ...(input.usage !== undefined ? { usage: input.usage } : {}),
-            output: input.output ?? emptyRunEndOutput(start.category),
-          },
-        ],
-        value: persisted,
-      };
-    }),
+    Effect.flatMap(session.streamClosureFacts(runId), (closure) =>
+      session.updateRecordFacts(runId, (rows) => {
+        const target = aggregateId('run', runId);
+        const start = rows.find(
+          (row): row is Extract<SessionEvent, { type: 'run.start' }> =>
+            row.type === 'run.start' && row.aggregateId === target,
+        );
+        if (!start) throw new Error(`Run start not found for ${runId}`);
+        // "Already ended" is a fact about the run's current lifecycle, not about
+        // the aggregate (`runEndFromEvents` states the rule, and every reader
+        // shares it): a resumed run has to end again even when it ends the same
+        // way, or the fold, history and every `durableOutcome` reader keep it
+        // RUNNING for want of a terminal row.
+        const ended = runEndFromEvents(rows, runId)?.outcome;
+        const persisted =
+          keepExistingOutcome === true && ended !== undefined ? ended : outcome;
+        if (ended === persisted) return { events: [], value: persisted };
+        return {
+          events: [
+            ...closure,
+            {
+              type: 'run.end' as const,
+              aggregateId: target,
+              outcome: persisted,
+              ...(input.error !== undefined ? { error: input.error } : {}),
+              ...(input.usage !== undefined ? { usage: input.usage } : {}),
+              output: input.output ?? emptyRunEndOutput(start.category),
+            },
+          ],
+          value: persisted,
+        };
+      }),
+    ),
   );
   if (Exit.isFailure(status)) {
     const error = Cause.squash(status.cause);

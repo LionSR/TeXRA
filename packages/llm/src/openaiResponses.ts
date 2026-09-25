@@ -25,6 +25,8 @@ import {
 import {
   ModelError,
   RemoteOperationSchema,
+  boundOperation,
+  cancellationStatus,
   enrichModelError,
   type RemoteOperation,
 } from './errors.js';
@@ -32,7 +34,7 @@ import { sameModelOrigin } from './protocol.js';
 import { ownedAbortSafeRequest } from './transport.js';
 import { filesApiUploads } from './uploadCache.js';
 import { openaiFailure } from './openaiError.js';
-import { admittedFingerprint } from './prefixFingerprint.js';
+import { admittedFingerprint, canChain } from './prefixFingerprint.js';
 import {
   RESPONSES_PREFIX_DOMAIN,
   openaiResponsesContinuation,
@@ -228,18 +230,6 @@ export function openaiResponsesModel(
   const generateTurn: Model['generateTurn'] = (turn) =>
     completedTurn(streamTurn(turn));
 
-  const boundOperation = Effect.fn('llm.responses.boundOperation')(function* (
-    input: RemoteOperation,
-  ) {
-    const parsed = RemoteOperationSchema.safeParse(input);
-    if (!parsed.success || !sameModelOrigin(parsed.data.origin, origin))
-      return yield* new ModelError({
-        kind: 'unsupported',
-        message: 'The remote operation belongs to another model binding.',
-      });
-    return parsed.data;
-  });
-
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.responses.submit',
   )(function* (input) {
@@ -378,7 +368,7 @@ export function openaiResponsesModel(
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
-        const operation = yield* boundOperation(input);
+        const operation = yield* boundOperation(input, origin);
         const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
         if (
           !parsedTurn.success ||
@@ -391,22 +381,11 @@ export function openaiResponsesModel(
             message: 'The admitted turn belongs to another model binding.',
           });
         const turn = parsedTurn.data;
-        // The operation records what the provider was actually given. A
-        // resume rebuilds the turn from the caller's current system text, so
-        // a drifted rebuild still gets its result but must leave no anchor:
-        // the next round then resends the transcript instead of chaining on
-        // instructions the answer never saw.
-        // The admitted storage mode is part of what makes an anchor safe: a
-        // turn re-derived stored for a temporary operation must not chain.
-        const chains =
-          turn.controls.store === operation.store &&
-          admittedFingerprint(RESPONSES_PREFIX_DOMAIN, turn) ===
-            operation.admittedFingerprint;
-        if (!chains) {
-          yield* Effect.logWarning(
-            `The admitted inputs of background operation ${operation.providerResponseId} changed since it was accepted; its completion leaves no continuation.`,
-          );
-        }
+        const chains = yield* canChain(
+          RESPONSES_PREFIX_DOMAIN,
+          turn,
+          operation,
+        );
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
           return yield* new ModelError({
@@ -723,7 +702,7 @@ export function openaiResponsesModel(
   const cancel: NonNullable<Model['background']>['cancel'] = Effect.fn(
     'llm.responses.cancel',
   )(function* (input) {
-    const operation = yield* boundOperation(input);
+    const operation = yield* boundOperation(input, origin);
     let requestId: string | undefined;
     const enrich = (error: ModelError) =>
       enrichModelError(error, {
@@ -781,26 +760,11 @@ export function openaiResponsesModel(
         id: providerResponseId,
         model: returnedModel,
       } = parsed.data;
-      const identity = {
+      return CancellationEvidenceSchema.parse({
         providerResponseId,
         requestedOrigin: origin,
         returnedModel,
-      };
-      if (status === 'cancelled')
-        return CancellationEvidenceSchema.parse({
-          ...identity,
-          kind: 'confirmed-cancelled',
-        });
-      if (status === 'queued' || status === 'in_progress')
-        return CancellationEvidenceSchema.parse({
-          ...identity,
-          kind: 'unconfirmed',
-          status,
-        });
-      return CancellationEvidenceSchema.parse({
-        ...identity,
-        kind: 'observed-terminal',
-        status,
+        ...cancellationStatus(status),
       });
     }).pipe(
       Effect.catchCause((cause) => Effect.failCause(Cause.map(cause, enrich))),

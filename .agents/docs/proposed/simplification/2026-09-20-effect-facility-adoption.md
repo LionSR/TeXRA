@@ -1,7 +1,7 @@
 # Effect facility adoption: the four families with zero uses
 
 Date: 2026-09-20
-Status: proposed
+Status: proposed — step 2 only. Step 1 was refused (`EFF-ADOPT-config-provider`) and steps 3, 4 and 5 are on main; step 2, converting the `createLog` sites and deleting `logUtils.ts` with its last synchronous caller, is in flight.
 Baseline: `main` at `3378a967`. Parent survey:
 [post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
 
@@ -97,4 +97,7 @@ and `JsonConfigProvider.get` keep their signatures. Effect `Config` is for
   `Schedule` and the ±20 % capped helper in `src/utils/core`; no third
   spelling.
 - `src/eventBus/AppSignals.ts` imports no `node:events`.
-- `config/ratchets/unknown-error-baseline.json` exists and shrinks.
+- No production `Effect.Effect<..., unknown, ...>` or
+  `Effect.fn.Return<..., unknown, ...>` remains: the shrink-only
+  `unknown-error-baseline.json` reached zero and was retired for the
+  hardcoded rule in `unknownErrorChannelRatchet.vitest.ts`.

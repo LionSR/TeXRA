@@ -1,61 +1,112 @@
-// Third-party imports
-import { StringDecoder } from 'node:string_decoder';
+import * as path from 'node:path';
 
-import { Effect, type Scope } from 'effect';
-import { execa, type Options, type ResultPromise } from 'execa';
+import {
+  Data,
+  Duration,
+  Effect,
+  Fiber,
+  Option,
+  Result,
+  type Scope,
+  Stream,
+} from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { quote as shellQuote } from 'shell-quote';
 
-// Internal imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import type { ApiKeyProviderId } from '@shared/constants/modelProviderPlugins';
+import { API_KEY_ENV_NAMES, apiKeyEnvName } from '@shared/constants/providers';
 import type { ExecResult } from '@shared/schemas';
+import { onAbort } from '@utils/core';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { inheritedEnv } from '@utils/system/envFlags';
 import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { onAbort as onAbortSignal } from '@utils/core';
-import {
-  CHANNEL,
-  commandEnv,
-  deriveCommandStderr,
-  logCommandStderr,
-  logExecutionErrorAndBuildResult,
-  normalizeEncoding,
-  resultFromProcessOutput,
-  signalProcessGroup,
-  type ExecEncoding,
-  type ExecaTextEncoding,
-  type ExecOutput,
-} from '@utils/system/execCore';
-import { IS_WINDOWS } from '@utils/system/platformPaths';
+import { IS_WINDOWS, withExtendedPath } from '@utils/system/platformPaths';
+import { toWindowsCommand } from '@utils/system/windowsCommandLine';
+import type {
+  ChildProcessHandle,
+  ChildProcessSpawner,
+} from 'effect/unstable/process/ChildProcessSpawner';
+import type { PlatformError } from 'effect/PlatformError';
 
-const FORCE_KILL_DELAY_MS = 5_000;
+const CHANNEL = 'execUtils';
 
-function subscribeDecodedOutput(
-  stream: NodeJS.ReadableStream,
-  encoding: ExecaTextEncoding,
-  onOutput: (chunk: string) => void,
-): void {
-  const decoder = new StringDecoder(encoding);
-  let finalized = false;
-  const finalize = (): void => {
-    if (finalized) return;
-    finalized = true;
-    const text = decoder.end();
-    if (text) onOutput(text);
-  };
+/** SIGTERM to SIGKILL escalation for every teardown the scope runs. */
+const FORCE_KILL_AFTER = Duration.seconds(5);
+const DEFAULT_MAX_BUFFER = 100_000_000;
+const MAX_LOGGED_STDERR = 150;
 
-  stream.on('data', (chunk: Buffer | string) => {
-    const text = typeof chunk === 'string' ? chunk : decoder.write(chunk);
-    if (text) onOutput(text);
+function normalizeOutput(text: string | null | undefined): string {
+  return text?.trim() ?? '';
+}
+
+/**
+ * The complete environment a command runs with: {@link inheritedEnv} on the
+ * extended PATH, the git author identity, the caller's overrides, and the
+ * project context an agent orients by.
+ */
+function commandEnv(
+  workspacePath: string,
+  authorEnv: Record<string, string | undefined> | undefined,
+  envOverrides?: Record<string, string>,
+): Record<string, string | undefined> {
+  // withExtendedPath, not a bare `env.PATH =`: on Windows the copy of
+  // `process.env` carries the variable as `Path`, so assigning `PATH` would
+  // leave both spellings on the environment handed to the shell, and the one
+  // the shell resolves against is then undefined.
+  const env = withExtendedPath({
+    ...inheritedEnv(),
+    ...authorEnv,
+    ...envOverrides,
   });
-  stream.once('end', finalize);
-  stream.once('close', finalize);
+  env.PROJECT_DIR = workspacePath;
+  env.PROJECT_NAME = path.basename(workspacePath);
+  return env;
+}
+
+function resultFromProcessOutput(
+  stdout: string | null | undefined,
+  stderr: string | null | undefined,
+  exitCode: number,
+  flags: {
+    timedOut?: boolean;
+    outputLimitExceeded?: boolean;
+    noExitCode?: boolean;
+  } = {},
+): ExecResult {
+  const timedOut = flags.timedOut ?? false;
+  return {
+    success: exitCode === 0 && !timedOut && !flags.outputLimitExceeded,
+    stdout: normalizeOutput(stdout),
+    stderr: normalizeOutput(stderr),
+    timedOut,
+    exitCode,
+    ...(flags.outputLimitExceeded ? { outputLimitExceeded: true } : {}),
+    ...(flags.noExitCode ? { noExitCode: true } : {}),
+  };
+}
+
+/** The debug line that reports a command's stderr, or undefined when none. */
+function commandStderrLogLine(
+  stderr: string | null | undefined,
+  truncate = false,
+): string | undefined {
+  const normalized = normalizeOutput(stderr);
+  if (!normalized) return undefined;
+  const logged =
+    truncate && normalized.length > MAX_LOGGED_STDERR
+      ? `...${normalized.slice(-MAX_LOGGED_STDERR)}`
+      : normalized;
+  return `Command stderr: ${logged}`;
 }
 
 export interface ExecuteCommandBaseOptions {
-  encoding?: ExecEncoding;
-  channel?: string;
-  truncate?: boolean;
-  env?: Record<string, string>;
-  timeout?: number;
+  readonly channel?: string;
+  readonly truncate?: boolean;
+  readonly env?: Record<string, string>;
+  /** Milliseconds; undefined or `<= 0` sets no deadline. */
+  readonly timeout?: number;
   /**
    * Working directory for the command, and the `PROJECT_DIR` the child sees.
    *
@@ -65,7 +116,7 @@ export interface ExecuteCommandBaseOptions {
    * (#12421). `undefined` is the honest answer only where the caller itself
    * has no folder, and it fails the run the same way the ambient miss did.
    */
-  cwd: string | undefined;
+  readonly cwd: string | undefined;
   /**
    * The setting slots the command's git identity is read from: whether this
    * workspace marks agent commits, and the name and email it marks them with.
@@ -77,331 +128,360 @@ export interface ExecuteCommandBaseOptions {
    * workspace, and it then carries no TeXRA git identity exactly as an
    * uninitialised ambient read did.
    */
-  settings: SettingsStores | undefined;
-  stdin?: string;
+  readonly settings: SettingsStores | undefined;
   /** Called with stdout chunks as they arrive, enabling live output streaming. */
-  onStdout?: (chunk: string) => void;
+  readonly onStdout?: (chunk: string) => void;
   /** Called with stderr chunks as they arrive, enabling live error streaming. */
-  onStderr?: (chunk: string) => void;
-  /** Called with subprocess PID right after creation, before awaiting. */
-  onPid?: (pid: number) => void;
-  /** Set to false to skip buffering stdout/stderr in memory (use with onStdout/onStderr). */
-  buffer?: boolean;
-  /** Maximum decoded characters execa may retain per output stream before terminating the process. */
-  maxBuffer?: number;
-  stdout?: ExecOutput;
-  stderr?: ExecOutput;
+  readonly onStderr?: (chunk: string) => void;
+  /** Set to false to retain no output in memory (use with onStdout/onStderr). */
+  readonly buffer?: boolean;
+  /** Maximum decoded characters retained per output stream before the command is stopped. */
+  readonly maxBuffer?: number;
   /**
    * A caller-owned cancellation channel, for the one case fiber interruption
    * cannot express: a command whose **result still has to be delivered** after
    * it is stopped (the background bash child run, whose strategy sets
    * `deliverAfterInterrupt`). Aborting it terminates the subprocess and any
-   * shell children, and the call still resolves — with exit code 130 when the
-   * child reports none.
+   * shell children, and the call still resolves with exit code 130.
    *
    * Every other caller stops the command by interrupting the fiber: teardown
    * is identical and the abandoned result is exactly what interruption means.
    */
-  signal?: AbortSignal;
+  readonly signal?: AbortSignal;
   /** Skip wrapper logging (pre-platform CLI callers whose sink is the console). */
-  quiet?: boolean;
+  readonly quiet?: boolean;
   /**
    * Terminate the whole process tree on abort or timeout instead of only the
    * tracked process. Array form only: the shell form already signals its whole
    * group. Opt in for tools that hand the work to a delegate (ImageMagick and
    * GraphicsMagick rasterize PDF pages through Ghostscript) so the delegate is
-   * signalled as part of the same teardown.
-   *
-   * Maps to execa's `killDescendants`: a new process group on POSIX,
-   * `taskkill /T` on Windows. Termination is initiated, not joined: the call
-   * still settles from the tracked process, and nothing waits for the
-   * descendants to exit.
+   * signalled as part of the same teardown: a new process group on POSIX; on
+   * Windows the spawner's `taskkill /T` already reaches the tree.
    */
-  killProcessTree?: boolean;
+  readonly killProcessTree?: boolean;
 }
 
-/** Mutable per-invocation teardown state shared by the watchers below. */
-interface CommandTeardown {
-  shellTimedOut: boolean;
-  shellAborted: boolean;
-  interrupted: boolean;
-  forceKillTimeoutId: ReturnType<typeof setTimeout> | undefined;
+/** One output stream passed `maxBuffer` decoded characters. */
+class OutputLimitExceeded extends Data.TaggedError('OutputLimitExceeded')<{
+  readonly stream: 'stdout' | 'stderr';
+  readonly limit: number;
+}> {}
+
+/** How a spawned command ended, before it is read as an `ExecResult`. */
+type Outcome =
+  | { readonly _tag: 'Exited'; readonly code: number }
+  // The exit-code read failed: the child died by a signal it was not sent.
+  | { readonly _tag: 'Signalled'; readonly description: string }
+  // A stdout or stderr read failed before the child ended.
+  | { readonly _tag: 'ReadFailed'; readonly description: string }
+  | { readonly _tag: 'TimedOut' }
+  | { readonly _tag: 'Aborted' }
+  | { readonly _tag: 'LimitExceeded'; readonly stream: 'stdout' | 'stderr' }
+  | { readonly _tag: 'SpawnFailed'; readonly error: PlatformError };
+
+/** Output kept so far; partial text survives a deadline or an abort. */
+interface Captured {
+  stdout: string;
+  stderr: string;
+}
+
+function buildCommand(
+  command: string | string[],
+  options: ExecuteCommandBaseOptions,
+  env: Record<string, string | undefined>,
+): ChildProcess.StandardCommand {
+  const common = {
+    cwd: options.cwd,
+    env,
+    // `env` is already complete; extending would merge `process.env` back in,
+    // restoring the withheld credential variables and the Windows
+    // `Path`/`PATH` duplicate `commandEnv` removed.
+    extendEnv: false,
+    // Nothing writes to a command's stdin, so it gets EOF at once: a child
+    // that reads stdin (a git hook, a lake build script) must not block on a
+    // pipe no one will close.
+    stdin: 'ignore' as const,
+    forceKillAfter: FORCE_KILL_AFTER,
+  };
+  if (Array.isArray(command)) {
+    const [argv0, ...args] = command;
+    // A process group only when asked: without one, a descendant that
+    // inherited stdio is left alone by an abort or timeout.
+    const detached = options.killProcessTree === true && !IS_WINDOWS;
+    return IS_WINDOWS
+      ? toWindowsCommand(argv0, args, { ...common, detached })
+      : ChildProcess.make(argv0, args, { ...common, detached });
+  }
+  // A shell that can be stopped runs as its own process group, so the stop
+  // reaches piped children and backgrounded jobs. Without a deadline or a
+  // signal it stays in ours, which avoids orphans on a hard host kill.
+  const stoppable = (options.timeout ?? 0) > 0 || options.signal !== undefined;
+  return ChildProcess.make(command, {
+    ...common,
+    shell: true,
+    detached: stoppable && !IS_WINDOWS,
+  });
 }
 
 /**
- * Execute external command with output handling and workspace path management.
- *
- * Never fails: every spawn error, non-zero exit, timeout and max-buffer trip is
- * reported in the {@link ExecResult} (`success`, `exitCode`, `timedOut`,
- * `outputLimitExceeded`), so callers need no error channel of their own.
- *
- * Interrupting the fiber tears the subprocess down — that is the cancellation
- * path for every caller but the background-bash one that needs a result back
- * (see {@link ExecuteCommandBaseOptions.signal}).
- *
- * The command form picks the teardown strategy:
- *
- * - the array form spawns one process and leaves abort/timeout signalling to
- *   execa's native `cancelSignal` / `forceKillAfterDelay`, plus a
- *   stream-destroy backstop. By default it has no process-group semantics: a
- *   descendant that inherited stdio is intentionally left alone.
- *   `killProcessTree` opts a call into whole-tree signalling (a process group
- *   on POSIX, `taskkill /T` on Windows); even then the await tracks only the
- *   spawned process, so the tree is signalled, not joined.
- * - the string form spawns a detached shell and signals SIGTERM/SIGKILL via
- *   `signalProcessGroup` on the negative PID so piped children and
- *   backgrounded jobs are torn down as a unit. Orphan risk on hard host kill,
- *   and a separate shell timeout, apply here.
+ * Decode `source` into `captured[name]`, stopping with `OutputLimitExceeded`
+ * past `limit` characters. The decoder flushes a trailing partial character
+ * once, at end of stream.
  */
-export function executeCommand(
-  command: string | string[],
+function drain(
+  source: Stream.Stream<Uint8Array, PlatformError>,
+  name: 'stdout' | 'stderr',
+  captured: Captured,
   options: ExecuteCommandBaseOptions,
-): Effect.Effect<ExecResult> {
-  return Effect.scoped(runCommand(command, options)).pipe(
-    Effect.catch((error) =>
-      Effect.succeed(logExecutionErrorAndBuildResult(error, options)),
-    ),
-  );
-}
-
-function runCommand(
-  command: string | string[],
-  options: ExecuteCommandBaseOptions,
-): Effect.Effect<ExecResult, unknown, Scope.Scope> {
-  return Effect.gen(function* () {
-    if (options.signal?.aborted) {
-      return resultFromProcessOutput(null, 'Command aborted by user', 130);
-    }
-
-    const workspacePath = options.cwd;
-    if (!workspacePath) {
-      return yield* Effect.fail(new Error('No workspace path found'));
-    }
-
-    const encoding = normalizeEncoding(options.encoding);
-    const log = createLog(options.channel ?? CHANNEL);
-    const isArrayForm = Array.isArray(command);
-    const teardown: CommandTeardown = {
-      shellTimedOut: false,
-      shellAborted: false,
-      interrupted: false,
-      forceKillTimeoutId: undefined,
-    };
-
-    const execaOptions: Options = {
-      cwd: workspacePath,
-      env: commandEnv(
-        workspacePath,
-        yield* getGitAuthorEnv(options.settings),
-        options.env,
+): Effect.Effect<void, OutputLimitExceeded | PlatformError> {
+  const onChunk = name === 'stdout' ? options.onStdout : options.onStderr;
+  const limit = options.maxBuffer ?? DEFAULT_MAX_BUFFER;
+  const emit = (text: string): Effect.Effect<void, OutputLimitExceeded> => {
+    if (text === '') return Effect.void;
+    onChunk?.(text);
+    if (options.buffer === false) return Effect.void;
+    const room = limit - captured[name].length;
+    captured[name] += text.slice(0, Math.max(room, 0));
+    return text.length > room
+      ? Effect.fail(new OutputLimitExceeded({ stream: name, limit }))
+      : Effect.void;
+  };
+  return Effect.suspend(() => {
+    const decoder = new TextDecoder();
+    return source.pipe(
+      Stream.runForEach((bytes) =>
+        emit(decoder.decode(bytes, { stream: true })),
       ),
-      encoding,
-      timeout: options.timeout,
-      reject: false,
-      input: options.stdin,
-      buffer: options.buffer,
-      maxBuffer: options.maxBuffer,
-      stdout: options.stdout,
-      stderr: options.stderr,
-    };
-
-    const subprocess = yield* Effect.try({
-      try: (): ResultPromise => {
-        if (Array.isArray(command)) {
-          const [cmd, ...args] = command;
-          if (!options.quiet) {
-            log.debug(`Running command: ${shellQuote(command)}`);
-          }
-          return execa(cmd, args, {
-            ...execaOptions,
-            cancelSignal: options.signal,
-            forceKillAfterDelay: FORCE_KILL_DELAY_MS,
-            // Passed through to execa: a process group on POSIX, `taskkill /T`
-            // on Windows, so the signal reaches the Ghostscript delegate a
-            // tracked-pid kill would leave behind.
-            killDescendants: options.killProcessTree,
-          });
-        }
-        if (!options.quiet) {
-          log.debug(`Running command: ${command}`);
-        }
-        // Shell commands with pipes (e.g. "find / | head -2") create child
-        // processes that inherit stdout.  execa's built-in timeout only kills
-        // the shell process; the piped children keep stdout open which causes
-        // the awaited subprocess to hang indefinitely.
-        //
-        // Fix: when a timeout is configured, spawn in a new process group
-        // (detached) and kill the entire group (-pid) on timeout so all
-        // children are terminated.  Without a timeout we use the normal
-        // (non-detached) path to avoid orphan risk on parent crash.
-        //
-        // On Windows, negative-PID signaling is not supported so we fall back
-        // to subprocess.kill() (kills the shell only) + stream destruction.
-        //
-        // Tradeoff: `detached` means the process group is NOT automatically
-        // cleaned up if the extension host is hard-killed (SIGKILL / crash) --
-        // long-running shell commands would be orphaned. This only affects
-        // shell-form commands that opt into timeout/cancel handling, primarily
-        // the bash tool. Acceptable because the alternative is an await that
-        // hangs forever or approved children left running after a user stop.
-        const { timeout, ...execaNoTimeout } = execaOptions;
-        // Only use detached when we have a timeout/signal and need
-        // process-group killing. On POSIX, detached creates a process group we
-        // can kill as a unit. On Windows, detached opens a new console window
-        // so we always skip it.
-        const useDetached = (!!timeout || !!options.signal) && !IS_WINDOWS;
-        return execa(command, {
-          ...execaNoTimeout,
-          shell: true,
-          ...(useDetached ? { detached: true } : {}),
-        });
-      },
-      catch: (error) => error,
-    });
-
-    // A command that ran to completion — including one its abort signal or
-    // timeout tore down — must not leave a SIGKILL armed against a pid the OS
-    // may recycle. An interrupted one is the opposite case: SIGTERM has just
-    // been sent and the escalation behind it has to survive, which is why this
-    // finalizer stands down once the interrupt handler below has fired.
-    yield* Effect.addFinalizer(() =>
-      Effect.sync(() => {
-        if (teardown.interrupted) return;
-        if (teardown.forceKillTimeoutId !== undefined) {
-          clearTimeout(teardown.forceKillTimeoutId);
-          teardown.forceKillTimeoutId = undefined;
-        }
-      }),
+      Effect.andThen(Effect.suspend(() => emit(decoder.decode()))),
     );
-
-    const terminateGroup = (signal: NodeJS.Signals): void => {
-      const pid = subprocess.pid;
-      if (!pid) return;
-
-      signalProcessGroup(pid, signal);
-
-      // Force-kill after FORCE_KILL_DELAY_MS if SIGTERM didn't work, and
-      // destroy the streams as a last resort so the await always unblocks.
-      if (signal === 'SIGTERM' && teardown.forceKillTimeoutId === undefined) {
-        teardown.forceKillTimeoutId = setTimeout(() => {
-          signalProcessGroup(pid, 'SIGKILL');
-          subprocess.stdout?.destroy();
-          subprocess.stderr?.destroy();
-        }, FORCE_KILL_DELAY_MS);
-      }
-    };
-
-    // Array-form abort/force-kill is execa's (`cancelSignal` /
-    // `forceKillAfterDelay` above), and execa signals only the tracked pid
-    // unless `killProcessTree` asked for the whole tree: a descendant that
-    // inherited stdio (e.g. `bash -c 'work & wait'`) can keep the pipes open
-    // after the tracked process dies, hanging the await forever. Destroy the
-    // streams once execa's force-kill delay has elapsed so the await always
-    // unblocks. No signal is sent from here; the tree signal is execa's own
-    // kill path.
-    const armStreamDestroy = (): void => {
-      if (teardown.forceKillTimeoutId !== undefined) return;
-      teardown.forceKillTimeoutId = setTimeout(() => {
-        subprocess.stdout?.destroy();
-        subprocess.stderr?.destroy();
-      }, FORCE_KILL_DELAY_MS);
-    };
-
-    const onAbort = isArrayForm
-      ? armStreamDestroy
-      : (): void => {
-          teardown.shellAborted = true;
-          terminateGroup('SIGTERM');
-        };
-    const onTimeout = isArrayForm
-      ? armStreamDestroy
-      : (): void => {
-          teardown.shellTimedOut = true;
-          terminateGroup('SIGTERM');
-        };
-    // Fiber interruption performs the same teardown the abort signal does; the
-    // array form additionally needs the kill execa's `cancelSignal` would have
-    // sent, since no signal is aborting here.
-    const onInterrupt = isArrayForm
-      ? (): void => {
-          teardown.interrupted = true;
-          // execa's `forceKillAfterDelay` and `killDescendants` apply to this
-          // kill exactly as they do to the `cancelSignal` path.
-          subprocess.kill('SIGTERM');
-          armStreamDestroy();
-        }
-      : (): void => {
-          teardown.interrupted = true;
-          terminateGroup('SIGTERM');
-        };
-
-    if (options.signal) {
-      yield* Effect.acquireRelease(
-        Effect.sync(() => onAbortSignal(options.signal, onAbort)),
-        (removeAbortListener) => Effect.sync(removeAbortListener),
-      );
-    }
-
-    // The string form has no execa timeout (it was stripped above so the whole
-    // process group is torn down rather than the shell alone); the array form
-    // leaves the kill to execa and only arms the stream-destroy backstop.
-    const timeoutMs = options.timeout;
-    if (timeoutMs !== undefined && (isArrayForm || timeoutMs > 0)) {
-      yield* Effect.forkScoped(
-        Effect.gen(function* () {
-          yield* Effect.sleep(timeoutMs);
-          onTimeout();
-        }),
-      );
-    }
-
-    yield* Effect.try({
-      try: () => {
-        if (subprocess.pid && options.onPid) options.onPid(subprocess.pid);
-        // Subscribe to the output streams for live output if callbacks provided
-        if (options.onStdout && subprocess.stdout) {
-          subscribeDecodedOutput(subprocess.stdout, encoding, options.onStdout);
-        }
-        if (options.onStderr && subprocess.stderr) {
-          subscribeDecodedOutput(subprocess.stderr, encoding, options.onStderr);
-        }
-      },
-      catch: (error) => error,
-    });
-
-    const result = yield* Effect.tryPromise({
-      try: () => subprocess,
-      catch: (error) => error,
-    }).pipe(Effect.onInterrupt(() => Effect.sync(onInterrupt)));
-
-    const stdout = (result.stdout as string) ?? '';
-    const stderr = (result.stderr as string) ?? '';
-    // `shellAborted` covers the shell-form teardown path; `isCanceled` covers
-    // the array-form path, aborted natively via execa's `cancelSignal`.
-    const aborted = teardown.shellAborted || (result.isCanceled ?? false);
-    const maxBufferExceeded = result.isMaxBuffer ?? false;
-    const exitCode = maxBufferExceeded
-      ? 2
-      : (result.exitCode ?? (aborted ? 130 : 1));
-    const timedOut = (result.timedOut ?? false) || teardown.shellTimedOut;
-    const shouldUseShortMessage =
-      maxBufferExceeded || result.exitCode === undefined || timedOut;
-    const normalizedStderr =
-      aborted && !stderr
-        ? 'Command aborted by user'
-        : deriveCommandStderr(
-            stderr,
-            result.shortMessage,
-            shouldUseShortMessage,
-          );
-
-    if (!options.quiet) {
-      logCommandStderr(log, normalizedStderr, options.truncate);
-    }
-
-    return resultFromProcessOutput(stdout, normalizedStderr, exitCode, {
-      timedOut,
-      outputLimitExceeded: maxBufferExceeded,
-    });
   });
 }
+
+function describeFailure(error: PlatformError): string {
+  return toErrorMessage(error.reason.cause ?? error.reason._tag);
+}
+
+function displayCommand(command: string | string[]): string {
+  return Array.isArray(command) ? shellQuote(command) : command;
+}
+
+function resultFromOutcome(
+  outcome: Outcome,
+  { stdout, stderr }: Captured,
+  command: string | string[],
+  options: ExecuteCommandBaseOptions,
+): ExecResult {
+  switch (outcome._tag) {
+    case 'Exited':
+      return resultFromProcessOutput(stdout, stderr, outcome.code);
+    case 'Signalled':
+      return resultFromProcessOutput(
+        stdout,
+        stderr || `Command was killed: ${outcome.description}`,
+        1,
+        { noExitCode: true },
+      );
+    case 'ReadFailed':
+      return resultFromProcessOutput(
+        stdout,
+        stderr || `Could not read the command's output: ${outcome.description}`,
+        1,
+        { noExitCode: true },
+      );
+    case 'TimedOut':
+      return resultFromProcessOutput(
+        stdout,
+        stderr ||
+          `Command timed out after ${options.timeout} milliseconds: ${displayCommand(command)}`,
+        1,
+        { timedOut: true },
+      );
+    case 'Aborted':
+      return resultFromProcessOutput(
+        stdout,
+        stderr || 'Command aborted by user',
+        130,
+      );
+    case 'LimitExceeded':
+      return resultFromProcessOutput(
+        stdout,
+        stderr ||
+          `Command's ${outcome.stream} was larger than ${options.maxBuffer ?? DEFAULT_MAX_BUFFER} characters (maxBuffer exceeded): ${displayCommand(command)}`,
+        2,
+        { outputLimitExceeded: true },
+      );
+    case 'SpawnFailed': {
+      // Never `error.message`: it embeds the argv, which can carry a token.
+      const { reason } = outcome.error;
+      const detail = reason.description ? `: ${reason.description}` : '';
+      return resultFromProcessOutput(
+        '',
+        `Command could not start: ${reason._tag}${detail}`,
+        127,
+        { noExitCode: true },
+      );
+    }
+  }
+}
+
+/** Wait for the command to end, or its deadline, abort or output limit. */
+const awaitOutcome = Effect.fnUntraced(function* (
+  handle: ChildProcessHandle,
+  captured: Captured,
+  options: ExecuteCommandBaseOptions,
+) {
+  // Both streams are always drained, so a full pipe never blocks the child.
+  const outFiber = yield* Effect.forkScoped(
+    drain(handle.stdout, 'stdout', captured, options),
+  );
+  const errFiber = yield* Effect.forkScoped(
+    drain(handle.stderr, 'stderr', captured, options),
+  );
+  const settled = Effect.all(
+    [
+      Fiber.join(outFiber),
+      Fiber.join(errFiber),
+      Effect.result(handle.exitCode),
+    ],
+    { concurrency: 'unbounded' },
+  ).pipe(
+    // The exit-code read fails only when the child died by a signal.
+    Effect.map(([, , exit]): Outcome =>
+      Result.isSuccess(exit)
+        ? { _tag: 'Exited', code: exit.success }
+        : { _tag: 'Signalled', description: describeFailure(exit.failure) },
+    ),
+    Effect.catchTag('OutputLimitExceeded', (error) =>
+      Effect.succeed<Outcome>({ _tag: 'LimitExceeded', stream: error.stream }),
+    ),
+    // A stream read failed while the child may still run: the scope's
+    // release, not an unref, ends it.
+    Effect.catchTag('PlatformError', (error) =>
+      Effect.succeed<Outcome>({
+        _tag: 'ReadFailed',
+        description: describeFailure(error),
+      }),
+    ),
+  );
+  const timeout = options.timeout ?? 0;
+  const bounded =
+    timeout > 0
+      ? settled.pipe(
+          Effect.timeoutOption(Duration.millis(timeout)),
+          Effect.map(Option.getOrElse((): Outcome => ({ _tag: 'TimedOut' }))),
+        )
+      : settled;
+  const { signal } = options;
+  if (signal === undefined) return yield* bounded;
+  const aborted = Effect.callback<Outcome>((resume) =>
+    Effect.sync(
+      onAbort(signal, () => resume(Effect.succeed({ _tag: 'Aborted' }))),
+    ),
+  );
+  return yield* Effect.raceFirst(bounded, aborted);
+});
+
+/**
+ * Spawn the command in the caller's scope and read how it ended. A command
+ * that ends by itself is unreferenced first, so the scope's release skips the
+ * clean-exit group terminate.
+ */
+const runSpawned = Effect.fnUntraced(function* (
+  command: string | string[],
+  options: ExecuteCommandBaseOptions,
+  env: Record<string, string | undefined>,
+  channel: string,
+) {
+  const captured: Captured = { stdout: '', stderr: '' };
+  const spawned = yield* buildCommand(command, options, env).pipe(
+    Effect.map((handle) => ({ _tag: 'Spawned', handle }) as const),
+    Effect.catch((error: PlatformError) =>
+      Effect.succeed({ _tag: 'SpawnFailed', error } as const),
+    ),
+  );
+  const outcome: Outcome =
+    spawned._tag === 'SpawnFailed'
+      ? spawned
+      : yield* awaitOutcome(spawned.handle, captured, options);
+  if (
+    spawned._tag === 'Spawned' &&
+    (outcome._tag === 'Exited' || outcome._tag === 'Signalled')
+  ) {
+    yield* spawned.handle.unref.pipe(
+      Effect.catch((error: PlatformError) =>
+        Effect.logWarning(
+          `Could not unreference an exited command: ${error.reason._tag}`,
+        ).pipe(withLogChannel(channel)),
+      ),
+    );
+  }
+  return {
+    outcome,
+    result: resultFromOutcome(outcome, captured, command, options),
+  };
+});
+
+/**
+ * Execute an external command in `cwd` with the workspace env, over the
+ * process's `ChildProcessSpawner`.
+ *
+ * Never fails: a spawn failure or missing cwd (127), a non-zero exit, a
+ * timeout (`timedOut`), an abort (130) and a max-buffer trip (2,
+ * `outputLimitExceeded`) are all reported in the {@link ExecResult}.
+ *
+ * The process lives exactly as long as this call's scope. A deadline, an
+ * abort, an output-limit trip or an interrupted fiber closes that scope, and
+ * that is the whole teardown: SIGTERM to the process (its group when it has
+ * one), SIGKILL after five seconds, and a join on its exit. The array form
+ * runs in our process group unless `killProcessTree` asks for its own; the
+ * string form runs its shell in its own group whenever it can be stopped. A
+ * command that ends by itself is unreferenced first, so a clean exit leaves
+ * the jobs a detached shell backgrounded running, as a shell would.
+ */
+export const executeCommand = Effect.fn('executeCommand')(function* (
+  command: string | string[],
+  options: ExecuteCommandBaseOptions,
+): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {
+  if (options.signal?.aborted) {
+    return resultFromProcessOutput('', 'Command aborted by user', 130);
+  }
+  const channel = options.channel ?? CHANNEL;
+  const logError = (message: string) =>
+    options.quiet
+      ? Effect.void
+      : Effect.logError(`Error executing command: ${message}`).pipe(
+          withLogChannel(channel),
+        );
+  const { cwd } = options;
+  if (!cwd) {
+    yield* logError('No workspace path found');
+    return resultFromProcessOutput('', 'No workspace path found', 127);
+  }
+  // The git identity is a setting read; a failed read fails this command,
+  // reported like a spawn failure, rather than dropping the identity.
+  const authorEnv = yield* Effect.result(getGitAuthorEnv(options.settings));
+  if (authorEnv._tag === 'Failure') {
+    const message = toErrorMessage(authorEnv.failure);
+    yield* logError(message);
+    return resultFromProcessOutput('', message, 127);
+  }
+  const env = commandEnv(cwd, authorEnv.success, options.env);
+  if (!options.quiet) {
+    yield* Effect.logDebug(`Running command: ${displayCommand(command)}`).pipe(
+      withLogChannel(channel),
+    );
+  }
+
+  const { outcome, result } = yield* Effect.scoped(
+    runSpawned(command, options, env, channel),
+  );
+  if (outcome._tag === 'SpawnFailed') {
+    yield* logError(result.stderr);
+  } else if (!options.quiet) {
+    const stderrLine = commandStderrLogLine(result.stderr, options.truncate);
+    if (stderrLine !== undefined) {
+      yield* Effect.logDebug(stderrLine).pipe(withLogChannel(channel));
+    }
+  }
+  return result;
+});

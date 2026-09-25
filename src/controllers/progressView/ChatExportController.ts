@@ -47,6 +47,7 @@ import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =
@@ -172,7 +173,7 @@ export class ChatExportController {
     ): Effect.fn.Return<
       LatexExportResult,
       PlatformError.PlatformError,
-      FileSystem.FileSystem | StorageFs | WorkspaceFs
+      FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
     > {
       const { storagePath, absolutePath } = yield* this.writeExport(
         runId,
@@ -230,11 +231,11 @@ export class ChatExportController {
 
       // The bundle path is host-supplied and absolute, so it is the process
       // filesystem's, not a rooted view's. Effect's `FileSystem.exists`
-      // resolves a relative path against cwd; the retired `AbsoluteFS.exists`
-      // refused that. Require an absolute path so a relative argument cannot
-      // silently retarget. A path whose parent is not a directory is a missing
-      // bundle, not a failure: `AbsoluteFS.exists` counted ENOTDIR as absent
-      // alongside ENOENT, and `FileSystem.exists` reports it as `BadResource`.
+      // resolves a relative path against cwd, so require an absolute path
+      // here: a relative argument must not silently retarget. A path whose
+      // parent is not a directory is a missing bundle, not a failure:
+      // `FileSystem.exists` reports ENOTDIR as `BadResource`, and the catch
+      // below reads it as absent alongside ENOENT.
       const fs = yield* FileSystem.FileSystem;
       if (!path.isAbsolute(standaloneTemplatePath)) {
         return yield* bundleFailure(
@@ -256,8 +257,8 @@ export class ChatExportController {
         );
       }
       // The bytes are decoded here rather than by `readFileString`, whose
-      // UTF-8 `TextDecoder` strips a BOM the old read kept, and the line
-      // endings are normalized as `AbsoluteFS.read` did.
+      // UTF-8 `TextDecoder` would strip a leading BOM, and the line endings
+      // are normalized, matching `readNormalizedFile`.
       const bytes = yield* fs.readFile(standaloneTemplatePath);
       const template = normalizeLineEndings(
         Buffer.from(bytes).toString('utf-8'),

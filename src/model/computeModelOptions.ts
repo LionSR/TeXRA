@@ -2,65 +2,42 @@ import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
-import {
-  isCodexSignedIn,
-  isPreferCodexSubscription,
-} from '@model/codex/codexSubscription';
-import {
-  isPreferXaiSubscription,
-  isXaiSignedIn,
-} from '@model/xai/xaiSubscription';
 import { StateWriteFailed } from '@platform/interfaces';
-import type { StateStore } from '@platform/interfaces';
+import type { StateReadFailed, StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_AVAILABILITY_STATUS,
   type ModelAvailabilityKind,
   type ModelOptionData,
+  type UsageRoute,
 } from '@shared/schemas';
 import { REASONING_LEVEL_LABELS } from '@shared/settingsView/settingsViewMessages';
-import {
-  DEFAULT_HELPER_MODEL,
-  providerDisplayName,
-} from '@shared/constants/providers';
+import { providerDisplayName } from '@shared/constants/providers';
 import {
   isKimiCodeExclusiveModel,
   isKimiSubscriptionEligible,
 } from '@shared/model/kimiCodeRetryGate';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  getPreferKimiCode,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
 
 import { hasUsableApiKey, type ApiProvider } from './apiProviders';
 import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from './reasoningLevel';
-import { warnModelAvailability } from './modelAvailabilityWarning';
 import {
-  resolveCodexSubscriptionCapabilities,
-  resolveXaiSubscriptionCapabilities,
-  type ProviderCapabilityProfile,
-} from './providerCapabilities';
-import {
-  kimiCodeEffectiveConfig,
-  type KimiCodeRoutingFacts,
-} from './kimiCodeSubscriptionRouting';
-import { resolveEffectiveHelperModel } from './helperModelSelection';
+  decideModelRoute,
+  readRouteFacts,
+  routeConfig,
+  type HostRouteFacts,
+  type ModelRoute,
+} from './modelRoute';
 import {
   buildBaseModelOption,
   DEFAULT_MODELS,
   isRetiredModel,
 } from './modelOptionsBasic';
-import {
-  isOpenRouterRoutingUnsupported,
-  resolveDirectModelApiKeyProvider,
-  resolveModelSource,
-  shouldRouteModelThroughOpenRouter,
-} from './openRouterRouting';
+import { resolveModelSource } from './openRouterRouting';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
@@ -92,12 +69,13 @@ type UnavailableReason = 'openrouter-missing-key';
 /** Availability verdict and captured routing facts; later presentation is pure. */
 interface ModelAvailabilityStatus {
   kind: ModelAvailabilityKind;
-  providerCapabilities?: ProviderCapabilityProfile;
   reason?: UnavailableReason;
   /** The discovered route's config, on `copilot-allowed` only. */
   copilotConfig?: ModelConfig;
   /** The dispatch path's own wording, on the two unavailable Copilot kinds. */
   copilotReason?: string;
+  /** The subscription paying for the next request; absent means own keys. */
+  usageRoute?: UsageRoute;
 }
 
 function availabilityStatus(
@@ -125,7 +103,8 @@ type UnavailableAvailabilityKind = {
  */
 interface UnavailableReasonContext {
   readonly model: string;
-  readonly config: ModelConfig;
+  /** The model source the route bills, for the missing-key sentence. */
+  readonly source: string;
   readonly reason: UnavailableReason | undefined;
   /** The Copilot wording captured when this model was routed, if it took that branch. */
   readonly copilotReason: string | undefined;
@@ -159,27 +138,19 @@ const UNAVAILABLE_REASON_BUILDERS: Record<
     `Model "${model}" is retired and no longer available from its provider. Choose an active model.`,
   'provider-unavailable': ({ model }) =>
     `Model "${model}" requires a provider request mode that OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
-  'missing-key': ({ model, config, reason }) => {
+  'missing-key': ({ model, source, reason }) => {
     if (reason === 'openrouter-missing-key') {
       return `Model "${model}" requires an OpenRouter API key.`;
     }
-    const modelSource = resolveModelSource(config) ?? config.provider;
-    const providerName = providerDisplayName(modelSource);
+    const providerName = providerDisplayName(source);
     return `Model "${model}" requires your ${providerName} API key. Provide it to continue.`;
   },
-  // Both Copilot arms ship the dispatch path's own wording
-  // ({@link copilotRouteUnavailableReason}), captured when the model was
-  // routed, so the picker shows exactly the sentence a run would fail with.
-  // The `??` arm is unreachable: these kinds are only chosen inside the
-  // `prefersCopilotRoute` branch, which is the one case that helper never
-  // answers `undefined` for.
+  // Both Copilot arms ship the dispatch path's own wording, captured when the
+  // model was routed, so the picker shows the sentence a run would fail with.
   'copilot-consent-required': copilotUnavailableReason,
   'copilot-unavailable': copilotUnavailableReason,
-  // Unreachable from `modelUnavailableReasonFrom` today (it returns its own
-  // "not recognized" message before a config resolves far enough to compute
-  // availability at all), but the table must still cover it: `unknown-model`
-  // is `available: false`, so leaving it out would defeat the whole point of
-  // this table being compiler-checked.
+  // Unreachable from `modelUnavailableReasonFrom` (it answers "not recognized"
+  // first), but an `available: false` kind the table must still cover.
   'unknown-model': ({ model }) => `Model "${model}" is not recognized.`,
 };
 
@@ -204,27 +175,15 @@ function withAvailabilityFields(
 type ProviderKeyStatuses = Partial<Record<ApiProvider, boolean>>;
 
 /**
- * The host facts the route ladder reads, all resolved once before any model is
- * routed. It deliberately excludes {@link ProviderKeyStatuses}: the ladder runs
- * *before* the per-provider key statuses are read — that pass is how the batch
- * read learns which providers to consult — so the compiler, not a comment,
- * keeps the ladder key-independent.
+ * The host facts every model's route is decided over, resolved once before
+ * any model is routed. It deliberately excludes {@link ProviderKeyStatuses}:
+ * the per-provider key statuses are read *after* routing, since that pass is
+ * how the batch read learns which providers to consult.
  */
 interface ModelRouteContext {
   reasoningLevels: Readonly<Record<string, ReasoningEffort>>;
   hasOpenRouter: boolean;
-  useOpenRouter: boolean;
-  /** Whether the user is signed in with ChatGPT (only resolved when the
-   * "prefer subscription" switch is on). */
-  codexSignedIn: boolean;
-  /** Whether the user is signed in with Grok (only when prefer is on). */
-  xaiSignedIn: boolean;
-  /**
-   * The Kimi Code route facts in their canonical shape, so this module feeds
-   * the shared resolver ({@link kimiCodeEffectiveConfig}) the same assembly
-   * `modelRoutes` uses instead of a hand-renamed copy.
-   */
-  kimiRouting: KimiCodeRoutingFacts;
+  facts: HostRouteFacts;
 }
 
 /** The route facts plus the key statuses the batch read resolved for them. */
@@ -232,26 +191,26 @@ interface ModelAvailabilityContext extends ModelRouteContext {
   keyStatuses: ProviderKeyStatuses;
 }
 
-/** The one provider whose key decides a model the ladder did not settle. */
+/** The one provider whose key decides a model, and the plan it pays through. */
 interface ProviderKeyGate {
   needsProviderKey: ApiProvider;
+  usageRoute?: UsageRoute;
 }
 
-/** The ladder's answer for one model: a verdict, or the provider still to consult. */
-type ModelRoute = ModelAvailabilityStatus | ProviderKeyGate;
+/** A route's availability: a verdict, or the provider key still to consult. */
+type RouteGate = ModelAvailabilityStatus | ProviderKeyGate;
 
 /**
  * What stage 1 decided for one model, and the only thing stage 3 reads about
- * it. Both configs are kept because the row needs both: the route and the
- * option are built from the effective config, while the route label asks the
- * registry config whether the model is Kimi-subscription eligible.
+ * it.
  */
 interface RoutedModel {
-  /** The registry config as published. */
+  /** The registry config as published: the row's hint describes the model. */
   readonly rawConfig: ModelConfig;
-  /** The config the model routes and runs with (Kimi Code synthesis applied). */
+  /** The config the model runs with on its route: the row's cost and window. */
   readonly config: ModelConfig;
   readonly route: ModelRoute;
+  readonly gate: RouteGate;
 }
 
 /**
@@ -261,108 +220,59 @@ interface RoutedModel {
 type RoutedModels = ReadonlyMap<string, RoutedModel>;
 
 /**
- * Stage 1 — the route ladder, free of any key status. Every branch that can
- * decide availability from the stage-0 facts answers with its kind; a model
- * that comes down to a direct provider key answers with that provider instead,
- * so the batch read that follows consults exactly the providers the ladder
- * reached and no others.
- *
- * This is the one step that reads the Copilot preference and route catalogue,
- * and it takes everything it finds there with it — the route's config, or the
- * sentence an unavailable route is explained with — so no later step has to go
- * back to either.
+ * Stage 1: what the decided route means for availability, free of any key
+ * status. A route that comes down to a direct provider key answers with that
+ * provider, so the batch read that follows consults exactly the providers the
+ * routes reached. A Copilot route takes the route's config, or the sentence
+ * an unavailable route is explained with, so no later step goes back to the
+ * catalogue.
  */
-function resolveModelRoute(
+const routeGate = Effect.fn('routeGate')(function* (
   stores: ModelOptionStores,
   model: string,
-  config: ModelConfig,
+  route: ModelRoute,
   ctx: ModelRouteContext,
-) {
-  return Effect.gen(function* () {
-    const globalState: Pick<StateStore, 'get'> = stores.globalState;
-    if (config.retired) {
-      return availabilityStatus('retired');
-    }
-
-    // An explicit Copilot route preference reports the discovered route's own
-    // state — consent and temporary unavailability are route states on the one
-    // canonical model row, never a reason to fall back to another transport.
-    if (yield* prefersCopilotRoute(model, globalState)) {
-      const route = copilotRouteForModel(model);
-      // No discovered route is the same verdict as a discovered unavailable one.
-      // The kind is the access word itself, so there is nothing to translate.
-      const access = route?.access ?? 'unavailable';
+): Effect.fn.Return<RouteGate, StateReadFailed> {
+  switch (route.kind) {
+    case 'copilot': {
+      // Consent and temporary unavailability are route states on the one
+      // canonical row, never a reason to fall back to another transport.
+      const copilot = copilotRouteForModel(model);
+      const access = copilot?.access ?? 'unavailable';
       if (access === 'allowed') {
         return {
           ...availabilityStatus('copilot-allowed'),
-          copilotConfig: route?.effectiveConfig,
+          copilotConfig: copilot?.effectiveConfig,
         };
       }
       return {
         ...availabilityStatus(`copilot-${access}`),
-        // The dispatch path's own wording for this model, resolved here from the
-        // same preference and catalogue this decision was made on.
-        copilotReason: yield* copilotRouteUnavailableReason(model, globalState),
+        copilotReason: yield* copilotRouteUnavailableReason(
+          model,
+          stores.globalState,
+        ),
       };
     }
-
-    if (isOpenRouterRoutingUnsupported(config, ctx.useOpenRouter)) {
+    case 'openrouter-unsupported':
       return availabilityStatus('provider-unavailable');
-    }
-
-    // ChatGPT subscription (Codex) is a preference, not a hard requirement. When
-    // the host is not signed in, continue through the normal API-key paths
-    // so the switch cannot disable models that are otherwise runnable.
-    if (ctx.codexSignedIn) {
-      const subscriptionCapabilities =
-        yield* resolveCodexSubscriptionCapabilities(
-          stores,
-          config,
-          ctx.useOpenRouter,
-        );
-      if (subscriptionCapabilities) {
-        return {
-          ...availabilityStatus('subscription-access'),
-          providerCapabilities: subscriptionCapabilities,
-        };
-      }
-    }
-
-    // Grok (xAI) subscription — same preference pattern as ChatGPT, and its own
-    // kind so pickers and status rows do not say "ChatGPT subscription" for an
-    // xAI model.
-    if (ctx.xaiSignedIn) {
-      const subscriptionCapabilities =
-        yield* resolveXaiSubscriptionCapabilities(
-          stores,
-          config,
-          ctx.useOpenRouter,
-        );
-      if (subscriptionCapabilities) {
-        return {
-          ...availabilityStatus('xai-subscription-access'),
-          providerCapabilities: subscriptionCapabilities,
-        };
-      }
-    }
-
-    // A configured OpenRouter key is the only ready state for these calls.
-    if (shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)) {
-      if (ctx.hasOpenRouter) return availabilityStatus('openrouter-key');
-      return {
-        ...availabilityStatus('missing-key'),
-        reason: 'openrouter-missing-key' as const,
-      };
-    }
-
-    // Dispatch sends every remaining request to the direct provider, so only its
-    // key makes the model ready. The live-route branch above is the only source
-    // of 'openrouter-key'.
-    const provider = resolveDirectModelApiKeyProvider(config);
-    if (!provider) return availabilityStatus('missing-key');
-    return { needsProviderKey: provider };
-  });
-}
+    case 'chatgpt-subscription':
+      return { kind: 'subscription-access', usageRoute: route.kind };
+    case 'xai-subscription':
+      return { kind: 'xai-subscription-access', usageRoute: route.kind };
+    case 'openrouter':
+      return ctx.hasOpenRouter
+        ? availabilityStatus('openrouter-key')
+        : { kind: 'missing-key', reason: 'openrouter-missing-key' };
+    case 'api-key':
+      return route.usageRoute === 'api-key'
+        ? { needsProviderKey: route.provider }
+        : { needsProviderKey: route.provider, usageRoute: route.usageRoute };
+    case 'no-api-key':
+      return availabilityStatus('missing-key');
+    case 'validation':
+      return availabilityStatus('provider-key');
+  }
+});
 
 /**
  * Stage 3 — the per-model verdict, pure: stage 1's own answer, or the one the
@@ -375,34 +285,26 @@ function resolveModelRoute(
  */
 function resolveModelAvailability(
   model: string,
-  route: ModelRoute,
+  gate: RouteGate,
   keyStatuses: ProviderKeyStatuses,
 ): ModelAvailabilityStatus {
-  if (!('needsProviderKey' in route)) return route;
-  const provider = route.needsProviderKey;
+  if (!('needsProviderKey' in gate)) return gate;
+  const provider = gate.needsProviderKey;
   const usable = keyStatuses[provider];
   if (usable === undefined) {
     throw new Error(
       `Model "${model}" routes to the "${provider}" API key, but that provider's key status was never read. A route decision reached the verdict without passing through the batch read.`,
     );
   }
-  return availabilityStatus(usable ? 'provider-key' : 'missing-key');
+  if (!usable) return availabilityStatus('missing-key');
+  return { kind: 'provider-key', usageRoute: gate.usageRoute };
 }
 
 /**
- * A host fact this module reads synchronously — a workspace preference, a
- * config switch, a stored state entry — could not be read at all, because the
- * host's config or state store threw. That is environmental, not a bug in this
- * module, so it belongs in the typed failure channel rather than as a defect:
- * a caller that already degrades on an unreadable host (the delegation
- * annotation skips its "Available models:" line and logs) recovers from it
- * exactly as it recovers from an unreadable secret store, and a caller that
- * runs this program at its boundary gets the rejection the async wrapper used
- * to give it.
- *
- * The module's own invariant — a verdict reached for a provider whose key
- * status was never read ({@link resolveModelAvailability}) — stays a defect:
- * it can only be a programming error here, and no caller should paper over it.
+ * A host fact (a preference, a config switch, a stored state entry) could not
+ * be read because the host's store threw. Environmental, so it is a typed
+ * failure a caller recovers from like an unreadable secret store. The module's
+ * own invariant ({@link resolveModelAvailability}) stays a defect.
  */
 export class ModelHostFactUnreadable extends Data.TaggedError(
   'ModelHostFactUnreadable',
@@ -439,13 +341,10 @@ function readProviderKeyStatuses(
     (provider) =>
       hasUsableApiKey(secrets, provider).pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
-          Effect.sync(() => {
-            warnModelAvailability(
-              `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
-              failure.cause,
-            );
-            return false;
-          }),
+          Effect.logWarning(
+            `Failed to read ${providerDisplayName(provider)} API key status; treating it as unavailable.`,
+            failure.cause,
+          ).pipe(Effect.as(false)),
         ),
         Effect.map((usable) => [provider, usable] as const),
       ),
@@ -454,71 +353,41 @@ function readProviderKeyStatuses(
 }
 
 /**
- * Stage 0 — every host fact the ladder reads, resolved once per call. The two
- * routing key statuses belong here rather than in the stage-2 batch because
- * routing itself depends on them: `kimiCodeEffectiveConfig` reads `keySet`,
- * and the OpenRouter branch is decided by the OpenRouter key alone.
+ * Stage 0: every host fact the routes are decided over, resolved once per
+ * call. The Kimi Code key status is a route fact (`readRouteFacts` reads it),
+ * so it seeds the key statuses, and the OpenRouter branch is decided by the
+ * OpenRouter key alone.
  */
 function buildAvailabilityContext(
   stores: ModelOptionStores,
 ): Effect.Effect<ModelAvailabilityContext, ModelHostFactUnreadable> {
   return Effect.gen(function* () {
-    const { secrets, globalState } = stores;
-    // The switches and stored levels, read before anything is probed: the two
-    // "prefer my subscription" answers decide whether their probe runs at all.
-    const [
-      useOpenRouter,
-      preferCodexSubscription,
-      preferXaiSubscription,
-      preferKimiCode,
-      reasoningLevels,
-    ] = yield* Effect.all([
-      hostFact('the OpenRouter switch', getUseOpenRouter(stores)),
-      hostFact(
-        'the ChatGPT subscription preference',
-        Effect.sync(() => isPreferCodexSubscription(stores)),
-      ),
-      hostFact(
-        'the Grok subscription preference',
-        Effect.sync(() => isPreferXaiSubscription(stores)),
-      ),
-      hostFact('the Kimi Code routing preference', getPreferKimiCode(stores)),
-      hostFact(
-        'the stored reasoning levels',
-        reasoningEffortOverrides(globalState),
-      ),
-    ] as const);
-    const [routingKeys, codexSignedIn, xaiSignedIn] = yield* Effect.all(
+    const [facts, reasoningLevels, openRouterKey] = yield* Effect.all(
       [
-        readProviderKeyStatuses(secrets, ['openRouter', 'kimiCode']),
-        // Only worth a probe when the "prefer subscription" switch is on.
-        preferCodexSubscription ? isCodexSignedIn() : Effect.succeed(false),
-        preferXaiSubscription ? isXaiSignedIn() : Effect.succeed(false),
+        hostFact('the routing preferences', readRouteFacts(stores)),
+        hostFact(
+          'the stored reasoning levels',
+          reasoningEffortOverrides(stores.globalState),
+        ),
+        readProviderKeyStatuses(stores.secrets, ['openRouter']),
       ] as const,
       { concurrency: 'unbounded' },
     );
     return {
       reasoningLevels,
-      keyStatuses: routingKeys,
-      hasOpenRouter: routingKeys.openRouter === true,
-      useOpenRouter,
-      codexSignedIn,
-      xaiSignedIn,
-      kimiRouting: {
-        useOpenRouter,
-        keySet: routingKeys.kimiCode === true,
-        preferKimiCode,
-      },
+      facts,
+      hasOpenRouter: openRouterKey.openRouter === true,
+      keyStatuses: { ...openRouterKey, kimiCode: facts.kimiCodeKey },
     };
   });
 }
 
 /**
- * Stage 1 — route every model once, and keep the decision. Each of the
- * ladder's live inputs (the runtime registry, the Copilot preference in global
- * state, the stage-0 facts) is therefore read once per computation: stage 3
- * finishes these decisions rather than re-running the ladder over inputs that
- * may have moved while the key read was in flight.
+ * Stage 1: decide every model's route once, and keep the decision. Each live
+ * input (the runtime registry, the Copilot preference, the stage-0 facts) is
+ * therefore read once per computation: stage 3 finishes these decisions
+ * rather than re-deciding over inputs that may have moved while the key read
+ * was in flight.
  */
 function routeModels(
   stores: ModelOptionStores,
@@ -531,13 +400,21 @@ function routeModels(
       if (routed.has(model)) continue;
       const rawConfig = getRuntimeModelConfig(model);
       if (!rawConfig) continue;
-      // Mirror modelRoutes: a dual-backend Kimi model routed to the coding
-      // endpoint runs with the synthesized runtime config, so the row reflects it.
-      const config = kimiCodeEffectiveConfig(rawConfig, ctx.kimiRouting);
+      const route = decideModelRoute(rawConfig, {
+        ...ctx.facts,
+        validation: false,
+        // A retired row settles without its Copilot preference.
+        prefersCopilot:
+          !rawConfig.retired &&
+          (yield* prefersCopilotRoute(model, stores.globalState)),
+      });
       routed.set(model, {
         rawConfig,
-        config,
-        route: yield* resolveModelRoute(stores, model, config, ctx),
+        config: yield* routeConfig(stores, rawConfig, route),
+        route,
+        gate: rawConfig.retired
+          ? availabilityStatus('retired')
+          : yield* routeGate(stores, model, route, ctx),
       });
     }
     return routed;
@@ -555,12 +432,12 @@ function withConsultedKeyStatuses(
   ctx: ModelAvailabilityContext,
 ): Effect.Effect<ModelAvailabilityContext> {
   const consulted = new Set<ApiProvider>();
-  for (const { route } of routed.values()) {
+  for (const { gate } of routed.values()) {
     if (
-      'needsProviderKey' in route &&
-      ctx.keyStatuses[route.needsProviderKey] === undefined
+      'needsProviderKey' in gate &&
+      ctx.keyStatuses[gate.needsProviderKey] === undefined
     ) {
-      consulted.add(route.needsProviderKey);
+      consulted.add(gate.needsProviderKey);
     }
   }
   if (consulted.size === 0) return Effect.succeed(ctx);
@@ -599,7 +476,7 @@ function readModelSelection(state: Pick<StateStore, 'get'>) {
     if (stored === undefined) return EMPTY_MODEL_SELECTION;
     const parsed = ModelSelectionSchema.safeParse(stored);
     if (parsed.success) return parsed.data;
-    warnModelAvailability(
+    yield* Effect.logWarning(
       `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
       z.prettifyError(parsed.error),
     );
@@ -703,26 +580,11 @@ export function setModelEnabled(input: {
         }),
       );
     }
-    // If the helper model was just removed, pin the built-in default. Do not
-    // fall back to the first remaining picker model — that is a premium default,
-    // not the cheap auxiliary.
-    const pinsHelper =
-      !input.enabled &&
-      resolveEffectiveHelperModel(
-        yield* state.get<string | undefined>(GlobalStateKey.HELPER_MODEL),
-        current,
-      ) === input.model;
-
+    // A helper model disabled here is not rewritten: the helper choice counts
+    // only while enabled, which `resolveEffectiveHelperModel` enforces at read.
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
-      .pipe(
-        Effect.andThen(
-          pinsHelper
-            ? state.update(GlobalStateKey.HELPER_MODEL, DEFAULT_HELPER_MODEL)
-            : Effect.void,
-        ),
-        Effect.as(nextEnabled),
-      );
+      .pipe(Effect.as(nextEnabled));
   });
 }
 
@@ -741,21 +603,14 @@ function buildModelOptionData(
       availabilityStatus('unknown-model'),
     );
   }
-  const { rawConfig, config } = decision;
-
+  const { rawConfig, config, route } = decision;
   const availability = resolveModelAvailability(
     model,
-    decision.route,
+    decision.gate,
     ctx.keyStatuses,
   );
-  const optionConfig = availability.providerCapabilities
-    ? {
-        ...config,
-        contextWindow: availability.providerCapabilities.contextWindow,
-        inputPrice: availability.providerCapabilities.inputPrice,
-        outputPrice: availability.providerCapabilities.outputPrice,
-      }
-    : (availability.copilotConfig ?? config);
+  const optionConfig = availability.copilotConfig ?? config;
+  const source = modelSource(route, optionConfig);
   let reasoning: string | undefined;
   if (optionConfig.capabilities.supportsReasoning) {
     if (availability.kind === 'copilot-allowed') {
@@ -781,17 +636,14 @@ function buildModelOptionData(
     // The row's identity stays the base model; the badge names the route.
     routeLabel = 'Via Copilot';
   } else if (
-    isKimiSubscriptionEligible(rawConfig) &&
-    !isKimiCodeExclusiveModel(rawConfig)
+    isKimiSubscriptionEligible(config) &&
+    !isKimiCodeExclusiveModel(config)
   ) {
-    const via = shouldRouteModelThroughOpenRouter(config, ctx.useOpenRouter)
-      ? 'OpenRouter'
-      : providerDisplayName(resolveModelSource(config) ?? config.provider);
-    routeLabel = `Via ${via}`;
+    routeLabel = `Via ${route.kind === 'openrouter' ? 'OpenRouter' : providerDisplayName(source)}`;
   }
   return withAvailabilityFields(
     {
-      ...buildBaseModelOption(model, optionConfig, config),
+      ...buildBaseModelOption(model, optionConfig, rawConfig, source),
       ...(reasoning ? { reasoning } : {}),
       ...(routeLabel ? { routeLabel } : {}),
     },
@@ -821,26 +673,13 @@ export interface ModelAvailabilityInputs {
 }
 
 /**
- * Read everything one availability computation runs over, in two steps: the
- * facts every model shares, then one key-status read per provider the visible
- * models actually consult, with each model routed once in between so that
- * batch consults exactly the providers the ladder reached.
- *
- * This is the module's only host call, and it is an Effect so that a caller
- * inside a program yields it instead of bridging a promise: the store read
- * behind it is interruptible and its failure is typed. Every host read it
- * makes fails in that channel, the synchronous preference and state reads
- * included ({@link ModelHostFactUnreadable}), so an unreadable host reaches a
- * caller as a failure it can recover from rather than as a defect.
- *
- * When `models` is provided the caller's view of the visible-models list is
- * honored verbatim. Nothing here is cached beyond the caches its reads already
- * own: the secret reads behind `hasUsableApiKey` in `apiProviders`
- * (`invalidateApiKeyCache`), the Copilot route catalogue in
- * `runtimeModelRegistry` (`invalidateRuntimeModelRegistry`), and the rest are
- * synchronous config and state reads plus the probe-backed sign-in status
- * (`isCodexSignedIn`, `isXaiSignedIn`, live by design), so there is no second
- * cache to keep fresh here.
+ * Read everything one availability computation runs over: the facts every
+ * model shares, each model routed once, then one key-status read per provider
+ * the routes consult. The module's only host call; every host read fails in
+ * its typed channel ({@link ModelHostFactUnreadable}). `models`, when given,
+ * is honored verbatim. Nothing is cached here beyond the caches its reads own
+ * (`invalidateApiKeyCache`, `invalidateRuntimeModelRegistry`); the sign-in
+ * probes are live by design.
  */
 export const readModelAvailabilityInputs = Effect.fn(
   'readModelAvailabilityInputs',
@@ -851,19 +690,17 @@ export const readModelAvailabilityInputs = Effect.fn(
   const routeCtx = yield* buildAvailabilityContext(stores);
   const visible =
     models ??
-    (yield* visibleModelsForAccess(
-      stores,
+    visibleModelsForAccess(
       yield* hostFact(
         'the enabled-model selection',
         getEnabledModels(stores.globalState),
       ),
       routeCtx,
-    ));
-  // Stage 1 is computation over the stage-0 facts except for the one live
-  // state read in its ladder, the Copilot route preference, so an unreadable
-  // state store fails it the same way it fails the reads above.
+    );
+  // Stage 1's live state reads (the Copilot route preference, the GLM endpoint
+  // settings) fail like the reads above.
   const routed = yield* hostFact(
-    'the Copilot route preference',
+    'the route preferences',
     routeModels(stores, visible, routeCtx),
   );
   const context = yield* withConsultedKeyStatuses(
@@ -887,6 +724,32 @@ export function modelOptionsFrom(
 }
 
 /**
+ * The subscription the picker decided will pay for `model`'s next request, or
+ * `undefined` when the user's own key would: the one prospective route. Pure,
+ * like {@link modelUnavailableReasonFrom}; `inputs` must cover `model`.
+ */
+export function usageRouteFrom(
+  inputs: ModelAvailabilityInputs,
+  model: string,
+): UsageRoute | undefined {
+  const decision = inputs.routed.get(model);
+  return decision
+    ? resolveModelAvailability(model, decision.gate, inputs.context.keyStatuses)
+        .usageRoute
+    : undefined;
+}
+
+/** {@link usageRouteFrom} for one model, read fresh. */
+export const readProspectiveUsageRoute = Effect.fn('readProspectiveUsageRoute')(
+  function* (stores: ModelOptionStores, model: string) {
+    return usageRouteFrom(
+      yield* readModelAvailabilityInputs(stores, [model]),
+      model,
+    );
+  },
+);
+
+/**
  * A human-readable reason why a model is unavailable, or `null` if available.
  * Pure — including the two Copilot kinds, whose sentence was worded when the
  * model was routed. `inputs` must have been read for a list containing `model`
@@ -899,10 +762,9 @@ export function modelUnavailableReasonFrom(
   const decision = inputs.routed.get(model);
   if (!decision) return `Model "${model}" is not recognized.`;
 
-  const { config, route } = decision;
   const availability = resolveModelAvailability(
     model,
-    route,
+    decision.gate,
     inputs.context.keyStatuses,
   );
   if (MODEL_AVAILABILITY_STATUS[availability.kind].available) return null;
@@ -914,34 +776,36 @@ export function modelUnavailableReasonFrom(
   const kind = availability.kind as UnavailableAvailabilityKind;
   return UNAVAILABLE_REASON_BUILDERS[kind]({
     model,
-    config,
+    source: modelSource(decision.route, decision.config),
     reason: availability.reason,
     copilotReason: availability.copilotReason,
   });
 }
 
-function visibleModelsForAccess(
-  stores: ModelOptionStores,
-  configuredModels: readonly string[],
-  context: ModelRouteContext,
-) {
-  return Effect.gen(function* () {
-    const models = new Set(configuredModels);
-    if (!context.codexSignedIn) return [...models];
+/** The source a row is grouped and worded under: the key its route bills. */
+function modelSource(route: ModelRoute, config: ModelConfig): string {
+  return route.kind === 'api-key' ? route.provider : resolveModelSource(config);
+}
 
-    for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
-      if (
-        !config.retired &&
-        !config.deprecated &&
-        (yield* resolveCodexSubscriptionCapabilities(
-          stores,
-          config,
-          context.useOpenRouter,
-        )) !== null
-      ) {
-        models.add(model);
-      }
+/** The enabled models, plus every model the ChatGPT subscription serves. */
+function visibleModelsForAccess(
+  configuredModels: readonly string[],
+  { facts }: ModelRouteContext,
+): readonly string[] {
+  const models = new Set(configuredModels);
+  if (!facts.chatgptSubscription) return [...models];
+  for (const [model, config] of Object.entries(MODEL_CONFIGS)) {
+    if (
+      !config.retired &&
+      !config.deprecated &&
+      decideModelRoute(config, {
+        ...facts,
+        validation: false,
+        prefersCopilot: false,
+      }).kind === 'chatgpt-subscription'
+    ) {
+      models.add(model);
     }
-    return [...models];
-  });
+  }
+  return [...models];
 }

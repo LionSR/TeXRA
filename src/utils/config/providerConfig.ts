@@ -2,7 +2,8 @@ import { Effect } from 'effect';
 /**
  * Provider streaming, endpoint, and region configuration.
  *
- * The shared provider registry owns provider state keys and region metadata.
+ * The model provider plugins (`@shared/constants/modelProviderPlugins`) own
+ * provider state keys and region metadata.
  * This module only reads/writes those keys through the active platform state.
  *
  * Canonical read path: every key read here is registered in the state-setting
@@ -18,25 +19,17 @@ import { Effect } from 'effect';
  */
 
 import type { ConfigWriteFailed } from '@platform/interfaces';
-import {
-  PROVIDER_STATE_ENTRIES,
-  PROVIDER_URLS,
-  type ProviderStateEntry,
-} from '@shared/constants/providers';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
+import { PROVIDER_URLS } from '@shared/constants/providers';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom, writeSettingTo } from './platformSettings';
 
-const PROVIDERS: ReadonlyMap<string, ProviderStateEntry> = new Map(
-  PROVIDER_STATE_ENTRIES.map((provider) => [provider.id, provider]),
-);
-
 function regionSet(stores: SettingsStores, provider: string) {
   return Effect.gen(function* () {
-    const region = PROVIDERS.get(provider)?.region;
+    const region = findModelProviderPlugin(provider)?.region;
     // Region keys are catalog-modeled, so the default comes from the entry's
-    // schema (kept aligned with the registry's `region.default` by the
-    // state-settings guardrail suite).
+    // schema, which the catalog builds from the plugin's `region.default`.
     return region
       ? yield* readSettingFrom<boolean>(stores, region.key)
       : undefined;
@@ -49,14 +42,14 @@ function regionSet(stores: SettingsStores, provider: string) {
 
 export function getProviderEndpoint(stores: SettingsStores, provider: string) {
   return Effect.gen(function* () {
-    const key = PROVIDERS.get(provider)?.endpointKey;
+    const key = findModelProviderPlugin(provider)?.endpointKey;
     // Catalog-modeled (see PROVIDER_ENDPOINT_SETTINGS in stateSettings.ts).
     return key ? yield* readSettingFrom<string>(stores, key) : '';
   });
 }
 
 export function supportsCustomEndpoint(provider: string): boolean {
-  return PROVIDERS.get(provider)?.endpointKey !== undefined;
+  return findModelProviderPlugin(provider)?.endpointKey !== undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -69,7 +62,7 @@ export function getProviderDisplayName(
   defaultName: string,
 ) {
   return Effect.gen(function* () {
-    const region = PROVIDERS.get(provider)?.region;
+    const region = findModelProviderPlugin(provider)?.region;
     if (!region?.displayName) return defaultName;
     return (yield* regionSet(stores, provider))
       ? region.displayName
@@ -83,7 +76,7 @@ export function getProviderKeyUrl(stores: SettingsStores, provider: string) {
     // string even for an unknown provider; the guard is what makes it honest.
     const defaultUrl = PROVIDER_URLS[provider];
     if (!defaultUrl) return undefined;
-    const region = PROVIDERS.get(provider)?.region;
+    const region = findModelProviderPlugin(provider)?.region;
     if (!region) return defaultUrl;
     const isSet = yield* regionSet(stores, provider);
     if (isSet === true && region.keyUrlWhenSet) return region.keyUrlWhenSet;
@@ -95,9 +88,7 @@ export function getProviderKeyUrl(stores: SettingsStores, provider: string) {
 
 /** Whether a provider routes through its China-region endpoint. */
 export function useChinaRegion(stores: SettingsStores, provider: string) {
-  return Effect.gen(function* () {
-    return (yield* regionSet(stores, provider)) ?? false;
-  });
+  return regionSet(stores, provider).pipe(Effect.map((set) => set ?? false));
 }
 
 // ---------------------------------------------------------------------------
@@ -105,12 +96,7 @@ export function useChinaRegion(stores: SettingsStores, provider: string) {
 // ---------------------------------------------------------------------------
 
 export function getGLMCodingPlan(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.GLM_CODING_PLAN,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.GLM_CODING_PLAN);
 }
 
 export function setGLMCodingPlan(
@@ -128,12 +114,7 @@ export function setGLMCodingPlan(
  * schema via the shared accessor.
  */
 export function getPreferKimiCode(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.KIMI_CODE_PREFER,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.KIMI_CODE_PREFER);
 }
 
 /**
@@ -142,10 +123,5 @@ export function getPreferKimiCode(stores: SettingsStores) {
  * accessor.
  */
 export function getUseOpenRouter(stores: SettingsStores) {
-  return Effect.gen(function* () {
-    return yield* readSettingFrom<boolean>(
-      stores,
-      GlobalStateKey.USE_OPENROUTER,
-    );
-  });
+  return readSettingFrom<boolean>(stores, GlobalStateKey.USE_OPENROUTER);
 }

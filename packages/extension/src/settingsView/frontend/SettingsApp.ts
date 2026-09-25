@@ -16,31 +16,26 @@ import { installToolbarTooltips } from '@shared/litControllers/TooltipController
 // Local imports - shared schemas and constants
 import {
   dispatchSettingsViewOutbound,
+  type SettingsSectionName,
   type SettingsTabPanelName,
 } from '@shared/settingsView/settingsViewMessages';
-import { isKnownUnsupported } from '@shared/utils/dispatcher';
+import { isUnrecognizedCommand } from '@shared/utils/dispatcher';
 import { commonViewStyles, designTokens } from '@ui/styles';
 import { registerTeXRAWebAwesomeIcons, waIcon } from '@ui/wa/webAwesomeIcons';
 
 // Local imports - settings view
-import {
-  SETTINGS_NAV_GROUPS,
-  type SettingsNavEntry,
-  type SettingsNavGroup,
-} from './settingsNav';
+import { SETTINGS_NAV_ENTRIES, type SettingsNavEntry } from './settingsNav';
 import { settingsViewStyles } from './styles';
 
 // Side-effect: register tab components
 import './tabs/MemoryTab';
 import './tabs/AccountTab';
 import './tabs/SubscriptionsTab';
-import './tabs/GoalTab';
 import './tabs/ModelsTab';
 import './tabs/AgentsTab';
 import './tabs/MultiAgentTab';
 import './tabs/ToolsTab';
 import './tabs/SkillsTab';
-import './tabs/AIAgentsTab';
 import './tabs/GitTab';
 import './tabs/LaTeXTab';
 import './tabs/ShortcutsTab';
@@ -57,13 +52,7 @@ import {
   bashApprovalEnabled,
   chatgptCodexContextWindow,
   childRunConcurrencyBudget,
-  claudeAgentEffort,
-  claudeAgentModel,
-  claudeAgentPermissionMode,
-  codexApprovalPolicy,
-  codexReasoningEffort,
   compactionThresholdPercent,
-  codexSandboxMode,
   copilotRouteInfos,
   customAgentDir,
   customAgentDirIsDefault,
@@ -72,6 +61,7 @@ import {
   detachSubagentsOnStop,
   disabledSkills,
   disabledSkillSources,
+  installedPlugins,
   multiAgentSettingsRevision,
   editApprovalEnabled,
   gitAuthorEmail,
@@ -80,10 +70,12 @@ import {
   gitMarkCommits,
   gitSettingsLoaded,
   gitWorktreeSupport,
-  goalItems,
   helperModel,
   inlineCriticismEnabled,
-  latexConfigValues,
+  latexdiffBetweenRounds,
+  latexdiffChangesOnly,
+  latexdiffMathMarkup,
+  latexFormatter,
   latexSettingsLoaded,
   latexSettingsStatus,
   memoryEnabled,
@@ -96,6 +88,8 @@ import {
   providerKeyStatuses,
   resetSettingsState,
   selectedPanel,
+  selectedSections,
+  settingSignal,
   sessionProblem,
   skillLoadIssues,
   skillsList,
@@ -106,7 +100,9 @@ import {
   toolDashboardLoaded,
   toolPathProtectionEnabled,
   agentSelectionItems,
-  unsupportedCommands,
+  workflowAutoCompile,
+  workflowAutoOpenPdf,
+  workflowRejectOnCompileFailure,
   userEmail,
 } from './settingsState';
 
@@ -127,6 +123,10 @@ export class SettingsApp extends SignalWatcher(LitElement) {
   private readonly messageListener = (event: MessageEvent): void => {
     const raw: unknown = event.data;
     dispatchSettingsViewOutbound(raw, settingsViewHandlers, (error) => {
+      // On the desktop this element shares the window with the whole shell,
+      // so every desktop message reaches this listener too; one whose command
+      // is not a settings-view command is another surface's, not a defect.
+      if (this.isDesktopHost && isUnrecognizedCommand(error)) return;
       const command =
         raw && typeof raw === 'object' && 'command' in raw
           ? String((raw as { command: unknown }).command)
@@ -164,13 +164,45 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     );
   }
 
-  private selectSettingsEntry(entry: SettingsNavEntry): void {
+  private selectSettingsEntry(
+    entry: SettingsNavEntry,
+    section?: SettingsSectionName,
+  ): void {
     selectedPanel.set(entry.panel);
+    if (section) {
+      selectedSections.set({
+        ...selectedSections.get(),
+        [entry.panel]: section,
+      });
+    }
     requestAnimationFrame(() => {
       const panel =
         this.shadowRoot?.querySelector<HTMLElement>('.settings-panel');
       if (panel) panel.scrollTop = 0;
     });
+  }
+
+  /**
+   * APG tabs keyboard contract for both nav rows: ArrowLeft/ArrowRight move
+   * (wrapping), Home/End jump to the ends, and moving selects the tab.
+   */
+  private async handleTablistKeydown(event: KeyboardEvent): Promise<void> {
+    const tablist = event.currentTarget as HTMLElement;
+    const tabs = [...tablist.querySelectorAll<HTMLElement>('[role="tab"]')];
+    const current = tabs.indexOf(event.target as HTMLElement);
+    if (current < 0) return;
+    const last = tabs.length - 1;
+    const next = {
+      ArrowRight: current === last ? 0 : current + 1,
+      ArrowLeft: current === 0 ? last : current - 1,
+      Home: 0,
+      End: last,
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    tabs[next].click();
+    await this.updateComplete;
+    tabs[next].focus();
   }
 
   private handleSetProviderKey(event: CustomEvent<{ provider: string }>): void {
@@ -179,70 +211,51 @@ export class SettingsApp extends SignalWatcher(LitElement) {
     });
   }
 
-  private handleManageProviderKeys(): void {
-    selectedPanel.set('models');
-  }
-
-  private entriesForGroup(
-    group: SettingsNavGroup,
-  ): readonly SettingsNavEntry[] {
-    return group.entries.filter(
-      (entry) => entry.panel !== 'shortcuts' || this.isDesktopHost,
-    );
+  /**
+   * The pages and sections this host shows: Shortcuts edits desktop key
+   * bindings only, and the recommended VS Code settings exist only in VS Code.
+   */
+  private navEntries(): readonly SettingsNavEntry[] {
+    const desktop = this.isDesktopHost;
+    return SETTINGS_NAV_ENTRIES.flatMap((entry) => {
+      if (entry.panel === 'shortcuts' && !desktop) return [];
+      if (!desktop) return [entry];
+      return [
+        {
+          ...entry,
+          sections: entry.sections.filter(
+            ({ section }) => section !== 'vscode',
+          ),
+        },
+      ];
+    });
   }
 
   private renderSettingsNavigation(
-    activeGroup: SettingsNavGroup,
-    activePanel: SettingsTabPanelName,
+    entries: readonly SettingsNavEntry[],
+    activeEntry: SettingsNavEntry,
+    activeSection: SettingsSectionName | undefined,
   ): TemplateResult {
-    const activeEntries = this.entriesForGroup(activeGroup);
-
     return html`
       <nav class="settings-navigation" aria-label="Settings">
         <div
-          class="settings-category-nav"
-          role="group"
-          aria-label="Settings categories"
-        >
-          ${SETTINGS_NAV_GROUPS.map((group) => {
-            const entries = this.entriesForGroup(group);
-            if (entries.length === 0) return nothing;
-            const active = group === activeGroup;
-            return html`
-              <wa-button
-                class="settings-category-button"
-                appearance="plain"
-                size="s"
-                aria-label=${group.label}
-                aria-pressed=${String(active)}
-                data-active=${String(active)}
-                data-group=${group.label}
-                @click=${() => this.selectSettingsEntry(entries[0])}
-              >
-                ${waIcon(group.icon, { slot: 'start' })} ${group.label}
-              </wa-button>
-            `;
-          })}
-        </div>
-        <!-- Plain toggle-button strip, not tablist/tab: these buttons switch
-             the whole page but implement none of the APG tabs keyboard
-             contract (no arrow keys/roving tabindex), and role="tab" on a
-             wa-button nests a native button role. aria-pressed matches the
-             actual behavior — same pattern as the category nav above. -->
-        <div
           class="settings-page-nav"
-          role="group"
-          aria-label=${`${activeGroup.label} pages`}
+          role="tablist"
+          aria-label="Settings pages"
+          @keydown=${this.handleTablistKeydown}
         >
-          ${activeEntries.map((entry) => {
-            const active = entry.panel === activePanel;
+          ${entries.map((entry) => {
+            const active = entry === activeEntry;
             return html`
               <wa-button
                 class="settings-page-button"
                 appearance="plain"
                 size="s"
-                aria-label=${`${activeGroup.label}: ${entry.label}`}
-                aria-pressed=${String(active)}
+                role="tab"
+                aria-label=${entry.label}
+                aria-selected=${String(active)}
+                aria-controls="settings-panel"
+                tabindex=${active ? '0' : '-1'}
                 data-active=${String(active)}
                 data-panel=${entry.panel}
                 title=${entry.label}
@@ -257,53 +270,79 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             `;
           })}
         </div>
+        ${
+          activeEntry.sections.length < 2
+            ? nothing
+            : html`
+                <div
+                  class="settings-page-nav settings-section-nav"
+                  role="tablist"
+                  aria-label=${`${activeEntry.label} sections`}
+                  @keydown=${this.handleTablistKeydown}
+                >
+                  ${activeEntry.sections.map(({ section, label }) => {
+                    const active = section === activeSection;
+                    return html`
+                      <wa-button
+                        class="settings-page-button settings-section-button"
+                        appearance="plain"
+                        size="s"
+                        role="tab"
+                        aria-selected=${String(active)}
+                        aria-controls="settings-panel"
+                        tabindex=${active ? '0' : '-1'}
+                        data-active=${String(active)}
+                        data-section=${section}
+                        @click=${() =>
+                          this.selectSettingsEntry(activeEntry, section)}
+                        >${label}</wa-button
+                      >
+                    `;
+                  })}
+                </div>
+              `
+        }
       </nav>
     `;
   }
 
   private renderActivePanel(
     activePanel: SettingsTabPanelName,
+    section: SettingsSectionName | undefined,
     desktopHost: boolean,
   ): TemplateResult {
     switch (activePanel) {
-      case 'account':
-        return html`
-          <account-tab
-            .authenticated=${authenticated.get()}
-            .userEmail=${userEmail.get()}
-            .sessionProblem=${sessionProblem.get()}
-            .telemetryEnabled=${telemetryEnabled.get()}
-            @manage-provider-keys=${this.handleManageProviderKeys}
-          ></account-tab>
-        `;
-      case 'subscriptions':
-        return html`
-          <subscriptions-tab
-            .ackGeneration=${multiAgentSettingsRevision.get()}
-            .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
-            .subscriptionAuth=${subscriptionAuth.get()}
-            .usage=${subscriptionUsage.get()}
-            .copilotModels=${copilotRouteInfos.get()}
-          ></subscriptions-tab>
-        `;
       case 'models':
         return html`
           <models-tab
+            .section=${section}
             .providerKeyStatuses=${providerKeyStatuses.get()}
             .modelSelectionItems=${modelSelectionItems.get()}
             .helperModel=${helperModel.get()}
             .preferShortModelNames=${preferShortModelNames.get()}
+            .usage=${subscriptionUsage.get()}
             @provider-key-set=${this.handleSetProviderKey}
-          ></models-tab>
+          >
+            <subscriptions-tab
+              slot="subscriptions"
+              .ackGeneration=${multiAgentSettingsRevision.get()}
+              .chatgptCodexContextWindow=${chatgptCodexContextWindow.get()}
+              .subscriptionAuth=${subscriptionAuth.get()}
+              .usage=${subscriptionUsage.get()}
+              .copilotModels=${copilotRouteInfos.get()}
+            ></subscriptions-tab>
+          </models-tab>
         `;
-      case 'agents':
-        // Touch the acknowledgement generation for the same reason the
-        // multi-agent branch does: the reliability rows below ride the
-        // multi-agent snapshot, so a same-value rebroadcast must still
-        // re-render and let live() restore the committed number-row value.
+      case 'agents': {
+        // Touch the acknowledgement generation so a same-value rebroadcast
+        // after a rejected/failed write still re-renders this branch and lets
+        // live() restore the committed number-row value: the Advanced rows
+        // ride the multi-agent snapshot.
+        const ackGeneration = multiAgentSettingsRevision.get();
         return html`
           <agents-tab
-            .ackGeneration=${multiAgentSettingsRevision.get()}
+            .section=${section}
+            .ackGeneration=${ackGeneration}
             .agents=${agentSelectionItems.get()}
             .customAgentDir=${customAgentDir.get()}
             .customAgentDirIsDefault=${customAgentDirIsDefault.get()}
@@ -311,89 +350,68 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .initialSubTab=${agentSubTab.get()}
             .compactionThresholdPercent=${compactionThresholdPercent.get()}
             .modelRetryMaxAttempts=${modelRetryMaxAttempts.get()}
-          ></agents-tab>
-        `;
-      case 'multi-agent': {
-        // Touch the acknowledgement generation so a same-value rebroadcast
-        // after a rejected/failed write still re-renders this branch and lets
-        // live() restore the committed number-row value.
-        const ackGeneration = multiAgentSettingsRevision.get();
-        return html`
-          <multi-agent-tab
-            .activePresetId=${activePresetId.get()}
-            .customPresets=${customPresets.get()}
-            .orchestratorAgents=${orchestratorAgents.get()}
             .allowOrchestratorKill=${allowOrchestratorKill.get()}
             .detachSubagentsOnStop=${detachSubagentsOnStop.get()}
             .childRunConcurrencyBudget=${childRunConcurrencyBudget.get()}
             .worktreeSupport=${gitWorktreeSupport.get()}
-            .ackGeneration=${ackGeneration}
-          ></multi-agent-tab>
+          >
+            <multi-agent-tab
+              slot="teams"
+              .activePresetId=${activePresetId.get()}
+              .customPresets=${customPresets.get()}
+              .orchestratorAgents=${orchestratorAgents.get()}
+            ></multi-agent-tab>
+            <skills-tab
+              slot="skills"
+              .masterEnabled=${agentSkillsEnabled.get()}
+              .disabledSkills=${disabledSkills.get()}
+              .disabledSources=${disabledSkillSources.get()}
+              .plugins=${installedPlugins.get()}
+              .skills=${skillsList.get()}
+              .issues=${skillLoadIssues.get()}
+            ></skills-tab>
+          </agents-tab>
         `;
       }
-      case 'tools':
+      case 'tools': {
+        const items = toolDashboardItems.get();
+        // Read here, inside this watcher's render, so a snapshot that changes
+        // one of the cards' inline settings re-renders the page.
+        const settingValues = Object.fromEntries(
+          items
+            .flatMap((item) => item.settings ?? [])
+            .map(([key]) => [key, settingSignal<string>(key).get()]),
+        );
         return html`
           <tools-tab
-            .items=${toolDashboardItems.get()}
+            .section=${section}
+            .items=${items}
             .loaded=${toolDashboardLoaded.get()}
             .approvalPolicy=${approvalPolicy.get()}
             .bashApprovalEnabled=${bashApprovalEnabled.get()}
             .editApprovalEnabled=${editApprovalEnabled.get()}
             .toolPathProtectionEnabled=${toolPathProtectionEnabled.get()}
+            .settingValues=${settingValues}
           ></tools-tab>
         `;
-      case 'skills':
-        return html`
-          <skills-tab
-            .masterEnabled=${agentSkillsEnabled.get()}
-            .disabledSkills=${disabledSkills.get()}
-            .disabledSources=${disabledSkillSources.get()}
-            .skills=${skillsList.get()}
-            .issues=${skillLoadIssues.get()}
-          ></skills-tab>
-        `;
-      case 'ai-agents':
-        return html`
-          <ai-agents-tab
-            .items=${toolDashboardItems.get()}
-            .loaded=${toolDashboardLoaded.get()}
-            .codexSandboxMode=${codexSandboxMode.get()}
-            .codexReasoningEffort=${codexReasoningEffort.get()}
-            .codexApprovalPolicy=${codexApprovalPolicy.get()}
-            .claudeAgentModel=${claudeAgentModel.get()}
-            .claudeAgentPermissionMode=${claudeAgentPermissionMode.get()}
-            .claudeAgentEffort=${claudeAgentEffort.get()}
-          ></ai-agents-tab>
-        `;
+      }
       case 'latex':
         return html`
           <latex-tab
+            .section=${section}
             .settings=${latexSettingsStatus.get()}
             .loaded=${latexSettingsLoaded.get()}
-            .configValues=${latexConfigValues.get()}
-            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
             .desktopHost=${desktopHost}
-            .inlineCriticismSupported=${!isKnownUnsupported(
-              unsupportedCommands.get(),
-              SETTINGS_VIEW_COMMANDS.GET_INLINE_CRITICISM_ENABLED,
-            )}
+            .autoCompile=${workflowAutoCompile.get()}
+            .autoOpenPdf=${workflowAutoOpenPdf.get()}
+            .rejectOnCompileFailure=${workflowRejectOnCompileFailure.get()}
+            .diffBetweenRounds=${latexdiffBetweenRounds.get()}
+            .diffChangesOnly=${latexdiffChangesOnly.get()}
+            .diffMathMarkup=${latexdiffMathMarkup.get()}
+            .formatter=${latexFormatter.get()}
+            .inlineCriticismEnabled=${inlineCriticismEnabled.get()}
           ></latex-tab>
         `;
-      case 'git':
-        return html`
-          <git-tab
-            .markCommits=${gitMarkCommits.get()}
-            .authorName=${gitAuthorName.get()}
-            .authorEmail=${gitAuthorEmail.get()}
-            .toggleDisabled=${!gitSettingsLoaded.get()}
-            .githubTokenStatus=${githubTokenStatus.get()}
-            .prSubscriptions=${prSubscriptions.get()}
-          ></git-tab>
-        `;
-      case 'shortcuts':
-        return html`<shortcuts-tab></shortcuts-tab>`;
-      case 'goal':
-        return html`<goal-tab .items=${goalItems.get()}></goal-tab>`;
       case 'memory':
         return html`
           <memory-tab
@@ -401,6 +419,28 @@ export class SettingsApp extends SignalWatcher(LitElement) {
             .enabled=${memoryEnabled.get()}
           ></memory-tab>
         `;
+      case 'general':
+        return section === 'git'
+          ? html`
+              <git-tab
+                .markCommits=${gitMarkCommits.get()}
+                .authorName=${gitAuthorName.get()}
+                .authorEmail=${gitAuthorEmail.get()}
+                .toggleDisabled=${!gitSettingsLoaded.get()}
+                .githubTokenStatus=${githubTokenStatus.get()}
+                .prSubscriptions=${prSubscriptions.get()}
+              ></git-tab>
+            `
+          : html`
+              <account-tab
+                .authenticated=${authenticated.get()}
+                .userEmail=${userEmail.get()}
+                .sessionProblem=${sessionProblem.get()}
+                .telemetryEnabled=${telemetryEnabled.get()}
+              ></account-tab>
+            `;
+      case 'shortcuts':
+        return html`<shortcuts-tab></shortcuts-tab>`;
     }
     // Exhaustiveness guard: `activePanel` is a `SettingsTabPanelName`, so every
     // entry in `SETTINGS_TAB_ORDER` must have a case above. A tab appended to
@@ -415,39 +455,33 @@ export class SettingsApp extends SignalWatcher(LitElement) {
 
   override render(): TemplateResult {
     const desktopHost = this.isDesktopHost;
-    const requestedPanel = selectedPanel.get();
-    const activePanel =
-      !desktopHost && requestedPanel === 'shortcuts'
-        ? 'account'
-        : requestedPanel;
-    const activeGroup =
-      SETTINGS_NAV_GROUPS.find((group) =>
-        group.entries.some((entry) => entry.panel === activePanel),
-      ) ?? SETTINGS_NAV_GROUPS[0];
-    const activeEntry = activeGroup.entries.find(
-      (entry) => entry.panel === activePanel,
-    );
+    const entries = this.navEntries();
+    const activeEntry =
+      entries.find((entry) => entry.panel === selectedPanel.get()) ??
+      entries[0];
+    const activePanel = activeEntry.panel;
+    const remembered = selectedSections.get()[activePanel];
+    const activeSection = (
+      activeEntry.sections.find(({ section }) => section === remembered) ??
+      activeEntry.sections[0]
+    )?.section;
 
     return html`
       <div class="settings-container">
-        ${this.renderSettingsNavigation(activeGroup, activePanel)}
+        ${this.renderSettingsNavigation(entries, activeEntry, activeSection)}
         <section
+          id="settings-panel"
           class="settings-panel"
-          aria-label=${activeEntry?.label ?? 'Settings'}
+          role="tabpanel"
+          aria-label=${activeEntry.label}
         >
-          ${
-            activeEntry
-              ? html`
-                  <header class="settings-page-header tab-content-container">
-                    <div class="settings-page-header-copy">
-                      <h1>${activeEntry.label}</h1>
-                      <p>${activeEntry.description}</p>
-                    </div>
-                  </header>
-                `
-              : nothing
-          }
-          ${this.renderActivePanel(activePanel, desktopHost)}
+          <header class="settings-page-header tab-content-container">
+            <div class="settings-page-header-copy">
+              <h1>${activeEntry.label}</h1>
+              <p>${activeEntry.description}</p>
+            </div>
+          </header>
+          ${this.renderActivePanel(activePanel, activeSection, desktopHost)}
         </section>
       </div>
     `;

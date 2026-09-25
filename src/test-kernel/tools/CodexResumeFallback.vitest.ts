@@ -20,7 +20,6 @@ const mocks = vi.hoisted(() => ({
   createChildRun: vi.fn(),
   startChildRunLoop: vi.fn(),
   importCodexClass: vi.fn(),
-  findCodexBinaryPath: vi.fn(),
   resumeThread: vi.fn(),
   submitFollowUp: vi.fn(),
 }));
@@ -60,18 +59,25 @@ vi.mock('@agent/runtime/childRunLoop', () => ({
 }));
 
 vi.mock('@tools/codexConfig', () => ({
-  getCodexSandboxMode: () => Effect.succeed('workspace-write'),
-  getCodexApprovalPolicy: () => Effect.succeed('on-request'),
   getCodexCliReasoningEffort: () => Effect.succeed('high'),
   codexBinarySupportsXhigh: async () => false,
   CODEX_CLI_MODEL: 'gpt-5.2-codex',
 }));
 
-vi.mock('@tools/codexImport', async (importActual) => ({
-  ...(await importActual<typeof import('@tools/codexImport')>()),
-  importCodexClass: mocks.importCodexClass,
-  findCodexBinaryPath: mocks.findCodexBinaryPath,
-}));
+vi.mock('@tools/codexImport', async (importActual) => {
+  const { Effect: EffectModule } = await import('effect');
+  return {
+    ...(await importActual<typeof import('@tools/codexImport')>()),
+    // The client over whatever class the case's SDK import yields.
+    openCodexClient: () =>
+      mocks.importCodexClass().pipe(
+        EffectModule.map((Codex: new () => unknown) => ({
+          codex: new Codex(),
+          codexPath: undefined,
+        })),
+      ),
+  };
+});
 
 import { CodexTool } from '@tools/codex';
 import { createFakeAgentCliChildRun } from '../support/agentCliResumeTestUtils';
@@ -108,10 +114,8 @@ describe('codex tool - atomic resume fallback', () => {
     mocks.startChildRunLoop.mockReset();
     mocks.startChildRunLoop.mockReturnValue(completedChildRunLoop());
     mocks.importCodexClass.mockReset();
-    mocks.findCodexBinaryPath.mockReset();
 
     mocks.registerRun.mockReturnValue(Effect.void);
-    mocks.findCodexBinaryPath.mockReturnValue(undefined);
     mocks.createChildRun.mockReturnValue(
       Effect.succeed(createFakeAgentCliChildRun(childRunId)),
     );
@@ -154,7 +158,7 @@ describe('codex tool - atomic resume fallback', () => {
         );
 
         expect(
-          yield* new CodexTool().call({
+          yield* CodexTool.call({
             prompt: 'launch Codex',
             sandbox_mode: 'workspace-write',
           }),
@@ -188,7 +192,7 @@ describe('codex tool - atomic resume fallback', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* new CodexTool().call({
+          yield* CodexTool.call({
             prompt: 'resume Codex',
             sandbox_mode: 'workspace-write',
             thread_id: 'stale-thread',
@@ -242,7 +246,7 @@ describe('codex tool - atomic resume fallback', () => {
             return release;
           });
 
-        const tool = new CodexTool();
+        const tool = CodexTool;
         const first = yield* Effect.forkChild(
           tool.call({
             prompt: 'continue the refactor',

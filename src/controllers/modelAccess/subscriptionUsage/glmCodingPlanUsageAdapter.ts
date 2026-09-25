@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
-
 import {
   asObject,
   fetchSubscriptionUsage,
@@ -11,6 +10,8 @@ import {
   usageWindow,
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
+import type { Cause } from 'effect';
+import type { HttpClient, HttpClientError } from 'effect/unstable/http';
 
 export const GLM_CODING_PLAN_USAGE_URL =
   'https://open.bigmodel.cn/api/monitor/usage/quota/limit';
@@ -162,9 +163,13 @@ export function parseGlmCodingPlanUsage(
 
 export function fetchGlmCodingPlanUsage(
   apiKey: string,
-  signal: AbortSignal,
+  timeoutMs: number,
   usageUrl = GLM_CODING_PLAN_USAGE_URL,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+): Effect.Effect<
+  ParsedSubscriptionUsage,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+> {
   return Effect.map(
     fetchSubscriptionUsage({
       url: usageUrl,
@@ -174,7 +179,7 @@ export function fetchGlmCodingPlanUsage(
         Authorization: apiKey,
         'Content-Type': 'application/json',
       },
-      signal,
+      timeoutMs,
     }),
     parseGlmCodingPlanUsage,
   );

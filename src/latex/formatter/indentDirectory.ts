@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { EXCLUDED_DIRS } from '@shared/constants/latexTiming';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
@@ -11,9 +10,8 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
-
-const log = createLog(CHANNEL);
 
 export type IndentLatexResult =
   | {
@@ -62,7 +60,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
 ): Effect.fn.Return<
   IndentLatexResult,
   PlatformError.PlatformError,
-  FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
   yield* Effect.logDebug(
     `Starting LaTeX indentation process for directory: ${directory}`,
@@ -107,7 +105,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
   ): Effect.fn.Return<
     void,
     PlatformError.PlatformError,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const entries = yield* readDirectoryTypedTolerant(dirPath);
     for (const [name, type] of entries) {
@@ -158,12 +156,18 @@ export const indentLatexFilesInDirectory = Effect.fn(
     : path.resolve(workspaceRoot ?? '.', directory);
 
   return yield* walkDirectory(absoluteDirectory).pipe(
-    Effect.map((): IndentLatexResult => {
-      log.info(
+    Effect.andThen(() =>
+      Effect.logInfo(
         `${indentedCount} .tex files have been formatted in ${directory}`,
-      );
-      return { status: 'formatted', directory, count: indentedCount };
-    }),
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as<IndentLatexResult>({
+          status: 'formatted',
+          directory,
+          count: indentedCount,
+        }),
+      ),
+    ),
     Effect.catch((err) =>
       Effect.logError(
         `Error during indentation process: ${toErrorMessage(err)}`,

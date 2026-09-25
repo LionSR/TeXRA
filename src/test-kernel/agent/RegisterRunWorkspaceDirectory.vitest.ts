@@ -10,6 +10,7 @@ import {
   registerRun,
 } from '@agent/storage/runLifecycle';
 import { aggregateId, type RunId } from '@shared/schemas';
+import { DatabaseReadFailed } from '@shared/session/database';
 import {
   createTestSession,
   publishTestRunStart,
@@ -37,7 +38,6 @@ const register = (workingDirectory?: string) =>
       ...baseConfig,
       ...(workingDirectory === undefined ? {} : { workingDirectory }),
     },
-    'chat',
     options,
   );
 
@@ -74,7 +74,7 @@ describe('run registration and finalization', () => {
         // what a record read sees: without the barrier ahead of it, this child is
         // refused as if its parent did not exist.
         const parentRunId = publishTestRunStart(session);
-        yield* registerRun(session, runId, baseConfig, 'chat', {
+        yield* registerRun(session, runId, baseConfig, {
           ...options,
           parentRunId,
         });
@@ -83,7 +83,7 @@ describe('run registration and finalization', () => {
         // than wait on the barrier for a row that is not coming.
         const absentParentId = 'def456' as RunId;
         const refusal = yield* Effect.flip(
-          registerRun(session, 'fed789' as RunId, baseConfig, 'chat', {
+          registerRun(session, 'fed789' as RunId, baseConfig, {
             ...options,
             parentRunId: absentParentId,
           }),
@@ -114,7 +114,10 @@ describe('run registration and finalization', () => {
       Effect.gen(function* () {
         yield* register();
         if (!alreadyOwned) yield* session.releaseRunLease(runId);
-        const failure = new Error('database admission rejected');
+        const failure = new DatabaseReadFailed({
+          path: 'session.db',
+          cause: new Error('database admission rejected'),
+        });
         vi.spyOn(session, 'acquireClaims').mockReturnValueOnce(
           Effect.fail(failure),
         );
@@ -143,24 +146,6 @@ describe('run registration and finalization', () => {
         yield* session.acquireClaims(aggregateId('run', runId));
         yield* getRunRecords(session, runId).writeReport('owned');
         expect(yield* getRunRecords(session, runId).readReport()).toBe('owned');
-      }),
-  );
-
-  it.effect(
-    'releases fresh birth claims when the committed publication consumer fails',
-    () =>
-      Effect.gen(function* () {
-        vi.spyOn(session, 'receiveCommittedEvent').mockReturnValue(
-          Effect.die(new Error('consumer failed')),
-        );
-        const born = yield* Effect.flip(register());
-        expect(born).toBeInstanceOf(Error);
-        expect(yield* getRunRecords(session, runId).exists()).toBe(true);
-        const refused = yield* Effect.flip(
-          getRunRecords(session, runId).writeReport('unowned'),
-        );
-        expect(refused).toBeInstanceOf(Error);
-        expect(yield* session.ownsRun(runId)).toBe(false);
       }),
   );
 

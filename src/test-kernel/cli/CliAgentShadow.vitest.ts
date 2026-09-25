@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 // Third-party imports
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +12,7 @@ import { getAgentsByCategory } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import {
   applyInitialCliAgentSelection,
-  chatToolUseAgentUsageError,
+  resolveChatToolUseAgent,
 } from '@cli/chat/tui/commands/handlers/agentModelCommands';
 import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
@@ -36,6 +36,7 @@ import {
   installPlatform,
 } from '@test/support/setupPlatform';
 import { cleanupTempDirs, makeTempDir } from '@test/support/tempDirPlatform';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
 // The root-agent selection writes a local notice, whose sink reads the bound
@@ -108,7 +109,7 @@ describe('CLI agent validation with a shadowed name', () => {
         ).pipe(
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
         ),
-        nodePlatformLayer,
+        Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
     );
   });
@@ -132,9 +133,9 @@ describe('CLI agent validation with a shadowed name', () => {
         expect(
           yield* checkCliAgentLaunch(hostStores(), 'assistant', entry, 'chat'),
         ).toBe(entry);
-        expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'assistant'),
-        ).toBeUndefined();
+        expect(yield* resolveChatToolUseAgent(hostStores(), 'assistant')).toBe(
+          entry,
+        );
       }),
   );
 
@@ -164,7 +165,7 @@ describe('CLI agent validation with a shadowed name', () => {
           ),
         ).toBeUndefined();
         expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'polish'),
+          String(yield* resolveChatToolUseAgent(hostStores(), 'polish')),
         ).toContain(
           'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
         );
@@ -176,7 +177,7 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* chatToolUseAgentUsageError(hostStores(), 'no-such-agent'),
+          String(yield* resolveChatToolUseAgent(hostStores(), 'no-such-agent')),
         ).toContain('Tool-use agent not found: no-such-agent.');
       }),
   );
@@ -298,7 +299,7 @@ describe('CLI agent validation with a shadowed name', () => {
             }),
           update: stores.globalState.update.bind(stores.globalState),
         };
-        const session = new TuiSession();
+        const session = new TuiSession(() => undefined);
         patchSessionMeta({ agent: 'launched-agent', teamName: 'Physicist' });
         const context = {
           stores: { ...stores, globalState: delayedState },

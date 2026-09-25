@@ -9,8 +9,12 @@ import { Cause, Effect, Exit } from 'effect';
 import { render, type Instance as InkInstance } from 'ink';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
-import { detachSubagentsOnStop, type AgentConfig } from '@agent/runtime';
-import { type CliContext, readCliVersion } from '@cli/runtime/cliContext';
+import type { AgentConfig } from '@agent/runtime';
+import {
+  CliUsageError,
+  type CliContext,
+  readCliVersion,
+} from '@cli/runtime/cliContext';
 import {
   firstRunSetupAgentOverride,
   SETUP_AGENT_HANDOFF_NOTICE,
@@ -33,20 +37,22 @@ import {
 } from '@cli/runtime/terminalRequirements';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import {
+  acquireTuiTerminal,
   clearTerminalScrollback,
-  installTerminalRestoreOnExit,
 } from '@cli/tui/terminalCleanup';
 import { DisposableStore } from '@platform/disposable';
 import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { RunId, RunPhase } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { AgentCategory, RUN_PHASE } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { descendantRuns } from '@shared/session/sessionView';
 import { getFirstRunDone } from '@shared/state/onboardingState';
-import { isActivePhase, isInFlightPhase } from '@shared/runs/runStatus';
+import {
+  isActivePhase,
+  isTranscriptSettlementPhase,
+} from '@shared/runs/runStatus';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -58,7 +64,7 @@ import { App } from './App';
 import {
   applyCliModelSelection,
   applyInitialCliAgentSelection,
-  chatToolUseAgentUsageError,
+  resolveChatToolUseAgent,
 } from './commands/handlers/agentModelCommands';
 import { applyCliModelAccessSelection } from './commands/handlers/modelAccessCommands';
 import { showCliMemoryPreview } from './commands/handlers/memoryCommands';
@@ -71,11 +77,10 @@ import { announceForegroundApprovals } from './state/subscribeApprovals';
 import { subscribeCliCredentialChanges } from './hosts/cliProviderKeys';
 import { createTuiViewportController } from './render/tuiViewportController';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   resetCliState,
   patchSessionMeta,
   sessionViewFailure as sessionViewFailureSignal,
-  rootRunId as rootRunIdSignal,
   sessionMeta as sessionMetaSignal,
 } from './state/cliState';
 import {
@@ -90,11 +95,7 @@ import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from './state/transcript';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
-  chatTuiCanInterruptActiveRun,
-  chatTuiCanSelectModel,
   chatTuiCanStartRootRun,
-  chatTuiCanStopVisibleRun,
-  chatTuiIsResumableIdleOnExit,
   chatTuiRunPending,
   TuiSession,
 } from './state/sessionRunState';
@@ -159,41 +160,36 @@ export async function runChat(
     resourcesPath: context.resourcesPath,
     minimumLogLevel: context.minimumLogLevel,
   });
-  const { services, runtimeSession } = await runtime.runPromise(
-    Effect.gen(function* () {
-      const built = yield* initCliPlatform({ ...context, quietLogs: true });
-      return { services: built, runtimeSession: yield* built.session };
-    }),
-  );
   const initialResume = init.initialResume;
-  runtimeSession.setApprovalPolicy(context.approvalPolicy);
-  // First-run gate (interactive only; headless already rejected above). A
-  // credential-less user signs in or saves a key here; the model
-  // resolution below then see the freshly-set credentials in the same process.
-  const { maybeRunCliOnboarding } =
-    await import('@cli/onboarding/runOnboarding');
-  const onboarding = await runtime.runPromise(
-    maybeRunCliOnboarding(services, context),
-  );
-  if (onboarding.declined) {
-    // The user saw the picker and chose "Skip for now"; the skip summary already
-    // told them how to set up later. Exit cleanly instead of falling through to
-    // the no-models resolution error, the dead-end this feature exists to fix.
-    return { exitCode: CliExitCode.Success };
-  }
-  // First-run setup yields to an explicitly selected agent.
-  const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
-  const setupAgentOverride = firstRunSetupAgentOverride({
-    onboardingConfigured: onboarding.configured,
-    firstRunDone: await runtime.runPromise(
-      getFirstRunDone(services.globalState),
-    ),
-    pinnedAgent: explicitAgent ?? context.envAgent,
-  });
-  const defaults = await runtime.runPromise(
+  // One startup program; an early exit is its `exitCode` arm.
+  const startup = await runtime.runPromise(
     Effect.gen(function* () {
+      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const runtimeSession = yield* services.session;
+      runtimeSession.setApprovalPolicy(context.approvalPolicy);
+      // First-run gate (interactive only; headless already rejected above). A
+      // credential-less user signs in or saves a key here, and the model
+      // resolution below sees those credentials in the same process.
+      const { maybeRunCliOnboarding } = yield* Effect.promise(
+        () => import('@cli/onboarding/runOnboarding'),
+      );
+      const onboarding = yield* maybeRunCliOnboarding(services, context);
+      if (onboarding.declined) {
+        // The user saw the picker and chose "Skip for now"; the skip summary
+        // already told them how to set up later. Exit cleanly instead of
+        // falling through to the no-models resolution error, the dead-end this
+        // feature exists to fix.
+        return { exitCode: CliExitCode.Success };
+      }
+      // First-run setup yields to an explicitly selected agent.
+      const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
+      const setupAgentOverride = firstRunSetupAgentOverride({
+        onboardingConfigured: onboarding.configured,
+        firstRunDone: yield* getFirstRunDone(services.globalState),
+        pinnedAgent: explicitAgent ?? context.envAgent,
+      });
       yield* loadAgents();
-      return resolveChatDefaults({
+      const defaults = resolveChatDefaults({
         stores: services,
         agentOverride: explicitAgent ?? setupAgentOverride,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
@@ -204,40 +200,85 @@ export async function runChat(
           AgentCategory.ToolUse,
         ),
       });
+      const agentEntry = yield* resolveChatToolUseAgent(
+        services,
+        defaults.agent,
+      );
+      if (agentEntry instanceof CliUsageError) {
+        writeTextStderr(agentEntry.message);
+        return { exitCode: CliExitCode.Usage };
+      }
+      // One API mode for the whole session: an explicit --api-mode/env
+      // override wins, otherwise the persisted account default. Model
+      // resolution, the no-models hints, and the header/status all read this
+      // same value so they can never disagree.
+      const modelSelectionExit = yield* Effect.exit(
+        selectCliRunnableModel(defaults.model, {
+          stores: services,
+          fallbackReason: defaults.modelSource,
+          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+            CHAT_STARTUP_MODEL_RECOVERY,
+          ),
+        }).pipe(
+          Effect.tap((selection) =>
+            setCliHelperModel(services.globalState, selection.model),
+          ),
+        ),
+      );
+      if (Exit.isFailure(modelSelectionExit)) {
+        writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
+        return { exitCode: CliExitCode.Usage };
+      }
+      const modelSelection = modelSelectionExit.value;
+      // Both persisted team fields are `.nullish()` on the wire, so a resumed
+      // run that never carried a preset lands `null` where `SessionMeta` wants
+      // absent.
+      const initialPresetId =
+        initialResume?.config.cli?.multiAgentPresetId ?? undefined;
+      sessionMetaSignal.set({
+        agent: defaults.agent,
+        agentSource: agentEntry.source,
+        model: modelSelection.model,
+        modelSource: defaults.modelSource,
+        cwd: context.cwd,
+        approvalPolicy: runtimeSession.approvalPolicy,
+        teamName: yield* readCliMultiAgentPresetName(
+          runtimeSession.roots.workspaceState,
+          initialPresetId,
+        ),
+        cliMultiAgentPresetId: initialPresetId,
+        delegationAgentScope:
+          initialResume?.config.delegationAgentScope ?? undefined,
+        version: yield* Effect.promise(readCliVersion),
+      });
+      if (modelSelection.notice) {
+        appendLocalAssistantTranscript(modelSelection.notice);
+      }
+      // First-run handoff explanation: when the setup agent owns this session
+      // (decided here for both the bare-`texra` and `texra chat` entries), say
+      // so - display-only, so the agent waits for the user's first message.
+      const startupNotice =
+        init.startupNotice ??
+        (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
+      if (startupNotice) {
+        appendLocalAssistantTranscript(startupNotice);
+      }
+      return {
+        services,
+        runtimeSession,
+        defaults,
+        model: modelSelection.model,
+        inputHistory: yield* loadInputHistory,
+        // The drain lives as long as the process runtime; the graceful exit
+        // waits on `idle` before that runtime is disposed.
+        followUpQueue: yield* makeFollowUpDeliveryQueue(runtime.scope),
+      };
     }),
   );
-  const agentUsageError = await runtime.runPromise(
-    chatToolUseAgentUsageError(services, defaults.agent),
-  );
-  if (agentUsageError) {
-    writeTextStderr(agentUsageError);
-    return { exitCode: CliExitCode.Usage };
-  }
-  // One API mode for the whole session: an explicit --api-mode/env override
-  // wins, otherwise the persisted account default. Model resolution, the
-  // no-models hints, and the header/status all read this same value so they can
-  // never disagree.
-  const modelSelectionExit = await runtime.runPromiseExit(
-    selectCliRunnableModel(defaults.model, {
-      stores: services,
-      fallbackReason: defaults.modelSource,
-      noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-        CHAT_STARTUP_MODEL_RECOVERY,
-      ),
-    }).pipe(
-      Effect.tap((selection) =>
-        setCliHelperModel(services.globalState, selection.model),
-      ),
-    ),
-  );
-  if (Exit.isFailure(modelSelectionExit)) {
-    writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
-    return { exitCode: CliExitCode.Usage };
-  }
-  const modelSelection = modelSelectionExit.value;
+  if (startup.exitCode !== undefined) return { exitCode: startup.exitCode };
+  const { services, runtimeSession, defaults, model } = startup;
+  const { inputHistory, followUpQueue } = startup;
   const { agent } = defaults;
-  const model = modelSelection.model;
-  const version = await readCliVersion();
 
   const getApprovalPolicy = (): TexraApprovalPolicy =>
     runtimeSession.approvalPolicy;
@@ -265,46 +306,9 @@ export async function runChat(
     requestInputExit: exitController.requestInputExit,
     getApprovalPolicy,
     setApprovalPolicy,
-    canSelectModel: canSelectCurrentModel,
     resetSession: resetSessionForClear,
     resumeRun: chatController.resume,
   });
-  // Both persisted team fields are `.nullish()` on the wire, so a resumed run
-  // that never carried a preset lands `null` where `SessionMeta` wants absent.
-  const initialPresetId =
-    initialResume?.config.cli?.multiAgentPresetId ?? undefined;
-  const initialPresetName = await runtime.runPromise(
-    readCliMultiAgentPresetName(
-      runtimeSession.roots.workspaceState,
-      initialPresetId,
-    ),
-  );
-  sessionMetaSignal.set({
-    agent,
-    model,
-    modelSource: defaults.modelSource,
-    cwd: context.cwd,
-    approvalPolicy: runtimeSession.approvalPolicy,
-    teamName: initialPresetName,
-    cliMultiAgentPresetId: initialPresetId,
-    delegationAgentScope:
-      initialResume?.config.delegationAgentScope ?? undefined,
-    version,
-  });
-  if (modelSelection.notice) {
-    appendLocalAssistantTranscript(modelSelection.notice);
-  }
-  // First-run handoff explanation: when the setup agent owns this session
-  // (decided here for both the bare-`texra` and `texra chat` entries), say so -
-  // display-only, so the agent waits for the user's first message.
-  const startupNotice =
-    init.startupNotice ??
-    (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
-  if (startupNotice) {
-    appendLocalAssistantTranscript(startupNotice);
-  }
-
-  const inputHistory = await runtime.runPromise(loadInputHistory);
 
   // DA1 sentinel discovery runs *before* Ink mounts so it owns the raw-mode
   // toggle exclusively, interleaving with Ink's own raw-mode lifecycle (set
@@ -317,17 +321,15 @@ export async function runChat(
   });
 
   const disposables = new DisposableStore();
-  // Crash safety stays armed until graceful teardown has restored the terminal;
-  // it outlives session subscriptions so a later teardown failure cannot leave
-  // the user's shell in raw/kitty/mouse mode with a hidden cursor.
-  const disposeTerminalRestoreOnExit = installTerminalRestoreOnExit();
   // The one session state the TUI renders (PRD 10.1): the session's fold
   // bridged into a signal, with every stream's transcript tier subscribed
   // for this surface. The TUI shows the whole session, so its subscription
   // set is the view's stream set. Bound before anything reads the view:
   // the terminal title below derives its attention state from it on
   // install.
-  const session = new TuiSession();
+  const session = new TuiSession((runId) =>
+    runtimeSession.runs.getToolUseFlowContext(runId),
+  );
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
   // failure on every exit path, since they all read `session.runExitCode`.
@@ -342,10 +344,14 @@ export async function runChat(
   });
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
-  const terminalTitleUpdates = installTerminalTitleUpdates(context.cwd);
-  disposables.add(terminalTitleUpdates.dispose);
+  // The terminal outlives session subscriptions: only the exit controller
+  // releases it, and its `exit` hook covers every other death.
+  const terminal = acquireTuiTerminal({
+    kittyKeyboard: terminalCaps.kittyKeyboard,
+    title: installTerminalTitleUpdates(context.cwd),
+  });
   disposables.add(announceForegroundApprovals());
-  disposables.add(subscribeCliCredentialChanges(runtime, runtimeSession.roots));
+  disposables.add(subscribeCliCredentialChanges(runtime));
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
     const ids = [...currentView().runs.keys()];
@@ -364,52 +370,17 @@ export async function runChat(
   );
   syncTranscriptSubscriptions();
 
-  // The drain lives as long as the process runtime; the graceful exit waits
-  // on `idle` before that runtime is disposed.
-  const followUpQueue = await runtime.runPromise(
-    makeFollowUpDeliveryQueue(runtime.scope),
-  );
-  const rootRunStatus = (): RunPhase | undefined =>
-    runPhaseOf(runViewOf(currentView(), session.runId));
-  const hasActiveToolUseFlow = (): boolean =>
-    Boolean(
-      session.runId && runtimeSession.runs.getToolUseFlowContext(session.runId),
-    );
-  const canSelectCurrentModel = (): boolean =>
-    chatTuiCanSelectModel({
-      canStartRootRun: chatTuiCanStartRootRun(session),
-      runId: session.runId,
-      status: rootRunStatus(),
-      hasActiveToolUseFlow: hasActiveToolUseFlow(),
-    });
   const getModelSwitchDisabledReason = (
     candidateModel: string,
   ): Effect.Effect<string | undefined, Error> => {
-    if (chatTuiCanStartRootRun(session) || !canSelectCurrentModel()) {
+    if (chatTuiCanStartRootRun(session) || !session.canSelectModel()) {
       return Effect.succeed(undefined);
     }
-    const activeFlow = session.runId
-      ? runtimeSession.runs.getToolUseFlowContext(session.runId)
-      : undefined;
     return (
-      activeFlow?.modelSwitchDisabledReason(candidateModel) ??
+      session.activeToolUseFlow()?.modelSwitchDisabledReason(candidateModel) ??
       Effect.succeed(undefined)
     );
   };
-  const canInterruptActiveRun = (): boolean =>
-    chatTuiCanInterruptActiveRun(session);
-  const canStopActiveRun = (): boolean =>
-    chatTuiCanStopVisibleRun({
-      runPending: chatTuiRunPending(session),
-      runId: session.runId,
-      status: rootRunStatus(),
-    });
-  const isResumableIdle = (): boolean =>
-    chatTuiIsResumableIdleOnExit({
-      canInterruptActiveRun: canInterruptActiveRun(),
-      canStopActiveRun: canStopActiveRun(),
-      hasActiveToolUseFlow: hasActiveToolUseFlow(),
-    });
   // Chat-session controller: owns run start/resume/stop orchestration.
   // The Ink layer never directly mutates session run-state fields, every
   // state transition flows through one of the controller's narrow commands.
@@ -431,7 +402,7 @@ export async function runChat(
   disposables.add(setCliAgentResumeHandler(chatController.tryResumeRun));
 
   const resetSessionForClear = (): void => {
-    const currentRunId = session.runId ?? activeRunIdSignal.get();
+    const currentRunId = session.runId ?? selectedRunIdSignal.get();
     const activeStatus = runPhaseOf(runViewOf(currentView(), currentRunId));
     const isRunPending = chatTuiRunPending(session);
 
@@ -451,14 +422,6 @@ export async function runChat(
     chatController.clearInterruptedRecovery();
     chatController.clearPendingSkills();
     session.clearRunState();
-    // Release this conversation's resident transcripts when their remaining
-    // readers and writers leave. Clearing the terminal does not delete history.
-    const store = runtimeSession.transcripts;
-    for (const runId of descendantRuns(currentView(), rootRunIdSignal.get(), {
-      includeRoot: true,
-    })) {
-      store.requestEviction(runId);
-    }
     resetCliState(meta);
     clearTerminalScrollback();
     // The erase above happened outside Ink, so everything the static
@@ -486,7 +449,7 @@ export async function runChat(
         `Approval mode: ${formatTexraApprovalPolicy(policy)}`,
       );
     },
-    canSelectModel: canSelectCurrentModel,
+    canSelectModel: () => session.canSelectModel(),
     getModelSwitchDisabledReason,
     onModelSelect: (nextModel) =>
       applyCliModelSelection(nextModel, slashCommandContext()),
@@ -525,38 +488,11 @@ export async function runChat(
       onSubmit={(line, mediaFiles, images) => {
         runtime.runFork(chatController.submit(line, mediaFiles, images));
       }}
-      canInterruptRun={(runId) =>
-        (runId === session.runId && canInterruptActiveRun()) ||
-        isInFlightPhase(runtimeSession.runView(runId)?.status)
-      }
       colorEnabled={stdoutColorEnabled}
       commandName={context.commandName}
-      onInterruptRun={chatController.stopRun}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={() => exitController.handleSigint()}
       onSuspend={() => exitController.handleSigtstp()}
-      onKillRun={(runId) => {
-        runtime.runFork(
-          Effect.gen(function* () {
-            const detachActiveChildren = yield* detachSubagentsOnStop(
-              runtimeSession.roots,
-            );
-            const stop = runtimeSession.runs.kill(runId, {
-              detachActiveChildren,
-            });
-            yield* stop.settlement;
-          }).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                appendLocalAssistantTranscript(toErrorMessage(error)),
-              ),
-            ),
-          ),
-        );
-      }}
-      onWorkflowControl={(runId, action) => {
-        runtimeSession.workflowControls.control(runId, action);
-      }}
       history={inputHistory}
     />,
     {
@@ -593,20 +529,12 @@ export async function runChat(
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,
-    disposeTerminalRestoreOnExit,
-    awaitFollowUpsIdle: () => runtime.runPromise(followUpQueue.idle),
-    awaitRunSettled: () =>
-      session.runSettled
-        ? runtime.runPromise(session.runSettled)
-        : Promise.resolve(),
+    terminal,
+    runtime,
+    followUpsIdle: followUpQueue.idle,
     getApprovalPolicy,
-    flushArtifacts: () =>
-      runtime.runPromise(runtimeSession.settlePublications()),
+    flushArtifacts: runtimeSession.settlePublications(),
     repaintAfterTerminalResume: viewportController.repaintAfterTerminalResume,
-    suspendTerminalTitle: terminalTitleUpdates.suspend,
-    resumeTerminalTitle: terminalTitleUpdates.resume,
-    canStopActiveRun,
-    isResumableIdle,
     interruptActive: () => chatController.stop(),
   });
   // Transfer signal ownership from the platform handler and arm this session's
@@ -624,15 +552,21 @@ export async function runChat(
     runtime.runFork(chatController.resume(initialResume.id));
   }
 
-  // Auto-prompt when the active stream goes WAITING so the UI clearly
-  // signals "your turn," alongside the StatusBar pill.
-  let rootPhase = rootRunStatus();
+  // The one "agent finished" notification: the claimed run's turn settles,
+  // at WAITING ("your turn", alongside the StatusBar pill) or at its outcome.
+  // A run that ends after waiting was already announced, and a stop the user
+  // asked for is not news.
+  let rootPhase = session.status();
   disposables.add(
     subscribeToSignalChanges([sessionView()], () => {
-      const phase = rootRunStatus();
-      if (phase === rootPhase) return;
-      rootPhase = phase;
-      if (phase === RUN_PHASE.WAITING && !session.stopRequested) {
+      const previous = rootPhase;
+      rootPhase = session.status();
+      if (
+        rootPhase !== previous &&
+        previous !== RUN_PHASE.WAITING &&
+        isTranscriptSettlementPhase(rootPhase) &&
+        !session.stopRequested
+      ) {
         notify('agentFinished');
       }
     }),

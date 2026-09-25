@@ -39,13 +39,7 @@ import {
   type AgentCategory,
   type AgentModePreset,
   type ByCategory,
-  type ClaudeAgentEffort,
-  type ClaudeAgentModel,
-  type ClaudeAgentPermissionMode,
-  type CodexApprovalPolicy,
-  type CodexReasoningEffort,
-  type CodexSandboxMode,
-  type GoalListItem,
+  type InstalledPlugin,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
@@ -60,12 +54,12 @@ import {
   type ModelSelectionItem,
   type ProviderKeyStatus,
   type PRSubscriptionEntry,
+  type SettingsSectionName,
   type SettingsTabPanelName,
   type SubscriptionAuthStatuses,
   type ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
-import type { LatexConfigValues } from '@shared/constants/latexConfig';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 
 // ---------------------------------------------------------------------------
@@ -80,53 +74,46 @@ const { trackedSignal, resetAll: resetTrackedSignals } =
 // Catalog-backed signals
 // ---------------------------------------------------------------------------
 
-/** Setters for every catalog-backed signal, keyed by canonical `texra.*` key. */
-const CATALOG_SIGNAL_SETTERS = new Map<string, (value: unknown) => void>();
+/** Every catalog-backed signal created so far, keyed by canonical `texra.*` key. */
+const CATALOG_SIGNALS = new Map<string, Signal.State<unknown>>();
 
 /**
- * Declare the signal for one settings catalog row.
+ * The signal for one settings catalog row, created on first use and the same
+ * signal on every later call.
  *
  * The row already owns the default (`schema.parse(undefined)` yields its
  * `.prefault()`), so a declaration here restates neither the default nor the
- * wire field name; it names the key and the value type the tabs render. It also
- * registers the setter under that key, which is what lets
- * {@link applySettingsSnapshot} apply a whole catalog-derived snapshot without
- * a per-setting `.set()` line in a slice.
+ * wire field name; it names the key and the value type the tabs render. Being
+ * keyed is what lets {@link applySettingsSnapshot} apply a whole
+ * catalog-derived snapshot without a per-setting `.set()` line in a slice, and
+ * lets a tab render rows it only knows by key (a tool card's inline settings).
  *
  * Throws on a key with no settings-view catalog row: a signal that no snapshot
  * can ever reach would silently render its default forever.
  */
-function settingSignal<T>(key: string): Signal.State<T> {
+export function settingSignal<T>(key: string): Signal.State<T> {
+  const existing = CATALOG_SIGNALS.get(key);
+  if (existing) return existing as Signal.State<T>;
   const entry = settingsViewSettingByKey(key);
   if (!entry) {
     throw new Error(`No settings-view catalog row for setting "${key}"`);
   }
   const state = trackedSignal<T>(() => entry.schema.parse(undefined) as T);
-  // Sound because the snapshot arm validated the value with this same row's
-  // schema before it reached the frontend.
-  CATALOG_SIGNAL_SETTERS.set(key, (value) => state.set(value as T));
+  CATALOG_SIGNALS.set(key, state as Signal.State<unknown>);
   return state;
 }
 
 /**
  * Apply a catalog-derived settings snapshot. Every key in the payload comes
  * from the catalog and was validated by its own row's schema at the message
- * boundary, so this is a direct fan-out to the declared signals. A key with no
- * declared signal means a row joined a snapshot without a signal to render it
- * — reported, never swallowed.
+ * boundary, so this is a direct fan-out to each key's signal (created here
+ * when no tab has read it yet).
  */
 export function applySettingsSnapshot(
   values: Readonly<Record<string, unknown>>,
 ): void {
   for (const [key, value] of Object.entries(values)) {
-    const setter = CATALOG_SIGNAL_SETTERS.get(key);
-    if (!setter) {
-      console.warn(
-        `[settings] No signal declared for catalog setting "${key}"; the settings view cannot render it.`,
-      );
-      continue;
-    }
-    setter(value);
+    settingSignal<unknown>(key).set(value);
   }
 }
 
@@ -134,13 +121,21 @@ export function applySettingsSnapshot(
 // Tab state
 // ---------------------------------------------------------------------------
 /**
- * Opening panel when the host asks for the settings view without naming a tab.
- * Account is the first nav group, so this matches what the nav already
- * presents as the entry point.
+ * Opening panel when the host asks for the settings view without naming a tab:
+ * Models, the first page, because connecting a model is the first job.
  */
 export const selectedPanel = trackedSignal<SettingsTabPanelName>(
-  () => 'account',
+  () => 'models',
 );
+
+/**
+ * The sub-tab last shown on each page, kept while the view lives so returning
+ * to a page lands where the user left it. A page with no entry shows its
+ * first section.
+ */
+export const selectedSections = trackedSignal<{
+  readonly [P in SettingsTabPanelName]?: SettingsSectionName<P>;
+}>(() => ({}));
 
 // ---------------------------------------------------------------------------
 // Memory state
@@ -244,28 +239,12 @@ export const disabledSkills = settingSignal<string[]>(
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
 );
+export const installedPlugins = settingSignal<InstalledPlugin[]>(
+  GlobalStateKey.INSTALLED_PLUGINS,
+);
 export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
 export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);
-export const codexSandboxMode = settingSignal<CodexSandboxMode>(
-  WorkspaceStateKey.CODEX_SANDBOX_MODE,
-);
-export const codexReasoningEffort = settingSignal<CodexReasoningEffort>(
-  WorkspaceStateKey.CODEX_REASONING_EFFORT,
-);
-export const codexApprovalPolicy = settingSignal<CodexApprovalPolicy>(
-  WorkspaceStateKey.CODEX_APPROVAL_POLICY,
-);
-export const claudeAgentModel = settingSignal<ClaudeAgentModel>(
-  WorkspaceStateKey.CLAUDE_AGENT_MODEL,
-);
-export const claudeAgentPermissionMode =
-  settingSignal<ClaudeAgentPermissionMode>(
-    WorkspaceStateKey.CLAUDE_AGENT_PERMISSION_MODE,
-  );
-export const claudeAgentEffort = settingSignal<ClaudeAgentEffort>(
-  WorkspaceStateKey.CLAUDE_AGENT_EFFORT,
-);
 
 // ---------------------------------------------------------------------------
 // Tool dashboard state
@@ -313,25 +292,29 @@ export const latexSettingsStatus = trackedSignal(() => ({
   ...DEFAULT_LATEX_SETTINGS_STATUS,
 }));
 export const latexSettingsLoaded = trackedSignal(() => false);
-export const latexConfigValues = trackedSignal<LatexConfigValues>(() => ({}));
-export const inlineCriticismEnabled = trackedSignal(() => false);
-
-// ---------------------------------------------------------------------------
-// Goal settings state
-// ---------------------------------------------------------------------------
-export const goalItems = trackedSignal<readonly GoalListItem[]>(() => []);
-
-// ---------------------------------------------------------------------------
-// Derived capability view: commands the active host's inbound registry
-// declares `unsupported(...)`, sent once at webview-ready (see
-// `unsupportedCommands` in `@shared/utils/dispatcher`). Replaces
-// `isDesktopHost` checks for command-availability gating. `null` before
-// that broadcast arrives — checked via `isKnownUnsupported`, which treats
-// "not yet known" as unsupported so a control never flashes visible then
-// hidden once the real capability set lands.
-// ---------------------------------------------------------------------------
-export const unsupportedCommands = trackedSignal<ReadonlySet<string> | null>(
-  () => null,
+export const workflowAutoCompile = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_AUTO_COMPILE,
+);
+export const workflowAutoOpenPdf = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
+);
+export const workflowRejectOnCompileFailure = settingSignal<boolean>(
+  WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
+);
+export const latexdiffBetweenRounds = settingSignal<boolean>(
+  WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+);
+export const latexdiffChangesOnly = settingSignal<boolean>(
+  WorkspaceStateKey.LATEXDIFF_CHANGES_ONLY,
+);
+export const latexdiffMathMarkup = settingSignal<string>(
+  WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
+);
+export const latexFormatter = settingSignal<string>(
+  WorkspaceStateKey.LATEX_FORMATTER,
+);
+export const inlineCriticismEnabled = settingSignal<boolean>(
+  GlobalStateKey.INLINE_CRITICISM_ENABLED,
 );
 
 // ---------------------------------------------------------------------------

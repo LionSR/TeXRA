@@ -29,6 +29,7 @@ import {
 } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { isStrictlyWithin } from '@utils/core/pathCore';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'latexPreview';
 
@@ -40,7 +41,7 @@ const CHANNEL = 'latexPreview';
 export type BuildDisplayFn = (
   location: FileLocation,
   options?: { preserveFocus?: boolean },
-) => Effect.Effect<void, unknown, PreviewServices>;
+) => Effect.Effect<void, Error, PreviewServices>;
 
 interface LatexPreviewDisplayOptions {
   openBuildDisplay: BuildDisplayFn;
@@ -86,23 +87,24 @@ const DIFF_SUFFIX = '_diff';
  * runtime a host runs them on: the temp files this module stages, and the
  * workspace-rooted compile a build display runs behind them.
  */
-type PreviewServices = FileSystem.FileSystem | Path.Path;
+type PreviewServices = FileSystem.FileSystem | Path.Path | ChildProcessSpawner;
 
-/** Silently attempt to delete a file or directory, ignoring errors */
+/** Delete a file or directory; a real failure is logged, not raised. */
 const silentDelete = (
   targetPath: string,
   kind: 'file' | 'dir',
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // What `BaseFS.delete` reached on the process provider: a non-directory
-    // (a symlink included) is unlinked, a directory is `rm`'d without
+    // `fs.remove` without `recursive`: a non-directory (a symlink included)
+    // is unlinked, a directory is `rm`'d without
     // recursion, and an already-absent target is not an error — that last is
     // what `force` carries, not a new best-effort.
     yield* fs.remove(targetPath, { force: true }).pipe(
-      // Best-effort temp cleanup; the target may already be gone.
+      // Best-effort temp cleanup: `force` already absorbs an absent target,
+      // so what reaches here is a real fault worth a warning.
       Effect.catch((error) =>
-        Effect.logDebug(`Failed to delete temp ${kind} ${targetPath}`).pipe(
+        Effect.logWarning(`Failed to delete temp ${kind} ${targetPath}`).pipe(
           withLogChannel(CHANNEL),
           Effect.annotateLogs({ data: error }),
         ),
@@ -151,7 +153,7 @@ const registerCleanup = (
 const withLatexOperation = (
   entry: LatexPreviewEntry,
   operationName: string,
-  operation: Effect.Effect<void, unknown, PreviewServices>,
+  operation: Effect.Effect<void, Error, PreviewServices>,
 ): Effect.Effect<void, never, PreviewServices> =>
   Effect.suspend(() => {
     if (entry.latexOperationInProgress) return Effect.void;
@@ -187,8 +189,8 @@ const readFileWithFallback = (
 ): Effect.Effect<string, never, PreviewServices> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    // `BaseFS.readBytes` returned the raw bytes: no line-ending normalization
-    // and no BOM handling, unlike `read`.
+    // The raw bytes decoded as-is: no line-ending normalization and no BOM
+    // handling, unlike `readNormalizedFile`.
     return yield* fs.readFile(uri.fsPath).pipe(
       Effect.map((bytes) => Buffer.from(bytes).toString('utf8')),
       Effect.catch((error) =>
@@ -214,7 +216,7 @@ const createTempFileWithCleanup = Effect.fn('createTempFileWithCleanup')(
     entry: LatexPreviewEntry,
     content: string,
     suffix: string,
-  ): Effect.fn.Return<string, unknown, PreviewServices> {
+  ): Effect.fn.Return<string, Error, PreviewServices> {
     const workspacePath = entry.request.roots.workspace;
     if (!workspacePath) {
       return yield* Effect.fail(new Error('No workspace folder open'));

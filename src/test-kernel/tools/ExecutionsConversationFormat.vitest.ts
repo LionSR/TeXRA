@@ -41,21 +41,11 @@ describe('formatConversation', () => {
     expect(output).toContain('[document attachment]');
   });
 
-  it('formats a web search as a tool_use marker and a compact result list', () => {
+  it('formats a web search as a tool_use marker', () => {
     const output = formatConversation([
       { kind: 'web-search', query: 'texra latex' },
-      {
-        kind: 'web-search-results',
-        results: [
-          { title: 'TeXRA', url: 'https://texra.ai' },
-          { title: 'TeXRA docs', url: 'https://texra.ai/docs' },
-        ],
-      },
     ]);
 
     expect(output).toContain('[tool_use: web_search({"query":"texra latex"})]');
-    expect(output).toContain(
-      '[tool_result: TeXRA (https://texra.ai), TeXRA docs (https://texra.ai/docs)]',
-    );
   });
 });

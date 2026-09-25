@@ -43,7 +43,7 @@ interface SettingsTeamRosterOptions<R> extends Omit<
   readonly presentation: SettingsTeamRosterPresentation;
   readonly refreshAfterApply: (
     selectedToolUseAgent?: string,
-  ) => Effect.Effect<void, unknown, R>;
+  ) => Effect.Effect<void, Error, R>;
 }
 
 /**
@@ -62,7 +62,7 @@ class TeamRosterRefreshFailed extends Data.TaggedError(
 export function applySettingsTeamRoster<R = never>(
   presetId: string,
   options: SettingsTeamRosterOptions<R>,
-): Effect.Effect<void, unknown, R> {
+): Effect.Effect<void, Error, R> {
   return Effect.gen(function* () {
     const result = yield* applyTeamRosterWithPreflight<R>(presetId, {
       ...options,

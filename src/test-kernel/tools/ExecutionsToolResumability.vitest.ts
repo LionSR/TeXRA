@@ -29,7 +29,11 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
         lastError: null,
         declinedRoutes: [],
       },
-      state: { shouldSkipCycle: false, stateSlices: null },
+      state: {
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
+      },
     },
   };
 }
@@ -50,7 +54,7 @@ describe('ExecutionsTool metadata-free run summary', () => {
           openingSnapshot(runId),
         ]);
 
-        const result = yield* new ExecutionsTool().call({
+        const result = yield* ExecutionsTool.call({
           path: `/executions/${runId}`,
         });
 

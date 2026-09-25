@@ -2,7 +2,7 @@ import { Deferred, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 
 import type { ApiProvider } from '@model/apiProviders';
-import { resolveModelApiKeyProvider } from '@model/openRouterRouting';
+import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
 import {
   LanguageModel,
@@ -52,7 +52,7 @@ interface RuntimeModelCatalogue {
   /** The in-flight discovery's shared answer, if one is running. */
   readonly pending?: Deferred.Deferred<
     RefreshRuntimeModelRegistryResult,
-    unknown
+    Error
   >;
   /** Whether the in-flight discovery explicitly bypasses a fresh cache. */
   readonly pendingForceDiscovery?: boolean;
@@ -153,7 +153,7 @@ export const refreshRuntimeModelRegistry = Effect.fn(
   'runtimeModelRegistry.refreshRuntimeModelRegistry',
 )(function* (
   options: RefreshRuntimeModelRegistryOptions = {},
-): Effect.fn.Return<RefreshRuntimeModelRegistryResult, unknown, LanguageModel> {
+): Effect.fn.Return<RefreshRuntimeModelRegistryResult, Error, LanguageModel> {
   if (options.forceDiscovery) {
     // Overlapping user actions share one forced probe. A normal probe that
     // started earlier is superseded because its access snapshot may predate
@@ -173,7 +173,7 @@ export const refreshRuntimeModelRegistry = Effect.fn(
     const { generation, entries: previousEntries } = catalogue;
     const pending = Deferred.makeUnsafe<
       RefreshRuntimeModelRegistryResult,
-      unknown
+      Error
     >();
     catalogue = {
       ...catalogue,
@@ -273,6 +273,13 @@ export function getRuntimeModelDirectFallback(
 ): RuntimeModelDirectFallback | undefined {
   const config = MODEL_CONFIGS[model];
   if (!config) return undefined;
-  const provider = resolveModelApiKeyProvider(config, useOpenRouter);
-  return provider ? { model, provider } : undefined;
+  // The replacement run declines every subscription route and Copilot.
+  const route = decideModelRoute(config, {
+    ...OWN_KEY_ROUTE_FACTS,
+    useOpenRouter,
+  });
+  if (route.kind === 'openrouter') return { model, provider: 'openRouter' };
+  return route.kind === 'api-key'
+    ? { model, provider: route.provider }
+    : undefined;
 }

@@ -11,7 +11,7 @@
  */
 import { signal, type Signal } from '@lit-labs/signals';
 
-import type { SessionType, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { LAUNCH_FILE_LISTS } from '@shared/launcher/fileSelectConfigs';
 import type { HostRequest } from '@shared/session/hostRequest';
@@ -28,7 +28,6 @@ import {
   PersistedSurfaceSchema,
   pruneSurface,
   reconcileLaunch,
-  resolveSelected,
   type Surface,
   type SurfaceAction,
 } from '@shared/session/surface';
@@ -121,7 +120,7 @@ export function createSessionSurfaces(options: {
     const view = entry.view$.get();
     const aggregates = transcriptAggregates(
       view,
-      resolveSelected(view, entry.surface$.get()),
+      entry.surface$.get().selected,
     );
     return {
       transcript: aggregates.map((aggregate) => aggregate.id).join('/'),
@@ -192,16 +191,15 @@ export function createSessionSurfaces(options: {
   }
 
   /** An asynchronous operation keeps the draft that started it, even if
-   *  selection or the launcher's mode changes before its response. */
+   *  selection changes before its response. */
   interface DraftOrigin {
     readonly runId: RunId | null;
-    readonly sessionType: SessionType;
   }
 
   function draftText(entry: Held, origin: DraftOrigin): string {
     const surface = entry.surface$.get();
     return origin.runId === null
-      ? surface.launch.instruction[origin.sessionType]
+      ? surface.launch.instruction
       : (surface.drafts.get(origin.runId)?.text ?? '');
   }
 
@@ -212,10 +210,7 @@ export function createSessionSurfaces(options: {
       act(entry, { kind: 'draft', runId: origin.runId, patch: { text } });
       return;
     }
-    act(entry, {
-      kind: 'launch',
-      patch: { instruction: { [origin.sessionType]: text } },
-    });
+    act(entry, { kind: 'launch', patch: { instruction: text } });
   }
 
   function presentResult(entry: Held, result: Response['result']): void {
@@ -300,14 +295,8 @@ export function createSessionSurfaces(options: {
         }
         return;
       case 'launch':
-        if (
-          launch.instruction[request.launch.sessionType] ===
-          request.launch.instruction[request.launch.sessionType]
-        ) {
-          act(entry, {
-            kind: 'launch',
-            patch: { instruction: { [request.launch.sessionType]: '' } },
-          });
+        if (launch.instruction === request.launch.instruction) {
+          act(entry, { kind: 'launch', patch: { instruction: '' } });
         }
         return;
       default:
@@ -330,15 +319,12 @@ export function createSessionSurfaces(options: {
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();
-    let runId = resolveSelected(entry.view$.get(), surface);
+    let runId = surface.selected;
     if (request.kind === 'record' && request.action.kind === 'start') {
       runId = request.action.target === 'launch' ? null : request.action.target;
     }
-    const origin: DraftOrigin = {
-      runId,
-      sessionType: surface.launch.sessionType,
-    };
-    const target = origin.runId ?? `launch:${origin.sessionType}`;
+    const origin: DraftOrigin = { runId };
+    const target = origin.runId ?? 'launch';
     if (request.kind === 'polish') {
       if (surface.polishing.has(target)) return;
       setSurface(entry, {
@@ -433,14 +419,15 @@ export function createSessionSurfaces(options: {
   function submit(entry: Held): void {
     const surface = entry.surface$.get();
     const view = entry.view$.get();
-    const runId = resolveSelected(view, surface);
+    const runId = surface.selected;
     if (runId !== null) {
       const run = view.runs.get(runId);
       const draft = surface.drafts.get(runId) ?? EMPTY_DRAFT;
       // The same decision the composer's Send takes, from the same fold
       // fields: a run that ended or that another process owns takes no
       // follow-up, however the send was reached.
-      if (!run || !canSendFollowUp(run, draft)) return;
+      if (!run || !canSendFollowUp(run, draft, { terminalBacked: true }))
+        return;
       const text = draft.text.trim();
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],
@@ -454,7 +441,7 @@ export function createSessionSurfaces(options: {
       return;
     }
     const { launch } = surface;
-    const instruction = launch.instruction[launch.sessionType].trim();
+    const instruction = launch.instruction.trim();
     if (instruction === '') return;
     hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
@@ -462,16 +449,14 @@ export function createSessionSurfaces(options: {
   transport.onSurfaceAction((key, action) => {
     const entry = held.get(key);
     if (!entry) return;
-    if (action.kind === 'chime') {
-      // The host already decided the transition and chose this port.
-      playCompletionSound();
-      return;
+    // The host already decided a chime's transition and chose this port.
+    if (action.kind === 'chime') playCompletionSound();
+    else if (action.kind === 'submit') submit(entry);
+    else if (action.kind !== 'showSessions') act(entry, action);
+    // Show Sessions opens the newest session only from the New-task state.
+    else if (entry.surface$.get().selected === null) {
+      act(entry, { kind: 'select', runId: action.runId });
     }
-    if (action.kind === 'submit') {
-      submit(entry);
-      return;
-    }
-    act(entry, action);
   });
 
   return {

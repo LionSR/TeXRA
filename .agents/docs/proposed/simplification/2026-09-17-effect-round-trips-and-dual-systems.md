@@ -326,7 +326,15 @@ tree.
   (`SubscriptionUsageService.ts`, and `authProgram.ts`'s `settleFailure`, which
   unwraps `AuthPortError` only), and handing the fetch the fiber's
   `AbortSignal` instead of the caller's `AbortSignal.timeout` would drop
-  `requestTimeoutMs` entirely.
+  `requestTimeoutMs` entirely. The `Error` channel it carries since the
+  unknown-error rule (2026-09-23, `ensureError` at its two `tryPromise`
+  edges) is not this candidate: `SyntaxError` and
+  `SubscriptionUsageHttpError` pass through unchanged, so the classification
+  and the caller's signal are as they were.
+  Overturned by the HttpClient lane (#13165): the fetch
+  now fails with `HttpClientError | TimeoutError`, the service classifies on
+  the reason (`StatusCodeError` 401/403, `DecodeError` over a `SyntaxError`),
+  and `requestTimeoutMs` stays the one deadline through `Effect.timeout`.
 - **`initCliPlatform` and its two siblings** (#12788): declined at the time. Of
   their ~25 call sites, 22 are R1 citty actions or the Ink entry and only three
   re-lifted the promise. Retyping would ripple into ~20 command modules and ~12

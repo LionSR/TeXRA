@@ -30,9 +30,9 @@
  * itself, so a second caller joins the first rather than racing it to build
  * a second runtime, and it is cleared once that install settles.
  *
- * The process identity is read before installing, so the map's entries
- * never wait on it and `initCliPlatform`'s open of the default session is
- * the first thing built on the runtime.
+ * The process identity is read as the runtime's own layer, over the
+ * spawner that runtime serves, and `initCliPlatform`'s open of the default
+ * session is the first thing built on it.
  *
  * AppState is built from the runtime's GlobalDatabase layer, sharing its
  * scoped connection. Platform-less entries provide refusing services instead.
@@ -41,7 +41,7 @@
 import { Effect, Layer } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
-import { createPlatformAgentDirectories } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
 import { globalDatabaseLayer } from '@controllers/session/Database';
@@ -62,13 +62,11 @@ import {
   withProcessServices,
   type ProcessRuntime,
 } from '@platform/processRuntime';
-import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
@@ -208,27 +206,16 @@ export function installCliProcessRuntime(
   }
   if (pending) return pending;
   pending = (async () => {
-    // Resolve process identity before installing. The runtime owns database
-    // acquisition and the AppState layer built from its global handle.
-    const { processStart, globalStoragePath } = await Effect.runPromise(
-      Effect.gen(function* () {
-        const processStart = yield* nodeProcesses.selfIdentity();
-        // The global root resolves here, at install, with the pure
-        // calculator: the directory is the state store's and the global
-        // database's to create when they open below, and clone — whose
-        // storage root may be read-only, and which runs no records
-        // operation — must not create it at all.
-        const globalStoragePath = resolveGlobalStoragePath(
-          storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-        );
-        return { processStart, globalStoragePath };
-      }).pipe(Effect.provide(nodeFileServices)),
+    // The global root resolves here, at install, with the pure calculator:
+    // the directory is the state store's and the global database's to create
+    // when they open below, and clone — whose storage root may be read-only,
+    // and which runs no records operation — must not create it at all.
+    const globalStoragePath = resolveGlobalStoragePath(
+      storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
     );
     const version = await readCliVersion();
     const secrets = getCliSecrets(storageRoot);
-    // The account plane is built beside the runtime that serves it; the CLI's
-    // sign-in surfaces settle it through the auth run edge, which
-    // `initializeCliSupabaseAuth` installs over this runtime.
+    // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
     // The process lifecycle and agent directories are process services the
     // runtime serves, so both are built here, before the install, rather than
@@ -243,13 +230,13 @@ export function installCliProcessRuntime(
         );
       },
     });
-    const agentDirectories = createPlatformAgentDirectories({
+    const agentDirectories = new AgentDirectoryService({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
       customDirectoryStore: { get: () => Effect.succeed(undefined) },
     });
     const runtime: ProcessRuntime = installProcessRuntime({
-      processStart: Effect.succeed(processStart),
+      processStart: nodeProcesses.selfIdentity(),
       globalStorage: globalStoragePath,
       secrets,
       appState: options?.appState
@@ -295,7 +282,6 @@ export function installCliProcessRuntime(
             ),
           ),
       },
-      lean: directLeanLanguageServices(),
       // CLI model traffic goes to the same Supabase usage log the extension
       // writes to, tagged with editorType 'cli' and the CLI version. The
       // runtime's disposal drains the queue, and that disposal is the last

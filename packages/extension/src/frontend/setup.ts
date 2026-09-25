@@ -6,7 +6,6 @@ import * as vscode from 'vscode';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -16,7 +15,6 @@ import { registerExternalRoot } from '@utils/files/externalRoots';
 import { extendEnvPath } from '@utils/system/platformPaths';
 
 const CHANNEL = 'extension';
-const log = createLog(CHANNEL);
 
 /** External-root registration options for the custom agents directory. */
 const CUSTOM_AGENT_ROOT_OPTIONS = {
@@ -133,11 +131,17 @@ export async function initializeLatexSupport(
   await runtime.runPromise(
     Effect.sync(() => {
       const extendedPath = extendEnvPath(process.env.PATH);
-      if (extendedPath !== process.env.PATH) {
-        process.env.PATH = extendedPath;
-        log.info('Extended process PATH with TeX directories');
-      }
+      if (extendedPath === process.env.PATH) return false;
+      process.env.PATH = extendedPath;
+      return true;
     }).pipe(
+      Effect.flatMap((extended) =>
+        extended
+          ? Effect.logInfo('Extended process PATH with TeX directories').pipe(
+              withLogChannel(CHANNEL),
+            )
+          : Effect.void,
+      ),
       Effect.catchCause((cause) =>
         Effect.logWarning(
           `Failed to extend PATH with TeX directories: ${toErrorMessage(Cause.squash(cause))}`,

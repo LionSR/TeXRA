@@ -20,11 +20,9 @@ import type {
 } from '@agent/runtime/ToolServices';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import {
-  NO_TOOL_INJECTIONS,
-  ToolInjections,
-} from '@agent/runtime/toolInjection';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
@@ -40,15 +38,19 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { getDefaultToolRegistry } from '@tools/registry';
-import {
-  buildOverlayToolRegistry,
-  buildTerminalTool,
-} from '@tools/structuredOutput';
+import type {
+  CompositionKey,
+  Compositions,
+  PinnedComposition,
+} from '@tools/compositions';
+import { buildTerminalTool } from '@tools/structuredOutput';
+import type { ToolRegistry } from '@tools/toolTable';
+import { processToolHost } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
+import { offeredToolset } from './tools';
 import type { HttpClient } from 'effect/unstable/http';
 import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
@@ -74,10 +76,10 @@ function launchDeclinedRoutes(
 export interface ToolPolicy {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   readonly approvalPromptsUnavailable?: boolean;
-  /** Hide tools unavailable because the current host/runtime cannot support them. */
-  readonly runtimeUnavailableTools?: readonly string[];
   /** Stop a tool-use run after one model/tool cycle instead of waiting. */
   readonly stopAfterCycle?: boolean;
+  /** The composition a delegated child joins: the one its parent pinned. */
+  readonly composition?: CompositionKey;
 }
 
 interface RunCallbacks {
@@ -102,7 +104,12 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  readonly onApprovalPolicyDenial?: () => void;
+  /**
+   * Record that this run met an approval-policy denial: a request settled as
+   * denied, or (with `withheldTools`) approval-gated tools were withheld from
+   * the model when the run resolved its tools.
+   */
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -111,6 +118,15 @@ export interface AgentRunShape {
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
   readonly tools: IToolRegistry;
+  /**
+   * The composition the run pinned (or joined, as a delegated child) for its
+   * lifetime: its children join it, and its plugins' services reach its
+   * tool calls.
+   */
+  readonly composition: PinnedComposition;
+  /** The toolset the run was offered at open, which a tool-use snapshot
+   *  records; a resumed run carries its recorded set forward unchanged. */
+  readonly toolset: ReturnType<typeof offeredToolset>;
   /** The synthetic terminal tool, when the config declares an output schema. */
   readonly finalToolName: string | null;
   /** The value the terminal tool captured, read by the loop at its exit. A
@@ -145,12 +161,6 @@ export interface AgentRunShape {
   readonly pendingModelSwitch: { value: string | null };
   readonly usageMonitor: UsageMonitor;
   readonly callbacks: RunCallbacks;
-  /**
-   * The run's one stop: completes the launch context's stop latch, so the
-   * boundary that owns the run's program interrupts it. The run's
-   * `AbortSignal` is aborted from that interruption, not from here.
-   */
-  readonly interrupt: () => void;
 }
 
 export class AgentRun extends Context.Service<AgentRun, AgentRunShape>()(
@@ -161,7 +171,7 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
-  readonly onApprovalPolicyDenial?: () => void;
+  readonly onApprovalPolicyDenial?: AgentRunShape['onApprovalPolicyDenial'];
 }
 
 /**
@@ -176,7 +186,11 @@ export const agentRunLayer = (
 ): Layer.Layer<
   AgentRun,
   Error,
-  RunLedger | LanguageModel | HttpClient.HttpClient | ToolInjections
+  | RunLedger
+  | LanguageModel
+  | HttpClient.HttpClient
+  | ToolRegistry
+  | Compositions
 > =>
   Layer.effect(
     AgentRun,
@@ -190,80 +204,107 @@ export const agentRunLayer = (
       // its own deadline rather than one after another.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
-      const baseRegistry = getDefaultToolRegistry();
       const { setting } = ctx;
-      // The process's conditional injections, read here rather than threaded
-      // through the launch. The reflection family injects none (memory and
-      // plan are tool-use infrastructure), so its run resolves tools from an
-      // empty list.
-      const injected = yield* ToolInjections;
-      const toolInjections =
-        setting.agentCategory === AgentCategory.ToolUse
-          ? injected
-          : NO_TOOL_INJECTIONS;
-      const resolvedTools = yield* resolveAgentTools({
-        tools: setting.tools,
-        registry: baseRegistry,
-        logger,
-        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
-        runtimeUnavailableTools: ctx.toolPolicy.runtimeUnavailableTools,
-        toolInjections,
-        stores: ctx.stores,
-        delegationScope: ctx.delegationAgentScope ?? undefined,
-      });
-      const overlayTools: ITool[] = [];
-      const overlayNames = new Set<string>();
-      const appendOverlayTool = (tool: ITool): void => {
-        const { name } = tool.definition;
-        const definitionIndex = resolvedTools.findIndex(
-          (definition) => definition.name === name,
-        );
-        if (
-          overlayNames.has(name) ||
-          baseRegistry.has(name) ||
-          definitionIndex !== -1
-        ) {
-          logger.warn(`Run-scoped tool "${name}" shadows an existing tool.`);
-        }
-        overlayNames.add(name);
-        const definition = { ...tool.definition, forceFunctionCall: true };
-        if (definitionIndex === -1) {
-          resolvedTools.push(definition);
-        } else {
-          resolvedTools[definitionIndex] = definition;
-        }
-        overlayTools.push(tool);
-      };
-      for (const tool of input.tools ?? []) appendOverlayTool(tool);
 
       // Unforced structured-output floor: when the config declares an output
-      // schema, a synthetic `submit_output` terminal tool joins the model
-      // facing list. The model finishes by calling it; its own Zod schema
+      // schema, a synthetic `submit_output` terminal tool joins the run's own
+      // tools. The model finishes by calling it; its own Zod schema
       // validates the call and `capture` records the value into the run's
       // slot, which the loop reads at exit.
       const structured: { value: JsonValue | undefined } = {
         value: undefined,
       };
-      let finalToolName: string | null = null;
       const outputSchema =
         config.agentCategory === AgentCategory.ToolUse
           ? config.outputSchema
           : undefined;
-      if (outputSchema) {
-        const terminalTool = buildTerminalTool(outputSchema, (value) => {
-          structured.value = value;
+      const terminalTool = outputSchema
+        ? buildTerminalTool(outputSchema, (value) => {
+            structured.value = value;
+          })
+        : undefined;
+      const finalToolName = terminalTool?.definition.name ?? null;
+      // The composition is pinned in this layer's scope, so the run holds it
+      // until its layer is released; a delegated child joins its parent's.
+      const resolved = yield* resolveAgentTools({
+        tools: setting.tools,
+        logger,
+        approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
+        host: processToolHost(),
+        runTools: terminalTool
+          ? [...(input.tools ?? []), terminalTool]
+          : input.tools,
+        // The reflection family injects none: memory and plan are tool-use
+        // infrastructure.
+        injectTools: setting.agentCategory === AgentCategory.ToolUse,
+        stores: ctx.stores,
+        workspaceRoot: session.roots.workspace,
+        delegationScope: ctx.delegationAgentScope ?? undefined,
+        inherited: ctx.toolPolicy.composition,
+      });
+      yield* Effect.logDebug(
+        `Run ${runId} pinned tool composition ${resolved.pinned.key.hash}`,
+      ).pipe(
+        // The key's own composition, which the logged hash is over: a child's
+        // is its parent's.
+        Effect.annotateLogs({ data: resolved.pinned.key.composition }),
+        withLogChannel('AgentRun'),
+      );
+
+      const snapshot = yield* ledger.latestSnapshot(runId);
+      // A resumed tool-use run offers the tools it recorded at open that
+      // still resolve, in recorded order, and never one it was not offered.
+      // Each recorded tool that no longer resolves (a plugin disabled or
+      // removed, a dependency gone) is named in the run's transcript; a call
+      // the model still makes to it settles as `tool_unavailable`.
+      const recorded =
+        snapshot?.payload.family === 'toolUse'
+          ? {
+              offeredTools: snapshot.payload.state.offeredTools,
+              toolsetHash: snapshot.payload.state.toolsetHash,
+            }
+          : null;
+      const toolset = recorded ?? offeredToolset(resolved.definitions);
+      let { definitions, registry: tools } = resolved;
+      if (recorded !== null) {
+        const byName = new Map(definitions.map((d) => [d.name, d]));
+        definitions = recorded.offeredTools.flatMap((name) => {
+          const definition = byName.get(name);
+          return definition ? [definition] : [];
         });
-        finalToolName = terminalTool.definition.name;
-        appendOverlayTool(terminalTool);
+        const kept = new Map(
+          definitions.flatMap(({ name }) => {
+            const tool = resolved.registry.get(name);
+            return tool ? [[name, tool] as const] : [];
+          }),
+        );
+        tools = new MapToolRegistry(kept);
+        const warnings = recorded.offeredTools
+          .filter((name) => !byName.has(name))
+          .map(
+            (name) =>
+              `Tool "${name}" was offered to this run but is no longer available; the resumed run continues without it.`,
+          );
+        if (
+          warnings.length === 0 &&
+          offeredToolset(definitions).toolsetHash !== recorded.toolsetHash
+        ) {
+          warnings.push(
+            'A tool offered to this run changed its input schema since the run opened; the resumed run offers the current schema.',
+          );
+        }
+        // Both the process log and the run's transcript (the trace's `log`
+        // row) carry each warning.
+        for (const message of warnings) {
+          yield* Effect.logWarning(message).pipe(withLogChannel('AgentRun'));
+          logger.warn(message);
+        }
       }
-      const tools = overlayTools.length
-        ? buildOverlayToolRegistry(baseRegistry, overlayTools)
-        : baseRegistry;
 
       // The model of a resumed run is the one its latest snapshot names; a
       // fresh run binds the launch model under the route the launch context
       // resolved for it (including a persisted compatibility key).
-      const snapshot = yield* ledger.latestSnapshot(runId);
       const persisted = snapshot === null ? null : snapshot.payload.runtime;
       const modelId = persisted?.modelId ?? config.model;
       const compatibilityKey =
@@ -301,7 +342,7 @@ export const agentRunLayer = (
         runId,
         session,
         config,
-        setting: { ...setting, tools: resolvedTools },
+        setting: { ...setting, tools: definitions },
         prompt: ctx.prompt,
         logger,
         parentStage: ctx.parentStage,
@@ -314,6 +355,8 @@ export const agentRunLayer = (
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
         tools,
+        composition: resolved.pinned,
+        toolset,
         finalToolName,
         structured,
         model,
@@ -322,7 +365,6 @@ export const agentRunLayer = (
         pendingModelSwitch,
         usageMonitor: ctx.usageMonitor,
         callbacks: input.callbacks,
-        interrupt: ctx.interrupt,
       };
     }),
   );

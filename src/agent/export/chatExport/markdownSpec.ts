@@ -1,7 +1,6 @@
 /** Markdown format spec for chat export. */
 
 import type { DocumentMeta, ExportAttachmentType } from '@agent/export/schemas';
-import { sanitizeLiveLinkUrl } from '@shared/utils/liveLinkUrl';
 
 import {
   HEADER_FIELDS,
@@ -59,37 +58,6 @@ const ATTACHMENT_LABELS = {
   document: 'Document attachment',
 } as const satisfies Record<ExportAttachmentType, string>;
 
-// Backtick/*/_/# added on top of the link-syntax-breaking set: a
-// tool-controlled title containing them can trigger incidental code-span,
-// emphasis, or heading formatting even though it can't inject a live link.
-const MARKDOWN_TEXT_ESCAPE_RE = /[\\[\]()<>!`*_#]/g;
-// No `[`/`]` here (unlike MARKDOWN_TEXT_ESCAPE_RE above): CommonMark's
-// bare-form link destination grammar restricts only unescaped/unbalanced
-// parentheses, ASCII space, and control characters — square brackets have
-// no special meaning inside `(...)`. Percent-encoding them anyway breaks
-// legitimate IPv6 literal hosts like `http://[::1]/`, whose brackets are
-// required syntax, not markdown syntax.
-const MARKDOWN_URL_DESTINATION_ESCAPE_RE = /[\\()<> \t\r\n]/g;
-
-function escapeMarkdownText(text: string): string {
-  return text.replaceAll(MARKDOWN_TEXT_ESCAPE_RE, (ch) => `\\${ch}`);
-}
-
-function escapeMarkdownUrlDestination(url: string): string {
-  return url.replaceAll(
-    MARKDOWN_URL_DESTINATION_ESCAPE_RE,
-    (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`,
-  );
-}
-
-function markdownLinkOrText(url: string, title: string): string {
-  const safeUrl = sanitizeLiveLinkUrl(url);
-  const safeTitle = escapeMarkdownText(title);
-  return safeUrl
-    ? `[${safeTitle}](${escapeMarkdownUrlDestination(safeUrl)})`
-    : safeTitle;
-}
-
 const MD_NODES: NodeRenderers = {
   'user-message': ({ parts }) => {
     const body = parts
@@ -112,10 +80,6 @@ const MD_NODES: NodeRenderers = {
   'tool-result': ({ text }) => `#### Tool Result\n\n${fencedBlock(text)}\n`,
 
   'web-search': ({ query }) => `#### Web Search\n\n**Query:** ${query}\n`,
-
-  'web-search-results': ({ results }) =>
-    results.map((r) => `- ${markdownLinkOrText(r.url, r.title)}`).join('\n') +
-    '\n',
 };
 
 export const markdownSpec: FormatSpec = {

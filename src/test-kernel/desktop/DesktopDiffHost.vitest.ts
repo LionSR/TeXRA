@@ -1,13 +1,15 @@
 // Standard library imports
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, vi } from 'vitest';
 
 // Local imports - test support
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -24,14 +26,14 @@ type DiffHost = ReturnType<
 const REVIEW_ROOTS = { storage: '/projects/paper/.texra' };
 
 let createDesktopDiffHost: DesktopDiffHostModule['createDesktopDiffHost'];
+let removeExternalDiffPatchDirs: DesktopDiffHostModule['removeExternalDiffPatchDirs'];
 
 // Every case needs the external-editor fallback observable, so the harness owns
-// `openPath` and the paths it received. It also stands in for the process-level
-// owner of the patch directories: `recordPatchDir` collects them, and
-// `afterEach` removes them the way the desktop quit lifecycle does.
+// `openPath` and the paths it received. `afterEach` removes the recorded patch
+// directories the way the desktop quit lifecycle does.
 function createHost(overrides: Partial<DiffHostOptions> = {}) {
   const openedPaths: string[] = [];
-  const openPath = vi.fn((filePath: string): Effect.Effect<void, unknown> =>
+  const openPath = vi.fn((filePath: string): Effect.Effect<void, Error> =>
     Effect.sync(() => {
       openedPaths.push(filePath);
     }),
@@ -39,9 +41,6 @@ function createHost(overrides: Partial<DiffHostOptions> = {}) {
   const host = createDesktopDiffHost({
     runtime: testRuntime(),
     openPath,
-    recordPatchDir: (tempDir: string) => {
-      recordedPatchDirs.push(tempDir);
-    },
     ...overrides,
   }).inProject(REVIEW_ROOTS);
   return {
@@ -57,15 +56,9 @@ function expectOpenedPatchFile(openedPaths: readonly string[]): void {
 }
 
 const tempDirs = useTempDirs();
-const recordedPatchDirs: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(
-    recordedPatchDirs.map((tempDir) =>
-      rm(tempDir, { recursive: true, force: true }),
-    ),
-  );
-  recordedPatchDirs.length = 0;
+  await testRuntime().runPromise(removeExternalDiffPatchDirs);
 });
 
 type OpenDiffArgs = Parameters<DiffHost['openDiff']>;
@@ -100,7 +93,8 @@ describe('createDesktopDiffHost', () => {
   // The dynamic import pulls the full desktop main graph through the module
   // runner; keep the hook timeout generous for cold combined test runs.
   beforeAll(async () => {
-    ({ createDesktopDiffHost } = await import('@desktop/main/desktopDiffHost'));
+    ({ createDesktopDiffHost, removeExternalDiffPatchDirs } =
+      await import('@desktop/main/desktopDiffHost'));
   }, 60_000);
 
   it('falls back to a generated patch file when no renderer is wired', async () => {
@@ -185,21 +179,26 @@ describe('createDesktopDiffHost', () => {
     consoleSpy.mockRestore();
   });
 
-  it('records external-editor patch directories for the process-level removal', async () => {
-    // #10314: every fallback run used to leave a texra-desktop-diff-* directory
-    // behind. The patch outlives `openPath` (the OS editor may still be reading
-    // it), so the host hands its directory to the process that removes them all
-    // at quit.
-    const { host, openedPaths } = createHost();
+  it.effect(
+    'records external-editor patch directories for the process-level removal',
+    () =>
+      Effect.gen(function* () {
+        // #10314: every fallback run used to leave a texra-desktop-diff-*
+        // directory behind. The patch outlives `openPath` (the OS editor may
+        // still be reading it), so the host records its directory for the
+        // process-level removal at quit.
+        const { host, openedPaths } = createHost();
 
-    await openDiffPair(host, 'Compare');
-    const diffPath = openedPaths[0];
-    const diffDir = path.dirname(diffPath);
+        yield* Effect.promise(() => openDiffPair(host, 'Compare'));
+        const diffPath = openedPaths[0];
+        const diffDir = path.dirname(diffPath);
 
-    expect(existsSync(diffPath)).toBe(true);
-    expect(path.basename(diffDir)).toMatch(/^texra-desktop-diff-/);
-    expect(recordedPatchDirs).toEqual([diffDir]);
-  });
+        expect(existsSync(diffPath)).toBe(true);
+        expect(path.basename(diffDir)).toMatch(/^texra-desktop-diff-/);
+        yield* removeExternalDiffPatchDirs;
+        expect(existsSync(diffDir)).toBe(false);
+      }).pipe(Effect.provide(nodePlatformLayer)),
+  );
 
   it('removes the patch directory immediately when the editor fails to open', async () => {
     const failure = new Error('editor unavailable');

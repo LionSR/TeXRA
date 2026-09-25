@@ -15,7 +15,6 @@
  * closing, and retries once. Closing the pool's scope ends map and servers.
  */
 
-import { access } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import {
@@ -24,6 +23,7 @@ import {
   Deferred,
   type Duration,
   Effect,
+  FileSystem,
   Layer,
   LayerMap,
   RcMap,
@@ -31,15 +31,16 @@ import {
   Result,
 } from 'effect';
 
+import { ChildProcessSpawner } from 'effect/unstable/process';
 import { withLogChannel } from '@logger/effectLog';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 
 import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { createLeanServerRoster } from '../leanServerRegistry';
 import type { LeanServerInfo } from '../leanServerRegistry';
-import type { ChildProcessSpawner } from 'effect/unstable/process';
 import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
   LeanFileCommand,
@@ -135,7 +136,7 @@ export class LeanServerPool extends Context.Service<
   ): Layer.Layer<
     LeanServerPool,
     never,
-    ChildProcessSpawner.ChildProcessSpawner
+    ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem
   > => Layer.effect(LeanServerPool)(make(options));
 }
 
@@ -143,8 +144,10 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
   lakeCommand,
   idleTimeToLive,
 }: LeanServerPoolOptions) {
+  const fs = yield* FileSystem.FileSystem;
   // This pool's own roster, so the dashboard's list ends when the pool does.
   const roster = createLeanServerRoster();
+  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const servers = yield* LayerMap.make(
     (root: string) =>
       LeanServer.layer({ workspaceRoot: root, lakeCommand, roster }),
@@ -291,7 +294,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
     filePath: string,
   ) {
     const absolute = path.resolve(filePath);
-    const root = yield* resolveWorkspaceRoot(absolute);
+    const root = yield* resolveWorkspaceRoot(fs, absolute);
     if (!root) {
       return yield* new LeanProjectNotFound({
         message: `No Lean project found for ${absolute}. Lake projects need a lakefile.lean or lakefile.toml in an ancestor directory.`,
@@ -378,24 +381,24 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
         message: `No Lean project session active. Run a Lean tool against a file in your project first, then retry "${args.join(' ')}".`,
       });
     }
-    // Leased for the command's duration: a build is server activity. Lake
-    // commands serialize per workspace inside `runLakeCommand`, which
-    // succeeds with the exit code and never fails on it.
+    // Leased for the command's duration: a build is server activity.
     const results = yield* Effect.forEach(
       roots,
       (root) =>
         Effect.scoped(
           lease(root, runId).pipe(
             Effect.andThen(
-              // `runLakeCommand` reports a non-zero exit in its result and
-              // runs execa with `reject: false`, so it succeeds rather than
-              // fails, including when `lake` is missing.
               runLakeCommand({
                 workspaceRoot: root,
                 lakeCommand,
                 args,
                 serialize: true,
-              }),
+              }).pipe(
+                Effect.provideService(
+                  ChildProcessSpawner.ChildProcessSpawner,
+                  spawner,
+                ),
+              ),
             ),
           ),
         ),
@@ -523,8 +526,7 @@ const make = Effect.fn('LeanServerPool.make')(function* ({
       ).pipe(
         Effect.as(true),
         // Return false (LeanFileTool surfaces it as a failure result) and log
-        // the cause, honoring `Promise<boolean>` so a missing or broken `lake`
-        // does not throw out of the JSON-RPC path.
+        // the cause, so a missing or broken `lake` does not fail the call.
         Effect.catch((error) =>
           Effect.logWarning(
             `executeFileCommand(${command}) failed for ${filePath}: ${toErrorMessage(error)}`,
@@ -580,21 +582,16 @@ function isFileTableExhausted(error: unknown): boolean {
   return false;
 }
 
-// Uses fs/promises directly — must not call platform() because this runs
-// before initPlatform() during early startup / test harness setup.
-const pathExists = (target: string): Effect.Effect<boolean> =>
-  Effect.isSuccess(Effect.tryPromise(() => access(target)));
-
 /** Walk up from `filePath` looking for a Lake project root. */
 export const resolveWorkspaceRoot = Effect.fn(
   'LeanServerPool.resolveWorkspaceRoot',
-)(function* (filePath: string) {
+)(function* (fs: FileSystem.FileSystem, filePath: string) {
   let dir = path.dirname(path.resolve(filePath));
   const root = path.parse(dir).root;
   for (;;) {
     if (
-      (yield* pathExists(path.join(dir, 'lakefile.lean'))) ||
-      (yield* pathExists(path.join(dir, 'lakefile.toml')))
+      (yield* pathExists(fs, path.join(dir, 'lakefile.lean'))) ||
+      (yield* pathExists(fs, path.join(dir, 'lakefile.toml')))
     ) {
       return dir;
     }

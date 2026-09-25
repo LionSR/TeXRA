@@ -16,7 +16,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { resolveRunStoragePath } from '@platform/defaults/workspaceStorage';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import {
   RunIdSchema,
@@ -41,6 +40,7 @@ import {
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
+import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -168,7 +168,7 @@ describe('ExecutionsTool', () => {
 
   it.live("rejects '..' path traversal in /executions/{id}/files/{path}", () =>
     Effect.gen(function* () {
-      const result = yield* new ExecutionsTool().call({
+      const result = yield* ExecutionsTool.call({
         path: '/executions/abc123def456/files/../../../../../../etc/passwd',
       });
 
@@ -214,30 +214,26 @@ describe('ExecutionsTool', () => {
             '<subagent-result>full report</subagent-result>',
           );
 
-          const parentWaitResult = yield* new ExecutionsTool()
-            .call({
-              path: `/executions/${childRunId}`,
-              action: 'wait',
-            })
-            .pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  run: { session: session, runId: parentRunId, toolPolicy: {} },
-                }),
-              ),
-            );
-          const crossTreeWaitResult = yield* new ExecutionsTool()
-            .call({
-              path: `/executions/${childRunId}`,
-              action: 'wait',
-            })
-            .pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  run: { session: session, runId: otherRunId, toolPolicy: {} },
-                }),
-              ),
-            );
+          const parentWaitResult = yield* ExecutionsTool.call({
+            path: `/executions/${childRunId}`,
+            action: 'wait',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session: session, runId: parentRunId, toolPolicy: {} },
+              }),
+            ),
+          );
+          const crossTreeWaitResult = yield* ExecutionsTool.call({
+            path: `/executions/${childRunId}`,
+            action: 'wait',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session: session, runId: otherRunId, toolPolicy: {} },
+              }),
+            ),
+          );
 
           expect(parentWaitResult.output).toContain(
             'Result: delivered automatically to this parent run as a follow-up message.',
@@ -308,10 +304,10 @@ describe('ExecutionsTool', () => {
           ]);
           yield* session.settlePublications();
           const [summary, todos] = yield* Effect.all([
-            new ExecutionsTool().call({
+            ExecutionsTool.call({
               path: `/executions/${childRunId}`,
             }),
-            new ExecutionsTool().call({
+            ExecutionsTool.call({
               path: `/executions/${childRunId}/todos`,
             }),
           ]).pipe(
@@ -359,11 +355,11 @@ describe('ExecutionsTool', () => {
             );
 
             const [waitResult, reportResult] = yield* Effect.all([
-              new ExecutionsTool().call({
+              ExecutionsTool.call({
                 path: `/executions/${runId}`,
                 action: 'wait',
               }),
-              new ExecutionsTool().call({
+              ExecutionsTool.call({
                 path: `/executions/${runId}/report`,
               }),
             ]).pipe(
@@ -435,7 +431,7 @@ describe('ExecutionsTool', () => {
       mocks.readResultMeta.mockResolvedValue(record);
       mocks.readRunEnd.mockResolvedValue(runEnd);
 
-      const result = yield* new ExecutionsTool().call({
+      const result = yield* ExecutionsTool.call({
         path: '/executions/abc123/result',
       });
 
@@ -472,7 +468,7 @@ describe('ExecutionsTool', () => {
       };
       mocks.readResultMeta.mockResolvedValue(record);
 
-      const result = yield* new ExecutionsTool().call({
+      const result = yield* ExecutionsTool.call({
         path: '/executions/abc123/result',
       });
 
@@ -522,15 +518,15 @@ describe('ExecutionsTool', () => {
               ]);
               yield* session.settlePublications();
               mocks.readConfig.mockResolvedValue(config);
-              const result = yield* new ExecutionsTool()
-                .call({ path: toolPath })
-                .pipe(
-                  Effect.provide(
-                    nativeToolTestLayer({
-                      run: { session: session, runId: runId, toolPolicy: {} },
-                    }),
-                  ),
-                );
+              const result = yield* ExecutionsTool.call({
+                path: toolPath,
+              }).pipe(
+                Effect.provide(
+                  nativeToolTestLayer({
+                    run: { session: session, runId: runId, toolPolicy: {} },
+                  }),
+                ),
+              );
 
               expect(result.output).toContain('Read the committed task list');
             }),
@@ -564,7 +560,7 @@ describe('ExecutionsTool', () => {
             });
             mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
 
-            const tool = new ExecutionsTool();
+            const tool = ExecutionsTool;
             const listResult = yield* tool.call({
               path: '/executions/abc123/workspace-files',
             });
@@ -605,7 +601,7 @@ describe('ExecutionsTool', () => {
           });
           mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
 
-          const result = yield* new ExecutionsTool().call({
+          const result = yield* ExecutionsTool.call({
             path: '/executions/abc123/workspace-files/secret.md',
           });
 
@@ -658,7 +654,7 @@ describe('ExecutionsTool', () => {
             writeFile(path.join(runDir, 'output.tex'), 'generated'),
           );
 
-          const result = yield* new ExecutionsTool().call({
+          const result = yield* ExecutionsTool.call({
             path: `/executions/${runId}/files`,
           });
 
@@ -698,7 +694,7 @@ describe('ExecutionsTool', () => {
           });
           mocks.readWorkspaceFiles.mockResolvedValue(['workspace/review.md']);
 
-          const result = yield* new ExecutionsTool().call({
+          const result = yield* ExecutionsTool.call({
             path: '/executions/abc123/workspace-files/workspace/review.md',
           });
 

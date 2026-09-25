@@ -9,6 +9,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
 // Local file imports
 import { LATEXINDENT_CONFIG_KEY, runLatexIndent } from './latexindentpt';
 import { TEXFMT_CONFIG_KEY, runTexFmt } from './texfmt';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { FileSystem } from 'effect';
 
 interface LatexFormatterDefinition {
@@ -21,7 +22,7 @@ interface LatexFormatterDefinition {
     workspaceRoot: string | undefined,
     configPath: string,
     settings: SettingsStores,
-  ): Effect.Effect<boolean, never, FileSystem.FileSystem>;
+  ): Effect.Effect<boolean, never, FileSystem.FileSystem | ChildProcessSpawner>;
 }
 
 export interface LatexFormatter extends LatexFormatterDefinition {

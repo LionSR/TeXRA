@@ -8,7 +8,10 @@ import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
-import { WorkspaceStorageProvider } from '@platform/defaults/workspaceStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from '@platform/defaults/workspaceStorage';
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -39,12 +42,11 @@ describe('LaTeXdiffService shadow output', () => {
     workspaceDir: string,
     storageRoot: string,
   ): Promise<void> {
-    const storage = new WorkspaceStorageProvider(storageRoot, workspaceDir);
     return installPlatform(
       {
         workspacePath: workspaceDir,
-        storagePath: storage.getStoragePath(),
-        globalStoragePath: storage.getGlobalStoragePath(),
+        storagePath: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
+        globalStoragePath: resolveGlobalStoragePath(storageRoot),
       },
       {
         globalState: new MemoryStateStore(),

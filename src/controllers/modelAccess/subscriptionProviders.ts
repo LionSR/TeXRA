@@ -125,11 +125,7 @@ export interface SubscriptionProvider {
    */
   signIn(
     options: SubscriptionSignInOptions,
-  ): Effect.Effect<
-    SubscriptionAccount,
-    unknown,
-    HttpClient.HttpClient | Secrets
-  >;
+  ): Effect.Effect<SubscriptionAccount, Error, HttpClient.HttpClient | Secrets>;
   /**
    * The sign-out program. A host runs it at its own edge; a failure is the
    * provider's own auth error or the secret store's rejection.
@@ -158,12 +154,18 @@ interface SubscriptionSessionFields {
   readonly accountId?: string;
 }
 
-interface SubscriptionProviderBindings<Coordinator, Session> {
-  readonly id: SubscriptionProviderId;
-  readonly displayName: string;
-  readonly sessionName: string;
-  readonly copyTarget: string;
-  readonly modelFamily: string;
+/** A row's descriptor and preference fields pass through to the provider
+ *  unchanged; the rest bind its transports to the shared flow. */
+interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
+  SubscriptionProvider,
+  | 'id'
+  | 'displayName'
+  | 'sessionName'
+  | 'copyTarget'
+  | 'modelFamily'
+  | 'isPreferSubscription'
+  | 'setPreferSubscription'
+> {
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
     signOut(): Effect.Effect<void, AuthPortError>;
   };
@@ -173,22 +175,17 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
   readonly loginWithDeviceCode: (options: {
     coordinator: Coordinator;
     onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
-  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
+  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
   readonly loginWithLoopback: (options: {
     coordinator: Coordinator;
     openBrowser: (url: string) => Effect.Effect<void, Error>;
-  }) => Effect.Effect<Session, unknown, HttpClient.HttpClient>;
+  }) => Effect.Effect<Session, Error, HttpClient.HttpClient>;
   readonly accountLabel: (
     account:
       | { readonly email?: string | null; readonly accountId?: string | null }
       | null
       | undefined,
   ) => string;
-  readonly isPrefer: (stores: SettingsStores) => boolean;
-  readonly setPrefer: (
-    stores: SettingsStores,
-    enabled: boolean,
-  ) => Effect.Effect<void, ConfigWriteFailed | Error>;
 }
 
 /**
@@ -198,74 +195,70 @@ interface SubscriptionProviderBindings<Coordinator, Session> {
 function defineSubscriptionProvider<
   Coordinator,
   Session extends SubscriptionSessionFields,
->(
-  bindings: SubscriptionProviderBindings<Coordinator, Session>,
-): SubscriptionProvider {
+>({
+  coordinator: bindCoordinator,
+  getStatus,
+  loginWithDeviceCode,
+  loginWithLoopback,
+  accountLabel,
+  ...descriptor
+}: SubscriptionProviderBindings<Coordinator, Session>): SubscriptionProvider {
   const deviceCodeLogin = (
     coordinator: Coordinator,
     options: SubscriptionSignInOptions,
   ) =>
-    bindings.loginWithDeviceCode({
+    loginWithDeviceCode({
       coordinator,
       onPrompt: (prompt) => options.present.presentDeviceCode(prompt),
     });
 
-  const signIn = Effect.fn(`subscriptionProviders.${bindings.id}.signIn`)(
+  const signIn = Effect.fn(`subscriptionProviders.${descriptor.id}.signIn`)(
     function* (options: SubscriptionSignInOptions) {
-      const coordinator = bindings.coordinator(yield* Secrets);
+      const coordinator = bindCoordinator(yield* Secrets);
       const session =
         options.transport === 'device'
           ? yield* deviceCodeLogin(coordinator, options)
-          : yield* bindings
-              .loginWithLoopback({
-                coordinator,
-                openBrowser: (url) => options.present.presentSignInUrl(url),
-              })
-              .pipe(
-                Effect.catchIf(
-                  (error): error is LoopbackTransportUnavailableError =>
-                    options.transport === 'auto' &&
-                    error instanceof LoopbackTransportUnavailableError,
-                  (error) => {
-                    const causeMessage =
-                      error.cause === undefined
-                        ? ''
-                        : ` Cause: ${toErrorMessage(error.cause)}`;
-                    return Effect.logWarning(
-                      `${bindings.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
-                    ).pipe(
-                      Effect.annotateLogs({ data: error }),
-                      withLogChannel(CHANNEL),
-                      Effect.andThen(deviceCodeLogin(coordinator, options)),
-                    );
-                  },
-                ),
-              );
+          : yield* loginWithLoopback({
+              coordinator,
+              openBrowser: (url) => options.present.presentSignInUrl(url),
+            }).pipe(
+              Effect.catchIf(
+                (error): error is LoopbackTransportUnavailableError =>
+                  options.transport === 'auto' &&
+                  error instanceof LoopbackTransportUnavailableError,
+                (error) => {
+                  const causeMessage =
+                    error.cause === undefined
+                      ? ''
+                      : ` Cause: ${toErrorMessage(error.cause)}`;
+                  return Effect.logWarning(
+                    `${descriptor.displayName} browser sign-in is unavailable, falling back to a one-time device code: ${toErrorMessage(error)}${causeMessage}`,
+                  ).pipe(
+                    Effect.annotateLogs({ data: error }),
+                    withLogChannel(CHANNEL),
+                    Effect.andThen(deviceCodeLogin(coordinator, options)),
+                  );
+                },
+              ),
+            );
       return {
         signedIn: true,
         email: session.email,
         accountId: session.accountId,
-        label: bindings.accountLabel(session),
+        label: accountLabel(session),
       } satisfies SubscriptionAccount;
     },
   );
 
   return Object.freeze({
-    id: bindings.id,
-    displayName: bindings.displayName,
-    sessionName: bindings.sessionName,
-    copyTarget: bindings.copyTarget,
-    modelFamily: bindings.modelFamily,
+    ...descriptor,
     signIn,
-    signOut: (secrets: PlatformSecrets) =>
-      bindings.coordinator(secrets).signOut(),
+    signOut: (secrets: PlatformSecrets) => bindCoordinator(secrets).signOut(),
     getStatus: (secrets: PlatformSecrets) =>
-      Effect.map(bindings.getStatus(secrets), (status) => ({
+      Effect.map(getStatus(secrets), (status) => ({
         ...status,
-        label: bindings.accountLabel(status),
+        label: accountLabel(status),
       })),
-    isPreferSubscription: bindings.isPrefer,
-    setPreferSubscription: bindings.setPrefer,
   });
 }
 
@@ -288,8 +281,9 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
   loginWithLoopback: (options) => codexLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
-  isPrefer: (stores) => isPreferCodexSubscription(stores),
-  setPrefer: (stores, enabled) => setPreferCodexSubscription(stores, enabled),
+  isPreferSubscription: (stores) => isPreferCodexSubscription(stores),
+  setPreferSubscription: (stores, enabled) =>
+    setPreferCodexSubscription(stores, enabled),
 });
 
 /**
@@ -307,8 +301,9 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
   loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),
-  isPrefer: (stores) => isPreferXaiSubscription(stores),
-  setPrefer: (stores, enabled) => setPreferXaiSubscription(stores, enabled),
+  isPreferSubscription: (stores) => isPreferXaiSubscription(stores),
+  setPreferSubscription: (stores, enabled) =>
+    setPreferXaiSubscription(stores, enabled),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */

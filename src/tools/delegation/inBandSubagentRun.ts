@@ -13,7 +13,7 @@
  */
 
 // Third-party imports
-import { Cause, Effect, Exit, Fiber, Scope } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -30,7 +30,7 @@ import {
   RunArtifactDrainError,
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
-import type { AgentRunServices } from '@agent/runtime/toolInjection';
+import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
@@ -40,6 +40,7 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
+import type { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -72,6 +73,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
+  /** The parent's composition, which the child joins. */
+  readonly composition: CompositionKey;
   /** Synchronous by contract; forwarded as the loop's `recordCost`. */
   readonly onCost?: (costUsd: number | undefined) => void;
   /**
@@ -93,7 +96,7 @@ export interface InBandSubagentLaunchOptions {
   readonly parentRunId: RunId;
   /** Resolve mutable launch prerequisites only when a launch actually happens. */
   readonly prepare: () => Effect.Effect<
-    Omit<InBandSubagentRunBaseOptions, 'signal'>,
+    InBandSubagentRunBaseOptions,
     Error,
     AgentRunServices
   >;
@@ -121,12 +124,10 @@ type SettledInBandTurn = Parameters<
 const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
   options: InBandSubagentDeliveryOptions,
 ) {
-  options.signal?.throwIfAborted();
   return yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(options.configPayload),
     session: options.session,
     enforceCategory: true,
-    signal: options.signal,
     suppressErrorNotification: true,
   });
 });
@@ -174,7 +175,6 @@ const executeInBand = Effect.fn('executeInBand')(
     yield* registerChildRun(options.session, {
       runId,
       config,
-      agentName: options.agentName,
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentRunId: options.parentRunId,
     }).pipe(
@@ -356,14 +356,19 @@ const executeInBand = Effect.fn('executeInBand')(
       };
     });
 
-    // Post-run cancellation deliberately observes a terminal record: the
-    // child's rows were committed inside its own lease boundary, then the
-    // awaiting caller rejects without rewriting them.
-    options.signal?.throwIfAborted();
+    // A caller stop landing here interrupts the join, not the child: the
+    // child's rows were committed inside its own lease boundary and the
+    // detached loop owns its terminal record.
     return completed;
   },
-  Effect.uninterruptible,
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  // Interruptible: the registration is one durable commit and the detached
+  // loop owns the child from its first tick, so an interruption lands in the
+  // join or the read-back and leaves the same rows a crash would.
+  Effect.catchCause((cause) =>
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.failCause(cause)
+      : Effect.fail(ensureError(Cause.squash(cause))),
+  ),
 );
 
 /**
@@ -371,35 +376,45 @@ const executeInBand = Effect.fn('executeInBand')(
  * result back from the durable record. Recovering an earlier attempt belongs
  * to the caller that owns the call identity; this only ever starts a new run.
  *
- * The child runs uninterruptibly under the child-run loop, which cancels it
- * through a signal. The caller cancels by interruption, so this is the edge
- * between the two: interrupting the caller aborts the child's signal, then
- * waits for the child to settle its own terminal record.
+ * The caller cancels by interruption, and the child's loop is a detached
+ * fiber that interruption does not reach, so this is the edge between the
+ * two: interrupting the caller stops the child by run id — the loop's own
+ * stop, which interrupts the child run's fiber — then waits for the child to
+ * settle its own terminal record. A launch that has no live run yet is
+ * interrupted where it is; one whose loop started inside the launch's
+ * uninterruptible hand-off is stopped once that hand-off returns.
  */
 export const executeSubagentInBand = (
   options: InBandSubagentLaunchOptions,
 ): Effect.Effect<InBandSubagentRunResult, Error, AgentRunServices> =>
   Effect.gen(function* () {
-    const signalScope = yield* Scope.make();
-    const signal = yield* Effect.abortSignal.pipe(Scope.provide(signalScope));
-    const child = yield* Effect.forkChild(
-      launchSubagentInBand(options, signal),
-      { startImmediately: true },
-    );
+    const runs = yield* Runs;
+    const child = yield* Effect.forkChild(launchSubagentInBand(options), {
+      startImmediately: true,
+    });
     return yield* Fiber.join(child).pipe(
-      Effect.onExit(() => Scope.close(signalScope, Exit.void)),
-      Effect.onInterrupt(() => Fiber.await(child)),
+      Effect.onInterrupt(() =>
+        Effect.suspend(() =>
+          runs.interruptActive(options.runId)
+            ? Fiber.await(child)
+            : Fiber.interrupt(child).pipe(
+                Effect.andThen(
+                  Effect.sync(() => {
+                    runs.interruptActive(options.runId);
+                  }),
+                ),
+              ),
+        ),
+      ),
     );
   });
 
 const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
   function* (
     options: InBandSubagentLaunchOptions,
-    signal: AbortSignal,
   ): Effect.fn.Return<InBandSubagentRunResult, Error, AgentRunServices> {
     const prepared = yield* options.prepare();
-    const launch = { ...prepared, signal };
-    const definition = yield* prepareInBandDefinition(launch);
+    const definition = yield* prepareInBandDefinition(prepared);
     // Validate the current definition, not metadata left by an earlier
     // catalog load.
     if (
@@ -409,22 +424,25 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
     ) {
       return yield* Effect.fail(
         new WorkflowRunAbortError(
-          `Workflow agent '${launch.agentName}' edits files: pass options.inputFiles ` +
+          `Workflow agent '${prepared.agentName}' edits files: pass options.inputFiles ` +
             `with files that still exist (its result carries output files and ` +
             `diffs, not response text).`,
         ),
       );
     }
     const completed = yield* executeInBand(
-      launch,
+      prepared,
       definition,
       'required-result',
       options.runId,
     );
     return { runId: completed.runId, result: completed.result };
   },
-  Effect.uninterruptible,
-  Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
+  Effect.catchCause((cause) =>
+    Cause.hasInterruptsOnly(cause)
+      ? Effect.failCause(cause)
+      : Effect.fail(ensureError(Cause.squash(cause))),
+  ),
 );
 
 /** Run one child and return its XML delivery alongside the typed result. */

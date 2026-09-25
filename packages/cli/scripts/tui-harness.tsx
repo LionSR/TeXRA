@@ -22,12 +22,12 @@ import React from 'react';
 
 import { loadAgents } from '@agent/index';
 import { tryDefaultSession } from '@agent/runtime';
+import { TraceEmitter } from '@agent/trace';
 import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
+import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
-import { platform } from '@platform/platform';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
-import { MEMORY_STORAGE_DIR } from '@platform/defaults/workspaceStorage';
 import {
   formatTexraApprovalPolicy,
   parseTexraApprovalPolicy,
@@ -43,11 +43,12 @@ import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
   RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
   TODO_STATUS,
   TOOL_CALL_STATUS,
   USER_FOLLOW_UP_SUPPORT,
   RunIdSchema,
+  type LogLevel,
+  type MessageType,
   type NormalizedToolUse,
   type PermissionPayload,
   type PlanApprovalPermission,
@@ -65,8 +66,7 @@ import {
   isInFlightPhase,
   isTerminalOutcomePhase,
 } from '@shared/runs/runStatus';
-import { descendantRuns } from '@shared/session/sessionView';
-import type { StreamLogAppendInput } from '@shared/session/traceEntries';
+import { acceptsFollowUp, descendantRuns } from '@shared/session/sessionView';
 import {
   buildScenario,
   foldAll,
@@ -78,7 +78,6 @@ import {
 } from '@test/shared/session/fanOutScenario';
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
-import { createRunTrace } from '@transcript';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -86,10 +85,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { App } from '../src/chat/tui/App';
 import { registerBuiltinSlashCommands } from '../src/chat/tui/commands/registerBuiltins';
 import { showCliWorkPlan } from '../src/chat/tui/commands/handlers/sessionCommands';
-import {
-  formatSlashCommandHelp,
-  GOAL_MODE_HELP,
-} from '../src/chat/tui/commands/helpText';
+import { formatSlashCommandHelp } from '../src/chat/tui/commands/helpText';
 import {
   findSlashCommand,
   listSlashCommands,
@@ -101,22 +97,25 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  activeRunId as activeRunIdSignal,
-  claimedRunId,
-  rootRunPending,
+  focusRun,
   rootRunId,
   resetCliState,
+  selectedRunId,
   sessionMeta,
   setCliSessionModelOverride,
 } from '../src/chat/tui/state/cliState';
 import {
   bindSessionView,
   currentView,
-  focusedChildAcceptsFollowUps,
+  CLI_FOLLOW_UP_HOST,
   runningChildCount,
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
+import {
+  chatTuiCanStartRootRun,
+  TuiSession,
+} from '../src/chat/tui/state/sessionRunState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
@@ -132,7 +131,6 @@ import {
 } from '../src/chat/tui/state/transcript';
 import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
-import { resolveCliModelAccessRoute } from '../src/runtime/modelAccessRoute';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
 import { initCliPlatform } from '../src/runtime/initPlatform';
@@ -154,7 +152,6 @@ const SHOW_PROCESS_CHILD = process.env.HARNESS_PROCESS_CHILD === '1';
 const RESET_WORKFLOW_SCRIPT_DISABLED =
   process.env.HARNESS_WORKFLOW_SCRIPT_DISABLED === '1';
 const HARNESS_APPROVAL_USAGE = 'Usage: /approval [ask | never | yolo]';
-const HARNESS_YOLO_USAGE = 'Usage: /yolo [ask | never | yolo]';
 const ENTRY_COUNT = Number(process.env.HARNESS_ENTRIES ?? '15');
 const SHOW_EDIT_APPROVAL = process.env.HARNESS_EDIT_APPROVAL === '1';
 const EDIT_APPROVAL_WRAPPED_CONTEXT =
@@ -242,6 +239,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   config: new MemoryConfigProvider(),
   commandName: 'texra',
   configWarnings: [],
+  configDegradations: [],
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
@@ -362,7 +360,10 @@ if (!harnessRoots) {
 // get descending mtimes in list order, so the first name is the newest row
 // and the listing order is deterministic.
 if (HARNESS_MEMORY_FILES.length > 0) {
-  const memoryRoot = path.join(harnessRoots.storage, MEMORY_STORAGE_DIR);
+  const memoryRoot = path.join(
+    harnessRoots.storage,
+    WORKSPACE_STORAGE_LAYOUT.memory,
+  );
   const newestEpochSeconds = Date.now() / 1000;
   HARNESS_MEMORY_FILES.forEach((name, index) => {
     const filePath = path.join(memoryRoot, name);
@@ -604,15 +605,21 @@ function removeRun(runId: RunId): void {
   harnessRuns.delete(runId);
 }
 
-/**
- * Publish complete fixture rows on the event plane. Every fixture builder
- * below emits a `LOG` entry, so each maps onto one `log` trace row; the
- * transcript fold mints the row's id and timestamp from the published fact.
- */
-function seedRows(
-  runId: RunId,
-  entries: readonly StreamLogAppendInput[],
-): void {
+/** One fixture row: published as one `log` trace row, whose id and clock
+ *  the transcript fold mints from the published fact. */
+interface HarnessLogRow {
+  readonly id: string;
+  readonly level: LogLevel;
+  readonly timestamp: number;
+  readonly messageType: MessageType;
+  readonly text?: string;
+  readonly data?: unknown;
+  readonly groupId?: string;
+  readonly verbose?: boolean;
+}
+
+/** Publish complete fixture rows on the event plane. */
+function seedRows(runId: RunId, entries: readonly HarnessLogRow[]): void {
   seedRun(runId);
   publish(
     ...entries.map((entry) => ({
@@ -634,7 +641,7 @@ function harnessTextRow(
   kind: 'assistant' | 'error' | 'user',
   text: string,
   seqNo: number,
-): StreamLogAppendInput {
+): HarnessLogRow {
   const messageType = {
     user: MESSAGE_TYPES.USER_MESSAGE,
     error: MESSAGE_TYPES.ERROR,
@@ -642,7 +649,6 @@ function harnessTextRow(
   }[kind];
   return {
     id,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: kind === 'error' ? LOG_LEVELS.ERROR : LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType,
@@ -650,8 +656,8 @@ function harnessTextRow(
   };
 }
 
-function makeEntries(count: number): StreamLogAppendInput[] {
-  const entries: StreamLogAppendInput[] = [];
+function makeEntries(count: number): HarnessLogRow[] {
+  const entries: HarnessLogRow[] = [];
   for (let i = 1; i <= count; i += 1) {
     const kind = i % 3 === 0 ? 'assistant' : 'user';
     const text =
@@ -685,10 +691,9 @@ function harnessToolEntry(
   id: string,
   toolUse: NormalizedToolUse,
   seqNo = 2,
-): StreamLogAppendInput {
+): HarnessLogRow {
   return {
     id,
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp: seqNo,
     messageType: MESSAGE_TYPES.TOOL_USE,
@@ -702,7 +707,7 @@ function harnessToolEntry(
   };
 }
 
-function makeLongToolOutputEntries(): StreamLogAppendInput[] {
+function makeLongToolOutputEntries(): HarnessLogRow[] {
   return [
     harnessTextRow(
       'long-tool-user',
@@ -714,7 +719,7 @@ function makeLongToolOutputEntries(): StreamLogAppendInput[] {
   ];
 }
 
-function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
+function makeAssistantToolPreambleEntries(): HarnessLogRow[] {
   return [
     harnessTextRow('preamble-user', 'user', 'what is this repo about', 1),
     harnessTextRow(
@@ -741,11 +746,10 @@ function makeAssistantToolPreambleEntries(): StreamLogAppendInput[] {
 }
 
 function seedLiveToolOnlyTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
   entries.push({
     id: 'live-tool-user',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp,
     messageType: MESSAGE_TYPES.USER_MESSAGE,
@@ -753,7 +757,6 @@ function seedLiveToolOnlyTranscript(): void {
   });
   entries.push({
     id: 'live-tool-empty-assistant',
-    type: STREAM_LOG_ENTRY_TYPES.LOG,
     level: LOG_LEVELS.INFO,
     timestamp: timestamp + 1,
     messageType: MESSAGE_TYPES.MODEL_RESPONSE,
@@ -771,7 +774,6 @@ function seedLiveToolOnlyTranscript(): void {
     .entries()) {
     entries.push({
       id: `live-tool-${toolName}-${index}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + 2 + index,
       messageType: MESSAGE_TYPES.TOOL_USE,
@@ -787,7 +789,7 @@ function seedLiveToolOnlyTranscript(): void {
   seedRows(HARNESS_RUN_ID, entries);
 }
 
-function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
+function makeRejectedBashToolEntries(): HarnessLogRow[] {
   const command = "printf 'approval-reject-live\\n'";
   const message = `User rejected command: ${command}`;
   return [
@@ -811,7 +813,7 @@ function makeRejectedBashToolEntries(): StreamLogAppendInput[] {
 }
 
 function seedSubagentFollowupTranscript(): void {
-  const entries: StreamLogAppendInput[] = [];
+  const entries: HarnessLogRow[] = [];
   const timestamp = Date.now();
   const followups = [
     '<subagent-progress id="child-a" agent="strategy" type="overview" tool-calls="3" files-changed="none" />',
@@ -830,7 +832,6 @@ function seedSubagentFollowupTranscript(): void {
   for (const [index, text] of followups.entries()) {
     entries.push({
       id: `harness-subagent-followup-${index}`,
-      type: STREAM_LOG_ENTRY_TYPES.LOG,
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
@@ -840,10 +841,7 @@ function seedSubagentFollowupTranscript(): void {
   seedRows(HARNESS_RUN_ID, entries);
 }
 
-function makeChildEntries(
-  agent: string,
-  action: string,
-): StreamLogAppendInput[] {
+function makeChildEntries(agent: string, action: string): HarnessLogRow[] {
   const assistantText =
     SHOW_LONG_CHILD_OUTPUT && agent === 'strategy'
       ? Array.from(
@@ -1110,7 +1108,7 @@ function harnessInitialRunStatus(): RunPhase | undefined {
   return undefined;
 }
 
-function harnessInitialEntries(): StreamLogAppendInput[] {
+function harnessInitialEntries(): HarnessLogRow[] {
   if (SHOW_REJECTED_BASH_TOOL) return makeRejectedBashToolEntries();
   if (SHOW_LONG_TOOL_OUTPUT) return makeLongToolOutputEntries();
   if (SHOW_ASSISTANT_TOOL_PREAMBLE) return makeAssistantToolPreambleEntries();
@@ -1129,7 +1127,7 @@ sessionMeta.set({
 });
 // The harness root: minted before any fixture, like a real run's start.
 seedRun(HARNESS_RUN_ID);
-activeRunIdSignal.set(HARNESS_RUN_ID);
+focusRun(HARNESS_RUN_ID);
 rootRunId.set(HARNESS_RUN_ID);
 seedRows(HARNESS_RUN_ID, harnessInitialEntries());
 publish(
@@ -1167,26 +1165,23 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const residency = await harnessRuntime.runPromise(
-    session().transcripts.acquireRunResidency(childRunId),
-  );
-  const runTrace = createRunTrace(residency);
-  const detachRunTrace = session().attachRunTrace(runTrace.trace, childRunId);
-  const runStage = runTrace.trace.openStage(
+  const trace = new TraceEmitter();
+  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
       id: 'harness-workflow-running-run',
       kind: 'run',
     },
   );
-  const phaseStage = runTrace.trace.openStage('Proofread', {
+  const phaseStage = trace.openStage('Proofread', {
     id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
     total: 1,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-a',
     call: {
@@ -1198,7 +1193,7 @@ async function seedRunningWorkflow(): Promise<void> {
     },
     stageId: phaseStage.id,
   });
-  runTrace.trace.emit({
+  trace.emit({
     type: 'workflow.call',
     logId: 'harness-workflow-running-task-b',
     call: {
@@ -1223,7 +1218,6 @@ async function seedRunningWorkflow(): Promise<void> {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
     detachRunTrace();
-    runTrace.dispose();
   });
 }
 
@@ -1236,7 +1230,7 @@ function seedRunningProcessChild(): void {
   });
   seedDescription(childRunId, 'sleep 30');
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  activeRunIdSignal.set(childRunId);
+  focusRun(childRunId);
 }
 
 if (SHOW_CHILDREN) {
@@ -1365,11 +1359,13 @@ if (SHOW_EDIT_APPROVAL) {
     // exactly as `requestToolEditApproval` stages it. Staging hands back the
     // release for an open that never commits; this request is opened right
     // below, so the harness holds that program and never runs it.
-    const releaseStagedPreview = session().interactions.presentToolEdit({
-      ...request,
-      roots: session().roots,
-      permission,
-    });
+    const releaseStagedPreview = harnessRuntime.runSync(
+      session().interactions.presentToolEdit({
+        ...request,
+        roots: session().roots,
+        permission,
+      }),
+    );
     requestHarnessApproval(
       request.runId,
       { kind: 'toolEdit', data: permission },
@@ -1418,7 +1414,7 @@ if (SHOW_BASH_APPROVAL) {
     let pollCount = 0;
     const timer = setInterval(() => {
       pollCount += 1;
-      const activeRunId = activeRunIdSignal.get();
+      const activeRunId = selectedRunId.get();
       if (activeRunId === undefined || activeRunId === HARNESS_RUN_ID) {
         if (pollCount >= 200) clearInterval(timer);
         return;
@@ -1479,7 +1475,7 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  rootRunPending.set(false);
+  harnessSession.markRunCompleted();
   cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',
@@ -1493,19 +1489,6 @@ function markHarnessInterrupted(): void {
       seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
     }
   }
-}
-
-function markHarnessRunInterrupted(runId: RunId): void {
-  cancelHarnessRequests('Run interrupted.', runId);
-  if (runId === HARNESS_RUN_ID) {
-    canInterrupt = false;
-    rootRunPending.set(false);
-  }
-  appendHarnessAssistantTranscript(
-    `Harness focused interrupt requested for ${runId}.`,
-    runId,
-  );
-  seedRunEnd(runId, RUN_OUTCOME.CANCELLED);
 }
 
 function appendHarnessAssistantTranscript(text: string, runId?: RunId): void {
@@ -1563,26 +1546,12 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessRunStopped(runId: RunId): void {
-  const child = currentView().runs.get(runId);
-  if (!child) return;
-  appendHarnessAssistantTranscript(
-    `Harness kill requested for ${runId}.`,
-    HARNESS_RUN_ID,
-  );
-  appendHarnessAssistantTranscript(
-    'Harness kill requested for this sub-workflow.',
-    child.id,
-  );
-  seedRunEnd(child.id, RUN_OUTCOME.CANCELLED);
-}
-
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
-  const focused = runViewOf(view, activeRunIdSignal.get());
+  const focused = runViewOf(view, selectedRunId.get());
   if (focused && focused.parentId !== null) {
-    if (!focusedChildAcceptsFollowUps(focused)) {
+    if (!acceptsFollowUp(focused, CLI_FOLLOW_UP_HOST)) {
       appendHarnessAssistantTranscript(
         FOCUSED_BACKGROUND_TASK.selectedNoLongerAccepting,
         focused.id,
@@ -1598,16 +1567,14 @@ function handleHarnessSubmit(line: string): void {
 function appendHarnessStatus(): void {
   const meta = sessionMeta.get();
   const view = currentView();
-  const runId = activeRunIdSignal.get() ?? HARNESS_RUN_ID;
+  const runId = selectedRunId.get() ?? HARNESS_RUN_ID;
   const run = runViewOf(view, runId);
   appendHarnessAssistantTranscript(
     formatCliSessionStatus({
       agent: meta.agent,
       model: meta.model,
       teamName: meta.teamName,
-      modelAccess: resolveCliModelAccessRoute({
-        usageRoute: run?.usage.usageRoute,
-      }),
+      modelAccess: run?.usage.usageRoute,
       approvalPolicy: harnessRuntimeSession.approvalPolicy,
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
@@ -1616,7 +1583,7 @@ function appendHarnessStatus(): void {
         run?.category === AgentCategory.ToolUse && run.goal.active
           ? run.goal
           : undefined,
-      // The harness never emits an ACTIVE_SKILLS snapshot.
+      // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
         (followUp) => followUp.text,
@@ -1667,18 +1634,11 @@ function handleHarnessSlashCommand(line: string): boolean {
     case 'plan':
       void showCliWorkPlan(session());
       return true;
-    case 'goal':
-    case 'goals':
-      appendHarnessAssistantTranscript(GOAL_MODE_HELP);
-      return true;
     case 'clear':
       resetHarnessForClear();
       return true;
     case 'approval':
       applyHarnessApprovalPolicySelection(rest, HARNESS_APPROVAL_USAGE);
-      return true;
-    case 'yolo':
-      applyHarnessApprovalPolicySelection(rest || 'yolo', HARNESS_YOLO_USAGE);
       return true;
     default: {
       const command = findSlashCommand(commandName);
@@ -1701,14 +1661,17 @@ function handleHarnessSlashCommand(line: string): boolean {
   }
 }
 
+/** The harness's root-run claim, held the way `texra chat` holds its own. */
+const harnessSession = new TuiSession(() => undefined);
+
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
   runtime: HARNESS_PLATFORM_SERVICES.runtime,
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
-  // is pending, the same fact the status bar's `/agent` hint derives from.
-  canSelectAgent: () => !rootRunPending.get(),
+  // is pending.
+  canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
@@ -1765,11 +1728,13 @@ registerBuiltinSlashCommands({
     );
   },
 });
-// Mirror the real publisher's run facts: an interruptible harness run is a
-// pending root-run claim on the harness run, so the status bar derives
-// the Ctrl-C stop hint from these signals exactly as `texra chat` does.
-rootRunPending.set(canInterrupt);
-claimedRunId.set(canInterrupt ? HARNESS_RUN_ID : undefined);
+// An interruptible harness run is a pending root-run claim on the harness
+// run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
+// does.
+if (canInterrupt) {
+  harnessSession.markRunPending(Effect.never);
+  harnessSession.runId = HARNESS_RUN_ID;
+}
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -1790,14 +1755,8 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      onKillRun={markHarnessRunStopped}
-      onWorkflowControl={() => undefined}
-      canInterruptRun={(runId) =>
-        isInFlightPhase(runViewOf(currentView(), runId)?.status)
-      }
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
-      onInterruptRun={markHarnessRunInterrupted}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}
     />
@@ -1877,7 +1836,7 @@ if (process.env.HARNESS_SESSION_TREE === '1') {
   const ref = await harnessRuntime.runPromise(SubscriptionRef.make(view));
   HARNESS_DISPOSERS.push(bindSessionView(harnessRuntime, ref));
   rootRunId.set(interrupted);
-  activeRunIdSignal.set(PROCESS);
+  focusRun(PROCESS);
 }
 
 const ink = render(renderHarnessApp(), {
@@ -1954,7 +1913,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(platform().lifecycle.runShutdown);
+    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
   } finally {
     process.exit(exitCode);
   }

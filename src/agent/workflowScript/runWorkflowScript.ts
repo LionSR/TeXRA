@@ -496,7 +496,7 @@ export function runWorkflowScript<R = never>(
                 },
               });
             },
-            catch: (error) => error,
+            catch: ensureError,
           }).pipe(Effect.catch(contractFault));
 
           if (issuedCallKeys.has(key)) {
@@ -599,7 +599,7 @@ export function runWorkflowScript<R = never>(
             workflowRunState.settleCall(progressId, {
               status: WORKFLOW_CALL_STATUS.CACHED,
             });
-            onJournalEntryConsumed?.(entry);
+            if (onJournalEntryConsumed) yield* onJournalEntryConsumed(entry);
             return payload;
           }
 
@@ -752,11 +752,11 @@ export function runWorkflowScript<R = never>(
                     ),
                     Effect.catch(failRun),
                     Effect.andThen(
-                      Effect.sync(() => {
+                      Effect.suspend(() => {
                         workflowRunState.settleCall(progressId, {
                           status: WORKFLOW_CALL_STATUS.COMPLETED,
                         });
-                        onJournalEntryConsumed?.(entry);
+                        return onJournalEntryConsumed?.(entry) ?? Effect.void;
                       }),
                     ),
                   ),

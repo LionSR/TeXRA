@@ -1,4 +1,8 @@
-/** Tool dashboard showing tool status and installation guides. */
+/**
+ * The Tools page, one section at a time: approval policy, then every tool, then
+ * the integrations, each card with its status and setup guide, plus the inline
+ * settings rows its plugin declares (Codex and Claude Code today).
+ */
 
 import '@awesome.me/webawesome/dist/components/tag/tag.js';
 import { LitElement, html, css, nothing, type TemplateResult } from 'lit';
@@ -18,7 +22,9 @@ import {
   BASH_APPROVAL_CONFIG_KEY,
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
 } from '@shared/schemas';
+import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
+  type SettingsSectionName,
   type ToolCategory,
   type ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
@@ -42,6 +48,7 @@ import '@awesome.me/webawesome/dist/components/option/option.js';
 
 // Local imports - catalog-driven settings rows
 import {
+  catalogEnumChoices,
   postStateSetting,
   renderStateSettingToggleRow,
 } from '../components/shared/stateSettingRows';
@@ -103,18 +110,16 @@ const CATEGORY_META: Record<ToolCategory, CategoryMeta> = {
     description: 'External runtimes that other tools depend on.',
     icon: 'gear',
   },
-  // ai-agents lives on its own tab (AIAgentsTab); keep the meta entry so the
-  // Record stays exhaustive and the type checker enforces it.
   'ai-agents': {
     label: 'Integrations',
-    description: 'Coding agents and external integrations.',
-    icon: 'robot',
+    description:
+      'Coding agents, reference managers, GitHub activity, and other services.',
+    icon: 'link',
   },
 };
 
-/** Canonical category display order. The 'ai-agents' category is rendered by
- * the dedicated AIAgentsTab, so it is intentionally omitted here. */
-const CATEGORY_ORDER: ToolCategory[] = [
+/** Canonical category display order. */
+const CATEGORY_ORDER: readonly ToolCategory[] = [
   'file',
   'latex',
   'academic',
@@ -122,6 +127,7 @@ const CATEGORY_ORDER: ToolCategory[] = [
   'computation',
   'lean',
   'workflow',
+  'ai-agents',
   'system',
 ];
 
@@ -158,15 +164,27 @@ export class ToolsTab extends LitElement {
       .tool-path-setting {
         margin-top: var(--wa-space-xs);
       }
+
+      .setting-select {
+        min-width: 10rem;
+        max-width: 14rem;
+      }
     `,
   ];
 
+  @property({ attribute: false }) section: SettingsSectionName<'tools'> =
+    'approval';
   @property({ attribute: false }) items: ToolDashboardItem[] = [];
   @property({ type: Boolean }) loaded = false;
   @property({ type: String }) approvalPolicy: TexraApprovalPolicy = 'ask';
   @property({ type: Boolean }) bashApprovalEnabled = true;
   @property({ type: Boolean }) editApprovalEnabled = true;
   @property({ type: Boolean }) toolPathProtectionEnabled = true;
+  /** Current value of every inline setting the cards declare, by catalog
+   *  key; `SettingsApp` reads them from the keyed setting signals. */
+  @property({ attribute: false }) settingValues: Readonly<
+    Record<string, string>
+  > = {};
 
   private handleApprovalPolicyChange = (e: Event): void => {
     const policy = parseTexraApprovalPolicy(readSelectValue(e));
@@ -200,21 +218,98 @@ export class ToolsTab extends LitElement {
               )}
             </wa-select>
           </div>
-          ${renderStateSettingToggleRow({
-            key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
-            checked: this.editApprovalEnabled,
-          })}
-          ${renderStateSettingToggleRow({
-            key: BASH_APPROVAL_CONFIG_KEY,
-            checked: this.bashApprovalEnabled,
-          })}
+          ${
+            // The two switches refine Ask only (decideTexraApproval ignores
+            // them under Never and Auto-approve), so they show only then.
+            this.approvalPolicy === 'ask'
+              ? html`
+                  ${renderStateSettingToggleRow({
+                    key: TOOL_EDIT_APPROVAL_CONFIG_KEY,
+                    checked: this.editApprovalEnabled,
+                  })}
+                  ${renderStateSettingToggleRow({
+                    key: BASH_APPROVAL_CONFIG_KEY,
+                    checked: this.bashApprovalEnabled,
+                  })}
+                `
+              : nothing
+          }
         </div>
       </div>
     `;
   }
 
-  private visibleItems(): ToolDashboardItem[] {
-    return this.items.filter((item) => CATEGORY_ORDER.includes(item.category));
+  /**
+   * One catalog-backed select row: the allowed values, their labels, and the
+   * help text all come from the `stateSettings` entry for `key`, and the
+   * change handler writes that same key. Only the row label is passed in —
+   * inside an integration card it reads bare ('Reasoning effort') where the
+   * catalog title has to disambiguate in a flat list ('Codex reasoning
+   * effort').
+   */
+  private renderSelectRow(
+    label: string,
+    key: string,
+    value: string,
+  ): TemplateResult {
+    const entry = settingsViewSettingByKey(key);
+    if (!entry) {
+      throw new Error(`No settings-view catalog row for setting "${key}"`);
+    }
+    const options = catalogEnumChoices(key);
+    if (options.length === 0) {
+      throw new Error(`Inline setting "${key}" is not an enum catalog row`);
+    }
+    const controlId = `ai-agent-${key.replaceAll('.', '-')}`;
+    return html`
+      <div class="settings-row">
+        <div class="settings-row-text">
+          <label class="settings-row-label" for=${controlId}>${label}</label>
+          <span class="settings-row-help">${entry.description}</span>
+        </div>
+        <div class="settings-row-control">
+          <wa-select
+            class="setting-select"
+            id=${controlId}
+            .value=${value}
+            @change=${(e: Event) => {
+              const selected = readSelectValue(e);
+              if (selected) postStateSetting(key, selected);
+            }}
+          >
+            ${options.map(
+              (opt) => html`
+                <wa-option value=${opt.value}>${opt.label}</wa-option>
+              `,
+            )}
+          </wa-select>
+        </div>
+      </div>
+    `;
+  }
+
+  /** The per-card settings: path protection, and each plugin's own rows. */
+  private renderCardSettings(
+    item: ToolDashboardItem,
+  ): TemplateResult | typeof nothing {
+    if (item.id === 'file-ops') {
+      return html`
+        <div slot="details" class="setting-block tool-path-setting">
+          ${renderStateSettingToggleRow({
+            key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
+            checked: this.toolPathProtectionEnabled,
+          })}
+        </div>
+      `;
+    }
+    if (!item.settings?.length) return nothing;
+    return html`
+      <div slot="details" class="settings-section">
+        ${item.settings.map(([key, label]) =>
+          this.renderSelectRow(label, key, this.settingValues[key]),
+        )}
+      </div>
+    `;
   }
 
   private renderSummary(
@@ -247,21 +342,7 @@ export class ToolsTab extends LitElement {
           (item) => item.id,
           (item) => html`
             <tool-card .item=${item}>
-              ${
-                item.id === 'file-ops'
-                  ? html`
-                      <div
-                        slot="details"
-                        class="setting-block tool-path-setting"
-                      >
-                        ${renderStateSettingToggleRow({
-                          key: WorkspaceStateKey.TOOL_PATH_PROTECTION_ENABLED,
-                          checked: this.toolPathProtectionEnabled,
-                        })}
-                      </div>
-                    `
-                  : nothing
-              }
+              ${this.renderCardSettings(item)}
             </tool-card>
           `,
         )}
@@ -270,6 +351,13 @@ export class ToolsTab extends LitElement {
   }
 
   override render(): TemplateResult {
+    if (this.section === 'approval') {
+      return html`
+        <div class="tools-container tab-content-container">
+          ${this.renderApprovalSettings()}
+        </div>
+      `;
+    }
     if (!this.loaded) {
       return html`
         <div class="tools-container tab-content-container">
@@ -278,7 +366,11 @@ export class ToolsTab extends LitElement {
       `;
     }
 
-    const items = this.visibleItems();
+    // Integrations is the one category with a sub-tab of its own.
+    const integrations = this.section === 'integrations';
+    const items = this.items.filter(
+      (item) => (item.category === 'ai-agents') === integrations,
+    );
     const groups = groupBy(items, (i) => i.category);
 
     return html`
@@ -294,7 +386,6 @@ export class ToolsTab extends LitElement {
               postMessage(SETTINGS_VIEW_COMMANDS.RECHECK_TOOL_STATUS),
           })}
         </div>
-        ${this.renderApprovalSettings()}
         ${CATEGORY_ORDER.flatMap((cat) => {
           const catItems = groups.get(cat);
           return catItems ? [this.renderCategory(cat, catItems)] : [];

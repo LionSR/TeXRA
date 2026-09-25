@@ -236,11 +236,11 @@ structured, cost }`), `null` on failure, or the truthy
   first), then the realm disposed, then the terminal sweep. Skip and retry
   are a per-attempt `Deferred` decision the host's gesture and the runner's
   settlement race for; a retry journals its supersession before it
-  interrupts the runner. The two signal edges live in the host, where the
-  child-run loop runs turns uninterruptibly and cancels them through a
-  signal: `workflowScriptStrategy` turns the loop's abort into an interrupt
-  of the run, and `executeSubagentInBand` turns an interrupt of its caller
-  into the in-band child's abort.
+  interrupts the runner. The two cancellation edges live in the host, where
+  the child-run loop is a detached fiber: `workflowScriptStrategy` turns the
+  loop's abort into an interrupt of the run, and `executeSubagentInBand`
+  turns an interrupt of its caller into a stop of the in-band child by run
+  id, then waits for the child to settle.
 - **Debuggability**: a thrown error inside a `parallel()` thunk
   (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) rejects the
@@ -258,10 +258,10 @@ and rerun the file instead of reproducing the full script. Phase metadata
 accepts both title strings and `{ title }` objects and normalizes them
 to one internal representation. It ships in the built-in `orchestrator`
 agent's tool list
-(`prompts/agents/remote/tool_use/orchestrator.yaml`); explicitly naming the tool in an
+(`packages/extension/resources/tool_use_agents/orchestrator.yaml`); explicitly naming the tool in an
 agent's configuration is one half of the consent boundary for automated
 workflow fan-out. The other half is global: the "Multi-Agent Workflow" toggle
-in the Tools dashboard (`src/tools/externalToolDefs.ts`, id `workflow-script`)
+in the Tools dashboard (`src/tools/plugins.ts`, id `workflow-script`)
 strips `delegate_multi_agents` from every agent's resolved tools when
 switched off, regardless of what any individual agent configuration names —
 and new installs start with the switch off.

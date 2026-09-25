@@ -10,7 +10,7 @@ import escapeRegExp from 'escape-string-regexp';
  * (so editors can reveal the label position).
  *
  * Reading a candidate and handling its match are both part of the scan: a
- * `read` or `onMatch` that fails skips that candidate and scanning continues,
+ * `read` or `onMatch` that fails is logged, skips that candidate, and scanning continues,
  * so a transient read/open failure on one match falls through to another file
  * that contains the same label. Answers `true` once a match has been handled,
  * `false` if no candidate matched (or every matching candidate failed to
@@ -19,11 +19,11 @@ import escapeRegExp from 'escape-string-regexp';
  * Host-neutral: callers supply their own file lister, reader, and open
  * handler, so the VS Code command and the desktop bridge share one scan.
  */
-export function openFirstLabelMatch(
+export function openFirstLabelMatch<ReadError, MatchError>(
   label: string,
   files: Iterable<string>,
-  read: (file: string) => Effect.Effect<string, unknown>,
-  onMatch: (file: string, index: number) => Effect.Effect<unknown, unknown>,
+  read: (file: string) => Effect.Effect<string, ReadError>,
+  onMatch: (file: string, index: number) => Effect.Effect<unknown, MatchError>,
 ): Effect.Effect<boolean> {
   // A regex matching `\label{<label>}` for a literal label string.
   const pattern = new RegExp(`\\\\label\\{${escapeRegExp(label)}\\}`, 'm');
@@ -35,7 +35,11 @@ export function openFirstLabelMatch(
           if (!match || match.index === undefined) return Effect.succeed(false);
           return Effect.as(onMatch(file, match.index), true);
         }),
-        Effect.catch(() => Effect.succeed(false)),
+        Effect.catch((error) =>
+          Effect.logWarning(`Skipping ${file} in the label search`, error).pipe(
+            Effect.as(false),
+          ),
+        ),
       );
       if (handled) return true;
     }

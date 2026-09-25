@@ -4,6 +4,8 @@
  * (e.g. @anthropic-ai/claude-agent-sdk-*, @openai/codex-*).
  *
  * Both tools follow the same shapes and would otherwise drift:
+ * - `importForeignSdk()` — wrap the one dynamic `import()` each tool makes:
+ *   classify a missing package into install guidance, then resolve its export.
  * - `resolveSdkExport()` — resolve and validate the SDK's main export across
  *   the ESM/CJS interop shapes esbuild can produce.
  * - `resolveBinary()` — the 4-strategy native-binary probe, plus the identical
@@ -20,15 +22,63 @@
 import { createRequire } from 'node:module';
 import * as path from 'node:path';
 
+import { Effect } from 'effect';
 import which from 'which';
 
 import { isModuleNotFoundError } from '@common/errors';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
-import { executeCommandSync } from '@utils/system/execCore';
+import { ensureError } from '@utils/errors/errorMessage';
+import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-const log = createLog('ExternalBinaryUtils');
+const CHANNEL = 'ExternalBinaryUtils';
+
+// ---------------------------------------------------------------------------
+// SDK import
+// ---------------------------------------------------------------------------
+
+/**
+ * Import a vendor SDK's main export, classifying a missing package into
+ * install guidance instead of a raw module-resolution error.
+ *
+ * `load` must be a thunk wrapping a literal `import('<specifier>')` written
+ * in the caller's own file — esbuild only rewrites a dynamic `import()` to
+ * `require()` when the specifier is a static string literal in that file, so
+ * the import call itself cannot be hoisted here (see the file header). This
+ * wraps everything downstream of that one foreign edge: a missing package is
+ * re-stated as `notFoundMessage` with the original attached as `cause`, so
+ * callers classify it off the cause chain rather than the message text; a
+ * present package resolves its export via {@link resolveSdkExport}.
+ */
+export function importForeignSdk<T>(opts: {
+  readonly load: () => Promise<Record<string, unknown>>;
+  readonly notFoundMessage: string;
+  readonly exportName: string;
+  readonly specifier: string;
+  readonly errorLabel: string;
+}): Effect.Effect<T, Error> {
+  return Effect.tryPromise({
+    try: opts.load,
+    catch: (err) =>
+      isModuleNotFoundError(err)
+        ? new Error(opts.notFoundMessage, { cause: err })
+        : ensureError(err),
+  }).pipe(
+    Effect.flatMap((mod) =>
+      Effect.try({
+        try: () =>
+          resolveSdkExport<T>(mod, {
+            exportName: opts.exportName,
+            specifier: opts.specifier,
+            errorLabel: opts.errorLabel,
+          }),
+        catch: ensureError,
+      }),
+    ),
+  );
+}
 
 // ---------------------------------------------------------------------------
 // SDK export resolution
@@ -46,7 +96,7 @@ const log = createLog('ExternalBinaryUtils');
  * @throws if the export is missing or not a function — a build-configuration
  * error (the package landed in esbuild's `external` array).
  */
-export function resolveSdkExport<T>(
+function resolveSdkExport<T>(
   mod: Record<string, unknown>,
   opts: {
     /** Property name of the export inside the module (e.g. `query`, `Codex`). */
@@ -93,11 +143,13 @@ export interface ResolveBinaryConfig {
   /**
    * Locate the binary inside a resolved platform-package directory, returning
    * its path if present or `undefined`. Codex nests the binary under
-   * `vendor/<triple>/bin/` (older packages: `vendor/<triple>/codex/`); Claude
-   * places it directly in the package dir. Synchronous, like every other
-   * probe on this path (`existsSync`, `which.sync`, `executeCommandSync`).
+   * `vendor/<triple>/bin/` (older packages: `vendor/<triple>/codex/`) and may
+   * follow a nested package through {@link resolvePackageDir}; Claude places
+   * it directly in the package dir.
    */
-  binaryInPlatformPackage(platformPkgDir: string): string | undefined;
+  binaryInPlatformPackage(
+    platformPkgDir: string,
+  ): Effect.Effect<string | undefined>;
   /**
    * Global npm-prefix package roots to resolve the platform package from,
    * given the detected `npm prefix -g`. Each root is passed to Node module
@@ -112,57 +164,53 @@ export interface ResolveBinaryConfig {
  * Resolve a native CLI binary via the shared 4-stage probe. Returns the
  * resolved path, or `undefined` to let the caller fall back to its own
  * resolution. Caching is handled by {@link createCachedBinaryResolver}.
- *
- * Every stage is synchronous — Node module resolution, `existsSync`,
- * `executeCommandSync` and `which.sync` — so the probe states that rather
- * than wearing a Promise no caller can ever be off the thread for.
  */
-function resolveBinary(config: ResolveBinaryConfig): string | undefined {
+const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
+  config: ResolveBinaryConfig,
+): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   if (config.platformPackages.length === 0) return undefined;
 
   // Strategy 1: packaged Electron app.asar.unpacked resources
   // Highest priority when present — packaged apps cannot execute binaries
   // from inside app.asar.
-  {
-    const resourcesPath = nodeHostEnvironment.packagedElectronResourcesPath();
-    if (resourcesPath != null) {
-      for (const pkg of config.platformPackages) {
-        const platformPkgDir = path.join(
-          resourcesPath,
-          'app.asar.unpacked',
-          'node_modules',
-          ...pkg.split('/'),
-        );
-        const binary = config.binaryInPlatformPackage(platformPkgDir);
-        if (binary) return binary;
-      }
+  const resourcesPath = nodeHostEnvironment.packagedElectronResourcesPath();
+  if (resourcesPath != null) {
+    for (const pkg of config.platformPackages) {
+      const platformPkgDir = path.join(
+        resourcesPath,
+        'app.asar.unpacked',
+        'node_modules',
+        ...pkg.split('/'),
+      );
+      const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
+      if (binary) return binary;
     }
   }
 
   // Strategy 2: resolve from local project's node_modules
   // Preferred in VS Code extension development — matches package.json.
-  {
-    const result = resolveBinaryFromBase(path.join(__dirname, '..'), config);
-    if (result) return result;
-  }
+  const local = yield* resolveBinaryFromBase(
+    path.join(__dirname, '..'),
+    config,
+  );
+  if (local) return local;
 
   // Strategy 3: resolve from global npm prefix
   // Preferred over PATH because the npm-installed binary matches the SDK.
-  {
-    // `npm prefix -g` reports the global prefix, which does not depend on the
-    // directory it is asked from: the process cwd, not a workspace root, and
-    // no workspace settings either.
-    const prefixResult = executeCommandSync(['npm', 'prefix', '-g'], {
-      cwd: process.cwd(),
-      timeout: 5000,
-    });
-    const prefix = prefixResult.success ? prefixResult.stdout : undefined;
-
-    if (prefix) {
-      for (const root of config.globalPrefixRoots(prefix)) {
-        const result = resolveBinaryFromBase(root, config);
-        if (result) return result;
-      }
+  //
+  // `npm prefix -g` reports the global prefix, which does not depend on the
+  // directory it is asked from: the process cwd, not a workspace root, and
+  // no workspace settings either.
+  const prefixResult = yield* executeCommand(['npm', 'prefix', '-g'], {
+    cwd: process.cwd(),
+    settings: undefined,
+    timeout: 5000,
+  });
+  const prefix = prefixResult.success ? prefixResult.stdout : undefined;
+  if (prefix) {
+    for (const root of config.globalPrefixRoots(prefix)) {
+      const result = yield* resolveBinaryFromBase(root, config);
+      if (result) return result;
     }
   }
 
@@ -171,11 +219,11 @@ function resolveBinary(config: ResolveBinaryConfig): string | undefined {
   //
   // The SDK spawns the binary directly, so only a real executable is usable.
   // `npm install -g` writes three shims next to each other — `claude`,
-  // `claude.cmd` and `claude.ps1` — and none of them can be spawned on Windows:
-  // the first is a POSIX sh script for Git Bash, and the other two need a
-  // shell. Restricting PATHEXT to `.EXE` rejects all three, so the tool reports
-  // "not found" with its install guide instead of resolving to a path that
-  // fails at spawn time.
+  // `claude.cmd` and `claude.ps1` — and none of them can be spawned on
+  // Windows: the first is a POSIX sh script for Git Bash, and the other two
+  // need a shell. Restricting PATHEXT to `.EXE` rejects all three, so the
+  // tool reports "not found" with its install guide instead of resolving to
+  // a path that fails at spawn time.
   return (
     which.sync(config.pathCommand, {
       nothrow: true,
@@ -183,10 +231,10 @@ function resolveBinary(config: ResolveBinaryConfig): string | undefined {
       ...(IS_WINDOWS ? { pathExt: '.EXE' } : {}),
     }) ?? undefined
   );
-}
+});
 
 /**
- * Wrap a per-session cache around {@link resolveBinary}. The returned function
+ * Wrap a per-session cache around {@link resolveBinary}. The returned program
  * caches a resolved path for the process lifetime but always retries misses
  * (so a mid-session `npm install -g` is picked up).
  *
@@ -196,16 +244,26 @@ function resolveBinary(config: ResolveBinaryConfig): string | undefined {
  */
 export function createCachedBinaryResolver(
   buildConfig: () => ResolveBinaryConfig | undefined,
-): () => string | undefined {
+): () => Effect.Effect<string | undefined, Error, ChildProcessSpawner> {
   let cached: string | undefined;
-  return () => {
-    if (cached !== undefined) return cached;
-    const config = buildConfig();
-    if (!config) return undefined;
-    const result = resolveBinary(config);
-    if (result) cached = result;
-    return result;
-  };
+  return () =>
+    Effect.suspend(() => {
+      if (cached !== undefined) return Effect.succeed(cached);
+      const config = buildConfig();
+      if (!config) return Effect.succeed(undefined);
+      return resolveBinary(config).pipe(
+        Effect.tap((result) =>
+          Effect.sync(() => {
+            if (result) cached = result;
+          }),
+        ),
+      );
+    }).pipe(
+      // The probe steps are plain synchronous calls (Node module resolution,
+      // `existsSync`, the PATH extension, `which.sync`); one that throws is a
+      // failed lookup the caller reports, not a crash of the calling fiber.
+      Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
+    );
 }
 
 /**
@@ -222,31 +280,41 @@ export function createCachedBinaryResolver(
 export function resolvePackageDir(
   baseDir: string,
   pkg: string,
-): string | undefined {
-  try {
-    const req = createRequire(path.join(baseDir, 'package.json'));
-    return path.dirname(req.resolve(`${pkg}/package.json`));
-  } catch (error) {
-    if (!isModuleNotFoundError(error)) {
-      log.warn(`Could not resolve ${pkg} from ${baseDir}`, { data: error });
-    }
-    return undefined;
-  }
+): Effect.Effect<string | undefined> {
+  return Effect.try({
+    try: (): string | undefined => {
+      const req = createRequire(path.join(baseDir, 'package.json'));
+      return path.dirname(req.resolve(`${pkg}/package.json`));
+    },
+    catch: ensureError,
+  }).pipe(
+    Effect.catch((error) =>
+      isModuleNotFoundError(error)
+        ? Effect.succeed(undefined)
+        : Effect.logWarning(`Could not resolve ${pkg} from ${baseDir}`).pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+            Effect.as(undefined),
+          ),
+    ),
+  );
 }
 
 /**
  * Resolve the platform package from `baseDir` via Node module resolution, then
  * locate the binary inside it. Returns the binary path if found.
  */
-function resolveBinaryFromBase(
+const resolveBinaryFromBase = Effect.fn(
+  'externalBinaryUtils.resolveBinaryFromBase',
+)(function* (
   baseDir: string,
   config: ResolveBinaryConfig,
-): string | undefined {
+): Effect.fn.Return<string | undefined> {
   for (const pkg of config.platformPackages) {
-    const platformPkgDir = resolvePackageDir(baseDir, pkg);
+    const platformPkgDir = yield* resolvePackageDir(baseDir, pkg);
     if (platformPkgDir === undefined) continue;
-    const binary = config.binaryInPlatformPackage(platformPkgDir);
+    const binary = yield* config.binaryInPlatformPackage(platformPkgDir);
     if (binary) return binary;
   }
   return undefined;
-}
+});

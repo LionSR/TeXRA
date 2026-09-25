@@ -43,15 +43,6 @@ function mountPanel(
   });
 }
 
-type ApproveSplit = HTMLElement & { canBypass?: boolean };
-
-function querySplitButton(element: ToolEditRequestPanel): ApproveSplit | null {
-  return (
-    element.shadowRoot?.querySelector<ApproveSplit>('approve-split-button') ??
-    null
-  );
-}
-
 function tooltipText(
   element: ToolEditRequestPanel,
   anchorId: string,
@@ -65,7 +56,7 @@ function selectDiffMenuItem(
   element: ToolEditRequestPanel,
   value: string,
 ): void {
-  const dropdown = element.shadowRoot?.querySelector('wa-dropdown');
+  const dropdown = element.shadowRoot?.querySelector('.diff-dropdown-menu');
   const item = element.shadowRoot?.querySelector<HTMLElement>(
     `wa-dropdown-item[value="${value}"]`,
   );
@@ -134,57 +125,19 @@ describe('tool-edit-request-panel', () => {
     expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
   });
 
-  it.each([
-    {
-      name: 'bypass is not allowed',
-      permission: createPermission({ allowBypass: false }),
-    },
-    {
-      name: 'runId is empty despite allowBypass',
-      permission: createPermission({ allowBypass: true, runId: '' }),
-    },
-  ])(
-    'renders a non-bypass Approve and ignores "a" when $name',
-    async ({ permission }) => {
-      const element = await mountPanel(permission);
-      const actions = recordPermissionActions(element);
-
-      const split = querySplitButton(element);
-      expect(split).toBeTruthy();
-      expect(split?.canBypass).toBe(false);
-      expect(element.handleKeyboardShortcut('a')).toBe(false);
-      expect(actions).toEqual([]);
-    },
-  );
-
-  it('passes canBypass to the split button and "a" emits approveSession', async () => {
+  it('offers "Approve all edits in this run" and "a" enables it', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, runId: RUN_ID }),
     );
     const actions = recordPermissionActions(element);
 
-    const split = querySplitButton(element);
-    expect(split?.canBypass).toBe(true);
-
+    expect(tooltipText(element, 'request-grant-trigger')).toBe(
+      'Approve all edits in this run (a)',
+    );
     expect(element.handleKeyboardShortcut('a')).toBe(true);
     expect(actions.map((request) => request.kind)).toEqual([
       'policy.set',
       'toolEdit',
     ]);
-  });
-
-  it('ignores "a" while the rejection feedback box is open', async () => {
-    const element = await mountPanel(
-      createPermission({ allowBypass: true, runId: RUN_ID }),
-    );
-    const actions = recordPermissionActions(element);
-
-    // First 'n' opens the feedback textarea (does not submit yet).
-    expect(element.handleKeyboardShortcut('n')).toBe(true);
-    await element.updateComplete;
-
-    // With feedback focused, 'a' must not hijack typing into the textarea.
-    expect(element.handleKeyboardShortcut('a')).toBe(false);
-    expect(actions).toEqual([]);
   });
 });

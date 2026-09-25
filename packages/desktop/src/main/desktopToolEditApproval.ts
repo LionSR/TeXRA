@@ -6,10 +6,8 @@
  * read back from the proposed copy on disk.
  */
 
-import { readFile, rm } from 'node:fs/promises';
-
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Local imports - types
 import type {
@@ -17,14 +15,15 @@ import type {
   ToolEditPreview,
   ToolEditPreviewContext,
 } from '@controllers/approval/ToolEditApprovalController';
-import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
+import { hostFailure } from '@controllers/session/hostCallFailure';
 import { NotificationFailed, type DiffSource } from '@hosts/uiHosts';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
 import type { BuildDisplayFn } from '@tools/approval/latexPreview';
 import { writeApprovalTempFiles } from '@tools/approval/tempFileManager';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { createTexraTempDir } from '@utils/files/tempDir';
+
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
@@ -42,13 +41,13 @@ export type DesktopToolEditApprovalUi = Pick<
     proposed: DiffSource,
     title: string,
     previewId: string,
-  ): Effect.Effect<void, unknown>;
+  ): Effect.Effect<void, Error>;
   /**
    * Take this request's staged diff off the Review workbench and nothing
    * else: settling here must not dismiss another request's pending preview
    * or an unrelated review, whichever of them the user is looking at.
    */
-  closeDiff(previewId: string): Effect.Effect<void, unknown>;
+  closeDiff(previewId: string): Effect.Effect<void, never>;
 };
 
 interface DesktopToolEditApprovalHostOptions {
@@ -73,11 +72,12 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
   stagePreview(
     request: ToolEditApprovalRequest,
     context: ToolEditPreviewContext,
-  ): Effect.Effect<ToolEditPreview, HostRequestFailure> {
+  ): Effect.Effect<ToolEditPreview, HostRequestFailure, FileSystem.FileSystem> {
     const { ui } = this.options;
-    return fromHost('approval.createTempDir', () =>
-      createTexraTempDir('texra-tool-edit-'),
+    return FileSystem.FileSystem.use((fs) =>
+      fs.makeTempDirectory({ prefix: 'texra-tool-edit-' }),
     ).pipe(
+      Effect.mapError((cause) => hostFailure('approval.createTempDir', cause)),
       Effect.flatMap((tempDir) =>
         writeApprovalTempFiles({
           directory: tempDir,
@@ -93,13 +93,23 @@ export class DesktopToolEditApprovalHost implements ToolEditApprovalHost {
                 proposedPath,
               }),
           ),
+          // A failed write leaves the directory it made; nothing else would
+          // remove it, since the preview that owns it was never built.
+          Effect.onError(() =>
+            FileSystem.FileSystem.use((fs) =>
+              fs.remove(tempDir, { recursive: true, force: true }),
+            ).pipe(
+              Effect.catch((error) =>
+                Effect.logWarning(
+                  `Could not remove the tool-edit preview directory ${tempDir}: ${toErrorMessage(error.reason.cause ?? error)}`,
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
-
-  // No `revealApprovalSurface`: active-stream selection surfaces the prompt
-  // in whichever view is open, so nothing has to open ahead of it.
 
   reportError(message: string): void {
     // Fire-and-forget, as the voided promise was; a dialog that cannot show
@@ -166,15 +176,18 @@ class DesktopToolEditPreview implements ToolEditPreview {
   }
 
   openProposed(): Effect.Effect<void, HostRequestFailure> {
-    // #12734's Effect-typed `openPath` reaches the controller as the program
-    // it is: `ToolEditPreview` is no longer a Promise-shaped core port, so
-    // the run this settled on is gone with the face that needed it.
     return this.ui.openPath(this.staged.proposedPath);
   }
 
-  readProposedContent(): Effect.Effect<string, HostRequestFailure> {
-    return fromHost('approval.readProposed', () =>
-      readFile(this.staged.proposedPath, 'utf8'),
+  readProposedContent(): Effect.Effect<
+    string,
+    HostRequestFailure,
+    FileSystem.FileSystem
+  > {
+    return FileSystem.FileSystem.use((fs) =>
+      fs.readFileString(this.staged.proposedPath),
+    ).pipe(
+      Effect.mapError((cause) => hostFailure('approval.readProposed', cause)),
     );
   }
 
@@ -183,14 +196,19 @@ class DesktopToolEditPreview implements ToolEditPreview {
    * names this request's preview, so a request settling while the user reads
    * another diff takes only its own off the Review workbench.
    */
-  dispose(): Effect.Effect<void, HostRequestFailure> {
-    return this.ui.closeDiff(this.context.requestId).pipe(
-      Effect.mapError((cause) => hostFailure('approval.closeDiff', cause)),
-      Effect.andThen(
-        fromHost('approval.removeTempDir', () =>
-          rm(this.staged.tempDir, { recursive: true, force: true }),
+  dispose(): Effect.Effect<void, HostRequestFailure, FileSystem.FileSystem> {
+    return this.ui
+      .closeDiff(this.context.requestId)
+      .pipe(
+        Effect.andThen(
+          FileSystem.FileSystem.use((fs) =>
+            fs.remove(this.staged.tempDir, { recursive: true, force: true }),
+          ).pipe(
+            Effect.mapError((cause) =>
+              hostFailure('approval.removeTempDir', cause),
+            ),
+          ),
         ),
-      ),
-    );
+      );
   }
 }

@@ -169,7 +169,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   /** A program failure as the provider's own error type. */
-  private readonly toProviderError = (error: MachineFailure): unknown =>
+  private readonly toProviderError = (error: MachineFailure): Error =>
     toProviderAuthError(
       error instanceof AuthPortError ? error.cause : error,
       this.errorType,
@@ -228,12 +228,12 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
     code: string;
     verifier: string;
     redirectUri: string;
-  }): Effect.Effect<S, unknown, HttpClient.HttpClient> {
+  }): Effect.Effect<S, Error, HttpClient.HttpClient> {
     return Effect.mapError(this.exchangeCode(params), this.toProviderError);
   }
 
   /** Persist tokens from a successful device-code (or other) grant. */
-  storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, unknown> {
+  storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error> {
     return Effect.mapError(this.adoptTokens(tokens), this.toProviderError);
   }
 
@@ -242,7 +242,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   /** The access token of the stored session, refreshed when expiring soon. */
-  getFreshAccessToken(): Effect.Effect<string, unknown, HttpClient.HttpClient> {
+  getFreshAccessToken(): Effect.Effect<string, Error, HttpClient.HttpClient> {
     return Effect.mapError(
       Effect.map(this.freshSession(), (session) => session.accessToken),
       this.toProviderError,
@@ -250,7 +250,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   }
 
   /** The stored session, refreshed when expiring soon. */
-  getFreshSession(): Effect.Effect<S, unknown, HttpClient.HttpClient> {
+  getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient> {
     return Effect.mapError(this.freshSession(), this.toProviderError);
   }
 

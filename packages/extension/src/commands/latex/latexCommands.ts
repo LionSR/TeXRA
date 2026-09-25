@@ -1,12 +1,11 @@
 // Third-party imports
-import { Cause, Effect } from 'effect';
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import type { SessionHandle } from '@agent/runtime';
 import { runGuardedLatexCommand } from '@frontend/editor/activeFileGuards';
 import {
-  showLoggedErrorMessage,
   showLoggedInfoMessage,
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
@@ -18,48 +17,10 @@ import {
 } from '@latex/texcount';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import { resolveLatexFormatter } from '@latex/formatter/texFormatter';
-import { indentLatexFilesInDirectory } from '@latex/formatter/indentDirectory';
 import { buildLatexdiffAwareFixInstruction } from '@latex/latexdiff/diffFileNameManager';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
-
-export function handleIndentTeX(
-  session: SessionHandle,
-): Effect.Effect<void, Error, ProcessServices> {
-  return Effect.gen(function* () {
-    const result = yield* indentLatexFilesInDirectory(
-      session.roots.workspace,
-      yield* resolveLatexFormatter(session.roots),
-    );
-    switch (result.status) {
-      case 'missing-config':
-        yield* showLoggedMessage(
-          CHANNEL,
-          `Formatter config file not found at ${result.configPath}`,
-        );
-        break;
-      case 'error':
-        yield* showLoggedErrorMessage(
-          CHANNEL,
-          'Error during indentation process',
-          result.error,
-        );
-        break;
-      case 'disabled':
-      case 'formatted':
-        break;
-    }
-  }).pipe(
-    Effect.catchCause((cause) =>
-      showLoggedErrorMessage(
-        CHANNEL,
-        'Error in indentTeX command',
-        Cause.squash(cause),
-      ).pipe(Effect.asVoid),
-    ),
-  );
-}
 
 export function handleFixCompilation(
   session: SessionHandle,
@@ -111,7 +72,7 @@ export function handleIndentCurrentTeX(
       channel: CHANNEL,
       action: 'indent LaTeX document',
       saveDocument: true,
-      errorMessage: 'Error in indentTeX command',
+      errorMessage: 'Error formatting the LaTeX file',
     },
     ({ relativePath }) =>
       Effect.gen(function* () {
@@ -119,9 +80,8 @@ export function handleIndentCurrentTeX(
           withLogChannel(CHANNEL),
         );
 
-        // The directory indent command treats a disabled formatter as a silent
-        // no-op (`case 'disabled': break`). The single-file command is an
-        // explicit user action, so it notifies instead of succeeding quietly.
+        // An explicit user action: a disabled formatter notifies instead of
+        // succeeding quietly.
         const formatter = yield* resolveLatexFormatter(session.roots);
         if (!formatter) {
           yield* showLoggedInfoMessage(

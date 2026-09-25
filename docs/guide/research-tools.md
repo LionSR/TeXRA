@@ -70,11 +70,11 @@ For documentation, project pages, or general information:
 Find the official PyTorch documentation for attention mechanisms.
 ```
 
-The `web_search` tool prefers the active provider's native search (Anthropic, OpenAI) and falls back to DuckDuckGo Instant Answers. Gemini's native search is not used because Google's API cannot combine it with function calling. `web_fetch` retrieves a specific URL and extracts its main content.
+The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model provider's hosted search. `web_fetch` retrieves a specific URL and extracts its main content.
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status on **Dashboard → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status on **Dashboard → Tools → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
 
 ```
 Search my Zotero library for papers by Vaswani on attention mechanisms.
@@ -124,7 +124,7 @@ The `inquiry` tool lets a TeXRA agent ask one question in an external chat (Chat
 
 ## Which agent to use
 
-Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` is an account-served agent: it appears only after you sign in and apply the Physicist or Computer Scientist team. Without an account, the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
+Specialist research agents are tuned for different stages of the work. Pick one from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). `search` ships with TeXRA and needs no sign-in; the built-in `assistant` agent carries the same literature toolset (arXiv, Crossref, web, Zotero). For computational derivations, reach for `research`; for formal proof verification, use `lean`:
 
 <DropdownMenu
   label="Agent"
@@ -141,7 +141,7 @@ Specialist research agents are tuned for different stages of the work. Pick one 
 <FeatureCards
   min="220px"
   :cards="[
-    { icon: 'mortar-board', title: 'search', tag: 'sign-in', tagVariant: 'warning', desc: 'Finding papers, literature reviews, fact-checking. Account-served; built-in assistant has the same tools.', chips: [
+    { icon: 'mortar-board', title: 'search', desc: 'Finding papers, literature reviews, fact-checking. Built in; the assistant agent has the same tools.', chips: [
       { text: 'arxiv_metadata', variant: 'neutral' },
       { text: 'crossref_search', variant: 'neutral' },
       { text: 'web_search', variant: 'neutral' },

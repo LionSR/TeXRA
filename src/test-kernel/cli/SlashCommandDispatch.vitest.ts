@@ -24,23 +24,21 @@ import {
   showCliMemoryList,
   showCliMemoryPreview,
 } from '@cli/chat/tui/commands/handlers/memoryCommands';
-import { loginFromChat } from '@cli/chat/tui/commands/handlers/loginCommands';
+import {
+  loginFromChat,
+  logoutFromChat,
+} from '@cli/chat/tui/commands/handlers/loginCommands';
 import {
   type SlashCommandContext,
   type SlashCommandOutput,
 } from '@cli/chat/tui/commands/handlers/slashContext';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
-import {
-  listSlashCommands,
-  registerSlashCommand,
-  unregisterSlashCommand,
-} from '@cli/chat/tui/commands/slashRegistry';
+import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { tuiUi } from '@cli/chat/tui/hosts/tuiUiHost';
 import { transcriptRowHeadline } from '@cli/chat/tui/panes/transcriptEntries';
 import { notices, noticesFor } from '@cli/chat/tui/state/transcript';
 import {
   CLI_LOCAL_RUN_ID,
-  activeRunId,
   closeForegroundReader,
   closeInfoPane,
   foregroundReader,
@@ -48,11 +46,14 @@ import {
   patchSessionMeta,
   resetCliState,
   transientNotice,
+  selectedRunId,
+  focusRun,
 } from '@cli/chat/tui/state/cliState';
 import { activeForm } from '@cli/chat/tui/state/formSlot';
 import * as apiStatus from '@cli/runtime/apiStatus';
 import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
+import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
 import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
@@ -96,7 +97,16 @@ function ensureRun(
   over: Partial<Omit<RunView, 'category'>> = {},
 ): void {
   const current = seeded.get(id);
-  seeded.set(id, makeRunView({ ...(current ?? {}), ...over, id }) as RunView);
+  // Held by this terminal, so a focused seed is inside the chat's scope.
+  seeded.set(
+    id,
+    makeRunView({
+      ownedHere: true,
+      ...(current ?? {}),
+      ...over,
+      id,
+    }) as RunView,
+  );
   syncSeededView();
 }
 beforeAll(bindTestSessionView);
@@ -108,7 +118,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
-  for (const cmd of [...listSlashCommands()]) unregisterSlashCommand(cmd.name);
+  installSlashCommands([]);
   seeded.clear();
   syncSeededView();
   resetCliState();
@@ -123,7 +133,7 @@ function seedWorkPlan(
 ): void {
   ensureRun(runId);
   seeded.set(runId, {
-    ...makeRunView({ id: runId }),
+    ...makeRunView({ id: runId, ownedHere: true }),
     plan,
     todos: [...todos],
   } as RunView);
@@ -164,7 +174,7 @@ const services = {
 };
 
 function createSession(): TuiSession {
-  return new TuiSession();
+  return new TuiSession(() => undefined);
 }
 
 function mockModelAccessOverview(): void {
@@ -220,7 +230,6 @@ function createContext(
     setApprovalPolicy: (policy) => {
       approvalPolicy = policy;
     },
-    canSelectModel: () => true,
     resetSession: vi.fn(),
     resumeRun: (_id: RunId) => Effect.void,
     ...overrides,
@@ -267,6 +276,14 @@ function dispatchSlash(
   return withProcessServices(
     services.runtime,
     handleTuiSlashCommand(line, context),
+  );
+}
+
+/** The account form's sign-out action, as `/login` runs it. */
+function logout(target: CliLogoutTarget): Effect.Effect<void, unknown> {
+  return withProcessServices(
+    services.runtime,
+    logoutFromChat(target, services.stores, services.secrets),
   );
 }
 
@@ -329,17 +346,9 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const context = createContext();
 
-      yield* dispatchSlash('/tools', context);
-      expect(localEntries()).toEqual([]);
-
       yield* dispatchSlash('/help', context);
       expect(infoPane.get()).toMatchObject({ title: '/help' });
       expect(infoPane.get()?.lines.join('\n')).toContain('**Keyboard**');
-      expect(localEntries()).toEqual([]);
-
-      closeInfoPane();
-      yield* dispatchSlash('/goal', context);
-      expect(activeForm.get()).toMatchObject({ commandName: 'goal' });
       expect(localEntries()).toEqual([]);
     }),
   );
@@ -354,7 +363,7 @@ describe('handleTuiSlashCommand', () => {
 
       const runId = 'plan-reader' as RunId;
       ensureRun(runId);
-      activeRunId.set(runId);
+      focusRun(runId);
       yield* dispatchSlash('/plan', context);
       expect(transientNotice.get()?.text).toBe(
         'The focused session has no work plan.',
@@ -370,7 +379,7 @@ describe('handleTuiSlashCommand', () => {
       yield* dispatchSlash('/plan', context);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
 
-      activeRunId.set('another-stream' as RunId);
+      focusRun('another-stream' as RunId);
       expect(foregroundReader.get()).toEqual({ kind: 'workPlan', runId });
       expect(localEntries()).toEqual([]);
       closeForegroundReader();
@@ -420,11 +429,18 @@ describe('handleTuiSlashCommand', () => {
     'adds a lazy command echo before errors even under echo never',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'unavailable',
-          description: 'Unavailable test command',
-          echo: 'never',
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'unavailable',
+                description: 'Unavailable test command',
+                echo: 'never',
+              },
+            ],
+          },
+        ]);
 
         yield* dispatchSlash('/unavailable', createContext());
 
@@ -440,12 +456,19 @@ describe('handleTuiSlashCommand', () => {
 
   it.effect('threads deferred echo through fallback registered forms', () =>
     Effect.gen(function* () {
-      registerSlashCommand({
-        name: 'custom-form',
-        description: 'Custom form',
-        echo: 'ifPersists',
-        formComponent: () => null,
-      });
+      installSlashCommands([
+        {
+          pluginId: 'test',
+          commands: [
+            {
+              name: 'custom-form',
+              description: 'Custom form',
+              echo: 'ifPersists',
+              formComponent: () => null,
+            },
+          ],
+        },
+      ]);
 
       yield* dispatchSlash('/custom-form', createContext());
       const form = activeForm.get()?.render(() => undefined, 20) as {
@@ -465,11 +488,18 @@ describe('handleTuiSlashCommand', () => {
     'queues a host dialog behind an open slash form instead of evicting it',
     () =>
       Effect.gen(function* () {
-        registerSlashCommand({
-          name: 'custom-form',
-          description: 'Custom form',
-          formComponent: () => null,
-        });
+        installSlashCommands([
+          {
+            pluginId: 'test',
+            commands: [
+              {
+                name: 'custom-form',
+                description: 'Custom form',
+                formComponent: () => null,
+              },
+            ],
+          },
+        ]);
         yield* dispatchSlash('/custom-form', createContext());
 
         // The host dialog reachable from a retry card ('k' with no stored
@@ -678,7 +708,7 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('derives /auth and /api status from the same access overview', () =>
+  it.effect('prints account and access status for /login status', () =>
     Effect.gen(function* () {
       registerBuiltinSlashCommands({ ...services });
       const overview = vi
@@ -693,15 +723,9 @@ describe('handleTuiSlashCommand', () => {
         );
       const context = createContext();
 
-      yield* dispatchSlash('/auth', context);
-      const authStatusText = lastEntryText();
-      expectAccessStatusText(authStatusText);
-
-      yield* dispatchSlash('/api status', context);
-      const apiStatusText = lastEntryText();
-      expectAccessStatusText(apiStatusText);
-      expect(apiStatusText).toBe(authStatusText);
-      expect(overview).toHaveBeenCalledTimes(2);
+      yield* dispatchSlash('/login status', context);
+      expectAccessStatusText(lastEntryText());
+      expect(overview).toHaveBeenCalledOnce();
     }),
   );
 
@@ -725,7 +749,7 @@ describe('handleTuiSlashCommand', () => {
         'glm-secret',
       );
       expect(notice).toBe(
-        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' with `/api glm-code` or in `/config` to use GLM Coding Plan.",
+        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
       );
     }),
   );
@@ -760,37 +784,30 @@ describe('handleTuiSlashCommand', () => {
       }),
   );
 
-  it.effect('clears TeXRA and ChatGPT credentials on /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-      const { signOutSupabase, signOutChatGpt } = mockSignOuts();
+  it.effect(
+    'clears TeXRA and ChatGPT credentials when signing out of all',
+    () =>
+      Effect.gen(function* () {
+        registerBuiltinSlashCommands({ ...services });
+        const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-      expect(handled).toBe(true);
-      expect(signOutSupabase).toHaveBeenCalledOnce();
-      // The provider ids only: each call also carries the session's setting
-      // stores, and a `ConfigProvider` in an assertion argument breaks the
-      // formatter's own `inspect` probe.
-      expect(
-        signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
-      ).toEqual(['chatgpt', 'grok']);
-      const entry = lastEntryText();
-      expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
-      expect(entry).toContain('Signed out of ChatGPT.');
-      expect(entry).toContain(
-        'ChatGPT subscription disabled for Codex models.',
-      );
-      expect(entry).not.toContain('\n');
-    }),
-  );
-
-  it.effect('opens an account-specific sign-out chooser for bare /logout', () =>
-    Effect.gen(function* () {
-      registerBuiltinSlashCommands({ ...services });
-
-      yield* expectFormOpens('/logout', 'logout');
-    }),
+        expect(signOutSupabase).toHaveBeenCalledOnce();
+        // The provider ids only: each call also carries the session's setting
+        // stores, and a `ConfigProvider` in an assertion argument breaks the
+        // formatter's own `inspect` probe.
+        expect(
+          signOutChatGpt.mock.calls.map(([, providerId]) => providerId),
+        ).toEqual(['chatgpt', 'grok']);
+        const entry = lastEntryText();
+        expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
+        expect(entry).toContain('Signed out of ChatGPT.');
+        expect(entry).toContain(
+          'ChatGPT subscription disabled for Codex models.',
+        );
+        expect(entry).not.toContain('\n');
+      }),
   );
 
   it.effect('signs out of only the requested account', () =>
@@ -798,11 +815,11 @@ describe('handleTuiSlashCommand', () => {
       registerBuiltinSlashCommands({ ...services });
       const { signOutSupabase, signOutChatGpt } = mockSignOuts();
 
-      yield* dispatchSlash('/logout texra', createContext());
+      yield* logout('texra');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).not.toHaveBeenCalled();
 
-      yield* dispatchSlash('/logout chatgpt', createContext());
+      yield* logout('chatgpt');
       expect(signOutSupabase).toHaveBeenCalledOnce();
       expect(signOutChatGpt).toHaveBeenCalledOnce();
     }),
@@ -817,9 +834,8 @@ describe('handleTuiSlashCommand', () => {
       );
       mockModelAccessOverview();
 
-      const handled = yield* dispatchSlash('/logout all', createContext());
+      yield* logout('all');
 
-      expect(handled).toBe(true);
       const entry = lastEntryText();
       expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
       expect(entry).toContain('ChatGPT sign-out failed: Codex logout failed');
@@ -839,9 +855,8 @@ describe('handleTuiSlashCommand', () => {
         );
         mockModelAccessOverview();
 
-        const handled = yield* dispatchSlash('/logout all', createContext());
+        yield* logout('all');
 
-        expect(handled).toBe(true);
         const entry = lastEntryText();
         expect(entry).toContain(RESEARCHER_ACCESS_AUTH.signedOut);
         expect(entry).toContain('Signed out of ChatGPT.');
@@ -871,7 +886,7 @@ describe('handleTuiSlashCommand', () => {
         // interrupt is deliberately NOT raised — the teardown owns that policy.
         expect(session.stopRequested).toBe(true);
         expect(requestInputExit).toHaveBeenCalledOnce();
-        expect(activeRunId.get()).toBeUndefined();
+        expect(selectedRunId.get()).toBeUndefined();
       }),
   );
 
@@ -881,10 +896,10 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const runId = 'stream-1' as RunId;
+        const runId = '5e0001' as RunId;
         session.runId = runId;
         session.runId = 'exec-1' as RunId;
-        activeRunId.set(runId);
+        focusRun(runId);
         ensureRun(runId, { status: RUN_PHASE.WAITING });
 
         const handled = yield* dispatchSlash(
@@ -905,9 +920,9 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunId = 'stream-child' as RunId;
-        activeRunId.set(rootRunId);
+        focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
         ensureRun(childRunId, { status: RUN_PHASE.RUNNING });
         seedChildRoster(rootRunId, [
@@ -933,15 +948,15 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const parentRunId = 'stream-parent' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const parentRunId = '5e0a01' as RunId;
         const rootSiblingIds = [
           'stream-root-sibling-1',
           'stream-root-sibling-2',
         ] as RunId[];
         const runningChildId = 'stream-child-running' as RunId;
         const waitingChildId = 'stream-child-waiting' as RunId;
-        activeRunId.set(parentRunId);
+        focusRun(parentRunId);
         for (const runId of rootSiblingIds) {
           ensureRun(runId, { status: RUN_PHASE.RUNNING });
         }
@@ -984,9 +999,9 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
+        const rootRunId = '5e0000' as RunId;
         const childRunIds = ['stream-child-1', 'stream-child-2'] as RunId[];
-        activeRunId.set(rootRunId);
+        focusRun(rootRunId);
         ensureRun(rootRunId, { status: RUN_PHASE.WAITING });
         for (const [index, childRunId] of childRunIds.entries()) {
           ensureRun(childRunId, {
@@ -1018,10 +1033,10 @@ describe('handleTuiSlashCommand', () => {
       Effect.gen(function* () {
         registerBuiltinSlashCommands({ ...services });
         const session = createSession();
-        const rootRunId = 'stream-root' as RunId;
-        const focusedChildId = 'stream-focused-child' as RunId;
+        const rootRunId = '5e0000' as RunId;
+        const focusedChildId = '5ef0c5' as RunId;
         const siblingChildId = 'stream-sibling-child' as RunId;
-        activeRunId.set(focusedChildId);
+        focusRun(focusedChildId);
         for (const runId of [focusedChildId, siblingChildId]) {
           ensureRun(runId, { status: RUN_PHASE.RUNNING });
         }
@@ -1051,8 +1066,8 @@ describe('handleTuiSlashCommand', () => {
         registerBuiltinSlashCommands({ ...services });
         const overview = vi.spyOn(apiStatus, 'loadCliModelAccessOverview');
         const session = createSession();
-        const runId = 'stream-access' as RunId;
-        activeRunId.set(runId);
+        const runId = '5eacce' as RunId;
+        focusRun(runId);
         patchSessionMeta({ model: 'gpt55' });
         // The access route comes off the fold's cumulative usage for the stream.
         ensureRun(runId, {

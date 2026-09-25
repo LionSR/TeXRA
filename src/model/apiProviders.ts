@@ -4,20 +4,20 @@
  * Shared between SecretManager (VS Code), modelRoutes (agent runtime),
  * and computeModelOptions (model). Platform-agnostic.
  */
-import { Deferred, Effect, Redacted } from 'effect';
+import { Data, Deferred, Effect, Redacted } from 'effect';
 import { LRUCache } from 'lru-cache';
 
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import { API_KEY_PROVIDER_IDS } from '@shared/constants/providers';
+import {
+  API_KEY_PROVIDER_IDS,
+  apiKeyEnvName,
+} from '@shared/constants/providers';
+import { envVar } from '@utils/system/envFlags';
 import { isNonEmptyString } from '@utils/text/stringUtils';
 
 export const API_PROVIDERS = API_KEY_PROVIDER_IDS;
 
 export type ApiProvider = (typeof API_PROVIDERS)[number];
-
-const API_KEY_ENV_NAME_OVERRIDES: Partial<Record<ApiProvider, string>> = {
-  kimiCode: 'KIMI_CODE_API_KEY',
-};
 
 /** Runtime-checked narrowing for provider strings. */
 export function isApiProvider(provider: string): provider is ApiProvider {
@@ -38,13 +38,6 @@ export function apiKeySecretName(provider: ApiProvider): string {
 export function apiProviderOfSecretName(key: string): ApiProvider | undefined {
   const provider = key.startsWith('apiKey.') ? key.slice('apiKey.'.length) : '';
   return isApiProvider(provider) ? provider : undefined;
-}
-
-/** Environment variable name for a provider's API key. */
-export function apiKeyEnvName(provider: ApiProvider): string {
-  return (
-    API_KEY_ENV_NAME_OVERRIDES[provider] ?? `${provider.toUpperCase()}_API_KEY`
-  );
 }
 
 /** Where a resolved API key came from. */
@@ -106,16 +99,20 @@ function resolveApiKeyUncached(
   secrets: PlatformSecrets,
   provider: ApiProvider,
 ): Effect.Effect<ResolvedApiKey, SecretsFailed> {
-  return Effect.map(secrets.get(apiKeySecretName(provider)), (stored) => {
-    if (isNonEmptyString(stored)) {
-      return { value: redactedKey(stored, provider), origin: 'secret' };
-    }
-    const envValue = secrets.getEnv(apiKeyEnvName(provider));
-    if (isNonEmptyString(envValue)) {
-      return { value: redactedKey(envValue, provider), origin: 'env' };
-    }
-    return { value: undefined, origin: 'none' };
-  });
+  return Effect.flatMap(
+    secrets.get(apiKeySecretName(provider)),
+    (stored): Effect.Effect<ResolvedApiKey> =>
+      isNonEmptyString(stored)
+        ? Effect.succeed({
+            value: redactedKey(stored, provider),
+            origin: 'secret',
+          })
+        : Effect.map(envVar(apiKeyEnvName(provider)), (envValue) =>
+            isNonEmptyString(envValue)
+              ? { value: redactedKey(envValue, provider), origin: 'env' }
+              : { value: undefined, origin: 'none' },
+          ),
+  );
 }
 
 /** The cache for one credential store, created on first use. */
@@ -270,17 +267,24 @@ export function configuredApiKeyProviders(
   );
 }
 
+/** No key is configured for the provider, in secret storage or the env. */
+class ApiKeyMissing extends Data.TaggedError('ApiKeyMissing')<{
+  readonly provider: ApiProvider;
+  readonly message: string;
+}> {}
+
 /** Get an API key, failing if none is configured. See trio doc above. */
 export function getApiKey(
   secrets: PlatformSecrets,
   provider: ApiProvider,
-): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | Error> {
+): Effect.Effect<Redacted.Redacted<string>, SecretsFailed | ApiKeyMissing> {
   return Effect.flatMap(resolveApiKey(secrets, provider), ({ value: key }) =>
     key === undefined
       ? Effect.fail(
-          new Error(
-            `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
-          ),
+          new ApiKeyMissing({
+            provider,
+            message: `No API key found for ${provider}. Set the ${apiKeyEnvName(provider)} environment variable, or configure your ${provider} API key.`,
+          }),
         )
       : Effect.succeed(key),
   );

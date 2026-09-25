@@ -10,6 +10,7 @@ import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { hasExtension } from '@utils/core/pathCore';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from './latexLogging';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHINESE_PACKAGES = [
   'xeCJK',
@@ -30,7 +31,7 @@ const hasChinesePackages = Effect.fn('texcount.hasChinesePackages')(function* (
   return yield* fs.readFile(absolutePath).pipe(
     Effect.mapError(ensureError),
     // Decoded from bytes rather than `readFileString`, whose `TextDecoder`
-    // strips a leading UTF-8 BOM that the old `AbsoluteFS.read` preserved.
+    // would strip a leading UTF-8 BOM the file carries.
     Effect.map((bytes) =>
       normalizeLineEndings(Buffer.from(bytes).toString('utf-8')),
     ),
@@ -105,7 +106,11 @@ const runTexcount = Effect.fn('texcount.runTexcount')(function* (
   args: string[],
   channel: string,
   context: string,
-): Effect.fn.Return<{ stdout: string | null; error?: string }, Error> {
+): Effect.fn.Return<
+  { stdout: string | null; error?: string },
+  Error,
+  ChildProcessSpawner
+> {
   const result = yield* runToolWithCheck('texcount', args, {
     channel,
     // The file arguments are workspace-relative, so the root the caller
@@ -283,7 +288,11 @@ export const getTeXCount = Effect.fn('texcount.getTeXCount')(function* (
   workspaceRoot: string | undefined,
   filePaths: string | string[],
   { mode = 'separate', channel, settings }: TexcountOptions,
-): Effect.fn.Return<TexcountResult, never, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  TexcountResult,
+  never,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   const resolvedChannel = channel ?? CHANNEL;
 
   const counted = Effect.gen(function* () {

@@ -6,7 +6,7 @@
 // registered installCommand / authCommand (packages/cli/src/runtime/tools.ts
 // formatCliToolStatus); `tools install --run` prints the install guide then
 // executes the registered command; `tools auth` runs `codex login`. The codex
-// id, commands, and guide text match src/tools/externalToolDefs.ts verbatim.
+// id, commands, and guide text match src/tools/plugins.ts verbatim.
 //
 // Built on <TermWindow>; .mockup-scoped and token-only. Static strings.
 </script>

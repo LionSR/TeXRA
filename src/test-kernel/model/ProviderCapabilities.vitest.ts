@@ -12,11 +12,9 @@ import { Effect } from 'effect';
 import { CODEX_SESSION_SECRET_KEY } from '@auth/codex/codexConstants';
 import type { CodexSession } from '@auth/codex/codexSessionTypes';
 import { installTexraAccountProbes } from '@controllers/modelAccess/installTexraAccountProbes';
-import {
-  isCodexSubscriptionActive,
-  resolveCodexSubscriptionCapabilities,
-  codexBackendModelId,
-} from '@model/providerCapabilities';
+import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { routeConfig } from '@model/modelRoute';
+import { codexBackendModelId } from '@model/providerCapabilities';
 import { withProcessServices } from '@platform/processRuntime';
 import { CHATGPT_CODEX_CONTEXT_WINDOW_SETTING } from '@shared/schemas';
 
@@ -26,6 +24,10 @@ const DEFAULT_INPUT_LIMIT =
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING.tokensPerUnit;
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
+
+/** The config a model runs with on the ChatGPT subscription. */
+const chatgptConfig = (config: ModelConfig) =>
+  routeConfig(hostStores(), config, { kind: 'chatgpt-subscription' });
 
 const gpt55Config: ModelConfig = {
   name: 'gpt55',
@@ -85,18 +87,12 @@ describe('provider capabilities', () => {
     'resolves ChatGPT subscription profile from model routing context',
     () =>
       Effect.gen(function* () {
-        const capabilities = yield* resolveCodexSubscriptionCapabilities(
-          hostStores(),
-          gpt55Config,
-          false,
-        );
+        const capabilities = yield* chatgptConfig(gpt55Config);
 
         expect(capabilities).toMatchObject({
           contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
-          inputTokenLimit: DEFAULT_INPUT_LIMIT,
           inputPrice: 0,
           outputPrice: 0,
-          usageRoute: 'chatgpt-subscription',
         });
       }),
   );
@@ -106,16 +102,11 @@ describe('provider capabilities', () => {
     (id) =>
       Effect.gen(function* () {
         const model = MODEL_CONFIGS[id];
-        const capabilities = yield* resolveCodexSubscriptionCapabilities(
-          hostStores(),
-          model,
-          false,
-        );
+        const capabilities = yield* chatgptConfig(model);
 
         expect(model.codexSubscription).toBe(true);
         expect(capabilities).toMatchObject({
           contextWindow: DEFAULT_INPUT_LIMIT + model.maxOutputTokens,
-          inputTokenLimit: DEFAULT_INPUT_LIMIT,
         });
       }),
   );
@@ -136,14 +127,7 @@ describe('provider capabilities', () => {
             }),
           );
 
-          expect(
-            yield* resolveCodexSubscriptionCapabilities(
-              hostStores(),
-              gpt55Config,
-              false,
-            ),
-          ).toMatchObject({
-            inputTokenLimit: 872_000,
+          expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
             contextWindow: 1_000_000,
           });
         }),
@@ -162,14 +146,8 @@ describe('provider capabilities', () => {
             }),
           );
 
-          expect(
-            yield* resolveCodexSubscriptionCapabilities(
-              hostStores(),
-              gpt55Config,
-              false,
-            ),
-          ).toMatchObject({
-            inputTokenLimit: DEFAULT_INPUT_LIMIT,
+          expect(yield* chatgptConfig(gpt55Config)).toMatchObject({
+            contextWindow: DEFAULT_INPUT_LIMIT + gpt55Config.maxOutputTokens,
           });
         }),
     );
@@ -177,13 +155,11 @@ describe('provider capabilities', () => {
 });
 
 describe('ChatGPT subscription model routing', () => {
-  function subscriptionCapabilities(useOpenRouter: boolean) {
-    return resolveCodexSubscriptionCapabilities(
-      hostStores(),
-      MODEL_CONFIGS.gpt55,
-      useOpenRouter,
+  const prospectiveRoute = () =>
+    withProcessServices(
+      testRuntime(),
+      readProspectiveUsageRoute(hostStores(), 'gpt55'),
     );
-  }
 
   it.effect(
     'keeps eligible OpenAI models on the direct API route when the preference is off',
@@ -191,7 +167,7 @@ describe('ChatGPT subscription model routing', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => installPlatform());
 
-        expect(yield* subscriptionCapabilities(false)).toBeNull();
+        expect(yield* prospectiveRoute()).toBeUndefined();
       }),
   );
 
@@ -201,13 +177,7 @@ describe('ChatGPT subscription model routing', () => {
         installSubscriptionPlatform({ useOpenRouter: true }),
       );
 
-      expect(yield* subscriptionCapabilities(true)).toBeNull();
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'gpt55'),
-        ),
-      ).toBe(false);
+      expect(yield* prospectiveRoute()).toBeUndefined();
     }),
   );
 
@@ -217,13 +187,7 @@ describe('ChatGPT subscription model routing', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => installSubscriptionPlatform());
 
-        expect(yield* subscriptionCapabilities(false)).not.toBeNull();
-        expect(
-          yield* withProcessServices(
-            testRuntime(),
-            isCodexSubscriptionActive(hostStores(), 'gpt55'),
-          ),
-        ).toBe(true);
+        expect(yield* prospectiveRoute()).toBe('chatgpt-subscription');
       }),
   );
 
@@ -233,12 +197,7 @@ describe('ChatGPT subscription model routing', () => {
         installSubscriptionPlatform({ signedIn: false }),
       );
 
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'gpt55'),
-        ),
-      ).toBe(false);
+      expect(yield* prospectiveRoute()).toBeUndefined();
     }),
   );
 
@@ -249,9 +208,9 @@ describe('ChatGPT subscription model routing', () => {
       expect(
         yield* withProcessServices(
           testRuntime(),
-          isCodexSubscriptionActive(hostStores(), 'unknown-subscription-model'),
+          readProspectiveUsageRoute(hostStores(), 'unknown-subscription-model'),
         ),
-      ).toBe(false);
+      ).toBeUndefined();
     }),
   );
 });

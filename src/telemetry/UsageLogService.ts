@@ -18,6 +18,7 @@ import {
 
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
+import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { UsageRoute } from '@shared/schemas';
@@ -39,7 +40,8 @@ import {
 import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
-const log = createLog('UsageLogService');
+const CHANNEL = 'UsageLogService';
+const log = createLog(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
@@ -240,14 +242,14 @@ class UsageLogServiceImpl {
     yield* Effect.addFinalizer(() => this.drainAndStop());
 
     if (isTelemetryDisabledByEnv()) {
-      log.info(
+      yield* Effect.logInfo(
         `Optional usage logging is disabled by the environment (${TELEMETRY_OPT_OUT_ENV_VARS.join(' / ')}); only plan-accounting rounds are reported`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
     }
 
-    log.debug(
+    yield* Effect.logDebug(
       `UsageLogService started (batchSize=${this.config.batchSize}, flushIntervalMs=${this.config.flushIntervalMs}, enabled=${this.config.enabled})`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
   });
 
   /** Queue one entry; `config` is the configuration of the workspace that
@@ -298,15 +300,14 @@ class UsageLogServiceImpl {
     while (this.retryBatch || this.queue.length > 0) {
       const batchSettled = yield* this.sendNextBatch().pipe(
         Effect.catchTag('UsageBatchUndelivered', (error) =>
-          Effect.sync(() => {
+          Effect.suspend(() => {
             const requeued = error.requeue?.entries.length ?? 0;
             if (error.requeue) this.retryBatch = error.requeue;
             const requeuedMessage =
               requeued > 0 ? `; requeued ${requeued} entries` : '';
-            log.warn(
+            return Effect.logWarning(
               `Failed to send usage batch${requeuedMessage}: ${error.reason}`,
-            );
-            return false;
+            ).pipe(withLogChannel(CHANNEL), Effect.as(false));
           }),
         ),
       );
@@ -332,9 +333,9 @@ class UsageLogServiceImpl {
       );
     },
     Effect.catchDefect((defect) =>
-      Effect.sync(() => {
-        log.error(`Usage flush failed: ${toErrorMessage(defect)}`);
-      }),
+      Effect.logError(`Usage flush failed: ${toErrorMessage(defect)}`).pipe(
+        withLogChannel(CHANNEL),
+      ),
     ),
   );
 
@@ -346,7 +347,9 @@ class UsageLogServiceImpl {
         (auth) => auth.accessToken,
       );
       if (!token) {
-        log.debug('Skipping flush - user not authenticated');
+        yield* Effect.logDebug('Skipping flush - user not authenticated').pipe(
+          withLogChannel(CHANNEL),
+        );
         return false;
       }
 
@@ -377,44 +380,49 @@ class UsageLogServiceImpl {
       );
       const dropped = batch.entries.length - kept.length;
       if (dropped > 0) {
-        log.debug(
+        yield* Effect.logDebug(
           `Usage logging is disabled; dropped ${dropped} optional ${dropped === 1 ? 'entry' : 'entries'} without sending`,
-        );
+        ).pipe(withLogChannel(CHANNEL));
       }
       if (kept.length === 0) {
         return true;
       }
       batch = { ...batch, entries: kept };
 
-      log.debug(
+      yield* Effect.logDebug(
         `Flushing ${batch.entries.length} entries (batch: ${batch.batchId})`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
 
       const response = yield* this.sendBatch(batch, token);
       if (!response.success) {
-        this.reportPermanentRejection(
+        yield* this.reportPermanentRejection(
           batch,
           response.error ?? 'Usage batch was rejected',
         );
         return true;
       }
-      log.debug(
+      yield* Effect.logDebug(
         `Batch ${batch.batchId} sent successfully (${response.accepted} entries)`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
       return true;
     },
   );
 
-  private reportPermanentRejection(batch: RetryBatch, reason: string): void {
-    log.error(
+  private reportPermanentRejection(
+    batch: RetryBatch,
+    reason: string,
+  ): Effect.Effect<void> {
+    return Effect.logError(
       `Usage batch ${batch.batchId} was permanently rejected; discarded ${batch.entries.length} entries so later batches can continue`,
-      {
+    ).pipe(
+      Effect.annotateLogs({
         data: {
           batchId: batch.batchId,
           entryCount: batch.entries.length,
           reason,
         },
-      },
+      }),
+      withLogChannel(CHANNEL),
     );
   }
 
@@ -518,9 +526,9 @@ class UsageLogServiceImpl {
       const warning = yield* Effect.forkChild(
         Effect.sleep(Duration.millis(DISPOSE_WARNING_TIMEOUT_MS)).pipe(
           Effect.andThen(
-            Effect.sync(() => {
-              log.warn('Dispose timeout waiting for in-flight flush');
-            }),
+            Effect.logWarning(
+              'Dispose timeout waiting for in-flight flush',
+            ).pipe(withLogChannel(CHANNEL)),
           ),
         ),
       );
@@ -530,7 +538,9 @@ class UsageLogServiceImpl {
 
       this.triggers = null;
       this.backgroundFlushActive = false;
-      log.debug('UsageLogService drained');
+      yield* Effect.logDebug('UsageLogService drained').pipe(
+        withLogChannel(CHANNEL),
+      );
     },
   );
 }

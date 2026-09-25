@@ -9,7 +9,7 @@ import {
 import { buildFileAttachment } from '@tools/attachments';
 import { formatToolOutput } from '@tools/formatting';
 import {
-  resolveAndFormat,
+  resolveToolPath,
   type WorkspacePathResolution,
 } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
@@ -61,12 +61,10 @@ export const resolveLatexFile = Effect.fn('tools.resolveLatexFile')(function* (
 > {
   const call = yield* ToolCall;
   const fs = yield* FileSystem.FileSystem;
-  const { path, display } = yield* resolveAndFormat(
-    call.roots,
-    call.roots.workspace,
-    texPath,
-    call.workingDirectory,
-  ).pipe(Effect.mapError(ensureError));
+  const path = yield* resolveToolPath(call, texPath).pipe(
+    Effect.mapError(ensureError),
+  );
+  const { display } = path;
   const exists = yield* entryExists(fs, path.absolute);
   if (!exists) {
     return yield* Effect.fail(

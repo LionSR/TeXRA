@@ -36,7 +36,6 @@ import {
   FoldEventSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
-  STREAM_LOG_ENTRY_TYPES,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -47,7 +46,11 @@ import {
   emptyHostSnapshot,
   type HostSnapshot,
 } from '@shared/session/hostSnapshot';
-import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
+import type {
+  DownMessage,
+  EventsFrame,
+  Subscribe,
+} from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
 import {
   createFakeWorkspaceRoots,
@@ -55,6 +58,7 @@ import {
 } from '@test/support/FakePlatform';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createTestSession } from '@test/support/sessionTestUtils';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 function textTail(
   text: string,
@@ -142,6 +146,7 @@ const runtimeGraph = (
     ),
     Layer.provide(Layer.succeed(WorkspaceRoots)(roots)),
     Layer.provide(ProcessIdentity.layer(SELF)),
+    Layer.provide(nodePlatformLayer),
   );
 };
 
@@ -260,6 +265,41 @@ describe('session framer', () => {
           );
         }),
       );
+    }).pipe(Effect.provide(fakeProcessServices())),
+  );
+  it.live('holds host actions until the port first subscribes', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      yield* Effect.addFinalizer(() => session.dispose());
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed: () => {},
+        handleHostRequest: () =>
+          Effect.die(new Error('No host request is expected.')),
+      });
+      const sent: DownMessage[] = [];
+      const port = yield* bridge.attach({
+        id: PORT,
+        send: (message) => sent.push(message),
+      });
+      const actions = () =>
+        sent.flatMap((message) =>
+          message.kind === 'surface.action' ? [message.action.kind] : [],
+        );
+
+      // Posted while the surface's document loads: nothing reaches it yet.
+      bridge.surfaceAction({ kind: 'selectNew' });
+      port.surfaceAction({ kind: 'showSessions', runId: RUN });
+      expect(sent).toEqual([]);
+
+      const live = { ...subscribe, session: session.roots.storage };
+      yield* port.receive(live);
+      expect(actions()).toEqual(['selectNew', 'showSessions']);
+
+      // Live from here on, and a resubscribe replays nothing.
+      port.surfaceAction({ kind: 'submit' });
+      yield* port.receive({ ...live, generation: 2 });
+      expect(actions()).toEqual(['selectNew', 'showSessions', 'submit']);
     }).pipe(Effect.provide(fakeProcessServices())),
   );
   it.live('closes a superseded port before registering its replacement', () =>

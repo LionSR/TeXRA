@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import type { SubscriptionUsageWindow } from '@shared/schemas';
-
 import {
   asObject,
   fetchSubscriptionUsage,
@@ -12,6 +11,8 @@ import {
   type JsonObject,
   type ParsedSubscriptionUsage,
 } from './subscriptionUsageParsing';
+import type { Cause } from 'effect';
+import type { HttpClient, HttpClientError } from 'effect/unstable/http';
 
 const CHATGPT_USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
 
@@ -124,8 +125,12 @@ export function parseChatGptUsage(
 
 export function fetchChatGptUsage(
   credential: ChatGptUsageCredential,
-  signal: AbortSignal,
-): Effect.Effect<ParsedSubscriptionUsage, unknown> {
+  timeoutMs: number,
+): Effect.Effect<
+  ParsedSubscriptionUsage,
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
+> {
   const headers: Record<string, string> = {
     Accept: 'application/json',
     Authorization: `Bearer ${credential.accessToken}`,
@@ -135,7 +140,7 @@ export function fetchChatGptUsage(
     headers['ChatGPT-Account-Id'] = credential.accountId;
   }
   return Effect.map(
-    fetchSubscriptionUsage({ url: CHATGPT_USAGE_URL, headers, signal }),
+    fetchSubscriptionUsage({ url: CHATGPT_USAGE_URL, headers, timeoutMs }),
     (body) => parseChatGptUsage(body),
   );
 }

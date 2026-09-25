@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
-import { resolveRouteEndpoint } from '@agent/runtime/run/routeEndpoint';
 import {
   CODEX_BACKEND_BASE_URL,
   CodexAuthError,
@@ -17,23 +16,18 @@ import {
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import {
   copilotRouteUnavailableReason,
   prefersCopilotRoute,
 } from '@model/copilotRouting';
-import {
-  codexBackendModelId,
-  resolveCodexSubscriptionCapabilities,
-  resolveXaiSubscriptionCapabilities,
-} from '@model/providerCapabilities';
-import { isCodexSignedIn } from '@model/codex/codexSubscription';
-import { isXaiSignedIn } from '@model/xai/xaiSubscription';
-import {
-  resolveDirectModelApiKeyProvider,
-  shouldRouteModelThroughOpenRouter,
-} from '@model/openRouterRouting';
+import { codexBackendModelId } from '@model/providerCapabilities';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
+import {
+  decideModelRoute,
+  readRouteFacts,
+  type ModelRoute,
+} from '@model/modelRoute';
+import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
@@ -42,73 +36,17 @@ import type {
   UsageRoute,
 } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { ensureError } from '@utils/errors/errorMessage';
-import { getUseOpenRouter } from '@utils/config/providerConfig';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';
-const log = createLog(CHANNEL);
 
 /**
  * The Grok subscription's OAuth token is accepted by xAI's own API surface
  * only; it is never sent to a dashboard custom endpoint or OpenRouter.
  */
 const XAI_SUBSCRIPTION_ENDPOINT = 'https://api.x.ai/v1';
-
-// Record (not Map) so TypeScript enforces exhaustiveness over ModelProvider.
-// A new enum value in llm-zoo without an entry here will fail typecheck.
-const PROVIDER_COMPATIBILITY_KEYS: Record<
-  ModelProvider,
-  ModelCompatibilityKey
-> = {
-  [ModelProvider.ANTHROPIC]: 'Anthropic',
-  [ModelProvider.OPENAI]: 'OpenAI',
-  [ModelProvider.GOOGLE]: 'GoogleInteractions',
-  [ModelProvider.DEEPSEEK]: 'DeepSeek',
-  [ModelProvider.XAI]: 'XAI',
-  [ModelProvider.MOONSHOT]: 'Kimi',
-  [ModelProvider.DASHSCOPE]: 'DashScope',
-  [ModelProvider.MINIMAX]: 'MiniMax',
-  [ModelProvider.GLM]: 'GLM',
-  [ModelProvider.META]: 'Meta',
-  [ModelProvider.OTHERS]: 'OpenRouterNative',
-  [ModelProvider.COPILOT]: 'VscodeLm',
-};
-
-/**
- * Check if OpenAI Responses API should be used for this config. Talking to
- * OpenAI directly always means Responses: the OpenAI-direct Chat Completions
- * route is gone. The only non-Responses OpenAI route left is OpenRouter,
- * which proxies these models on /v1/chat/completions and rejects
- * Responses-shaped payloads — so an OpenRouter-only config, or any config
- * under the global OpenRouter preference, falls through to
- * {@link shouldRouteModelThroughOpenRouter} below. A model that requires
- * Responses has no OpenRouter route at all and stays on Responses.
- */
-function shouldUseResponsesAPI(
-  config: ModelConfig,
-  useOpenRouter: boolean,
-): boolean {
-  if (config.provider !== ModelProvider.OPENAI || config.openRouterOnly) {
-    return false;
-  }
-  return config.requiresResponsesAPI === true || !useOpenRouter;
-}
-
-/**
- * Single owner for the "prefer short model names" preference read. Read live
- * (no caching) so a mid-session settings change is honored on the next
- * binding, matching the other `globalState` reads in this module.
- */
-const getPreferShortModelNames = Effect.fn('getPreferShortModelNames')(
-  function* (globalState: StateStore) {
-    return yield* globalState.get<boolean>(
-      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      false,
-    );
-  },
-);
 
 /** The API-key credential and endpoint of one model route, resolved together. */
 export interface ApiKeyRouteCredential {
@@ -120,12 +58,13 @@ export interface ApiKeyRouteCredential {
 }
 
 /**
- * An OAuth subscription session standing in for the provider's API key: the
- * ChatGPT (Codex) session on the Responses protocol, the Grok session on the
- * xAI Chat protocol. The token is the bearer the package sends; `@auth/*`
- * owns its refresh, so a binding always carries a fresh one.
+ * What a subscription route reads off its signed-in session: the ChatGPT
+ * (Codex) session on the Responses protocol, the Grok session on the xAI Chat
+ * protocol, each with the endpoint its token is accepted at. The token is the
+ * bearer the package sends; `@auth/*` owns its refresh, so a binding always
+ * carries a fresh one.
  */
-type SubscriptionRouteCredential =
+type SubscriptionSession =
   | {
       readonly route: 'chatgpt-subscription';
       readonly accessToken: string;
@@ -136,16 +75,19 @@ type SubscriptionRouteCredential =
       /** The Codex backend's bare model id, which differs from the API's. */
       readonly requestedModel: string;
       readonly endpoint: string;
-      readonly provider: ApiProvider;
       readonly usageRoute: 'chatgpt-subscription';
     }
   | {
       readonly route: 'xai-subscription';
       readonly accessToken: string;
       readonly endpoint: string;
-      readonly provider: ApiProvider;
       readonly usageRoute: 'xai-subscription';
     };
+
+/** An OAuth subscription session standing in for the provider's API key. */
+type SubscriptionRouteCredential = SubscriptionSession & {
+  readonly provider: ApiProvider;
+};
 
 export type RouteCredential =
   ApiKeyRouteCredential | SubscriptionRouteCredential;
@@ -162,207 +104,233 @@ export function routeBearer(credential: RouteCredential): string {
   }
 }
 
-/** The route a subscription-eligible model binds under, with its own config. */
-interface SubscriptionRoute {
-  readonly credential: SubscriptionRouteCredential;
-  readonly config: ModelConfig;
+/**
+ * A subscription session failure the user must act on, minted as the loop's
+ * own error: the "sign in again, or turn off the preference" instruction, not
+ * a raw auth error. Anything else keeps its identity.
+ */
+function subscriptionAuthFailure<E extends Error>(
+  error: Error,
+  AuthError: abstract new (...args: never[]) => E,
+  format: (error: E) => string,
+): Error {
+  return error instanceof AuthError
+    ? new AgentError(format(error), { cause: error })
+    : error;
+}
+
+/** How one OAuth subscription route reads its signed-in session. */
+interface SubscriptionRouteRow {
+  /** The API key the subscription stands in for. */
+  readonly provider: ApiProvider;
+  /**
+   * The session read, the only refresh on this path. Its failure passes
+   * through `authFailure`, so a refresh that fails reaches the user as the
+   * "sign in again, or turn off the preference" instruction.
+   */
+  readonly readSession: (
+    secrets: PlatformSecrets,
+    config: ModelConfig,
+  ) => Effect.Effect<SubscriptionSession, Error, HttpClient.HttpClient>;
+  readonly authFailure: (error: Error) => Error;
 }
 
 /**
- * A ChatGPT session failure the user must act on, minted as the loop's own
- * error: the "sign in again, or turn off the preference" instruction, not a
- * raw auth error. Anything else keeps its identity through `ensureError`,
- * which is what the caller's own promise boundary did with it.
+ * The subscription routes, keyed by the route kind `decideModelRoute`
+ * decided. Eligibility, the preference and the sign-in are the decision's;
+ * a row only reads the session.
+ *
+ * Each binding calls through rather than capturing the imported value: the
+ * table is built at module load, and a suite that partially mocks
+ * `@auth/*` must still load this one.
  */
-const codexAuthFailure = (error: unknown): Error =>
-  error instanceof CodexAuthError
-    ? new AgentError(formatCodexAuthUnavailableMessage(error), { cause: error })
-    : ensureError(error);
+const SUBSCRIPTION_ROUTES: {
+  readonly [K in SubscriptionSession['route']]: SubscriptionRouteRow;
+} = {
+  'chatgpt-subscription': {
+    provider: 'openai',
+    readSession: (secrets, config) =>
+      Effect.gen(function* () {
+        const coordinator = codexCoordinator(secrets);
+        const accessToken = yield* coordinator.getFreshAccessToken();
+        const accountId = (yield* coordinator.getAccountId()) ?? null;
+        const plan = yield* coordinator.getPlanType();
+        return {
+          route: 'chatgpt-subscription',
+          accessToken,
+          accountId,
+          plan,
+          requestedModel: codexBackendModelId(config),
+          endpoint: CODEX_BACKEND_BASE_URL,
+          usageRoute: 'chatgpt-subscription',
+        } as const;
+      }),
+    authFailure: (error) =>
+      subscriptionAuthFailure(
+        error,
+        CodexAuthError,
+        formatCodexAuthUnavailableMessage,
+      ),
+  },
+  'xai-subscription': {
+    provider: 'xai',
+    readSession: (secrets) =>
+      Effect.map(
+        xaiCoordinator(secrets).getFreshAccessToken(),
+        (accessToken) =>
+          ({
+            route: 'xai-subscription',
+            accessToken,
+            endpoint: XAI_SUBSCRIPTION_ENDPOINT,
+            usageRoute: 'xai-subscription',
+          }) as const,
+      ),
+    authFailure: (error) =>
+      subscriptionAuthFailure(
+        error,
+        XaiAuthError,
+        formatXaiAuthUnavailableMessage,
+      ),
+  },
+};
 
 /**
- * The subscription route a model binds under, if the user prefers one, the
- * model is eligible on it, and a session is signed in. Decided above
- * {@link resolveRouteCredential}: an eligible model with the preference on
- * but no signed-in session falls back to the API key, and says so, because
- * the preference is a preference (the model list already shows which route
- * serves the model), while a signed-in session that fails to refresh is a
- * failure and surfaces as one. The returned config is the route's own: the
- * subscription's context ceiling and its zero per-token price. A run that
- * declined this route (a retry the user answered with their own API key)
- * never reaches it, whatever the stored preference says.
+ * The OAuth session a subscription route bills. The decision already found
+ * the preference on, the model eligible and a session signed in, so this
+ * only reads the session; a signed-in session that fails to refresh is a
+ * failure and surfaces as one.
  */
 export const resolveSubscriptionCredential = Effect.fn(
   'resolveSubscriptionCredential',
 )(function* (
-  stores: SettingsStores,
   config: ModelConfig,
-  useOpenRouter: boolean,
+  route: Extract<ModelRoute, { kind: SubscriptionSession['route'] }>,
   secrets: PlatformSecrets,
-  declinedRoutes: readonly DeclinableUsageRoute[] = [],
-): Effect.fn.Return<SubscriptionRoute | null, Error, HttpClient.HttpClient> {
-  const provider = resolveDirectModelApiKeyProvider(config);
-  if (provider === undefined) return null;
-  if (config.provider === ModelProvider.OPENAI) {
-    if (declinedRoutes.includes('chatgpt-subscription')) return null;
-    // The capability read consults the subscription preference and
-    // context-window setting of the workspace the caller handed in; a host
-    // read that throws stays in the typed channel.
-    const profile = yield* resolveCodexSubscriptionCapabilities(
-      stores,
-      config,
-      useOpenRouter,
-    );
-    if (profile === null) return null;
-    const signedIn = yield* isCodexSignedIn();
-    if (!signedIn) {
-      yield* Effect.logWarning(
-        `Prefer ChatGPT subscription is on but no ChatGPT session is signed in: model ${config.name} bills the OpenAI API key.`,
-      ).pipe(withLogChannel(CHANNEL));
-      return null;
-    }
-    const coordinator = codexCoordinator(secrets);
-    // The session read is the only refresh on this path: a refresh that fails
-    // must reach the user with the "sign in again, or turn off the
-    // preference" instruction, not as a raw auth error.
-    const session = yield* Effect.gen(function* () {
-      const accessToken = yield* coordinator.getFreshAccessToken();
-      const accountId = (yield* coordinator.getAccountId()) ?? null;
-      const plan = yield* coordinator.getPlanType();
-      return { accessToken, accountId, plan };
-    }).pipe(Effect.mapError(codexAuthFailure));
-    return {
-      credential: {
-        route: 'chatgpt-subscription',
-        accessToken: session.accessToken,
-        accountId: session.accountId,
-        plan: session.plan,
-        requestedModel: codexBackendModelId(config),
-        endpoint: CODEX_BACKEND_BASE_URL,
-        provider,
-        usageRoute: 'chatgpt-subscription',
-      },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-        // Whether this backend takes input files is the route's fact, not
-        // the base model's, and the ChatGPT-subscription backend takes none.
-        // The binding's PDF admission reads this, so the route degrades a PDF
-        // the way any route without native PDF does instead of sending a
-        // shape the backend rejects.
-        capabilities: {
-          ...config.capabilities,
-          supportsNativePdf: false,
-        },
-      },
-    };
-  }
-  if (config.provider === ModelProvider.XAI) {
-    if (declinedRoutes.includes('xai-subscription')) return null;
-    const profile = yield* resolveXaiSubscriptionCapabilities(
-      stores,
-      config,
-      useOpenRouter,
-    );
-    if (profile === null) return null;
-    const signedIn = yield* isXaiSignedIn();
-    if (!signedIn) {
-      yield* Effect.logWarning(
-        `Prefer Grok subscription is on but no Grok session is signed in: model ${config.name} bills the xAI API key.`,
-      ).pipe(withLogChannel(CHANNEL));
-      return null;
-    }
-    const accessToken = yield* xaiCoordinator(secrets)
-      .getFreshAccessToken()
-      .pipe(
-        Effect.mapError((error) =>
-          error instanceof XaiAuthError
-            ? new AgentError(formatXaiAuthUnavailableMessage(error), {
-                cause: error,
-              })
-            : ensureError(error),
-        ),
-      );
-    return {
-      credential: {
-        route: 'xai-subscription',
-        accessToken,
-        endpoint: XAI_SUBSCRIPTION_ENDPOINT,
-        provider,
-        usageRoute: 'xai-subscription',
-      },
-      config: {
-        ...config,
-        contextWindow: profile.contextWindow,
-        inputPrice: profile.inputPrice,
-        outputPrice: profile.outputPrice,
-      },
-    };
-  }
-  return null;
+): Effect.fn.Return<SubscriptionRouteCredential, Error, HttpClient.HttpClient> {
+  const row = SUBSCRIPTION_ROUTES[route.kind];
+  const session = yield* row
+    .readSession(secrets, config)
+    .pipe(Effect.mapError(row.authFailure));
+  return { ...session, provider: row.provider };
 });
 
 /**
- * Resolve the credential and endpoint the run loop binds a model under: the
- * direct API key of the model's provider, or the OpenRouter key when the
- * route goes through OpenRouter. The one producer of the missing-credential
- * fact the run lifecycle classifies for the loop, so the failure carries the
- * typed marker rather than a message pattern. Lives beside the route resolver
- * above so route and credential are decided in one place. `secrets` is the
- * process secret store the caller already holds.
- *
- * A program, because the key read behind it is one ({@link getApiKey}). The
- * endpoint resolution is a synchronous host read — a per-provider dashboard
- * endpoint, the China-region switch — over `stores`, the setting slots of the
- * workspace the caller holds.
+ * Resolve the key and endpoint of an API-key route: the provider key the
+ * decision named, or the OpenRouter key. The one producer of the
+ * missing-credential fact the run lifecycle classifies for the loop, so the
+ * failure carries the typed marker rather than a message pattern. `secrets`
+ * is the process secret store the caller already holds; the endpoint is read
+ * over `stores`, the setting slots of the workspace the caller holds.
  */
 export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
   function* (
     stores: SettingsStores,
     config: ModelConfig,
-    useOpenRouter: boolean,
+    route: Extract<
+      ModelRoute,
+      { kind: 'openrouter' | 'api-key' | 'no-api-key' }
+    >,
     secrets: PlatformSecrets,
-    declinedRoutes?: readonly DeclinableUsageRoute[],
   ) {
-    const provider = useOpenRouter
-      ? 'openRouter'
-      : resolveDirectModelApiKeyProvider(config);
-    if (!provider) {
+    if (route.kind === 'no-api-key') {
       return yield* Effect.fail(
         new Error(`Model "${config.name}" has no direct API-key provider.`),
       );
     }
-    const apiKey = yield* Effect.mapBoth(getApiKey(secrets, provider), {
-      onFailure: (cause) => {
+    const provider =
+      route.kind === 'openrouter' ? 'openRouter' : route.provider;
+    // An unreadable key store fails as itself, not as a missing key.
+    const apiKey = yield* getApiKey(secrets, provider).pipe(
+      Effect.map(exposeApiKey),
+      Effect.catchTag('ApiKeyMissing', (cause) => {
         const error = new Error(
-          useOpenRouter
+          route.kind === 'openrouter'
             ? 'Missing OpenRouter API key. Set an OpenRouter API key in settings.'
             : `Missing API key for ${provider}. Set a provider API key in settings.`,
           { cause },
         );
         attachMissingApiKeyError(error);
-        return error;
-      },
-      onSuccess: exposeApiKey,
-    });
-    const endpoint = yield* resolveRouteEndpoint(
-      stores,
-      config,
-      useOpenRouter,
-      declinedRoutes,
+        return Effect.fail(error);
+      }),
     );
     return {
       apiKey,
-      endpoint: endpoint.baseUrl,
+      endpoint: yield* resolveRouteEndpoint(stores, config, route),
       provider,
-      route: useOpenRouter ? 'openrouter' : 'api-key',
-      usageRoute:
-        endpoint.usageRoute ??
-        (provider === 'kimiCode' ? 'kimi-code-subscription' : 'api-key'),
+      route: route.kind,
+      usageRoute: route.kind === 'openrouter' ? 'api-key' : route.usageRoute,
     } satisfies ApiKeyRouteCredential;
   },
 );
+
+/** The routes a binding can take: the unsupported one fails in resolution. */
+export type BindableRoute = Exclude<
+  ModelRoute,
+  { kind: 'openrouter-unsupported' }
+>;
+
+/**
+ * The route `config` binds under, decided once over this workspace's facts.
+ * A resumed conversation's persisted format constrains the facts it answers
+ * for: its OpenRouter, Copilot and validation choice are the format's, and a
+ * subscription serves it only on the protocol the format names, so turning a
+ * preference on since cannot silently move the conversation's billing. An
+ * own-key quota fallback declines the Copilot preference. The two routes
+ * nothing can bind fail here as the user's instruction: a mode-selected model
+ * on OpenRouter, and a preferred Copilot route the editor cannot serve now.
+ */
+export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
+  stores: SettingsStores & {
+    readonly secrets: PlatformSecrets;
+    readonly globalState: StateStore;
+  },
+  config: ModelConfig,
+  options: {
+    readonly compatibilityKey?: ModelCompatibilityKey | null;
+    readonly ownApiKeyFallback?: boolean;
+    readonly declinedRoutes?: readonly DeclinableUsageRoute[];
+  } = {},
+): Effect.fn.Return<BindableRoute, Error> {
+  const host = yield* readRouteFacts(stores, options.declinedRoutes);
+  const key = options.compatibilityKey;
+  const route = decideModelRoute(
+    config,
+    key == null
+      ? {
+          ...host,
+          validation: yield* shouldUseInternalValidationModel(),
+          prefersCopilot:
+            !options.ownApiKeyFallback &&
+            (yield* prefersCopilotRoute(config.name, stores.globalState)),
+        }
+      : {
+          ...host,
+          validation: key === 'Validation',
+          prefersCopilot: key === 'VscodeLm',
+          useOpenRouter: key === 'OpenRouterNative',
+          chatgptSubscription:
+            host.chatgptSubscription && key === 'OpenAIResponse',
+          xaiSubscription: host.xaiSubscription && key === 'XAI',
+        },
+  );
+  if (route.kind === 'openrouter-unsupported') {
+    return yield* Effect.fail(
+      new Error(
+        `Model ${config.name} requires reasoning mode ${config.capabilities.reasoningMode}, which OpenRouter does not support. Disable OpenRouter and use the provider API directly.`,
+      ),
+    );
+  }
+  if (route.kind === 'copilot' && key == null) {
+    const unavailableReason = yield* copilotRouteUnavailableReason(
+      config.name,
+      stores.globalState,
+    );
+    if (unavailableReason) {
+      return yield* Effect.fail(new AgentError(unavailableReason));
+    }
+  }
+  return route;
+});
 
 /**
  * The config a binding sends on the wire under the user's "prefer short model
@@ -375,94 +343,63 @@ export const withShortModelName = Effect.fn('withShortModelName')(function* (
   config: ModelConfig,
   globalState: StateStore,
 ) {
-  const resolved = applyShortModelNamePreference(
-    config,
-    yield* getPreferShortModelNames(globalState),
-  );
-  if (resolved !== config) {
-    log.debug(
-      `Using short model name for ${config.name}: ${config.fullName} → ${resolved.fullName}`,
-    );
-  }
-  return resolved;
-});
-
-function applyShortModelNamePreference(
-  config: ModelConfig,
-  preferShortModelNames: boolean,
-): ModelConfig {
-  if (!preferShortModelNames) return config;
-  // Mode-selected registry entries share another entry's wire id. Their
-  // display-oriented shortName is not an API model identifier.
-  if (config.capabilities.reasoningMode !== undefined) return config;
   const short = config.shortName;
-  if (!short || short === config.fullName) return config;
-  return { ...config, fullName: short };
-}
-
-/** Returns the conversation-history format this model binds under. */
-export const resolveModelCompatibilityKey = Effect.fn(
-  'resolveModelCompatibilityKey',
-)(function* (
-  originalConfig: ModelConfig,
-  globalState: StateStore,
-  useOpenRouter: boolean,
-  ownApiKeyFallback = false,
-) {
-  if (shouldUseInternalValidationModel()) {
-    return 'Validation';
-  }
-
-  // Editor-supplied models cannot be proxied through OpenRouter. Both Copilot
-  // routes — the per-model route preference on a canonical base model, and a
-  // config whose provider is Copilot itself — must win before the global
-  // OpenRouter preference below. A preference is a hard route choice: when
-  // the editor cannot serve it right now, report the route state instead of
-  // silently consuming a provider key or subscription (#9635).
   if (
-    !ownApiKeyFallback &&
-    (yield* prefersCopilotRoute(originalConfig.name, globalState))
+    // Read live so a mid-session change is honored on the next binding.
+    !(yield* globalState.get<boolean>(
+      GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
+      false,
+    )) ||
+    // Mode-selected registry entries share another entry's wire id. Their
+    // display-oriented shortName is not an API model identifier.
+    config.capabilities.reasoningMode !== undefined ||
+    !short ||
+    short === config.fullName
   ) {
-    const unavailableReason = yield* copilotRouteUnavailableReason(
-      originalConfig.name,
-      globalState,
-    );
-    if (unavailableReason)
-      return yield* Effect.fail(new AgentError(unavailableReason));
-    return 'VscodeLm';
+    return config;
   }
-  if (originalConfig.provider === ModelProvider.COPILOT) {
-    return 'VscodeLm';
-  }
-
-  // Re-application is identity on an already-shortened config, so the live
-  // `bindModel` path can hand this its own resolved config.
-  const config = applyShortModelNamePreference(
-    originalConfig,
-    yield* getPreferShortModelNames(globalState),
-  );
-  if (shouldUseResponsesAPI(config, useOpenRouter)) {
-    return 'OpenAIResponse';
-  }
-  if (shouldRouteModelThroughOpenRouter(config, useOpenRouter)) {
-    return 'OpenRouterNative';
-  }
-  return providerCompatibilityKey(config.provider);
+  yield* Effect.logDebug(
+    `Using short model name for ${config.name}: ${config.fullName} → ${short}`,
+  ).pipe(withLogChannel(CHANNEL));
+  return { ...config, fullName: short };
 });
 
 /**
- * Guarded route-table read. The table is exhaustive over `ModelProvider`, so a
- * miss means a provider string from outside the enum (stale registry entry or
+ * The conversation-history format a route binds under. Talking to OpenAI
+ * directly always means Responses (the OpenAI-direct Chat Completions route
+ * is gone); OpenRouter proxies on its own chat format.
+ */
+export function routeCompatibilityKey(
+  config: ModelConfig,
+  route: BindableRoute,
+): Effect.Effect<ModelCompatibilityKey | undefined> {
+  switch (route.kind) {
+    case 'validation':
+      return Effect.succeed('Validation');
+    case 'copilot':
+      return Effect.succeed('VscodeLm');
+    case 'openrouter':
+      return Effect.succeed('OpenRouterNative');
+    default:
+      return config.provider === ModelProvider.OPENAI && !config.openRouterOnly
+        ? Effect.succeed('OpenAIResponse')
+        : providerCompatibilityKey(config.provider);
+  }
+}
+
+/**
+ * Guarded plugin read. The provider plugin manifest gives every
+ * `ModelProvider` a compatibility key (checked at compile time), so a miss
+ * means a provider string from outside the enum (stale registry entry or
  * persisted config). Report it here instead of crashing on the property
  * access; the caller turns the missing route into a named failure.
  */
 function providerCompatibilityKey(
   provider: ModelProvider,
-): ModelCompatibilityKey | undefined {
-  const key = PROVIDER_COMPATIBILITY_KEYS[provider];
-  if (!key) {
-    log.warn(`No model route is registered for provider ${provider}`);
-    return undefined;
-  }
-  return key;
+): Effect.Effect<ModelCompatibilityKey | undefined> {
+  const key = findModelProviderPlugin(provider)?.compatibilityKey;
+  if (key) return Effect.succeed(key);
+  return Effect.logWarning(
+    `No model route is registered for provider ${provider}`,
+  ).pipe(withLogChannel(CHANNEL), Effect.as(undefined));
 }

@@ -256,6 +256,12 @@ for a second purpose without checking that the exit still holds. Treating
 it; the exits above are what happens if a module is withdrawn, not a system
 maintained in parallel.
 
+**Amendment (owner decision, 2026-09-24; plugin architecture).** Effect
+unstable modules are allowed for the plugin work. `effect/unstable/process` is
+no longer type-only: the MCP plugin (#13092) spawns its stdio servers through
+it at runtime (`src/tools/mcp/mcpServer.ts`). The exit named in the table is
+unchanged. See the [plugin architecture note](./2026-09-24-plugin-architecture.md).
+
 ## Per-session `LayerMap`, per-run `Layer.effect`: decision 8's "one provide at the process entry" is amended (ruled 2026-09-18)
 
 **Question.** Decision 8 of the
@@ -284,6 +290,10 @@ decision 8 and §8.1 were in tension and §8.1 wins.
 satisfy a literal reading of decision 8. A fourth lifetime without a carrier
 row in §8.1. Reintroducing a process-global lookup for anything a session or
 run layer already provides.
+
+**Amendment (2026-09-23).** A fourth lifetime, the composition, now has its
+carrier row in §8.1: a `Compositions` `LayerMap` entry keyed by composition
+hash, held by the runs that pinned it (see the composition ruling below).
 
 ## The four permanent `AbortController` residents (ruled 2026-09-18; named in the ratchet by [#12700](https://github.com/LionSR/TeXRA/pull/12700))
 
@@ -636,6 +646,18 @@ contract.
 and implementation modules, as part of a simplification, refactor or
 consolidation lane. That change needs its own owner decision and its own PR.
 
+**Amendment (owner decision, 2026-09-23; "tools as data" PR).** The owner
+lifted this freeze for the plugin architecture: the SDK tool contract may
+change, and `definition.ts`, `define.ts` and `packages/agent/src/index.ts` are
+open to that work. Net-negative LOC is not the gate for this line of work. The
+first change under the amendment makes `defineTool` return a plain tool object
+carrying `execute` instead of a class to subclass: `BaseTool`
+(`src/tools/core/base.ts`) is deleted, every class-based tool and the
+structured-output terminal tool are tool objects, the registry lists them by
+value, and the SDK exports `DefinedTool` in place of `DefinedToolClass`. The
+freeze's premise still holds for unrelated lanes: a simplification lane does
+not retype the tool contract on its own initiative.
+
 ---
 
 ## The pandoc scratchpad conversion tier is retired; there is one conversion path (ruled 2026-09-19; [#12863](https://github.com/LionSR/TeXRA/pull/12863))
@@ -786,3 +808,73 @@ hosted web tools without BOTH the usage accounting folded through
 `providerUsage` and the `pause_turn` continuation protocol. Shipping a second
 web-search or web-fetch system beside the local `web_search` and `web_fetch`
 tools.
+
+## Post-auth cache invalidation is a permanent host boundary; only the sign-out catalog refresh is shared (recorded 2026-09-23; moved here from the deleted `src/auth/authFlowEffects.ts` by [#13054](https://github.com/LionSR/TeXRA/issues/13054))
+
+**Question.** Should the post-sign-in and post-sign-out cache-invalidation
+sequence that each host runs be collapsed into one shared coordinator?
+
+**Ruling.** No. The one shared step is the best-effort remote-agent-catalog
+refresh after sign-out, owned by `invalidateRemoteAgentsAfterSignOut`
+(`src/agent/index/agentRegistry.ts`), which absorbs every failure, defects
+included, so a stale local catalog never blocks sign-out. Everything around it
+stays per host.
+
+**Evidence.** The extension invalidates its long-lived model cache before
+publishing a session event. Desktop routes the same transition through its
+settings-IPC refresh chain because that chain also republishes model and
+profile state; agent-catalog publication normally follows there, except that
+team sign-in defers it to the team resolver, and the desktop session-change
+handler refreshes onboarding separately. Ordinary CLI login and logout
+commands exit without consuming model options; persistent CLI callers own
+their transition before reading credential-dependent state (onboarding
+invalidates its model-options cache, the orchestration launcher its model
+list, the chat TUI its subscription-preference views), and setup-agent team
+sign-in refreshes and rereads the remote catalog before applying the team.
+Collapsing these effects would either omit host refresh work or repeat it.
+
+**Forbids.** A shared post-auth invalidation coordinator across hosts, and a
+second guard around `invalidateRemoteAgentsAfterSignOut` at a call site.
+
+---
+
+## A run pins one composition from a process `Compositions` `LayerMap`; plugins may own layers (ruled 2026-09-23)
+
+**Question.** The plugin architecture (the owner decision of 2026-09-23 in the
+`defineTool` amendment above) makes a run's toolset a composition value
+(`src/tools/composition.ts`). How long does a composition live, who holds
+it, and where may a plugin's resources live?
+
+**Ruling.** A composition is a fourth lifetime, carried by one process
+service: `Compositions` (`src/tools/compositions.ts`), a `LayerMap` keyed by
+composition hash and provided with the `ToolRegistry` by
+`installProcessRuntime`. A run pins its composition in its own layer scope
+(`resolveAgentTools`, from `AgentRun`) and holds it for its lifetime; a
+delegated child (LLM delegation, workflow-script `agent()`, the native
+subagent strategy) joins the key its parent pinned, passed through the
+child's launch options beside the approval gate, instead of resolving the
+switches again. A resumed run resolves its own under the recorded-toolset
+rule. A composition whose switches differ builds beside the one in use; an
+entry closes when the last run holding it ends (reference counting, no idle
+retention); a failed build caches nothing. An entry holds the plugin table
+restricted to the composition's plugins and the services of those plugins'
+layers, which reach the run's tool calls. A plugin that owns resources
+declares `layer` in the manifest and its layer is one object in the
+`@tools/registry` table, so every entry builds through the map's one
+`MemoMap` and compositions that share a plugin share one build of its layer.
+
+**Evidence.** The prototype check built one plugin layer once across two
+compositions, rebuilt only the changed plugin on a new key, and closed each
+plugin layer with the last composition holding it. The toolsets offered by
+every shipped tool-use agent across hosts, switches, the approval gate and
+both families were unchanged by the move (the behavior dump in the PR that
+landed it). The Lean
+server pool stays a process service: its port differs by host (the VS Code
+bridge against the direct pool), the Tools dashboard and the lean4 probe read
+it outside any run, and the probe decides whether lean4 is in a composition
+at all, so the pool cannot live inside the entries it gates.
+
+**Forbids.** A second composition cache, an idle-time-to-live on the map
+standing in for the holders' count, `Layer.fresh` on a plugin layer, a
+plugin layer constructed per composition (its identity is what makes it
+shared), and a child re-resolving its parent's plugin set.

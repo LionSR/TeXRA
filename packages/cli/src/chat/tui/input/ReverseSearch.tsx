@@ -7,7 +7,8 @@
 import { useState } from 'react';
 import { Box, Text, useInput } from 'ink';
 
-import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
+import { isCtrlInput } from '@cli/tui/inputKeys';
+import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { COLOR_ACCENT } from '@cli/tui/ui/colors';
 import { BaseTextInput } from './BaseTextInput';
@@ -30,7 +31,7 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   const match = props.history.reverseFind(query, cursor);
 
   useInput((input, key) => {
-    if (isEscapeInput(input, key) || isCtrlInput(input, key, 'g')) {
+    if (isCtrlInput(input, key, 'g')) {
       props.onCancel();
       return;
     }
@@ -48,16 +49,22 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
   });
 
   return (
-    <Box
-      borderStyle="round"
-      borderColor={COLOR_ACCENT}
-      flexDirection="column"
-      paddingX={1}
+    <BorderedPanel
+      color={COLOR_ACCENT}
+      footer={
+        <KeyHints
+          hints={[
+            { key: 'Ctrl-R / ↑', action: 'older match' },
+            { key: '↓', action: 'reset' },
+          ]}
+        />
+      }
     >
       <Box>
         <Text color={COLOR_ACCENT}>(reverse-i-search)`</Text>
         <BaseTextInput
           value={query}
+          onEscape={props.onCancel}
           onChange={(value) => {
             setQuery(value);
             setCursor(undefined);
@@ -75,14 +82,6 @@ export function ReverseSearch(props: ReverseSearchProps): React.JSX.Element {
           <Text wrap="truncate-end">{match?.value ?? ''}</Text>
         </Box>
       </Box>
-      <Box marginTop={1}>
-        <KeyHints
-          hints={[
-            { key: 'Ctrl-R / ↑', action: 'older match' },
-            { key: '↓', action: 'reset' },
-          ]}
-        />
-      </Box>
-    </Box>
+    </BorderedPanel>
   );
 }

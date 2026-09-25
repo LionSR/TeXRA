@@ -1,24 +1,20 @@
 /**
- * The JSON stores a Node-family host (CLI, desktop, extension) opens before
- * `initPlatform`.
+ * The JSON stores a Node-family host (CLI, desktop, extension) opens while
+ * it composes its process.
  *
- * Every host resolves the same files from the same
- * {@link WorkspaceStorageProvider}, so the derivations live here once: which
- * store backs workspace configuration (the project `.texra/config.json` when
- * it is usable, the internal workspace store otherwise), where global
+ * Every host resolves the same files from the same storage root, so the
+ * derivations live here once: which
+ * store backs workspace configuration (the project `.texra/config.json`, or
+ * the internal workspace store when there is no workspace), where global
  * configuration lives. Workspace and global state are not here: they are rows
  * in the root's database (`@controllers/session/appStateStore`), not files.
  */
 
 // Node imports
-import { access, constants } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
 import { Effect } from 'effect';
-
-// Local imports - common
-import { isFileNotFoundError } from '@common/errors';
 
 // Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -29,121 +25,75 @@ import {
   TEXRA_CONFIG_FILE_NAME,
   workspaceTexraConfigPath,
 } from './nodeStorage';
+import {
+  resolveGlobalStoragePath,
+  resolveWorkspaceStoragePath,
+} from './workspaceStorage';
 import type { JsonConfigProviderOptions } from './jsonConfigProvider';
-import type { WorkspaceStorageProvider } from './workspaceStorage';
-
-/**
- * Whether a write through a `JsonStore` at `filePath` could succeed:
- * `flush()` creates the containing directory on demand and then writes a temp
- * file into it, so the deepest existing ancestor of `filePath` must be
- * writable and traversable. Answers false for e.g. a read-only checkout
- * without ever creating the directory in the project tree.
- */
-const canCreateOrWrite = Effect.fn('nodeStores.canCreateOrWrite')(function* (
-  filePath: string,
-) {
-  let dir = path.dirname(filePath);
-  // Walk up to the deepest existing ancestor; the workspace root exists, so
-  // this terminates after a step or two.
-  for (;;) {
-    const reachable = yield* Effect.tryPromise({
-      try: () => access(dir, constants.W_OK | constants.X_OK),
-      catch: (cause) => cause as NodeJS.ErrnoException,
-    }).pipe(
-      Effect.as(true),
-      Effect.catch((error) =>
-        Effect.succeed(isFileNotFoundError(error) ? undefined : false),
-      ),
-    );
-    if (reachable !== undefined) return reachable;
-    const parent = path.dirname(dir);
-    if (parent === dir) return false;
-    dir = parent;
-  }
-});
 
 /**
  * Open the store backing the workspace config target. The desktop opens one
  * per paper beside the process-wide global store; single-workspace hosts go
  * through {@link openTexraConfigStores}.
  *
- * `warn` reports why the project store could not be used: falling back to the
- * internal store is a degradation, so every host says so out loud rather than
- * swallowing the cause.
- *
- * A workspace uses its `.texra/config.json`, shared by all three hosts.
- * Sessions without a workspace, read-only projects without an existing
- * config, and projects whose config file cannot be read (missing permissions,
- * malformed JSON) fall back to the internal workspace store so settings stay
- * readable and writable — degraded, never fatal.
+ * One home per workspace, fixed by one rule: a workspace's configuration is
+ * its `.texra/config.json`, the committable project file all three hosts
+ * share; only a session without a workspace uses the internal workspace
+ * store. The home is never chosen by writability, so no value can be stranded
+ * in a store another open did not pick. A read-only project reads its file
+ * and fails loudly at the first write. A file that cannot be read (missing
+ * permissions, malformed JSON) is reported through `warn` and serves as an
+ * empty, effectively read-only view: every write re-reads the file and fails
+ * rather than overwriting it.
  *
  * No write runner is supplied: a config store is written through the store's
  * own Effect `set`, which composes into the writer's program.
  */
-export const openTexraWorkspaceConfigStore = Effect.fn(
-  'nodeStores.openTexraWorkspaceConfigStore',
-)(function* (
+export function openTexraWorkspaceConfigStore(
   workspaceStoragePath: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ) {
-  if (workspaceRoot) {
-    const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
-    const projectStore = yield* JsonStore.open(projectConfigPath).pipe(
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          warn(
-            `Cannot open project .texra/config.json; using the internal workspace config store. Cause: ${toErrorMessage(error)}`,
-          );
-          return undefined;
-        }),
-      ),
+  if (!workspaceRoot) {
+    return JsonStore.open(
+      path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
     );
-    if (projectStore) {
-      if (
-        projectStore.keys().length > 0 ||
-        (yield* canCreateOrWrite(projectConfigPath))
-      ) {
-        return projectStore;
-      }
-      warn(
-        `Project .texra/config.json is not writable (${projectConfigPath}); using the internal workspace config store.`,
-      );
-    }
   }
-  return yield* JsonStore.open(
-    path.join(workspaceStoragePath, TEXRA_CONFIG_FILE_NAME),
-  );
-});
+  const projectConfigPath = workspaceTexraConfigPath(workspaceRoot);
+  return JsonStore.open(projectConfigPath, {
+    onUnreadable: (error) =>
+      warn(
+        `Cannot read ${projectConfigPath}; project settings are ignored and cannot be saved until it is fixed. Cause: ${toErrorMessage(error)}`,
+      ),
+  });
+}
 
 /**
- * Open both stores backing a host's {@link JsonConfigProvider}.
- *
- * `storage` is the two path getters and nothing else: a
- * {@link WorkspaceStorageProvider} satisfies it, and a caller that must not
- * create a directory under the storage root (the CLI's pre-platform startup
- * read, whose `clone` entry may only be able to read it) passes the pure path
- * calculators instead. Neither store creates anything on open.
+ * Open both stores backing a host's {@link JsonConfigProvider} for the
+ * workspace `workspaceRoot` under `storageRoot`. Neither store creates
+ * anything on open, so a caller that must not create a directory under the
+ * storage root (the CLI's pre-platform startup read, whose `clone` entry may
+ * only be able to read it) is served too.
  */
 export const openTexraConfigStores = Effect.fn(
   'nodeStores.openTexraConfigStores',
 )(function* (
-  storage: Pick<
-    WorkspaceStorageProvider,
-    'getStoragePath' | 'getGlobalStoragePath'
-  >,
+  storageRoot: string,
   workspaceRoot: string | undefined,
   warn: (message: string) => void,
 ) {
   const [workspace, global] = yield* Effect.all(
     [
       openTexraWorkspaceConfigStore(
-        storage.getStoragePath(),
+        resolveWorkspaceStoragePath(storageRoot, workspaceRoot),
         workspaceRoot,
         warn,
       ),
       JsonStore.open(
-        path.join(storage.getGlobalStoragePath(), TEXRA_CONFIG_FILE_NAME),
+        path.join(
+          resolveGlobalStoragePath(storageRoot),
+          TEXRA_CONFIG_FILE_NAME,
+        ),
       ),
     ],
     { concurrency: 'unbounded' },

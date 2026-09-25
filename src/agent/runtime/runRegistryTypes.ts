@@ -19,11 +19,12 @@ import type { Effect } from 'effect';
 import type { LiveToolUseFlowContext, RunParent } from './RunHandle';
 
 /**
- * Child policy shared by `kill()` and `stopAgentRun()`. The caller owns the
- * decision because only it knows which gesture it is serving: the configured
- * stop surfaces resolve it through `detachSubagentsOnStop()`, the CLI's
- * bare-Escape stop always detaches, and shutdown always cascades. Omitting
- * the field means cascade, since a child left running has no owner.
+ * Child policy shared by `kill()` and `stopAgentRun()`. An explicit value
+ * wins: the CLI's bare-Escape stop always detaches and shutdown always
+ * cascades. A `run.stop` request that leaves it unset is resolved by the
+ * session request handler through `detachSubagentsOnStop()`. `Runs` itself
+ * still reads a missing option as cascade, since a child left running has no
+ * owner.
  */
 export interface RunStop {
   /** Whether a live interrupt target took the stop, asked rather than read:
@@ -45,16 +46,26 @@ export interface RunStopOptions {
 }
 
 /**
- * A native child loop's lineage for the loop's whole life: from the
+ * A child loop's stop target and lineage for the loop's whole life: from the
  * synchronous launch until its final result has reached the parent, including
- * preparation before the engine tracks its handle and terminal delivery after it. The parent counts
- * it as an active child throughout, so its continuation stays recoverable
- * until the last delivery landed. Child-run loops use their run handle.
+ * preparation before the engine tracks its handle and terminal delivery after
+ * it. Every child loop carries one so the run's stop
+ * (`RunRegistry.interrupt`) always finds a live target, including the
+ * inter-turn gap when no flow context is attached.
  */
 export interface ChildRunActivation {
   readonly runId: RunId;
   parent: RunParent;
   readonly interrupt: () => void;
+  /**
+   * A native child (true) counts as its parent's active child until the last
+   * delivery landed, so a terminal parent's continuation stays recoverable
+   * (`RunRegistry.getToolUseFollowUpTarget` queues a follow-up into it). A
+   * process child (false) must not: its reservation would make a terminal
+   * parent look recoverable after it can no longer accept either user input
+   * or the child's result.
+   */
+  readonly retainsTerminalParent: boolean;
 }
 
 /**

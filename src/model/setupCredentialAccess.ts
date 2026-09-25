@@ -1,135 +1,82 @@
-import { Data, Effect } from 'effect';
+import { Effect } from 'effect';
 
-import { API_PROVIDERS, hasUsableApiKey } from '@model/apiProviders';
+import { hasUsableApiKey } from '@model/apiProviders';
 import {
-  isCodexSubscriptionActive,
-  isXaiSubscriptionActive,
-} from '@model/providerCapabilities';
-import {
-  CHATGPT_SETUP_MODEL,
-  XAI_SETUP_MODEL,
-} from '@model/setupModelDefaults';
+  modelOptionsFrom,
+  readModelAvailabilityInputs,
+  usageRouteFrom,
+} from '@model/computeModelOptions';
+import { SETUP_MODEL_BY_PROVIDER } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { toErrorMessage } from '@utils/errors/errorMessage';
-
-/** True when any provider has a usable API key in secret storage or the environment. */
-function hasAnyUsableProviderApiKey(
-  secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => void,
-): Effect.Effect<boolean> {
-  return Effect.gen(function* () {
-    for (const provider of API_PROVIDERS) {
-      // Keep the scan sequential so the first usable key ends the lookup.
-      const hasApiKey = yield* probeSetupCredential(
-        hasUsableApiKey(secrets, provider).pipe(
-          Effect.mapError(setupCredentialProbeFailed(`${provider} API key`)),
-        ),
-        onProbeFailure,
-      );
-      if (hasApiKey) return true;
-    }
-    return false;
-  });
-}
+import { isModelOptionAvailable } from '@shared/schemas';
+import { getUseOpenRouter } from '@utils/config/providerConfig';
 
 /**
- * One credential check could not be answered: the subscription probe rejected,
- * or the credential store could not be read. Each check mints it for its own
- * kind through {@link setupCredentialProbeFailed}, so the recovery below is a
- * match on the one failure a probe can report rather than a blanket catch over
- * an untyped channel.
- */
-export class SetupCredentialProbeFailed extends Data.TaggedError(
-  'SetupCredentialProbeFailed',
-)<{
-  readonly kind: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-/** Mint {@link SetupCredentialProbeFailed} for one kind of credential check. */
-export const setupCredentialProbeFailed =
-  (kind: string) =>
-  (cause: unknown): SetupCredentialProbeFailed =>
-    new SetupCredentialProbeFailed({
-      kind,
-      message: `${kind} check failed; treating it as no credential: ${toErrorMessage(cause)}`,
-      cause,
-    });
-
-/**
- * A probe failure is treated as no credential of that kind. The caller owns
- * reporting so this model-layer policy stays free of logging side effects.
- * Interruption is not a probe failure: it cancels the scan rather than
- * answering it, which is why the recovery matches the failure tag rather
- * than every exit.
+ * The setup assistant's launch model: the first provider setup model the
+ * picker reports available, preferring one a subscription pays for. A
+ * provider's setup model counts only on that provider's own credential, so
+ * another provider's model riding OpenRouter never stands in for OpenRouter's
+ * own setup model.
  *
- * `check` is the credential program itself, typed with the one failure a
- * probe reports: a check whose own failure is already typed (a provider key
- * read, a subscription probe) maps it to the tag at its own call.
+ * `includeAccessListFallback` offers OpenRouter's setup model while the
+ * OpenRouter switch is off, as a last resort: the extension prompts first and
+ * turns the switch on for that launch (`requiresOpenRouter`), while desktop
+ * has no prompt to explain the flip and opts out.
  */
-export function probeSetupCredential<R>(
-  check: Effect.Effect<boolean, SetupCredentialProbeFailed, R>,
-  onProbeFailure: (message: string) => void,
-): Effect.Effect<boolean, never, R> {
-  return check.pipe(
-    Effect.catchTag('SetupCredentialProbeFailed', (failure) =>
-      Effect.sync(() => {
-        onProbeFailure(failure.message);
-        return false;
-      }),
-    ),
-  );
-}
+export const resolveSetupLaunchModel = Effect.fn('resolveSetupLaunchModel')(
+  function* (
+    stores: SettingsStores,
+    secrets: PlatformSecrets,
+    includeAccessListFallback: boolean,
+  ) {
+    const candidates = Object.entries(SETUP_MODEL_BY_PROVIDER);
+    const inputs = yield* readModelAvailabilityInputs(
+      { ...stores, secrets },
+      candidates.map(([, model]) => model),
+    );
+    const options = modelOptionsFrom(inputs);
+    const runnable = options.filter(
+      (option, index) =>
+        isModelOptionAvailable(option) &&
+        (option.availability === 'openrouter-key') ===
+          (candidates[index]?.[0] === 'openRouter'),
+    );
+    const pick =
+      runnable.find((option) => usageRouteFrom(inputs, option.value)) ??
+      runnable[0];
+    if (pick) {
+      return {
+        model: pick.value,
+        requiresOpenRouter: pick.availability === 'openrouter-key',
+      };
+    }
+    if (!includeAccessListFallback || (yield* getUseOpenRouter(stores))) {
+      return null;
+    }
+    return (yield* hasUsableApiKey(secrets, 'openRouter'))
+      ? { model: SETUP_MODEL_BY_PROVIDER.openRouter, requiresOpenRouter: true }
+      : null;
+  },
+);
 
 /**
- * The signed-in setup subscription's model, in host-shared priority order:
- * ChatGPT/Codex first, then Grok. The one ladder both the setup gate below and
- * the setup model picker read, so the priority order and the probe wiring
- * cannot come to disagree about which subscription the user has. A probe
- * failure is treated as no subscription of that kind and reported through
- * `onProbeFailure`; `null` when neither subscription is signed in.
- */
-export function setupSubscriptionModel(
-  stores: SettingsStores,
-  onProbeFailure: (message: string) => void,
-): Effect.Effect<string | null, never, LanguageModel> {
-  return Effect.gen(function* () {
-    const hasChatGptSubscription = yield* probeSetupCredential(
-      isCodexSubscriptionActive(stores, CHATGPT_SETUP_MODEL).pipe(
-        Effect.mapError(setupCredentialProbeFailed('ChatGPT subscription')),
-      ),
-      onProbeFailure,
-    );
-    if (hasChatGptSubscription) return CHATGPT_SETUP_MODEL;
-    const hasGrokSubscription = yield* probeSetupCredential(
-      isXaiSubscriptionActive(stores, XAI_SETUP_MODEL).pipe(
-        Effect.mapError(setupCredentialProbeFailed('Grok subscription')),
-      ),
-      onProbeFailure,
-    );
-    return hasGrokSubscription ? XAI_SETUP_MODEL : null;
-  });
-}
-
-/**
- * True when any setup credential is usable: a signed-in subscription, or an
- * API key of any provider. Each failed credential probe resolves to false
- * after being reported through `onProbeFailure`.
+ * True when the setup assistant has a model to launch with, the OpenRouter
+ * last resort included. A check that cannot be answered is logged and read as
+ * no credential, so a broken store sends the user to onboarding instead of
+ * failing the gate.
  */
 export function hasUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  onProbeFailure: (message: string) => void,
 ): Effect.Effect<boolean, never, LanguageModel> {
-  return Effect.gen(function* () {
-    const subscriptionModel = yield* setupSubscriptionModel(
-      stores,
-      onProbeFailure,
-    );
-    if (subscriptionModel !== null) return true;
-    return yield* hasAnyUsableProviderApiKey(secrets, onProbeFailure);
-  });
+  return resolveSetupLaunchModel(stores, secrets, true).pipe(
+    Effect.map((resolution) => resolution !== null),
+    Effect.catch((failure) =>
+      Effect.logWarning(
+        `Setup credential check failed; treating it as no credential: ${failure.message}`,
+      ).pipe(Effect.as(false)),
+    ),
+  );
 }

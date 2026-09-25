@@ -1,10 +1,11 @@
 /**
  * The composer, one component in two states (PRD 12.1). Expanded, it is the
- * new-task launcher: the instruction, chips for agent (teams as a section),
- * model, mode, and working directory (only with two or more roots), and the
- * polish, dictation, attach, and send controls. Compact, it is the follow-up
- * line with the same trailing controls, under a "Goes to X" line that offers
- * the parent instead.
+ * new-task launcher: the instruction, chips for agent and model (and the
+ * working directory, only with two or more roots), and the polish,
+ * dictation, attach, and send controls. The agent menu lists interactive
+ * agents, document passes and teams as sections: the agent picked is the
+ * run type. Compact, it is the follow-up line with the same trailing
+ * controls, under a line that offers the parent instead when there is one.
  *
  * It reads `Surface` (the draft or the launch selections) and the `host`
  * snapshot (the catalogs) and dispatches the arm for every change: a
@@ -21,7 +22,6 @@ import { repeat } from 'lit/directives/repeat.js';
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
 import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
-import '@awesome.me/webawesome/dist/components/callout/callout.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
@@ -54,39 +54,12 @@ import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
 
-const MODE_LABELS: Record<SessionType, string> = {
-  toolUse: 'Interactive',
-  workflow: 'Workflow',
-};
-
-/** The hint under the expanded composer, keyed by what the launch is. */
-type SessionHintKey = SessionType | 'orchestrator' | 'team';
-
-const SESSION_HINT_COPY: Record<
-  SessionHintKey,
-  { lede: string; body: string; time: string }
-> = {
-  workflow: {
-    lede: 'Deep pass.',
-    body: 'Drafts, reviews its own work, then revises, across your whole document.',
-    time: 'Typically 5 to 10 min on fast models, 10 to 30 min on frontier reasoning. Pick a smaller model if you need faster turnaround.',
-  },
-  toolUse: {
-    lede: 'Conversational.',
-    body: 'Reads, edits, and searches in a running dialogue you steer turn by turn.',
-    time: 'Turns run back in seconds; tool-heavy runs take a minute or two. Pick a stronger model for longer chains of reasoning.',
-  },
-  orchestrator: {
-    lede: 'Orchestrator.',
-    body: 'Plans a pipeline of specialized agents and dispatches them for you. Name agents to steer delegation, or ask it which one to use.',
-    time: 'For example, "use polish on the intro, then review the math", or leave it blank. Approve tasks in Sessions as they arrive.',
-  },
-  team: {
-    lede: 'Team run.',
-    body: 'Starts the team lead in an interactive session with delegation limited to this team.',
-    time: '',
-  },
-};
+/** The agent menu's sections: the category an agent belongs to is the run
+ *  type its launch takes. */
+const AGENT_SECTIONS: ReadonlyArray<readonly [SessionType, string]> = [
+  ['toolUse', 'Interactive'],
+  ['workflow', 'Document passes'],
+];
 
 interface ChipMenu {
   readonly id: string;
@@ -147,10 +120,6 @@ export class SessionComposer extends LitElement {
       .routing .routing-parent:hover {
         text-decoration: underline;
       }
-      .routing .routing-note {
-        white-space: nowrap;
-        color: var(--color-text-muted);
-      }
 
       .composer {
         display: flex;
@@ -188,22 +157,19 @@ export class SessionComposer extends LitElement {
       .composer.is-compact .row {
         flex: 0 0 auto;
       }
-      /* Collapsed, the pill is the field and one chevron; the tools and the
-         send button appear once the field has focus or text. */
-      .composer.is-compact .tools,
-      .composer:not(.is-compact) .expand,
-      .composer.is-compact:is(:focus-within, .has-text) .expand {
+      /* Collapsed, the pill is the field alone; the tools and the send
+         button appear once the field has focus or text. */
+      .composer.is-compact .tools {
         display: none;
       }
-      .composer.is-compact:is(:focus-within, .has-text) .tools,
-      .composer.is-compact .expand {
+      .composer.is-compact:is(:focus-within, .has-text) .tools {
         display: contents;
       }
 
       /* A plain native textarea (#11851): the card draws the one focus
-         ring, so the field carries no chrome of its own and grows with its
-         content between the two heights each state sets. */
-      textarea {
+         ring, so the field carries no chrome of its own (scoped, to out-rank
+         the shared :focus-visible ring) and grows between the two heights. */
+      .composer textarea {
         display: block;
         width: 100%;
         min-width: 0;
@@ -288,19 +254,6 @@ export class SessionComposer extends LitElement {
         letter-spacing: 0.02em;
         color: var(--color-text-muted);
       }
-      .chips-collapsed {
-        display: none;
-        min-width: 0;
-        flex: 1 1 auto;
-      }
-      @container (max-width: 440px) {
-        .chips {
-          display: none;
-        }
-        .chips-collapsed {
-          display: block;
-        }
-      }
 
       .composer-primary-action::part(base) {
         border-radius: var(--wa-border-radius-circle, 50%);
@@ -312,33 +265,6 @@ export class SessionComposer extends LitElement {
         display: block;
         min-width: 0;
         margin-bottom: var(--wa-space-2xs);
-      }
-
-      /* The session hint under the expanded composer: a brand callout at
-         IDE density, one row. */
-      .session-hint {
-        margin-top: var(--wa-space-2xs);
-        padding: var(--wa-space-3xs) var(--wa-space-2xs);
-        font-size: var(--font-size-sm);
-        line-height: var(--line-height-relaxed);
-      }
-      .session-hint::part(message) {
-        display: flex;
-        gap: var(--wa-space-2xs);
-        align-items: flex-start;
-        color: var(--wa-color-text-quiet);
-      }
-      .session-hint-lede {
-        color: var(--wa-color-text-normal);
-        font-weight: var(--font-weight-semibold);
-        letter-spacing: 0.01em;
-        white-space: nowrap;
-      }
-      .session-hint-body {
-        flex: 1 1 auto;
-      }
-      .session-hint-time {
-        color: var(--wa-color-text-quiet);
       }
     `,
   ];
@@ -366,7 +292,7 @@ export class SessionComposer extends LitElement {
   private get text(): string {
     const launch = this.surface?.launch;
     if (this.compact) return this.draft.text;
-    return launch ? launch.instruction[launch.sessionType] : '';
+    return launch?.instruction ?? '';
   }
 
   private get recordingTarget(): RunId | 'launch' {
@@ -400,16 +326,7 @@ export class SessionComposer extends LitElement {
       );
       return;
     }
-    const launch = this.surface?.launch;
-    if (!launch) return;
-    this.dispatchEvent(
-      SessionUiEvents.surface({
-        kind: 'launch',
-        patch: {
-          instruction: { ...launch.instruction, [launch.sessionType]: text },
-        },
-      }),
-    );
+    this.setLaunch({ instruction: text });
   }
 
   private handleInput = (event: Event): void => {
@@ -547,16 +464,15 @@ export class SessionComposer extends LitElement {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return [];
-    const sessionType = launch.sessionType;
-    const agents = host.agentOptions[sessionType] ?? [];
-    const agentId = launch.agent[sessionType];
     const team = host.teamOptions.find(
       (option) => option.value === launch.selectedTeamId,
     );
     const agentLabel =
       launch.launchTarget === 'team' && team
         ? team.label
-        : (agents.find((option) => option.value === agentId)?.label ?? agentId);
+        : (host.agentOptions[launch.sessionType]?.find(
+            (option) => option.value === launch.agent,
+          )?.label ?? launch.agent);
     const model = host.modelOptions.find(
       (option) => option.value === launch.model,
     );
@@ -567,21 +483,28 @@ export class SessionComposer extends LitElement {
         label: agentLabel,
         title: 'Agent',
         items: html`
-          ${repeat(
-            agents,
-            (option) => option.value,
-            (option) =>
-              html`<wa-dropdown-item
-                value=${`agent:${option.value}`}
-                type="checkbox"
-                ?checked=${
-                  launch.launchTarget === 'agent' && option.value === agentId
-                }
-                >${option.label}</wa-dropdown-item
-              >`,
-          )}
+          ${AGENT_SECTIONS.map(([category, heading]) => {
+            const agents = host.agentOptions[category] ?? [];
+            if (agents.length === 0) return nothing;
+            return html`<div class="menu-heading">${heading}</div>
+              ${repeat(
+                agents,
+                (option) => option.value,
+                (option) =>
+                  html`<wa-dropdown-item
+                    value=${`agent:${category}:${option.value}`}
+                    type="checkbox"
+                    ?checked=${
+                      launch.launchTarget === 'agent' &&
+                      launch.sessionType === category &&
+                      option.value === launch.agent
+                    }
+                    >${option.label}</wa-dropdown-item
+                  >`,
+              )}`;
+          })}
           ${
-            sessionType === 'toolUse' && host.teamOptions.length > 0
+            host.teamOptions.length > 0
               ? html`<div class="menu-heading">Teams</div>
                   ${repeat(
                     host.teamOptions,
@@ -607,20 +530,23 @@ export class SessionComposer extends LitElement {
           >
         `,
         onSelect: (value) => {
-          if (value.startsWith('agent:')) {
+          const agent = /^agent:(toolUse|workflow):(.+)$/.exec(value);
+          if (agent) {
             this.setLaunch({
-              launchTarget: 'agent',
-              agent: { ...launch.agent, [sessionType]: value.slice(6) },
+              sessionType: agent[1] as SessionType,
+              agent: agent[2],
             });
           } else if (value.startsWith('team:')) {
+            // A team runs its lead as an interactive session.
             this.setLaunch({
               launchTarget: 'team',
+              sessionType: 'toolUse',
               selectedTeamId: value.slice(5),
             });
           } else if (value === 'settings:teams') {
             this.openSettings('teams');
           } else if (value === 'settings:agents') {
-            this.openSettings('agents', sessionType);
+            this.openSettings('agents', launch.sessionType);
           }
         },
       },
@@ -651,28 +577,6 @@ export class SessionComposer extends LitElement {
             this.setLaunch({ model: value.slice(6) });
           } else if (value === 'settings:models') {
             this.openSettings('models');
-          }
-        },
-      },
-      {
-        id: 'composer-mode',
-        icon: 'screwdriver-wrench',
-        label: MODE_LABELS[sessionType],
-        title: 'Mode',
-        items: html`
-          ${(Object.keys(MODE_LABELS) as SessionType[]).map(
-            (mode) =>
-              html`<wa-dropdown-item
-                value=${`mode:${mode}`}
-                type="checkbox"
-                ?checked=${mode === sessionType}
-                >${MODE_LABELS[mode]}</wa-dropdown-item
-              >`,
-          )}
-        `,
-        onSelect: (value) => {
-          if (value.startsWith('mode:')) {
-            this.setLaunch({ sessionType: value.slice(5) as SessionType });
           }
         },
       },
@@ -731,104 +635,32 @@ export class SessionComposer extends LitElement {
   }
 
   private renderChips(): TemplateResult {
-    const menus = this.chipMenus();
-    return html`
-      <div class="chips">${menus.map((menu) => this.renderChip(menu))}</div>
-      <div class="chips-collapsed">
-        <wa-dropdown
-          placement="top-start"
-          @wa-select=${(event: Event) => {
-            const value = selectedValue(event);
-            for (const menu of menus) menu.onSelect(value);
-          }}
-        >
-          <wa-button
-            slot="trigger"
-            id="composer-setup"
-            class="chip-trigger"
-            appearance="outlined"
-            variant="neutral"
-            size="s"
-            type="button"
-            with-caret
-            >${waIcon('screwdriver-wrench', { slot: 'start' })}<span
-              class="chip-label"
-              >${menus.map((menu) => menu.label).join(' · ')}</span
-            ></wa-button
-          >
-          ${menus.map(
-            (menu) =>
-              html`<div class="menu-heading">${menu.title}</div>
-                ${menu.items}`,
-          )}
-        </wa-dropdown>
-        <wa-tooltip for="composer-setup">Setup</wa-tooltip>
-      </div>
-    `;
-  }
-
-  private renderRouting(run: RunView): TemplateResult {
-    const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;
-    // The link moves the draft to the parent, or the line states that the
-    // parent takes no replies (a workflow-script run has no chat).
-    const parentAcceptsFollowUps =
-      parent !== undefined && parent.followUpSupport !== 'unsupported';
-    return html`<div class="routing">
-      ${waIcon('code-branch')}
-      <span class="routing-target">Goes to ${run.label}</span>
-      ${
-        parent === undefined
-          ? nothing
-          : html`<span aria-hidden="true">·</span>${
-                parentAcceptsFollowUps
-                  ? html`<button
-                      type="button"
-                      class="routing-parent"
-                      @click=${() => this.replyToParent(parent.id)}
-                    >
-                      reply to ${parent.label} instead
-                    </button>`
-                  : html`<span class="routing-note"
-                      >${parent.label} takes no replies</span
-                    >`
-              }`
-      }
+    return html`<div class="chips">
+      ${this.chipMenus().map((menu) => this.renderChip(menu))}
     </div>`;
   }
 
-  /** What the launch is: the team when one is chosen, else an orchestrator
-   *  agent, else the mode. */
-  private renderSessionHint(): TemplateResult | typeof nothing {
-    const launch = this.surface?.launch;
-    const host = this.host;
-    if (!launch || !host) return nothing;
-    const { sessionType } = launch;
-    const agent = host.agentOptions[sessionType]?.find(
-      (option) => option.value === launch.agent[sessionType],
-    );
-    let key: SessionHintKey = sessionType;
-    if (sessionType === 'toolUse' && launch.launchTarget === 'team') {
-      key = 'team';
-    } else if (sessionType === 'toolUse' && agent?.isOrchestrator === true) {
-      key = 'orchestrator';
+  /** Where a follow-up goes, shown only when there is a choice: a parent
+   *  that takes replies too. A top-level run's name is already in the
+   *  header, and a parent that takes none (a workflow-script run has no
+   *  chat) leaves nothing to choose. */
+  private renderRouting(run: RunView): TemplateResult | typeof nothing {
+    const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;
+    if (parent === undefined || parent.followUpSupport === 'unsupported') {
+      return nothing;
     }
-    const copy = SESSION_HINT_COPY[key];
-    return html`<wa-callout
-      class="session-hint"
-      variant="brand"
-      role="note"
-      data-hint-key=${key}
-    >
-      <span class="session-hint-lede">${copy.lede}</span>
-      <span class="session-hint-body">
-        ${copy.body}
-        ${
-          copy.time
-            ? html` <span class="session-hint-time">${copy.time}</span>`
-            : nothing
-        }
-      </span>
-    </wa-callout>`;
+    return html`<div class="routing">
+      ${waIcon('code-branch')}
+      <span class="routing-target">Your message goes to ${run.label}</span>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        class="routing-parent"
+        @click=${() => this.replyToParent(parent.id)}
+      >
+        reply to ${parent.label} instead
+      </button>
+    </div>`;
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -841,10 +673,10 @@ export class SessionComposer extends LitElement {
     ).map((followUp) => followUp.text);
     const text = this.text;
     const hasText = text.trim() !== '';
-    // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
-    // (`canSendFollowUp`); the launcher has no run and no draft images,
-    // so its own Run turns on the instruction alone.
-    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
+    // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
+    const canSend = run
+      ? canSendFollowUp(run, this.draft, { terminalBacked: true })
+      : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`
@@ -884,25 +716,13 @@ export class SessionComposer extends LitElement {
         </div>
         <div class="row">
           ${compact ? html`<span class="spacer"></span>` : this.renderChips()}
-          <span class="expand"
-            >${renderIconActionButton({
-              id: 'composer-expand',
-              icon: 'chevron-up',
-              label: 'Write a follow-up',
-              tooltip: 'Write a follow-up',
-              disabled: readOnly,
-              onClick: () => this.textArea?.focus(),
-            })}</span
-          >
           <span class="tools"
             >${renderIconActionButton({
               id: 'composer-polish',
               icon: 'wand-magic-sparkles',
               label: 'Polish',
               tooltip: 'Polish with AI',
-              busy: this.surface?.polishing.has(
-                this.run?.id ?? `launch:${this.surface.launch.sessionType}`,
-              ),
+              busy: this.surface?.polishing.has(this.run?.id ?? 'launch'),
               disabled: readOnly || !hasText,
               onClick: this.polish,
             })}
@@ -948,7 +768,6 @@ export class SessionComposer extends LitElement {
           >
         </div>
       </div>
-      ${compact ? nothing : this.renderSessionHint()}
       <div class="visually-hidden" role="status">${this.announcement}</div>
     `;
   }

@@ -9,7 +9,7 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
-import { DiagnosticsTool, type DiagnosticsInput } from '@tools/DiagnosticsTool';
+import { DiagnosticsTool } from '@tools/DiagnosticsTool';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 
 const WORKTREE_PATH = path.join(path.sep, 'worktree');
@@ -26,7 +26,7 @@ function withSession<A, E, R>(
   );
 }
 
-function addCriticismCall(): Extract<DiagnosticsInput, { command: 'add' }> {
+function addCriticismCall() {
   return {
     command: 'add',
     path: 'paper.tex',
@@ -41,7 +41,7 @@ describe('DiagnosticsTool', () => {
   it.effect.each([
     {
       name: 'reports a capability error when the session has no diagnostics reader',
-      input: { command: 'list', path: 'paper.tex' } as DiagnosticsInput,
+      input: { command: 'list', path: 'paper.tex' },
       message: 'Diagnostics capability unavailable',
     },
     {
@@ -53,7 +53,7 @@ describe('DiagnosticsTool', () => {
     Effect.gen(function* () {
       yield* withSession((session) =>
         Effect.gen(function* () {
-          const result = yield* new DiagnosticsTool().call(input).pipe(
+          const result = yield* DiagnosticsTool.call(input).pipe(
             Effect.provide(
               nativeToolTestLayer({
                 workingDirectory: WORKTREE_PATH,
@@ -85,20 +85,21 @@ describe('DiagnosticsTool', () => {
           );
           yield* session.interactions.use({ readDiagnostics });
 
-          const result = yield* new DiagnosticsTool()
-            .call({ command: 'list', path: 'paper.tex' })
-            .pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  workingDirectory: WORKTREE_PATH,
-                  run: {
-                    session,
-                    runId: 'diagnostics-test' as RunId,
-                    toolPolicy: {},
-                  },
-                }),
-              ),
-            );
+          const result = yield* DiagnosticsTool.call({
+            command: 'list',
+            path: 'paper.tex',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                workingDirectory: WORKTREE_PATH,
+                run: {
+                  session,
+                  runId: 'diagnostics-test' as RunId,
+                  toolPolicy: {},
+                },
+              }),
+            ),
+          );
 
           expect(readDiagnostics).toHaveBeenCalledWith(PAPER_PATH);
           expect(result.diagnostics).toMatchObject({
@@ -120,20 +121,18 @@ describe('DiagnosticsTool', () => {
               addCriticism: () => ({ accepted: false, resolvedPath: '' }),
             });
 
-            const result = yield* new DiagnosticsTool()
-              .call(addCriticismCall())
-              .pipe(
-                Effect.provide(
-                  nativeToolTestLayer({
-                    workingDirectory: WORKTREE_PATH,
-                    run: {
-                      session,
-                      runId: 'diagnostics-test' as RunId,
-                      toolPolicy: {},
-                    },
-                  }),
-                ),
-              );
+            const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  workingDirectory: WORKTREE_PATH,
+                  run: {
+                    session,
+                    runId: 'diagnostics-test' as RunId,
+                    toolPolicy: {},
+                  },
+                }),
+              ),
+            );
 
             expect(result.summary).toBe('Criticism not accepted');
           }),
@@ -153,20 +152,18 @@ describe('DiagnosticsTool', () => {
             },
           });
 
-          const result = yield* new DiagnosticsTool()
-            .call(addCriticismCall())
-            .pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  workingDirectory: WORKTREE_PATH,
-                  run: {
-                    session,
-                    runId: 'diagnostics-test' as RunId,
-                    toolPolicy: {},
-                  },
-                }),
-              ),
-            );
+          const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                workingDirectory: WORKTREE_PATH,
+                run: {
+                  session,
+                  runId: 'diagnostics-test' as RunId,
+                  toolPolicy: {},
+                },
+              }),
+            ),
+          );
 
           expect(entries).toEqual([
             {
@@ -200,20 +197,18 @@ describe('DiagnosticsTool', () => {
           }));
           yield* session.interactions.use({ addCriticism });
 
-          const result = yield* new DiagnosticsTool()
-            .call(addCriticismCall())
-            .pipe(
-              Effect.provide(
-                nativeToolTestLayer({
-                  run: {
-                    session,
-                    runId: 'diagnostics-project-scope' as RunId,
-                    toolPolicy: {},
-                  },
-                  roots: project.roots,
-                }),
-              ),
-            );
+          const result = yield* DiagnosticsTool.call(addCriticismCall()).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: {
+                  session,
+                  runId: 'diagnostics-project-scope' as RunId,
+                  toolPolicy: {},
+                },
+                roots: project.roots,
+              }),
+            ),
+          );
 
           expect(addCriticism).toHaveBeenCalledWith(
             expect.objectContaining({ absolutePath: projectPath }),

@@ -2,7 +2,6 @@ import { Effect } from 'effect';
 
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -13,7 +12,6 @@ import { helperCompletion, helperModel } from './helperModel';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'TextEnhancement';
-const log = createLog(CHANNEL);
 
 /**
  * Polish `text` with the configured helper model. Fails with the reason the
@@ -44,10 +42,12 @@ export const polishTextWithAI = Effect.fn('polishTextWithAI')(function* (
     return (corrected ?? responseText).trim();
   }).pipe(
     Effect.scoped,
-    Effect.mapError((error) => {
+    Effect.catch((error) => {
       const message = getSdkErrorMessage(error);
-      log.error(`Error polishing text: ${message}`);
-      return new Error(message, { cause: error });
+      return Effect.logError(`Error polishing text: ${message}`).pipe(
+        withLogChannel(CHANNEL),
+        Effect.andThen(Effect.fail(new Error(message, { cause: error }))),
+      );
     }),
   );
 });

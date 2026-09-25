@@ -5,22 +5,24 @@
  * branch (merge-base), using Git's ordinary diff semantics so the review
  * policy is not encoded as a collection-time switch.
  *
- * Host-neutral: uses simple-git for git operations; no vscode.
+ * Host-neutral: uses simple-git for git operations; no vscode. The entry
+ * points are Effects; the host that runs them owns the Promise boundary.
  */
 
 // Third-party imports
+import { Data, Effect } from 'effect';
 import simpleGit, { type SimpleGit } from 'simple-git';
 
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { unique } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
 import { normalizeReviewFilePath } from './reviewIssues';
 
-const log = createLog('reviewDiff');
+const LOG_CHANNEL = 'reviewDiff';
 
 const GIT_TIMEOUT_MS = 30_000;
 
@@ -63,8 +65,10 @@ interface ReviewDiff {
   truncated: boolean;
 }
 
-type CollectReviewDiffResult =
-  { ok: true; value: ReviewDiff } | { ok: false; reason: string };
+/** The diff could not be collected; `message` is shown to the user as-is. */
+class ReviewDiffFailed extends Data.TaggedError('ReviewDiffFailed')<{
+  readonly message: string;
+}> {}
 
 function makeGit(cwd: string): SimpleGit {
   // makeMachineGitEnv() strips helper-invoking env keys and extends PATH so
@@ -75,27 +79,62 @@ function makeGit(cwd: string): SimpleGit {
   );
 }
 
-/** `makeGit(cwd)`, or null when that path cannot be opened as a working tree. */
-function tryMakeGit(cwd: string): SimpleGit | null {
-  try {
-    return makeGit(cwd);
-  } catch (err) {
-    log.debug(
-      `Cannot open ${cwd} as a git working tree: ${toErrorMessage(err)}`,
-    );
-    return null;
-  }
-}
+/**
+ * `makeGit(cwd)`, or null when that path cannot be opened as a working tree
+ * (simple-git throws synchronously for a missing directory).
+ */
+const tryMakeGit = (cwd: string): Effect.Effect<SimpleGit | null> =>
+  Effect.try({ try: () => makeGit(cwd), catch: ensureError }).pipe(
+    Effect.catch((err) =>
+      Effect.as(
+        Effect.logDebug(
+          `Cannot open ${cwd} as a git working tree: ${err.message}`,
+        ),
+        null,
+      ),
+    ),
+  );
 
-/** Run a git command, returning stdout on success and null on error. */
-async function rawGit(sg: SimpleGit, args: string[]): Promise<string | null> {
-  try {
-    return await sg.raw(args);
-  } catch (err) {
-    log.debug(`git ${args.join(' ')} failed: ${toErrorMessage(err)}`);
-    return null;
-  }
-}
+/**
+ * Run a git command, yielding stdout on success and null on error. Probes
+ * (`rev-parse --verify`) fail by design, so the failure is a debug entry;
+ * callers that need the output turn null into a {@link ReviewDiffFailed}.
+ */
+const rawGit = (sg: SimpleGit, args: string[]): Effect.Effect<string | null> =>
+  Effect.tryPromise({ try: () => sg.raw(args), catch: ensureError }).pipe(
+    Effect.catch((err) =>
+      Effect.as(
+        Effect.logDebug(`git ${args.join(' ')} failed: ${err.message}`),
+        null,
+      ),
+    ),
+  );
+
+/**
+ * The repository root containing `cwd`, or null outside a working tree.
+ * Fails with {@link ReviewDiffFailed} when the reported root cannot be opened.
+ */
+const resolveRepoRoot = Effect.fnUntraced(function* (cwd: string) {
+  const sg = yield* tryMakeGit(cwd);
+  if (!sg) return null;
+  // `git diff <commit>` always emits repo-relative paths; resolve the root
+  // so file reads and editor locations agree with them.
+  const repoRoot = (yield* rawGit(sg, [
+    'rev-parse',
+    '--show-toplevel',
+  ]))?.trim();
+  if (!repoRoot) return null;
+  // Git just reported this root, so failing to open it is a real error to
+  // surface, not "outside a working tree".
+  const sgRoot = yield* Effect.try({
+    try: () => makeGit(repoRoot),
+    catch: (err) =>
+      new ReviewDiffFailed({
+        message: `Cannot open the repository root ${repoRoot}: ${ensureError(err).message}`,
+      }),
+  });
+  return { repoRoot, sgRoot };
+});
 
 /**
  * True when `file` belongs to the collected change set. `changedFiles` must
@@ -129,8 +168,8 @@ interface BaseBranch {
  * ref, so a clone without a local main (e.g. a manually added remote with
  * no origin/HEAD) still resolves. Local wins over remote for a name.
  */
-async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
-  const originHead = await rawGit(sg, [
+const detectBaseBranch = Effect.fnUntraced(function* (sg: SimpleGit) {
+  const originHead = yield* rawGit(sg, [
     'symbolic-ref',
     '--quiet',
     '--short',
@@ -140,27 +179,30 @@ async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
     const ref = originHead.trim();
     return { ref, shortName: ref.replace(/^origin\//, '') };
   }
-  const verified = await Promise.all(
-    BASE_BRANCH_CANDIDATES.map(async (candidate) => {
-      const [local, origin] = await Promise.all([
-        rawGit(sg, [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          `refs/heads/${candidate}`,
-        ]),
-        rawGit(sg, [
-          'rev-parse',
-          '--verify',
-          '--quiet',
-          `refs/remotes/origin/${candidate}`,
-        ]),
-      ]);
-      return { candidate, local, origin };
-    }),
+  const verified = yield* Effect.forEach(
+    BASE_BRANCH_CANDIDATES,
+    (candidate) =>
+      Effect.all(
+        {
+          local: rawGit(sg, [
+            'rev-parse',
+            '--verify',
+            '--quiet',
+            `refs/heads/${candidate}`,
+          ]),
+          origin: rawGit(sg, [
+            'rev-parse',
+            '--verify',
+            '--quiet',
+            `refs/remotes/origin/${candidate}`,
+          ]),
+        },
+        { concurrency: 'unbounded' },
+      ).pipe(Effect.map((refs) => ({ candidate, ...refs }))),
+    { concurrency: 'unbounded' },
   );
   for (const { candidate, local, origin } of verified) {
-    // rawGit returns null for non-existent refs: simple-git's .raw() rejects on
+    // rawGit yields null for non-existent refs: simple-git's .raw() rejects on
     // any non-zero exit, caught and converted to null; a truthy SHA means "found".
     if (local) {
       return { ref: candidate, shortName: candidate };
@@ -170,7 +212,7 @@ async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
     }
   }
   return null;
-}
+});
 
 /**
  * Resolve a user-chosen base branch (from the "Diff Against…" picker). The ref
@@ -178,19 +220,17 @@ async function detectBaseBranch(sg: SimpleGit): Promise<BaseBranch | null> {
  * confusing empty diff. The short name drops a leading `origin/` for
  * user-facing labels in on-branch fallback descriptions.
  */
-async function resolveBaseBranch(
+const resolveBaseBranch = (
   sg: SimpleGit,
   branch: string,
-): Promise<BaseBranch | null> {
-  const verified = await rawGit(sg, [
-    'rev-parse',
-    '--verify',
-    '--quiet',
-    branch,
-  ]);
-  if (!verified) return null;
-  return { ref: branch, shortName: branch.replace(/^origin\//, '') };
-}
+): Effect.Effect<BaseBranch | null> =>
+  rawGit(sg, ['rev-parse', '--verify', '--quiet', branch]).pipe(
+    Effect.map((verified) =>
+      verified
+        ? { ref: branch, shortName: branch.replace(/^origin\//, '') }
+        : null,
+    ),
+  );
 
 /** A branch offered by the "Diff Against…" picker. */
 interface BaseBranchCandidate {
@@ -202,38 +242,48 @@ interface BaseBranchCandidate {
 
 /**
  * List local and origin branches for the "Diff Against…" picker, flagging the
- * current branch. Best-effort: returns an empty list when the repository
+ * current branch. Best-effort: yields an empty list when the repository
  * cannot be resolved, leaving the picker with just its auto-detect default.
  */
-export async function listBaseBranchCandidates(
-  cwd: string,
-): Promise<BaseBranchCandidate[]> {
-  const sg = tryMakeGit(cwd);
-  if (!sg) return [];
-  const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
-  if (!repoRoot) return [];
-  const sgRoot = makeGit(repoRoot);
-  const [headOut, localsOut, remotesOut] = await Promise.all([
-    rawGit(sgRoot, ['rev-parse', '--abbrev-ref', 'HEAD']),
-    rawGit(sgRoot, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']),
-    rawGit(sgRoot, [
-      'for-each-ref',
-      '--format=%(refname:short)',
-      'refs/remotes/origin',
-    ]),
-  ]);
-  const current = headOut?.trim();
-  return (
-    unique([
-      ...splitOutputLines(localsOut ?? ''),
-      ...splitOutputLines(remotesOut ?? ''),
-    ])
-      // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
-      // (`splitOutputLines` already drops empty lines.)
-      .filter((ref) => ref !== 'origin/HEAD')
-      .map((ref) => ({ ref, current: ref === current }))
-  );
-}
+export const listBaseBranchCandidates = Effect.fn('listBaseBranchCandidates')(
+  function* (cwd: string) {
+    const resolved = yield* resolveRepoRoot(cwd);
+    if (!resolved) return [] as BaseBranchCandidate[];
+    const { sgRoot } = resolved;
+    const {
+      head: headOut,
+      locals: localsOut,
+      remotes: remotesOut,
+    } = yield* Effect.all(
+      {
+        head: rawGit(sgRoot, ['rev-parse', '--abbrev-ref', 'HEAD']),
+        locals: rawGit(sgRoot, [
+          'for-each-ref',
+          '--format=%(refname:short)',
+          'refs/heads',
+        ]),
+        remotes: rawGit(sgRoot, [
+          'for-each-ref',
+          '--format=%(refname:short)',
+          'refs/remotes/origin',
+        ]),
+      },
+      { concurrency: 'unbounded' },
+    );
+    const current = headOut?.trim();
+    return (
+      unique([
+        ...splitOutputLines(localsOut ?? ''),
+        ...splitOutputLines(remotesOut ?? ''),
+      ])
+        // `origin/HEAD` is a symbolic alias, not a real branch to diff against.
+        // (`splitOutputLines` already drops empty lines.)
+        .filter((ref) => ref !== 'origin/HEAD')
+        .map((ref): BaseBranchCandidate => ({ ref, current: ref === current }))
+    );
+  },
+  withLogChannel(LOG_CHANNEL),
+);
 
 /**
  * Pick the diff base when the main branch itself is checked out: the
@@ -241,17 +291,17 @@ export async function listBaseBranchCandidates(
  * so a run-on-commit review right after `git commit` still has something
  * to look at.
  */
-async function resolveOnBaseBranch(
+const resolveOnBaseBranch = Effect.fnUntraced(function* (
   sg: SimpleGit,
   branch: string,
-): Promise<Pick<ReviewDiff, 'baseRef' | 'baseDescription'>> {
+) {
   // `diff --name-only HEAD` is empty on a clean tree (exit 0, no output) and
   // lists changed files on a dirty tree (exit 0, non-empty output). This
   // avoids `diff --quiet`, whose exit code 1 ("differences found") simple-git
   // cannot distinguish from a genuine command failure (both throw GitResponseError).
   // Treat a git failure (null) conservatively as dirty: better to include HEAD
   // (possibly redundant) than to silently skip uncommitted changes by picking HEAD^.
-  const dirtyFiles = await rawGit(sg, ['diff', '--name-only', 'HEAD']);
+  const dirtyFiles = yield* rawGit(sg, ['diff', '--name-only', 'HEAD']);
   const treeClean = dirtyFiles !== null && !dirtyFiles.trim();
   if (!treeClean) {
     return {
@@ -259,7 +309,7 @@ async function resolveOnBaseBranch(
       baseDescription: `last commit on ${branch} (uncommitted changes)`,
     };
   }
-  if (await rawGit(sg, ['rev-parse', '--verify', '--quiet', 'HEAD^'])) {
+  if (yield* rawGit(sg, ['rev-parse', '--verify', '--quiet', 'HEAD^'])) {
     return {
       baseRef: 'HEAD^',
       baseDescription: `previous commit on ${branch} (latest commit)`,
@@ -271,7 +321,7 @@ async function resolveOnBaseBranch(
     baseRef: 'HEAD',
     baseDescription: `last commit on ${branch}`,
   };
-}
+});
 
 /**
  * Collect the reviewable diff. By default this compares the working tree
@@ -280,23 +330,18 @@ async function resolveOnBaseBranch(
  *
  * All paths in the result are relative to {@link ReviewDiff.repoRoot}, which
  * may be above `options.cwd` when the workspace is a repository subfolder.
+ * Fails with {@link ReviewDiffFailed} carrying a user-facing message.
  */
-export async function collectReviewDiff(
+export const collectReviewDiff = Effect.fn('collectReviewDiff')(function* (
   options: CollectReviewDiffOptions,
-): Promise<CollectReviewDiffResult> {
-  const sg = tryMakeGit(options.cwd);
-  if (!sg) {
-    return { ok: false, reason: 'The workspace is not a git repository.' };
+) {
+  const resolved = yield* resolveRepoRoot(options.cwd);
+  if (!resolved) {
+    return yield* new ReviewDiffFailed({
+      message: 'The workspace is not a git repository.',
+    });
   }
-
-  // `git diff <commit>` always emits repo-relative paths; resolve the root
-  // so file reads and editor locations agree with them.
-  const repoRoot = (await rawGit(sg, ['rev-parse', '--show-toplevel']))?.trim();
-  if (!repoRoot) {
-    return { ok: false, reason: 'The workspace is not a git repository.' };
-  }
-
-  const sgRoot = makeGit(repoRoot);
+  const { repoRoot, sgRoot } = resolved;
 
   let baseRef: string;
   let baseDescription: string;
@@ -305,35 +350,35 @@ export async function collectReviewDiff(
     baseDescription = options.baseDescription ?? options.baseRef;
   } else {
     const base = options.baseBranch
-      ? await resolveBaseBranch(sgRoot, options.baseBranch)
-      : await detectBaseBranch(sgRoot);
+      ? yield* resolveBaseBranch(sgRoot, options.baseBranch)
+      : yield* detectBaseBranch(sgRoot);
     if (!base) {
-      return {
-        ok: false,
-        reason: options.baseBranch
+      return yield* new ReviewDiffFailed({
+        message: options.baseBranch
           ? `Could not resolve the base branch "${options.baseBranch}"; it may have been deleted.`
           : `Could not find the repository's main branch (looked for origin/HEAD plus local and origin remote-tracking ${BASE_BRANCH_CANDIDATES.join('/')}).`,
-      };
+      });
     }
 
-    const head = (
-      await rawGit(sgRoot, ['rev-parse', '--abbrev-ref', 'HEAD'])
-    )?.trim();
+    const head = (yield* rawGit(sgRoot, [
+      'rev-parse',
+      '--abbrev-ref',
+      'HEAD',
+    ]))?.trim();
     const checkedOutBase = options.baseBranch
       ? head === base.ref
       : head === base.shortName;
     if (checkedOutBase) {
-      ({ baseRef, baseDescription } = await resolveOnBaseBranch(
+      ({ baseRef, baseDescription } = yield* resolveOnBaseBranch(
         sgRoot,
         base.shortName,
       ));
     } else {
-      const mergeBase = await rawGit(sgRoot, ['merge-base', 'HEAD', base.ref]);
+      const mergeBase = yield* rawGit(sgRoot, ['merge-base', 'HEAD', base.ref]);
       if (!mergeBase) {
-        return {
-          ok: false,
-          reason: `Could not determine the merge base between HEAD and ${base.ref}.`,
-        };
+        return yield* new ReviewDiffFailed({
+          message: `Could not determine the merge base between HEAD and ${base.ref}.`,
+        });
       }
       baseRef = mergeBase.trim();
       baseDescription = options.baseBranch
@@ -342,17 +387,20 @@ export async function collectReviewDiff(
     }
   }
 
-  // rawGit converts every failure to null, so this pair cannot reject; the
-  // null checks below are the only error handling these diffs need.
-  const [diffText, nameOnly] = await Promise.all([
-    rawGit(sgRoot, ['diff', '--no-color', baseRef, '--']),
-    rawGit(sgRoot, ['diff', '--name-only', baseRef, '--']),
-  ]);
+  const { diffText, nameOnly } = yield* Effect.all(
+    {
+      diffText: rawGit(sgRoot, ['diff', '--no-color', baseRef, '--']),
+      nameOnly: rawGit(sgRoot, ['diff', '--name-only', baseRef, '--']),
+    },
+    { concurrency: 'unbounded' },
+  );
   // A failed name-only diff must fail the collection too: issue reports are
   // validated against `changedFiles`, so an empty list alongside real diff
   // text would reject every finding as outside the change set.
   if (diffText === null || nameOnly === null) {
-    return { ok: false, reason: `git diff against ${baseRef} failed.` };
+    return yield* new ReviewDiffFailed({
+      message: `git diff against ${baseRef} failed.`,
+    });
   }
   const changedFiles = splitOutputLines(nameOnly);
 
@@ -361,15 +409,13 @@ export async function collectReviewDiff(
     ? `${diffText.slice(0, MAX_REVIEW_DIFF_CHARS)}\n[... diff truncated for review]`
     : diffText;
 
-  return {
-    ok: true,
-    value: {
-      repoRoot,
-      baseRef,
-      baseDescription,
-      diff: combined.trim() ? combined : '',
-      changedFiles,
-      truncated,
-    },
+  const value: ReviewDiff = {
+    repoRoot,
+    baseRef,
+    baseDescription,
+    diff: combined.trim() ? combined : '',
+    changedFiles,
+    truncated,
   };
-}
+  return value;
+}, withLogChannel(LOG_CHANNEL));

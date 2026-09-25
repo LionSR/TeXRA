@@ -18,9 +18,8 @@ import {
   type SessionEvent,
   type RunId,
   type RunIdentity,
-  type RunOutcome,
+  type RunLifecycleStatus,
 } from '@shared/schemas';
-import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -36,8 +35,9 @@ interface RunListingBase {
   id: RunId;
   timestamp: string;
   parentRunId?: RunId;
-  /** Canonical terminal outcome; absent for a run still in flight. */
-  outcome?: RunOutcome;
+  /** The run's folded status; a terminal outcome phase is its durable
+   *  outcome. */
+  status: RunLifecycleStatus;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /**
@@ -145,9 +145,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           id,
           timestamp: new Date(run.launchedAt).toISOString(),
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
-          ...(isTerminalOutcomePhase(run.status)
-            ? { outcome: run.status }
-            : {}),
+          status: run.status,
           ...(run.description === null ? {} : { description: run.description }),
           checkpointPresent,
         };

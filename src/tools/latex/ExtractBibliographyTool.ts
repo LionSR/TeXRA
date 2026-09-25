@@ -12,13 +12,15 @@ import {
   loadBibliographyEntries,
   summarizeBibliographyEntries,
 } from '@latex/extractBibliography';
+import { relativeToRoot } from '@platform/defaults/nodeWorkspace';
 import { WorkspaceFs } from '@platform/rootedFs';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ToolResult } from '@shared/schemas';
 import { formatToolOutput } from '@tools/formatting';
-import { resolveAndFormat } from '@tools/pathResolution';
+import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
+import { toPosixPath } from '@utils/core/pathCore';
+import { ensureError } from '@utils/errors/errorMessage';
 import { pathExists } from '@utils/files/fsDurability';
 import { formatResultCount } from '@utils/text/stringUtils';
 import {
@@ -42,12 +44,26 @@ type ExtractBibliographyInput = z.infer<typeof ExtractBibliographyInputSchema>;
 
 const DEFAULT_MAX_ENTRIES = 25;
 
-function formatPathList(roots: WorkspaceRoots, filePaths: string[]) {
-  return Effect.forEach(filePaths, (filePath) =>
-    resolveAndFormat(roots, roots.workspace, filePath).pipe(
-      Effect.map(({ display }) => display),
-    ),
-  ).pipe(Effect.map((paths) => paths.join(', ')));
+/**
+ * Display already-resolved absolute paths: relative to the working directory
+ * (or the workspace) when they lie under it, absolute otherwise. These are
+ * files the document names, not tool input, so no containment applies: a
+ * chapter run's missing `../refs.bib` is a note, not a tool failure.
+ */
+function formatPathList(call: ToolPathCall, filePaths: string[]) {
+  const base = call.workingDirectory ?? call.roots.workspace;
+  return Effect.try({
+    try: () =>
+      filePaths
+        .map((filePath) =>
+          toPosixPath(
+            (base === undefined ? undefined : relativeToRoot(base, filePath)) ??
+              filePath,
+          ),
+        )
+        .join(', '),
+    catch: ensureError,
+  });
 }
 
 const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
@@ -72,25 +88,18 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
       bibPath || call.roots.config.get<string>('texra.bib.defaultPath');
 
     if (effectiveBibPath) {
-      const { path: resolved } = yield* resolveAndFormat(
-        call.roots,
-        call.roots.workspace,
-        effectiveBibPath,
-        call.workingDirectory,
-      );
+      const resolved = yield* resolveToolPath(call, effectiveBibPath);
       // `fsPath` records where the bibliography landed: workspace-relative
       // inside the session's folder, absolute for a path the caller chose
-      // outside it. So the confined view of this call's own workspace
-      // answers the first and the process filesystem the second, which is
-      // the split `WorkspaceFS` made by passing absolute paths through.
+      // outside it. So the confined `WorkspaceFs` view of this call's own
+      // workspace answers the first and the process `FileSystem` the second.
       const fs: FileSystem.FileSystem = nodePath.isAbsolute(resolved.fsPath)
         ? yield* FileSystem.FileSystem
         : yield* WorkspaceFs;
       // A path whose parent is not a directory is a missing bibliography, not
-      // a tool failure: that is `pathExists`'s reading. One difference from
-      // the old `lstat`-backed check is deliberate -- `exists` follows the
-      // link, so a dangling symlink reads as missing where the facade saw the
-      // entry itself.
+      // a tool failure: that is `pathExists`'s reading. `exists` follows the
+      // link, deliberately, so a dangling symlink reads as a missing
+      // bibliography.
       const exists = yield* pathExists(fs, resolved.fsPath);
       const target = exists ? bibliographyFiles : missingBibliographyFiles;
       if (!target.includes(resolved.absolute)) {
@@ -104,7 +113,7 @@ const extractBibliography = Effect.fn('ExtractBibliographyTool.execute')(
     const missingBibliographyNote =
       missingBibliographyFiles.length > 0
         ? `Missing bibliography files: ${yield* formatPathList(
-            call.roots,
+            call,
             missingBibliographyFiles,
           )}.`
         : undefined;

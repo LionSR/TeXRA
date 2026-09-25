@@ -46,6 +46,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter } from '@agent/trace';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { StateReadFailed } from '@platform/interfaces';
 import {
   LanguageModel,
@@ -54,15 +55,18 @@ import {
 import {
   AgentCategory,
   RUN_OUTCOME,
-  STREAM_LOG_ENTRY_TYPES,
   type CompileResult,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
+import {
+  WORKFLOW_RAW_OUTPUT_EXT,
+  workflowOutputPath,
+} from '@shared/constants/workflowOutput';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
-import { StreamLog } from '@shared/session/traceEntries';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -79,7 +83,8 @@ import {
   setupPlatform,
 } from '@test/support/setupPlatform';
 import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
-import { generateRunId, isObject } from '@utils/core';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { generateRunId } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -268,7 +273,6 @@ function testBoundModel(): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -338,16 +342,16 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
     ModelInvoker,
     Effect.gen(function* () {
       const run = yield* AgentRun;
-      const ledger = yield* RunLedger;
       const aggregateId = rowAggregate(run.runId);
       return {
-        invoke: (state: RunState, request: InvokeRequest) =>
+        invoke: (cell: RunCell, request: InvokeRequest) =>
           Effect.gen(function* () {
+            const state = yield* cell.current;
             const turnScript = init.turns?.[requests.length] ?? COMPLETE;
             requests.push(request);
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
-              const failed = yield* ledger.appendBatch(run.runId, state, [
+              const failed = yield* cell.append([
                 snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: turnScript.failWith,
@@ -368,7 +372,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               turnScript.text ?? `round ${request.round} output`,
               turnScript.finish,
             );
-            const next = yield* ledger.appendBatch(run.runId, state, [
+            const next = yield* cell.append([
               {
                 type: 'model.message',
                 aggregateId,
@@ -447,6 +451,8 @@ function agentRunTestLayer(init: LoopInit) {
         fileService: new RunFileService(init.runId, init.session.roots),
         tools: new MapToolRegistry({}),
         finalToolName: null,
+        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
+        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
@@ -463,7 +469,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'correct', agentCategory: AgentCategory.Workflow },
         ),
         callbacks: { onModelChanged: vi.fn() },
-        interrupt: vi.fn(),
       } satisfies AgentRunShape;
     }),
   );
@@ -481,6 +486,7 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
           LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
         ),
         Layer.provideMerge(testHttpClientLayer),
+        Layer.provideMerge(nodeSpawnerLayer),
       ),
     ),
   );
@@ -554,14 +560,14 @@ const setRejectOnCompileFailure = (enabled: boolean) =>
     .pipe(Effect.orDie);
 
 /** The verdict each round stage closed with, in transcript order. */
-function roundStageOutcomes(store: StreamLog): unknown[] {
-  return store
-    .toJSON()
-    .flatMap((entry) =>
-      entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END &&
-      isObject(entry.data) &&
-      entry.data.kind === 'round'
-        ? [entry.data.status]
+function roundStageOutcomes(
+  recorder: ReturnType<typeof attachTestTranscriptFold>,
+): unknown[] {
+  return recorder
+    .transcript()
+    .taskGroups.flatMap((group) =>
+      group.kind === 'round' && group.endTime !== undefined
+        ? [group.status]
         : [],
     );
 }
@@ -578,6 +584,18 @@ function userTexts(state: RunState): string[] {
         )
       : [],
   );
+}
+
+/** The canonical raw output a round's pipeline reads, as the loop derives it
+ *  from the round. */
+function canonicalOutputOf(
+  session: SessionHandle,
+  runId: RunId,
+  round: number,
+): string {
+  return new RunFileService(runId, session.roots).createLocation(
+    workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
+  ).absolutePath;
 }
 
 /** The persisted reflection state of a folded run. */
@@ -815,8 +833,7 @@ describe('the reflection round loop', () => {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
       const logger = new TraceEmitter();
-      const store = new StreamLog();
-      const recorder = attachTestTranscriptFold(logger, runId, store);
+      const recorder = attachTestTranscriptFold(logger, runId);
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => recorder.unsubscribe()),
       );
@@ -830,7 +847,7 @@ describe('the reflection round loop', () => {
       });
 
       expect(result.outcome).toBe(scenario.outcomes.at(-1));
-      expect(roundStageOutcomes(store)).toEqual(scenario.outcomes);
+      expect(roundStageOutcomes(recorder)).toEqual(scenario.outcomes);
     }),
   );
 });
@@ -977,8 +994,7 @@ describe('the output facts a reflection round publishes', () => {
       scripted.collidingDocument = true;
 
       const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
-      const canonical = flowOf(state).outputLocation?.absolutePath;
-      if (canonical === undefined) throw new Error('The round has no output.');
+      const canonical = canonicalOutputOf(session, runId, 0);
       const roundDir = dirname(canonical);
       const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
       const extracted = join(roundDir, 'output.c0.xml');
@@ -1118,7 +1134,7 @@ describe('a token-limited reflection response', () => {
       const session = yield* createProcessSession({
         responseTextProcessing: {
           normalizeResponseText: (text: string) => text,
-          postProcessResponse: (text: string) => text,
+          postProcessResponse: (text: string) => Effect.succeed(text),
           connectResponseText,
         },
       });
@@ -1134,17 +1150,16 @@ describe('a token-limited reflection response', () => {
         ],
       });
 
-      const location = flowOf(state).outputLocation;
-      if (location === null) throw new Error('The round kept no output.');
+      const canonical = canonicalOutputOf(session, runId, state.round);
       // Every cycle asks the policy how it joins onto what came before; the
       // first has nothing before it, so its connector is never written.
       expect(connectResponseText.mock.calls).toEqual([
         ['', 'left'],
         ['left', 'right'],
       ]);
-      expect(
-        yield* Effect.promise(() => readFile(location.absolutePath, 'utf-8')),
-      ).toBe('left\nright');
+      expect(yield* Effect.promise(() => readFile(canonical, 'utf-8'))).toBe(
+        'left\nright',
+      );
     }),
   );
 
@@ -1191,7 +1206,7 @@ describe('an interrupted reflection run', () => {
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens.
-      expect(flowOf(state).currentRound).toBe(0);
+      expect(state.round).toBe(0);
 
       const resumed = yield* runLoop({
         runId,
@@ -1210,8 +1225,7 @@ describe('an interrupted reflection run', () => {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
-        const store = new StreamLog();
-        const recorder = attachTestTranscriptFold(logger, runId, store);
+        const recorder = attachTestTranscriptFold(logger, runId);
         yield* Effect.addFinalizer(() =>
           Effect.sync(() => recorder.unsubscribe()),
         );
@@ -1224,12 +1238,12 @@ describe('an interrupted reflection run', () => {
         // The first round's stage closed with its own verdict; only the
         // interrupted one is cancelled, and its outputs stay in the
         // ledger a resume continues from.
-        expect(roundStageOutcomes(store)).toEqual([
+        expect(roundStageOutcomes(recorder)).toEqual([
           RUN_OUTCOME.COMPLETED,
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(flowOf(halted).currentRound).toBe(1);
+        expect(halted.round).toBe(1);
         expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
@@ -1268,10 +1282,7 @@ describe('an interrupted reflection run', () => {
         );
         // The response row is committed; its cycle file is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        const canonical = flowOf(halted).outputLocation?.absolutePath;
-        if (canonical === undefined) {
-          throw new Error('The round has no output.');
-        }
+        const canonical = canonicalOutputOf(session, runId, halted.round);
         yield* Effect.promise(async () => {
           if (seed === null) return;
           const target =

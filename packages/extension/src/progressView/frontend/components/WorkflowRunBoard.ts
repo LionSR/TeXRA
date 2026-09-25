@@ -51,7 +51,6 @@ import { assertNever } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
-  formatCostUsd,
 } from '@utils/text/stringUtils';
 
 // Local imports - progress view
@@ -332,15 +331,6 @@ export class WorkflowRunBoard extends LitElement {
     );
   }
 
-  private killRun(): void {
-    this.dispatchEvent(
-      SessionUiEvents.runtime({
-        kind: 'run.stop',
-        runId: this.run.id,
-      }),
-    );
-  }
-
   /** Every failed card with a child to retry, in phase order. */
   private failedRows(): readonly { phase: string; row: WorkflowTaskRow }[] {
     return (this.model?.phases ?? []).flatMap((phase) =>
@@ -389,24 +379,6 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** `↓41k · $1.84 · 38m`: what the run has produced and spent so far. */
-  private renderUsage(): TemplateResult {
-    const usage = this.run.usage;
-    const { runStartedAt } = this.run;
-    const parts = [
-      usage.outputTokens > 0
-        ? html`${waIcon('arrow-down', {
-            label: 'Output tokens',
-          })}${formatCompactTokenCount(usage.outputTokens)}`
-        : undefined,
-      usage.cost > 0 ? formatCostUsd(usage.cost) : undefined,
-      !this.summary && runStartedAt !== null
-        ? formatCompactDuration(this._ticker.now - runStartedAt)
-        : undefined,
-    ].filter((part) => part !== undefined);
-    return html`<span class="quiet">${join(parts, ' · ')}</span>`;
-  }
-
   private renderSummary(model: WorkflowRunModel): TemplateResult {
     const { tally } = model;
     return html`<div class="summary">
@@ -415,16 +387,14 @@ export class WorkflowRunBoard extends LitElement {
       >
       ${this.renderStatusCount('running', tally.running)}
       ${this.renderStatusCount('failed', tally.failed)}
-      <span class="spacer"></span>
-      ${this.renderUsage()}
     </div>`;
   }
 
+  /** The calls' tally; spend is the usage footer's and elapsed time the
+   *  header's, so neither repeats here. */
   private renderTally(model: WorkflowRunModel): TemplateResult {
     return html`<div class="tally">
       <span>${formatWorkflowTally(model.tally)}</span>
-      <span>·</span>
-      ${this.renderUsage()}
     </div>`;
   }
 
@@ -479,7 +449,7 @@ export class WorkflowRunBoard extends LitElement {
             event.stopPropagation();
             this.select(asking);
           }}
-          >Review (y/n)</wa-button
+          >Review</wa-button
         ></span
       >`;
     }
@@ -602,7 +572,7 @@ export class WorkflowRunBoard extends LitElement {
         return html`<div class="row status-declared" role="listitem">
           <span class="row-icon">${waIcon('circle')}</span>
           <bdi class="row-label" dir="auto">${row.task.label}</bdi>
-          <span class="row-last">Declared</span>
+          <span class="row-last">Not started</span>
         </div>`;
       case 'group':
         // A group row reaches the board only as a fold's header.
@@ -662,7 +632,7 @@ export class WorkflowRunBoard extends LitElement {
 
   /** The runtime's refusal of a request this surface made, in the runtime's
    *  words; the next request on that run clears it (`Surface.rejected`).
-   *  Kill answers on the run's run, skip and retry on the call's. */
+   *  A stop answers on the run, skip and retry on the call's run. */
   private renderRejection(error: SurfaceRefusal): TemplateResult {
     switch (error._tag) {
       case 'NotOwner':
@@ -678,51 +648,41 @@ export class WorkflowRunBoard extends LitElement {
     }
   }
 
-  /** Next failed only navigates, so it stays live on a settled run that
-   *  has failures to read; the two that act follow `canControl`. The note
-   *  carries the run's own refusal, which is Kill's; a call's lands on its
-   *  row. */
-  private renderControls(): TemplateResult {
+  /** Shown only when a call failed or the runtime refused a request on
+   *  this run. Next failed only navigates, so it stays live on a settled
+   *  run; Retry failed follows `canControl`. The run itself stops from the
+   *  header, whose refusal lands in the note; a call's lands on its row. */
+  private renderControls(): TemplateResult | typeof nothing {
     const failed = this.failedRows().length;
-    const disabled = !this.canControl;
     const rejected = this.surface.rejected.get(this.run.id);
+    if (failed === 0 && rejected === undefined) return nothing;
     return html`<div
       class=${classMap({ controls: true, settled: this.settled })}
     >
-      <wa-button
-        size="s"
-        appearance="outlined"
-        ?disabled=${failed === 0}
-        @click=${this.nextFailed}
-        >Next failed</wa-button
-      >
-      <wa-button
-        size="s"
-        appearance="outlined"
-        ?disabled=${disabled || failed === 0}
-        @click=${this.retryFailed}
-        >Retry failed</wa-button
-      >
+      ${
+        failed === 0
+          ? nothing
+          : html`<wa-button
+                size="s"
+                appearance="outlined"
+                @click=${this.nextFailed}
+                >Next failed</wa-button
+              >
+              <wa-button
+                size="s"
+                appearance="outlined"
+                ?disabled=${!this.canControl}
+                @click=${this.retryFailed}
+                >Retry failed</wa-button
+              >`
+      }
       ${
         rejected === undefined
-          ? html`<span class="note"
-              ><span class="note-narrow">This run has no chat</span
-              ><span class="note-wide"
-                >Skip and retry are per call; Kill is the run's stop.</span
-              ></span
-            >`
+          ? nothing
           : html`<span class="note note-rejected" role="status"
               >${this.renderRejection(rejected)}</span
             >`
       }
-      <wa-button
-        size="s"
-        variant="danger"
-        appearance="outlined"
-        ?disabled=${disabled}
-        @click=${this.killRun}
-        >Kill run</wa-button
-      >
     </div>`;
   }
 

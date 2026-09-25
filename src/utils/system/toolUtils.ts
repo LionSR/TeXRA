@@ -3,11 +3,10 @@ import * as path from 'node:path';
 
 // Third-party imports
 import { Effect, Option } from 'effect';
-import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { ToolMissingReporter } from '@platform/interfaces';
 import type { ExecResult } from '@shared/schemas';
 import {
@@ -21,18 +20,21 @@ import {
   IMAGEMAGICK_INSTALL_GUIDE,
   LATEXMK_INSTALL_GUIDE,
   TEXFMT_INSTALL_GUIDE,
-  WOLFRAM_INSTALL_GUIDE,
   getInstallGuide,
 } from '@shared/constants/latexToolchain';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { IS_WINDOWS, extendEnvPath, withExtendedPath } from './platformPaths';
+import {
+  IS_WINDOWS,
+  extendEnvPath,
+  whichOnExtendedPath,
+} from './platformPaths';
 import { resolveOptionalCommand } from './binaryResolver';
-import { executeCommandSync } from './execCore';
 import { executeCommand, type ExecuteCommandBaseOptions } from './execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-const log = createLog('toolUtils');
+const CHANNEL = 'toolUtils';
 
 interface ToolConfig {
   command?: string | string[]; // Optional - defaults to "${toolName} --version"
@@ -42,34 +44,20 @@ interface ToolConfig {
 }
 
 /**
- * Hand the missing-tool message to the host, whose handler is the one foreign
- * edge here. A handler that rejects is reported rather than dropped: the probe
- * itself succeeded, so the caller still gets its answer. The reporter is the
- * process's optional `ToolMissingReporter` service; the composition root omits
- * it where no host UI exists, so an absent port reads as silence.
+ * Hand the missing-tool message to the host. The reporter is the process's
+ * optional `ToolMissingReporter` service; the composition root omits it where
+ * no host UI exists, so an absent port reads as silence.
  */
 function reportMissingTool(
   message: string,
   openDocsCommand?: string,
 ): Effect.Effect<void> {
   return Effect.serviceOption(ToolMissingReporter).pipe(
-    Effect.flatMap((reportMissing) =>
-      Option.isNone(reportMissing)
-        ? Effect.void
-        : Effect.tryPromise({
-            try: async () => {
-              await reportMissing.value(message, openDocsCommand);
-            },
-            catch: ensureError,
-          }).pipe(
-            Effect.catch((err) =>
-              Effect.sync(() => {
-                log.error(
-                  `Failed to report missing tool: ${toErrorMessage(err)}`,
-                );
-              }),
-            ),
-          ),
+    Effect.flatMap(
+      Option.match({
+        onNone: () => Effect.void,
+        onSome: (report) => report(message, openDocsCommand),
+      }),
     ),
   );
 }
@@ -88,7 +76,6 @@ const PERL_INSTRUCTIONS = installGuide(PERL_INSTALL_GUIDE);
 const GHOSTSCRIPT_INSTRUCTIONS = installGuide(GHOSTSCRIPT_INSTALL_GUIDE);
 const GM_INSTRUCTIONS = installGuide(GRAPHICSMAGICK_INSTALL_GUIDE);
 const MAGICK_INSTRUCTIONS = installGuide(IMAGEMAGICK_INSTALL_GUIDE);
-const WOLFRAM_INSTRUCTIONS = installGuide(WOLFRAM_INSTALL_GUIDE);
 const PDFLATEX_INSTRUCTIONS = installGuide(PDFLATEX_INSTALL_GUIDE);
 const LATEXMK_INSTRUCTIONS = installGuide(LATEXMK_INSTALL_GUIDE);
 
@@ -143,9 +130,9 @@ const TOOL_CONFIGS: Record<string, ToolConfig> = {
         : 'gs --version',
     },
   ),
+  // Probe only: the wolfram plugin's manifest entry owns the install copy.
   wolframscript: withDocs(
-    '"wolframscript" is not installed or not in your PATH.\n' +
-      WOLFRAM_INSTRUCTIONS,
+    '"wolframscript" is not installed or not in your PATH.',
     { command: 'wolframscript -version', docs: false },
   ),
 
@@ -179,22 +166,16 @@ function parseCommand(cmd: string): { cmdName: string; args: string[] } | null {
 }
 
 /**
- * Spawn one `<tool> --version` probe. This is the module's execa edge, lifted
- * exactly once: `Effect.tryPromise` hands the thunk an `AbortSignal` that
- * aborts when the fiber is interrupted, and it is execa's `cancelSignal`, so
- * an interrupted probe kills the spawned process instead of leaving it to run
- * out its five-second timeout. No caller threads a signal in.
+ * Run one `<tool> --version` probe. A `--version` probe answers the same from
+ * any directory and for any project, so it names the process cwd and no
+ * setting slots. An interrupted probe's scope kills the child.
  */
-const spawnProbe = (cmd: string, args: string[], execEnv: NodeJS.ProcessEnv) =>
-  Effect.tryPromise({
-    try: (signal) =>
-      execa(cmd, args, {
-        env: execEnv,
-        reject: false,
-        timeout: 5000,
-        cancelSignal: signal,
-      }),
-    catch: ensureError,
+const runProbe = (cmd: string, args: string[]) =>
+  executeCommand([cmd, ...args], {
+    cwd: process.cwd(),
+    settings: undefined,
+    timeout: 5000,
+    quiet: true,
   });
 
 /**
@@ -205,39 +186,42 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
   function* (
     cmd: string,
     args: string[],
-    execEnv: NodeJS.ProcessEnv,
-  ): Effect.fn.Return<boolean, Error> {
-    log.debug(`Checking tool '${cmd}' with args [${args.join(', ')}]`);
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
+    yield* Effect.logDebug(
+      `Checking tool '${cmd}' with args [${args.join(', ')}]`,
+    ).pipe(withLogChannel(CHANNEL));
 
-    let result = yield* spawnProbe(cmd, args, execEnv);
-    log.debug(
+    let result = yield* runProbe(cmd, args);
+    yield* Effect.logDebug(
       `Initial check for '${cmd}': exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
 
     // Accept if exit code is 0, OR if we got version-like output
     // (some tools return non-zero for --version but still output version info)
     if (result.exitCode === 0 || hasVersionOutput(result)) {
-      log.debug(`Tool '${cmd}' detected successfully`);
+      yield* Effect.logDebug(`Tool '${cmd}' detected successfully`).pipe(
+        withLogChannel(CHANNEL),
+      );
       return true;
     }
 
-    const fallback = resolveOptionalCommand(cmd, args);
-    log.debug(
+    const fallback = yield* resolveOptionalCommand(cmd, args);
+    yield* Effect.logDebug(
       `Fallback search for '${cmd}': ${fallback?.resolvedPath ?? 'not found'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
 
     if (fallback) {
-      log.debug(
+      yield* Effect.logDebug(
         `Running fallback '${fallback.command}' with args [${fallback.args.join(', ')}]`,
-      );
-      result = yield* spawnProbe(fallback.command, fallback.args, execEnv);
-      log.debug(
+      ).pipe(withLogChannel(CHANNEL));
+      result = yield* runProbe(fallback.command, fallback.args);
+      yield* Effect.logDebug(
         `Fallback result: exitCode=${result.exitCode}, ` +
           `stdout=${result.stdout?.slice(0, 100) || '(empty)'}, ` +
           `stderr=${result.stderr?.slice(0, 100) || '(empty)'}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
 
       if (result.exitCode === 0 || hasVersionOutput(result)) {
         return true;
@@ -245,11 +229,11 @@ const executeWithFallback = Effect.fn('toolUtils.executeWithFallback')(
     }
 
     // Log at info level so it shows in output channel by default
-    log.info(
+    yield* Effect.logInfo(
       `Tool '${cmd}' not detected. Last result: exitCode=${result.exitCode}, ` +
         `stdout=${result.stdout?.slice(0, 200) || '(empty)'}, ` +
         `stderr=${result.stderr?.slice(0, 200) || '(empty)'}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return false;
   },
 );
@@ -274,7 +258,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
   function* (
     toolName: string,
     showError: boolean = true,
-  ): Effect.fn.Return<boolean> {
+  ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
     const config = TOOL_CONFIGS[toolName];
 
     if (!config) {
@@ -288,23 +272,20 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     const command = config.command || `${toolName} --version`;
 
     const probe = Effect.gen(function* () {
-      const execEnv = withExtendedPath(process.env);
       const extendedPath = extendEnvPath();
 
       // Log PATH info once (not per-command)
-      log.debug(
+      yield* Effect.logDebug(
         `PATH contains ${extendedPath.split(path.delimiter).length} entries, ` +
           `includes /usr/bin: ${extendedPath.includes('/usr/bin')}`,
-      );
+      ).pipe(withLogChannel(CHANNEL));
 
       if (Array.isArray(command)) {
         // Try each command in the array until one succeeds
         for (const cmd of command) {
           const parsed = parseCommand(cmd);
           if (!parsed) continue;
-          if (
-            yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv)
-          ) {
+          if (yield* executeWithFallback(parsed.cmdName, parsed.args)) {
             return true;
           }
         }
@@ -318,16 +299,18 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
           new Error('Invalid command: no executable found'),
         );
       }
-      return yield* executeWithFallback(parsed.cmdName, parsed.args, execEnv);
+      return yield* executeWithFallback(parsed.cmdName, parsed.args);
     });
 
     // A probe failure and an absent tool differ only in what the report links
     // to: the failing path has no install-docs command, exactly as before.
     const answerAsAbsent = (err: unknown) =>
-      Effect.sync(() => {
-        log.warn(`Tool check for '${toolName}' failed: ${toErrorMessage(err)}`);
-        return { installed: false, probeFailed: true };
-      });
+      Effect.logWarning(
+        `Tool check for '${toolName}' failed: ${toErrorMessage(err)}`,
+      ).pipe(
+        withLogChannel(CHANNEL),
+        Effect.as({ installed: false, probeFailed: true }),
+      );
 
     // Both arms, because the `try`/`catch` this replaces answered a rejected
     // spawn and a synchronous throw alike — the binary resolution and the PATH
@@ -337,7 +320,7 @@ export const checkToolInstalled = Effect.fn('toolUtils.checkToolInstalled')(
     // reporting a missing tool.
     const outcome = yield* probe.pipe(
       Effect.map((installed) => ({ installed, probeFailed: false })),
-      Effect.catch(answerAsAbsent),
+      Effect.catch((error: Error) => answerAsAbsent(error)),
       Effect.catchDefect(answerAsAbsent),
     );
 
@@ -376,7 +359,7 @@ export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
     toolName: string,
     args: string[],
     options: RunToolOptions,
-  ): Effect.fn.Return<ExecResult | false, Error> {
+  ): Effect.fn.Return<ExecResult | false, never, ChildProcessSpawner> {
     const { showError = true, ...execOptions } = options;
     if (!(yield* checkToolInstalled(toolName, showError))) {
       return false;
@@ -392,7 +375,11 @@ export const runToolWithCheck = Effect.fn('toolUtils.runToolWithCheck')(
  * core-dependency check all decide on.
  */
 export const detectImageTool = Effect.fn('toolUtils.detectImageTool')(
-  function* (): Effect.fn.Return<'magick' | 'gm' | null> {
+  function* (): Effect.fn.Return<
+    'magick' | 'gm' | null,
+    never,
+    ChildProcessSpawner
+  > {
     const [hasMagick, hasGm] = yield* Effect.all(
       ['magick', 'gm'].map((tool) => checkToolInstalled(tool, false)),
       { concurrency: 'unbounded' },
@@ -454,8 +441,6 @@ export function detectPackageManager(): SystemPackageManager | null {
   for (const name of managers) {
     if (hasPackageManager(name)) return name;
   }
-
-  log.debug('No package manager detected');
   return null;
 }
 
@@ -468,23 +453,17 @@ const packageManagerAvailability = new Map<SystemPackageManager, boolean>();
  * than {@link detectPackageManager}: that one answers "which manager does this
  * platform use", so on a Linux box with both apt and Linuxbrew it returns
  * `apt` and a brew-only command map would never match. Each answer is probed
- * once and cached, including misses.
+ * once and cached, including misses. The answer is a PATH lookup, not a
+ * spawn, so it stays synchronous for the install-command getters; a present
+ * but broken binary counts as installed, and the install command it picks
+ * then fails visibly. Each caller surfaces the boolean (or
+ * `detectPackageManager`'s null) itself.
  */
 export function hasPackageManager(name: SystemPackageManager): boolean {
   const cached = packageManagerAvailability.get(name);
   if (cached !== undefined) return cached;
 
-  // A `--version` probe answers the same from any directory and for any
-  // project, so it names the process cwd and no setting slots instead of
-  // reaching for a workspace it does not need.
-  const available = executeCommandSync([name, '--version'], {
-    cwd: process.cwd(),
-  }).success;
+  const available = whichOnExtendedPath(name) !== null;
   packageManagerAvailability.set(name, available);
-  log.debug(
-    available
-      ? `Package manager detected: ${name}`
-      : `Package manager not found: ${name}`,
-  );
   return available;
 }

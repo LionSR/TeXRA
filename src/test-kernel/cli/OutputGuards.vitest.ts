@@ -1,9 +1,10 @@
 import { mkdir, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, win32 } from 'node:path';
+import { join } from 'node:path';
 
+import * as NodePath from '@effect/platform-node/NodePath';
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, FileSystem, Layer, type Path, PlatformError } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { CliUsageError } from '@cli/runtime/cliContext';
@@ -12,22 +13,41 @@ import {
   assertOutputFileAvailable,
   probeOutputPathForTests,
 } from '@cli/runtime/workflowOutput';
-import { errnoError } from '@test/support/fsTestUtils';
+import { errnoError, nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
 
-// Every probe case below starts from a stat that reports the target missing.
-function probeDeps(
-  mkdir: (candidate: string) => Promise<string | undefined>,
-): Parameters<typeof probeOutputPathForTests>[2] {
-  return {
-    dirname: win32.dirname,
-    stat: async () => {
-      throw errnoError('ENOENT');
-    },
-    mkdir,
-  };
+function sysError(
+  tag: PlatformError.SystemErrorTag,
+  method: string,
+  target: string,
+  code: string,
+): PlatformError.PlatformError {
+  return PlatformError.systemError({
+    _tag: tag,
+    module: 'FileSystem',
+    method,
+    pathOrDescriptor: target,
+    cause: errnoError(code),
+  });
+}
+
+// Every probe case below starts from a stat that reports the target missing;
+// dirname comes from win32 path semantics.
+function probeLayer(
+  makeDirectory: (
+    candidate: string,
+  ) => Effect.Effect<void, PlatformError.PlatformError>,
+): Layer.Layer<FileSystem.FileSystem | Path.Path> {
+  return Layer.mergeAll(
+    FileSystem.layerNoop({
+      stat: (target) =>
+        Effect.fail(sysError('NotFound', 'stat', target, 'ENOENT')),
+      makeDirectory,
+    }),
+    NodePath.layerWin32,
+  );
 }
 
 describe('probeOutputPath', () => {
@@ -45,22 +65,29 @@ describe('probeOutputPath', () => {
   ];
 
   const windowsBlockedCases = windowsCases.flatMap((testCase) =>
-    ['ENOTDIR', 'EEXIST'].map((mkdirCode) => ({ ...testCase, mkdirCode })),
+    (
+      [
+        ['ENOTDIR', 'BadResource'],
+        ['EEXIST', 'AlreadyExists'],
+      ] as const
+    ).map(([mkdirCode, mkdirTag]) => ({ ...testCase, mkdirCode, mkdirTag })),
   );
 
   it.effect.each(windowsBlockedCases)(
     'maps native $mkdirCode after Windows-shaped ENOENT for a $label output path',
-    ({ target, outputParent, mkdirCode }) =>
+    ({ target, outputParent, mkdirCode, mkdirTag }) =>
       Effect.gen(function* () {
         const mkdirVisited: string[] = [];
         const error = yield* Effect.flip(
-          probeOutputPathForTests(
-            target,
-            '--output',
-            probeDeps(async (candidate) => {
-              mkdirVisited.push(candidate);
-              throw errnoError(mkdirCode);
-            }),
+          probeOutputPathForTests(target, '--output').pipe(
+            Effect.provide(
+              probeLayer((candidate) => {
+                mkdirVisited.push(candidate);
+                return Effect.fail(
+                  sysError(mkdirTag, 'makeDirectory', candidate, mkdirCode),
+                );
+              }),
+            ),
           ),
         );
         expect(error.message).toContain(
@@ -77,10 +104,13 @@ describe('probeOutputPath', () => {
       const result = yield* probeOutputPathForTests(
         target,
         '--output-dir',
-        probeDeps(async (candidate) => {
-          mkdirVisited.push(candidate);
-          return candidate;
-        }),
+      ).pipe(
+        Effect.provide(
+          probeLayer((candidate) => {
+            mkdirVisited.push(candidate);
+            return Effect.void;
+          }),
+        ),
       );
       expect(result).toBeNull();
       expect(mkdirVisited).toEqual([target]);
@@ -105,13 +135,15 @@ describe('probeOutputPath', () => {
       Effect.gen(function* () {
         const mkdirVisited: string[] = [];
         const error = yield* Effect.flip(
-          probeOutputPathForTests(
-            '/missing/output.tex',
-            flagLabel,
-            probeDeps(async (candidate) => {
-              mkdirVisited.push(candidate);
-              throw errnoError('ENOENT');
-            }),
+          probeOutputPathForTests('/missing/output.tex', flagLabel).pipe(
+            Effect.provide(
+              probeLayer((candidate) => {
+                mkdirVisited.push(candidate);
+                return Effect.fail(
+                  sysError('NotFound', 'makeDirectory', candidate, 'ENOENT'),
+                );
+              }),
+            ),
           ),
         );
         expect(error.message).toContain(expectedMessage);
@@ -119,16 +151,36 @@ describe('probeOutputPath', () => {
       }),
   );
 
+  it.effect('reports a mkdir permission denial as a usage error', () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(
+        probeOutputPathForTests('/missing/output.tex', '--output').pipe(
+          Effect.provide(
+            probeLayer((candidate) =>
+              Effect.fail(
+                sysError(
+                  'PermissionDenied',
+                  'makeDirectory',
+                  candidate,
+                  'EACCES',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      expect(error.message).toBe(
+        '--output is not writable (permission denied): /missing/output.tex',
+      );
+    }),
+  );
+
   it.effect('preserves unexpected mkdir failures', () =>
     Effect.gen(function* () {
-      const denied = errnoError('EACCES', 'denied');
+      const denied = sysError('Unknown', 'makeDirectory', '/missing', 'EIO');
       const error = yield* Effect.flip(
-        probeOutputPathForTests(
-          '/missing/output.tex',
-          '--output',
-          probeDeps(async () => {
-            throw denied;
-          }),
+        probeOutputPathForTests('/missing/output.tex', '--output').pipe(
+          Effect.provide(probeLayer(() => Effect.fail(denied))),
         ),
       );
       expect(error).toBe(denied);
@@ -196,7 +248,7 @@ describe('dangling output symlinks', () => {
           }),
         );
         expect(statError).toMatchObject({ code: 'ENOENT' });
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -209,7 +261,7 @@ describe('assertOutputDirAvailable', () => {
       const target = join(root, 'flagged');
       yield* Effect.promise(() => mkdir(target));
       expect(yield* assertOutputDirAvailable(target, root)).toBeUndefined();
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('creates and accepts a path that does not exist yet', () =>
@@ -222,7 +274,7 @@ describe('assertOutputDirAvailable', () => {
       expect((yield* Effect.promise(() => stat(target))).isDirectory()).toBe(
         true,
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('rejects a --output-dir that points at a file', () =>
@@ -239,7 +291,7 @@ describe('assertOutputDirAvailable', () => {
       );
       expect(error).toBeInstanceOf(CliUsageError);
       expect(error.message).toMatch(/--output-dir is not a directory/);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -260,7 +312,7 @@ describe('assertOutputDirAvailable', () => {
         );
         expect(error).toBeInstanceOf(CliUsageError);
         expect(error.message).toMatch(/is not a directory/);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });
 
@@ -275,7 +327,7 @@ describe('assertOutputFileAvailable', () => {
         expect(
           yield* assertOutputFileAvailable(join(root, 'out.tex'), root),
         ).toBeUndefined();
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('accepts an existing file (the writer overwrites)', () =>
@@ -286,7 +338,7 @@ describe('assertOutputFileAvailable', () => {
       const target = join(root, 'existing.tex');
       yield* Effect.promise(() => writeFile(target, 'old content'));
       expect(yield* assertOutputFileAvailable(target, root)).toBeUndefined();
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('rejects --output pointing at an existing directory', () =>
@@ -306,7 +358,7 @@ describe('assertOutputFileAvailable', () => {
       expect(error.message).toMatch(
         /--output is a directory.*use --output-dir/,
       );
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live(
@@ -326,7 +378,7 @@ describe('assertOutputFileAvailable', () => {
         );
         expect(error).toBeInstanceOf(CliUsageError);
         expect(error.message).toMatch(/parent path component is a file/);
-      }),
+      }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.live('resolves a relative --output against cwd before stat-ing', () =>
@@ -340,6 +392,6 @@ describe('assertOutputFileAvailable', () => {
         assertOutputFileAvailable('rel-dir', root),
       );
       expect(error.message).toMatch(/--output is a directory/);
-    }),
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 });

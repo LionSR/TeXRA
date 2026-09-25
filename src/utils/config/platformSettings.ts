@@ -1,3 +1,4 @@
+import { Effect } from 'effect';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -6,12 +7,13 @@ import type {
 } from '@platform/interfaces';
 import { settingByKey, type SettingHost } from '@shared/state/stateSettings';
 import {
+  inspectSetting,
   readConfigSetting,
   readSetting,
   writeSetting,
   type SettingsStores,
+  type StoredSetting,
 } from '@shared/config/settingsAccess';
-import type { Effect } from 'effect';
 
 function requireEntry(key: string) {
   const entry = settingByKey(key);
@@ -26,12 +28,25 @@ function requireEntry(key: string) {
  * by host (the git identity rows live in worktree-shared workspace state on
  * the extension and desktop and in `.texra/config.json` on the CLI). One
  * process is one host, so the composition root installs it once, beside
- * `initPlatform()`.
+ * `installProcessRuntime()`.
  */
-let processSettingHost: SettingHost = 'vscode';
+let installedHost: SettingHost | undefined;
 
 export function initProcessSettingHost(host: SettingHost): void {
-  processSettingHost = host;
+  installedHost = host;
+}
+
+/** Setting slots keep their extension layout until a root names the host. */
+const processSettingHost = (): SettingHost => installedHost ?? 'vscode';
+
+/**
+ * The same host in the tool registry's naming, for `unavailableHosts`, or
+ * `undefined` when no composition root named one (the agent package embedded
+ * in another process, a test). The tool resolver withholds every host-bound
+ * tool from such a process rather than guessing which host it is.
+ */
+export function processToolHost(): 'cli' | 'desktop' | 'extension' | undefined {
+  return installedHost === 'vscode' ? 'extension' : installedHost;
 }
 
 /**
@@ -48,8 +63,38 @@ export function readSettingFrom<T>(
   return readSetting(
     requireEntry(key),
     stores,
-    processSettingHost,
+    processSettingHost(),
   ) as Effect.Effect<T, StateReadFailed>;
+}
+
+/**
+ * A tool call's own override of a per-call setting, else the workspace
+ * default read via {@link readSettingFrom} — the shape a call-scoped knob
+ * (sandbox mode, permission mode, …) shares with the launch that follows it.
+ */
+export function readSettingUnlessOverridden<T>(
+  override: T | null | undefined,
+  stores: SettingsStores,
+  key: string,
+): Effect.Effect<T, StateReadFailed> {
+  return override == null
+    ? readSettingFrom<T>(stores, key)
+    : Effect.succeed(override);
+}
+
+/**
+ * {@link readSettingFrom} that reports a present value failing the row's
+ * schema as `invalid` instead of resolving it to the row's default.
+ */
+export function inspectSettingFrom<T>(
+  stores: SettingsStores,
+  key: string,
+): Effect.Effect<StoredSetting<T>, StateReadFailed> {
+  return inspectSetting(
+    requireEntry(key),
+    stores,
+    processSettingHost(),
+  ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 
 /** Read and validate one catalog-backed value from its config slot. */
@@ -72,7 +117,7 @@ export function readConfigSettingFrom<T>(
  * the declared `ConfigWriteFailed | Error` channel: it is raised inside
  * `writeSetting`, so it will not arrive as a catchable failure. Callers must
  * pass a value they already know is valid. User input is validated upstream — a
- * setting write resolves through `resolveStateSettingWrite`, which `safeParse`s
+ * setting write resolves through `applyStateSettingUpdate`, which `safeParse`s
  * before reaching the shared path — and a malformed catalog row is a bug to
  * fix rather than a condition to catch.
  *
@@ -90,7 +135,7 @@ export function writeSettingTo(
     requireEntry(key),
     value,
     stores,
-    processSettingHost,
+    processSettingHost(),
     target,
   );
 }

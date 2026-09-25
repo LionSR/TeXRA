@@ -13,6 +13,7 @@
 import { Effect, FileSystem, type Path } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
+import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
 import {
   RunIdSchema,
   OutputFileInfoSchema,
@@ -28,8 +29,8 @@ import type {
 import { runLatexdiffFromMetadata } from './diffOperations';
 import { discoverLatestRunOutputs } from './outputDiscovery';
 import { scanRunDirForOutputs } from './runOutputFiles';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
-import type { MathMarkupOption } from './mathMarkup';
 import type {
   DiffProgressReporter,
   DiffRunOutcome,
@@ -83,7 +84,7 @@ export interface RunLatexdiffForRunParams {
    * present, discovery is skipped and the metadata engine runs directly.
    */
   readonly outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo> | null;
-  readonly mathMarkup?: MathMarkupOption;
+  readonly mathMarkup?: LatexdiffMathMarkupValue;
   readonly generateBetweenRoundDiffs: boolean;
   /** Host-supplied diff service + logger channel (see {@link LatexdiffRuntime}). */
   readonly latexdiff: LatexdiffRuntime;
@@ -102,7 +103,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   ): Effect.fn.Return<
     LatexdiffExecutionResult,
     Error,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const {
       agent,

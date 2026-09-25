@@ -12,17 +12,21 @@
  * instead of running them out.
  */
 
-import { Effect } from 'effect';
+import { Data, Effect, Stream } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 import {
-  buildAuthenticatedRemoteUrl,
-  buildGitCredential,
+  overleafGitClone,
   overleafTokenSpec,
-  redactSensitive,
-  type GitCredential,
+  type OverleafGitClone,
   type OverleafRemote,
   type OverleafTokenSpec,
 } from '@latex/overleafProject';
+import { withLogChannel } from '@logger/effectLog';
+import { executeCommand } from '@utils/system/execUtils';
+import { makeMachineGitEnv } from '@utils/system/gitEnv';
+import type { PlatformError } from 'effect/PlatformError';
 
 /** Files ignored when deciding whether a workspace is "empty enough" to clone into. */
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
@@ -43,7 +47,6 @@ export interface OverleafCloneWorkflowPorts {
     message: string,
   ): Effect.Effect<void>;
 
-  isGitAvailable(): Effect.Effect<boolean>;
   /** `git` isn't on PATH — surface install guidance. */
   showGitMissing(): Effect.Effect<void>;
   /** Fails when the directory can't be read at all. */
@@ -53,11 +56,11 @@ export interface OverleafCloneWorkflowPorts {
   showWorkspaceUnreadable(error: unknown): Effect.Effect<void>;
   showWorkspaceNotEmpty(): Effect.Effect<void>;
 
-  /** Fails when `git clone` does. */
+  /** Run {@link gitClone} for `clone`. Fails when `git clone` does. */
   runClone(
-    remoteUrl: string,
+    clone: OverleafGitClone,
     workspacePath: string,
-  ): Effect.Effect<void, Error>;
+  ): Effect.Effect<void, Error, ChildProcessSpawner>;
   showCloneSucceeded(label: string): Effect.Effect<void>;
   /** The clone failed for what looks like an auth reason (bad/expired token). */
   showAuthFailure(remote: OverleafRemote): Effect.Effect<void>;
@@ -76,7 +79,7 @@ type OverleafCloneOutcome =
   | { status: 'cloneFailed' };
 
 type TokenResolution =
-  | { status: 'ready'; credential: GitCredential }
+  | { status: 'ready'; token: string }
   | { status: 'cancelled' }
   | { status: 'invalidToken' };
 
@@ -94,7 +97,7 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
 
   const stored = (yield* ports.getStoredToken(spec.tokenKey))?.trim() ?? '';
   if (stored && isValid(stored)) {
-    return { status: 'ready', credential: buildGitCredential(stored) };
+    return { status: 'ready', token: stored };
   }
   if (stored) yield* ports.deleteStoredToken(spec.tokenKey);
 
@@ -110,7 +113,7 @@ const resolveOverleafToken = Effect.fn('overleaf.resolveToken')(function* (
   }
 
   yield* ports.storeToken(spec.tokenKey, input);
-  return { status: 'ready', credential: buildGitCredential(input) };
+  return { status: 'ready', token: input };
 });
 
 const checkOverleafClonePreconditions = Effect.fn(
@@ -118,8 +121,18 @@ const checkOverleafClonePreconditions = Effect.fn(
 )(function* (
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
-): Effect.fn.Return<ClonePreconditionFailure | null, never> {
-  if (!(yield* ports.isGitAvailable())) {
+): Effect.fn.Return<
+  ClonePreconditionFailure | null,
+  never,
+  ChildProcessSpawner
+> {
+  // Directory-independent: the clone target may not exist yet.
+  const gitVersion = yield* executeCommand(['git', '--version'], {
+    cwd: process.cwd(),
+    settings: undefined,
+    quiet: true,
+  });
+  if (!gitVersion.success) {
     yield* ports.showGitMissing();
     return { status: 'gitMissing' };
   }
@@ -143,6 +156,91 @@ const checkOverleafClonePreconditions = Effect.fn(
   return null;
 });
 
+/**
+ * `git clone` ended without a clone. `message` is git's own stderr (or the
+ * exit or start failure when it printed none), never a `PlatformError`
+ * message.
+ */
+class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
+  readonly exitCode: number | undefined;
+  readonly message: string;
+}> {}
+
+/**
+ * Run one `git` command in `cwd` with the machine git environment plus
+ * `env`: `extendEnv: false`, because `makeMachineGitEnv` omits the
+ * credential-helper keys a merge with `process.env` would bring back.
+ */
+const runGit = (
+  args: readonly string[],
+  cwd: string,
+  env: Readonly<Record<string, string>>,
+  input?: string,
+) =>
+  Effect.gen(function* () {
+    const handle = yield* ChildProcess.make('git', [...args], {
+      cwd,
+      env: { ...makeMachineGitEnv(), ...env },
+      extendEnv: false,
+      stdin:
+        input === undefined
+          ? 'ignore'
+          : Stream.make(new TextEncoder().encode(input)),
+      stdout: 'ignore',
+      detached: false,
+      forceKillAfter: '5 seconds',
+    });
+    const [stderr, code] = yield* Effect.all(
+      [
+        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
+        handle.exitCode,
+      ],
+      { concurrency: 'unbounded' },
+    );
+    return { stderr: stderr.trim(), code };
+  }).pipe(Effect.scoped);
+
+/**
+ * Run `clone` in the existing directory `into`, then `git credential
+ * approve` with its `approval`. The approval only offers the token to the
+ * user's credential helper, so its failure is logged at warn rather than
+ * failing a clone that succeeded.
+ */
+export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
+  clone: OverleafGitClone,
+  into: string,
+): Effect.fn.Return<void, GitCloneFailed, ChildProcessSpawner> {
+  const cloned = yield* runGit(clone.args, into, clone.env).pipe(
+    Effect.mapError(
+      (error: PlatformError) =>
+        new GitCloneFailed({
+          exitCode: undefined,
+          message: `git clone did not complete: ${error.reason._tag}`,
+        }),
+    ),
+  );
+  if (cloned.code !== 0) {
+    return yield* new GitCloneFailed({
+      exitCode: cloned.code,
+      message: cloned.stderr || `git clone exited with code ${cloned.code}`,
+    });
+  }
+  const approved = yield* Effect.result(
+    runGit(['credential', 'approve'], into, {}, clone.approval),
+  );
+  let approveFailure: string | undefined;
+  if (approved._tag === 'Failure') {
+    approveFailure = approved.failure.reason._tag;
+  } else if (approved.success.code !== 0) {
+    approveFailure = `exit ${approved.success.code}: ${approved.success.stderr}`;
+  }
+  if (approveFailure !== undefined) {
+    yield* Effect.logWarning(
+      `git credential approve failed (${approveFailure}). The clone succeeded; git will ask for the token on the next pull or push.`,
+    ).pipe(withLogChannel('overleafClone'));
+  }
+});
+
 function isCloneAuthError(e: unknown): boolean {
   return (
     e instanceof Error && /auth|401|403|fatal: could not read/i.test(e.message)
@@ -161,7 +259,7 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     remote: OverleafRemote,
     workspacePath: string,
     ports: OverleafCloneWorkflowPorts,
-  ): Effect.fn.Return<OverleafCloneOutcome, Error> {
+  ): Effect.fn.Return<OverleafCloneOutcome, Error, ChildProcessSpawner> {
     const preconditionFailure = yield* checkOverleafClonePreconditions(
       workspacePath,
       ports,
@@ -171,34 +269,37 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     const token = yield* resolveOverleafToken(remote, ports);
     if (token.status !== 'ready') return token;
 
-    const remoteUrl = buildAuthenticatedRemoteUrl(remote, token.credential);
     const label = remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX';
 
-    return yield* ports.runClone(remoteUrl, workspacePath).pipe(
-      Effect.flatMap(() =>
-        ports
-          .showCloneSucceeded(label)
-          .pipe(Effect.as<OverleafCloneOutcome>({ status: 'success' })),
-      ),
-      Effect.catch((error) =>
-        Effect.gen(function* () {
-          const authError = isCloneAuthError(error);
-          if (authError) {
-            yield* ports.deleteStoredToken(overleafTokenSpec(remote).tokenKey);
-            yield* ports.showAuthFailure(remote);
-          } else {
-            yield* ports.showCloneFailed(
-              'Clone failed. Check credentials and connection.',
-            );
-          }
-          yield* ports.logCloneError(
-            redactSensitive(error.message, token.credential.sensitive),
-          );
-          return {
-            status: authError ? 'authFailure' : 'cloneFailed',
-          } satisfies OverleafCloneOutcome;
-        }),
-      ),
-    );
+    return yield* ports
+      .runClone(overleafGitClone(remote, token.token), workspacePath)
+      .pipe(
+        Effect.flatMap(() =>
+          ports
+            .showCloneSucceeded(label)
+            .pipe(Effect.as<OverleafCloneOutcome>({ status: 'success' })),
+        ),
+        Effect.catch((error) =>
+          Effect.gen(function* () {
+            const authError = isCloneAuthError(error);
+            if (authError) {
+              yield* ports.deleteStoredToken(
+                overleafTokenSpec(remote).tokenKey,
+              );
+              yield* ports.showAuthFailure(remote);
+            } else {
+              yield* ports.showCloneFailed(
+                'Clone failed. Check credentials and connection.',
+              );
+            }
+            // The token travels in no argument or URL, so git's message
+            // cannot carry it.
+            yield* ports.logCloneError(error.message);
+            return {
+              status: authError ? 'authFailure' : 'cloneFailed',
+            } satisfies OverleafCloneOutcome;
+          }),
+        ),
+      );
   },
 );

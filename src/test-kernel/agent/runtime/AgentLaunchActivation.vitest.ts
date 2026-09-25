@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   buildVars: vi.fn(),
-  createTrace: vi.fn(),
   helperCompletion: vi.fn(),
   helperModel: vi.fn(),
   load: vi.fn(),
@@ -14,15 +13,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agent/index', () => ({
-  isRemoteAgent: () => false,
   resolveAgentForLaunch: mocks.resolve,
 }));
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
-}));
-vi.mock('@transcript', async (importActual) => ({
-  ...(await importActual<typeof import('@transcript')>()),
-  createRunTrace: mocks.createTrace,
 }));
 vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -43,7 +37,6 @@ vi.mock('@agent/runtime/AgentRunLifecycle', async (importActual) => {
   return { ...actual, runFlowWithLifecycle: mocks.runFlowWithLifecycle };
 });
 
-import { TraceEmitter } from '@agent/trace';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { registerRun } from '@agent/storage/runLifecycle';
@@ -133,7 +126,6 @@ const captureStartedLaunch = Effect.fn(function* (
           yield* session.settlePublications();
         }
         const recordedSession = recordSessionEvents(session);
-        const trace = new TraceEmitter();
 
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({ path: '/agents/chat.yaml' }),
@@ -141,14 +133,10 @@ const captureStartedLaunch = Effect.fn(function* (
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.createTrace.mockReturnValueOnce({
-          trace,
-          dispose: vi.fn(),
-        });
         mocks.buildVars.mockReturnValueOnce(Effect.fail(LAUNCH_FAILURE));
 
         if (!options.resumedRunId) {
-          yield* registerRun(session, FRESH_RUN_ID, config, 'chat', {
+          yield* registerRun(session, FRESH_RUN_ID, config, {
             identity: { kind: 'agent', agent: 'chat' },
             parentRunId: options.parentRunId,
           });
@@ -330,10 +318,6 @@ describe('native agent launch activation', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.createTrace.mockReturnValueOnce({
-          trace: new TraceEmitter(),
-          dispose: vi.fn(),
-        });
         mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
 
         const session = createTestSession();
@@ -344,7 +328,7 @@ describe('native agent launch activation', () => {
           agentCategory: AgentCategory.ToolUse,
           instruction: 'Fix grammar.',
         });
-        yield* registerRun(session, DESCRIPTION_RUN_ID, described, 'chat', {
+        yield* registerRun(session, DESCRIPTION_RUN_ID, described, {
           identity: { kind: 'agent', agent: 'chat' },
         });
         const failure = yield* Effect.forkChild(
