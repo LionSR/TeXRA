@@ -866,9 +866,9 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt; the prior attempt's card
       // already carried that cost.
       if (!recovered) {
-        // `RunEnd.usage` is present once a round recorded usage and absent
-        // otherwise (see `RunEndSchema`), so it stays optional and absence is
-        // the recorded fact "no spend" rather than an unknown defaulted here.
+        // `RunEnd.usage` is the run ledger's folded totals, absent only for
+        // a run that never opened a ledger, so absence is the recorded fact
+        // "no spend" rather than an unknown defaulted here.
         invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
