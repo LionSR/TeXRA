@@ -76,8 +76,8 @@ Rows are the authority; memory keeps only a wake signal and the one live-only
 gate.
 
 1. **Publisher-kept pending set.** `sessionEventsLayer` already keeps each
-   aggregate's open work as it commits (#13255 streams, and open stages and
-   workflow calls since the host-exit change). Add pending follow-ups the
+   aggregate's open streams as it commits (#13255; #13270, not yet merged,
+   extends it to open stages and workflow calls). Add pending follow-ups the
    same way: `followup.queued` adds `{followUpId, content}` unless the id is
    known, `followup.consumed` removes it and marks the id known,
    `run.removed` drops the aggregate. Expose
@@ -113,24 +113,29 @@ gate.
    id not in `deferred`", a synchronous read as today.
 
 What is deleted: `RunInput.held`, `RunInput.seen`, `RunInput.seed`,
-`QueueEntry.held`, the replay in `attachInput`, `FollowUps.seed` and its two
-call sites (`toolUse.ts` enter, `childRunLoop.ts` setup fold for the
-agent-CLI child), and the ordering argument in the `RunInput` header.
+`QueueEntry.held`, the replay in `attachInput`, `FollowUps.seed` and its one
+call site (`toolUse.ts` enter), the direct `RunInput.seed` call in the
+`childRunLoop.ts` setup fold for the agent-CLI child, and the ordering
+argument in the `RunInput` header.
 Estimated net: about -120 lines, plus the pending-set tracker (about +30).
 
 ## 4. Ruling needed
 
 The design keeps the loop's `RunState` as the fold of its own writes (no
 ledger contract change): pending is read from the publisher's set, not from
-`RunState.followUps`. `RunState.followUps` then has no runtime reader after
-load; the ruling is whether to
+`RunState.followUps`. The loop then no longer reads `RunState.followUps`
+after load. One runtime reader remains outside it: `resumeRun.queuedFollowUps`
+cold-folds the run with `foldRunState` and reads `.followUps` at resume. The
+view is unaffected either way: `sessionFold`'s `projectFollowUps` reads
+`RunRows.followUps`. The ruling is whether to
 
 - (a) keep `RunState.followUps` as a fold field for `load` diagnostics and
   tests only, or
 - (b) remove it from `RunState` and keep it only in `RunRows` (the
-  admission replay check and the hydrate read it there).
+  admission replay check, the hydrate, and `sessionFold` read it there), with
+  `resumeRun.queuedFollowUps` reading `RunRows` or the hydrated pending set.
 
-Recommended: (b). One field, one reader, and the loop state stops carrying a
+Recommended: (b). One field in one fold, and the loop state stops carrying a
 value that is stale after its first batch.
 
 ## 5. Verification plan
