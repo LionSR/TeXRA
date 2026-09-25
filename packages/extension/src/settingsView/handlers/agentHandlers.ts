@@ -33,6 +33,7 @@ import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import { chooseTeamAvailabilityViaDialog } from '@frontend/ui/dialogs';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
@@ -442,10 +443,9 @@ export class AgentHandlers {
     return Effect.forkDetach(
       vscodeUi.showInfoMessage(message).pipe(
         Effect.catchTag('NotificationFailed', (failure) =>
-          Effect.sync(() => {
-            this.ctx.log.warn(`${scope} notice failed: ${failure.message}`);
-          }),
+          Effect.logWarning(`${scope} notice failed: ${failure.message}`),
         ),
+        withLogChannel(this.ctx.channel),
       ),
     ).pipe(Effect.asVoid);
   }

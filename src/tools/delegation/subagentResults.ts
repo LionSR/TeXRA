@@ -32,7 +32,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines, formatDuration } from '@utils/text/stringUtils';
-import { unifiedDiffText } from '@utils/text/unifiedDiff';
+import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import { formatDelivery } from './deliveryEnvelope';
 
 export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
@@ -354,7 +354,8 @@ const computeAndWriteWorkflowDiffs = Effect.fn(
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
-        const diff = unifiedDiffText(original, modified);
+        const { text: diff, timeout } = unifiedDiffText(original, modified);
+        yield* reportDiffTimeout(timeout);
         if (diff) {
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           const truncated = truncateDiff(diff, limit);

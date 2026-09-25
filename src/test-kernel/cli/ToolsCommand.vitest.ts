@@ -1,8 +1,7 @@
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setLogSink } from '@logger/logSink';
-import { createLog } from '@logger/logUtils';
+import { LOG_CHANNEL, setLogSink, writeLogEntry } from '@logger/logSink';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -137,7 +136,15 @@ describe('CLI tools command', () => {
     // parse. The channel writer emits unconditionally now: no gate decides
     // whether such a line is written.
     mocks.installCliProcessRuntime.mockImplementation(async () => {
-      createLog('UsageLogService').debug('UsageLogService started');
+      writeLogEntry({
+        level: 'DEBUG',
+        fiberId: '',
+        timestamp: new Date().toISOString(),
+        message: 'UsageLogService started',
+        cause: undefined,
+        annotations: { [LOG_CHANNEL]: 'UsageLogService' },
+        spans: {},
+      });
       return testRuntime();
     });
 
