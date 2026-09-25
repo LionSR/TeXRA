@@ -15,10 +15,7 @@ import {
 } from '@common/errors/agentErrorClassification';
 import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import {
-  ChatExportInputUnreadable,
-  exportRunTranscript,
-} from '@controllers/progressView/exportTranscript';
+import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
@@ -29,8 +26,6 @@ import {
 } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
-  RunConfigUnreadable,
-  RunLaunchFailed,
   type WorkflowDiffRequest,
   type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
@@ -55,7 +50,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import type { AgentDirectoriesFailed } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -69,11 +64,7 @@ import {
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
 import latexPreamble from '@resources/templates/chatExport.tex';
-import {
-  cloneRoundIndexed,
-  type FileOpResult,
-  type RunId,
-} from '@shared/schemas';
+import { type FileOpResult, type RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Cancelled,
@@ -98,14 +89,8 @@ import {
   postDesktopSettingsView,
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
-import {
-  DesktopProgressFileActions,
-  type DesktopLatexdiffWorkspaceScan,
-} from './desktopProgressFileActions.js';
-import {
-  OnboardingCallFailed,
-  type DesktopOnboardingIpc,
-} from './desktopOnboardingIpc.js';
+import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
+import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -113,10 +98,8 @@ import type { DesktopFileSelection } from './desktopFileSelection.js';
 
 interface DesktopHostRequestsOptions {
   session: SessionHandle;
-  /** The process stores the desktop root holds: the model catalog reads both,
-   *  and the merge run reads the helper model from the state store. */
+  /** The process secret store the model catalog reads. */
   secrets: PlatformSecrets;
-  globalState: StateStore;
   host: DesktopAgentRunHost;
   run: DesktopAgentRun;
   files: DesktopFileSelection;
@@ -190,7 +173,7 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      runAgentRequest: run.runAgentRequest,
+      runValidated: run.runValidated,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -254,7 +237,6 @@ export function createDesktopHostRequests(
     },
     {
       session,
-      globalState: options.globalState,
       runtime,
       // The request schedules a merge; its later run failure belongs to this
       // lifecycle callback, after the request has already completed.
@@ -296,56 +278,14 @@ export function createDesktopHostRequests(
     editedFile: string,
     runId?: RunId,
   ): Effect.Effect<void, HostCallFailed | RequestRefusal> =>
-    Effect.gen(function* () {
-      const context =
-        runId === undefined
-          ? undefined
-          : yield* getLatexdiffRunContext(runId, editedFile);
-      if (!context) {
-        yield* fileActions.runLatexdiffFile(baseFile, editedFile);
-        return;
-      }
-      yield* fileActions.diffAcceptedFilePair(baseFile, editedFile, context);
-    }).pipe(
+    (runId === undefined
+      ? fileActions.runLatexdiffFile(baseFile, editedFile)
+      : fileActions.diffAcceptedFilePair(baseFile, editedFile, runId)
+    ).pipe(
       Effect.mapError((cause) =>
         hostFailure('fileActions.runLatexdiffFile', cause),
       ),
     );
-
-  /**
-   * The run context a diff of an accepted file pair reads its per-round
-   * outputs from: the run the sheet was opened on. Frozen here, not read
-   * later: `getOutputFiles` reads the view's current level (#11402), and
-   * this context crosses several awaits before anything enumerates it.
-   */
-  function getLatexdiffRunContext(runId: RunId, editedFile: string) {
-    return Effect.gen(function* () {
-      const config = yield* runActions.readConfig(runId);
-      const outputsByRound = cloneRoundIndexed(
-        runOutputs.getOutputFiles(runId),
-      );
-      const workspaceScan: DesktopLatexdiffWorkspaceScan | undefined = config
-        ? {
-            agent: config.agent,
-            model: config.model,
-            inputFile: config.inputFiles.at(0) ?? editedFile,
-            // The run's output files, so multi-document runs resolved via the
-            // run-dir or workspace scan diff every output.
-            ...(config.outputFiles?.length
-              ? { outputFiles: config.outputFiles }
-              : {}),
-          }
-        : undefined;
-      if (Object.keys(outputsByRound).length === 0 && !workspaceScan) {
-        return undefined;
-      }
-      return {
-        outputsByRound,
-        runId,
-        ...(workspaceScan && { workspaceScan }),
-      };
-    });
-  }
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
@@ -374,32 +314,13 @@ export function createDesktopHostRequests(
   });
 
   const runWorkflowDiff = (request: WorkflowDiffRequest) =>
-    Effect.gen(function* () {
-      const { agent, model, inputFile } = request;
-      if (!agent || !model || !inputFile) {
-        return yield* Effect.fail(
-          new Rejected({
-            reason: 'Missing required configuration parameters for the diff.',
-          }),
-        );
-      }
-      yield* fileActions
-        .diffStreamToolbarAction({
-          outputsByRound: request.outputsByRound ?? {},
-          runId: request.runId,
-          workspaceScan: {
-            agent,
-            model,
-            inputFile,
-            outputFiles: request.outputFiles,
-          },
-        })
-        .pipe(
-          Effect.mapError((cause) =>
-            hostFailure('fileActions.diffStreamToolbarAction', cause),
-          ),
-        );
-    });
+    fileActions
+      .diffStreamToolbarAction(request.runId)
+      .pipe(
+        Effect.mapError((cause) =>
+          hostFailure('fileActions.diffStreamToolbarAction', cause),
+        ),
+      );
 
   const reportFileOperationResult = (
     operation: WorkflowFileOperation,
@@ -746,10 +667,9 @@ export function createDesktopHostRequests(
   }
 
   /**
-   * The bridge's host-request port: the dispatch program plus the one dialog
-   * a failed request presents before it is answered. The cause is squashed to
-   * word the dialog and re-raised unchanged, so the bridge's
-   * refusal-versus-defect fold sees what the failing arm produced.
+   * The bridge's host-request port. A failure is answered as it is: the
+   * surface shows a refusal with its guide link, and a launch that fails has
+   * already been presented by the launch itself.
    */
   function handleHostRequest(
     request: HostRequest,
@@ -757,46 +677,7 @@ export function createDesktopHostRequests(
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the
     // session's storage takes the view the layer above built from its roots.
-    return Effect.provide(dispatch(request, port), sessionFiles).pipe(
-      Effect.catchCause((cause) => {
-        const error = Cause.squash(cause);
-        if (error instanceof Cancelled) return Effect.failCause(cause);
-        // Request-scoped operations do not present. Every rejection, including
-        // a capability refusal, reaches this one dialog before the response.
-        // A lifted member is presented as what it rejected with: the tag names
-        // the member, the classification reads the cause it carried, so the
-        // dialog words the launcher's or the record read's own error exactly
-        // as it did when that value reached here bare.
-        const primaryError = primaryAgentError(
-          error instanceof HostCallFailed ||
-            error instanceof OnboardingCallFailed ||
-            error instanceof RunLaunchFailed ||
-            error instanceof RunConfigUnreadable ||
-            error instanceof TranscriptExportFailed ||
-            error instanceof ChatExportInputUnreadable
-            ? error.cause
-            : error,
-        );
-        const refusal =
-          primaryError instanceof Rejected ||
-          primaryError instanceof Unavailable
-            ? primaryError
-            : undefined;
-        return presentAgentFailure(
-          session.interactions,
-          {
-            kind: classifyAgentError(primaryError),
-            message: refusal?.reason ?? toErrorMessage(primaryError),
-            // A refused request's guide link (e.g. the launch's
-            // file-management page) must survive into the host-owned
-            // dialog (#11959).
-            ...(refusal instanceof Rejected &&
-              refusal.docsCommand && { docsCommand: refusal.docsCommand }),
-          },
-          { replayWhenAttached: true },
-        ).pipe(Effect.andThen(Effect.failCause(cause)));
-      }),
-    );
+    return Effect.provide(dispatch(request, port), sessionFiles);
   }
 
   return {

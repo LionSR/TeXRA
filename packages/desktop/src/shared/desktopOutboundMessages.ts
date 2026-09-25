@@ -29,7 +29,6 @@ import { DesktopShowPromptMessageSchema } from './desktopPromptMessages.js';
 import {
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
-  DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
 } from './desktopShellMessages.js';
 import {
@@ -43,6 +42,7 @@ import {
   DesktopTerminalErrorMessageSchema,
   DesktopTerminalExitMessageSchema,
   DesktopTerminalOpenCommandMessageSchema,
+  DesktopWorkspaceFilesChangedMessageSchema,
 } from './desktopWorkspaceMessages.js';
 
 export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
@@ -52,6 +52,7 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   DesktopFileReadMessageSchema,
   DesktopFileWrittenMessageSchema,
   DesktopFileErrorMessageSchema,
+  DesktopWorkspaceFilesChangedMessageSchema,
   // Terminal
   DesktopTerminalDataMessageSchema,
   DesktopTerminalExitMessageSchema,
@@ -67,7 +68,6 @@ export const DesktopOutboundMessageSchema = z.discriminatedUnion('command', [
   // Shell, logs, onboarding
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
-  DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
   DesktopSetLogMessageSchema,
   DesktopOnboardingSetStateMessageSchema,

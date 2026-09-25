@@ -1,4 +1,4 @@
-import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,7 +10,6 @@ import {
   buildCliContext,
   CliUsageError,
   readCliBugsUrl,
-  readCliEnv,
   readCliVersion,
   resolveCliCommandName,
   resolveStreamColor,
@@ -24,6 +23,17 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
+
+// The user mcp.json the CLI validates at startup, moved out of the real home
+// so no case reads a developer's own file.
+const mcpConfig = vi.hoisted(() => {
+  const dir = `${process.env.TMPDIR ?? '/tmp'}/texra-cli-mcp-${process.pid}`;
+  return { dir, file: `${dir}/mcp.json` };
+});
+vi.mock('@tools/mcp/mcpConfig', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/mcp/mcpConfig')>()),
+  USER_MCP_CONFIG_PATH: mcpConfig.file,
+}));
 
 const ambient = {
   isCi: true,
@@ -206,6 +216,27 @@ describe('CLI context config defaults', () => {
     expect(context.config.get('texra.chat')).toMatchObject({
       model: 'deepseekT',
     });
+  });
+
+  it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
+    await mkdir(mcpConfig.dir, { recursive: true });
+    await writeFile(mcpConfig.file, '{ "mcpServers": ');
+    try {
+      const context = await cliContext({
+        ambient,
+        env: {},
+        globalArgs: {
+          cwd: await makeTempDir('texra-cli-context-', tempDirs),
+        },
+        storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
+      });
+
+      expect(context.configWarnings.join('\n')).toContain(
+        `${mcpConfig.file} is not valid JSON`,
+      );
+    } finally {
+      await rm(mcpConfig.dir, { recursive: true, force: true });
+    }
   });
 
   it('accepts every config key a CLI reader honors', async () => {

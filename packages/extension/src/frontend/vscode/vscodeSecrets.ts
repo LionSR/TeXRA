@@ -1,19 +1,15 @@
 /**
  * VS Code adapter for the platform-agnostic PlatformSecrets.
  *
- * Uses vscode.SecretStorage for secure key storage. Environment variables
- * override persisted secrets, matching ElectronSecrets and CliSecrets so a
- * key exported in the environment behaves identically in every host.
+ * Uses vscode.SecretStorage for secure key storage. Like ElectronSecrets and
+ * CliSecrets it answers only what it holds; the environment tier of a
+ * credential lives in `resolveCredential`, so it behaves identically in every
+ * host.
  */
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
-import { invalidateApiKeyCache } from '@model/apiProviders';
-import {
-  SecretsFailed,
-  secretsGet,
-  type PlatformSecrets,
-} from '@platform/secrets';
+import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export class VscodeSecrets implements PlatformSecrets {
@@ -24,16 +20,12 @@ export class VscodeSecrets implements PlatformSecrets {
   }
 
   get(key: string) {
-    return secretsGet(this, key);
-  }
-
-  getStored(key: string) {
     return Effect.tryPromise({
       try: () => Promise.resolve(this.storage.get(key)),
       catch: (cause) =>
         new SecretsFailed({
           reason: 'io',
-          operation: 'getStored',
+          operation: 'get',
           key,
           message: `VS Code could not read the secret "${key}": ${toErrorMessage(cause)}`,
           cause,
@@ -44,26 +36,17 @@ export class VscodeSecrets implements PlatformSecrets {
   /**
    * `SecretStorage.store` is the commit, so the whole call is the commit
    * region: host-controller study Q2 rules that it survives cancellation.
-   *
-   * The API-key lookup cache drops in this store's own finalizer, before the
-   * write returns, because a writer re-reads the key right after it (the
-   * setup agent's `unset_api_key` does). The `credentialChanged` signal is
-   * not emitted here: `SecretStorage.onDidChange` emits it at the extension
-   * entry, which also covers writes from other windows.
+   * The `credentialChanged` signal is not emitted here:
+   * `SecretStorage.onDidChange` emits it at the extension entry, which also
+   * covers writes from other windows.
    */
   set(key: string, value: string) {
-    return Effect.ensuring(
-      this.commit('set', () => this.storage.store(key, value), key),
-      Effect.sync(invalidateApiKeyCache),
-    );
+    return this.commit('set', () => this.storage.store(key, value), key);
   }
 
   /** The commit region of a removal, uninterruptible for the same reason. */
   delete(key: string) {
-    return Effect.ensuring(
-      this.commit('delete', () => this.storage.delete(key), key),
-      Effect.sync(invalidateApiKeyCache),
-    );
+    return this.commit('delete', () => this.storage.delete(key), key);
   }
 
   private commit(

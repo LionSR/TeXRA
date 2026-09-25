@@ -16,6 +16,7 @@
  */
 
 // Local imports
+import type { TokenUsageStats } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 
 interface DeliveryEnvelopeAttribute {
@@ -48,25 +49,11 @@ interface ChildRunDelivery {
   /** Final assistant response as one inline element; empty → `(no response)`. */
   readonly response?: string;
   /** Token usage element; omitted when null/undefined. */
-  readonly usage?: { input: number; output: number } | null;
+  readonly usage?: Pick<TokenUsageStats, 'inputTokens' | 'outputTokens'> | null;
   /** Pre-rendered fact lines appended after the shared elements. */
   readonly lines?: readonly string[];
   /** Failure text; its presence is what makes this delivery an error report. */
   readonly message?: string;
-}
-
-/**
- * Renames an SDK/provider usage shape (`input_tokens`/`output_tokens`,
- * optional across providers) into {@link ChildRunDelivery.usage}'s
- * `{input, output}` shape, defaulting missing counts to 0. Single source for
- * a mapping every child-run driver otherwise re-derives per provider.
- */
-export function toDeliveryUsage(
-  usage: { input_tokens?: number; output_tokens?: number } | null | undefined,
-): { input: number; output: number } | null {
-  return usage
-    ? { input: usage.input_tokens ?? 0, output: usage.output_tokens ?? 0 }
-    : null;
 }
 
 /**
@@ -102,7 +89,7 @@ export function formatDelivery(delivery: ChildRunDelivery): string {
   }
   if (delivery.usage) {
     body.push(
-      `<usage input="${delivery.usage.input}" output="${delivery.usage.output}" />`,
+      `<usage input="${delivery.usage.inputTokens}" output="${delivery.usage.outputTokens}" />`,
     );
   }
   if (delivery.lines) body.push(...delivery.lines);

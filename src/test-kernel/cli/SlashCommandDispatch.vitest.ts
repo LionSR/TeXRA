@@ -62,7 +62,6 @@ import * as codexSubscription from '@model/codex/codexSubscription';
 import { withProcessServices } from '@platform/processRuntime';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
-  AgentCategory,
   RUN_PHASE,
   type RunId,
   type Plan,
@@ -74,7 +73,7 @@ import type { RunView } from '@shared/session/sessionView';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import * as memoryFileSystem from '@tools/memory/memoryFileSystem';
 import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';

@@ -11,8 +11,12 @@
  */
 import { Effect } from 'effect';
 
-import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
-import { envVar } from '@utils/system/envFlags';
+import {
+  type CredentialOrigin,
+  type PlatformSecrets,
+  resolveCredential,
+  type SecretsFailed,
+} from '@platform/secrets';
 
 /** SecretStorage key under which the GitHub PAT is persisted. */
 export const GITHUB_TOKEN_STORAGE_KEY = 'github.token';
@@ -49,48 +53,22 @@ export function gitHubTokenRejectedMessage(reason: string): string {
 /** Environment variables accepted by GitHub tools, in precedence order. */
 const GITHUB_TOKEN_ENV_VARS = ['GH_TOKEN', 'GITHUB_TOKEN'] as const;
 
-function normalizeGitHubToken(token: string | undefined): string | undefined {
-  const trimmed = token?.trim();
-  return trimmed || undefined;
-}
-
-/** The first non-blank GitHub token env var, in precedence order. */
-const gitHubEnvToken: Effect.Effect<string | undefined> = Effect.gen(
-  function* () {
-    for (const name of GITHUB_TOKEN_ENV_VARS) {
-      const token = normalizeGitHubToken(yield* envVar(name));
-      if (token) return token;
-    }
-    return undefined;
-  },
-);
+const resolveGitHubToken = (secrets: PlatformSecrets) =>
+  resolveCredential(secrets, GITHUB_TOKEN_STORAGE_KEY, GITHUB_TOKEN_ENV_VARS);
 
 export function getGitHubToken(
   secrets: PlatformSecrets,
 ): Effect.Effect<string | undefined, SecretsFailed> {
-  return Effect.flatMap(secrets.get(GITHUB_TOKEN_STORAGE_KEY), (stored) => {
-    const token = normalizeGitHubToken(stored);
-    return token ? Effect.succeed(token) : gitHubEnvToken;
-  });
+  return Effect.map(resolveGitHubToken(secrets), ({ value }) => value);
 }
 
 /**
- * Precedence-ordered GitHub-token *source* check: a persisted secret wins
- * over environment-variable fallbacks. Unlike `getGitHubToken`, this reports
- * which source backs the token (rather than the token value itself), which
- * is what credential-status surfaces need. Single owner for the setup tool's
- * environment probe (`src/tools/setup/platform.ts`) and the extension's
- * `SecretManager.gitHubTokenExists()`, which previously duplicated this
- * precedence chain.
+ * Which source backs the GitHub token (a persisted secret wins over the env
+ * vars), read through the same ladder as {@link getGitHubToken}, which is
+ * what credential-status surfaces need.
  */
 export function resolveGitHubTokenSource(
   secrets: PlatformSecrets,
-): Effect.Effect<'secret' | 'env' | 'none', SecretsFailed> {
-  return Effect.flatMap(
-    secrets.getStored(GITHUB_TOKEN_STORAGE_KEY),
-    (stored): Effect.Effect<'secret' | 'env' | 'none'> =>
-      normalizeGitHubToken(stored)
-        ? Effect.succeed('secret')
-        : Effect.map(gitHubEnvToken, (token) => (token ? 'env' : 'none')),
-  );
+): Effect.Effect<CredentialOrigin, SecretsFailed> {
+  return Effect.map(resolveGitHubToken(secrets), ({ origin }) => origin);
 }

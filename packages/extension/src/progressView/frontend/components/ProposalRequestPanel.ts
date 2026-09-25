@@ -228,6 +228,7 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           >${workflowScriptPlanSummary(workflow)}</span
         >
       </div>
+      <div class="proposal-card__defaults">${data.agent} · ${modelLabel}</div>
       ${
         phases.length > 0
           ? html`<div class="proposal-card__phases" role="list">
@@ -238,9 +239,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
                   <div class="proposal-card__phase" role="listitem">
                     ${waIcon('diagram-project')}
                     <strong>${phase.heading.phaseLabel}</strong>
-                    <span class="proposal-card__phase-agents"
-                      >${data.agent} · ${modelLabel}</span
-                    >
                     <span class="proposal-card__phase-calls"
                       >${
                         phase.declaredTasks.length > 0

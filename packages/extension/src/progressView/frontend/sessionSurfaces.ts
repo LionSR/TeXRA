@@ -89,9 +89,6 @@ function withPickedPaths(
 
 export function createSessionSurfaces(options: {
   readonly storage: KeyValueStore;
-  /** Desktop requests present through their host session. The extension
-   *  surface owns its request notices. Choose the owner when wiring a shell. */
-  readonly hostRequestFailureOwner: 'host' | 'surface';
 }): SessionSurfaces {
   const transport = installWebviewTransport();
   interface Held extends SessionSurface {
@@ -304,18 +301,17 @@ export function createSessionSurfaces(options: {
     }
   }
 
-  const hostResponseHandlers: Record<
-    typeof options.hostRequestFailureOwner,
-    typeof settleHost
-  > = {
-    host: settleHost,
-    surface: (entry, request, origin, result) => {
-      presentResult(entry, result);
-      settleHost(entry, request, origin, result);
-    },
-  };
-  const settleHostResponse =
-    hostResponseHandlers[options.hostRequestFailureOwner];
+  /** A refusal is the surface's to show, on every host: the wire carries
+   *  its reason and its guide link. */
+  function settleHostResponse(
+    entry: Held,
+    request: HostRequest,
+    origin: DraftOrigin,
+    result: Response['result'],
+  ): void {
+    presentResult(entry, result);
+    settleHost(entry, request, origin, result);
+  }
 
   function hostRequestFor(entry: Held, request: HostRequest): void {
     const surface = entry.surface$.get();

@@ -27,7 +27,7 @@ import {
 } from './turn.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
-import { authOrRejectionKind, retryAfterMsOf } from './errors.js';
+import { sdkModelError } from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
@@ -177,28 +177,17 @@ const EventSchema = z.discriminatedUnion('type', [
 ]);
 
 function sdkFailure(cause: unknown): ModelError {
-  const retryAfterMs =
-    cause instanceof APIError ? retryAfterMsOf(cause.headers) : undefined;
-  let kind: ModelError['kind'] = 'transport';
-  if (cause instanceof SyntaxError) kind = 'malformed-output';
-  else if (
-    cause instanceof APIError &&
-    !(cause instanceof APIConnectionError)
-  ) {
-    kind = authOrRejectionKind(cause.status);
-  }
-  return new ModelError({
-    kind,
-    message:
-      cause instanceof Error
-        ? cause.message
-        : 'The Anthropic transport failed.',
-    ...(cause instanceof APIError
-      ? { status: cause.status, requestId: cause.requestID ?? undefined }
-      : {}),
-    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+  return sdkModelError(
     cause,
-  });
+    cause instanceof APIError && !(cause instanceof APIConnectionError)
+      ? {
+          status: cause.status,
+          headers: cause.headers,
+          requestId: cause.requestID,
+        }
+      : undefined,
+    'The Anthropic transport failed.',
+  );
 }
 
 /**

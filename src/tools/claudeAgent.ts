@@ -47,6 +47,7 @@ import type {
   ClaudeAgentModel,
   ClaudeAgentPermissionMode,
   RunId,
+  TokenUsageStats,
   ToolResult,
   ToolUseLog,
 } from '@shared/schemas';
@@ -83,13 +84,12 @@ import {
   launchAgentCliSession,
   reraiseAgentCliCallFailure,
 } from './agentCliShared';
-import { formatDelivery, toDeliveryUsage } from './delegation/deliveryEnvelope';
+import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
-  aggregateClaudeModelUsage,
   buildClaudeToolUseLog,
+  claudeResultUsage,
   CLAUDE_AGENT_NAME,
   modelSupportsAdaptiveThinking,
-  type ClaudeTurnUsage,
 } from './claudeAgentShared';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
@@ -153,7 +153,7 @@ export type ClaudeAgentInput = z.infer<typeof ClaudeAgentInputSchema>;
 
 interface TurnResult {
   finalResponse: string;
-  usage: ClaudeTurnUsage | null;
+  usage: TokenUsageStats | null;
   sessionId: string | undefined;
   totalCostUsd?: number;
   isError: boolean;
@@ -264,10 +264,7 @@ export function runStreamedTurn(params: {
                 }
                 break;
               case 'result':
-                usage =
-                  raw.modelUsage == null
-                    ? (raw.usage ?? null)
-                    : aggregateClaudeModelUsage(raw.modelUsage);
+                usage = claudeResultUsage(raw);
                 totalCostUsd = raw.total_cost_usd;
                 if (raw.subtype === 'success') {
                   if (isNonEmptyString(raw.result)) {
@@ -481,23 +478,6 @@ function buildClaudeAgentLaunch(params: {
     },
     resolveSessionIds: (turn) => [fallbackSessionId, turn.sessionId],
     getUsage: (turn) => turn.usage,
-    buildUsageStats: (turn) =>
-      turn.usage
-        ? {
-            inputTokens: turn.usage.input_tokens ?? 0,
-            outputTokens: turn.usage.output_tokens ?? 0,
-            cost: turn.usage.cost_usd ?? 0,
-            ...(turn.usage.cache_read_input_tokens != null &&
-              turn.usage.cache_read_input_tokens > 0 && {
-                cacheReadInputTokens: turn.usage.cache_read_input_tokens,
-              }),
-            ...(turn.usage.cache_creation_input_tokens != null &&
-              turn.usage.cache_creation_input_tokens > 0 && {
-                cacheCreationInputTokens:
-                  turn.usage.cache_creation_input_tokens,
-              }),
-          }
-        : undefined,
     isTurnError: (turn) => turn.isError,
     turnErrorMessage: (turn) => turn.errorMessage || undefined,
     formatDelivery: (turn, wallTimeMs, lastPrompt) =>
@@ -508,7 +488,7 @@ function buildClaudeAgentLaunch(params: {
         attributes: [{ name: 'session-id', value: turn.sessionId || null }],
         wallTime: formatWallTimeSeconds(wallTimeMs),
         response: turn.finalResponse,
-        usage: toDeliveryUsage(turn.usage),
+        usage: turn.usage,
         lines: claudeCostLines(turn),
       }),
     formatError: (turn, err, lastPrompt) =>

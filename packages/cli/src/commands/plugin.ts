@@ -4,7 +4,6 @@ import * as path from 'node:path';
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
 
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { withProcessServices } from '@platform/processRuntime';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
@@ -16,6 +15,7 @@ import {
   installPlugins,
   listPlugins,
   removePlugin,
+  setPluginEnabled,
   updatePlugins,
   GIT_URL,
   SAFE_REF,
@@ -105,10 +105,7 @@ function withPluginEnv<A, E>(
       services.runtime,
       operation({
         stores: services.roots,
-        pluginsDir: path.join(
-          context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-          'plugins',
-        ),
+        pluginsDir: path.join(context.storageRoot, 'plugins'),
       }),
     );
   });
@@ -123,7 +120,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
   return plugins
     .map((plugin) => {
       const header = [
-        plugin.name,
+        plugin.enabled ? plugin.name : `${plugin.name} (disabled)`,
         plugin.version,
         plugin.commit
           ? `${plugin.source} @ ${shortCommit(plugin.commit)}`
@@ -264,6 +261,37 @@ const pluginRemoveCommand = defineCliCommand({
     ),
 });
 
+function pluginSwitchCommand(enabled: boolean) {
+  const verb = enabled ? 'enable' : 'disable';
+  return defineCliCommand({
+    meta: {
+      name: verb,
+      description: enabled
+        ? 'Enable an installed plugin: its skills load again'
+        : 'Disable an installed plugin without removing it: its skills are hidden',
+    },
+    args: { ...GLOBAL_ARGS, name: NAME_ARG },
+    catchExitCode: pluginExitCode,
+    run: (context, ctx) =>
+      withPluginEnv(context, (env) =>
+        setPluginEnabled(ctx.args.name, enabled, env).pipe(
+          Effect.map((plugin) => {
+            const result = { name: plugin.name, enabled };
+            emitCliResult(context, {
+              json: result,
+              ndjson: {
+                kind: 'result',
+                result: { command: `plugin ${verb}`, ...result },
+              },
+              text: `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}.`,
+            });
+            return CliExitCode.Success;
+          }),
+        ),
+      ),
+  });
+}
+
 const pluginUpdateCommand = defineCliCommand({
   meta: {
     name: 'update',
@@ -314,6 +342,8 @@ export const pluginCommand = withUsageSections(
       list: pluginListCommand,
       remove: pluginRemoveCommand,
       update: pluginUpdateCommand,
+      enable: pluginSwitchCommand(true),
+      disable: pluginSwitchCommand(false),
     },
   }),
   [
@@ -330,6 +360,10 @@ export const pluginCommand = withUsageSections(
           'install one plugin a marketplace lists',
         ],
         ['texra plugin update', 'refetch every installed plugin'],
+        [
+          'texra plugin disable paper-protocol',
+          'hide a plugin without removing it',
+        ],
       ],
     },
     {

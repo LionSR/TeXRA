@@ -16,6 +16,7 @@
  * billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
@@ -48,7 +49,6 @@ import {
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -64,12 +64,14 @@ import {
   type RequestDecision,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import type { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  findStorageRefusal,
+  type RunLedgerRefused,
+} from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
@@ -263,6 +265,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         objectType: 'messages' | 'response',
         round: number,
         baseName: string,
+        bound: BoundModel,
       ) =>
         maybeSaveDebugObject({
           object,
@@ -270,7 +273,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           context: {
             logger,
             runId,
-            modelName: run.config.model,
+            modelName: bound.modelId,
             isRemote: run.config.agentSource === 'remote',
             roots: session.roots,
           },
@@ -447,13 +450,9 @@ export const modelInvokerLayer = (): Layer.Layer<
           trace.output.finalize();
           if (Cause.hasInterrupts(streamed.cause))
             return yield* Effect.interrupt;
+          const refused = findStorageRefusal(streamed.cause);
+          if (refused) return yield* Effect.fail(refused);
           const cause = Cause.squash(streamed.cause);
-          if (
-            cause instanceof RunLedgerRefused ||
-            cause instanceof DatabaseWriteFailed
-          ) {
-            return yield* Effect.fail(cause);
-          }
           logRetryLifecycle(operationId, 'attempt_failed', bound, {
             attempt: invocation.attempt,
           });
@@ -482,6 +481,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           'response',
           request.round,
           `${request.debugName}_response`,
+          bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
         if (
@@ -622,6 +622,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           'messages',
           request.round,
           request.debugName,
+          bound,
         );
         // R4: the input estimate where the provider offers one. A count that
         // fails is logged and the provider enforces its own limit; an input
@@ -906,8 +907,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             // endpoint) and binds the catalog model.
             const config =
               selection === 'personal'
-                ? ((yield* resolveRuntimeModelConfig(failed.modelId)) ??
-                  failed.config)
+                ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
                 : failed.config;
             const next = yield* bindModel({
               config,

@@ -12,7 +12,15 @@
 
 // Node imports
 // Third-party imports
-import { Data, Deferred, Duration, Effect, FileSystem } from 'effect';
+import {
+  Data,
+  Deferred,
+  Duration,
+  Effect,
+  FileSystem,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 // Local imports
 import {
@@ -35,6 +43,7 @@ import {
 } from '@shared/schemas';
 import { BASH_BACKGROUND_LOG_CAP_CHARS } from '@shared/toolUse';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import type { SessionView } from '@shared/session/sessionView';
 import { assertNoParentTraversal } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { requireToolRun } from '@tools/core/toolRun';
@@ -111,13 +120,15 @@ interface RunToolContext {
 /**
  * Block until one of `runIds` changes status, the caller's run
  * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
- * elapse — whichever comes first. `settled` is re-checked once the change
- * listeners are registered, closing the window between the caller's
- * pre-check and registration. The race settles on the first completion,
- * success or defect, so a throw inside the registry wait surfaces at once
- * instead of stalling until the deadline. Interrupting the winner-less
- * racers detaches the registry wait's listeners and disposes the follow-up
- * listener.
+ * elapse — whichever comes first. A status change is read off the session's
+ * view stream against the phases the wait started from, so a change landing
+ * before the stream's first emission still wakes it; `settled` is re-checked
+ * once the listeners are up, closing the window after the caller's
+ * pre-check. The view stream ends with the session, which ends the wait
+ * too. The race settles on the first completion, success or failure, so a
+ * dead fold surfaces at once instead of stalling until the deadline.
+ * Interrupting the winner-less racers closes the view subscription and
+ * disposes the follow-up listener.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
@@ -126,6 +137,9 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
     runIds: readonly RunId[],
     settled: () => boolean,
   ) {
+    const phases = (view: SessionView): string =>
+      runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
+    const started = phases(SubscriptionRef.getUnsafe(context.session.view));
     const followUp = yield* Deferred.make<void>();
     yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -135,7 +149,10 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
       ),
       (stop) => Effect.sync(stop),
     );
-    const statusChange = (yield* Runs).waitForAnyChange(runIds);
+    const statusChange = context.session.viewChanges.pipe(
+      Stream.filter((view) => phases(view) !== started),
+      Stream.runHead,
+    );
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
@@ -211,7 +228,7 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
       );
     }
     if (input.action === 'wait') {
-      yield* waitForAnyChange(context, input.timeout, input.ids);
+      yield* waitForRuns(context, input.timeout, input.ids);
     }
     return yield* listRuns(context, input.offset, input.limit);
   }
@@ -224,7 +241,7 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
       case 'kill':
         return yield* handleKill(context, runId);
       case 'wait':
-        yield* waitForAnyChange(context, input.timeout, [runId]);
+        yield* waitForRuns(context, input.timeout, [runId]);
         return yield* showSummary(context, runId, {
           suppressAutoDeliveredSubagentReport: true,
         });
@@ -322,24 +339,22 @@ function resolveRunId(
 }
 
 /** Wait for runs to change status, with timeout. */
-const waitForAnyChange = Effect.fn('ExecutionsTool.waitForAnyChange')(
-  function* (
-    context: RunToolContext,
-    timeout: number,
-    ids?: readonly RunId[] | null,
-  ) {
-    const runs = yield* Runs;
-    const candidateIds = ids?.length ? unique(ids) : runs.getActiveIds();
-    // Exclude runs that are already effectively done
-    // (completed, inactive, or tool-use subagent WAITING with result delivered).
-    const pendingIds = candidateIds.filter((id) => !shouldSkipWait(runs, id));
-    if (pendingIds.length === 0) return;
+const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
+  context: RunToolContext,
+  timeout: number,
+  ids?: readonly RunId[] | null,
+) {
+  const runs = yield* Runs;
+  const candidateIds = ids?.length ? unique(ids) : runs.getActiveIds();
+  // Exclude runs that are already effectively done
+  // (completed, inactive, or tool-use subagent WAITING with result delivered).
+  const pendingIds = candidateIds.filter((id) => !shouldSkipWait(runs, id));
+  if (pendingIds.length === 0) return;
 
-    yield* awaitStatusChange(context, timeout, pendingIds, () =>
-      pendingIds.every((id) => shouldSkipWait(runs, id)),
-    );
-  },
-);
+  yield* awaitStatusChange(context, timeout, pendingIds, () =>
+    pendingIds.every((id) => shouldSkipWait(runs, id)),
+  );
+});
 
 const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
   context: RunToolContext,

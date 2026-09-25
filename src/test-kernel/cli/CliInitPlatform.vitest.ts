@@ -106,19 +106,6 @@ vi.mock('@logger/logSink', () => ({
   writeLogEntry: vi.fn(),
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  createLog: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-  debug: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-}));
-
 // initCliPlatform delegates shared Node-host construction and runtime wiring to
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
@@ -163,6 +150,7 @@ function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
 ): Parameters<typeof initCliPlatform>[0] {
   return {
+    storageRoot: '/tmp/texra-test-storage',
     cwd: '/tmp/project',
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',

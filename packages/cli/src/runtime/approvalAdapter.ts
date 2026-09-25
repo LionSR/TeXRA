@@ -12,7 +12,7 @@
 import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
@@ -49,6 +49,8 @@ import {
 } from './userQuestionAnswer';
 import { type CliContext } from './cliContext';
 import { writeTextStderr } from './logSinks';
+
+const CHANNEL = 'cli.approval';
 
 interface HeadlessCliHostInteractionHooks extends CliApprovalPromptHooks {
   readonly emit?: HostInteractions['emit'];
@@ -116,10 +118,9 @@ const askHeadlessUserQuestion = Effect.fn(
     ),
   );
   if (Result.isFailure(asked)) {
-    logWarning(
-      'cli.approval',
+    yield* Effect.logWarning(
       `The CLI user-question prompt failed: ${toErrorMessage(asked.failure)}`,
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return {
       action: 'cancel',
       cause: 'CLI user question prompt failed.',
@@ -165,34 +166,30 @@ export function createHeadlessCliHostInteractions(
     session.requests
       .request({ kind: 'request.decide', runId, requestId, decision })
       .pipe(
-        Effect.match({
-          onFailure: (error) => {
-            logWarning(
-              'cli.approval',
+        Effect.matchEffect({
+          onFailure: (error) =>
+            Effect.logWarning(
               `The ${decision.action} decision for request ${requestId} was refused: ${toErrorMessage(error)}`,
-            );
-            return false;
-          },
-          onSuccess: () => true,
+            ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
+          onSuccess: () => Effect.succeed(true),
         }),
       );
 
   /** The prompt content for a tool edit: the staged preview when the tool
    *  boundary reached this host, else the payload's own summary. */
-  const toolEditContent = (
-    payload: Extract<PermissionPayload, { kind: 'toolEdit' }>,
-  ): CliApprovalContent => {
-    const preview = previews.get(payload.data.requestId);
-    if (preview) return buildToolEditApprovalContent(preview);
-    logWarning(
-      'cli.approval',
-      `No preview was staged for tool edit ${payload.data.requestId}: prompting without the diff.`,
-    );
-    const { data } = payload;
-    return {
-      summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (+${data.addedLines} / -${data.removedLines})`,
-    };
-  };
+  const toolEditContent = Effect.fn('approvalAdapter.toolEditContent')(
+    function* (payload: Extract<PermissionPayload, { kind: 'toolEdit' }>) {
+      const preview = previews.get(payload.data.requestId);
+      if (preview) return buildToolEditApprovalContent(preview);
+      yield* Effect.logWarning(
+        `No preview was staged for tool edit ${payload.data.requestId}: prompting without the diff.`,
+      ).pipe(withLogChannel(CHANNEL));
+      const { data } = payload;
+      return {
+        summary: `Tool edit requested by ${data.sourceTool}: ${data.relativePath} (+${data.addedLines} / -${data.removedLines})`,
+      } satisfies CliApprovalContent;
+    },
+  );
 
   /** One pending request, answered: policy first, then the prompt. Returns
    *  whether the decision reached the ledger. */
@@ -214,7 +211,7 @@ export function createHeadlessCliHostInteractions(
         return yield* decide(
           runId,
           requestId,
-          yield* ask(toolEditContent(payload)),
+          yield* ask(yield* toolEditContent(payload)),
         );
       case 'planApproval': {
         const settled = settleExecutable(session, context, runId);

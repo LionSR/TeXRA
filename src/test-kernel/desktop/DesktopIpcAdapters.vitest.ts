@@ -3,13 +3,9 @@ import { Effect, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { withProcessServices } from '@platform/processRuntime';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { createModuleMocks } from '@test/support/moduleMocks';
-
-const mocks = createModuleMocks();
 
 type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
 type DesktopShellActionFactoryOptions = Parameters<
@@ -35,11 +31,6 @@ async function flushAsync(): Promise<void> {
   }
 }
 
-async function flushMicrotasks(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
 async function createShellHarness(
   overrides: Partial<DesktopShellActionFactoryOptions> = {},
 ) {
@@ -56,6 +47,7 @@ async function createShellHarness(
       openWorkspaceFolder: vi.fn(() => Effect.void),
       signIn: vi.fn(() => Effect.void),
       showInfoMessage: vi.fn(),
+      showLauncher: vi.fn(),
       onAsyncError: vi.fn(),
       runtime: testRuntime(),
       ...overrides,

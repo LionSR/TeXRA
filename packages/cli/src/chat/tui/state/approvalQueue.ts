@@ -13,7 +13,7 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   PermissionPayload,
@@ -28,7 +28,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { RunGroup, SessionView } from '@shared/session/sessionView';
+import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
@@ -178,9 +178,6 @@ export function pruneToLive(
   }
 }
 
-/** Run groups whose requests can still be answered here. */
-const LIVE_GROUPS: ReadonlySet<RunGroup> = new Set(['running', 'waiting']);
-
 /**
  * Every request awaiting the user, from the fold: the outstanding requests
  * in commit order, from the runs this chat owns. The promoted stream's requests lead; nothing is decided
@@ -192,15 +189,15 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
   const view = sessionView().get();
   // The fold lists every kind, including an `externalInquiry` a persisted
   // session carries from another host; this surface renders none of those,
-  // so the narrowing is a filter rather than an assertion. Nor does it render
-  // one a stopped run left for its resume to ask again: that modal would trap
-  // the keys `/resume` needs.
-  const requests = view.requests
-    .filter(
+  // so the narrowing is a filter rather than an assertion. It renders only
+  // what this window can answer (`attentionOf`, the rule every host reads):
+  // not a stopped run's leftover (its modal would trap the keys `/resume`
+  // needs), nor a request on a run another process holds.
+  const requests = attentionOf(view)
+    .requests.filter(
       (request): request is PendingApprovalFact =>
         included.has(request.runId) &&
-        request.payload.kind !== 'externalInquiry' &&
-        LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? 'recent'),
+        request.payload.kind !== 'externalInquiry',
     )
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
@@ -441,14 +438,13 @@ function decideRequest(
   }
   for (const arm of arms) {
     if (!('host' in arm)) continue;
-    if (!hostCapability) {
-      logWarning(
-        'cli.tui',
-        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+    if (hostCapability) hostCapability(arm.host);
+    else
+      runtime.runFork(
+        Effect.logWarning(
+          `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+        ).pipe(withLogChannel('cli.tui')),
       );
-      continue;
-    }
-    hostCapability(arm.host);
   }
   // Both approve-all actions on a proposal turn the run's delegated-work
   // bypass on, so the work already queued behind it follows.
@@ -502,9 +498,10 @@ export function decidePendingRequest(
     .get()
     .find((pending) => pending.requestId === requestId);
   if (!request) {
-    logWarning(
-      'cli.tui',
-      `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+    runtime.runFork(
+      Effect.logWarning(
+        `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
     return;
   }

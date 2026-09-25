@@ -120,7 +120,7 @@ describe('claude agent progress events', () => {
       expect(result).toMatchObject({
         finalResponse: 'I will run lint.\n\nLint passed.',
         sessionId: 'sess-2',
-        usage: { input_tokens: 12, output_tokens: 4 },
+        usage: { inputTokens: 12, outputTokens: 4 },
         totalCostUsd: 0.01,
         isError: false,
       });

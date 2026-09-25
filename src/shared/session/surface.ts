@@ -31,6 +31,7 @@ import {
   type SessionView,
   type RunView,
 } from './sessionView';
+import { markShownRunSeen } from './unseenRuns';
 import type { HostSnapshot } from './hostSnapshot';
 import type { RequestErrorWire } from './sessionFrames';
 
@@ -133,6 +134,8 @@ export interface Surface {
   readonly expanded: ReadonlyMap<RunId, boolean>;
   /** Task groups and workflow row groups inside a transcript, per stream. */
   readonly groups: ReadonlyMap<RunId, ReadonlyMap<string, boolean>>;
+  /** Per top-level run, the `lastTimestamp` this surface last showed. */
+  readonly seen: ReadonlyMap<RunId, number>;
   /** Never persisted. */
   readonly focusedRow: string | null;
   /** Run-board tab strip; resolved at read through `resolvePhase`. */
@@ -166,6 +169,7 @@ export const PersistedSurfaceSchema = z.object({
   expanded: entries(RunIdSchema, z.boolean()),
   groups: entries(RunIdSchema, entries(z.string(), z.boolean())),
   phase: entries(RunIdSchema, z.string()),
+  seen: entries(RunIdSchema, z.number()),
   drawerOpen: z.boolean().prefault(false),
   storageHintDismissed: z.boolean().prefault(false),
   workbench: z.record(z.string(), z.unknown()).nullable().prefault(null),
@@ -197,6 +201,7 @@ export function loadSurface(
     groups: new Map(
       persisted.groups.map(([id, groups]) => [id, new Map(groups)]),
     ),
+    seen: new Map(persisted.seen),
     focusedRow: null,
     phase: new Map(persisted.phase),
     drawerOpen: persisted.drawerOpen,
@@ -219,6 +224,7 @@ export function persistSurface(surface: Surface): PersistedSurface {
     expanded: [...surface.expanded],
     groups: [...surface.groups].map(([id, groups]) => [id, [...groups]]),
     phase: [...surface.phase],
+    seen: [...surface.seen],
     drawerOpen: surface.drawerOpen,
     storageHintDismissed: surface.storageHintDismissed,
     workbench: surface.workbench,
@@ -233,15 +239,9 @@ function retain<V>(
   return retained.length === map.size ? map : new Map(retained);
 }
 
-/**
- * The `Surface` fields that are stream-keyed maps — the only fields
- * `pruneSurface` may retain over. Restricting the list below to these keys
- * means a non-map field (`search`, `drawerOpen`) is refused at the list
- * itself, not several lines later at the read. `RunId` is branded
- * (`identifiers.ts`), so this also excludes `inquiryDrafts`: a map too, but
- * keyed by `${InquiryThreadId}#${turn}` (plain `string`), not by stream — no
- * stream leaving the view can retire one, so it must stay off the list below.
- */
+/** The `Surface` fields that are stream-keyed maps, the only ones
+ *  `pruneSurface` retains over; the branded `RunId` keeps `inquiryDrafts`
+ *  (keyed by thread and turn, which no stream leaving retires) off it. */
 type RunKeyedMapField = {
   [K in keyof Surface]: Surface[K] extends ReadonlyMap<RunId, unknown>
     ? K
@@ -249,14 +249,9 @@ type RunKeyedMapField = {
 }[keyof Surface];
 
 /**
- * The single list `pruneSurface` reads: the per-stream maps it retains over,
- * spelled as a `Record` rather than an array so both directions are checked
- * at compile time — `satisfies Record<RunKeyedMapField, true>` fails if an
- * entry here is not a stream-keyed `Surface` field (a typo, or a field this
- * list should not touch) and equally fails if a stream-keyed field is
- * missing from it. Adding a new `ReadonlyMap<RunId, ...>` field to `Surface`
- * is therefore a compile error here until it is added below, rather than a
- * silent leak of deleted streams' entries.
+ * The list `pruneSurface` reads, a `Record` so `satisfies` checks both
+ * directions: a new stream-keyed `Surface` map is a compile error here until
+ * it is listed, rather than a silent leak of deleted streams' entries.
  */
 const PER_STREAM_MAP_FIELDS = {
   drafts: true,
@@ -264,6 +259,7 @@ const PER_STREAM_MAP_FIELDS = {
   groups: true,
   phase: true,
   rejected: true,
+  seen: true,
 } as const satisfies Record<RunKeyedMapField, true>;
 const PER_STREAM_MAPS = Object.keys(
   PER_STREAM_MAP_FIELDS,
@@ -364,16 +360,15 @@ export function canSendFollowUp(
 }
 
 /**
- * The phase the run board shows for a stream: the surface's choice while
- * the model still has it, else the current phase (the last opened one, or
- * the first declared), else `null` for a run with no phases.
+ * The phase a workflow view shows — the run board and the terminal popup
+ * alike: the viewer's choice while the model still has it, else the current
+ * phase (the last opened one, or the first declared), else `null` for a run
+ * with no phases.
  */
 export function resolvePhase(
-  surface: Surface,
-  runId: RunId,
+  chosen: string | undefined,
   phases: readonly { readonly key: string; readonly opened: boolean }[],
 ): string | null {
-  const chosen = surface.phase.get(runId);
   if (chosen !== undefined && phases.some((phase) => phase.key === chosen)) {
     return chosen;
   }
@@ -423,7 +418,8 @@ export type SurfaceAction =
       readonly phase: string;
     }
   | { readonly kind: 'workbench'; readonly layout: WorkbenchLayout | null }
-  | { readonly kind: 'dismissStorageHint' };
+  | { readonly kind: 'dismissStorageHint' }
+  | { readonly kind: 'seen'; readonly view: SessionView };
 
 function withEntry<K, V>(map: ReadonlyMap<K, V>, key: K, value: V | null) {
   const next = new Map(map);
@@ -507,5 +503,7 @@ export function applySurfaceAction(
       };
     case 'workbench':
       return { ...surface, workbench: action.layout };
+    case 'seen':
+      return markShownRunSeen(surface, action.view);
   }
 }

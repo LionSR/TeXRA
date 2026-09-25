@@ -79,6 +79,19 @@ export interface RuntimeShutdownHooks {
   readonly afterFlushArtifacts?: readonly ShutdownHandler[];
   /** ON handlers that run after live runs have settled. */
   readonly afterRunSettlement?: readonly ShutdownHandler[];
+  /**
+   * Release the host's sessions and the project scopes that hold their
+   * state. A RELEASE handler: it follows every ON handler, including those
+   * registered after this call, under the phase's own deadline.
+   */
+  readonly releaseSessions: ShutdownHandler;
+  /**
+   * Dispose the process runtime: the last step on every host. Its layer
+   * finalizers drain the usage log while the HTTP client and account plane
+   * it sends through are still up, so it runs to completion rather than
+   * being cut at the deadline a slow session release has spent.
+   */
+  readonly disposeRuntime: Effect.Effect<void>;
 }
 
 /**
@@ -100,6 +113,13 @@ export interface RuntimeShutdownHooks {
  * own `ON` handler before calling here (the extension does, for Lean server
  * cleanup), which is fine as long as it does not touch run state.
  *
+ * The process's release closes the order on all three hosts: the sessions,
+ * then the runtime, in the `RELEASE` phase after every `ON` handler. It used
+ * to be the tail of the desktop's and the CLI's `ON` phase, where a slow
+ * settlement could spend the phase budget and interrupt the runtime disposal
+ * mid-drain, losing queued usage records, while the extension ran it after
+ * the drain.
+ *
  * Each host used to carry this rationale in its own inline comment; the three
  * copies were consolidated here by #11355.
  */
@@ -114,6 +134,11 @@ export function registerRuntimeShutdownHandlers(
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
   lifecycle.onShutdown(SHUTDOWN_PHASE.ON, settleLiveSessionRuns);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.ON, hooks.afterRunSettlement);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.RELEASE, hooks.releaseSessions);
+  lifecycle.onShutdown(
+    SHUTDOWN_PHASE.RELEASE,
+    Effect.uninterruptible(hooks.disposeRuntime),
+  );
 }
 
 function registerHandlers(

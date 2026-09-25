@@ -12,7 +12,7 @@
  * instead of running them out.
  */
 
-import { Data, Effect, Stream } from 'effect';
+import { Data, Effect, type FileSystem, Stream } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -27,6 +27,10 @@ import { withLogChannel } from '@logger/effectLog';
 import { executeCommand } from '@utils/system/execUtils';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type { PlatformError } from 'effect/PlatformError';
+
+/** What the clone workflow and its host ports run on: git, and the filesystem
+ *  for the destination probe and its creation. */
+type CloneServices = ChildProcessSpawner | FileSystem.FileSystem;
 
 /** Files ignored when deciding whether a workspace is "empty enough" to clone into. */
 const IGNORED_CLONE_FILES = new Set(['.DS_Store', 'Thumbs.db']);
@@ -52,7 +56,7 @@ export interface OverleafCloneWorkflowPorts {
   /** Fails when the directory can't be read at all. */
   listWorkspaceEntries(
     workspacePath: string,
-  ): Effect.Effect<Iterable<string>, Error>;
+  ): Effect.Effect<Iterable<string>, Error, FileSystem.FileSystem>;
   showWorkspaceUnreadable(error: unknown): Effect.Effect<void>;
   showWorkspaceNotEmpty(): Effect.Effect<void>;
 
@@ -60,7 +64,7 @@ export interface OverleafCloneWorkflowPorts {
   runClone(
     clone: OverleafGitClone,
     workspacePath: string,
-  ): Effect.Effect<void, Error, ChildProcessSpawner>;
+  ): Effect.Effect<void, Error, CloneServices>;
   showCloneSucceeded(label: string): Effect.Effect<void>;
   /** The clone failed for what looks like an auth reason (bad/expired token). */
   showAuthFailure(remote: OverleafRemote): Effect.Effect<void>;
@@ -121,11 +125,7 @@ const checkOverleafClonePreconditions = Effect.fn(
 )(function* (
   workspacePath: string,
   ports: OverleafCloneWorkflowPorts,
-): Effect.fn.Return<
-  ClonePreconditionFailure | null,
-  never,
-  ChildProcessSpawner
-> {
+): Effect.fn.Return<ClonePreconditionFailure | null, never, CloneServices> {
   // Directory-independent: the clone target may not exist yet.
   const gitVersion = yield* executeCommand(['git', '--version'], {
     cwd: process.cwd(),
@@ -259,7 +259,7 @@ export const cloneOverleafProject = Effect.fn('overleaf.cloneProject')(
     remote: OverleafRemote,
     workspacePath: string,
     ports: OverleafCloneWorkflowPorts,
-  ): Effect.fn.Return<OverleafCloneOutcome, Error, ChildProcessSpawner> {
+  ): Effect.fn.Return<OverleafCloneOutcome, Error, CloneServices> {
     const preconditionFailure = yield* checkOverleafClonePreconditions(
       workspacePath,
       ports,

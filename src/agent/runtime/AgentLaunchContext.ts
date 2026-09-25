@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
@@ -12,12 +12,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
@@ -30,12 +25,10 @@ import {
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
-  type AgentSource,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
@@ -170,7 +163,7 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     modelName: string,
     interactions: Pick<SessionHostInteractions, 'emit'>,
   ) {
-    const modelConfig = yield* resolveRuntimeModelConfig(modelName);
+    const modelConfig = MODEL_CONFIGS[modelName];
     if (modelConfig) return modelConfig;
 
     return yield* presentLaunchError(
@@ -371,23 +364,23 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     );
 
     const isRemote = agentEntry.source === 'remote';
-    // Registration committed creation, configuration and initial activation,
-    // each awaited; a resumed turn appends only its new activation, awaited
-    // here. Both are durable before the run resolves, so this path drains
-    // nothing: a barrier over the run's publications would answer for facts
-    // the run's own fibers queued, and their loss is the terminal drain's to
-    // report on the row it decides.
+    // Registration committed creation, configuration and first activation; a
+    // resume appends its activation here, with the approval snapshot that
+    // enforcement holds (no `run.start` re-stamps it). Both are durable before
+    // the run resolves, so nothing drains here (lost facts are the terminal
+    // drain's), and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      // A durable append: uninterruptible, like every row commit, so a stop
-      // lands either before this activation or after it, never inside it.
+      const aggregateId = qualifyAggregateId('run', runId);
+      const snapshot = session.approvalPolicySnapshotFor(runId);
       yield* Effect.uninterruptible(
         session.commit([
           {
             type: 'run.activate',
-            aggregateId: qualifyAggregateId('run', runId),
+            aggregateId,
             category: setting.agentCategory,
             isRemote,
           },
+          { type: 'approval.policy', aggregateId, snapshot },
         ]),
       );
     }

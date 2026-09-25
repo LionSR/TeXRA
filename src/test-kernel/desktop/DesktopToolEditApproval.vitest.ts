@@ -28,10 +28,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import {
-  createStubDesktopAgentRunHost,
-  disposeAfterTest,
-} from './desktopAgentRunTestHarness.ts';
+import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const approvalTest = (

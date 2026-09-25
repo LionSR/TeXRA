@@ -21,7 +21,7 @@ describe('AgentDefinitionSchema', () => {
       },
     });
 
-    expect(result.settings).toEqual({ tools: ['grep'] });
+    expect(result.settings).toEqual({ tools: [{ name: 'grep' }] });
     expect(Object.hasOwn(result.settings, 'rounds')).toBe(false);
     expect(Object.hasOwn(result.settings, 'agentCategory')).toBe(false);
     expect(result.prompts).toEqual({ userRequest: 'Do the thing' });

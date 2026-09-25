@@ -2,11 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
-import {
-  toolUseDisplayLines,
-  toolUseStyledLines,
-} from '@cli/chat/tui/panes/toolRenderers';
-import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
+import { toolUseDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas
@@ -116,7 +112,7 @@ describe('CLI tool display lines', () => {
         "  line 4",
         "  line 5",
         "  line 6",
-        "  … +11 lines (Ctrl-T to view full output)",
+        "  … 11 lines hidden (Ctrl-T to view full output)",
         "  line 18",
         "  line 19",
         "  line 20",

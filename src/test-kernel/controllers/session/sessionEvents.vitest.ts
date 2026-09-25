@@ -13,15 +13,11 @@
  */
 // Node imports
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -55,7 +51,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { TraceEmitter, type ResultEvent } from '@agent/trace';
+import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -847,7 +843,7 @@ describe('Sessions owner', () => {
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/committed-status');
-        const handleStatus = vi.spyOn(session.runs, 'handleStatus');
+        const sweep = vi.spyOn(session.runs, 'sweepChildrenOfFoldedStop');
         const onResult = vi.fn((_event: ResultEvent) => Effect.void);
         const detachResult = session.onResult(onResult);
 
@@ -877,9 +873,12 @@ describe('Sessions owner', () => {
             },
           ]);
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(handleStatus).toHaveBeenCalledOnce()),
+            vi.waitFor(() =>
+              expect(
+                SubscriptionRef.getUnsafe(session.view).runs.get(OLDER)?.status,
+              ).toBe(RUN_PHASE.WAITING),
+            ),
           );
-          expect(handleStatus).toHaveBeenCalledWith(OLDER);
           const received = yield* Effect.all(
             [RUN, OLDER].map((id) =>
               Stream.runCollect(
@@ -922,21 +921,22 @@ describe('Sessions owner', () => {
           const committed = yield* Stream.runCollect(
             session.events.aggregate(qualifyAggregateId('run', OLDER), 0),
           );
-          // `run.end` carries the terminal phase, so the live run's end is a
-          // second status notification, delivered once the view has folded
-          // it; the foreign-owned replay below must add none.
+          // The live run's `run.end` reaches the folded-stop sweep once the
+          // view has folded it, and a `waiting` step never does; the
+          // foreign-owned replay below must add none.
           yield* Effect.promise(() =>
-            vi.waitFor(() => expect(handleStatus).toHaveBeenCalledTimes(2)),
+            vi.waitFor(() => expect(sweep).toHaveBeenCalledOnce()),
           );
+          expect(sweep).toHaveBeenCalledWith(OLDER);
           for (const event of committed) {
             const foreign = { ...event, ownerId: OTHER };
             yield* session.receiveFoldedEvent(foreign);
           }
-          expect(handleStatus).toHaveBeenCalledTimes(2);
+          expect(sweep).toHaveBeenCalledOnce();
           expect(onResult).toHaveBeenCalledOnce();
         } finally {
           detachResult();
-          handleStatus.mockRestore();
+          sweep.mockRestore();
           yield* session.dispose();
         }
       }),

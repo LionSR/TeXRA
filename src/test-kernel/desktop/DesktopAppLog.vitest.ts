@@ -9,8 +9,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { setLogSink } from '@logger/logSink';
-import { warn } from '@logger/logUtils';
+import { LOG_CHANNEL, setLogSink, writeLogEntry } from '@logger/logSink';
 
 // Local imports - test support
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -63,7 +62,15 @@ describe('desktop app log', () => {
     const { installDesktopAppLog } = await loadDesktopAppLogModule();
 
     const logPath = installDesktopAppLog();
-    warn('DesktopTest', 'workspace write failed');
+    writeLogEntry({
+      level: 'WARN',
+      fiberId: '',
+      timestamp: new Date().toISOString(),
+      message: 'workspace write failed',
+      cause: undefined,
+      annotations: { [LOG_CHANNEL]: 'DesktopTest' },
+      spans: {},
+    });
 
     expect(logPath).toBeDefined();
     const lines = (await readFile(logPath ?? '', 'utf8'))

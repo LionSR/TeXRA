@@ -133,6 +133,8 @@ describe('shared JsonStore', () => {
 
         const error = yield* Effect.flip(store.set('added', 2));
         expect(error).toBeInstanceOf(SyntaxError);
+        // #13188: a failed flush must not leave the value readable in memory.
+        expect(store.get('added')).toBeUndefined();
         expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
           corrupt,
         );
@@ -225,7 +227,7 @@ describe('shared JsonStore', () => {
         // The second set claims the lane and then waits for the first's flush.
         // Cancelling it there writes nothing, so the instance must not be left
         // serving the key either: this store outlives the fiber that wrote
-        // through it (`ElectronSecrets` answers `getStored` from one), and a
+        // through it (`ElectronSecrets` answers `get` from one), and a
         // mutation applied ahead of the wait would read as committed until the
         // process restarts.
         const committing = yield* Effect.forkChild(store.set('committed', 'a'));

@@ -73,7 +73,7 @@ const DEFAULT_GIT_WORKTREE_SUPPORT = false;
  * Keep file-oriented tools inside the active working directory unless the
  * user explicitly grants them access to arbitrary filesystem paths.
  */
-export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
+const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
 /**
  * Host-neutral catalog for every TeXRA setting a host can store, honor, or render.
@@ -622,17 +622,17 @@ const CORE_SETTING_ROWS: Record<
     ],
     honoredBy: everyHost('src/tools/approval/latexPreview.ts'),
   },
-  // Only the extension's git commands read the commit count. The setup
-  // assistant's host-neutral `update_config` writer is recorded separately so
-  // a CLI-written value is recognized without mislabeling the writer as a reader.
+  // The launcher's commit picker reads the count through the host snapshot on
+  // both GUI hosts. The setup assistant's host-neutral `update_config` writer
+  // is recorded separately so a CLI-written value is recognized without
+  // mislabeling the writer as a reader.
   'git.numberOfCommitsToShow': {
     schema: z.int().min(1).max(1000).prefault(20),
     description:
       'Number of recent commits to show in the commit selection dropdown',
     honoredBy: {
-      vscode: {
-        reader: 'packages/extension/src/commands/git/gitCommands.ts',
-      },
+      vscode: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
+      desktop: { reader: 'src/controllers/session/hostSnapshotSource.ts' },
     },
     writtenBy: {
       cli: { writer: 'src/tools/setup/ConfigTools.ts' },
@@ -1325,7 +1325,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(z.string()).prefault([]),
     title: 'Tool integrations',
     description:
-      'Enable or disable external tool integration groups used by agent tool resolution.',
+      'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/tools/toolAvailability.ts'),
@@ -1361,7 +1361,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(InstalledPluginSchema).prefault([]),
     title: 'Installed plugins',
     description:
-      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads the skills of each enabled one as user skills; `texra plugin disable` hides a plugin without removing it.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/skills/runtimeSkills.ts'),

@@ -1,5 +1,5 @@
 import { Cause, Clock, Deferred, Effect, Option } from 'effect';
-import { createLog } from '@logger/logUtils';
+import { writeLogLine } from '@logger/logSink';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -7,7 +7,7 @@ import {
   type ShutdownPhase,
 } from '../interfaces';
 
-const log = createLog('LifecycleHost');
+const CHANNEL = 'LifecycleHost';
 
 /** One `onShutdown` call. Registrations are compared by entry identity, not by
  *  handler identity, so registering the same program twice yields two
@@ -41,13 +41,22 @@ export function createLifecycleHost(
   const handlers: Record<ShutdownPhase, Registration[]> = {
     [SHUTDOWN_PHASE.BEFORE]: [],
     [SHUTDOWN_PHASE.ON]: [],
+    [SHUTDOWN_PHASE.RELEASE]: [],
   };
   let drain: Effect.Effect<void> | undefined;
 
   const onError =
     options.onError ??
     ((phase, error) => {
-      log.error(`[lifecycle] ${phase} handler failed`, { data: error });
+      // Direct sink write: the hosts run the drain on a bare runtime (it is
+      // the path that disposes the process runtime), whose logger is not the
+      // host sink.
+      writeLogLine(
+        'ERROR',
+        CHANNEL,
+        `[lifecycle] ${phase} handler failed`,
+        error,
+      );
     });
 
   // Sequential — handlers within a phase run in registration order. Parallel
@@ -112,6 +121,7 @@ export function createLifecycleHost(
       drain = Deferred.await(joined);
       return runPhase(SHUTDOWN_PHASE.BEFORE).pipe(
         Effect.andThen(runPhase(SHUTDOWN_PHASE.ON)),
+        Effect.andThen(runPhase(SHUTDOWN_PHASE.RELEASE)),
         Effect.onExit((exit) =>
           Effect.sync(() => {
             Deferred.doneUnsafe(joined, exit);

@@ -12,17 +12,8 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
-import { currentView } from '@cli/chat/tui/state/sessionView';
-import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -32,7 +23,6 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),

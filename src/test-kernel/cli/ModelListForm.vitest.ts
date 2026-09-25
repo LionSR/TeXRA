@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { modelListDescription } from '@cli/chat/tui/forms/ModelListForm';
 import {
   shouldBufferAsyncListFormInput,
   shouldCloseAsyncListFormOnInput,
 } from '@cli/chat/tui/forms/_shared/useAsyncListForm';
-import { isCompactFormRows } from '@cli/tui/selectWindow';
 import {
   nextSelectHighlightIndex,
   selectInitialHighlightIndex,
-  selectItemRenderKey,
 } from '@cli/tui/ui/Select';
 import { selectVisibleInlineOverflowText } from '@cli/tui/overflowText';
 

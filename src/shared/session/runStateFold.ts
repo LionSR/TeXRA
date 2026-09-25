@@ -49,17 +49,16 @@ import type { z } from 'zod';
 /**
  * The rows `RunLedger.appendBatch` commits: the six ledger arms plus the
  * display arms a batch has to commit atomically with them. A tool call's card
- * settles with its `tool.result` — `tool.end` for a card the dispatcher
- * already opened, both card rows for a fast tool whose card opens and closes
- * in that one batch; an approval's recovery binding is the `tool.binding`
- * committed in the same batch; a streaming row still open when the loop
- * parks closes with the `waiting` step, in that step's batch. Publishing
- * those companions separately is the
- * crash window where a settled tool keeps an active card, or a terminal card
- * claims a result no row holds, or an approval survives with nothing to
- * recover it by. An explicit list narrowed from `SessionEventDraft`, never
- * `SessionEventDraft` itself: a card the ledger opens is one a settlement in
- * the same batch closes, and no other row type reaches `appendBatch`.
+ * settles with its `tool.result` (`tool.end` for a card the dispatcher already
+ * opened, both card rows for a fast tool whose card opens and closes in that
+ * batch); an approval's recovery binding is the `tool.binding` committed in
+ * the same batch; a streaming row open when the loop parks closes with the
+ * `waiting` step; a model switch's `run.record` and `run.config` restate the
+ * snapshot's model id. Publishing those companions separately is the crash
+ * window where a settled tool keeps an active card, or a terminal card claims
+ * a result no row holds, or an approval survives with nothing to recover it
+ * by, or a listing names a model the ledger does not. An explicit list
+ * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself.
  */
 export type RunLedgerDraft = Extract<
   SessionEventDraft,
@@ -79,7 +78,9 @@ export type RunLedgerDraft = Extract<
       | 'stream.end'
       | 'request.opened'
       | 'request.decided'
-      | 'followup.consumed';
+      | 'followup.consumed'
+      | 'run.record'
+      | 'run.config';
   }
 >;
 
@@ -192,9 +193,9 @@ export type RunState = RunRows & {
   readonly flow: FlowState | null;
 };
 
-/** The card rows a batch commits beside its settlement or its `waiting`
- *  step: the ledger row beside each is the fact, so the loop ignores them. */
-type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
+/** Companions committed beside the ledger fact; the loop ignores them. */
+type CardRowType =
+  'tool.start' | 'tool.end' | 'stream.end' | 'run.record' | 'run.config';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =

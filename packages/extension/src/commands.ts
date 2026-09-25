@@ -32,7 +32,7 @@ export function registerCommands(
   registerLatexdiffCommands(context, runtime, session);
   registerGitCommands(context, runtime, session);
   registerAgentReviewCommands(context, runtime, session);
-  registerMergeCommands(context, globalState, runtime);
+  registerMergeCommands(context, runtime, session);
   const settingsViewProvider = new SettingsViewProvider(
     context,
     globalState,

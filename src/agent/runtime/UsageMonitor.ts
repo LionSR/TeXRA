@@ -85,22 +85,10 @@ type UsageMonitorRunKind = 'workflow' | 'tool-use';
  * billed per round.
  */
 export class UsageMonitor {
-  /**
-   * The most recent run totals seen by {@link recordUsage}. Cached so a failed
-   * run can still report usage on its terminal `result` event (the catch arm
-   * has no flow result to read totals from). Undefined before the first round.
-   */
-  private lastSeenTotals: RunUsageTotals | undefined;
-
   constructor(
     private readonly context: UsageMonitorContext,
     private readonly metadata: UsageMonitorMetadata,
   ) {}
-
-  /** The last run totals recorded this run, or undefined before any round. */
-  lastTotals(): RunUsageTotals | undefined {
-    return this.lastSeenTotals;
-  }
 
   /**
    * Record one round's usage against `bound`, the run's binding that served
@@ -121,7 +109,6 @@ export class UsageMonitor {
       agentCategory === AgentCategory.ToolUse ? 'tool-use' : 'workflow';
 
     try {
-      this.lastSeenTotals = totals;
       if (!latestUsage) return;
 
       // Per-round usage - billed to the backend, which accounts per round.

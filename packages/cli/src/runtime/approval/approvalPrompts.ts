@@ -43,7 +43,7 @@ function onCliPromptLane(context: CliContext) {
 }
 
 /** What the policy closed, as the operator warning names it. */
-export type CliApprovalDenial =
+type CliApprovalDenial =
   /** A Bash command or tool edit settled as denied. */
   | { readonly kind: 'executable' }
   /** Approval-gated tools withheld from the model when the run started. */
@@ -55,16 +55,6 @@ export type CliApprovalDenial =
     }
   /** A question the model asked the user. */
   | { readonly kind: 'humanInput' };
-
-/** The denial an `onApprovalPolicyDenial` report names: the withheld tools
- *  when it carries them, else a denied request. */
-export function policyDenialOf(
-  withheldTools: readonly string[] | undefined,
-): CliApprovalDenial {
-  return withheldTools
-    ? { kind: 'withheldTools', tools: withheldTools }
-    : { kind: 'executable' };
-}
 
 /** Why no prompt could answer, from the live policy and this run's mode. */
 function promptUnavailableReason(
@@ -127,7 +117,7 @@ function approvalDenialMessage(
  * Match settleApprovals: TUI `/approval` updates SessionHandle only, so the
  * frozen CliContext.approvalPolicy can be stale — the warning names the live
  * policy read off the threaded `session`. Operator-facing warnings go
- * to stderr (not `@logger/logUtils`).
+ * to stderr (not the diagnostic log).
  */
 export function warnApprovalDenied(
   session: SessionHandle,

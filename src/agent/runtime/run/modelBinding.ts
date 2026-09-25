@@ -49,9 +49,10 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
-import { copilotRouteForModel } from '@model/runtimeModelRegistry';
+import type { CopilotModelRoute } from '@model/copilotRouting';
 import { routeConfig } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
@@ -820,9 +821,12 @@ function backgroundCapable<P extends HttpProtocol>(
  * owned the choice.
  */
 const responsesWebSocketSelected = Effect.fn('responsesWebSocketSelected')(
-  function* (credential: RouteCredential, globalState: StateStore) {
+  function* (credential: RouteCredential, stores: SettingsStores) {
     if (
-      !(yield* globalState.get<boolean>(GlobalStateKey.WEBSOCKET_OPENAI, false))
+      !(yield* readSettingFrom<boolean>(
+        stores,
+        GlobalStateKey.WEBSOCKET_OPENAI,
+      ))
     ) {
       return false;
     }
@@ -867,28 +871,18 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
   );
 });
 
-/**
- * Bind a model the editor serves. The route is the one the registry
- * discovered for the base model (exact id, vendor and version); the editor
- * model itself comes from the host's port, into the caller's scope.
- */
+/** Bind a model the editor serves over the route its decision discovered
+ *  (exact id, vendor and version), into the caller's scope. */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
   compatibilityKey: ModelCompatibilityKey,
+  route: CopilotModelRoute,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const editor = yield* Effect.serviceOption(EditorModel);
   if (Option.isNone(editor)) {
     return yield* Effect.fail(
       new Error(
         `Model ${config.name} is served by the editor's language-model API, which this host does not expose.`,
-      ),
-    );
-  }
-  const route = copilotRouteForModel(config.name);
-  if (route === undefined) {
-    return yield* Effect.fail(
-      new Error(
-        `No editor route is discovered for model ${config.name}; refresh the model list.`,
       ),
     );
   }
@@ -989,12 +983,13 @@ export function releaseBindingUploads(
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
-): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  BoundModel,
+  Error,
+  Scope.Scope | HttpClient.HttpClient | LanguageModel
+> {
   // The wire identity the preference promises, applied to the bound config.
-  const requested = yield* withShortModelName(
-    input.config,
-    input.stores.globalState,
-  );
+  const requested = yield* withShortModelName(input.config, input.stores);
   const route = yield* resolveModelRoute(input.stores, requested, input);
   const compatibilityKey =
     input.compatibilityKey ?? (yield* routeCompatibilityKey(requested, route));
@@ -1004,8 +999,8 @@ export const bindModel = Effect.fn('bindModel')(function* (
     );
   }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
-  if (protocol === 'vscode-lm') {
-    return yield* bindEditorModel(requested, compatibilityKey);
+  if (protocol === 'vscode-lm' && route.kind === 'copilot') {
+    return yield* bindEditorModel(requested, compatibilityKey, route.route);
   }
   if (protocol === 'validation') {
     const bound = validationModel(requested);
@@ -1030,7 +1025,11 @@ export const bindModel = Effect.fn('bindModel')(function* (
       backgroundCapable: false,
     };
   }
-  if (route.kind === 'copilot' || route.kind === 'validation') {
+  if (
+    protocol === 'vscode-lm' ||
+    route.kind === 'copilot' ||
+    route.kind === 'validation'
+  ) {
     return yield* Effect.fail(
       new Error(
         `Model ${requested.name} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,
@@ -1071,7 +1070,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       },
       input.stores,
     )) &&
-    (yield* responsesWebSocketSelected(credential, input.stores.globalState));
+    (yield* responsesWebSocketSelected(credential, input.stores));
   const model =
     configuration.protocol === 'openai-responses' && onWebSocket
       ? yield* openaiResponsesWebSocketModel(

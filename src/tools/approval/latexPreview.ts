@@ -10,7 +10,6 @@
 import path from 'node:path';
 
 import { Cause, Deferred, Effect, FileSystem, type Path } from 'effect';
-import { sync as globSync } from 'glob';
 
 import { TEMP_EXTENSIONS } from '@housekeeping/constants';
 import { LaTeXdiffService } from '@latex/latexdiff';
@@ -116,19 +115,40 @@ const silentDelete = (
 const deleteWithAuxFiles = (
   filePath: string,
 ): Effect.Effect<void, never, FileSystem.FileSystem> =>
-  Effect.suspend(() => {
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const ext = path.extname(filePath);
     // An extensionless file (extname returns '') has no suffix to strip:
     // `slice(0, -0)` is `slice(0, 0)`, which would drop the path entirely and
-    // unlink bare relative names (and glob every `*.bak*`) in the process cwd.
+    // unlink bare relative names (and list every `*.bak*`) in the process cwd.
     const basePathNoExt =
       ext === '' ? filePath : filePath.slice(0, -ext.length);
-    const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) =>
-      tempExt.includes('*')
-        ? globSync(`${basePathNoExt}${tempExt}`, { nodir: true })
-        : [basePathNoExt + tempExt],
-    );
-    return Effect.forEach(
+    const dir = path.dirname(basePathNoExt);
+    // The `.bak*` backups are found by a plain name prefix over one listing
+    // of the directory, so a path holding glob metacharacters (or a Windows
+    // backslash) still names its own backups.
+    const siblings = yield* fs
+      .readDirectory(dir)
+      .pipe(
+        Effect.catch((error) =>
+          error.reason._tag === 'NotFound'
+            ? Effect.succeed<ReadonlyArray<string>>([])
+            : Effect.logWarning(`Failed to list ${dir} for temp backups`).pipe(
+                withLogChannel(CHANNEL),
+                Effect.annotateLogs({ data: error }),
+                Effect.as<ReadonlyArray<string>>([]),
+              ),
+        ),
+      );
+    const baseName = path.basename(basePathNoExt);
+    const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) => {
+      if (!tempExt.endsWith('*')) return [basePathNoExt + tempExt];
+      const prefix = baseName + tempExt.slice(0, -1);
+      return siblings
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => path.join(dir, name));
+    });
+    yield* Effect.forEach(
       [filePath, ...unlinkTargets],
       (target) => silentDelete(target, 'file'),
       { concurrency: 'unbounded', discard: true },

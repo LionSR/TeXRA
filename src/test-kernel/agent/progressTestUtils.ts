@@ -23,7 +23,6 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import {
   prepareToolEditApprovalPrompt,
   type ToolEditApprovalRequest,
@@ -356,6 +355,6 @@ export function toolEditApprovalRequest(
         session.roots.workspace,
         request.path,
       ),
-    }),
+    }).permission,
   };
 }

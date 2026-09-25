@@ -416,8 +416,9 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * The journal answers one question about an id that *does* read back, and only
  * one: whether a user superseded it. A retry through the workflow's control
  * surface interrupts a child that may already have accepted a turn and asks
- * for its replacement, so the engine journals the next attempt's mark naming
- * that child before this call is invoked again. That mark is an authorization,
+ * for its replacement, so the engine journals a mark naming that child, at
+ * that child's own attempt, before this call is invoked again. That mark is
+ * an authorization,
  * not a reading of the child, and it is the only fact that advances past an
  * attempt which started work.
  *
@@ -769,7 +770,7 @@ export function createWorkflowScriptAgentRunner(
    * here: a detached workflow builds this runner on the forked child-loop
    * fiber, after its tool call settled and after the child-run permit
    * wait, by which point a pending parent model switch may have applied
-   * to the live `run.config.model` cell.
+   * to the live `run.model` cell.
    */
   parentModel: string,
   defaultAgent: AgentEntry,
@@ -866,9 +867,9 @@ export function createWorkflowScriptAgentRunner(
       // not charge the synthetic resume attempt; the prior attempt's card
       // already carried that cost.
       if (!recovered) {
-        // `RunEnd.usage` is present once a round recorded usage and absent
-        // otherwise (see `RunEndSchema`), so it stays optional and absence is
-        // the recorded fact "no spend" rather than an unknown defaulted here.
+        // `RunEnd.usage` is the run ledger's folded totals, absent only for
+        // a run that never opened a ledger, so absence is the recorded fact
+        // "no spend" rather than an unknown defaulted here.
         invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {

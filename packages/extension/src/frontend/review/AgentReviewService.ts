@@ -14,6 +14,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { Effect } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
@@ -39,7 +40,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
@@ -52,7 +53,6 @@ import {
 } from './AgentReviewRunController';
 
 const CHANNEL = 'AgentReview';
-const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-agent-review';
 const SOURCE_LABEL = 'TeXRA Agent Review';
 /** Tool-use agent that performs the review and reports issues via the tool sink. */
@@ -124,10 +124,9 @@ class AgentReviewServiceImpl {
   // Captured by `initialize` from the host entry, which holds the process
   // runtime in a local; the service is a process-lifetime singleton.
   private runtime: ProcessRuntime | undefined;
-  // Handed to `initialize` on the same occasion: extension activation runs
-  // after `initializeDefaultSession`, and every review entry (the commands,
-  // the commit watcher) is UI-triggered outside any run context, so the
-  // process default is the session a review belongs to.
+  // Handed to `initialize` too: activation runs after `initializeDefaultSession`
+  // and every review entry (commands, commit watcher) is UI-triggered outside
+  // any run context, so the process default is the session a review belongs to.
   private session: SessionHandle | undefined;
 
   initialize(
@@ -142,11 +141,7 @@ class AgentReviewServiceImpl {
     context.subscriptions.push(this.collection, this.emitter);
   }
 
-  /**
-   * The process runtime `initialize` captured. Every review entry runs after
-   * extension activation, so an absent runtime is the same uninitialized-use
-   * mistake the review entries already report.
-   */
+  /** The runtime `initialize` captured; absent means an uninitialized use. */
   private get host(): ProcessRuntime {
     const runtime = this.runtime;
     if (!runtime) {
@@ -155,6 +150,13 @@ class AgentReviewServiceImpl {
       );
     }
     return runtime;
+  }
+
+  /** Log on the process runtime: review entries are Promise-shaped UI callbacks. */
+  private log(level: 'Info' | 'Warn', message: string): void {
+    this.host.runFork(
+      Effect.logWithLevel(level)(message).pipe(withLogChannel(CHANNEL)),
+    );
   }
 
   getState(): AgentReviewStateSnapshot {
@@ -236,7 +238,7 @@ class AgentReviewServiceImpl {
       // summary must never stay stuck on "Reviewing changes…".
       const errorMsg = toErrorMessage(err);
       this.summary = `Review failed: ${errorMsg}`;
-      log.warn(`Agent review failed unexpectedly: ${errorMsg}`);
+      this.log('Warn', `Agent review failed unexpectedly: ${errorMsg}`);
     } finally {
       if (this.reviewRuns.finish(run)) {
         const pending = this.pendingCommitReview;
@@ -280,7 +282,7 @@ class AgentReviewServiceImpl {
           showLoggedErrorMessage(CHANNEL, 'Agent review failed', reason),
         );
       } else {
-        log.warn(`Agent review failed: ${reason}`);
+        this.log('Warn', `Agent review failed: ${reason}`);
       }
       return;
     }
@@ -369,12 +371,13 @@ class AgentReviewServiceImpl {
       const errorMsg = toErrorMessage(err);
       const restored = this.restorePreviousResults(previous);
       this.summary = `Review failed: ${errorMsg}${restored ? ' · showing previous results' : ''}`;
-      log.warn(`Agent review session failed: ${errorMsg}`);
+      this.log('Warn', `Agent review session failed: ${errorMsg}`);
       return;
     }
 
     if (!this.reviewRuns.isCurrent(run)) {
-      log.info(
+      this.log(
+        'Info',
         'Agent review results were cleared while the session ran; discarding its outcome',
       );
       return;
@@ -394,7 +397,7 @@ class AgentReviewServiceImpl {
         suffix = ` · showing the ${formatResultCount(this.issues.length, 'issue')} reported before the session ended`;
       }
       this.summary = `Review ${verb}${suffix}`;
-      log.warn(`Agent review session ${verb}`);
+      this.log('Warn', `Agent review session ${verb}`);
       return;
     }
 
@@ -403,7 +406,8 @@ class AgentReviewServiceImpl {
       count === 0
         ? `No issues found (diff with ${baseDescription})`
         : `Found ${formatResultCount(count, 'potential issue')} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
-    log.info(
+    this.log(
+      'Info',
       `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
     );
   }

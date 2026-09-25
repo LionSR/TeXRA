@@ -66,7 +66,6 @@ import {
   type AggregateClaim,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -75,6 +74,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
+import { foldRunRows } from '@shared/session/runRows';
 import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
 import { openWork } from '@shared/session/transcriptReads';
 import { readRunTranscript } from '@transcript/runTranscript';
@@ -205,11 +205,11 @@ export class SessionHandle {
   readonly storeCleared: SessionGraph['storeCleared'];
   /**
    * The session's `Runs` service, as the session layer built it in the
-   * session's scope (`SessionGraph.runs`): registration, lookup, change
-   * listeners, and subagent lineage. The record carries it for a host that
+   * session's scope (`SessionGraph.runs`): registration, lookup and
+   * subagent lineage. The record carries it for a host that
    * holds the session; Effect code below a launch takes it from context,
    * where the run and request entries provide this same value.
-   * Hears every phase-moving row this process committed
+   * Hears every `run.end` this process committed
    * ({@link receiveFoldedEvent}), in commit order and only once the view has
    * folded it; the phase itself is the fold's (`RunView.status`), never a
    * second map here.
@@ -632,29 +632,21 @@ export class SessionHandle {
   /**
    * The final-text facts that close every streaming row still open for
    * `runId`: the loop commits them in the batch that parks the run (its
-   * `waiting` step), so a parked transcript never streams. Read from the
-   * run's committed rows, not the view: the view folds a run's transcript
-   * only while some port subscribes it, and a run parks whether or not one
-   * does.
+   * `waiting` step), so a parked transcript never streams. The open ids are
+   * the publisher's, kept as it commits, not the view's: the view folds a
+   * run's transcript only while some port subscribes it, and a run parks
+   * whether or not one does. Read after this run's publications settled, or
+   * inside a publisher job, so every `stream.start` before it is counted.
    */
   streamClosureFacts(
     runId: RunId,
-  ): Effect.Effect<
-    Extract<RunLedgerDraft, { type: 'stream.end' }>[],
-    DatabaseReadFailed
-  > {
-    return readRunTranscript(this, runId).pipe(
-      Effect.map((transcript) =>
-        openWork(transcript)
-          .filter((work) => work.kind === 'stream')
-          .map((work) => ({
-            type: 'stream.end' as const,
-            aggregateId: qualifyAggregateId('run', runId),
-            id: work.id,
-            finalText: this.graph.readText(runId, work.id) ?? work.text,
-          })),
-      ),
-    );
+  ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
+    return this.graph.openStreams(runId).map((id) => ({
+      type: 'stream.end' as const,
+      aggregateId: qualifyAggregateId('run', runId),
+      id,
+      finalText: this.graph.readText(runId, id),
+    }));
   }
 
   /**
@@ -815,18 +807,10 @@ export class SessionHandle {
   > {
     const aggregateId = qualifyAggregateId('run', runId);
     return Effect.gen({ self: this }, function* () {
-      let open = false;
-      for (const row of yield* this.graph.aggregateRows(aggregateId)) {
-        if (row.type === 'request.opened' && row.requestId === requestId) {
-          open = true;
-        } else if (
-          row.type === 'request.decided' &&
-          row.requestId === requestId
-        ) {
-          open = false;
-        }
-      }
-      if (!open) return false;
+      const { requests } = foldRunRows(
+        yield* this.graph.aggregateRows(aggregateId),
+      );
+      if (requests[requestId]?.resolved !== false) return false;
       yield* append([
         { type: 'request.decided', aggregateId, requestId, decision },
       ]);
@@ -873,26 +857,23 @@ export class SessionHandle {
   }
 
   /** Read and append as one job of the publisher, with no other write
-   *  between them. C5 excludes foreign writers; losing the claim between
-   *  the read and the append comes back as `DatabaseNotOwner` with nothing
-   *  written. */
-  updateRecordFacts<A>(
+   *  between them (the update may read more of the run inside that job). C5
+   *  excludes foreign writers; losing the claim between the read and the
+   *  append comes back as `DatabaseNotOwner` with nothing written. */
+  updateRecordFacts<A, E>(
     runId: RunId,
-    update: (rows: readonly SessionEvent[]) => {
-      readonly events: readonly SessionEventDraft[];
-      readonly value: A;
-    },
+    update: (
+      rows: readonly SessionEvent[],
+    ) => Effect.Effect<{ events: readonly SessionEventDraft[]; value: A }, E>,
   ): Effect.Effect<
     A,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    E | DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
-    const graph = this.graph;
-    return graph.exclusive((append) =>
-      Effect.gen(function* () {
-        const updateResult = update(yield* graph.runRecords(runId));
-        yield* append(updateResult.events);
-        return updateResult.value;
-      }),
+    return this.graph.exclusive((append) =>
+      this.graph.runRecords(runId).pipe(
+        Effect.flatMap(update),
+        Effect.flatMap((next) => Effect.as(append(next.events), next.value)),
+      ),
     );
   }
 
@@ -1107,45 +1088,34 @@ export class SessionHandle {
   }
 
   /**
-   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the registry's
-   * phase notification and the result listeners, which is why neither is on
-   * the raw tail above. A woken waiter, a refreshed child roster, and a
-   * result listener all read the run's view synchronously, so a notification
-   * ahead of the fold would hand them the state the row just replaced.
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the result
+   * listeners and the registry's folded-stop child sweep, which is why
+   * neither is on the raw tail above. Both read the run's view
+   * synchronously, so a notification ahead of the fold would hand them the
+   * state the row just replaced.
    */
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      // Runtime waiters and host notifications belong to the authoring process.
+      // The sweep and host notifications belong to the authoring process.
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.ownerId == null || !self.includes(event.ownerId)) return;
       const target = aggregateTarget(event.aggregateId);
-      if (target.kind !== 'run') return;
-      if (event.type === 'run.end') {
-        // A throwing listener is logged and never stops the ones after it.
-        yield* Effect.forEach(
-          [...this.resultListeners],
-          (listener) =>
-            Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logWarning('Session result listener threw').pipe(
-                  Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(CHANNEL),
-                ),
+      if (target.kind !== 'run' || event.type !== 'run.end') return;
+      // A throwing listener is logged and never stops the ones after it.
+      yield* Effect.forEach(
+        [...this.resultListeners],
+        (listener) =>
+          Effect.suspend(() => listener({ ...event, runId: target.id })).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning('Session result listener threw').pipe(
+                Effect.annotateLogs({ data: Cause.squash(cause) }),
+                withLogChannel(CHANNEL),
               ),
             ),
-          { discard: true },
-        );
-      }
-      // Every row that moves a run's phase (3.3): activation, park, wake, end.
-      const phaseMoved =
-        event.type === 'run.activate' ||
-        event.type === 'run.end' ||
-        event.type === 'child.park' ||
-        (event.type === 'flow.step' &&
-          (event.payload.step === 'waiting' ||
-            event.payload.step === 'turn.begin'));
-      if (!phaseMoved) return;
-      this.runs.handleStatus(target.id);
+          ),
+        { discard: true },
+      );
+      this.runs.sweepChildrenOfFoldedStop(target.id);
     });
   }
 
