@@ -175,11 +175,10 @@ describe('desktop preview host', () => {
               initials: 'P',
               subtitle: '/paper',
             },
+            root: undefined,
             secrets,
             stores: session.roots,
             fileOptions: () => files.fileOptions().pipe(Effect.orDie),
-            readRecentCommits: () =>
-              Effect.succeed({ commits: [], isGitRepo: false }),
             publish: () => Effect.void,
             onError: () => {},
           }),

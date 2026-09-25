@@ -4,8 +4,8 @@
  * follows a change and on every subscribe, so a surface never asks for a
  * catalog and never holds a stale one. Every producer is a read the host
  * already owns; nothing here is a fact about a run (`SessionView`) or a
- * choice of the user's (`Surface`). The catalogs are host-neutral; the
- * host injects its file lists, its git probe, and the banners only it can
+ * choice of the user's (`Surface`). The catalogs and the recent commits are
+ * host-neutral; the host injects its file lists and the banners only it can
  * answer (a VS Code host knows its API-key status and
  * its missing tools; the desktop keeps both in Settings).
  */
@@ -27,28 +27,32 @@ import type {
   HostSnapshot,
   ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import { readSettingFrom } from '@utils/config/platformSettings';
+import { readRecentCommits } from '@utils/git/repositoryOverview';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];
 
 /**
  * One of the host's own snapshot reads failed. The members below are the
- * reads only a host can answer — its file lists, its git probe, and the two
- * banners it alone knows about — so the failure is the host's and carries it.
+ * reads only a host can answer (its file lists and the two banners it alone
+ * knows about), so the failure is the host's and carries it.
  * `member` says which producer kept its last value: every read here is
  * guarded, so a failure never blanks the shell.
  */
 export class HostSnapshotReadFailed extends Data.TaggedError(
   'HostSnapshotReadFailed',
 )<{
-  readonly member:
-    'fileOptions' | 'readRecentCommits' | 'apiKeyBanner' | 'dependencyBanner';
+  readonly member: 'fileOptions' | 'apiKeyBanner' | 'dependencyBanner';
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
 interface HostSnapshotSourceOptions {
   project: ProjectDisplay;
+  /** The project folder the recent commits are read from; `undefined` for a
+   *  session with no folder open, which is never a repository. */
+  root: string | undefined;
   /**
    * The owning session's three setting slots: its workspace-scoped team and
    * roster state, its configuration, and the process global state. The model
@@ -69,11 +73,6 @@ interface HostSnapshotSourceOptions {
     FileOptions,
     HostSnapshotReadFailed,
     FileSystem.FileSystem
-  >;
-  readRecentCommits(): Effect.Effect<
-    { commits: string[]; isGitRepo: boolean },
-    HostSnapshotReadFailed,
-    ChildProcessSpawner
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
@@ -216,7 +215,15 @@ export function createHostSnapshotSource(
   });
 
   const loadCommits = Effect.gen(function* () {
-    commits = yield* options.readRecentCommits();
+    if (options.root === undefined) return;
+    commits = yield* readRecentCommits(
+      options.root,
+      yield* readSettingFrom<number>(
+        options.stores,
+        'texra.git.numberOfCommitsToShow',
+      ),
+      { settings: options.stores, onError: options.onError },
+    );
   });
 
   const loadHostBanners = Effect.gen(function* () {

@@ -79,7 +79,6 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { readRecentCommits } from '@utils/git/repositoryOverview';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
@@ -186,12 +185,6 @@ import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
-/**
- * Maximum number of commits the renderer displays in the launcher banner.
- * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
- * desktop has no per-user override.
- */
-const DESKTOP_RECENT_COMMIT_LIMIT = 20;
 let mainWindow: BrowserWindow | null = null;
 let reopenMainWindow: (() => void) | undefined;
 /** Window-owned post-launch funnel refresh. The process resume owner reads
@@ -805,14 +798,6 @@ function createWindow(options: {
     });
     return result.canceled ? undefined : result.filePaths;
   };
-  const recentCommitsOf = (project: DesktopProject) =>
-    project.root
-      ? readRecentCommits(project.root, DESKTOP_RECENT_COMMIT_LIMIT, {
-          // This project's own slots: the read runs for the paper it belongs to.
-          settings: project.roots,
-          onError: reportBackgroundError,
-        })
-      : Effect.succeed({ commits: [] as string[], isGitRepo: false });
   /**
    * One binding per open project for this window (PRD 8.1, 12.2): the
    * session bridge the renderer subscribes to, the project's `host` snapshot,
@@ -866,6 +851,7 @@ function createWindow(options: {
     );
     const snapshot = createHostSnapshotSource({
       project: projectDisplayOf(project.key, project.root),
+      root: project.root,
       stores: project.session.roots,
       secrets: options.secrets,
       fileOptions: () =>
@@ -879,7 +865,6 @@ function createWindow(options: {
               }),
           ),
         ),
-      readRecentCommits: () => recentCommitsOf(project),
       onError: reportBackgroundError,
       publish: (next) => bridge.setHost(next),
     });

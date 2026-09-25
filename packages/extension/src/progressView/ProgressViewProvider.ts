@@ -91,8 +91,6 @@ import { checkCoreDependencies } from '@utils/system/checkCoreDependencies';
 import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
 
-const RECENT_COMMIT_LIMIT = 20;
-
 const CHANNEL = 'ProgressViewProvider';
 const log = createLog(CHANNEL);
 
@@ -210,6 +208,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     const roots = session.roots;
     this.snapshot = createHostSnapshotSource({
       project: projectDisplayOf(session.roots.storage, roots.workspace),
+      root: roots.workspace,
       stores: roots,
       secrets,
       fileOptions: () =>
@@ -223,28 +222,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
               }),
           ),
         ),
-      readRecentCommits: () =>
-        Effect.tryPromise({
-          try: async () => {
-            const isGitRepo =
-              (await vscode.commands.executeCommand<boolean>(
-                'texra.isGitRepository',
-              )) ?? false;
-            const commits = isGitRepo
-              ? ((await vscode.commands.executeCommand<string[]>(
-                  'texra.getRecentCommits',
-                  RECENT_COMMIT_LIMIT,
-                )) ?? [])
-              : [];
-            return { commits, isGitRepo };
-          },
-          catch: (cause) =>
-            new HostSnapshotReadFailed({
-              member: 'readRecentCommits',
-              message: 'The recent commits could not be read.',
-              cause,
-            }),
-        }),
       workspaceRoots: () =>
         vscode.workspace.workspaceFolders?.map((folder) => ({
           label: folder.name,
