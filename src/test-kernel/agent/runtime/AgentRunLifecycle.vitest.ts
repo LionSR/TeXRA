@@ -532,6 +532,33 @@ describe('runFlowWithLifecycle', () => {
     }),
   );
 
+  // A stop whose unwinding also fails (a finalizer that dies) is still a
+  // stop: the row says cancelled and carries the failure as its detail.
+  it.effect('finalizes a stop whose finalizer died as cancelled', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+      const runner = () =>
+        Effect.scoped(
+          Effect.acquireRelease(Effect.void, () =>
+            Effect.die(new Error('finalizer died')),
+          ).pipe(Effect.andThen(Effect.interrupt)),
+        );
+
+      yield* Effect.exit(runFlow(ctx, runner));
+
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        expect.objectContaining({
+          runId,
+          outcome: RUN_OUTCOME.CANCELLED,
+          error: expect.objectContaining({
+            message: expect.stringContaining('finalizer died'),
+          }),
+        }),
+      );
+    }),
+  );
+
   it.effect(
     'passes flow-carried terminal results to subagent error delivery',
     () =>

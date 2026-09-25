@@ -428,9 +428,14 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     const finalizeFailedRun = Effect.fn(function* (
       err: unknown,
       carried: AgentFlowResult | undefined,
+      stopped = false,
     ) {
       const kind = classifyAgentError(err);
-      const outcome = AGENT_ERROR_OUTCOME[kind];
+      // A stop that reached the run outranks the failure beside it; the
+      // failure still rides the cancelled row as its error detail.
+      const outcome = stopped
+        ? RUN_OUTCOME.CANCELLED
+        : AGENT_ERROR_OUTCOME[kind];
       // normalizeProviderError recovers the structured shape the flow attached
       // (T2-2) when there was one, or formats a fresh one otherwise.
       // toRetryErrorInfo strips rawErrorBody, which the `run.end` error type
@@ -486,6 +491,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         outcome,
         error,
         output: carried?.output,
+        stopped,
         deliver:
           subagentResult && options?.onError
             ? (resolved) =>
@@ -592,7 +598,15 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         const err = ensureError(Cause.squash(cause));
         // A failure already classified and published retains its one error path.
         if (err instanceof FinalizedRunFailure) return Effect.fail(err);
-        return finalizeFailedRun(err, undefined);
+        // A stop that met a failure (a finalizer that died or failed as the
+        // stop unwound it) is still a stop, as `runVerdict` keys it: the row
+        // says CANCELLED and carries the failure, which is logged, not lost.
+        if (!Cause.hasInterrupts(cause))
+          return finalizeFailedRun(err, undefined);
+        return logLifecycleWarning('A stopped run also failed', {
+          runId,
+          error: err,
+        }).pipe(Effect.andThen(finalizeFailedRun(err, undefined, true)));
       }),
       Effect.onInterrupt(() =>
         // The run's stop is its fiber's interruption, and this is its
