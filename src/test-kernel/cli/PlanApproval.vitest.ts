@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { CONFIRM_CARD_FEEDBACK_PLACEHOLDER } from '@cli/chat/tui/modals/ConfirmCard';
 import {
   isCompactPlanApprovalRows,
   isPlanApprovalGoalActionVisible,
   planApprovalCompactBodyRowsBudget,
   planApprovalGoalNoticeLine,
 } from '@cli/chat/tui/modals/PlanApproval';
-import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 import { PLAN_GOAL_COPY } from '@ui/copy/delegationApproval';
 

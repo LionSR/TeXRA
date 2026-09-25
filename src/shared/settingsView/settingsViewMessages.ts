@@ -90,10 +90,46 @@ export const SETTINGS_TAB_ORDER = [
  */
 export type SettingsTabPanelName = (typeof SETTINGS_TAB_ORDER)[number];
 
-/** Outbound schema to switch tabs, addressed by panel name. */
+/**
+ * Each page's sections in sub-tab order; a page with fewer than two shows no
+ * second nav row. `vscode` (LaTeX) exists on the extension only.
+ */
+export const SETTINGS_PAGE_SECTIONS = {
+  models: ['keys', 'subscriptions', 'models'],
+  agents: ['library', 'teams', 'skills', 'advanced'],
+  tools: ['approval', 'tools', 'integrations'],
+  latex: ['dependencies', 'compile', 'formatting', 'vscode'],
+  memory: [],
+  general: ['account', 'git'],
+  shortcuts: [],
+} as const satisfies Record<SettingsTabPanelName, readonly string[]>;
+
+/** A section of page `P`, e.g. `'teams'` for `'agents'`. */
+export type SettingsSectionName<
+  P extends SettingsTabPanelName = SettingsTabPanelName,
+> = (typeof SETTINGS_PAGE_SECTIONS)[P][number];
+
+/**
+ * Where a settings link lands: a page (on its remembered section), or one
+ * section of it spelled `page/section`, e.g. `'agents/teams'`.
+ */
+export type SettingsTarget =
+  | SettingsTabPanelName
+  | {
+      [P in SettingsTabPanelName]: `${P}/${SettingsSectionName<P>}`;
+    }[SettingsTabPanelName];
+
+export const SettingsTargetSchema = z.enum(
+  SETTINGS_TAB_ORDER.flatMap((page) => [
+    page,
+    ...SETTINGS_PAGE_SECTIONS[page].map((section) => `${page}/${section}`),
+  ]) as [SettingsTarget, ...SettingsTarget[]],
+);
+
+/** Outbound schema to switch tabs, addressed by page or `page/section`. */
 const SetTabMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.SET_TAB),
-  tab: z.enum(SETTINGS_TAB_ORDER),
+  tab: SettingsTargetSchema,
   agentSubTab: AgentCategorySchema.optional(),
 });
 

@@ -28,7 +28,7 @@ import {
 
 import { type CliContext } from '../cliContext';
 
-import { warnApprovalDenied } from './approvalPrompts';
+import { policyDenialOf, warnApprovalDenied } from './approvalPrompts';
 
 function canPresent(context: CliContext): boolean {
   return context.mode === 'interactive';
@@ -52,15 +52,31 @@ function executableDecision(
 }
 
 /**
- * Whether this run can never present an approval prompt, so the runtime should
- * withhold approval-gated tools up front rather than let each request settle as
- * denied. Callers pass the launch-time policy the run is pinned to.
+ * The approval options of every CLI tool-use launch. When this run can never
+ * present an approval prompt, the runtime withholds approval-gated tools up
+ * front rather than let each request settle as denied; a policy denial warns
+ * once. The policy is the session's at launch, the one the run is pinned to.
  */
-export function cliApprovalPromptsUnavailable(
+export function cliToolUseApprovalOptions(
+  session: SessionHandle,
   context: CliContext,
-  policy: TexraApprovalPolicy,
-): boolean {
-  return isTexraApprovalDenied(executableDecision(context, policy));
+  runId?: RunId,
+): {
+  readonly approvalPromptsUnavailable: boolean;
+  readonly onApprovalPolicyDenial: (withheldTools?: readonly string[]) => void;
+} {
+  return {
+    approvalPromptsUnavailable: isTexraApprovalDenied(
+      executableDecision(context, session.approvalPolicy),
+    ),
+    onApprovalPolicyDenial: (withheldTools) =>
+      warnApprovalDenied(
+        session,
+        context,
+        policyDenialOf(withheldTools),
+        runId,
+      ),
+  };
 }
 
 /** The policy's answer for a gated executable request, or `undefined` to
@@ -73,7 +89,7 @@ export function settleExecutable(
   const decision = executableDecision(context, session.approvalPolicy);
   if (decision === 'allow') return { action: 'approve' };
   if (decision === 'present') return undefined;
-  warnApprovalDenied(session, context, 'Approval policy', runId);
+  warnApprovalDenied(session, context, { kind: 'executable' }, runId);
   return { action: 'deny', reason: texraApprovalDenialMessage(decision) };
 }
 
@@ -96,13 +112,13 @@ export function settleRetry(
     isCredentialFailure: isCredentialRetryFailure(payload),
   });
   if (retryDecision === 'present') return undefined;
-  if (retryDecision.deny !== 'yolo-retry') {
+  // Under yolo the TUI shows the failed run itself; a headless run would
+  // otherwise end on the model error with no word that no retry was tried.
+  if (retryDecision.deny !== 'yolo-retry' || context.mode === 'headless') {
     warnApprovalDenied(
       session,
       context,
-      retryDecision.deny === 'credential'
-        ? 'Credential-exhausted retry'
-        : 'Approval policy',
+      { kind: 'retry', deny: retryDecision.deny },
       payload.runId,
     );
   }
@@ -127,7 +143,7 @@ export function settleHumanInputDenial(
   });
   if (decision === 'present') return undefined;
   if (decision.deny !== 'yolo-no-human') {
-    warnApprovalDenied(session, context, 'Human-input request', runId);
+    warnApprovalDenied(session, context, { kind: 'humanInput' }, runId);
   }
   return {
     reason: texraHumanInputDenialMessage(decision.deny),

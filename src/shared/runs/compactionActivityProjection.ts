@@ -1,7 +1,9 @@
 import {
+  CompactionActivityDataSchema,
+  ContextManagementDataSchema,
   MESSAGE_TYPES,
   type CompactionActivityOutcome,
-  type StreamLogEntry,
+  type TranscriptEvent,
 } from '@shared/schemas';
 
 export type CompactionActivityStatus =
@@ -50,67 +52,89 @@ export function createCompactionActivityProjection(): CompactionActivityProjecti
   return { blocks: [], indexByOperationId: new Map(), maxAppliedSeqNo: 0 };
 }
 
-const STREAM_ADVANCING_MESSAGE_TYPES: ReadonlySet<string> = new Set([
-  MESSAGE_TYPES.USER_MESSAGE,
-  MESSAGE_TYPES.TOOL_USE,
-  MESSAGE_TYPES.ERROR,
-]);
-
+/** A later row that moves the stream past a compaction still running. */
 function interruptRunningBlocks(
   projection: CompactionActivityProjection,
-  entry: StreamLogEntry,
-  changedIndices: Set<number>,
-): void {
-  if (!STREAM_ADVANCING_MESSAGE_TYPES.has(entry.messageType)) return;
+  position: number,
+  at: number,
+): readonly number[] {
+  const changedIndices: number[] = [];
   for (const [index, block] of projection.blocks.entries()) {
-    if (block.status !== 'running' || entry.seqNo <= block.startPosition) {
+    if (block.status !== 'running' || position <= block.startPosition) {
       continue;
     }
     projection.blocks[index] = {
       ...block,
       status: 'interrupted',
-      finishedAt: entry.timestamp,
+      finishedAt: at,
     };
-    changedIndices.add(index);
+    changedIndices.push(index);
   }
+  return changedIndices;
 }
 
-/** Apply one raw stream-log entry to an existing projection, in source order. */
-export function applyCompactionActivityEntry(
+/** The figures a `compaction` context-management payload freed, carried by
+ *  the one activity row: the latest running block. */
+function applyFreed(
   projection: CompactionActivityProjection,
-  entry: StreamLogEntry,
+  payload: unknown,
 ): readonly number[] {
-  const changedIndices = new Set<number>();
-  projection.maxAppliedSeqNo = Math.max(
-    projection.maxAppliedSeqNo,
-    entry.seqNo,
+  // A payload its schema rejects moves nothing here; the transcript fold
+  // writes it as an error row (`traceFold`).
+  const parsed = ContextManagementDataSchema.safeParse(payload);
+  if (!parsed.success || parsed.data.action !== 'compaction') return [];
+  const index = projection.blocks.findLastIndex(
+    (block) => block.status === 'running',
   );
-  if (
-    entry.messageType === MESSAGE_TYPES.CONTEXT_MANAGEMENT &&
-    entry.data.action === 'compaction'
-  ) {
-    // The figures belong to the one activity row: the latest running block.
-    const index = projection.blocks.findLastIndex(
-      (block) => block.status === 'running',
-    );
-    if (index === -1) return [];
-    const { data } = entry;
-    projection.blocks[index] = {
-      ...projection.blocks[index],
-      freed: {
-        tokens: data.tokensBefore - data.tokensAfter,
-        utilizationBefore: data.utilizationBefore,
-        utilizationAfter: data.utilizationAfter,
-      },
-    };
-    return [index];
-  }
-  if (entry.messageType !== MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY) {
-    interruptRunningBlocks(projection, entry, changedIndices);
-    return [...changedIndices];
-  }
+  if (index === -1) return [];
+  const { data } = parsed;
+  projection.blocks[index] = {
+    ...projection.blocks[index],
+    freed: {
+      tokens: data.tokensBefore - data.tokensAfter,
+      utilizationBefore: data.utilizationBefore,
+      utilizationAfter: data.utilizationAfter,
+    },
+  };
+  return [index];
+}
 
-  const { operationId, state } = entry.data;
+/**
+ * Apply one transcript event to the projection, in source order. `position`
+ * is the seqNo of the row the event wrote: a tool event's is the tool row's
+ * first-seen position, so a tool that started before a compaction and ended
+ * after it never interrupts it. `at` is the event's clock.
+ */
+export function applyCompactionActivityEvent(
+  projection: CompactionActivityProjection,
+  event: TranscriptEvent,
+  position: number,
+  at: number,
+): readonly number[] {
+  projection.maxAppliedSeqNo = Math.max(projection.maxAppliedSeqNo, position);
+  if (event.type === 'tool.start' || event.type === 'tool.end') {
+    return interruptRunningBlocks(projection, position, at);
+  }
+  if (event.type === 'domain') {
+    return event.key === 'contextManagement'
+      ? applyFreed(projection, event.data)
+      : [];
+  }
+  if (event.type !== 'log') return [];
+  switch (event.messageType) {
+    case MESSAGE_TYPES.USER_MESSAGE:
+    case MESSAGE_TYPES.ERROR:
+      return interruptRunningBlocks(projection, position, at);
+    case MESSAGE_TYPES.CONTEXT_MANAGEMENT:
+      return applyFreed(projection, event.data);
+    case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
+      break;
+    default:
+      return [];
+  }
+  const activity = CompactionActivityDataSchema.safeParse(event.data);
+  if (!activity.success) return []; // an error row, like applyFreed
+  const { operationId, state } = activity.data;
   const existingIndex = projection.indexByOperationId.get(operationId);
 
   if (state === 'started') {
@@ -121,8 +145,8 @@ export function applyCompactionActivityEntry(
       operationId,
       status: 'running',
       finalized: false,
-      startPosition: entry.seqNo,
-      startedAt: entry.timestamp,
+      startPosition: position,
+      startedAt: at,
     });
     return [index];
   }
@@ -135,7 +159,7 @@ export function applyCompactionActivityEntry(
   const withinSettlementBoundary =
     block.status === 'interrupted' &&
     block.settledThroughSeqNo !== undefined &&
-    entry.seqNo <= block.settledThroughSeqNo;
+    position <= block.settledThroughSeqNo;
   if (block.finalized && !withinSettlementBoundary) return [];
   const { settledThroughSeqNo: _settledThroughSeqNo, ...unsettledBlock } =
     block;
@@ -143,14 +167,14 @@ export function applyCompactionActivityEntry(
     ...unsettledBlock,
     status: state,
     finalized: true,
-    finishedAt: entry.timestamp,
+    finishedAt: at,
   };
   return [existingIndex];
 }
 
 /**
  * Finalize every start the projection has seen, at the settlement boundary the
- * entries themselves drew: `maxAppliedSeqNo`, the last entry applied.
+ * events themselves drew: `maxAppliedSeqNo`, the newest row position applied.
  */
 export function settleCompactionActivities(
   projection: CompactionActivityProjection,

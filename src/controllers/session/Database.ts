@@ -30,6 +30,7 @@ import {
   Scope,
   Effect,
   Exit,
+  FileSystem,
   Layer,
   Result,
   Stream,
@@ -40,6 +41,7 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
   RunIdSchema,
@@ -249,16 +251,18 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ChildProcessSpawner
+  WorkspaceRoots | ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
       const identity = yield* ProcessIdentity;
+      const fs = yield* FileSystem.FileSystem;
       const spawner = yield* ChildProcessSpawner;
       const liveness = (owner: string) =>
         proveOwnerLiveness(ownerIdentity(owner)).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
           Effect.provideService(ChildProcessSpawner, spawner),
         );
       const path =
@@ -550,6 +554,24 @@ export const databaseLayer = (
             ),
           );
         });
+      /** C5: a row whose claim moved or closed refused this writer. Read it
+       *  in the refusing transaction so the typed refusal names the holder. */
+      const refuseWriter = (id: AggregateId, absent: string) =>
+        Effect.gen(function* () {
+          const held = (yield* readState([id]))[0];
+          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          const { ownerId, closed } = held;
+          return yield* new DatabaseNotOwner({
+            aggregateId: id,
+            ownerId,
+            closed,
+          });
+        });
+      /** The refusal leaves typed (D6 b); the transaction wrapper carried it
+       *  as the write failure's cause. */
+      const typedRefusal = Effect.mapError((failure: DatabaseWriteFailed) =>
+        failure.cause instanceof DatabaseNotOwner ? failure.cause : failure,
+      );
       /** Claim every observed row in the caller's transaction, refusing the
        *  first whose claim moved since it was read. */
       const claimObserved = (rows: readonly AggregateState[], moved: string) =>
@@ -561,7 +583,7 @@ export const databaseLayer = (
               row.ownerId,
             ]);
             if (claimed.length !== 1) {
-              throw new Error(`${moved}: ${row.aggregateId}`);
+              return yield* refuseWriter(row.aggregateId, moved);
             }
           }
         });
@@ -630,20 +652,10 @@ export const databaseLayer = (
               identity.ownerId,
             ]))?.seq;
             if (typeof seq !== 'number') {
-              // C5: the sequence row exists and refused this writer, because
-              // its claim moved or it closed. Read that row in the refusing
-              // transaction so the typed refusal names the holder.
-              const held = (yield* readState([draft.aggregateId]))[0];
-              if (held === undefined) {
-                throw new Error(
-                  `Sequence refused for an absent aggregate: ${draft.aggregateId}`,
-                );
-              }
-              return yield* new DatabaseNotOwner({
-                aggregateId: draft.aggregateId,
-                ownerId: held.ownerId,
-                closed: held.closed,
-              });
+              return yield* refuseWriter(
+                draft.aggregateId,
+                'Sequence refused for an absent aggregate',
+              );
             }
             const target = aggregateTarget(draft.aggregateId);
             // The seq-1 rule (decision 9): a run aggregate begins with exactly
@@ -1000,7 +1012,7 @@ export const databaseLayer = (
                   .filter((row) => row.ownerId !== identity.ownerId)
                   .map((row) => row.aggregateId);
               }),
-            );
+            ).pipe(typedRefusal);
           }),
         removeRun: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
@@ -1177,8 +1189,6 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            // The ownership refusal leaves typed (D6 b); the transaction
-            // wrapper carried it as the write failure's cause.
             // A write from a process whose build no longer matches the store's
             // stamp (another build cleared and re-stamped it under this one)
             // fails here instead of appending rows of a vocabulary the store
@@ -1187,13 +1197,7 @@ export const databaseLayer = (
               assertStoreFormat(sql, path).pipe(
                 Effect.andThen(appendPrepared(prepared, at)),
               ),
-            ).pipe(
-              Effect.mapError((failure) =>
-                failure.cause instanceof DatabaseNotOwner
-                  ? failure.cause
-                  : failure,
-              ),
-            );
+            ).pipe(typedRefusal);
           }),
       };
     }),
@@ -1212,7 +1216,7 @@ export const globalDatabaseLayer = (
 ): Layer.Layer<
   GlobalDatabase,
   DatabaseOpenFailed,
-  ProcessIdentity | ChildProcessSpawner
+  ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
@@ -1319,15 +1323,11 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot for it. One
-  // written under another version is unsupported state: there are no legacy
-  // readers, so its tables are dropped here, at the boundary that owns the
-  // file, before this build's schema touches them, and a row of another
-  // vocabulary never reaches a fold. The stamp is read before the tables are
-  // created, so a layout this schema cannot extend is dropped rather than
-  // failing the open; and the reset runs under the write lock, re-reading
-  // the stamp inside it, so two processes opening the same store clear it
-  // once. The stamp is written last, inside the same transaction.
+  // A store holds one vocabulary, stamped in SQLite's own slot. One written
+  // under another version is unsupported (no legacy readers): its tables go
+  // here, before this build's schema touches them, and the stamp is read
+  // before the tables exist, so an unextendable layout is dropped rather than
+  // failing the open. resetStore owns the write lock and the stamp write.
   const cleared =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null

@@ -268,10 +268,10 @@ describe('sessionFold', () => {
     expect(root.transcript.rows).toStrictEqual([
       {
         id: 'phase-Map',
-        seqNo: 2,
+        seqNo: 1,
         timestamp: T.root + 1,
         level: 'info',
-        settlementSeqNo: 2,
+        settlementSeqNo: 1,
         verbose: false,
         messageType: MESSAGE_TYPES.DEFAULT,
         kind: 'phase',
@@ -282,10 +282,10 @@ describe('sessionFold', () => {
       },
       {
         id: 'call-1',
-        seqNo: 3,
+        seqNo: 2,
         timestamp: T.root + 2,
         level: 'info',
-        settlementSeqNo: 3,
+        settlementSeqNo: 2,
         verbose: false,
         groupId: 'phase-Map',
         messageType: MESSAGE_TYPES.WORKFLOW_TASK,

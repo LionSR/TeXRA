@@ -121,12 +121,15 @@ export interface HostSnapshotSource {
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
   setRecording(recording: HostSnapshot['recording']): Effect.Effect<void>;
-  /** A run loaded an agent from the custom directory, under the category
-   *  it was launched as: the banner's actions edit that catalog. */
+  /** A launch could not find its agent, under the category it was launched
+   *  as: the banner's actions edit that catalog. */
   showAgentConfigBanner(
     agentName: string,
     sessionType: SessionType,
   ): Effect.Effect<void>;
+  /** A launch resolved its agent and started a run, so the missing-agent
+   *  warning no longer describes the launcher. */
+  readonly clearAgentConfigBanner: Effect.Effect<void>;
   /** The user dismissed a notice for the rest of this session. */
   dismissBanner(banner: 'gettingStarted' | 'dependency'): Effect.Effect<void>;
   setOnboarding(state: HostSnapshot['onboarding']): Effect.Effect<void>;
@@ -278,6 +281,11 @@ export function createHostSnapshotSource(
           customDirSet: true,
         };
       }).pipe(Effect.andThen(publish)),
+    clearAgentConfigBanner: Effect.suspend(() => {
+      if (!agentConfig.visible) return Effect.void;
+      agentConfig = { visible: false };
+      return publish;
+    }),
     dismissBanner: (banner) =>
       Effect.sync(() => {
         dismissed.add(banner);

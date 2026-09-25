@@ -90,7 +90,7 @@ export class DesktopProcessResumeOwner {
     if (isCancellationRequested()) return Effect.succeed(false);
     const runtime = this.options.runtime();
     const attempt = Effect.gen(function* () {
-      const exists = (yield* session.transcripts.readEvents(runId)).length > 0;
+      const exists = (yield* session.readRunEvents(runId)).length > 0;
       if (!exists) return false;
       return yield* resumeRunWithRefusalNotice(runId, {
         session,

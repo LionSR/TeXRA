@@ -49,6 +49,13 @@ export const settingsViewStyles: CSSResult[] = [
       padding: 0 var(--wa-space-xs);
     }
 
+    /* The current page's sections: a second strip of text sub-tabs, on the
+       page's own surface so it reads as part of the page below it. */
+    .settings-section-nav {
+      border-top: var(--border-thin) solid var(--border-hairline);
+      background: var(--wa-color-surface-default);
+    }
+
     .settings-page-button {
       flex: 0 0 auto;
       white-space: nowrap;

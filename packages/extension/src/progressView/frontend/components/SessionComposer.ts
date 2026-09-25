@@ -120,10 +120,6 @@ export class SessionComposer extends LitElement {
       .routing .routing-parent:hover {
         text-decoration: underline;
       }
-      .routing .routing-note {
-        white-space: nowrap;
-        color: var(--color-text-muted);
-      }
 
       .composer {
         display: flex;
@@ -171,9 +167,9 @@ export class SessionComposer extends LitElement {
       }
 
       /* A plain native textarea (#11851): the card draws the one focus
-         ring, so the field carries no chrome of its own and grows with its
-         content between the two heights each state sets. */
-      textarea {
+         ring, so the field carries no chrome of its own (scoped, to out-rank
+         the shared :focus-visible ring) and grows between the two heights. */
+      .composer textarea {
         display: block;
         width: 100%;
         min-width: 0;
@@ -644,29 +640,26 @@ export class SessionComposer extends LitElement {
     </div>`;
   }
 
-  /** Where a follow-up goes, shown only when there is a parent to
-   *  redirect it to: a top-level run's name is already in the header. */
+  /** Where a follow-up goes, shown only when there is a choice: a parent
+   *  that takes replies too. A top-level run's name is already in the
+   *  header, and a parent that takes none (a workflow-script run has no
+   *  chat) leaves nothing to choose. */
   private renderRouting(run: RunView): TemplateResult | typeof nothing {
     const parent = run.parentId ? this.view?.runs.get(run.parentId) : undefined;
-    if (parent === undefined) return nothing;
-    // The link moves the draft to the parent, or the line states that the
-    // parent takes no replies (a workflow-script run has no chat).
+    if (parent === undefined || parent.followUpSupport === 'unsupported') {
+      return nothing;
+    }
     return html`<div class="routing">
       ${waIcon('code-branch')}
-      <span class="routing-target">Goes to ${run.label}</span>
-      <span aria-hidden="true">·</span>${
-        parent.followUpSupport !== 'unsupported'
-          ? html`<button
-              type="button"
-              class="routing-parent"
-              @click=${() => this.replyToParent(parent.id)}
-            >
-              reply to ${parent.label} instead
-            </button>`
-          : html`<span class="routing-note"
-              >${parent.label} takes no replies</span
-            >`
-      }
+      <span class="routing-target">Your message goes to ${run.label}</span>
+      <span aria-hidden="true">·</span>
+      <button
+        type="button"
+        class="routing-parent"
+        @click=${() => this.replyToParent(parent.id)}
+      >
+        reply to ${parent.label} instead
+      </button>
     </div>`;
   }
 
@@ -680,10 +673,10 @@ export class SessionComposer extends LitElement {
     ).map((followUp) => followUp.text);
     const text = this.text;
     const hasText = text.trim() !== '';
-    // A follow-up's Send and the Cmd+Alt+E accelerator read one rule
-    // (`canSendFollowUp`); the launcher has no run and no draft images,
-    // so its own Run turns on the instruction alone.
-    const canSend = run ? canSendFollowUp(run, this.draft) : hasText;
+    // Send and Cmd+Alt+E share `canSendFollowUp`; the launcher needs text.
+    const canSend = run
+      ? canSendFollowUp(run, this.draft, { terminalBacked: true })
+      : hasText;
     const sendLabel = compact ? 'Send follow-up' : 'Run';
 
     return html`

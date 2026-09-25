@@ -18,6 +18,7 @@ const BASE_CLI_CONTEXT = {
   resourcesPath: '/tmp/resources',
   config: new MemoryConfigProvider(),
   configWarnings: [],
+  configDegradations: [],
   skillSourceOptions: {},
 } satisfies CliContext;
 

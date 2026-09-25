@@ -34,7 +34,6 @@ export {
   type WorkflowTaskRow,
 } from './transcriptRow';
 export {
-  toolHeaderPreview,
   type ToolChecklistSection,
   type ToolFileGroupsSection,
   type ToolFileListSection,

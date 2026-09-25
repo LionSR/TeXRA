@@ -29,7 +29,6 @@ import {
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
-  type RoundOutput,
   type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
@@ -38,7 +37,14 @@ import {
   type ToolResultPayload,
 } from '@shared/schemas';
 import { isObject } from '@utils/core';
-import { applyRunRow, byId, freshRunRows, type RunRows } from './runRows';
+import {
+  applyRunRow,
+  byId,
+  freshRunRows,
+  isSharedRunRow,
+  type RunRows,
+  type SharedRunRow,
+} from './runRows';
 import type { z } from 'zod';
 
 /**
@@ -181,26 +187,32 @@ export type RunState = RunRows & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** Complete output collection from the newest output.produced row. */
-  readonly roundOutputs: RoundOutput[];
   /** The round of the last `context-window` compaction: a turn that
    *  overflowed the window is retried once per round against it. */
   readonly overflowRecoveredAtRound: number | null;
   readonly flow: FlowState | null;
 };
 
-type LedgerRowType = RunLedgerDraft['type'];
+/** The card rows a batch commits beside its settlement or its `waiting`
+ *  step: the ledger row beside each is the fact, so the loop ignores them. */
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
+
+/** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
+type FoldedRowType =
+  SharedRunRow['type'] | Exclude<RunLedgerDraft['type'], CardRowType>;
 
 /**
  * Display rows ignored by name. Anything on the run aggregate that is neither
- * here nor a folded arm (a ledger arm, or `followup.queued`, which its
- * producer publishes outside `appendBatch`) is `unknown-run-row`, never a
- * quiet `default`. The record is total over the event vocabulary, so a new
- * display arm is a compile error here until it is classified.
+ * here nor a folded row is `unknown-run-row`, never a quiet `default`. The
+ * record is total over the event vocabulary, so a new display arm is a
+ * compile error here until it is classified.
  */
 const IGNORED_ROW_TYPES: Readonly<
-  Record<Exclude<SessionEvent['type'], LedgerRowType | 'followup.queued'>, true>
+  Record<Exclude<SessionEvent['type'], FoldedRowType>, true>
 > = {
+  'tool.start': true,
+  'tool.end': true,
+  'stream.end': true,
   'run.start': true,
   'run.activate': true,
   'run.config': true,
@@ -260,7 +272,6 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
-  roundOutputs: [],
   overflowRecoveredAtRound: null,
 });
 
@@ -417,43 +428,37 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     commit,
     rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
   });
-  switch (row.type) {
-    case 'flow.step':
-    case 'request.opened':
-    case 'request.decided':
-    case 'followup.queued':
-    case 'followup.consumed': {
-      // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
-      // `unresolved` is a malformed aggregate here — this fold reads a run's
-      // whole history, so a decision always follows the opening it answers.
-      const verdict = applyRunRow(current, row);
-      if (verdict.kind === 'unchanged') return null;
-      if (verdict.kind === 'unresolved') {
-        return refuse(
-          'out-of-order',
-          `decision names no request ${verdict.requestId}`,
-          commit,
-        );
-      }
-      if (verdict.kind === 'contradiction') {
-        return refuse('out-of-order', verdict.detail, commit);
-      }
-      const state = current ?? freshRunState(commit);
-      return Result.succeed({
-        ...state,
+  if (isSharedRunRow(row)) {
+    // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
+    // `unresolved` is a malformed aggregate here: this fold reads a run's
+    // whole history, so a decision always follows the opening it answers.
+    if (row.type === 'output.produced' && !opened(current)) {
+      return refuse('out-of-order', 'output before opening snapshot', commit);
+    }
+    const verdict = applyRunRow(current, row);
+    if (verdict.kind === 'unchanged') return null;
+    if (verdict.kind === 'unresolved') {
+      return refuse(
+        'out-of-order',
+        `decision names no request ${verdict.requestId}`,
         commit,
-        // Only the loop's own step is a ledger row; queued input and the
-        // requests a session opens do not open a run.
-        rowsBeforeSnapshot:
-          state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
-        ...verdict.rows,
-      });
+      );
     }
-    case 'output.produced': {
-      if (!opened(current))
-        return refuse('out-of-order', 'output before opening snapshot', commit);
-      return Result.succeed({ ...current, commit, roundOutputs: row.rounds });
+    if (verdict.kind === 'contradiction') {
+      return refuse('out-of-order', verdict.detail, commit);
     }
+    const state = current ?? freshRunState(commit);
+    return Result.succeed({
+      ...state,
+      commit,
+      // Only the loop's own step is a ledger row; queued input, output and
+      // the requests a session opens do not open a run.
+      rowsBeforeSnapshot:
+        state.rowsBeforeSnapshot + (verdict.rows.step === undefined ? 0 : 1),
+      ...verdict.rows,
+    });
+  }
+  switch (row.type) {
     case 'flow.snapshot': {
       // Family state and the coordinates the loop owns, and nothing else: no
       // reference set to reconcile, so there is no way for a snapshot to
@@ -783,12 +788,6 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         commit,
       );
     }
-    case 'tool.start':
-    case 'tool.end':
-    case 'stream.end':
-      // Committed with its `tool.result` or its `waiting` step; the ledger
-      // row beside it is the fact.
-      return null;
     default:
       if (IGNORED.has(row.type)) return null;
       return refuse('unknown-run-row', row.type, commit);

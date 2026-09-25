@@ -19,7 +19,7 @@ import { Component, type ReactNode } from 'react';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
 import { WARNING } from '@cli/tui/ui/glyphs';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { truncateSummary } from '@utils/text/stringUtils';
 
 interface EntryErrorBoundaryProps {
   // Names the failed entry in the inline marker (e.g. its
@@ -42,7 +42,7 @@ function formatRenderError(error: unknown): string {
   }
   // The marker is a single line: collapse whitespace and cap length so a long
   // or multi-line message can't reflow the transcript.
-  return truncateWithEllipsis(message.replaceAll(/\s+/g, ' ').trim(), 120);
+  return truncateSummary(message, 120);
 }
 
 export class EntryErrorBoundary extends Component<

@@ -5,7 +5,7 @@ import { notifyFollowUpSent } from '@agent/followUp';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
-  activeRunId as activeRunIdSignal,
+  selectedRunId as selectedRunIdSignal,
   beginWorkPlanReaderRequest,
   cancelPendingWorkPlanReaderRequest,
   cancelWorkPlanReaderRequest,
@@ -26,7 +26,7 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
-import { AgentCategory, MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { AgentCategory, type RunId } from '@shared/schemas';
 
 import { formatSlashCommandHelp } from '../helpText';
 import { listSlashCommands } from '../slashRegistry';
@@ -44,7 +44,7 @@ export function showCliSlashCommandHelp(): void {
 
 /** Open the focused run's work plan from the view it is rendered from. */
 export function showCliWorkPlan(session: SessionHandle): void {
-  const runId = activeRunIdSignal.get();
+  const runId = selectedRunIdSignal.get();
   if (!runId) {
     cancelPendingWorkPlanReaderRequest();
     setTransientNotice('No focused session.');
@@ -63,23 +63,28 @@ export function showCliWorkPlan(session: SessionHandle): void {
   }
 }
 
-function activeSkillNamesFor(
-  session: SessionHandle,
-  runId: RunId | undefined,
-): readonly string[] {
-  if (runId === undefined) return [];
-  const entries = session.transcripts.get(runId)?.toJSON() ?? [];
-  const latest = entries.findLast(
-    (entry) => entry.messageType === MESSAGE_TYPES.ACTIVE_SKILLS,
-  );
-  return latest?.data.skills.map((skill) => skill.name) ?? [];
+/** The skills the run's newest `skills.snapshot` row names. Read from the
+ *  run's committed rows: the snapshot is no listing row, so the view holds it
+ *  only for a run whose transcript tier some port subscribes. */
+function activeSkillNamesFor(session: SessionHandle, runId: RunId | undefined) {
+  if (runId === undefined) return Effect.succeed([]);
+  return session
+    .readRunEvents(runId)
+    .pipe(
+      Effect.map(
+        (events) =>
+          events
+            .findLast((event) => event.type === 'skills.snapshot')
+            ?.skills.map((skill) => skill.name) ?? [],
+      ),
+    );
 }
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
   function* (context: SlashCommandContext) {
     const meta = sessionMeta.get();
     const view = currentView();
-    const activeRunId = activeRunIdSignal.get();
+    const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
     // The children a status line counts: the active run's, else its
     // parent's (a focused leaf reports its siblings' activity).
@@ -89,6 +94,10 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
         : run;
     const activeChildSessions = runningChildCount(view, countedParent);
     const model = run?.model ?? (meta.model || context.initialModel);
+    const activeSkills = yield* activeSkillNamesFor(
+      context.runtimeSession,
+      activeRunId,
+    );
     const prospectiveRoute = yield* readProspectiveUsageRoute(
       { ...context.stores, secrets: context.secrets },
       model,
@@ -111,7 +120,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
           run?.category === AgentCategory.ToolUse && run.goal.active
             ? run.goal
             : undefined,
-        activeSkills: activeSkillNamesFor(context.runtimeSession, activeRunId),
+        activeSkills,
         sessionId: run ? context.session.runId : undefined,
         commandName: context.cliContext.commandName,
         cwd: context.cliContext.cwd,
@@ -132,7 +141,7 @@ export function requestCliSessionCompaction(
   session: SessionHandle,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
-    const runId = activeRunIdSignal.get();
+    const runId = selectedRunIdSignal.get();
     if (runId === undefined) {
       appendLocalAssistantTranscript(
         'No active tool-use session found for context compaction.',

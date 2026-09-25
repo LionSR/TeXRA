@@ -74,7 +74,7 @@ The `web_search` tool queries the DuckDuckGo Instant Answers API, not a model pr
 
 ### <wa-icon library="texra" name="book"></wa-icon> Manage references with Zotero
 
-If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status on **Dashboard → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
+If you use [Zotero](https://www.zotero.org/) with the [Better BibTeX](https://retorque.re/zotero-better-bibtex/) plugin, TeXRA can search, export, and add items to your library directly. Keep Zotero running while you use these features; check its status on **Dashboard → Tools → Integrations** (<wa-icon library="texra" name="link"></wa-icon>).
 
 ```
 Search my Zotero library for papers by Vaswani on attention mechanisms.

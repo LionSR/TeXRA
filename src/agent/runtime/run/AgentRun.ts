@@ -104,7 +104,12 @@ export interface AgentRunShape {
   readonly toolPolicy: ToolPolicy;
   readonly workingDirectory?: string;
   readonly delegationAgentScope?: AgentDelegationScope | null;
-  readonly onApprovalPolicyDenial?: () => void;
+  /**
+   * Record that this run met an approval-policy denial: a request settled as
+   * denied, or (with `withheldTools`) approval-gated tools were withheld from
+   * the model when the run resolved its tools.
+   */
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
@@ -172,7 +177,7 @@ interface AgentRunLayerInput {
   /** Caller-supplied tools available only to this run. */
   readonly tools?: readonly ITool[];
   readonly callbacks: RunCallbacks;
-  readonly onApprovalPolicyDenial?: () => void;
+  readonly onApprovalPolicyDenial?: AgentRunShape['onApprovalPolicyDenial'];
 }
 
 /**
@@ -231,6 +236,7 @@ export const agentRunLayer = (
         tools: setting.tools,
         logger,
         approvalPromptsUnavailable: ctx.toolPolicy.approvalPromptsUnavailable,
+        onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         host: processToolHost(),
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]

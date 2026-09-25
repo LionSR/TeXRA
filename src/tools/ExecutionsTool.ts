@@ -694,12 +694,10 @@ const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   }
 
   // The row above already proved the run is in the session's view; its
-  // transcript is read from the same rows.
-  const entries = yield* context.session.transcripts
-    .readEntries(runId)
-    .pipe(readFailed);
-
-  const { lines, chars } = projectProcessOutput(entries);
+  // output is read from the run's own committed rows.
+  const { lines, chars } = projectProcessOutput(
+    yield* context.session.readRunEvents(runId).pipe(readFailed),
+  );
   // The row above was read before the transcript, and a command that
   // finished during that read must not be judged against it: the view is
   // in memory, so one read of one run can afford a fresh row. Only a

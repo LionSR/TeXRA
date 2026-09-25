@@ -1,6 +1,6 @@
 ---
 name: writing-commenter
-description: Review research writing by leaving inline comments on logic, notation, narrative flow, positioning, and editorial impact. Use when Codex needs to annotate a paper or draft with reader-facing comments instead of silently rewriting it, especially for argument structure, symbol consistency, and publication-oriented presentation.
+description: Review research writing by leaving inline comments on logic, notation, narrative flow, positioning, and editorial impact. Use when you need to annotate a paper or draft with reader-facing comments instead of silently rewriting it, especially for argument structure, symbol consistency, and publication-oriented presentation.
 ---
 
 # Writing Commenter
