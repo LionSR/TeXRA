@@ -1,6 +1,6 @@
 import { Box, Text, useStderr, useWindowSize } from 'ink';
-import { Effect, Exit } from 'effect';
-import { useMemo, useRef, useState } from 'react';
+import { Cause, Effect, Exit } from 'effect';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { loadingFrameAt } from '@cli/tui/ui/LoadingIndicator';
 import { COLOR_ERROR } from '@cli/tui/ui/colors';
@@ -181,24 +181,24 @@ export function StatusBar(props: StatusBarProps): React.JSX.Element {
       readProspectiveUsageRoute(
         { ...props.stores, secrets: props.secrets },
         accessModel,
-      ).pipe(
-        Effect.tap(() =>
-          Effect.sync(() =>
-            reportedProbeFailureKeysRef.current.delete(routeReadKey),
-          ),
-        ),
-        Effect.tapError((error) =>
-          Effect.sync(() => {
-            if (reportedProbeFailureKeysRef.current.has(routeReadKey)) return;
-            reportedProbeFailureKeysRef.current.add(routeReadKey);
-            writeStderr(
-              `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(error)}\n`,
-            );
-          }),
-        ),
       ),
     CODEX_SUBSCRIPTION_REFRESH_MS,
   );
+  // Only a read of the current key settles here, so a probe that a newer key
+  // overtook neither reports nor latches its failure.
+  useEffect(() => {
+    if (routeRead === undefined) return;
+    const reported = reportedProbeFailureKeysRef.current;
+    if (Exit.isSuccess(routeRead)) {
+      reported.delete(routeReadKey);
+      return;
+    }
+    if (reported.has(routeReadKey)) return;
+    reported.add(routeReadKey);
+    writeStderr(
+      `[warn] [cli.tui] subscription route probe failed for ${accessModel}: ${toErrorMessage(Cause.squash(routeRead.cause))}\n`,
+    );
+  }, [routeRead, routeReadKey, accessModel, writeStderr]);
   const prospectiveRoute =
     routeRead !== undefined && Exit.isSuccess(routeRead)
       ? routeRead.value
