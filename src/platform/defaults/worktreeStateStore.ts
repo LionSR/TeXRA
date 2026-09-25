@@ -85,10 +85,11 @@ class WorktreeStateStore implements StateStore {
  * one a {@link WorktreeStateStore} keyed by the repository every worktree of
  * it shares.
  *
- * The repository is what `git rev-parse --git-common-dir` answers, so a
- * linked worktree, a submodule and a bare repository resolve the way git
- * itself resolves them. A common directory named `.git` is keyed by the
- * checkout that holds it (the main worktree's root), any other by itself.
+ * The key is the checkout the main worktree of a plain repository lives in:
+ * a linked worktree, whose git dir is `<repo>/.git/worktrees/<name>`, keys by
+ * `<repo>`; every other checkout (a main worktree, a submodule under
+ * `.git/modules/…`, a worktree of a bare repository or of a submodule) keys
+ * by its own top level, so two submodules never share one namespace.
  * "Not a git repository" is the expected answer for a plain folder; any
  * other failure (git missing, a timeout) is logged at warn and the workspace
  * keeps its own state unshared, so host startup is never aborted by it.
@@ -100,7 +101,13 @@ export const openWorktreeStateStore = Effect.fn('openWorktreeStateStore')(
     workspaceRoot: string,
   ): Effect.fn.Return<StateStore, never, ChildProcessSpawner> {
     const result = yield* executeCommand(
-      ['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      [
+        'git',
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-dir',
+        '--show-toplevel',
+      ],
       { cwd: workspaceRoot, settings: undefined, timeout: 5_000, quiet: true },
     );
     if (!result.success) {
@@ -111,9 +118,16 @@ export const openWorktreeStateStore = Effect.fn('openWorktreeStateStore')(
       }
       return projectState;
     }
-    const commonDir = path.normalize(result.stdout.trim());
+    const [gitDirLine = '', topLevelLine = ''] = result.stdout
+      .trim()
+      .split(/\r?\n/);
+    const worktreesDir = path.dirname(path.normalize(gitDirLine.trim()));
+    const commonDir = path.dirname(worktreesDir);
     const repoRoot =
-      path.basename(commonDir) === '.git' ? path.dirname(commonDir) : commonDir;
+      path.basename(worktreesDir) === 'worktrees' &&
+      path.basename(commonDir) === '.git'
+        ? path.dirname(commonDir)
+        : path.normalize(topLevelLine.trim());
     return new WorktreeStateStore(
       projectState,
       globalState,
