@@ -89,6 +89,17 @@ export type ProcessServices =
   | ToolRegistry
   | Compositions;
 
+/**
+ * The services an agent catalog load reads: the global and filesystem views
+ * the local agent directories are scanned through, and the HTTP client the
+ * remote catalog is listed with.
+ */
+export type AgentCatalogServices =
+  | GlobalStorageFs
+  | FileSystem.FileSystem
+  | AgentDirectories
+  | HttpClient.HttpClient;
+
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,
   never

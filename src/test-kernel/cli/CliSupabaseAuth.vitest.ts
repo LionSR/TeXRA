@@ -317,6 +317,7 @@ describe('CLI Supabase auth', () => {
       yield* signOutCliSupabase().pipe(
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
+        Effect.provide(testHttpClientLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
       );
 
@@ -374,6 +375,7 @@ describe('CLI Supabase auth', () => {
         yield* signOutCliSupabase().pipe(
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
+          Effect.provide(testHttpClientLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
           Effect.withLogger(capture),
         ),

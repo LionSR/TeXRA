@@ -10,14 +10,11 @@ import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { isNewerSemverVersion } from '@utils/system/semverUpdateCheck';
-import {
-  fetchJsonStringField,
-  runDailyUpdateCheck,
-} from '@utils/system/updateCheck';
+import { runDailyUpdateCheck } from '@utils/system/updateCheck';
 
 describe('runDailyUpdateCheck', () => {
   const nowMs = Date.UTC(2026, 0, 1);
-  type CheckOptions = Parameters<typeof runDailyUpdateCheck>[0];
+  type CheckOptions = Parameters<typeof runDailyUpdateCheck<never>>[0];
   const checkOptions = (
     overrides: Partial<CheckOptions> = {},
   ): CheckOptions => ({

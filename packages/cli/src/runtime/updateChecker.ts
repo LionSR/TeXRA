@@ -24,6 +24,7 @@ import { installCliProcessRuntime } from './cliProcessRuntime';
 import { CliExitCode } from './exitCodes';
 import { askCliQuestion, writeTextStderr } from './logSinks';
 import { createCliStyle } from './style';
+import type { HttpClient } from 'effect/unstable/http';
 
 /** Published package name on npm; the `texra` bin lives here. */
 const CLI_PACKAGE_NAME = '@texra-ai/cli';
@@ -118,15 +119,13 @@ export function buildUpdateCommand(method: InstallMethod): {
 export function fetchLatestCliVersion(options?: {
   registry?: string;
   timeoutMs?: number;
-  fetchImpl?: typeof fetch;
-}): Effect.Effect<string | undefined> {
+}): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
   const registry = options?.registry ?? DEFAULT_REGISTRY;
   return fetchJsonStringField({
     url: `${registry}/${CLI_PACKAGE_NAME}/latest`,
     field: 'version',
     timeoutMs: options?.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     headers: { accept: 'application/json' },
-    fetchImpl: options?.fetchImpl,
   });
 }
 

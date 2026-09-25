@@ -137,19 +137,6 @@
       ]
     },
     {
-      "id": "RT-subscription-usage-typed-failure",
-      "candidate": "A typed failure on the subscription-usage fetch",
-      "why": "SubscriptionUsageHttpError | UnknownError would reclassify a malformed body and a 401 as request_failed at the call sites, and handing the fetch the fiber's AbortSignal would drop requestTimeoutMs.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "src/controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing.ts",
-          "symbol": "fetchSubscriptionUsage",
-          "signature": "export function fetchSubscriptionUsage(request: { readonly url: string; readonly headers: Record<string, string>; readonly signal: AbortSignal; }): Effect.Effect<unknown, Error> {…}"
-        }
-      ]
-    },
-    {
       "id": "RT-desktop-pty-host-effect",
       "candidate": "The desktop PTY host as an Effect",
       "why": "Built, measured, reverted: the file would become a runtime effect importer whose catch sites two of five are irreducibly synchronous, so it needs Effect.runSync in a module holding no runtime. Measured +21 LoC for one lift removed.",

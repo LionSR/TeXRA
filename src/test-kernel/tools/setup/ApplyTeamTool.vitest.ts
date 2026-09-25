@@ -26,6 +26,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { REPO_ROOT } from '@test/support/repoScan';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ApplyTeamTool } from '@tools/setup/ApplyTeamTool';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
@@ -103,6 +104,7 @@ beforeAll(async () => {
       Layer.mergeAll(
         unusedGlobalStorageFs(),
         nodePlatformLayer,
+        testHttpClientLayer,
         AgentDirectories.layer(fakeHostAgentDirectories),
       ),
     ),
