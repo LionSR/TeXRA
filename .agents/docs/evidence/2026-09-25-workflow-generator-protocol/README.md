@@ -19,7 +19,7 @@ About 500 lines in three files, with 18 behavioral tests:
 
 ## Pins
 
-Taken on `main` at `b4569d4c` (2026-09-25), Node.js v22.22.2, with the
+Taken on `main` at `5395cd6c` (2026-09-25; first run at `b4569d4c`), Node.js v22.22.2, with the
 repository's locked dependencies: `effect` 4.0.0-rc.117,
 `quickjs-emscripten-core` and `@jitl/quickjs-wasmfile-release-sync` 0.32.0,
 `zod` 4.4.3, `vitest` 5.0.1.
@@ -57,7 +57,8 @@ about 1.3 s; the typecheck is clean.
   CPU budget, and the script's own `try/catch` cannot stop the preemption.
 - An `await`-format script fails with a hint to write `yield*`; yielding a
   non-operation fails with a named error.
-- `process`, `require`, `Function`, constructor escapes, `Math.random` and
+- `process`, `require`, `Function`, constructor escapes (including the
+  async-function and async-generator constructors), `Math.random` and
   `Date.now` are unreachable or refused.
 
 ## Checking the tests themselves

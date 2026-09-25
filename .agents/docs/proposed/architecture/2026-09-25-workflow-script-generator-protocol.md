@@ -18,7 +18,7 @@ them. A prototype of the protocol passes 18 behavioral tests
 One decision gates the switch: whether models write the generator form as
 reliably as `async`/`await` (§8).
 
-Baseline: `main` at `b4569d4c`.
+Baseline: `main` at `5395cd6c` (re-checked after #13180 moved the cited lines).
 
 ## 1. The seam, as it stands
 
@@ -27,7 +27,7 @@ scoped Effect, cancellation is interruption, and skip/retry is a per-attempt
 `Deferred` decision. The script side is still a Promise program, because the
 script's contract is `async`:
 
-- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:657`),
+- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:665`),
   and `parallel()` is a realm-side `Promise.all` over thunks, installed as
   trusted prelude code (`ORCHESTRATION_PRELUDE`, `runWorkflowScript.ts:120`).
 - Because the realm holds pending promises, the host must pump QuickJS jobs
@@ -36,8 +36,8 @@ script's contract is `async`:
   per-call settlement back into the realm (`settleHostPromise`, `:508`), and
   the async bridge wrappers in `BRIDGE_PRELUDE` (`:153`).
 - A failed call resolves to `null` and a skip to the string
-  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:725`, `:740`), so every
-  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:658`).
+  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:718`, `:733`), so every
+  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:666`).
 - Concurrency, retry and timeout policy the script wants is written by hand
   in the script, if at all; the host offers one semaphore.
 
@@ -205,7 +205,7 @@ adapter, shim, flag, or dual engine").
   with the `await` hint. There is no reader for the old form; the journal
   key means a rewritten script loses no completed work.
 - Retry and identity: a retried body re-issues the same call keys, so the
-  duplicate-key check (`runWorkflowScript.ts:502`) must admit a re-issue
+  duplicate-key check (`runWorkflowScript.ts:495`) must admit a re-issue
   inside the same `Retry` (decision 4).
 
 ## 7. Evidence
@@ -267,7 +267,7 @@ unchanged; none conflicts with the protocol.
 
 ## Verified
 
-- Read on `main` at `b4569d4c`: `src/agent/workflowScript/{sandbox,runWorkflowScript,types,parseScript}.ts`,
+- Read on `main` at `b4569d4c`, and the cited lines re-checked at `5395cd6c`: `src/agent/workflowScript/{sandbox,runWorkflowScript,types,parseScript}.ts`,
   `docs/guide/multi-agent-workflows.md`, the three agent YAMLs that offer the
   tool (none teaches the format),
   `src/tools/delegation/{WorkflowScriptTool,workflowScriptStrategy,workflowScriptAgentRunner,inBandSubagentRun}.ts`,
