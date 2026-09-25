@@ -150,7 +150,8 @@ function diffEdit(original: string, proposed: string): DiffHunks {
     : buildDiffHunks(original, proposed);
 }
 
-function countLineChanges(hunks: DiffHunks['hunks']): LineChanges {
+/** Added/removed line counts folded over hunks a caller already holds. */
+export function countLineChanges(hunks: DiffHunks['hunks']): LineChanges {
   let added = 0;
   let removed = 0;
   for (const hunk of hunks) {
@@ -166,9 +167,11 @@ function countLineChanges(hunks: DiffHunks['hunks']): LineChanges {
  * Added/removed line counts for an edit, folded from the very hunks the host
  * renders underneath them — the CLI card's `+N / −M` header and the diff body
  * below it are now two readings of one computation, not two engines.
- * The hosts call this (and {@link firstChangedLine}) on the pair
+ * The approval hosts call this (and {@link firstChangedLine}) on the pair
  * {@link requestToolEditApproval} already diffed and reported a timeout for,
- * so these re-readings do not report it again.
+ * so these re-readings do not report it again. A caller diffing a pair of its
+ * own diffs it with `buildDiffHunks`, reports the timeout, and folds the hunks
+ * with {@link countLineChanges}.
  */
 export function computeLineChangeSummary(
   original: string,

@@ -21,7 +21,7 @@ import {
 
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
-import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
@@ -239,15 +239,11 @@ export const sessionEventsLayer = Layer.effect(
         pending.delete(done);
         // Direct sink write: `detach` is the synchronous door for producers
         // with no fiber, and the refusing plane's publisher fiber has ended.
-        writeLogEntry({
-          level: 'WARN',
-          fiberId: '',
-          timestamp: new Date().toISOString(),
-          message: 'Session publication dropped: the plane has closed',
-          cause: undefined,
-          annotations: { [LOG_CHANNEL]: CHANNEL },
-          spans: {},
-        });
+        writeLogLine(
+          'WARN',
+          CHANNEL,
+          'Session publication dropped: the plane has closed',
+        );
       }
     };
     const settle: Effect.Effect<CommitOrdinal | null> = Effect.suspend(() =>

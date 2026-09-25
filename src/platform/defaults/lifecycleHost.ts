@@ -1,5 +1,5 @@
 import { Cause, Clock, Deferred, Effect, Option } from 'effect';
-import { LOG_CHANNEL, LOG_DATA, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -50,15 +50,12 @@ export function createLifecycleHost(
       // Direct sink write: the hosts run the drain on a bare runtime (it is
       // the path that disposes the process runtime), whose logger is not the
       // host sink.
-      writeLogEntry({
-        level: 'ERROR',
-        fiberId: '',
-        timestamp: new Date().toISOString(),
-        message: `[lifecycle] ${phase} handler failed`,
-        cause: undefined,
-        annotations: { [LOG_CHANNEL]: CHANNEL, [LOG_DATA]: error },
-        spans: {},
-      });
+      writeLogLine(
+        'ERROR',
+        CHANNEL,
+        `[lifecycle] ${phase} handler failed`,
+        error,
+      );
     });
 
   // Sequential — handlers within a phase run in registration order. Parallel

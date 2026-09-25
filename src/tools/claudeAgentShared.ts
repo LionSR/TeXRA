@@ -1,6 +1,6 @@
 // Shared constants and helpers for the Claude Code CLI tool.
 
-import { LOG_CHANNEL, LOG_DATA, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import type {
   ClaudeAgentEffort,
   TokenUsageStats,
@@ -128,15 +128,12 @@ function toToolInputRecord(
   if (isToolRecord(input)) return input;
   // Direct sink write: this runs inside the SDK stream's `for await` drain
   // (one `Effect.tryPromise` in claudeAgent.ts), where no fiber is current.
-  writeLogEntry({
-    level: 'WARN',
-    fiberId: '',
-    timestamp: new Date().toISOString(),
-    message: `Claude tool "${toolName}" sent a non-object input; expected a JSON object per the tool-use protocol.`,
-    cause: undefined,
-    annotations: { [LOG_CHANNEL]: CHANNEL, [LOG_DATA]: { input } },
-    spans: {},
-  });
+  writeLogLine(
+    'WARN',
+    CHANNEL,
+    `Claude tool "${toolName}" sent a non-object input; expected a JSON object per the tool-use protocol.`,
+    { input },
+  );
   return undefined;
 }
 

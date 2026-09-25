@@ -9,7 +9,7 @@ import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports
-import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import { normalizeFilePath, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -43,15 +43,7 @@ let cachedExtraDirs: string[] | null = null;
  * directly at computation time.
  */
 function warnSkippedDir(message: string): void {
-  writeLogEntry({
-    level: 'WARN',
-    fiberId: '',
-    timestamp: new Date().toISOString(),
-    message,
-    cause: undefined,
-    annotations: { [LOG_CHANNEL]: 'platformPaths' },
-    spans: {},
-  });
+  writeLogLine('WARN', 'platformPaths', message);
 }
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];

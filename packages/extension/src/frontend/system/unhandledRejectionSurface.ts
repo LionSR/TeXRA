@@ -7,7 +7,7 @@
 import * as vscode from 'vscode';
 
 // Local imports
-import { LOG_CHANNEL, LOG_DATA, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -20,15 +20,7 @@ export function installUnhandledRejectionSurface(
   // A process listener that may fire before the runtime exists or after it is
   // disposed, so it writes to the host sink directly rather than via a fiber.
   const logError = (message: string, data: unknown) =>
-    writeLogEntry({
-      level: 'ERROR',
-      fiberId: '',
-      timestamp: new Date().toISOString(),
-      message,
-      cause: undefined,
-      annotations: { [LOG_CHANNEL]: CHANNEL, [LOG_DATA]: data },
-      spans: {},
-    });
+    writeLogLine('ERROR', CHANNEL, message, data);
   const report = (error: unknown) => {
     logError('Unhandled extension-host rejection', error);
     void vscode.window

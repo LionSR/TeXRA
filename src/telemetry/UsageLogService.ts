@@ -19,6 +19,7 @@ import {
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
+import { writeLogLine } from '@logger/logSink';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { UsageRoute } from '@shared/schemas';
 import {
@@ -74,11 +75,6 @@ const TELEMETRY_OPT_OUT_ENV_VARS = [
 const telemetryOptOutEnvVar = (): string | undefined =>
   TELEMETRY_OPT_OUT_ENV_VARS.find((name) => isEnvFlagEnabled(name));
 
-// Raised off-fiber (the sync consent read, `log`); the next drain logs them.
-const notes: Effect.Effect<void>[] = [];
-const logNotes = () =>
-  Effect.all(notes.splice(0), { discard: true }).pipe(withLogChannel(CHANNEL));
-
 /**
  * Routes whose records meter what the user consumed against their plan.
  * Subscription routes are accounted against a database aggregate populated by
@@ -131,8 +127,12 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
     (value) => typeof value !== 'boolean',
   );
   if (malformed !== undefined) {
-    const warning = `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`;
-    notes.push(Effect.logWarning(warning));
+    // A sync read (`log`, `texra doctor`) has no fiber: it writes the sink.
+    writeLogLine(
+      'WARN',
+      CHANNEL,
+      `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
+    );
     return false;
   }
   // Either scope may opt out. In particular, a checked-in project `true` must
@@ -262,7 +262,8 @@ class UsageLogServiceImpl {
     }
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      notes.push(Effect.logWarning('Queue full, dropping oldest entry'));
+      // `log` is synchronous (UsageMonitor): its lines go straight to the sink.
+      writeLogLine('WARN', CHANNEL, 'Queue full, dropping oldest entry');
       this.queue.shift();
     }
 
@@ -276,7 +277,7 @@ class UsageLogServiceImpl {
       config,
     });
     const queued = `Queued usage entry (queue size: ${this.queue.length})`;
-    notes.push(Effect.logDebug(queued));
+    writeLogLine('DEBUG', CHANNEL, queued);
 
     if (this.queue.length >= this.config.batchSize) {
       this.requestFlush();
@@ -295,7 +296,6 @@ class UsageLogServiceImpl {
   private readonly drain = Effect.fn('UsageLogService.drain')(function* (
     this: UsageLogServiceImpl,
   ) {
-    yield* logNotes();
     while (this.retryBatch || this.queue.length > 0) {
       const batchSettled = yield* this.sendNextBatch().pipe(
         Effect.catchTag('UsageBatchUndelivered', (error) =>
@@ -310,7 +310,6 @@ class UsageLogServiceImpl {
           }),
         ),
       );
-      yield* logNotes();
       if (!batchSettled) return;
     }
   });

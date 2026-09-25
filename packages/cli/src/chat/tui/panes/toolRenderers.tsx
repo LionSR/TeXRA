@@ -25,7 +25,7 @@ import {
   TODO_PENDING,
   TOOL_OUTPUT_CORNER,
 } from '@cli/tui/ui/glyphs';
-import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import { TOOL_CALL_STATUS } from '@shared/schemas';
 import { isMcpToolName } from '@shared/tools/toolDisplayName';
 import { toolDisplayKind } from '@shared/tools/toolKind';
@@ -289,15 +289,7 @@ function patchGroupsFromSections(
     const { hunks, timeout } = buildDiffHunks(section.oldText, section.newText);
     // A render pass has no fiber, so the degraded diff goes to the sink here.
     if (timeout !== undefined) {
-      writeLogEntry({
-        level: 'WARN',
-        fiberId: '',
-        timestamp: new Date().toISOString(),
-        message: timeout,
-        cause: undefined,
-        annotations: { [LOG_CHANNEL]: 'unifiedDiff' },
-        spans: {},
-      });
+      writeLogLine('WARN', 'unifiedDiff', timeout);
     }
     if (hunks.length > 0) {
       groups.push({

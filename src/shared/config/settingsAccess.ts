@@ -4,7 +4,7 @@ import { z } from 'zod';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { LOG_CHANNEL, writeLogEntry } from '@logger/logSink';
+import { writeLogLine } from '@logger/logSink';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -128,15 +128,7 @@ export function readConfigSetting(
   if (stored.kind === 'value') return stored.value;
   // Direct sink write: config reads are synchronous by ruling and this one
   // also serves the CLI's pre-runtime startup rows, so no fiber exists here.
-  writeLogEntry({
-    level: 'WARN',
-    fiberId: '',
-    timestamp: new Date().toISOString(),
-    message: invalidStoredMessage(entry, stored.cause),
-    cause: undefined,
-    annotations: { [LOG_CHANNEL]: CHANNEL },
-    spans: {},
-  });
+  writeLogLine('WARN', CHANNEL, invalidStoredMessage(entry, stored.cause));
   return settingDefault(entry);
 }
 
