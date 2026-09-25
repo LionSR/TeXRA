@@ -208,6 +208,24 @@ describe('CLI context config defaults', () => {
     });
   });
 
+  it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
+    const storageRoot = await makeTempDir('texra-cli-mcp-', tempDirs);
+    await writeFile(join(storageRoot, 'mcp.json'), '{ "mcpServers": ');
+
+    const context = await cliContext({
+      ambient,
+      env: {},
+      globalArgs: {
+        cwd: await makeTempDir('texra-cli-context-', tempDirs),
+      },
+      storageRoot,
+    });
+
+    expect(context.configWarnings.join('\n')).toContain(
+      `${join(storageRoot, 'mcp.json')} is not valid JSON`,
+    );
+  });
+
   it('accepts every config key a CLI reader honors', async () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({

@@ -35,11 +35,14 @@ import {
   mcpServerOfToolName,
 } from './mcpServer';
 
+/** The config file's name inside the user's `~/.texra` directory. */
+export const MCP_CONFIG_FILE_NAME = 'mcp.json';
+
 /** The user-level config file: `~/.texra/mcp.json`. */
 export const USER_MCP_CONFIG_PATH = path.join(
   safeHomedir() ?? '/nonexistent',
   TEXRA_STORAGE_DIR_NAME,
-  'mcp.json',
+  MCP_CONFIG_FILE_NAME,
 );
 
 /**
@@ -151,6 +154,40 @@ function parseConfig(
   return { servers, warnings };
 }
 
+/**
+ * The config file's servers and the warnings its invalid entries raise, or
+ * `null` when the file does not exist. Fails on an unreadable file or
+ * invalid JSON.
+ */
+const readMcpConfig = (
+  fs: FileSystem.FileSystem,
+  file: string,
+): Effect.Effect<ReturnType<typeof parseConfig> | null, Error> =>
+  Effect.gen(function* () {
+    const text = yield* readConfigText(fs, file);
+    if (text === null) return null;
+    const json = yield* Effect.try({
+      try: (): unknown => JSON.parse(text),
+      catch: (error) =>
+        new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
+    });
+    return parseConfig(file, json);
+  });
+
+/**
+ * Every problem the config file at `file` has, for `texra doctor` and the
+ * CLI's startup config warnings; a missing file has none, since MCP servers
+ * are optional.
+ */
+export const mcpConfigWarnings = (
+  fs: FileSystem.FileSystem,
+  file: string,
+): Effect.Effect<readonly string[]> =>
+  readMcpConfig(fs, file).pipe(
+    Effect.map((config) => config?.warnings ?? []),
+    Effect.catch((error) => Effect.succeed([error.message])),
+  );
+
 /** The plugin one configured server is. */
 function mcpPlugin(config: McpServerConfig): LoadedPlugin {
   return {
@@ -177,25 +214,19 @@ export const mcpPluginLoader =
         declared.flatMap((name) => mcpServerOfToolName(name) ?? []),
       );
       if (wanted.size === 0) return { plugins: [], warnings: [] };
-      const text = yield* readConfigText(fs, file);
-      if (text === null)
+      const config = yield* readMcpConfig(fs, file);
+      if (config === null)
         return {
           plugins: [],
           warnings: [
             `The run declares MCP tools, but ${file} does not exist; no MCP server is configured.`,
           ],
         };
-      const json = yield* Effect.try({
-        try: (): unknown => JSON.parse(text),
-        catch: (error) =>
-          new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
-      });
-      const { servers, warnings } = parseConfig(file, json);
       return {
-        plugins: servers
+        plugins: config.servers
           .filter((server) => wanted.has(server.name))
           .map(mcpPlugin),
-        warnings,
+        warnings: config.warnings,
       };
     }).pipe(
       Effect.catch((error) =>
