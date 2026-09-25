@@ -129,7 +129,6 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
