@@ -659,7 +659,7 @@ export function openrouterChatModel(
     },
   );
 
-  const streamTurn: Model['streamTurn'] = (input) =>
+  const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
       let returnedModel: string | undefined;
@@ -678,19 +678,15 @@ export function openrouterChatModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const parsed = ResolvedTurnSchema.safeParse(input);
           if (
-            !parsed.success ||
-            parsed.data.protocol !== 'openrouter-chat' ||
-            !sameModelOrigin(parsed.data, origin)
+            turn.protocol !== 'openrouter-chat' ||
+            !sameModelOrigin(turn, origin)
           )
             return yield* new ModelError({
               kind: 'unsupported',
               message:
                 'The prepared turn belongs to another protocol or deployment.',
-              cause: parsed.error,
             });
-          const turn = parsed.data;
           const parameters = yield* requestBody(turn, config);
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
             undefined;

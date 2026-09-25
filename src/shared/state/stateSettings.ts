@@ -103,16 +103,15 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * `settingSlot(entry, host)`.
  */
 
-/** Hosts that may store, honor, or surface a setting. */
-export type SettingHost = 'vscode' | 'cli' | 'desktop';
+/** The product hosts, spelled once: for settings and `unavailableHosts`. */
+export const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
+export type SettingHost = (typeof SETTING_HOSTS)[number];
 
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 
 /** Storage slot per host. Absent means the host does not store the key. */
-type SettingSlots = {
-  readonly [H in SettingHost]?: SettingStore;
-};
+type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
 
 export type SettingsViewSnapshot =
   | 'approval'
