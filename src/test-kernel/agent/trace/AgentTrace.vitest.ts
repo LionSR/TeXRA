@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { type AgentEvent, emitToolUseCard, TraceEmitter } from '@agent/trace';
+import {
+  type AgentEvent,
+  emitToolUseCard,
+  logFileCategory,
+  logUserMessage,
+  TraceEmitter,
+} from '@agent/trace';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
@@ -74,4 +80,45 @@ describe('emitToolUseCard', () => {
       }
     },
   );
+});
+
+// #7508: the userMessage row carries attachment kinds (never bytes), and the
+// common no-media message carries no `data` at all.
+describe('logUserMessage', () => {
+  it('stamps attachment kinds only when attachments are present', () => {
+    const [plain, withMedia] = collectEvents((trace) => {
+      logUserMessage(trace, 'Fix the lemma.');
+      logUserMessage(trace, 'See the figure.', ['image', 'document']);
+    });
+
+    expect(plain).toMatchObject({ data: undefined });
+    expect(withMedia).toMatchObject({
+      data: { attachments: ['image', 'document'] },
+    });
+  });
+});
+
+describe('logFileCategory', () => {
+  // A file whose `ok` is unset counts as not found, and an empty list logs
+  // no card at all.
+  it('treats an unset ok as not loaded and skips empty lists', () => {
+    const events = collectEvents((trace) => {
+      logFileCategory(trace, 'Input Files', []);
+      logFileCategory(trace, 'Aux', [
+        { path: '/a.tex', ok: true },
+        { path: '/b.tex' },
+      ]);
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      data: {
+        category: 'Aux',
+        entries: [
+          { path: '/a.tex', ok: true },
+          { path: '/b.tex', ok: false },
+        ],
+      },
+    });
+  });
 });

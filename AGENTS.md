@@ -327,15 +327,17 @@ Three rules come first and override anything below that seems to allow more:
    fit code that already exists asserts what the code does, not what it
    should do. It passes on day one, catches nothing, and pins the
    implementation for the next refactor to pay down. If the code is already
-   written, the evidence is an E2E run, not a retrofitted unit suite.
+   written, the evidence is an E2E run, not a retrofitted unit suite. Keeping
+   an existing test is not writing one: when a cleanup deletes a suite, a live
+   helper keeps its last direct test that protects a real contract.
 2. **E2E tests are the preferred and default testing mechanism.** Verify a
    complex feature by driving the real app (the Playwright suite in
    `packages/desktop/tests/e2e/`, or the real `texra` binary for CLI
    behavior) through the user-visible path. Every E2E test ends by producing
    a **verifiable, repeatable artifact** — a screenshot compared against a
-   committed baseline, a saved transcript, run ledger, or output file — written
-   to a known path (`tests/e2e/test-results/`), so a reviewer can re-run the
-   test and diff the artifact rather than trusting a green checkmark.
+   committed baseline, a saved transcript, run ledger, or output file —
+   written to a known path (`packages/desktop/tests/e2e/test-results/`), so a
+   reviewer can re-run the test and diff the artifact rather than trusting a green checkmark.
 3. **If you must test a system in isolation, write down how it can fail
    first, then write the code.** Before any implementation, list every way the
    unit can fail — bad input, malformed persisted data, ordering and

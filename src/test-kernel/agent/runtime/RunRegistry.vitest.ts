@@ -906,6 +906,51 @@ describe('runRegistry', () => {
     }),
   );
 
+  it('registers a child without publishing its parent edge', () => {
+    const { events, registry } = createRegistry();
+    const recorded = recordSessionEvents(events);
+    const parentRunId = generateRunId();
+    const runId = generateRunId();
+
+    try {
+      const handle = createHandle(runId, parentRunId);
+
+      registry.track(handle);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(true);
+      registry.untrack(runId);
+
+      // The parent edge is a `run.start` fact, so tracking publishes none.
+      expect(recorded.events).toEqual([]);
+      expect(registry.hasActiveChildren(parentRunId)).toBe(false);
+    } finally {
+      registry.dispose();
+    }
+  });
+
+  it('clears live tool-use context while the handle remains tracked', () => {
+    const { registry } = createRegistry();
+    const runId = generateRunId();
+    const context = createLiveToolUseFlowContext();
+
+    try {
+      const handle = createHandle(runId, null, {
+        agentName: 'test-tool-use',
+      });
+
+      handle.attachToolUseFlow(context);
+      registry.track(handle);
+
+      expect(registry.getToolUseFlowContext(runId)).toBe(context);
+
+      handle.detachToolUseFlow(context);
+
+      expect(registry.getToolUseFlowContext(runId)).toBeUndefined();
+      expect(registry.getHandle(runId)).toBe(handle);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it('detaches children of an ownerless run and cancels it', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
