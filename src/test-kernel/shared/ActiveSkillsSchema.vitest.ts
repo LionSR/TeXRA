@@ -174,4 +174,13 @@ describe('active skill safe summaries', () => {
 
     expect(parsed.skills[0]?.description).toBe('a'.repeat(180));
   });
+
+  it('redacts a secret before truncating the description', () => {
+    const prefix = `${'Review credentials carefully. '.padEnd(168, 'a')} `;
+    const description = parseDescription(
+      `${prefix}sk-proj-redaction-example-1234567890abcdef`,
+    );
+    expect(description).toBe(`${prefix}[redacted]`);
+    expect(description).not.toContain('sk-proj-red');
+  });
 });

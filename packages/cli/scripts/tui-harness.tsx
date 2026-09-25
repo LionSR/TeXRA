@@ -1601,7 +1601,7 @@ function appendHarnessStatus(): void {
         run?.category === AgentCategory.ToolUse && run.goal.active
           ? run.goal
           : undefined,
-      // The harness never emits an ACTIVE_SKILLS snapshot.
+      // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
         (followUp) => followUp.text,

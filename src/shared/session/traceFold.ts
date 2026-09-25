@@ -5,7 +5,6 @@
  */
 // Shared contracts and utilities
 import {
-  ActiveSkillsSnapshotSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -23,7 +22,6 @@ import {
   type RunPhase,
   type SessionEvent,
 } from '@shared/schemas';
-import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import type {
   StreamLog,
@@ -290,24 +288,6 @@ export function createTranscriptFold(
         return;
       }
 
-      case 'skills.snapshot': {
-        // Schema owns redaction + sanitize + truncate for descriptions.
-        const snapshot = ActiveSkillsSnapshotSchema.parse({
-          skills: event.skills,
-        });
-        writer.appendSettled({
-          id: stamp.id,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: stamp.at,
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.ACTIVE_SKILLS,
-          data: snapshot,
-          verbose: false,
-        });
-        return;
-      }
-
       case 'usage':
         if (event.recordTranscript === false) return;
         appendLog({
@@ -318,23 +298,12 @@ export function createTranscriptFold(
         });
         return;
 
-      case 'context.state': {
-        const utilizationPercent = roundedUtilizationPercent(
-          event.inputTokens,
-          event.contextWindow,
-        );
-        appendLog({
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.CONTEXT_STATE,
-          text: `Context: ${event.inputTokens}/${event.contextWindow} tokens (${utilizationPercent.toFixed(1)}%)`,
-          data: {
-            inputTokens: event.inputTokens,
-            contextWindow: event.contextWindow,
-            utilizationPercent,
-          },
-        });
+      // The run's facts, not transcript rows: `context.state` folds into
+      // `RunView.context`, and the newest `skills.snapshot` is read from the
+      // run's committed rows by the one surface that shows it.
+      case 'skills.snapshot':
+      case 'context.state':
         return;
-      }
 
       case 'stream.start': {
         if (transcriptBoundaryClosed) return;
