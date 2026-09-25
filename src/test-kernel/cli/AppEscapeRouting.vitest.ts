@@ -20,6 +20,7 @@ import {
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
 import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
+import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -31,7 +32,6 @@ import {
   openInfoPane,
   openWorkflowPopup,
   resetCliState,
-  rootRunPending,
   rootRunId,
   updateWorkflowPopupView,
   workflowPopupView,
@@ -246,7 +246,7 @@ function seedParentEdge(runId: RunId, parentRunId: RunId | null): void {
 }
 function seedRootRun(): void {
   rootRunId.set(ROOT);
-  rootRunPending.set(true);
+  new TuiSession(() => undefined).markRunPending(Effect.never);
   setRunning(ROOT);
   focusRun(ROOT);
 }

@@ -14,7 +14,6 @@
 // mirrors bypass state onto its wire, and presents events.
 
 import { Effect } from 'effect';
-import { computed } from '@lit-labs/signals';
 
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
 import {
@@ -63,7 +62,6 @@ import {
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
-import { currentView } from './sessionView';
 
 /**
  * What this host holds for its lifetime: the session its policy settlements
@@ -86,9 +84,6 @@ interface TuiApprovalStores {
    *  the host's lifetime rather than looked up per decision. */
   readonly runtime: ProcessRuntime;
 }
-
-/** The pending requests this surface watches, as a level it subscribes to. */
-const pendingRequests = computed(() => attentionRequests(currentView()));
 
 /** The provider a retry failed on, when it names one this host has keys for. */
 function retryProvider(permission: RetryPermission): ApiProvider | undefined {
@@ -127,9 +122,9 @@ export function createTuiHostInteractions(
   const automaticSwitches = new Set<string>();
 
   const pendingRetry = (requestId: string): RetryPermission | undefined => {
-    const pending = attentionRequests(currentView()).find(
-      (request) => request.requestId === requestId,
-    );
+    const pending = attentionRequests
+      .get()
+      .find((request) => request.requestId === requestId);
     return pending?.payload.kind === 'retry' ? pending.payload.data : undefined;
   };
 
@@ -336,7 +331,7 @@ export function createTuiHostInteractions(
    * opens, so those always wait for the modal.
    */
   const answerPendingRequests = (): void => {
-    const pending = pendingRequests.get();
+    const pending = attentionRequests.get();
     const live = new Set(pending.map((request) => request.requestId));
     // Every level prunes what this host staged for requests that have left
     // it, however they settled: a decision taken on another surface or a run
@@ -409,7 +404,7 @@ export function createTuiHostInteractions(
 
   answerPendingRequests();
   const unsubscribe = subscribeToSignalChanges(
-    [pendingRequests],
+    [attentionRequests],
     answerPendingRequests,
   );
   const releaseCapability = useHostCapability(performHostCapability);
@@ -458,7 +453,7 @@ export function announceForegroundApprovals(): () => void {
     if (!pending) return;
     // A settled request is never presented again, so its entry leaves too.
     pruneToLive(
-      new Set(pendingRequests.get().map((request) => request.requestId)),
+      new Set(attentionRequests.get().map((request) => request.requestId)),
       announced,
     );
     const id = pending.payload.data.requestId;
