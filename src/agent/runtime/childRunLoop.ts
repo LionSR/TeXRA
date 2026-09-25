@@ -6,7 +6,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
 import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
@@ -21,7 +20,6 @@ import {
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
-import { classifyAgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
@@ -104,16 +102,20 @@ interface ChildRunPort {
   }): Effect.Effect<void, Error, Runs>;
 }
 
-/** A native run keeps its scope while each turn is admitted, budgeted and delivered. */
-export interface ChildRunTurns<TTurn, R = never> {
-  run<A, E, R>(
-    operation: Effect.Effect<A, E, R>,
+/**
+ * A native run's child policy: each turn runs under `turnPermit` (so a WAITING
+ * child holds no slot); each completed turn is offered to the loop, delivered
+ * on the loop's fiber, and a failed delivery is the run's failure.
+ */
+export interface ChildRunTurns<TTurn> {
+  turnPermit<A, E, R>(
+    turn: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R>;
-  complete(turn: TTurn): Effect.Effect<void, Error, R | AgentResume>;
+  onTurnBoundary(turn: TTurn): Effect.Effect<void, Error>;
 }
 
 export interface ChildRunStrategy<TTurn, R = never> {
-  /** A native program owns its input wait and calls the supplied turn boundary. */
+  /** A native program owns its input wait and offers each turn boundary. */
   readonly continuous?: true;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   readonly stageLabel: string;
@@ -140,7 +142,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
   launch(
     ports: ChildRunPorts,
     signal: AbortSignal,
-    turns: ChildRunTurns<TTurn, R>,
+    turns: ChildRunTurns<TTurn>,
   ): Effect.Effect<TTurn, Error, R>;
 
   /**
@@ -328,26 +330,6 @@ function loopLog(
   return data === undefined ? entry : Effect.annotateLogs(entry, { data });
 }
 
-/** Log a turn summary (duration + token usage) to the child stream. */
-const logTurnSummary = (
-  trace: AgentTrace | undefined,
-  wallTimeMs: number,
-  usage: TurnUsage | null | undefined,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    yield* loopLog(
-      trace,
-      'info',
-      `Turn completed in ${formatDuration(wallTimeMs)}`,
-    );
-    if (usage) {
-      yield* loopLog(trace, 'info', 'Tokens', {
-        input: usage.input_tokens ?? 0,
-        output: usage.output_tokens ?? 0,
-      });
-    }
-  });
-
 /** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
 type TurnAttempt<TTurn> =
   | { kind: 'completed'; turn: TTurn; turnIsError: boolean }
@@ -358,23 +340,34 @@ type TurnAttempt<TTurn> =
  * Run one turn (via `runner`) and classify the outcome. A clean interruption
  * maps to `interrupted` (the caller breaks), a thrown call to `failed`, and a
  * returned turn to `completed` (carrying its application-level error flag).
+ * A native run's exit is classified the same way: joined, its failure is the
+ * failed turn a thrown call is.
  */
-function attemptTurn<TTurn, R>(
+function attemptTurn<TTurn, R, RTurn>(
   strategy: ChildRunStrategy<TTurn, R>,
-  runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
+  runner: (signal: AbortSignal) => Effect.Effect<TTurn, Error, RTurn>,
   loop: ChildRunInterruptible,
   trace: AgentTrace | undefined,
   startedAt: number,
-): Effect.Effect<TurnAttempt<TTurn>, never, R> {
+): Effect.Effect<TurnAttempt<TTurn>, never, RTurn> {
   return Effect.gen(function* () {
     const attempt = yield* Effect.exit(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
-        yield* logTurnSummary(
+        // The turn summary (duration + token usage) on the child stream.
+        const wallTimeMs = Date.now() - startedAt;
+        yield* loopLog(
           trace,
-          Date.now() - startedAt,
-          strategy.getUsage?.(turn),
+          'info',
+          `Turn completed in ${formatDuration(wallTimeMs)}`,
         );
+        const usage = strategy.getUsage?.(turn);
+        if (usage) {
+          yield* loopLog(trace, 'info', 'Tokens', {
+            input: usage.input_tokens ?? 0,
+            output: usage.output_tokens ?? 0,
+          });
+        }
         const turnIsError = strategy.isTurnError?.(turn) === true;
         const turnError = turnIsError
           ? strategy.turnErrorMessage?.(turn)
@@ -716,17 +709,6 @@ function onceAborted<A, E>(
   });
 }
 
-/** Race a queue wait against the child loop's interrupt; null when stopped. */
-function untilInterrupted<A>(
-  wait: Effect.Effect<A>,
-  loop: ChildRunInterruptible,
-): Effect.Effect<A | null> {
-  return Effect.raceFirst(
-    wait,
-    onceAborted(loop.signal, () => Effect.succeed(null)),
-  ).pipe(Effect.interruptible);
-}
-
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
  * interruption records the terminal outcome and releases the run's claim
@@ -768,8 +750,9 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
 
 /**
  * Own one child's delivery, queue, concurrency budget and terminal cleanup.
- * Native launches call turn boundaries from their live scope; process
- * strategies return a turn and wait for their next batch here.
+ * A native launch runs on its own fiber and offers its turn boundaries to
+ * this loop; process strategies return a turn and wait for their next batch
+ * here.
  */
 export function startChildRunLoop<TTurn, R = never>(
   params: ChildRunLoopParams<TTurn, R>,
@@ -1118,24 +1101,52 @@ export function startChildRunLoop<TTurn, R = never>(
                 },
               });
             });
-          const turns: ChildRunTurns<TTurn, R> = {
-            run: (operation) =>
+          // A native run offers each completed turn here, and the loop settles
+          // the offer with its delivery. The queue ends with the fiber that
+          // feeds it: no wait on a boundary that can no longer come.
+          const boundaries = yield* Queue.unbounded<
+            { turn: TTurn; delivered: Deferred.Deferred<void, Error> },
+            Cause.Done
+          >();
+          const turns: ChildRunTurns<TTurn> = {
+            turnPermit: (turn) =>
               Effect.gen(function* () {
                 if (loop.isInterrupted()) return yield* Effect.interrupt;
                 yield* beginTurn;
-                return yield* budget ? budget.withPermit(operation) : operation;
+                return yield* budget ? budget.withPermit(turn) : turn;
               }),
-            complete: (turn) =>
+            onTurnBoundary: (turn) =>
               Effect.gen(function* () {
-                const delivery = yield* settleTurn(turn, null, false, false);
-                yield* submitPendingDelivery(
-                  delivery,
-                  runSession,
-                  runId,
-                  trace,
-                );
-              }).pipe(Effect.uninterruptible),
+                const delivered = yield* Deferred.make<void, Error>();
+                yield* Queue.offer(boundaries, { turn, delivered });
+                yield* Deferred.await(delivered);
+              }),
           };
+          // Forked into this scope, which awaits it on every exit: its own
+          // `run.end` precedes the loop's terminal; its exit is its last turn.
+          const launchNative = Effect.gen(function* () {
+            const runFiber = yield* Effect.forkScoped(
+              strategy.launch(ports, loop.signal, turns),
+              { startImmediately: true },
+            );
+            runFiber.addObserver(() => Queue.endUnsafe(boundaries));
+            for (;;) {
+              const next = yield* Queue.take(boundaries).pipe(
+                Effect.catchTag('Done', () => Effect.succeed(null)),
+              );
+              if (next === null) return yield* Fiber.join(runFiber);
+              const delivered = yield* Effect.exit(
+                Effect.uninterruptible(
+                  Effect.flatMap(
+                    settleTurn(next.turn, null, false, false),
+                    (delivery) =>
+                      submitPendingDelivery(delivery, runSession, runId, trace),
+                  ),
+                ),
+              );
+              yield* Deferred.done(next.delivered, delivered);
+            }
+          });
           let runner: (
             signal: AbortSignal,
           ) => Effect.Effect<TTurn, Error, R> = (signal) =>
@@ -1144,7 +1155,7 @@ export function startChildRunLoop<TTurn, R = never>(
             if (!strategy.continuous) yield* beginTurn;
             const attempt = yield* attemptTurn(
               strategy,
-              strategy.continuous ? runner : gateTurn(runner),
+              strategy.continuous ? () => launchNative : gateTurn(runner),
               loop,
               trace,
               turnStartedAt,
@@ -1210,7 +1221,11 @@ export function startChildRunLoop<TTurn, R = never>(
             // being refused against a run that only looks busy.
             yield* commitPark(runSession, runId, 'parked');
             const nextRunTurn = strategy.runTurn;
-            const batch = yield* untilInterrupted(input.take, loop);
+            // The queue wait, raced against the loop's stop; null when stopped.
+            const batch = yield* Effect.raceFirst(
+              input.take,
+              onceAborted(loop.signal, () => Effect.succeed(null)),
+            ).pipe(Effect.interruptible);
             if (!batch || loop.isInterrupted()) break;
             // The batch leaves the park: the loop is running again from
             // here, and the turn it is about to accept is the top's.
@@ -1289,36 +1304,21 @@ export function startChildRunLoop<TTurn, R = never>(
                     stopped: stoppedAtExit,
                     stage: sessionStage,
                   });
-                } else {
-                  // Startup may fail before the engine owns terminal finalization.
-                  const handle = runs.getHandle(runId);
-                  if (handle) {
-                    yield* finalizeRunTerminal({
-                      stopped: stoppedAtExit,
-                      session: runSession,
-                      handle,
-                      outcome,
-                      error:
-                        sawTurnFailure && lastTurnErr !== undefined
-                          ? {
-                              kind: classifyAgentError(lastTurnErr),
-                              message: toErrorMessage(lastTurnErr),
-                            }
-                          : undefined,
-                    });
-                  } else if (
-                    (stoppedAtExit || sawTurnFailure) &&
-                    (yield* runSession.ownsRun(runId))
-                  ) {
-                    // Failure or cancellation can precede the engine's first handle.
-                    const finalized = yield* finalizeRun(runSession, {
-                      runId,
-                      outcome,
-                      keepExistingOutcome: true,
-                    });
-                    if (!finalized.ok)
-                      return yield* Effect.fail(ensureError(finalized.error));
-                  }
+                } else if (
+                  (stoppedAtExit || sawTurnFailure) &&
+                  (yield* runSession.ownsRun(runId))
+                ) {
+                  // A native run's lifecycle is its one terminal writer, and
+                  // its fiber has exited by now (this loop's scope awaited
+                  // it). A failure or stop can precede that lifecycle; one
+                  // that ran has already ended the run, which this keeps.
+                  const finalized = yield* finalizeRun(runSession, {
+                    runId,
+                    outcome,
+                    keepExistingOutcome: true,
+                  });
+                  if (!finalized.ok)
+                    return yield* Effect.fail(ensureError(finalized.error));
                 }
               }),
             );

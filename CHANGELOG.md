@@ -102,6 +102,11 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   app and the CLI, a quit while live runs took more than a few seconds to
   stop could cut off sending the last usage records. Every host now sends
   them as the final shutdown step, after runs and sessions have closed.
+
+- **A stopped subagent records one final outcome.** Stopping a subagent
+  while it waited for input, or while its failure was being recorded, could
+  leave the run without a final record. Every run now ends through a single
+  final step, and a waiting subagent no longer holds a concurrency slot.
 - **Stopping a run or subagent as it starts now takes effect.** A stop
   issued in the instant a run or in-band subagent was starting could miss it,
   and a caller waiting on that subagent could hang. A stop now interrupts the
