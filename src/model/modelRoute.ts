@@ -31,7 +31,7 @@ import {
   isPreferXaiSubscription,
   isXaiSignedIn,
 } from '@model/xai/xaiSubscription';
-import type { StateReadFailed } from '@platform/interfaces';
+import { StateReadFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
@@ -202,6 +202,27 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
 ): Effect.fn.Return<HostRouteFacts, StateReadFailed> {
   const allowed = (route: DeclinableUsageRoute) =>
     !declinedRoutes.includes(route);
+  // Only worth a sign-in probe when the preference is on. The preference read
+  // is a synchronous catalog read that throws; keep it in the typed channel.
+  const subscriptionOn = (
+    route: DeclinableUsageRoute,
+    preference: string,
+    isPrefer: (stores: SettingsStores) => boolean,
+    isSignedIn: () => Effect.Effect<boolean>,
+  ) =>
+    allowed(route)
+      ? Effect.try({
+          try: () => isPrefer(stores),
+          catch: (cause) =>
+            new StateReadFailed({
+              key: preference,
+              message: `Could not read the ${preference} preference.`,
+              cause,
+            }),
+        }).pipe(
+          Effect.flatMap((on) => (on ? isSignedIn() : Effect.succeed(false))),
+        )
+      : Effect.succeed(false);
   const [
     useOpenRouter,
     preferKimiCode,
@@ -216,13 +237,18 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
       getPreferKimiCode(stores),
       getGLMCodingPlan(stores),
       getProviderEndpoint(stores, ModelProvider.GLM),
-      // Only worth a sign-in probe when the preference is on.
-      allowed('chatgpt-subscription') && isPreferCodexSubscription(stores)
-        ? isCodexSignedIn()
-        : Effect.succeed(false),
-      allowed('xai-subscription') && isPreferXaiSubscription(stores)
-        ? isXaiSignedIn()
-        : Effect.succeed(false),
+      subscriptionOn(
+        'chatgpt-subscription',
+        'ChatGPT subscription',
+        isPreferCodexSubscription,
+        isCodexSignedIn,
+      ),
+      subscriptionOn(
+        'xai-subscription',
+        'Grok subscription',
+        isPreferXaiSubscription,
+        isXaiSignedIn,
+      ),
       hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
           Effect.logWarning(
