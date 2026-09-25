@@ -25,6 +25,12 @@ All notable changes to this project will be documented in this file.
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
   and the delegation roster an agent can see is still listed in the
   descriptions of its delegation tools.
+- **Goal mode is a Tools plugin, and its switch replaces the
+  `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
+  dashboard, or with `texra tools disable goal` / `texra tools enable goal`.
+  Off, no agent is offered the `plan` tool and runs open no goal turns. The
+  old setting is no longer read, so if you had set it to `false`, Goal Mode is
+  on again (its default) until you switch the plugin off.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.

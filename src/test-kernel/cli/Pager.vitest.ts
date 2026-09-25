@@ -1,4 +1,4 @@
-import { Effect, Stream } from 'effect';
+import { Cause, Effect, Exit, Stream } from 'effect';
 import * as PlatformError from 'effect/PlatformError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -178,39 +178,38 @@ describe('pageStdout', () => {
 
   describe('Ctrl-C while the pager owns the terminal', () => {
     /** Page on a TTY, pressing Ctrl-C while the pager runs; the pager then
-     *  answers `answer`. Returns the SIGINTs the CLI re-raised at itself. */
-    async function pageWithCtrlC(answer: Answer): Promise<unknown[][]> {
+     *  answers `answer`. Returns how the paging program ended. */
+    async function pageWithCtrlC(answer: Answer): Promise<Exit.Exit<void>> {
       const listeners: Array<() => void> = [];
       const on = vi.spyOn(process, 'on');
       on.mockImplementation(((event: string | symbol, listener: () => void) => {
         if (event === 'SIGINT') listeners.push(listener);
         return process;
       }) as typeof process.on);
-      const kill = vi
-        .spyOn(process, 'kill')
-        .mockImplementation((() => true) as typeof process.kill);
       const spawner = scriptedSpawnerLayer(() => {
         for (const listener of listeners) listener();
         return answer;
       });
-      await Effect.runPromise(
+      const exit = await Effect.runPromiseExit(
         pageStdout('long listing', { stdoutIsTty: true, env: {} }).pipe(
           Effect.provide(spawner.layer),
         ),
       );
       expect(listeners).toHaveLength(1);
-      return kill.mock.calls.filter(([, signal]) => signal === 'SIGINT');
+      return exit;
     }
 
     it('keeps the CLI running when the pager handles Ctrl-C itself', async () => {
       // `less` cancels a search on Ctrl-C and exits normally when quit.
-      expect(await pageWithCtrlC({ exitCode: 0 })).toEqual([]);
+      expect(Exit.isSuccess(await pageWithCtrlC({ exitCode: 0 }))).toBe(true);
     });
 
-    it('re-raises the interrupt when the pager died of it', async () => {
-      expect(await pageWithCtrlC({ exitCode: signalled('exitCode') })).toEqual([
-        [process.pid, 'SIGINT'],
-      ]);
+    it('interrupts the command when the pager died of the Ctrl-C', async () => {
+      // The command boundary maps an interruption to exit 130.
+      const exit = await pageWithCtrlC({ exitCode: signalled('exitCode') });
+      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
+        true,
+      );
     });
   });
 });

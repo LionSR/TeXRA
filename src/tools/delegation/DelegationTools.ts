@@ -123,7 +123,6 @@ function executeWorkflowAgentTool(
       input.agent,
       call.run.delegationAgentScope ?? undefined,
     );
-    const agentName = agent.name;
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
@@ -147,7 +146,7 @@ function executeWorkflowAgentTool(
     // into MediaExtractionNode → LatexMediaManager at runtime.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
-      agent: agentName,
+      agent: agent.name,
       agentSource: agent.source,
       model,
       instruction: input.instruction,
@@ -162,7 +161,7 @@ function executeWorkflowAgentTool(
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return yield* proposeAndExecute(call, proposal, agentName);
+    return yield* proposeAndExecute(call, proposal);
   });
 }
 
@@ -267,7 +266,6 @@ function executeDelegateAgentTool(
       input.agent!,
       call.run.delegationAgentScope ?? undefined,
     );
-    const agentName = agent.name;
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
@@ -279,7 +277,7 @@ function executeDelegateAgentTool(
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
-      agent: agentName,
+      agent: agent.name,
       agentSource: agent.source,
       model,
       instruction: withToolUseSubagentHandoffInstruction(
@@ -291,7 +289,7 @@ function executeDelegateAgentTool(
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return yield* proposeAndExecute(call, proposal, agentName);
+    return yield* proposeAndExecute(call, proposal);
   });
 }
 

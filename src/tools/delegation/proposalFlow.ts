@@ -218,14 +218,13 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
 export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
   parent: DelegationParent,
   proposal: WorkflowAgentProposal | ToolUseAgentProposal,
-  agentName: string,
 ) {
   const decision = yield* requestDelegationProposal(proposal, parent);
   const { runId } = parent.run;
   if (decision.autoApproved) {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
-    return yield* executeSubagent(parent, proposal, agentName, runId, {
+    return yield* executeSubagent(parent, proposal, runId, {
       approvalMeta: { autoApproved: true },
     });
   }
@@ -234,7 +233,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
 
   const nonApproveResult = proposalResultToToolResult(
     result,
-    agentName,
+    proposal.agent,
     proposal,
   );
   if (nonApproveResult) return nonApproveResult;
@@ -306,8 +305,7 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
       agentSource: resolvedAgentOverride.source,
     }),
   };
-  const effectiveAgentName = resolvedAgentOverride?.name ?? agentName;
-  return yield* executeSubagent(parent, effective, effectiveAgentName, runId, {
+  return yield* executeSubagent(parent, effective, runId, {
     approvalMeta: {
       autoApproved: false,
       ...(modelOverride && {

@@ -22,7 +22,7 @@ const started = Effect.promise(
 );
 
 const EXPECTED_DEFAULTS = TOOL_PLUGINS.filter(
-  (plugin) => plugin.toggleable,
+  (plugin) => plugin.toggleable && !plugin.onByDefault,
 ).map((plugin) => plugin.id);
 
 describe('seedDisabledToolDefaults', () => {

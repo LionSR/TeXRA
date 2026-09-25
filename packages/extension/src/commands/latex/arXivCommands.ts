@@ -112,6 +112,9 @@ export function downloadArXivSource(
             const listener = token.onCancellationRequested(() =>
               resume(Effect.void),
             );
+            // The token fires once, at cancel(); a Cancel pressed before this
+            // arm subscribed is only visible on the flag.
+            if (token.isCancellationRequested) resume(Effect.void);
             return Effect.sync(() => listener.dispose());
           }).pipe(
             Effect.andThen(Effect.logInfo('User cancelled the download')),

@@ -71,7 +71,7 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
-import { goalContinuation } from './continuationPolicy';
+import { continuationFor } from './continuationPolicy';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
@@ -141,7 +141,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => runs.getHandle(runId)?.isChild === true;
-  const continuation = goalContinuation(session, runId);
+  const continuation = continuationFor(run);
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -655,13 +655,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !followUps.hasQueued()) {
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
           }
-          // A child's idle is its parent's to decide; the policy sees a
-          // failed turn too.
+          // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
-          const next = isChild()
-            ? null
-            : yield* continuation.atIdle(state, canContinue);
+          const next =
+            isChild() || continuation === null
+              ? null
+              : yield* continuation.atIdle(state, canContinue);
           // Every park is idle, a failed turn's included: a resume
           // acknowledges at the first one.
           run.callbacks.onIdle?.();
