@@ -104,7 +104,7 @@ export class RunLedger extends Context.Service<
      * folded: the loop's fresh-run branch and, for a run recorded before the
      * run ledger, the honest answer, distinct from "checkpoint corrupt".
      * Queued follow-ups alone still return that unopened state (`phase` is
-     * null) so the caller can seed them; they do not open the run. Ledger
+     * null) so the caller can deliver them; they do not open the run. Ledger
      * rows without an opening `flow.snapshot` are not that case: they are a
      * malformed aggregate and fail `inconsistent`, because folding an
      * `attempt` or a `response` into a fresh run is how a paid invocation

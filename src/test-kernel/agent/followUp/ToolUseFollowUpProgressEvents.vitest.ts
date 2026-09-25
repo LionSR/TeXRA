@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RunInput } from '@agent/followUp/RunInput';
 import {
   notifyFollowUpSent,
   submitFollowUp,
@@ -109,12 +108,7 @@ describe('tool-use follow-up progress events', () => {
         }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
         expect(result).toEqual({ status: 'sent' });
-        const input = session.followUps.attachInput(
-          runId,
-          yield* RunInput.make,
-          lease,
-        )!;
-        input.seed([]);
+        const input = session.followUps.attachInput(runId, lease)!;
         expect(yield* input.take).toMatchObject({
           followUps: [{ content: { text: 'please continue', origin: 'user' } }],
         });

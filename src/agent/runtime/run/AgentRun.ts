@@ -37,7 +37,6 @@ import {
   type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
 import type {
   CompositionKey,
   Compositions,
@@ -84,8 +83,8 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Current folded state at an idle turn boundary, after child delivery. */
-  readonly onIdle?: (state: RunState) => void;
+  /** An idle turn boundary, after child delivery. */
+  readonly onIdle?: () => void;
 }
 
 export interface AgentRunShape {
