@@ -44,7 +44,7 @@ const EDITED_REVIEW_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'latexdiffButton',
     icon: 'plus-minus',
-    label: 'Diff',
+    label: 'Diff vs. edited',
     tooltip:
       'Run latexdiff on the base and edited files and open the marked-up result',
     action: 'latexdiff',
@@ -83,7 +83,7 @@ const COMMIT_DIFF_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'latexdiffvcButton',
     icon: 'plus-minus',
-    label: 'Diff',
+    label: 'Diff vs. commit',
     tooltip:
       'Run latexdiff-vc on the base file against its version at the selected commit',
     action: 'latexdiffvc',
@@ -95,15 +95,17 @@ const COMMIT_MANAGE_ACTIONS: readonly DiffActionSpec[] = [
   {
     id: 'packLatexdiffvcButton',
     icon: 'box-archive',
-    label: 'Pack',
-    tooltip: 'Pack the latexdiff-vc output into the History folder',
+    label: 'Move to Diffs folder',
+    tooltip:
+      "Move this commit's diff .tex and .pdf into a dated folder under Diffs and delete their build files",
     action: 'packLatexdiffvc',
   },
   {
     id: 'cleanLatexdiffvcButton',
     icon: 'trash',
-    label: 'Delete output',
-    tooltip: 'Delete generated latexdiff-vc output files',
+    label: 'Delete diff files',
+    tooltip:
+      "Delete this commit's diff .tex, .pdf and build files; Diff vs. commit makes them again",
     action: 'cleanLatexdiffvc',
   },
 ];
@@ -326,7 +328,7 @@ export class LatexDiffsSection extends LitElement {
             <div class="file-select-actions">
               ${renderIconActionButton({
                 id: 'refreshEditedFileButton',
-                icon: 'pencil',
+                icon: 'arrows-rotate',
                 label: 'Refresh edited files',
                 tooltip: 'Refresh edited files',
                 onClick: this.handleRefreshEditedFiles,
@@ -377,7 +379,7 @@ export class LatexDiffsSection extends LitElement {
             <div class="file-select-actions">
               ${renderIconActionButton({
                 id: 'refreshCommitsButton',
-                icon: 'circle-dot',
+                icon: 'arrows-rotate',
                 label: 'Refresh commit list',
                 tooltip: 'Refresh commit list',
                 onClick: this.handleRefreshCommits,

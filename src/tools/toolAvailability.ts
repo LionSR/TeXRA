@@ -130,7 +130,10 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
-      if (this.probes.inFlight) this.pendingRerun = true;
+      // The latch resets in the segment that claims the slot, not on the
+      // detached fiber: a caller joining before that fiber's first step
+      // must not have its rerun wiped.
+      this.pendingRerun = this.probes.inFlight;
       return this.probes.run(() => this.probeUntilSettled(inputs));
     });
   }
@@ -141,7 +144,6 @@ class ToolAvailabilityCache {
   private probeUntilSettled(
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-    this.pendingRerun = false;
     // Every group probes at once and no group's failure cancels a sibling,
     // because each one resolves to a result of its own.
     return Effect.forEach(
@@ -151,9 +153,9 @@ class ToolAvailabilityCache {
     ).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
-        return this.pendingRerun
-          ? this.probeUntilSettled(inputs)
-          : Effect.succeed(results);
+        if (!this.pendingRerun) return Effect.succeed(results);
+        this.pendingRerun = false;
+        return this.probeUntilSettled(inputs);
       }),
     );
   }

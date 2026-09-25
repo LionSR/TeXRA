@@ -142,12 +142,8 @@ const NOT_RESUMABLE_MESSAGE =
   'This run was recorded before the run ledger and is not resumable under this release, and a request it left pending (an approval, a retry, a question) is not resumable either. Start a new run instead.';
 
 export type RunEntry =
-  /** No opening row yet. `loaded` may still carry queued follow-up rows. */
-  | {
-      readonly _tag: 'fresh';
-      readonly loaded: RunState | null;
-      readonly opening: RunState;
-    }
+  /** No opening row yet: the aggregate holds at most queued follow-ups. */
+  | { readonly _tag: 'fresh'; readonly opening: RunState }
   | { readonly _tag: 'restored'; readonly loaded: RunState };
 
 /**
@@ -156,8 +152,7 @@ export type RunEntry =
  * and a fresh launch onto an aggregate that already holds ledger state
  * (#11313). The family check both families need lives here too: a run resumed
  * under the wrong family fails loudly instead of continuing against an empty
- * workspace. The caller branches on the tag; `followUps.seed(entry.loaded)`
- * works on both arms without narrowing.
+ * workspace. The caller branches on the tag.
  */
 export const loadRun = (
   runId: RunId,
@@ -190,7 +185,6 @@ export const loadRun = (
     const bound = yield* SynchronizedRef.get(run.model);
     return {
       _tag: 'fresh',
-      loaded,
       opening: {
         ...freshRunState(0),
         family,

@@ -23,7 +23,6 @@ import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
-import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
@@ -44,7 +43,6 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
-import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -73,6 +71,7 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
+import { goalContinuation } from './continuationPolicy';
 import type { HttpClient } from 'effect/unstable/http';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
@@ -142,6 +141,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => runs.getHandle(runId)?.isChild === true;
+  const continuation = goalContinuation(session, runId);
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -623,20 +623,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     );
   });
 
-  const pauseActiveGoal = Effect.fn('toolUse.pauseGoal')(function* () {
-    if (goalOf(session, runId)?.status !== 'active') return;
-    yield* pauseGoal(session, runId);
-    setGoalSessionAutoApproval(session, runId, false);
-  });
-
   // ------------------------------------------------------------- the loop
   const enter = Effect.gen(function* () {
+    // The follow-ups the rows still queue (input admitted while no consumer
+    // held this run, or a batch a crash left unconsumed, C3) are the
+    // publisher's, seeded where `loadRun`'s claim moved here.
     const entry = yield* loadRun(runId, 'toolUse', start.resume);
-    // The follow-ups the rows still queue: input admitted while no consumer
-    // held this run, or a batch a crash left unconsumed (C3). An unopened
-    // aggregate (`phase` null) still carries those rows; seed them before
-    // the opening batch so a restart delivers the SQLite copy.
-    followUps.seed(entry.loaded);
     const opened =
       entry._tag === 'fresh'
         ? yield* openFresh(entry.opening)
@@ -663,28 +655,27 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (restoring && !followUps.hasQueued()) {
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
           }
-          let batch: FollowUpBatch | null = null;
-          if (batch === null) {
-            if (afterError && !isChild()) yield* pauseActiveGoal();
-            // Every park is idle, a failed turn's included: a resume
-            // acknowledges at the first one.
-            run.callbacks.onIdle?.(state);
-            if (run.toolPolicy.stopAfterCycle) {
-              return finish(
-                state,
-                afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
-              );
-            }
-            if (!isChild() && !afterError && !followUps.hasQueued()) {
-              const continuation = yield* maybeBuildGoalContinuation(
-                session,
-                runId,
-              );
-              if (continuation && !followUps.hasQueued()) {
-                batch = { synthetic: true, text: continuation };
-              }
-            }
+          // A child's idle is its parent's to decide; the policy sees a
+          // failed turn too.
+          const canContinue =
+            !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
+          const next = isChild()
+            ? null
+            : yield* continuation.atIdle(state, canContinue);
+          // Every park is idle, a failed turn's included: a resume
+          // acknowledges at the first one.
+          run.callbacks.onIdle?.();
+          if (run.toolPolicy.stopAfterCycle) {
+            return finish(
+              state,
+              afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.COMPLETED,
+            );
           }
+          // A queued follow-up outranks the policy's synthetic turn.
+          let batch: FollowUpBatch | null =
+            next !== null && !followUps.hasQueued()
+              ? { synthetic: true, text: next.turn }
+              : null;
           if (batch === null) {
             // The host port stays attached: `/model` and `/compact` land on
             // a parked run.

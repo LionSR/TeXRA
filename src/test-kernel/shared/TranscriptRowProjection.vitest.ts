@@ -76,7 +76,7 @@ describe('transcript row builders', () => {
       },
     });
     if (row?.kind !== 'tool') throw new Error('bad');
-    expect(row.model.headerLabel).toBe('Delegate agent');
+    expect(row.model.headerLabel).toBe('Subagent');
     expect(row.model.headerPreview).toBe('proof');
     expect(row.model.sections.map((s) => s.kind)).toEqual([
       'identifier',

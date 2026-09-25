@@ -1,5 +1,4 @@
 import { Cause, Effect, Exit } from 'effect';
-import type { ReviewIssueReport } from '@agent/review/reviewIssues';
 import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
@@ -71,16 +70,6 @@ type OpenPdfOpener = (
 ) => Effect.Effect<void, PdfOpenFailed>;
 
 /**
- * Collects one agent-review finding. Returns `accepted: false` with a reason
- * when no review session is collecting issues (or the report is rejected), so
- * the tool can surface that to the agent.
- */
-type ReportReviewIssueSink = (report: ReviewIssueReport) => {
-  readonly accepted: boolean;
-  readonly reason?: string;
-};
-
-/**
  * The host's presentation surface for a session (ruling A9-3): what a host
  * can show or do on the runtime's behalf. It answers nothing. Every request a
  * run makes of a person is a `request.opened` row the fold lists and a
@@ -105,8 +94,6 @@ export interface HostInteractions {
   readonly addCriticism?: AddCriticismSink;
   /** Open a PDF in the active host's viewer. */
   readonly openPdf?: OpenPdfOpener;
-  /** Report one agent-review finding to the active host's review session. */
-  readonly reportReviewIssue?: ReportReviewIssueSink;
   /**
    * Stage a tool edit's preview (its original and proposed content, which
    * the durable request payload does not carry) for the request the fold
@@ -278,10 +265,6 @@ export class SessionHostInteractions implements HostInteractions {
 
   get openPdf(): OpenPdfOpener | undefined {
     return this.activeAttachment?.interactions.openPdf;
-  }
-
-  get reportReviewIssue(): ReportReviewIssueSink | undefined {
-    return this.activeAttachment?.interactions.reportReviewIssue;
   }
 
   /**

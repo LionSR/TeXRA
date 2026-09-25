@@ -239,6 +239,22 @@ export function createWorkbenchController({
     return html`<div class="shell-workbench-surface">${content}</div>`;
   }
 
+  /**
+   * Which surface holds the project tree, a single node that can be mounted
+   * in one place only: the Files tab while it is showing, otherwise the
+   * editor beside the file it opened, so picking the next file does not mean
+   * switching tabs back to Files.
+   */
+  function treeSurface(): 'files' | 'editor' {
+    const shown = WORKBENCH_PLACEMENTS.map((side) =>
+      activeWorkbenchTab(getState(), side),
+    );
+    if (shown.some((active) => active?.kind === 'files')) return 'files';
+    return shown.some((active) => active?.kind === 'editor' && active.target)
+      ? 'editor'
+      : 'files';
+  }
+
   function workbenchContentTemplate(
     tab: WorkbenchTab,
   ): TemplateResult | typeof nothing {
@@ -248,12 +264,18 @@ export function createWorkbenchController({
           class="shell-workbench-surface shell-files"
           data-scroll="true"
         >
-          ${editorPane.treeElement}
+          ${treeSurface() === 'files' ? editorPane.treeElement : nothing}
         </div>`;
       case 'editor':
-        return tab.target
-          ? workbenchSurfaceTemplate(editorPane.element)
-          : workbenchPlaceholderTemplate();
+        if (!tab.target) return workbenchPlaceholderTemplate();
+        return treeSurface() === 'editor'
+          ? html`<div class="shell-workbench-surface shell-editor-with-tree">
+              <div class="shell-editor-tree" data-scroll="true">
+                ${editorPane.treeElement}
+              </div>
+              ${editorPane.element}
+            </div>`
+          : workbenchSurfaceTemplate(editorPane.element);
       case 'terminal':
         return workbenchSurfaceTemplate(terminalPane.element);
       case 'browser':

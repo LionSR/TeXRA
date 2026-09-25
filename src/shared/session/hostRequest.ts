@@ -84,9 +84,11 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('popBack') }),
   z.object({ kind: z.literal('refreshCommits') }),
   z.object({ kind: z.literal('refreshFiles') }),
+  /** Settings at a section, or where it last was when `section` is absent
+   *  (the header's gear). */
   z.object({
     kind: z.literal('openSettings'),
-    section: z.enum(['agents', 'teams', 'models']),
+    section: z.enum(['agents', 'teams', 'models']).nullish(),
     sessionType: SessionTypeSchema.nullish(),
   }),
   /** The launcher's pickers: `fileType` chooses the dialog and names the
@@ -156,7 +158,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     base: z.string().nullish(),
     prev: z.string().nullish(),
   }),
-  /** The "Restore setup" link on a settled proposal row. */
+  /** The "Copy to new task" link on a settled delegation row. */
   z.object({
     kind: z.literal('restoreProposalConfig'),
     proposal: AgentProposalSchema,

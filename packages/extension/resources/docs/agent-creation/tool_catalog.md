@@ -126,10 +126,6 @@ recommended groups at the bottom are a good starting point.
 - `inline_comment` — leave resolvable inline comment threads in the editor
   via VS Code's native Comments UI (gutter bubbles + Comments panel). Not
   available on the CLI or desktop hosts.
-- `report_review_issue` — report one finding from an agent review of the
-  current change set; appears in the Agent Review panel and as an editor
-  diagnostic. Only accepted while an agent review session is collecting
-  issues.
 
 ## Utility
 

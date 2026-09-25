@@ -136,7 +136,7 @@ When a run recorded a compile failure, **Run latexFixer** still appears under
 
 ### Memory
 
-Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Dashboard's **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in the Dashboard, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
+Tool-use agents can remember things between sessions. When memory is enabled (toggle in the Settings **Memory** tab), agents save useful notes about your project. You can browse, pin, and delete these notes from the **Memory** tab in Settings, reached with **TeXRA: Open Settings**. Read the [memory guide](./memory.md) for a full walkthrough.
 
 ### Log content
 

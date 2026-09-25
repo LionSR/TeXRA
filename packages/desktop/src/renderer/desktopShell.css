@@ -915,33 +915,47 @@ body[data-desktop-platform='darwin']
 
 /* The Files tab: the tree alone; the tab names it, so its own heading
    keeps only the refresh control. */
-.shell-files {
+.shell-files,
+.shell-editor-tree {
   align-content: start;
   padding: 6px 4px;
 }
 
-.shell-files .desktop-editor-tree-header > span {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
   visibility: hidden;
 }
 
-.shell-files .desktop-editor-tree-list {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
   display: block;
   max-height: none;
   padding: 0;
   overflow: visible;
 }
 
-.shell-files .desktop-editor-tree-row {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row {
   --indent-size: 1.15em;
 }
 
-.shell-files .desktop-editor-tree-row::part(item) {
+/* An open file keeps the tree it came from beside it, so the next file is
+   one click away rather than a tab switch back to Files. */
+.shell-editor-with-tree {
+  grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
+}
+
+.shell-editor-tree {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--wa-color-surface-border);
+}
+
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
   min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
 }
 
-.shell-files .desktop-editor-tree-empty {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {
   padding: 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);
