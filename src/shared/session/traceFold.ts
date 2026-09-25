@@ -16,7 +16,6 @@ import {
   type LogLevel,
   type MessageType,
   type ToolUseLog,
-  type WorkflowPlanMarker,
   type WorkflowCallProgress,
   type TranscriptEvent,
   type RunPhase,
@@ -54,7 +53,7 @@ interface TraceStamp {
 type StageMetadata = Pick<
   Extract<TranscriptEvent, { type: 'stage.start' }>,
   'kind' | 'index' | 'total'
-> & { readonly attemptId?: string };
+>;
 
 /** Build the transcript projection for one subscribed aggregate. */
 export function createTranscriptFold(
@@ -68,7 +67,6 @@ export function createTranscriptFold(
   const activeToolEntries = new Map<string, ToolUseLog>();
   const stageMetadata = new Map<string, StageMetadata>();
   const workflowCallEntries = new Set<string>();
-  let workflowAttemptId: string | undefined;
   let pendingModelResponseId: string | undefined;
   let transcriptBoundaryClosed = false;
   const record = (event: TranscriptEvent, stamp: TraceStamp): void => {
@@ -115,9 +113,6 @@ export function createTranscriptFold(
       case 'stage.start': {
         const metadata = {
           ...(event.kind !== undefined ? { kind: event.kind } : {}),
-          ...(event.kind === 'phase' && workflowAttemptId !== undefined
-            ? { attemptId: workflowAttemptId }
-            : {}),
           ...(event.index !== undefined ? { index: event.index } : {}),
           ...(event.total !== undefined ? { total: event.total } : {}),
         } satisfies StageMetadata;
@@ -234,27 +229,6 @@ export function createTranscriptFold(
           writer.settle(event.logId, patch);
           activeToolEntries.delete(event.logId);
         }
-        return;
-      }
-
-      case 'workflow.plan': {
-        workflowAttemptId = event.attemptId;
-        const marker = {
-          kind: 'workflowPlan',
-          attemptId: event.attemptId,
-          phases: [...event.phases],
-          tasks: [...event.tasks],
-        } satisfies WorkflowPlanMarker;
-        writer.appendSettled({
-          id: `workflow-plan-${event.attemptId}`,
-          type: STREAM_LOG_ENTRY_TYPES.LOG,
-          level: 'info',
-          timestamp: stamp.at,
-          groupId: event.stageId,
-          messageType: MESSAGE_TYPES.INTERNAL,
-          data: marker,
-          verbose: false,
-        });
         return;
       }
 

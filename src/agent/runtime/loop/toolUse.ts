@@ -686,7 +686,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             }
           }
           if (batch === null) {
-            detach();
+            // The host port stays attached: `/model` and `/compact` land on
+            // a parked run.
             batch = yield* followUps.wait;
             if (batch === null) {
               // The queue was cancelled or disposed under the parked loop:
@@ -696,7 +697,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 afterError ? RUN_OUTCOME.FAILED : RUN_OUTCOME.CANCELLED,
               );
             }
-            attach();
           }
           const consumed: ConsumedFollowUps = yield* followUps.consume(
             state,

@@ -10,9 +10,7 @@ import {
   ToolUseLogSchema,
   type StreamLogEntry,
   type RunId,
-  type TaskGroup,
 } from '@shared/schemas';
-import { upsertTaskGroupFromStreamLog } from '@shared/runs/taskGroupProjection';
 import { StreamLog } from '@shared/session/traceEntries';
 import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
 import { isObject } from '@utils/core';
@@ -85,34 +83,6 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
 
     expect(roundEntry?.type).toBe(STREAM_LOG_ENTRY_TYPES.GROUP_END);
     expect(dataOf(roundEntry).kind).toBe('round');
-  });
-
-  it('persists and projects phase attempt ownership through stage end', () => {
-    const { trace, row } = attachRecorder();
-    trace.emit({
-      type: 'workflow.plan',
-      attemptId: 'attempt-2',
-      phases: [{ title: 'Review' }],
-      tasks: [],
-    });
-
-    const phase = trace.openStage('Review', {
-      kind: 'phase',
-      index: 0,
-      total: 1,
-    });
-    phase.end();
-
-    const entry = row(phase.id)!;
-    expect(entry).toMatchObject({
-      type: STREAM_LOG_ENTRY_TYPES.GROUP_END,
-      data: { attemptId: 'attempt-2' },
-    });
-    const groups: TaskGroup[] = [];
-    expect(upsertTaskGroupFromStreamLog(groups, new Map(), entry)).toBe(true);
-    expect(groups).toMatchObject([
-      { id: phase.id, attemptId: 'attempt-2', status: RUN_PHASE.COMPLETED },
-    ]);
   });
 });
 
