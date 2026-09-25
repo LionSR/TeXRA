@@ -136,7 +136,8 @@ function isInterruption(cause: Cause.Cause<unknown>): boolean {
  * A runtime whose `runFork` reports a fiber's failure or defect on exit
  * (#12613). `Fiber.addObserver` fires on every exit, including fibers a
  * caller later `Fiber.join`s, so a joined failure is logged here and still
- * delivered to the joiner. A success or an interrupted exit stays silent.
+ * delivered to the joiner. A success stays silent, as does an exit made of
+ * interrupts alone or of interrupts beside Effect's end-of-stream `Done`.
  * `runPromise` and `runSync` hand their exits to the caller already.
  */
 export function withForkFailureReporting<R, ER>(
