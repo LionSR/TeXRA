@@ -108,20 +108,17 @@ function focusRunAndPromoteApprovals(runId: RunId): void {
   promoteApprovalsForRun(runId);
 }
 
-/** Labels for child executions whose label differs from the id. Returns
- *  `previous` when the content is unchanged, so layout caches keyed on the
- *  map's identity survive the fold ticks that do not touch a label. */
-function runLabelsOf(view: SessionView, previous: RunLabels): RunLabels {
-  const labels = new Map<string, string>();
+/** Labels for child executions whose label differs from the id, as a content
+ *  key: App memoizes the map on it, so layout caches keyed on the map's
+ *  identity survive the fold ticks that do not touch a label. */
+function runLabelsKey(view: SessionView): string {
+  const labels: Array<[string, string]> = [];
   for (const run of view.runs.values()) {
     if (run.parentId !== null && run.label !== run.id) {
-      labels.set(run.id, run.label);
+      labels.push([run.id, run.label]);
     }
   }
-  const unchanged =
-    labels.size === previous.size &&
-    [...labels].every(([id, label]) => previous.get(id) === label);
-  return unchanged ? previous : labels;
+  return JSON.stringify(labels);
 }
 
 export interface AppProps {
@@ -189,10 +186,10 @@ export function App(props: AppProps): React.JSX.Element {
   const { columns, rows } = useWindowSize();
   const activeDraftRegistry = useMemo(() => createActiveDraftRegistry(), []);
   const activeRun = runViewOf(view, activeRunId);
-  const runLabelsRef = useRef<RunLabels>(new Map());
-  const subagentRunLabels = useMemo(
-    () => (runLabelsRef.current = runLabelsOf(view, runLabelsRef.current)),
-    [view],
+  const labelsKey = runLabelsKey(view);
+  const subagentRunLabels = useMemo<RunLabels>(
+    () => new Map(JSON.parse(labelsKey) as Array<[string, string]>),
+    [labelsKey],
   );
   const activeApprovalVisible = approvalVisibleForSelection({
     pending,
