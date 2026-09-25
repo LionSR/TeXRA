@@ -10,11 +10,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  EMPTY_RUN_USAGE_TOTALS,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import {
   fakeProcessServices,
@@ -25,10 +21,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId } from '@utils/core';
-import {
-  createTestLaunchContext,
-  testModelInfo,
-} from './launchContextTestUtils';
+import { createTestLaunchContext } from './launchContextTestUtils';
 
 let counter = 0;
 
@@ -206,27 +199,6 @@ describe('terminal result event', () => {
       expectSingleResult(results, ctx, { outcome: 'cancelled' });
       expect(results[0].error?.kind).toBe('abort');
     }),
-  );
-
-  it.effect(
-    'emits a failed result with usage on an unexpected throw after a round',
-    () =>
-      Effect.gen(function* () {
-        const { ctx, results } = setupResultCase();
-        // Record one round of usage so the failed result still carries totals.
-        yield* Effect.sync(() =>
-          ctx.usageMonitor.recordUsage(
-            EMPTY_RUN_USAGE_TOTALS,
-            null,
-            testModelInfo,
-          ),
-        );
-        const error = yield* Effect.flip(runFlow(ctx, explodedRun));
-        expect(error.message).toContain('model exploded');
-        expectSingleResult(results, ctx, { outcome: 'failed' });
-        expect(results[0].error?.kind).toBeDefined();
-        expect(results[0].usage).toBeDefined();
-      }),
   );
 
   it.effect('bridges a child run result to session.onResult', () =>

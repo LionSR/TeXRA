@@ -75,6 +75,16 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Plainer multi-agent workflow screens.** The workflow launch row shows its
+  summary alone; the instructions for the model stay in the tool output, and
+  the model is no longer told to wait on a run whose result arrives by
+  itself. In the terminal popup each call shows its full label and status
+  with the failure reason or latest activity beside it, while its agent,
+  model and cost move to a line for the focused call; the popup opens on the
+  active phase, and phases of three calls or fewer are not folded. Status
+  marks no longer look like checkboxes, and plan entries read "planned"
+  rather than "declared".
+
 - **Enable or disable an installed plugin** — `texra plugin disable <name>`
   hides a plugin's skills without uninstalling it, and
   `texra plugin enable <name>` brings them back. `texra plugin list` marks a
@@ -128,6 +138,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **The VS Code dashboard shows your agents, teams and saved settings
+  again.** The Agents page listed no tool-use or workflow agents and no
+  teams, and several pages showed defaults instead of your saved values
+  (compaction, retries, team coordination, approval, skills, memory, telemetry,
+  LaTeX and commit attribution), because the extension sent those updates
+  in a form the dashboard discarded.
 - **Usage recorded just before quitting is no longer lost** — on the desktop
   app and the CLI, a quit while live runs took more than a few seconds to
   stop could cut off sending the last usage records. Every host now sends
@@ -176,6 +192,15 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   any round but the last was cut off and continued stopped at the next round
   with `continuationIndex 0 is below 1`. The continuation count now restarts
   with each round, as the agent always wrote it.
+- **A workflow run is counted one way everywhere.** The popup title, the
+  phase tabs, the session list, the progress board and the result card all
+  show the same tally, spelled by outcome (`6 ok · 1 failed · 1 not run`),
+  and a failed run's card reports what it did instead of `0/0 calls`. The
+  result card's tick is shown only when every call succeeded, and it lists
+  the workspace files a run changed rather than their run-storage copies.
+- **Workflow phases the script never reached stay unopened.** A planned
+  call the run never issued reads as "Not run" under a hollow phase, instead
+  of opening that phase and marking the call skipped.
 - **`texra` reports config settings it cannot use.** A setting in
   `.texra/config.json` or the user config whose value has the wrong type
   (`"texra.model.retry.maxAttempts": "five"`) now prints a warning that names

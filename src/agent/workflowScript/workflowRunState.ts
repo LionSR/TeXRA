@@ -292,83 +292,69 @@ export class WorkflowRunState {
   }
 
   /**
-   * The terminal sweep: a plan label the run never issued is skipped as
-   * not-reached; a call still queued or running is cancelled with the run or
-   * failed with its error (the unfinished note when the run ended without
-   * one). Then every stage the run reached, or that owns a card, closes.
+   * The terminal sweep: a call still queued or running never settled itself,
+   * so the run ending around it cancels it — whichever call's fault ended
+   * the run failed on its own card — except a script that returned without
+   * awaiting it, which is a script bug the unfinished note names. A plan label
+   * the run never issued keeps its `declared` card: the hosts read an
+   * unissued plan entry of a settled run as not run. Then every stage the run
+   * entered closes.
    */
-  finish(outcome: RunOutcome, error?: string): void {
+  finish(outcome: RunOutcome): void {
     if (this.#sealed) return;
     for (const call of this.#calls.values()) {
-      if (call.status === WORKFLOW_CALL_STATUS.DECLARED) {
-        call.status = WORKFLOW_CALL_STATUS.SKIPPED;
+      if (
+        call.status !== WORKFLOW_CALL_STATUS.QUEUED &&
+        call.status !== WORKFLOW_CALL_STATUS.RUNNING
+      )
+        continue;
+      // A swept call never reached its own settlement: its card carries
+      // spend but no duration.
+      const costUsd = totalAttemptCost(call.attemptCosts);
+      const spent = costUsd !== undefined ? { costUsd } : {};
+      if (outcome !== RUN_OUTCOME.COMPLETED) {
+        call.status = WORKFLOW_CALL_STATUS.CANCELLED;
+        this.#emit({
+          type: 'call',
+          call: { ...this.#identity(call), status: 'cancelled', ...spent },
+        });
+      } else {
+        call.status = WORKFLOW_CALL_STATUS.FAILED;
+        call.error = WORKFLOW_CALL_UNFINISHED_NOTE;
         this.#emit({
           type: 'call',
           call: {
             ...this.#identity(call),
-            status: 'skipped',
-            reason: 'not-reached',
+            status: 'failed',
+            error: call.error,
+            ...spent,
           },
         });
-      } else if (
-        call.status === WORKFLOW_CALL_STATUS.QUEUED ||
-        call.status === WORKFLOW_CALL_STATUS.RUNNING
-      ) {
-        // A swept call never reached its own settlement: its card carries
-        // spend but no duration.
-        const costUsd = totalAttemptCost(call.attemptCosts);
-        const spent = costUsd !== undefined ? { costUsd } : {};
-        if (outcome === RUN_OUTCOME.CANCELLED) {
-          call.status = WORKFLOW_CALL_STATUS.CANCELLED;
-          this.#emit({
-            type: 'call',
-            call: { ...this.#identity(call), status: 'cancelled', ...spent },
-          });
-        } else {
-          call.status = WORKFLOW_CALL_STATUS.FAILED;
-          call.error = error ?? WORKFLOW_CALL_UNFINISHED_NOTE;
-          this.#emit({
-            type: 'call',
-            call: {
-              ...this.#identity(call),
-              status: 'failed',
-              error: call.error,
-              ...spent,
-            },
-          });
-        }
       }
     }
     this.#currentIndex = -1;
-    this.#closeSettledStages(outcome);
+    this.#closeSettledStages();
     this.#sealed = true;
   }
 
   /**
-   * Close every stage the script has left whose calls have all settled, so a
-   * finished phase reads finished while later phases still run and a failure
-   * in phase 3 cannot retroactively mark phases 1–2. Worst wins: one failed
-   * call fails the stage, one cancelled call cancels it. A reached stage the
-   * sweep settled outright has no call of its own to read, so the run's
-   * outcome is its outcome; a stage that issued nothing at all completed.
+   * Close every stage the script has entered and left whose issued calls
+   * have all settled, so a finished phase reads finished while later phases
+   * still run and a failure in phase 3 cannot retroactively mark phases 1–2.
+   * Worst wins: one failed call fails the stage, one cancelled call cancels
+   * it; a stage that issued nothing completed. A stage the run never entered
+   * was never announced, so nothing closes it.
    */
-  #closeSettledStages(runOutcome?: RunOutcome): void {
+  #closeSettledStages(): void {
     for (const [index, stage] of this.#stages.entries()) {
-      if (stage.closed || index === this.#currentIndex) continue;
-      const calls = [...this.#calls.values()].filter(
-        (call) => call.phase === stage.title,
+      if (stage.closed || !stage.entered || index === this.#currentIndex)
+        continue;
+      const issued = [...this.#calls.values()].filter(
+        (call) => call.phase === stage.title && call.kind !== undefined,
       );
-      // A stage never entered closes only with the run, for the not-reached
-      // cards it owns; without any it was never announced.
-      if (!stage.entered && (runOutcome === undefined || calls.length === 0))
+      if (!issued.every((call) => isTerminalWorkflowCallStatus(call.status)))
         continue;
-      if (!calls.every((call) => isTerminalWorkflowCallStatus(call.status)))
-        continue;
-      const issued = calls.filter((call) => call.kind !== undefined);
-      let outcome: RunOutcome =
-        calls.length > 0 && issued.length === 0
-          ? (runOutcome ?? RUN_OUTCOME.COMPLETED)
-          : RUN_OUTCOME.COMPLETED;
+      let outcome: RunOutcome = RUN_OUTCOME.COMPLETED;
       if (issued.some((call) => call.status === WORKFLOW_CALL_STATUS.CANCELLED))
         outcome = RUN_OUTCOME.CANCELLED;
       if (issued.some((call) => call.status === WORKFLOW_CALL_STATUS.FAILED))

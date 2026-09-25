@@ -30,6 +30,7 @@ import {
   WorkflowScriptDeliverySummarySchema,
 } from '@shared/schemas';
 import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
+import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import {
   formatCompactDuration,
   formatCostUsd,
@@ -207,15 +208,19 @@ export function parseWorkflowScriptDeliverySummary(
   return Result.getOrUndefined(parsed);
 }
 
-/** Collapse a parsed workflow delivery summary to its transcript lines. */
+/** Collapse a parsed workflow delivery summary to its transcript lines. The
+ *  tick is earned only by a run whose every call succeeded; a completed run
+ *  with a failed, stopped, or unreached call says so in its marker too. */
 export function formatWorkflowScriptDeliverySummary(
   summary: WorkflowScriptDeliverySummary,
 ): string {
-  const marker = summary.outcome === 'completed' ? '✓' : '✗';
-  const status = summary.outcome === 'completed' ? 'completed' : 'failed';
+  const { tally } = summary;
+  const clean = tally.ok === tally.total;
+  let marker = '✗';
+  if (summary.outcome === 'completed') marker = clean ? '✓' : '!';
   const facts = [
     `${formatResultCount(summary.phaseCount, 'phase')}`,
-    `${summary.taskDone}/${summary.taskTotal} calls succeeded`,
+    formatWorkflowTally(tally),
     formatCostUsd(summary.costUsd),
     formatCompactDuration(summary.durationMs),
   ];
@@ -227,13 +232,12 @@ export function formatWorkflowScriptDeliverySummary(
     return `  ${file.path}${diffstat}`;
   });
   return [
-    `${marker} ${summary.name} ${status} · ${facts.join(' · ')}`,
+    `${marker} ${summary.name} ${summary.outcome} · ${facts.join(' · ')}`,
     ...(summary.outcome === 'failed' && summary.errorCause
       ? [truncatedResultResponsePreview(summary.errorCause)]
       : []),
     ...fileLines,
     `  script: ${summary.scriptPath}`,
-    `  rerun: edit the script, then call delegate_multi_agents with scriptPath`,
   ].join('\n');
 }
 

@@ -79,8 +79,9 @@ reports with a pointed hint.
   a plan label the script has not issued, and every other status is an issued
   call, carrying the invocation facts (`kind`, plus the declared `model`,
   agent, and file basenames) the script supplied when it called `agent()`. A
-  plan entry the run never reaches stays `declared` and settles as
-  not-reached. Hosts must not present plan entries as resolved calls, nor
+  plan entry the run never reaches stays `declared`: nothing sweeps it into a
+  settled card or opens its phase, and once the run has ended the shared run
+  model reads it as not run. Hosts must not present plan entries as resolved calls, nor
   infer parallelism or dependencies from shared phase membership — the
   `queued`/`running` cards are the only source of real concurrency.
   The engine publishes its plan, phase and call transitions once, through
@@ -263,17 +264,18 @@ structured, cost }`). A failed call throws an Error named `AgentFailed` into
   the deadline timer, so a result, a timeout, the first run-level fault, or
   the caller interrupting the run all tear it down the same way: calls
   interrupted (an admitted journal commit reaching its durability point
-  first), then the realm disposed, then the terminal sweep. A call an
-  operation interrupts (a fail-fast sibling, a `timeout()`) settles its card
-  cancelled; one a run-level fault interrupts is left to the sweep, which
-  knows the fault. Skip and retry
-  are a per-attempt `Deferred` decision the host's gesture and the runner's
-  settlement race for; a retry journals its supersession before it
-  interrupts the runner. The two cancellation edges live in the host, where
-  the child-run loop is a detached fiber: `workflowScriptStrategy` turns the
-  loop's abort into an interrupt of the run, and `executeSubagentInBand`
-  turns an interrupt of its caller into a stop of the in-band child by run
-  id, then waits for the child to settle.
+  first), then the realm disposed, then the terminal sweep, which cancels
+  every call the run ended around — the call whose fault ended it failed on
+  its own card. A call an operation interrupts while the run goes on (a
+  fail-fast sibling, a `timeout()`) settles its own card cancelled. Skip and
+  retry are a per-attempt `Deferred` decision the host's gesture and the
+  runner's settlement race for; a retry journals its supersession — a mark at
+  the retried child's own attempt, so the replacement's id reads as the free
+  slot above it — before it interrupts the runner. The two cancellation edges
+  live in the host, where the child-run loop is a detached fiber:
+  `workflowScriptStrategy` turns the loop's abort into an interrupt of the
+  run, and `executeSubagentInBand` turns an interrupt of its caller into a
+  stop of the in-band child by run id, then waits for the child to settle.
 - **Debuggability**: a script's own error (a bug, as opposed to an operation
   failure) fails the workflow with up to three guest stack frames, so the
   saved script can be edited and rerun. An uncaught `AgentFailed` fails it
