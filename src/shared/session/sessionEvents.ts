@@ -18,12 +18,24 @@ import type {
   SessionEvent,
   DisplaySessionEvent,
   SessionEventDraft,
+  WorkflowCallLiveProgress,
 } from '@shared/schemas';
 import type {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from './database';
+
+/** One piece of work a run's rows left open (`SessionEvents.openWork`). */
+export type OpenWork =
+  | { readonly kind: 'stage'; readonly id: string }
+  | { readonly kind: 'stream'; readonly id: string }
+  | {
+      readonly kind: 'call';
+      readonly id: string;
+      readonly stageId: string | undefined;
+      readonly call: WorkflowCallLiveProgress;
+    };
 
 /** One ordered append to the log, as the publisher hands it to a job. */
 export type Append = (
@@ -98,12 +110,14 @@ export class SessionEvents extends Context.Service<
      *  decides what its loss means (`SessionHandle` holds it for the drain
      *  that stamps its run's terminal row). */
     readonly settle: Effect.Effect<CommitOrdinal | null>;
-    /** The stream ids this publisher committed a `stream.start` for on one
-     *  aggregate and no `stream.end` since, nor a phase move that rests or
-     *  ends its run: what a park or an end closes. Read on the publisher
-     *  fiber (inside a job) or after a settle, it counts every commit
-     *  before. */
-    readonly openStreams: (aggregateId: AggregateId) => readonly string[];
+    /** What this publisher committed open on one aggregate and nothing has
+     *  closed since, in first-appearance order: a stream until its
+     *  `stream.end` or a phase move that rests or ends its run, a stage
+     *  until its `stage.end`, a workflow call until a terminal
+     *  `workflow.call`. What a park (streams) or a host exit (all three)
+     *  closes. Read on the publisher fiber (inside a job) or after a
+     *  settle, it counts every commit before. */
+    readonly openWork: (aggregateId: AggregateId) => readonly OpenWork[];
     /** The cold listing hydrate (C8): the latest row per aggregate and type
      *  for the listing fact types plus the outstanding approvals, in commit
      *  order; never a transcript row; completes. */

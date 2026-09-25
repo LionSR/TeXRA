@@ -312,8 +312,7 @@ is the result-style validation helper: it returns either a
 `ValidatedExecutionRequest` or a validation message. A caller that prefers
 exceptions may instead run `AgentConfigSchema.parse` and construct the
 `ValidatedExecutionRequest` structurally, as production extension callers do
-(`packages/extension/src/commands/agent/executeCommand.ts:37-46`;
-`packages/extension/src/frontend/review/AgentReviewService.ts:328-347`).
+(`packages/extension/src/commands/agent/executeCommand.ts:37-46`).
 `agent`, `model`, and `instruction` all have `.prefault()` defaults
 (`src/agent/core/definition/AgentConfig.ts:18,27,28`), and an absent
 `agentCategory` normalizes to `Workflow`
