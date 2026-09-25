@@ -1,6 +1,6 @@
 ---
 name: lean-proof-assistant
-description: Develop and debug Lean 4 proofs in project context. Use when Codex needs to understand a theorem, inspect goals, search for supporting lemmas, write or repair Lean proof terms or tactic scripts, and iterate with diagnostics until the file is clean.
+description: Develop and debug Lean 4 proofs in project context. Use when you need to understand a theorem, inspect goals, search for supporting lemmas, write or repair Lean proof terms or tactic scripts, and iterate with diagnostics until the file is clean.
 ---
 
 # Lean Proof Assistant

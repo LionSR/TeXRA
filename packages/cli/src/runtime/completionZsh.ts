@@ -89,11 +89,13 @@ export function zshCompletion(commands: readonly CompletionCommand[]): string {
 ${dynamicSourceFunctions()}
 
 _texra() {
-  local path
-  path="\${words[2]}"
-  [[ -n "\${words[3]}" && "\${words[3]}" != -* ]] && path="$path \${words[3]}"
+  # Not \`path\`: in zsh that name is tied to $PATH, so a local of it would
+  # hide \`texra\` and \`awk\` from the dynamic completion helpers.
+  local command_path
+  command_path="\${words[2]}"
+  [[ -n "\${words[3]}" && "\${words[3]}" != -* ]] && command_path="$command_path \${words[3]}"
 
-  case "$path" in
+  case "$command_path" in
     ${pathCases}
     *) _arguments ${quote(rootSpecs)} ;;
   esac

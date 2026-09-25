@@ -239,6 +239,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   config: new MemoryConfigProvider(),
   commandName: 'texra',
   configWarnings: [],
+  configDegradations: [],
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
