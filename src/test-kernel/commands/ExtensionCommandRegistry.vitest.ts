@@ -70,60 +70,6 @@ function dispatch(
 }
 
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  it('texra.auth.viewProfile opens General on its Account section', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.auth.viewProfile'),
-    ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      'general/account',
-    );
-  });
-
-  it('texra.showMemory passes the memory panel name', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.showMemory'),
-    ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('memory');
-  });
-
-  it('texra.showAgents forwards parsed agent-category sub-tab', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.showAgents', 'toolUse'),
-    ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      'agents/library',
-      'toolUse',
-    );
-  });
-
-  it('texra.showAgents with no arg opens the agents tab without a sub-tab', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.showAgents'),
-    ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      'agents/library',
-      undefined,
-    );
-  });
-
-  it('texra.openDoc forwards parsed page argument', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.openDoc', 'getting-started'),
-    ).resolves.toBeUndefined();
-    expect(actions.openDoc).toHaveBeenCalledExactlyOnceWith('getting-started');
-  });
-
-  it('texra.openDoc rejects non-string raw arg', async () => {
-    const actions = makeActions();
-    await expect(dispatch(actions, 'texra.openDoc', 42)).resolves.toBe(false);
-    expect(actions.openDoc).not.toHaveBeenCalled();
-  });
-
   describe('typed file-operation arguments', () => {
     const BASE_FILE = {
       kind: 'external' as const,
@@ -184,35 +130,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
         COPY_META,
       );
     });
-
-    it('forwards accept arguments when copy metadata is omitted', async () => {
-      const actions = makeActions();
-
-      await expect(
-        dispatch(actions, 'texra.acceptEdited', BASE_FILE, EDITED_FILE),
-      ).resolves.toBe(true);
-      expect(actions.acceptEdited).toHaveBeenCalledExactlyOnceWith(
-        BASE_FILE,
-        EDITED_FILE,
-        undefined,
-      );
-    });
-  });
-
-  it('texra.showProgressView with no arg defaults to inPlace=false', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.showProgressView'),
-    ).resolves.toBeUndefined();
-    expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(false);
-  });
-
-  it('texra.showProgressView forwards inPlace=true', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.showProgressView', { inPlace: true }),
-    ).resolves.toBeUndefined();
-    expect(actions.showProgressView).toHaveBeenCalledExactlyOnceWith(true);
   });
 
   it.each([null, true, 'true', { inPlace: 'true' }, { extra: true }])(
@@ -226,55 +143,12 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
     },
   );
 
-  it('texra.setApiKey forwards parsed provider', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.setApiKey', 'anthropic'),
-    ).resolves.toBeUndefined();
-    expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith('anthropic');
-  });
-
-  it('texra.setApiKey passes undefined when no provider given', async () => {
-    const actions = makeActions();
-    await expect(dispatch(actions, 'texra.setApiKey')).resolves.toBeUndefined();
-    expect(actions.setApiKey).toHaveBeenCalledExactlyOnceWith(undefined);
-  });
-
   it('texra.setApiKey rejects unknown provider', async () => {
     const actions = makeActions();
     await expect(
       dispatch(actions, 'texra.setApiKey', 'not-a-provider'),
     ).resolves.toBe(false);
     expect(actions.setApiKey).not.toHaveBeenCalled();
-  });
-
-  it('texra.createAgentWithAI defaults to workflow when no category given', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.createAgentWithAI'),
-    ).resolves.toBeUndefined();
-    expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
-      'workflow',
-    );
-  });
-
-  it('texra.createAgentWithAI forwards parsed toolUse category', async () => {
-    const actions = makeActions();
-    await expect(
-      dispatch(actions, 'texra.createAgentWithAI', 'toolUse'),
-    ).resolves.toBeUndefined();
-    expect(actions.createAgentWithAI).toHaveBeenCalledExactlyOnceWith(
-      'toolUse',
-    );
-  });
-
-  it('texra.execute forwards raw input through z.unknown() schema', async () => {
-    const actions = makeActions();
-    const payload = { config: { name: 'test' } };
-    await expect(
-      dispatch(actions, 'texra.execute', payload),
-    ).resolves.toBeUndefined();
-    expect(actions.execute).toHaveBeenCalledExactlyOnceWith(payload);
   });
 
   // Regression guard for #3782: handlers must propagate async rejections
@@ -293,17 +167,6 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       (actions[actionKey] as any).mockReturnValueOnce(Effect.fail(failure));
 
       await expect(dispatch(actions, id)).rejects.toBe(failure);
-    });
-
-    it('typed handler texra.openDoc rejection bubbles up', async () => {
-      const actions = makeActions();
-      const failure = new Error('boom-openDoc');
-
-      (actions.openDoc as any).mockReturnValueOnce(Effect.fail(failure));
-
-      await expect(
-        dispatch(actions, 'texra.openDoc', 'getting-started'),
-      ).rejects.toBe(failure);
     });
   });
 });

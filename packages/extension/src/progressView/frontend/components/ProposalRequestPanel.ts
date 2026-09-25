@@ -97,7 +97,8 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
     const data = this.permission.data;
     if (data.agentCategory === AgentCategory.Workflow && data.workflowScript) {
       return html`Start a multi-agent run:
-        <strong>${data.workflowScript.name}</strong>`;
+        <strong>${data.workflowScript.name}</strong> with ${data.agent} on
+        ${getModelLabel(data.model)}`;
     }
     const agent =
       (this.permission.agentOptionsData ?? []).length > 0
@@ -203,8 +204,9 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
   /**
    * The proposal card (board W0): what the run will be, as the run model
    * folds the plan for a run that has not started. Every declared phase in
-   * order with its declared calls, the proposal's default agent and model,
-   * and the honest note that calls may run concurrently. No cost estimate
+   * order with its declared calls (the model is in the ask above), and,
+   * above the phases so the sticky action row never covers it, the
+   * honest note that calls may run concurrently. No cost estimate
    * (the fold has none) and no script link (the file list below has it).
    */
   private renderWorkflowScriptSummary(
@@ -219,7 +221,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
       runDurablyFinal: false,
       childProgress: new Map(),
     });
-    const modelLabel = getModelLabel(data.model);
 
     return html`
       <div class="proposal-card__lede">
@@ -228,7 +229,10 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
           >${workflowScriptPlanSummary(workflow)}</span
         >
       </div>
-      <div class="proposal-card__defaults">${data.agent} · ${modelLabel}</div>
+      <div class="workflow-proposal__cost-warning">
+        ${waIcon('triangle-exclamation')}
+        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
+      </div>
       ${
         phases.length > 0
           ? html`<div class="proposal-card__phases" role="list">
@@ -252,10 +256,6 @@ export class ProposalRequestPanel extends BaseRequestPanel<'proposal'> {
             </div>`
           : nothing
       }
-      <div class="workflow-proposal__cost-warning">
-        ${waIcon('triangle-exclamation')}
-        ${WORKFLOW_SCRIPT_PROPOSAL_COPY.costWarning}
-      </div>
       <wa-details
         class="workflow-proposal__workflow-details"
         summary="Instruction and files"

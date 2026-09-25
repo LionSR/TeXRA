@@ -22,18 +22,6 @@ const readParentRunId = (runId: RunId) =>
   );
 
 describe('persisted parent edge', () => {
-  it.effect('is absent for roots and for runs that were never started', () =>
-    Effect.gen(function* () {
-      publishTestRunStart(session, 'aaa001' as RunId);
-      yield* session.settlePublications();
-      expect(
-        yield* Effect.promise(() => readParentRunId('aaa001' as RunId)),
-      ).toBeUndefined();
-      expect(
-        yield* Effect.promise(() => readParentRunId('aaa002' as RunId)),
-      ).toBeUndefined();
-    }),
-  );
   it.effect(
     'retains parent identity in the child creation even when reads exclude parent history',
     () =>

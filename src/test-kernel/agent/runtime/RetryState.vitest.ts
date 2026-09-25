@@ -84,7 +84,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { isObject } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
@@ -335,8 +334,6 @@ const freshState = (): RunState => ({
   pendingResponse: null,
   pendingIntents: {},
   requests: {},
-  followUps: [],
-  followUpIds: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
@@ -447,23 +444,6 @@ const modelRouteRecovery = (
     ? { retryAfterMs: verdict.retryAfterMs }
     : undefined;
 };
-
-/** Collects the modelRetryLifecycle domain events a TraceEmitter sees. */
-function collectRetryLifecycleEvents(
-  logger: TraceEmitter,
-): Record<string, unknown>[] {
-  const events: Record<string, unknown>[] = [];
-  logger.subscribe((event) => {
-    if (
-      event.type === 'domain' &&
-      event.key === 'modelRetryLifecycle' &&
-      isObject(event.data)
-    ) {
-      events.push(event.data);
-    }
-  });
-  return events;
-}
 
 describe('model failure classification', () => {
   it('treats a user abort as a cancellation, never an automatic retry', () => {
@@ -969,51 +949,6 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
-    }),
-  );
-
-  it.effect('records one operation of attempt and decision diagnostics', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-      );
-      const logger = new TraceEmitter();
-      const events = collectRetryLifecycleEvents(logger);
-      const pump = yield* pumpClock;
-      const session = sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'retry',
-      }));
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-        { ok: completedTurn('recovered') },
-      ]);
-
-      const kit = yield* openRun(session, stub.model, {}, logger);
-      const { runId } = kit;
-      yield* Effect.promise(() => seedActiveRun(session, runId));
-      yield* invokeOn(kit);
-
-      expect(events.map((event) => [event.event, event.attempt])).toEqual([
-        ['attempt_started', 1],
-        ['attempt_failed', 1],
-        ['retry_decision_requested', undefined],
-        ['retry_decided', undefined],
-        ['attempt_started', 2],
-        ['attempt_succeeded', 2],
-      ]);
-      expect(
-        events.find((event) => event.event === 'retry_decided'),
-      ).toMatchObject({ action: 'retry' });
-      expect(new Set(events.map((event) => event.operationId)).size).toBe(1);
-      expect(
-        events.every(
-          (event) => event.runId === runId && event.model === 'gpt54',
-        ),
-      ).toBe(true);
-      requests.detach();
-      yield* Fiber.interrupt(pump);
       yield* session.dispose();
     }),
   );

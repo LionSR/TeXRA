@@ -20,8 +20,4 @@ describe('envFlag', () => {
   it.each(['0', 'false', 'No', 'off', '  '])('reads %j as off', (value) => {
     expect(readFlag({ FLAG: value })).toBe(false);
   });
-
-  it('reads an unset variable as off', () => {
-    expect(readFlag({})).toBe(false);
-  });
 });

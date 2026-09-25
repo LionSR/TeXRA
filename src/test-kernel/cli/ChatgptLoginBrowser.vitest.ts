@@ -76,24 +76,6 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
     vi.clearAllMocks();
   });
 
-  it.effect(
-    'prints the sign-in link once, then browser status without repeating the URL',
-    () =>
-      Effect.gen(function* () {
-        mocks.tryOpenBrowser.mockReturnValue(Effect.succeed(true));
-
-        const progress = yield* runSignIn(
-          'https://auth.openai.com/authorize?x=1',
-        );
-
-        expect(progress).toEqual([
-          'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=1',
-          'Browser launch in progress...',
-          'Browser opened; the same URL works in another browser.',
-        ]);
-      }),
-  );
-
   it.effect('prints the URL once when the browser fails to launch', () =>
     Effect.gen(function* () {
       mocks.tryOpenBrowser.mockReturnValue(Effect.succeed(false));

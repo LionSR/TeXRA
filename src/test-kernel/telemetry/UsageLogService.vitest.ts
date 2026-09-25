@@ -14,7 +14,6 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 import {
   jsonResponse,
@@ -244,42 +243,6 @@ describe('UsageLogService', () => {
     expect(tick).toBeGreaterThanOrEqual(0);
     const handle = timers.mock.results[tick]?.value as NodeJS.Timeout;
     expect(handle.hasRef()).toBe(false);
-  });
-
-  it('warns after five seconds without bounding disposal', async () => {
-    stubAccessToken();
-    const logs = captureLogEntries();
-    const disposeWarned = () =>
-      logs.has(
-        'WARN',
-        'UsageLogService',
-        'Dispose timeout waiting for in-flight flush',
-      );
-
-    const { promise: fetchReleased, resolve: releaseFetch } = createDeferred();
-    const { batches, fetchMock } = stubBatchFetch(async () => {
-      await fetchReleased;
-    });
-
-    usageLog.log(usageEntry('slow'), testWorkspaceRoots().config);
-    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-
-    const disposal = stopUsageLog();
-    let disposed = false;
-    void disposal.then(() => {
-      disposed = true;
-    });
-
-    await vi.advanceTimersByTimeAsync(4999);
-    expect(disposeWarned()).toBe(false);
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(disposeWarned()).toBe(true);
-    expect(disposed).toBe(false);
-
-    releaseFetch();
-    await expect(disposal).resolves.toBeUndefined();
-    expect(batches.map(batchModels)).toEqual([['slow']]);
   });
 
   it('keeps queued entries when the token read answers signed-out', async () => {
@@ -512,15 +475,9 @@ describe('UsageLogService', () => {
       }),
     );
 
-    // Plan accounting is derived from the aggregate that these records
-    // populate, so an opt-out that suppressed them would let plan-covered
-    // calls run on against a stale total. Only `api-key` rounds are optional.
-    it.live.each([
-      'chatgpt-subscription',
-      'xai-subscription',
-      'kimi-code-subscription',
-      'glm-coding-plan-subscription',
-    ] as const)('still sends %s usage while the setting is off', (usageRoute) =>
+    // Subscription rounds used to bypass the opt-out as "plan accounting" for
+    // a relay spend cap; the relay is gone and nothing reads those totals.
+    it.live('drops subscription usage while the setting is off', () =>
       Effect.gen(function* () {
         stubAccessToken();
         yield* testWorkspaceRoots().config.update(
@@ -532,46 +489,14 @@ describe('UsageLogService', () => {
         const { batches, fetchMock } = stubBatchFetch();
 
         usageLog.log(
-          { ...usageEntry('hosted'), usageRoute },
+          { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
           testWorkspaceRoots().config,
         );
         yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(batches.map(batchModels)).toEqual([['hosted']]);
+        expect(fetchMock).not.toHaveBeenCalled();
+        expect(batches).toEqual([]);
       }),
-    );
-
-    it.live(
-      'drops optional entries from a batch but keeps the accounted ones',
-      () =>
-        Effect.gen(function* () {
-          stubAccessToken();
-          yield* Effect.promise(() =>
-            startUsageLog({ batchSize: 100, flushIntervalMs: 60_000 }),
-          );
-
-          const { batches, fetchMock } = stubBatchFetch();
-
-          usageLog.log(
-            { ...usageEntry('byok'), usageRoute: 'api-key' },
-            testWorkspaceRoots().config,
-          );
-          usageLog.log(
-            { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-            testWorkspaceRoots().config,
-          );
-          yield* testWorkspaceRoots().config.update(
-            TELEMETRY_ENABLED_KEY,
-            false,
-            'global',
-          );
-
-          yield* Effect.promise(() => vi.advanceTimersByTimeAsync(60_000));
-
-          expect(fetchMock).toHaveBeenCalledTimes(1);
-          expect(batches.map(batchModels)).toEqual([['hosted']]);
-        }),
     );
 
     // The token probe is awaited before the batch is sent, so an opt-out
@@ -647,24 +572,6 @@ describe('UsageLogService', () => {
         expect(batches.map(batchModels)).toEqual([['optional']]);
       }),
     );
-
-    // Same carve-out as the setting: plan accounting is derived from these
-    // records, so the environment switch must not suppress them either.
-    it('still sends plan usage while TEXRA_NO_TELEMETRY is set', async () => {
-      stubAccessToken();
-      vi.stubEnv('TEXRA_NO_TELEMETRY', '1');
-
-      const { batches, fetchMock } = stubBatchFetch();
-
-      usageLog.log(
-        { ...usageEntry('hosted'), usageRoute: 'chatgpt-subscription' },
-        testWorkspaceRoots().config,
-      );
-      await vi.advanceTimersByTimeAsync(0);
-
-      expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(batches.map(batchModels)).toEqual([['hosted']]);
-    });
 
     // JsonConfigProvider returns raw JSON from a hand-edited .texra/config.json,
     // so a mistyped string must not read as truthy and re-enable logging.

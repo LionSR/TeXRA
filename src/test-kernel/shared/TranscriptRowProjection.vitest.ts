@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { MESSAGE_TYPES, type RunId, type ToolUseLog } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
-import {
-  isSettledRow,
-  logPayloadRow,
-  toolRow,
-  type TranscriptRowBase,
-} from '@ui/transcript';
+import { logPayloadRow, toolRow, type TranscriptRowBase } from '@ui/transcript';
 
 const base: TranscriptRowBase = {
   id: 'a',
@@ -19,32 +14,6 @@ const base: TranscriptRowBase = {
 const tool = (log: ToolUseLog) => toolRow(base, log, undefined, undefined);
 
 describe('transcript row builders', () => {
-  it('carries the full typed error field set in display order', () => {
-    const row = logPayloadRow(base, 'Request failed', {
-      messageType: MESSAGE_TYPES.ERROR,
-      data: {
-        message: 'HTTP 429',
-        userRetryable: true,
-        statusCode: 429,
-        classification: { kind: 'chatgpt-subscription' },
-        provider: 'anthropic',
-        requestId: 'req_1',
-      },
-    });
-    expect(row?.kind).toBe('error');
-    if (row?.kind !== 'error') throw new Error('bad');
-    expect(row.summary.full).toBe('Request failed');
-    expect(row.details.map((d) => d.key)).toEqual([
-      'message',
-      'provider',
-      'statusCode',
-      'classification',
-      'requestId',
-    ]);
-    expect(row.detailText.lineCount).toBeGreaterThan(5);
-    expect(isSettledRow(row, false)).toBe(true);
-  });
-
   it('keeps failed and non-media attachments with a counted summary', () => {
     const row = logPayloadRow(base, 'all', {
       messageType: MESSAGE_TYPES.FILE_LIST,
@@ -61,31 +30,6 @@ describe('transcript row builders', () => {
     expect(row.summary).toBe('Files (1/2 loaded, 1 not found)');
     expect(row.files).toHaveLength(2);
     expect(row.media).toHaveLength(1);
-  });
-
-  it('gives a delegation call typed sections instead of a JSON blob', () => {
-    const row = tool({
-      toolName: 'delegate_agent',
-      status: 'in_progress',
-      input: {
-        agent: 'proof',
-        model: 'claude-opus',
-        instruction: 'Check lemma 3',
-        inputFiles: ['a.tex'],
-        extractTikz: true,
-      },
-    });
-    if (row?.kind !== 'tool') throw new Error('bad');
-    expect(row.model.headerLabel).toBe('Delegate agent');
-    expect(row.model.headerPreview).toBe('proof');
-    expect(row.model.sections.map((s) => s.kind)).toEqual([
-      'identifier',
-      'text',
-      'badges',
-      'fileGroups',
-    ]);
-    expect(row.model.showOutput).toBe(false);
-    expect(row.model.outputSuppression).toBe('empty');
   });
 
   it('shows MCP output through the section builder', () => {

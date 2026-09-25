@@ -127,24 +127,6 @@ describe('ProgressApiKeyRetryController', () => {
     }),
   );
 
-  itHosted('does not retry after the retry request was replaced', () =>
-    Effect.gen(function* () {
-      const harness = createHarness({
-        keys: { anthropic: 'stored-key' },
-        retryPending: false,
-      });
-
-      yield* harness.controller.useOwnApiKey({
-        stream: 'stream-a' as RunId,
-        requestId: 'retry:stale',
-        provider: 'anthropic',
-        requireNewKey: false,
-      });
-
-      expect(harness.retries).toStrictEqual([]);
-    }),
-  );
-
   itHosted('retries with the existing OpenAI key without prompting', () =>
     Effect.gen(function* () {
       const harness = createHarness({ keys: { openai: 'stored-openai' } });

@@ -2090,7 +2090,9 @@ describe('the C1 event table and the C6 publisher', () => {
    * the store, so this is the one window whose regression costs every run
    * that was live at the crash. The recorded owner here is this pid under a
    * start identity from before the crash: the pid resolves, its identity
-   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict.
+   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict. The
+   * follow-up the crash left queued reaches the restarted publisher's
+   * pending set where the claim moves.
    */
   it.live('reclaims a run whose recorded owner is provably dead', () => {
     const storage = workspace();
@@ -2100,13 +2102,23 @@ describe('the C1 event table and the C6 publisher', () => {
       'an-earlier-process',
     ]);
     const target = qualifyAggregateId('run', RUN);
+    const followUp = {
+      followUpId: 'left-queued',
+      content: { text: 'deliver me', origin: 'user' as const },
+    };
     return Effect.gen(function* () {
       yield* Database.pipe(
-        Effect.flatMap((crashed) => crashed.appendAll([runStart])),
+        Effect.flatMap((crashed) =>
+          crashed.appendAll([
+            runStart,
+            { type: 'followup.queued', aggregateId: target, ...followUp },
+          ]),
+        ),
         Effect.provide(substrate(storage, CRASHED)),
       );
       yield* Effect.gen(function* () {
         const restarted = yield* Database;
+        const events = yield* SessionEvents;
         expect(yield* restarted.claimOwner(target)).toEqual({
           ownerId: CRASHED,
           liveness: 'dead',
@@ -2115,13 +2127,23 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
           'DatabaseNotOwner',
         );
-        yield* restarted.acquireClaims([target]);
+        expect(events.pendingFollowUps(target)).toEqual([]);
+        yield* (yield* RunLedger).acquire(RUN);
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
+        // The claim that moved here seeds the input the crash left queued.
+        expect(events.pendingFollowUps(target)).toEqual([followUp]);
         // The resumed run appends onto the rows the crash left behind.
-        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(2);
-      }).pipe(Effect.provide(substrate(storage)));
+        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
+      }).pipe(
+        Effect.provide(
+          runLedgerLayer.pipe(
+            Layer.provideMerge(sessionEventsLayer),
+            Layer.provideMerge(substrate(storage)),
+          ),
+        ),
+      );
     });
   });
 

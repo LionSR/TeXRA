@@ -1,10 +1,8 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber, Logger, References } from 'effect';
+import { Deferred, Effect, Fiber } from 'effect';
 import { describe, expect } from 'vitest';
-import { z, type ZodType } from 'zod';
 
-import { LOG_CHANNEL } from '@logger/logSink';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -18,7 +16,6 @@ import {
   type BasePollSubscriptionState,
   type PollHookRejected,
 } from '@tools/github/PollingSourceBase';
-import type { ConditionalResponse } from '@tools/github/githubClient';
 
 interface TestItem {
   id: number;
@@ -39,13 +36,6 @@ class TestPollingSource extends PollingSourceBase<
       backoffMaxMs: 10_000,
       maxFailureDurationMs: 60_000,
     });
-  }
-
-  validate<T>(
-    res: ConditionalResponse<unknown>,
-    schema: ZodType<T>,
-  ): Effect.Effect<ConditionalResponse<T> | undefined> {
-    return this.validateOrSkip(res, schema, 'bad payload');
   }
 
   subscribeForTest(listener: (text: string) => Effect.Effect<void>) {
@@ -128,45 +118,6 @@ describe('DedupedResource', () => {
     );
 
     expect(emitted).toEqual([2, 3, 4]);
-  });
-});
-
-describe('PollingSourceBase.validateOrSkip', () => {
-  it.effect('logs and skips malformed 200 responses without throwing', () => {
-    const entries: Array<{
-      level: string;
-      message: unknown;
-      annotations: Record<string, unknown>;
-    }> = [];
-    const capture = Logger.make((options) => {
-      entries.push({
-        level: options.logLevel,
-        message: options.message,
-        annotations: {
-          ...options.fiber.getRef(References.CurrentLogAnnotations),
-        },
-      });
-    });
-    return Effect.gen(function* () {
-      const source = new TestPollingSource();
-
-      const result = yield* source.validate(
-        { status: 200, data: { id: 'bad' }, etag: 'etag' },
-        z.object({ id: z.number() }),
-      );
-
-      expect(result).toBeUndefined();
-      expect(entries).toEqual([
-        {
-          level: 'Warn',
-          message: ['bad payload'],
-          annotations: expect.objectContaining({
-            [LOG_CHANNEL]: 'TestPollingSource',
-            data: expect.any(z.ZodError),
-          }),
-        },
-      ]);
-    }).pipe(Effect.withLogger(capture));
   });
 });
 

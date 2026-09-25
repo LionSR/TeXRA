@@ -68,7 +68,7 @@ return await agent('Merge the corrected drafts.', {
 });
 ```
 
-A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the progress view can show all three tasks before any of them run. `parallel()` runs the two fixes concurrently and waits for both. A failed call resolves to `null` and a call you skipped resolves to `'__WORKFLOW_SKIPPED__'`, so the script filters both out before the merge. Each workflow-agent call resolves to a result that lists the files it produced, and those files can be handed straight to the next call.
+A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the Sessions view can show all three tasks before any of them run. `parallel()` runs the two fixes concurrently and waits for both. A failed call resolves to `null` and a call you skipped resolves to `'__WORKFLOW_SKIPPED__'`, so the script filters both out before the merge. Each workflow-agent call resolves to a result that lists the files it produced, and those files can be handed straight to the next call.
 
 ## The script API
 
@@ -90,7 +90,7 @@ Ordinary JavaScript handles the rest: a `for` loop with awaited calls is a pipel
 
 Every completed `agent()` call is written to a journal before its result is handed back to the script. The journal is keyed by the script's `meta.name` together with the default agent and the lead's session, so resume works within the same session rather than across sessions. Each entry records the call's prompt and options, plus the bytes of any files it read.
 
-If the run times out, is interrupted, or fails partway through, nothing that finished is lost. The lead calls the tool again in the same session with the same `meta.name`, and calls whose prompt, options, and input files are unchanged replay from the journal at no cost, showing as **Saved result** in the progress view. Only the calls that did not finish, or that the lead changed in the script, run again. A new `meta.name` starts over from scratch.
+If the run times out, is interrupted, or fails partway through, nothing that finished is lost. The lead calls the tool again in the same session with the same `meta.name`, and calls whose prompt, options, and input files are unchanged replay from the journal at no cost, showing as **Saved result** in the Sessions view. Only the calls that did not finish, or that the lead changed in the script, run again. A new `meta.name` starts over from scratch.
 
 This also means the lead can edit a script after a failure rather than rewriting it. Every result points at the saved script file, and the tool accepts a path to that file instead of new source.
 
@@ -100,13 +100,13 @@ In the CLI, a workflow run resumes headless: `texra resume <id>` continues a sto
 
 **Agents.** The tool is only offered to agents whose configuration names it. Today that is the `orchestrator` lead (the Physicist, Mathematician, and Computer Scientist teams), `leanOrchestrator` (the Lean Project team), and the `engineer` lead (the Software Engineer team). All three leads ship with TeXRA and need no sign-in. A [custom agent](./custom-agents.md) can list `delegate_multi_agents` in its tools too.
 
-**The global switch.** Naming the tool is only half of the opt-in. The **Multi-Agent Workflow** switch on the **Tools** tab of the Dashboard is a kill switch on top of it: when it is off, the tool is removed from every agent's tool list, whatever the agent's configuration says. New installs start with it off, so turn it on before asking a lead to use it. From the CLI, the same switch is `texra tools enable workflow-script`.
+**The global switch.** Naming the tool is only half of the opt-in. The **Multi-Agent Workflow** switch on the **Tools** tab of Settings is a kill switch on top of it: when it is off, the tool is removed from every agent's tool list, whatever the agent's configuration says. New installs start with it off, so turn it on before asking a lead to use it. From the CLI, the same switch is `texra tools enable workflow-script`.
 
 **Hosts.** The VS Code extension and the desktop app show the proposal, the phase and task progress, and the delivery summary in the ProgressBoard. The CLI shows the same run in the chat TUI's subagent panel, with the skip and retry keys above. In a headless `texra run`, no proposal prompt can be shown, so the workflow proceeds without one; the approval policy you pass still governs what its child agents may edit or execute.
 
 ## Troubleshooting
 
-**The lead never offers a multi-agent workflow.** Check the **Multi-Agent Workflow** switch on the Dashboard's **Tools** tab (or `texra tools status workflow-script`). When it is off the tool is stripped from every agent, and the lead falls back to delegating one task at a time. Also confirm the lead is one of the agents listed above.
+**The lead never offers a multi-agent workflow.** Check the **Multi-Agent Workflow** switch on the Settings **Tools** tab (or `texra tools status workflow-script`). When it is off the tool is stripped from every agent, and the lead falls back to delegating one task at a time. Also confirm the lead is one of the agents listed above.
 
 **"A workflow script run for meta.name ... is already in progress".** The lead tried to launch a script whose previous run is still running or finishing. Only one run per name is allowed at a time, so a second launch is refused rather than starting a competing run over the same journal. Wait for the first run to deliver, then resume with the same name if it did not complete.
 

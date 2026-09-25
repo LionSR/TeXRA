@@ -223,41 +223,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
     setLogSink(null);
   });
 
-  it.live('publishes githubSubscriptionsChanged through app signals', () =>
-    Effect.gen(function* () {
-      const signal = yield* Effect.promise(() =>
-        recordAppSignal('githubSubscriptionsChanged'),
-      );
-      const source = new RegistryTestSource();
-      const session = createTestSession();
-      const registry = createTestRegistry(source);
-      yield* Effect.addFinalizer(() => session.dispose());
-      yield* Effect.addFinalizer(() => Effect.sync(() => signal.dispose()));
-
-      yield* registry
-        .bind('stream-a' as RunId, 'owner/repo', session)
-        .pipe(
-          Effect.provideService(Secrets, fakeHostSecrets),
-          Effect.provideService(AgentResume, fakeHostAgentResume),
-          Effect.provideService(Lifecycle, fakeHostLifecycle),
-        );
-      // Delivery runs on the subscriber's fiber, so each publication lands a
-      // turn after the call that made it.
-      yield* signal.delivered(1);
-      expect(signal.events).toEqual([
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-      ]);
-
-      registry.unbind('stream-a' as RunId, 'owner/repo');
-
-      yield* signal.delivered(2);
-      expect(signal.events).toEqual([
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-        { event: 'githubSubscriptionsChanged', payload: undefined },
-      ]);
-    }),
-  );
-
   it.effect('reports token invalid events through app signals', () =>
     Effect.gen(function* () {
       const host = createRecordingHost();

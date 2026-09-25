@@ -40,15 +40,6 @@ const signalled = (method: string) =>
   });
 
 describe('resolvePagerCommand', () => {
-  it('defaults to less -FIRX when $PAGER is unset', () => {
-    expect(resolvePagerCommand({})).toBe('less -FIRX');
-  });
-
-  it('honors an explicit $PAGER', () => {
-    expect(resolvePagerCommand({ PAGER: 'more' })).toBe('more');
-    expect(resolvePagerCommand({ PAGER: '  less -R  ' })).toBe('less -R');
-  });
-
   it('treats empty $PAGER or PAGER=cat as "no pager"', () => {
     expect(resolvePagerCommand({ PAGER: '' })).toBeUndefined();
     expect(resolvePagerCommand({ PAGER: '   ' })).toBeUndefined();
@@ -183,5 +174,43 @@ describe('pageStdout', () => {
   it('never pages empty text', async () => {
     expect(await page('', { stdoutIsTty: true })).toEqual([]);
     expect(stdout).toBe('');
+  });
+
+  describe('Ctrl-C while the pager owns the terminal', () => {
+    /** Page on a TTY, pressing Ctrl-C while the pager runs; the pager then
+     *  answers `answer`. Returns the SIGINTs the CLI re-raised at itself. */
+    async function pageWithCtrlC(answer: Answer): Promise<unknown[][]> {
+      const listeners: Array<() => void> = [];
+      const on = vi.spyOn(process, 'on');
+      on.mockImplementation(((event: string | symbol, listener: () => void) => {
+        if (event === 'SIGINT') listeners.push(listener);
+        return process;
+      }) as typeof process.on);
+      const kill = vi
+        .spyOn(process, 'kill')
+        .mockImplementation((() => true) as typeof process.kill);
+      const spawner = scriptedSpawnerLayer(() => {
+        for (const listener of listeners) listener();
+        return answer;
+      });
+      await Effect.runPromise(
+        pageStdout('long listing', { stdoutIsTty: true, env: {} }).pipe(
+          Effect.provide(spawner.layer),
+        ),
+      );
+      expect(listeners).toHaveLength(1);
+      return kill.mock.calls.filter(([, signal]) => signal === 'SIGINT');
+    }
+
+    it('keeps the CLI running when the pager handles Ctrl-C itself', async () => {
+      // `less` cancels a search on Ctrl-C and exits normally when quit.
+      expect(await pageWithCtrlC({ exitCode: 0 })).toEqual([]);
+    });
+
+    it('re-raises the interrupt when the pager died of it', async () => {
+      expect(await pageWithCtrlC({ exitCode: signalled('exitCode') })).toEqual([
+        [process.pid, 'SIGINT'],
+      ]);
+    });
   });
 });

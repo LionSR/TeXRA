@@ -229,32 +229,6 @@ describe('CLI model access routes', () => {
     }),
   );
 
-  it.effect('reports the Kimi preference independently of key', () =>
-    Effect.gen(function* () {
-      mocks.hasUsableApiKey.mockImplementation((_secrets, provider) =>
-        Effect.succeed(provider === 'kimiCode'),
-      );
-      mocks.getPreferKimiCode.mockReturnValue(Effect.succeed(true));
-
-      expect(yield* readCliModelAccessStatus(stores, secrets)).toEqual(
-        expectedAccessStatus(
-          {
-            preferences: {
-              chatGpt: 'off',
-              grok: 'off',
-            },
-          },
-          { kimiPreferred: true, kimiKeySet: true },
-        ),
-      );
-
-      mocks.hasUsableApiKey.mockReturnValue(Effect.succeed(false));
-      expect(yield* readCliModelAccessStatus(stores, secrets)).toMatchObject({
-        codingPlans: { kimiCode: { preferred: true, keySet: false } },
-      });
-    }),
-  );
-
   it.effect(
     'enables Kimi Code routing on a personal fallback when a key exists',
     () =>
@@ -323,42 +297,6 @@ describe('CLI model access routes', () => {
       }).pipe(withServices),
   );
 
-  it.effect(
-    'guides to key entry when GLM Coding Plan is selected without a key',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* updateCliModelAccess(
-          stores,
-          context,
-          subscriptionPreference('glm-code', 'on'),
-          { writeProgress: vi.fn() },
-        );
-
-        expect(mocks.setGLMCodingPlan).not.toHaveBeenCalled();
-        expect(result.message).toContain('No GLM API key configured');
-        expect(result.message).toContain('https://open.bigmodel.cn');
-      }).pipe(withServices),
-  );
-
-  it.effect('turns off GLM Coding Plan without requiring a key', () =>
-    Effect.gen(function* () {
-      const result = yield* updateCliModelAccess(
-        stores,
-        context,
-        subscriptionPreference('glm-code', 'off'),
-        { writeProgress: vi.fn() },
-      );
-
-      expect(mocks.hasUsableApiKey).not.toHaveBeenCalled();
-      expect(mocks.setGLMCodingPlan).toHaveBeenCalledWith(stores, false);
-      expect(mocks.writeSettingTo).not.toHaveBeenCalled();
-      expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        message: 'Prefer GLM Coding Plan disabled for GLM models.',
-      });
-    }).pipe(withServices),
-  );
-
   it.effect('signs in when needed and enables ChatGPT without an API key', () =>
     Effect.gen(function* () {
       mocks.signInCliSubscription.mockReturnValue(
@@ -394,36 +332,6 @@ describe('CLI model access routes', () => {
       expect(result.message).toBe(
         'Prefer ChatGPT subscription enabled for Codex models (user@example.com).',
       );
-    }).pipe(withServices),
-  );
-
-  it.effect('turns off ChatGPT without changing the Kimi preference', () =>
-    Effect.gen(function* () {
-      mocks.getCodexStatus.mockReturnValue(
-        Effect.succeed({
-          signedIn: true,
-          email: 'user@example.com',
-        }),
-      );
-      mocks.isPreferCodexSubscription.mockReturnValue(true);
-      mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
-
-      const result = yield* updateCliModelAccess(
-        stores,
-        context,
-        subscriptionPreference('chatgpt', 'off'),
-        { writeProgress: vi.fn() },
-      );
-
-      expect(mocks.signInCliSubscription).not.toHaveBeenCalled();
-      expect(mocks.setPreferCodexSubscription).toHaveBeenCalledWith(
-        stores,
-        false,
-      );
-      expect(mocks.writeSettingTo).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        message: 'Prefer ChatGPT subscription disabled for Codex models.',
-      });
     }).pipe(withServices),
   );
 

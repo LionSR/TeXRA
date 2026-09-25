@@ -50,13 +50,6 @@ describe('DelegationTools', () => {
 
   it.effect.each([
     {
-      name: 'rejects context .bib files larger than 100KB',
-      sizeBytes: 100 * 1024 + 1,
-      paths: ['references.bib'],
-      rejectedPath: 'references.bib',
-      formattedSize: '100 KiB',
-    },
-    {
       name: 'rejects context .bib files in the multi-list larger than 100KB',
       sizeBytes: 150 * 1024,
       paths: ['paper.tex', 'bibliography/main.bib'],

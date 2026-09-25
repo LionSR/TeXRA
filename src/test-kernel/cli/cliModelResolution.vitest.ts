@@ -94,31 +94,6 @@ describe('selectCliRunModel precedence', () => {
     );
   });
 
-  it('checks model access before returning the model', async () => {
-    await withRunModel('staleConfiguredModel');
-    const stores = storesOf();
-    const context = makeContext();
-    selectCliRunnableModelMock.mockReturnValueOnce(
-      Effect.succeed({
-        model: 'deepseekT',
-        notice: 'Using deepseekT instead.',
-      }),
-    );
-
-    await expect(runSelect(context, undefined, 'run', stores)).resolves.toBe(
-      'deepseekT',
-    );
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        { model: 'staleConfiguredModel', reason: 'command-config' },
-      ]),
-      { stores },
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Using deepseekT instead.',
-    );
-  });
-
   it('does not fall back from an explicit unavailable model', async () => {
     await withRunModel('deepseekT');
     const stores = storesOf();

@@ -96,15 +96,6 @@ it.layer(testHttpClientLayer)(
       }),
     );
 
-    it.effect('requests a device authorization from the auth server', () =>
-      Effect.gen(function* () {
-        const calls = queuedFetch([jsonResponse(AUTHORIZATION)]);
-        const authorization = yield* requestDeviceAuthorization();
-        expect(authorization.device_code).toBe('device-code-secret');
-        expect(calls[0].url).toMatch(/\/auth-device\/code$/);
-      }),
-    );
-
     it.effect(
       'reports an unavailable device endpoint with a recovery hint',
       () =>

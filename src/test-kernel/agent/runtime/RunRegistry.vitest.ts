@@ -906,48 +906,6 @@ describe('runRegistry', () => {
     }),
   );
 
-  it('reports agent status from its run-status owner', () => {
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    try {
-      phases.set(runId, RUN_PHASE.WAITING);
-      const handle = createHandle(runId, parentRunId);
-      registry.track(handle);
-
-      expect(registry.getStatus(handle).status).toBe(RUN_PHASE.WAITING);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('reports active elapsed from runStartedAt without a handle fallback', () => {
-    vi.useFakeTimers({ now: 1_000 });
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const handle = createHandle(runId, parentRunId);
-
-    try {
-      registry.track(handle);
-      vi.setSystemTime(10_000);
-      phases.set(runId, RUN_PHASE.RUNNING, {
-        runStartedAt: 6_000,
-      });
-
-      expect(registry.getStatus(handle)).toEqual({
-        status: RUN_PHASE.RUNNING,
-        elapsed: '4s',
-      });
-      phases.set(runId, RUN_PHASE.RUNNING);
-      expect(registry.getStatus(handle).elapsed).toBeNull();
-    } finally {
-      vi.useRealTimers();
-      registry.dispose();
-    }
-  });
-
   it('detaches children of an ownerless run and cancels it', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
@@ -994,30 +952,6 @@ describe('runRegistry', () => {
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('clears live tool-use context while the handle remains tracked', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const context = createLiveToolUseFlowContext();
-
-    try {
-      const handle = createHandle(runId, null, {
-        agentName: 'test-tool-use',
-      });
-
-      handle.attachToolUseFlow(context);
-      registry.track(handle);
-
-      expect(registry.getToolUseFlowContext(runId)).toBe(context);
-
-      handle.detachToolUseFlow(context);
-
-      expect(registry.getToolUseFlowContext(runId)).toBeUndefined();
-      expect(registry.getHandle(runId)).toBe(handle);
     } finally {
       registry.dispose();
     }

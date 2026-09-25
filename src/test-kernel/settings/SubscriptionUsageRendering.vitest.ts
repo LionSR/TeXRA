@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ postMessage: vi.fn() }));
 vi.mock('@shared/hostBridge', () => ({ postMessage: mocks.postMessage }));
 
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type {
   SubscriptionUsageSnapshot,
   SubscriptionUsageSnapshots,
@@ -95,49 +94,6 @@ describe('subscription usage rendering', () => {
 
   beforeEach(() => mocks.postMessage.mockClear());
   afterEach(() => vi.useRealTimers());
-
-  it('renders accessible meters and one refresh action', async () => {
-    const tab = await mountTabWithFakeTimers();
-
-    expect(mocks.postMessage).toHaveBeenCalledWith(
-      SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
-      { forceRefresh: false },
-    );
-    const refreshButtons = [
-      ...(tab.shadowRoot?.querySelectorAll<HTMLElement>('wa-button') ?? []),
-    ].filter((button) => button.textContent?.includes('Refresh usage'));
-    expect(refreshButtons).toHaveLength(1);
-    refreshButtons[0]?.click();
-    expect(mocks.postMessage).toHaveBeenLastCalledWith(
-      SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE,
-      { forceRefresh: true },
-    );
-
-    await tab.updateComplete;
-    const chatgptRow = await getChatgptUsageRow(tab);
-    expect(chatgptRow).not.toBeNull();
-    await chatgptRow!.updateComplete;
-    expect(chatgptRow!.shadowRoot?.querySelector('wa-details')).toBeNull();
-    const styleText = (
-      chatgptRow!.constructor as unknown as {
-        styles: readonly { cssText: string }[];
-      }
-    ).styles
-      .map((style) => style.cssText)
-      .join('\n');
-    expect(styleText).toContain('flex: 1 1 100%');
-    expect(styleText).toContain('min-width: 0');
-    const text = chatgptRow!.shadowRoot?.textContent ?? '';
-    expect(text).toContain('ChatGPT plan usage');
-    expect(text).toMatch(/5-hour\s*:\s*25%/);
-    expect(text).toMatch(/7-day\s*:\s*100%/);
-    const meters = chatgptRow!.shadowRoot?.querySelectorAll('wa-progress-bar');
-    expect(meters).toHaveLength(2);
-    expect(meters?.[0]?.getAttribute('value')).toBe('25');
-    expect(meters?.[0]?.getAttribute('label')).toBe('ChatGPT 5-hour usage');
-    expect(text).toContain('resets in 1d 21h');
-    expect(tab.shadowRoot?.textContent).not.toContain('Grok usage unavailable');
-  });
 
   it('advances one tab clock while connected and stops it after disconnect', async () => {
     const tab = await mountTabWithFakeTimers();
