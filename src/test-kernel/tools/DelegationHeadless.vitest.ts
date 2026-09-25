@@ -302,23 +302,20 @@ function runInBand(
 }
 
 /**
- * One-shot executeAgent mock that reports a failed child via onRunError and
- * returns the same failed result, carrying the given subagent cost.
+ * One-shot executeAgent mock that returns a failed child result carrying its
+ * normalized error and the given subagent cost.
  */
 function mockExecuteAgentErrorOnce(
   totalCostUsd: number,
   extra: Record<string, unknown> = {},
 ): void {
-  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-    const failed = {
-      outcome: 'failed',
-      runId: CHILD_RUN_ID,
-      usage: { totalCost: totalCostUsd },
-      output: { category: 'toolUse', response: '', files: [] },
-      ...extra,
-    };
-    await options.onRunError?.(new Error('review model failed'), failed);
-    return failed;
+  mocks.executeAgent.mockResolvedValueOnce({
+    outcome: 'failed',
+    runId: CHILD_RUN_ID,
+    usage: { totalCost: totalCostUsd },
+    output: { category: 'toolUse', response: '', files: [] },
+    error: { message: 'review model failed', userRetryable: true },
+    ...extra,
   });
 }
 
@@ -394,7 +391,6 @@ function memoryChildRecords() {
 function recordTerminalFact(
   runId: RunId,
   turn: unknown,
-  reportedError: unknown,
   drainFailure: Error | undefined,
 ): void {
   const store = mocks.childRecords(runId) as {
@@ -404,12 +400,13 @@ function recordTerminalFact(
     outcome?: string;
     usage?: unknown;
     output?: unknown;
+    error?: { message: string };
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
   const outcome = drainFailure === undefined ? flow.outcome : 'failed';
   const flowError =
-    outcome === 'failed' && reportedError !== undefined
-      ? { kind: 'unexpected', message: toErrorMessage(reportedError) }
+    outcome === 'failed' && flow.error !== undefined
+      ? { kind: 'unexpected', message: flow.error.message }
       : undefined;
   const error =
     drainFailure === undefined
@@ -457,18 +454,9 @@ describe('headless delegation', () => {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async (signal) => {
-            let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
               turnSignal: signal,
-              onRunError: (error: unknown, result: unknown) => {
-                reportedError = error;
-                return (
-                  options as {
-                    onRunError?: (e: unknown, r: unknown) => unknown;
-                  }
-                ).onRunError?.(error, result);
-              },
             });
             // Production's lifecycle drains the facts this run queued before
             // it writes the terminal row, and the row is the post-drain fact
@@ -481,7 +469,7 @@ describe('headless delegation', () => {
                 Effect.catch((cause) => Effect.succeed(cause)),
               ),
             );
-            recordTerminalFact(runId, turn, reportedError, drainFailure);
+            recordTerminalFact(runId, turn, drainFailure);
             return turn;
           },
           catch: ensureError,
