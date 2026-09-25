@@ -14,6 +14,7 @@
 // Local imports - shared schemas and utilities
 import { formatAgentProposalFileGroup } from '@cli/runtime/approval/approvalSummaries';
 import {
+  safeTerminalText,
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
@@ -45,6 +46,8 @@ import {
 } from '../render/DiffView';
 import { elidedTextLines } from '../render/transcriptRowLines';
 
+/** Combined left padding of the two nested boxes wrapping the patch diff. */
+export const PATCH_PREVIEW_INDENT = 4;
 const MAX_HEADER_PREVIEW = 80;
 // Header chrome around the preview: `● ` plus ` (` and `)`.
 const HEADER_CHROME_COLS = 5;
@@ -284,7 +287,10 @@ function patchGroupsFromSections(
     if (section.kind !== 'diff') continue;
     const hunks = buildDiffHunks(section.oldText, section.newText);
     if (hunks.length > 0) {
-      groups.push({ fileLabel: section.fileLabel ?? fileLabel, hunks });
+      groups.push({
+        fileLabel: safeTerminalText(section.fileLabel ?? fileLabel),
+        hunks,
+      });
     }
   }
   return groups.length > 0 ? groups : undefined;
@@ -296,7 +302,8 @@ function patchTextLines(
 ): string[] {
   // Plain text only: the colored full-width bands come from the `DiffView`
   // component; these lines feed row budgeting and full-output printing.
-  const diffWidth = width === undefined ? undefined : width - 4;
+  const diffWidth =
+    width === undefined ? undefined : width - PATCH_PREVIEW_INDENT;
   return groups.flatMap((group) => [
     `${TOOL_OUTPUT_CORNER} ${group.fileLabel}`,
     ...(diffWidth === undefined
@@ -321,7 +328,7 @@ function buildStyledLines(
   const budget = toolHeaderPreviewBudget(options.width, model.headerLabel);
   const preview =
     budget > 0 && headerPreview
-      ? truncateSummaryToWidth(headerPreview, budget)
+      ? truncateSummaryToWidth(safeTerminalText(headerPreview), budget)
       : '';
   const statusColor = toolStatusColor(model);
 
@@ -329,11 +336,17 @@ function buildStyledLines(
   const sectionRows = model.sections.flatMap((section) =>
     isHeaderRedundantSection(section, headerPreview)
       ? []
-      : cornerRows(sectionLines(section, elide)),
+      : // Section values are producer text too (paths, ids, checklist
+        // items); a CR in one opens a row rather than moving the cursor.
+        cornerRows(
+          sectionLines(section, elide).flatMap((line) =>
+            safeTerminalText(line).split('\n'),
+          ),
+        ),
   );
 
-  const outputRows = model.showOutput
-    ? cornerRows(elidedLines(transcriptText(toolUse.outputText), elide))
+  const outputRows = model.output
+    ? cornerRows(elidedLines(model.output, elide))
     : [];
   const exitCode = model.isError ? model.exitCode : undefined;
   const errorRows = cornerRows(toolErrorLines(model, elide), COLOR_ERROR);
@@ -361,7 +374,10 @@ function buildStyledLines(
     toolUse.outputText
   ) {
     compactOutput.push(row([{ text: 'Full output:' }]));
-    for (const line of toolUse.outputText.split('\n')) {
+    for (const line of elidedTextLines(
+      transcriptText(toolUse.outputText),
+      false,
+    )) {
       compactOutput.push(row([{ text: line }]));
     }
   }
