@@ -559,6 +559,35 @@ describe('runRegistry', () => {
     }),
   );
 
+  it.effect('stops a detached process child through its loop signal', () =>
+    Effect.gen(function* () {
+      const { registry } = createRegistry();
+      const runId = generateRunId();
+      const loopInterrupt = vi.fn();
+      const fiberInterrupt = vi.fn();
+      try {
+        // A process child whose parent edge a detach already cut: its OS turn
+        // is reached only through the loop's signal, and its loop fiber has
+        // to survive the stop to deliver and finalize.
+        registry.reserveChildActivation({
+          runId,
+          parent: { current: null },
+          retainsTerminalParent: false,
+          interrupt: loopInterrupt,
+        });
+        trackInterruptibleHandle(registry, { runId }, fiberInterrupt);
+
+        const stop = registry.kill(runId);
+        yield* stop.settlement;
+        expect(stop.accepted()).toBe(true);
+        expect(loopInterrupt).toHaveBeenCalledOnce();
+        expect(fiberInterrupt).not.toHaveBeenCalled();
+      } finally {
+        registry.dispose();
+      }
+    }),
+  );
+
   it.effect(
     'detaches children when stopping a run with detached subagents',
     () =>

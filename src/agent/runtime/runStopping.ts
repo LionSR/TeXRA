@@ -322,10 +322,11 @@ export class RunStopper {
     }
     // A child run is its loop, not only the turn this handle runs:
     // stopping it ends the loop too, so the interrupted turn is not delivered
-    // to the parent as a completed one.
+    // to the parent as a completed one. A detached child is still a loop: its
+    // process turn is reached through the loop's signal alone.
     const activation = this.roster.activation(handle.runId);
     let activationInterrupted = false;
-    if (activation && activation.parent.current !== null) {
+    if (activation) {
       const key = `activation:${activation.runId}`;
       if (!visited.has(key)) {
         visited.add(key);
@@ -342,7 +343,10 @@ export class RunStopper {
     // so it spends the fiber target before we reach it.
     // The delivered stop is the admission, exactly as the handle-less
     // branch of `kill` reports an activation-only stop.
-    return activationInterrupted || this.roster.interrupt(handle.runId);
+    return (
+      activationInterrupted ||
+      (activation === undefined && this.roster.interrupt(handle.runId))
+    );
   }
 
   /** Stop a run no live handle holds, reporting whether there was one to
