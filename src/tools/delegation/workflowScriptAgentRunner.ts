@@ -13,6 +13,7 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
+import { RunLive } from '@agent/runtime/runRoster';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import type { AppState } from '@platform/interfaces';
@@ -20,6 +21,11 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
+import {
+  DatabaseClaimRefused,
+  DatabaseNotOwner,
+  DatabaseWriteFailed,
+} from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   resolveRunLiveness,
@@ -327,8 +333,10 @@ function probeJournal<A>(
  * for as long as its replacement is live, and the attempt whose result the
  * parent journals — recovered, or launched by this call and returned once its
  * loop released both — stays fenced until that result is durable. A claim
- * release that fails leaves every fact committed and only the claim behind, so
- * it is logged rather than failing a call whose child already answered.
+ * release that fails is a defect (`RunRoster.holdInactive` releases through
+ * `Effect.orDie`): the claim would stay behind with nothing left to release it.
+ * A claim acquisition that fails for any reason but a concurrent holder
+ * surfaces as its own error, not as a refusal.
  */
 const fenceSupersededRun = (
   runId: RunId,
@@ -337,13 +345,21 @@ const fenceSupersededRun = (
   // the same hold fiber's lifetime (`RunRoster.holdInactive`), so the two
   // can never disagree about whether this run is fenced.
   Effect.flatMap(Runs, (runs) => runs.holdInactiveRun(runId)).pipe(
-    Effect.mapError(
-      (cause) =>
+    Effect.mapError((cause) => {
+      const refuse = (holder: string) =>
         new WorkflowRunAbortError(
-          `Workflow child ${runId} is live in this session or held by a concurrent resume; refusing to repeat it.`,
+          `Workflow child ${runId} ${holder}; refusing to repeat it.`,
           { cause },
-        ),
-    ),
+        );
+      if (cause instanceof RunLive) return refuse('is live in this session');
+      const claimHeld =
+        cause instanceof DatabaseNotOwner ||
+        cause instanceof DatabaseClaimRefused ||
+        (cause instanceof DatabaseWriteFailed &&
+          cause.cause instanceof DatabaseClaimRefused);
+      // Any other acquisition failure is the database's own, not a refusal.
+      return claimHeld ? refuse('is held by a concurrent resume') : cause;
+    }),
   );
 
 /** Runaway backstop on the attempt probe, not a retry policy. */
