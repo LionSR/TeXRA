@@ -376,15 +376,6 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 applyTheme();
 
-/** The task on screen, named in the conversation header: the rail
- *  already names its project. */
-function conversationTitle(project: RailProject | undefined): string {
-  if (!project) return '';
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  return run ? (run.description ?? run.label) : 'New task';
-}
-
 function shellConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
@@ -435,9 +426,7 @@ function shellConversationTemplate(): TemplateResult {
   // a row of its own to drag the window by.
   render(
     html`<span slot="header-start" class="shell-header-start"
-        >${sidebarToggle}<span class="shell-header-title"
-          >${conversationTitle(activeProject)}</span
-        ></span
+        >${sidebarToggle}</span
       ><span slot="header-end" class="shell-header-end"
         >${subagentsButtonTemplate(activeProject, () =>
           currentWorkbench().workbench.openKind('subagents'),
