@@ -367,6 +367,53 @@ pipeline behind a boundary.
   not. This is unexplained, and PR 2 should find out why before porting the
   connector.
 
+## Later: model-directed reflection
+
+Round mode is the parity step. Once it lands, the main limit on workflow
+agents is that every round after the first runs a prompt written in advance.
+`polish.yaml`'s second `userRequest` is a fixed checklist: missing equations,
+notation used before it is defined, generic filler, changes the instruction
+did not ask for. That costs three ways:
+
+- **It asks instead of looking.** Every run gets the same questions whatever
+  actually went wrong. A strong model's real mistakes are rarely on that list.
+- **It pushes toward editing.** A fixed critique prompt nudges the model to
+  change something, so the template has to add "do not invent weaknesses"
+  and "reproduce it unchanged".
+- **It always pays for a full second pass.** Round 2 regenerates the whole
+  document even when round 1 was right.
+
+The proposed mode splits each later round into a critique and a revision:
+
+1. **Critique turn.** The model reviews round _n_ against the instruction, the
+   original and evidence rather than questions: the latexdiff of the round,
+   compile output and chktex warnings. It writes a specific list of problems
+   with locations, or "nothing to fix".
+2. **Stop or revise.** "Nothing to fix" finishes the run and saves the
+   regeneration. Otherwise the critique is the next round's user message.
+3. **The checklist becomes a rubric.** Today's `userRequest[1]` text stays in
+   the YAML as hints the critique may use, not as the instruction. Domain
+   rules such as `\tr` and non-breaking references stay; the scripted
+   conversation goes.
+4. **Where the critique runs.** First as a turn in the same conversation,
+   where the cached prefix makes it cheap. Later, optionally, as a critic
+   subagent on another model.
+
+It is a different round policy, not a loop change. The policy's `nextRound`
+returns the critique's output instead of `userRequest[n]`, and its idle
+decision may finish early. Two follow-ons build on it: the checks the
+critique reads (compile, references, chktex, a Lean proof check) become
+plugin contributions, and the run stops when they pass. Once workflow agents
+may declare read and verify tools, the revision can patch the flagged spots
+instead of reprinting the document.
+
+**Not breaking what exists.** The mode is opt-in through an agent YAML field,
+for example `reflection: critique`. Bundled agents keep `userRequest[1]` until
+an evaluation on a fixed set of papers with the cheap test models shows the
+new mode is better on diff size, compile and chktex failures, cost and a
+blind judge's preference. The comparison is itself the harness improving
+under measurement: the change stays only if the numbers say so.
+
 ## Not in scope
 
 - Offering tools to workflow agents. Round mode makes it possible, since the
