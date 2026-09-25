@@ -168,13 +168,12 @@ export function childCompositionRefusal(
   const outside = declaredToolNames(tools).flatMap((tool) => {
     const server = mcpServerOfToolName(tool);
     if (server === undefined) return [];
-    const plugin = mcpPluginId(server);
-    return loaded.has(plugin) ? [] : [{ tool, plugin }];
+    return loaded.has(mcpPluginId(server)) ? [] : [{ tool, server }];
   });
   if (outside.length === 0) return undefined;
-  const plugins = [...new Set(outside.map(({ plugin }) => plugin))];
+  const servers = [...new Set(outside.map(({ server }) => `"${server}"`))];
   return [
-    `Subagent${agentName ? ` '${agentName}'` : ''} was not launched: it declares ${outside.map(({ tool }) => tool).join(', ')}, from ${plugins.join(', ')}, which this run's tool composition does not include.`,
+    `Subagent${agentName ? ` '${agentName}'` : ''} was not launched: it declares ${outside.map(({ tool }) => tool).join(', ')}, from MCP server${servers.length > 1 ? 's' : ''} ${servers.join(', ')}, which this run's tool composition does not include.`,
     "A subagent can only narrow its parent's tools: declare the plugin on the parent agent, or delegate to an agent that does not need it.",
   ].join(' ');
 }

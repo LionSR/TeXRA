@@ -166,7 +166,7 @@ describe('tool-use tool resolution', () => {
           resolve(['grep', 'mcp__candidate__*'], false, parent.pinned.key),
         );
         expect(refused.message).toContain('mcp__candidate__*');
-        expect(refused.message).toContain('mcp:candidate');
+        expect(refused.message).toContain('MCP server "candidate"');
       }).pipe(
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
