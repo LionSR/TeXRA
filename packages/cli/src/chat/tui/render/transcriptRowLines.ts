@@ -19,7 +19,7 @@ import { formatBytes } from '@utils/text/stringUtils';
 
 // A body block can be arbitrarily large (a 50 KB tool dump, a long error
 // payload). Finalized scrollback and the live region show a head+tail slice
-// with a `… +N lines` marker; the untruncated text stays on the row and is
+// with a `… N lines hidden` marker; the untruncated text stays on the row and is
 // printed in full by the ctrl+t reader. Tune head/tail here.
 const ROW_BODY_HEAD_LINES = 6;
 const ROW_BODY_TAIL_LINES = 3;

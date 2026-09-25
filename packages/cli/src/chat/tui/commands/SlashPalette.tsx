@@ -40,7 +40,7 @@ interface SlashPaletteWindow {
 // Wraparound highlight stepping is shared with `ui/Select.tsx`. The window
 // below stays local: scrolling through the middle of a long list shows one
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
-// earlier" / "… N more") can be visible at once — unlike `Select`'s simple
+// previous rows" / "… N more rows") can be visible at once — unlike `Select`'s simple
 // centered `visibleSelectRange`.
 export function slashPaletteWindow({
   highlight,
