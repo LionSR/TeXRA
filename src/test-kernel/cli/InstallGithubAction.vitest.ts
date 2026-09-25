@@ -11,11 +11,11 @@ import { runCli } from '@cli/commands/root';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { parseGitHubSlug } from '@tools/github/githubSlug';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
 const browserMocks = vi.hoisted(() => ({
   tryOpenBrowser: vi.fn(),

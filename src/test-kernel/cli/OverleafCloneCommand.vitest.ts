@@ -11,13 +11,13 @@ import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { overleafGitClone } from '@latex/overleafProject';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import type * as ChildProcess from 'effect/unstable/process/ChildProcess';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 
 const mocks = vi.hoisted(() => ({
   deleteSecret: vi.fn(),
