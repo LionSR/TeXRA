@@ -85,7 +85,6 @@ interface InputBarProps {
 
 export interface InputBarHandle {
   readonly appendInput: (input: string) => void;
-  readonly discardDraft: () => boolean;
 }
 
 export function slashSubmitText(
@@ -128,8 +127,15 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const historyBrowseRef = useRef<
     { index: number; savedDraft: string; applied: string } | undefined
   >(undefined);
+  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
+  // by chip id and are expanded back into the submitted text at handleSubmit.
+  // Ref-held so the store survives re-renders and never triggers one itself.
+  // An emptied draft holds no chip, so it drops them, whichever path emptied
+  // it (a submit, or the input's own Ctrl-C discard).
+  const attachmentsRef = useRef(new DraftAttachmentStore());
   const setValue = useCallback((next: string) => {
     draftValueRef.current = next;
+    if (next === '') attachmentsRef.current.clear();
     if (next !== historyBrowseRef.current?.applied) {
       historyBrowseRef.current = undefined;
     }
@@ -155,14 +161,9 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   imagePasteQueueRef.current ??= new ImagePasteQueue();
   const imagePasteQueue = imagePasteQueueRef.current;
 
-  // Collapsed pastes (and, in the image slice, pasted images) live here keyed
-  // by chip id and are expanded back into the submitted text at handleSubmit.
-  // Ref-held so the store survives re-renders and never triggers one itself.
-  const attachmentsRef = useRef(new DraftAttachmentStore());
   const clearDraft = useCallback(() => {
     imagePasteQueue.discardPending();
     setValue('');
-    attachmentsRef.current.clear();
   }, [imagePasteQueue, setValue]);
   const clearDraftEdit = useCallback<CursorEdit>(() => {
     clearDraft();
@@ -172,21 +173,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     (input: string): void => setValue(`${draftValueRef.current}${input}`),
     [setValue],
   );
-  const discardDraft = useCallback((): boolean => {
-    if (
-      draftValueRef.current.length === 0 &&
-      !imagePasteQueue.hasPending &&
-      !imagePasteQueue.hasDeferredAction
-    ) {
-      return false;
-    }
-    clearDraft();
-    return true;
-  }, [clearDraft, imagePasteQueue]);
-  useImperativeHandle(props.controlRef, () => ({ appendInput, discardDraft }), [
-    appendInput,
-    discardDraft,
-  ]);
+  useImperativeHandle(props.controlRef, () => ({ appendInput }), [appendInput]);
   const replaceSlashTriggerInput = useCallback(
     (input: string, value: string, cursor: number) => {
       if (value === '/' && cursor === 1 && input.startsWith('/')) {

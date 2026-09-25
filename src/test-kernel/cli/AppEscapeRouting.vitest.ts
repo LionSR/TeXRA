@@ -19,6 +19,7 @@ import {
   currentApproval,
   type ApprovalPayload,
 } from '@cli/chat/tui/state/approvalQueue';
+import { takeActiveForm } from '@cli/chat/tui/state/formSlot';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import type { InputHistory } from '@cli/chat/tui/history/inputHistory';
 import {
@@ -367,6 +368,29 @@ describe('App foreground Escape ownership', () => {
       instance.unmount();
     }
   });
+  it('mounts a form that takes the slot with its own state', async () => {
+    seedRootRun();
+    const { ink, React } = await loadInk();
+    function Probe({ label }: { readonly label: string }) {
+      const [shown] = React.useState(label);
+      return React.createElement(ink.Text, null, `form:${shown}`);
+    }
+    const openProbe = (label: string): void =>
+      takeActiveForm({
+        commandName: 'probe',
+        render: () => React.createElement(Probe, { label }),
+      });
+    const { instance, stdout } = await renderRoutingApp();
+    try {
+      openProbe('first');
+      await waitFor(() => stdout.output.includes('form:first'));
+      openProbe('second');
+      await waitFor(() => stdout.output.includes('form:second'));
+    } finally {
+      instance.unmount();
+    }
+  });
+
   it('lets a foreground information pane own Escape before child back', async () => {
     seedChildHierarchy();
     focusRun(CHILD);

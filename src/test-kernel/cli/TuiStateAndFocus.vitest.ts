@@ -175,6 +175,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'keeps foreground approval and form surfaces inside the middle row budget',
       options: {
+        footerRows: 5,
         foregroundOpen: true,
         reverseSearchOpen: false,
         rows: 24,
@@ -186,8 +187,8 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'returns disabled input rows to tiny foreground surfaces',
       options: {
+        footerRows: 2,
         foregroundOpen: true,
-        inputVisible: false,
         reverseSearchOpen: false,
         rows: 10,
         slashPaletteOpen: false,
@@ -198,6 +199,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'can cap compact foreground surfaces on tall terminals',
       options: {
+        footerRows: 5,
         foregroundMaxRows: 12,
         foregroundOpen: true,
         reverseSearchOpen: false,
@@ -210,6 +212,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'uses the whole middle region for the transcript without foreground UI',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: false,
         rows: 24,
@@ -221,6 +224,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'reserves queued follow-up panel rows above the stable input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         reverseSearchOpen: false,
@@ -233,6 +237,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'accounts for capped static transcript rows above the stable input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         queuedFollowUpPanelRows: 3,
         reverseSearchOpen: false,
@@ -254,6 +259,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'reserves rows for reverse-search input chrome',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: true,
         rows: 24,
@@ -265,6 +271,7 @@ describe('CLI TUI row allocation', () => {
     {
       name: 'returns former header rows to the transcript when slash palette is open',
       options: {
+        footerRows: 5,
         foregroundOpen: false,
         reverseSearchOpen: false,
         rows: 24,
