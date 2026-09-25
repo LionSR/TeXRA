@@ -23,19 +23,16 @@ import * as path from 'node:path';
 
 import { Effect } from 'effect';
 
-import { isModuleNotFoundError } from '@common/errors';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import type { CodexSandboxMode } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
+import { readSettingUnlessOverridden } from '@utils/config/platformSettings';
 import { IS_WINDOWS } from '@utils/system/platformPaths';
 
 import {
   createCachedBinaryResolver,
+  importForeignSdk,
   resolvePackageDir,
-  resolveSdkExport,
 } from './support/externalBinaryUtils';
 
 // The native `Codex` class value; `typeof` gives its construct signature
@@ -54,34 +51,19 @@ type PlatformInfo = { pkg: string; triple: string };
  * The SDK is ESM-only, but esbuild converts it to CJS at build time (it must
  * NOT be listed in esbuild's `external` array). The dynamic import() here is
  * converted to require() by esbuild, so it works in VS Code's extension host.
- * That import is this module's one foreign edge and is wrapped exactly once,
- * here; a missing package is re-stated as install guidance with the original
- * attached as `cause`, so callers classify it off the cause chain rather than
- * the message text.
+ * That import is this module's one foreign edge, kept inline as a literal for
+ * esbuild's benefit; {@link importForeignSdk} wraps everything downstream of
+ * it (the shape shared with `importClaudeAgentSdk`).
  */
 export function importCodexClass(): Effect.Effect<CodexConstructor, Error> {
-  return Effect.tryPromise({
-    try: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
-    catch: (err) =>
-      isModuleNotFoundError(err)
-        ? new Error(
-            '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
-            { cause: err },
-          )
-        : ensureError(err),
-  }).pipe(
-    Effect.flatMap((mod) =>
-      Effect.try({
-        try: () =>
-          resolveSdkExport<CodexConstructor>(mod, {
-            exportName: 'Codex',
-            specifier: '@openai/codex-sdk',
-            errorLabel: 'Codex class',
-          }),
-        catch: ensureError,
-      }),
-    ),
-  );
+  return importForeignSdk<CodexConstructor>({
+    load: (): Promise<Record<string, unknown>> => import('@openai/codex-sdk'),
+    notFoundMessage:
+      '@openai/codex-sdk package not found. Install with: npm install -g @openai/codex',
+    exportName: 'Codex',
+    specifier: '@openai/codex-sdk',
+    errorLabel: 'Codex class',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -195,9 +177,8 @@ export const codexSandboxMode = (
   input: { readonly sandbox_mode?: SandboxMode | null },
   stores: SettingsStores,
 ): Effect.Effect<SandboxMode, StateReadFailed> =>
-  input.sandbox_mode == null
-    ? readSettingFrom<CodexSandboxMode>(
-        stores,
-        WorkspaceStateKey.CODEX_SANDBOX_MODE,
-      )
-    : Effect.succeed(input.sandbox_mode);
+  readSettingUnlessOverridden(
+    input.sandbox_mode,
+    stores,
+    WorkspaceStateKey.CODEX_SANDBOX_MODE,
+  );
