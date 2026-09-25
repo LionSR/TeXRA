@@ -27,7 +27,7 @@ import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 import {
   ModelError,
   ResolvedTurnSchema,
@@ -92,7 +92,6 @@ import {
   seedActiveRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
-import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
 const RETRY_BACKOFF_MS = 1000;
@@ -306,7 +305,7 @@ function agentRun(
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
-    callbacks: { onModelChanged: () => undefined },
+    callbacks: {},
   };
 }
 

@@ -7,7 +7,6 @@ import {
   dismissOnboarding,
   launchTexraApp,
   showLauncher,
-  setSettingsTab,
   type LaunchedApp,
 } from './electronApp.js';
 

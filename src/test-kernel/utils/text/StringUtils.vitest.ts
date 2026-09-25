@@ -4,12 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import {
   formatTimestamp,
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatResultCount,
-  pluralize,
-  splitContentLines,
-  splitOutputLines,
   tailWithEllipsis,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';

@@ -49,7 +49,6 @@ import {
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
-  RUN_PHASE,
   type RetryErrorInfo,
   type RunId,
 } from '@shared/schemas';
@@ -316,7 +315,6 @@ function agentRunTestLayer(init: LoopInit) {
           { agentName: 'chat', agentCategory: AgentCategory.ToolUse },
         ),
         callbacks: {
-          onModelChanged: vi.fn(),
           ...(init.onIdle ? { onIdle: init.onIdle } : {}),
         },
       } satisfies AgentRunShape;

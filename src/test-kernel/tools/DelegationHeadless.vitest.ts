@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import {
   afterEach,
   beforeEach,

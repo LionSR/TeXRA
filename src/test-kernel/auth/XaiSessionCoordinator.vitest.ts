@@ -1,20 +1,18 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { XaiAuthError } from '@auth/xai';
 import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
 import type {
   SubscriptionOAuthClient,
   SubscriptionSessionStorage,
 } from '@auth/oauth/SubscriptionOAuthCoordinator';
-import type { XaiSession, XaiTokenResponse } from '@auth/xai/xaiSessionTypes';
+import type { XaiSession } from '@auth/xai/xaiSessionTypes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const NOW = 1_900_000_000_000;
-const FIVE_MIN = 5 * 60 * 1000;
 
 function memoryStorage(initial?: XaiSession): SubscriptionSessionStorage & {
   peek: () => XaiSession | undefined;
@@ -34,40 +32,11 @@ function memoryStorage(initial?: XaiSession): SubscriptionSessionStorage & {
   };
 }
 
-function session(overrides: Partial<XaiSession> = {}): XaiSession {
-  return {
-    accessToken: 'access-0',
-    refreshToken: 'refresh-0',
-    expiresAtMs: NOW + 60 * 60 * 1000,
-    email: 'user@x.ai',
-    ...overrides,
-  };
-}
-
-function tokens(overrides: Partial<XaiTokenResponse> = {}): XaiTokenResponse {
-  return {
-    access_token: 'access-1',
-    refresh_token: 'refresh-1',
-    expires_in: 3600,
-    ...overrides,
-  };
-}
-
 function makeCoordinator(options: {
   storage: SubscriptionSessionStorage;
   client?: SubscriptionOAuthClient;
 }): XaiSessionCoordinator {
   return new XaiSessionCoordinator({ ...options, now: () => NOW });
-}
-
-function makeClient(
-  overrides: Partial<SubscriptionOAuthClient> = {},
-): SubscriptionOAuthClient {
-  return {
-    exchangeAuthorizationCode: vi.fn(),
-    refreshTokens: vi.fn(),
-    ...overrides,
-  };
 }
 
 describe('XaiSessionCoordinator', () => {

@@ -17,7 +17,6 @@ import type {
   CodexSession,
   CodexTokenResponse,
 } from '@auth/codex/codexSessionTypes';
-import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
 

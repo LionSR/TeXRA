@@ -14,10 +14,7 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
-import {
-  createFakePlatform,
-  FakeScopedConfigProvider,
-} from '@test/support/FakePlatform';
+import { FakeScopedConfigProvider } from '@test/support/FakePlatform';
 import {
   jsonResponse,
   testHttpClientLayer,

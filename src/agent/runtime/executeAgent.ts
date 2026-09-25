@@ -118,12 +118,6 @@ function runLayerFor(
             }
             shared.onProgress?.(update);
           },
-          onModelChanged: (model) => {
-            // The cell is the live model; usage accounting and the prompt
-            // side MODEL variable read it directly. This one mirror remains
-            // because config.model is a persisted AgentConfig schema field.
-            ctx.config.model = model;
-          },
           ...(onIdle ? { onIdle } : {}),
         },
       }),

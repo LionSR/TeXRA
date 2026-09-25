@@ -3,7 +3,7 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, expect, vi } from 'vitest';
+import { afterEach, expect } from 'vitest';
 
 import {
   installPlugins,
@@ -33,13 +33,6 @@ const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
-const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
-
-vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
-  initCliPlatform: commandMocks.initCliPlatform,
-}));
-
 async function writeSkill(
   root: string,
   dirName: string,
@@ -55,7 +48,6 @@ async function writeSkill(
 
 afterEach(() => {
   installTestSkillRoots([]);
-  commandMocks.initCliPlatform.mockReset();
 });
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {

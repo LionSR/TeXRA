@@ -11,7 +11,7 @@ import {
   refreshOAuthTokens,
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
-import { oauthTokenErrorKind, postOAuth } from '@auth/oauth/oauthRequest';
+import { postOAuth } from '@auth/oauth/oauthRequest';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const TokenSchema = z.object({

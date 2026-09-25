@@ -9,12 +9,7 @@ import {
   type ModelConfig,
 } from 'llm-zoo';
 
-import {
-  computeCodeChallenge,
-  generateCodeVerifier,
-  generateOAuthState,
-  generatePkcePair,
-} from '@auth/oauth/pkce';
+import { computeCodeChallenge } from '@auth/oauth/pkce';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 
 /** A minimal OpenAI `ModelConfig` fixture, overridable per test. */

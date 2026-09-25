@@ -7,11 +7,7 @@ import { LATEX_CONFIG_DEFAULTS } from '@shared/constants/latexConfig';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
-import {
-  getProviderEndpoint,
-  getProviderKeyUrl,
-  getUseOpenRouter,
-} from '@utils/config/providerConfig';
+import { getProviderEndpoint } from '@utils/config/providerConfig';
 import { readSettingFrom } from '@utils/config/platformSettings';
 
 afterEach(() => {
