@@ -514,19 +514,19 @@ export function openrouterChatModel(
           message: 'The OpenRouter connection failed.',
           cause,
         });
-      /** One SDK request failure, classified once from the facts it carries. */
+      /** One SDK request failure; any OpenRouterError is a reply, not ours. */
       const requestFailure = Effect.fn('llm.openrouterRequestFailure')(
         function* (error: unknown) {
-          if (error instanceof SDKValidationError)
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message: 'OpenRouter refused to encode this request.',
-              cause: error,
-            });
           if (!(error instanceof OpenRouterError))
-            return yield* transportFailure(
-              error instanceof HTTPClientError ? error.cause : error,
-            );
+            return yield* error instanceof SDKValidationError
+              ? new ModelError({
+                  kind: 'invalid-request',
+                  message: 'OpenRouter refused to encode this request.',
+                  cause: error,
+                })
+              : transportFailure(
+                  error instanceof HTTPClientError ? error.cause : error,
+                );
           const status = error.statusCode;
           if (status < 400)
             return yield* new ModelError({

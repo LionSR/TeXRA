@@ -128,7 +128,8 @@ function response(body: BodyInit, status = 200): Response {
   return new Response(body, {
     status,
     headers: {
-      'Content-Type': 'text/event-stream',
+      // An HTTP rejection is JSON, so the SDK's typed error schemas parse it.
+      'Content-Type': status === 200 ? 'text/event-stream' : 'application/json',
       'X-Request-ID': 'request-1',
     },
   });
@@ -666,6 +667,7 @@ describe('native OpenRouter Chat', () => {
   it.effect.each([
     [401, 401],
     [429, 429],
+    [503, 503],
     [503, 'overloaded'],
     [200, 502],
   ] as const)(
