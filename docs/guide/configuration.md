@@ -115,8 +115,7 @@ variables `TEXRA_NO_TELEMETRY=1` and `DO_NOT_TRACK=1` also disable telemetry.
 When telemetry is enabled and you are signed in, TeXRA records model and
 provider names, agent category, token counts, cost, response time, route,
 stream identifier, version, and host. It does not send prompt text, document
-content, or file names. Turning telemetry off stops reporting for runs billed
-through your own provider key.
+content, or file names. Turning telemetry off stops all usage reporting.
 
 ## File discovery
 
