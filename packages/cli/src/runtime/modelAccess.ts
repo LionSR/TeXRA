@@ -153,7 +153,7 @@ function formatModelAccessStatus(model: ModelOptionData): string {
  * The picker row's access, naming the coding plan when one pays for the next
  * request (the row's `usageRoute`, decided by the picker).
  */
-export function formatModelStatusForCli(model: CliModelAccess): string {
+function formatModelStatusForCli(model: CliModelAccess): string {
   const route = model.usageRoute;
   return route === 'kimi-code-subscription' ||
     route === 'glm-coding-plan-subscription'
