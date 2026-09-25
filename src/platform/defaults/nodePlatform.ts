@@ -19,7 +19,11 @@
  *   its loser to finish interrupting and a scope close is uninterruptible.
  *   Past the budget a still-running child gets one SIGKILL and a warning
  *   naming its pid; the detached close keeps running and reaps a late exit.
- *   `handle.kill` gets the same budget. The budget is upstream's own bounded
+ *   `handle.kill` gets the same budget, so a kill with no `forceKillAfter`
+ *   escalates to SIGKILL after about 2 s where upstream waited forever. The
+ *   close runs on a detached fiber: a failure inside the budget is re-raised
+ *   to the caller's scope, and one that lands later is logged at warn. The
+ *   budget is upstream's own bounded
  *   tail (`forceKillAfter` plus its grace) plus slack, so a shutdown phase
  *   now waits at most one bounded close per child. For a command with the
  *   5 s `forceKillAfter` most callers pass that is 7 s on POSIX and 9 s on
@@ -62,8 +66,10 @@ import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcess
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import {
+  Cause,
   Duration,
   Effect,
+  Exit,
   Fiber,
   type FileSystem,
   Layer,
@@ -129,7 +135,8 @@ const leadsGroup = (command: ChildProcess.StandardCommand): boolean =>
 
 /** Past its budget: one SIGKILL to a child still running, then a warning
  *  naming the pid. The pid is signalled only while Node has not seen its
- *  exit, so a reused pid is never hit. Without a handle (a spawn that failed
+ *  exit, so a reused pid is not hit here; the exit listener's sweep can race
+ *  a reap by milliseconds (see `killLive`). Without a handle (a spawn that failed
  *  or was interrupted after upstream acquired a stage) there is no pid to
  *  signal, only the warning. */
 const stopWaiting = (
@@ -217,16 +224,18 @@ const supervisedSpawner = Layer.effect(
           const forget = (pid: number) => {
             if (live.get(pid) === entry) live.delete(pid);
           };
-          const spawned: { handle?: ChildProcessHandle } = {};
-          // Registered before the spawn, so a failed or interrupted spawn
-          // still closes the child scope, under the same budget.
-          yield* Effect.addFinalizer((exit) => {
-            const { handle } = spawned;
-            const budgetMs = teardownBudgetMillis(
-              command,
-              (stage) => stage.options,
-            );
-            return Effect.gen(function* () {
+          // Close the child scope under the budget, on a detached fiber: a
+          // close failure inside the budget is the caller's, a late one is
+          // logged, and past the budget a running child is SIGKILLed.
+          const closeChild = (
+            handle: ChildProcessHandle | undefined,
+            exit: Exit.Exit<unknown, unknown>,
+          ) =>
+            Effect.gen(function* () {
+              const budgetMs = teardownBudgetMillis(
+                command,
+                (stage) => stage.options,
+              );
               const closing = yield* Scope.close(child, exit).pipe(
                 Effect.ensuring(
                   Effect.sync(() => {
@@ -238,15 +247,36 @@ const supervisedSpawner = Layer.effect(
               const closed = yield* Fiber.await(closing).pipe(
                 Effect.timeoutOption(budgetMs),
               );
-              if (Option.isNone(closed)) {
-                yield* stopWaiting(handle, command, budgetMs, 'scope close');
+              if (Option.isSome(closed)) {
+                if (Exit.isFailure(closed.value)) {
+                  return yield* Effect.failCause(closed.value.cause);
+                }
+                return;
               }
+              yield* stopWaiting(handle, command, budgetMs, 'scope close');
+              yield* Fiber.await(closing).pipe(
+                Effect.flatMap((late) =>
+                  Exit.isFailure(late) && !Cause.hasInterruptsOnly(late.cause)
+                    ? Effect.logWarning(
+                        `Late teardown of child process ${handle?.pid ?? lastStage(command).command} failed: ${Cause.pretty(late.cause)}`,
+                      )
+                    : Effect.void,
+                ),
+                withLogChannel(CHANNEL),
+                Effect.forkDetach,
+              );
             });
-          });
+          // A failed or interrupted spawn closes its child scope at once, so
+          // nothing is left on the caller's scope; a live child's close is
+          // registered only once it exists.
           const handle = yield* restore(
             inner.spawn(command).pipe(Scope.provide(child)),
+          ).pipe(
+            Effect.onError((cause) =>
+              closeChild(undefined, Exit.failCause(cause)),
+            ),
           );
-          spawned.handle = handle;
+          yield* Effect.addFinalizer((exit) => closeChild(handle, exit));
           live.set(handle.pid, entry);
           // Leaves the set on exit; a close that interrupts this watcher
           // leaves the entry to the close, so a stuck child stays killable.
