@@ -87,10 +87,12 @@ export function installTerminalTitleUpdates(
     stopSharedTick?.();
     stopSharedTick = undefined;
   };
-  const updateTitle = (title: string): void => {
-    if (title === lastTitle) return;
+  /** False when the terminal takes no OSC title, so nothing animates it. */
+  const updateTitle = (title: string): boolean => {
+    if (title === lastTitle) return true;
+    if (!writeOsc(osc(`0;${title}`))) return false;
     lastTitle = title;
-    writeOsc(osc(`0;${title}`));
+    return true;
   };
   // Frame is derived from wall time via `loadingFrameAt`, the same 1 Hz
   // rotation `LoadingIndicator` and the status bar use, so the tab title
@@ -98,8 +100,7 @@ export function installTerminalTitleUpdates(
   const runningTitle = (): string =>
     terminalTitleText(cwd, 'running', loadingFrameAt(Date.now(), TITLE_FRAMES));
   const startRunningAnimation = (): void => {
-    if (stopSharedTick !== undefined) return;
-    updateTitle(runningTitle());
+    if (stopSharedTick !== undefined || !updateTitle(runningTitle())) return;
     stopSharedTick = subscribeToPolling(1000, () =>
       updateTitle(runningTitle()),
     );
