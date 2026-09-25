@@ -19,19 +19,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import * as NodeChildProcessSpawner from '@effect/platform-node/NodeChildProcessSpawner';
-import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
-import * as NodePath from '@effect/platform-node/NodePath';
-import {
-  Data,
-  Duration,
-  Effect,
-  Exit,
-  Layer,
-  Ref,
-  Scope,
-  Stream,
-} from 'effect';
+import { Data, Duration, Effect, Exit, Ref, Scope, Stream } from 'effect';
 import {
   ChildProcess,
   type ChildProcessSpawner,
@@ -353,18 +341,17 @@ const connect = (config: McpServerConfig) =>
     return tools;
   });
 
-/** The spawner the server runs under, over Node's filesystem and path. */
-const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
-);
-
 /**
  * Bring `config`'s server up in the caller's scope, answering its tools, or
  * its failure (with the process already stopped) and none.
  */
 export const acquireMcpServer = (
   config: McpServerConfig,
-): Effect.Effect<LoadedPluginTools, never, Scope.Scope> =>
+): Effect.Effect<
+  LoadedPluginTools,
+  never,
+  Scope.Scope | ChildProcessSpawner.ChildProcessSpawner
+> =>
   Effect.gen(function* () {
     const scope = yield* Scope.fork(yield* Effect.scope, 'sequential');
     const result = yield* connect(config).pipe(
@@ -378,7 +365,6 @@ export const acquireMcpServer = (
           ),
       }),
       Scope.provide(scope),
-      Effect.provide(spawnerLayer),
       Effect.result,
     );
     if (result._tag === 'Success') return { tools: result.success };

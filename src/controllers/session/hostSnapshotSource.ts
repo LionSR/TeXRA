@@ -27,6 +27,7 @@ import type {
   HostSnapshot,
   ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];
 
@@ -71,7 +72,8 @@ interface HostSnapshotSourceOptions {
   >;
   readRecentCommits(): Effect.Effect<
     { commits: string[]; isGitRepo: boolean },
-    HostSnapshotReadFailed
+    HostSnapshotReadFailed,
+    ChildProcessSpawner
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
@@ -84,7 +86,8 @@ interface HostSnapshotSourceOptions {
   >;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
-    HostSnapshotReadFailed
+    HostSnapshotReadFailed,
+    ChildProcessSpawner
   >;
   /** Write directly to the bridge's host snapshot, which its runs replay. */
   publish(snapshot: HostSnapshot): Effect.Effect<void>;
@@ -96,7 +99,7 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    AgentCatalogServices | LanguageModel
+    AgentCatalogServices | LanguageModel | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
@@ -107,9 +110,13 @@ export interface HostSnapshotSource {
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
-  readonly refreshCommits: Effect.Effect<void>;
+  readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<void, never, LanguageModel>;
+  readonly refreshHostBanners: Effect.Effect<
+    void,
+    never,
+    LanguageModel | ChildProcessSpawner
+  >;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
@@ -248,12 +255,9 @@ export function createHostSnapshotSource(
   const catalogLoads = [loadAgents, loadTeams, loadModels];
 
   return {
-    refresh: guarded<AgentCatalogServices | LanguageModel>(
-      ...catalogLoads,
-      loadFiles,
-      loadCommits,
-      loadHostBanners,
-    ),
+    refresh: guarded<
+      AgentCatalogServices | LanguageModel | ChildProcessSpawner
+    >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
     refreshCatalogs: guarded<AgentCatalogServices | LanguageModel>(
       ...catalogLoads,
     ),

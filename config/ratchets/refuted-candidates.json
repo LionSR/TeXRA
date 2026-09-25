@@ -80,7 +80,7 @@
         {
           "file": "src/utils/system/execUtils.ts",
           "symbol": "executeCommand",
-          "signature": "export function executeCommand( command: string | string[], options: ExecuteCommandBaseOptions, ): Effect.Effect<ExecResult> {…}"
+          "signature": "export const executeCommand = Effect.fn('executeCommand')(function* ( command: string | string[], options: ExecuteCommandBaseOptions, ): Effect.fn.Return<ExecResult, never, ChildProcessSpawner> {…});"
         }
       ]
     },

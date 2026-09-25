@@ -11,6 +11,7 @@ import { nullishWithDefault } from '@tools/core/inputSchema';
 import { executed } from '@tools/core/result';
 import { ensureArray } from '@utils/core';
 import { formatResultCount } from '@utils/text/stringUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const TexcountInputSchema = z.strictObject({
   files: z
@@ -30,7 +31,11 @@ type TexcountInput = z.infer<typeof TexcountInputSchema>;
 
 const texcount = Effect.fn('TexcountTool.execute')(function* (
   input: TexcountInput,
-): Effect.fn.Return<ToolResult, ToolError, FileSystem.FileSystem | ToolCall> {
+): Effect.fn.Return<
+  ToolResult,
+  ToolError,
+  FileSystem.FileSystem | ToolCall | ChildProcessSpawner
+> {
   const call = yield* ToolCall;
   const files = ensureArray(input.files)
     .map((file) => file.trim())

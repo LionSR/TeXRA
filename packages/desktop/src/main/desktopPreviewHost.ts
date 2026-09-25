@@ -33,6 +33,7 @@ import {
   tryShowInRenderer,
   type DesktopOverlayPostOptions,
 } from './desktopIpcTypes.js';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 interface DesktopShellAdapter {
   openExternal(url: string): Promise<void>;
@@ -209,7 +210,7 @@ export function createDesktopPreviewHost(
   ): Effect.Effect<
     void,
     PreviewUnavailable,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     return Effect.gen(function* () {
       const sourcePath = fileLocation.absolutePath;

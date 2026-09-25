@@ -49,29 +49,32 @@ const { globalStorage } = createFakeWorkspaceRoots();
  *  process service, so it builds once however many sessions open. */
 export const identityReads = { count: 0 };
 
-initTestProcessRuntime(
-  installProcessRuntime({
-    processStart: Effect.sync(() => {
-      identityReads.count += 1;
-      return 'vitest';
-    }),
-    globalStorage,
-    secrets: fakeHostSecrets,
-    appState: AppState.layer(fakeHostAppState),
-    // Suites swap the account plane with their host; the default host's
-    // answers signed-out.
-    auth: fakeHostAuth,
-    languageModel: fakeHostLanguageModel,
-    agentResume: fakeHostAgentResume,
-    agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-    lifecycle: fakeHostLifecycle,
-    setup: fakeSetupPlatform,
-    // The Node hosts' layer: inert until a Lean tool is invoked.
-    // The harness reports no usage; the telemetry suite starts its own.
-    usageLog: UsageLog.disabled,
-    globalDatabase: globalDatabaseLayer(globalStorage),
-    // The suite's captured entries are the assertion surface: emit every
-    // level the programs run and let each test filter what it reads.
-    minimumLogLevel: 'Trace',
+const runtime = installProcessRuntime({
+  processStart: Effect.sync(() => {
+    identityReads.count += 1;
+    return 'vitest';
   }),
-);
+  globalStorage,
+  secrets: fakeHostSecrets,
+  appState: AppState.layer(fakeHostAppState),
+  // Suites swap the account plane with their host; the default host's
+  // answers signed-out.
+  auth: fakeHostAuth,
+  languageModel: fakeHostLanguageModel,
+  agentResume: fakeHostAgentResume,
+  agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
+  lifecycle: fakeHostLifecycle,
+  setup: fakeSetupPlatform,
+  // The harness reports no usage; the telemetry suite starts its own.
+  usageLog: UsageLog.disabled,
+  globalDatabase: globalDatabaseLayer(globalStorage),
+  // The suite's captured entries are the assertion surface: emit every
+  // level the programs run and let each test filter what it reads.
+  minimumLogLevel: 'Trace',
+});
+initTestProcessRuntime(runtime);
+// Built here, once, as a composition root's first `runPromise` builds it:
+// opening the global database reads the mount table through the spawner,
+// which is asynchronous, so the synchronous session opens the suites run
+// (`createTestSession`) need the process services already in place.
+await runtime.runPromise(Effect.void);

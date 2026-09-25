@@ -1,18 +1,15 @@
 // Main-process IPC for the workspace shell surfaces: editor file I/O, terminal
-// pty sessions, and embedded browser tabs.
-//
-// All three are renderer-driven, and the renderer is sandboxed with no node
-// integration, so every request lands here. Requests are Zod-validated at the
-// boundary and — for file I/O — confined to the workspace root before touching
-// disk: a path from the renderer is untrusted input, and `../` traversal would
-// otherwise read or overwrite anything the user can reach.
+// pty sessions, and embedded browser tabs. All three are renderer-driven, and
+// the sandboxed renderer has no node integration, so every request lands here.
+// Requests are Zod-validated at the boundary and, for file I/O, confined to the
+// workspace root before touching disk: a renderer path is untrusted input, and
+// `../` traversal would otherwise reach anything the user can.
 //
 // Every disk operation below is a program over the standard library's
 // `FileSystem`, settled on the runtime the window handed this handler. The
-// paths they receive are the canonical ones the containment check above
-// already vouched for, which a workspace symlink can legitimately place
-// outside the lexical project root — so they go to the process filesystem, not
-// to a root-confined view that would refuse exactly those.
+// paths are the canonical ones the containment check vouched for, which a
+// workspace symlink can place outside the lexical root, so they go to the
+// process filesystem, not a root-confined view that would refuse them.
 
 import { basename, dirname, join } from 'node:path';
 
@@ -70,8 +67,7 @@ interface DesktopWorkspaceIpcOptions {
    */
   getWorkspacePath(): string | undefined;
   onAsyncError(error: unknown): void;
-  /** The process runtime the window was handed; every program below settles
-   *  on it. */
+  /** The process runtime the window was handed; every program settles on it. */
   runtime: ProcessRuntime;
 }
 

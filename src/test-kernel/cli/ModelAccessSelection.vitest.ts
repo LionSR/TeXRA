@@ -20,6 +20,8 @@ import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+
 const mocks = vi.hoisted(() => ({
   getCodexStatus: vi.fn(),
   getXaiStatus: vi.fn(),
@@ -65,6 +67,8 @@ const withServices = Effect.provide(
     testHttpClientLayer,
     Secrets.layer(secrets),
     AppState.layer(appState),
+    // Sign-in is mocked, so nothing is spawned.
+    scriptedSpawnerLayer(() => ({})).layer,
   ),
 );
 

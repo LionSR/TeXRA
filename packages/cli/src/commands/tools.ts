@@ -1,12 +1,12 @@
 import { defineCommand } from 'citty';
 import { Effect } from 'effect';
-import { execa } from 'execa';
 import { parse as shellParse } from 'shell-quote';
 
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from '../runtime/exitCodes';
+import { runForegroundCommand } from '../runtime/foregroundCommand';
 import {
   initCliPlatform,
   type CliPlatformServices,
@@ -28,6 +28,8 @@ import {
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { PlatformError } from 'effect/PlatformError';
 import type { CliContext } from '../runtime/cliContext';
 
 type ToolGuideOperation = 'install' | 'auth';
@@ -130,8 +132,8 @@ function toggleTool(context: CliContext, id: string, enabled: boolean) {
 // never from user or LLM input. POSIX commands run as argv; Windows uses the
 // shell so npm/gh `.cmd` shims resolve through PATHEXT.
 const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
-  // reject: false — a spawn failure and a non-zero exit both map to an exit
-  // code here, never to a throw. The parse gates both branches: on Windows the
+  // A non-zero exit is an exit code and a signal (Ctrl-C) is the agent-error
+  // code; a spawn failure fails with its reason. The parse gates both branches: on Windows the
   // parts are discarded, but a command carrying shell operators still parses to
   // non-strings and is refused before it reaches the shell.
   //
@@ -154,10 +156,7 @@ const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
     );
   }
   if (process.platform === 'win32') {
-    const result = yield* Effect.promise(() =>
-      execa(command, { shell: true, stdio: 'inherit', reject: false }),
-    );
-    return result.exitCode ?? CliExitCode.AgentError;
+    return yield* runRegisteredCommand(command, command);
   }
   const [cmd, ...args] = parsed;
   if (!cmd) {
@@ -167,11 +166,26 @@ const shellRun = Effect.fn('cli.tools.shellRun')(function* (command: string) {
       ),
     );
   }
-  const result = yield* Effect.promise(() =>
-    execa(cmd, args, { stdio: 'inherit', reject: false }),
-  );
-  return result.exitCode ?? CliExitCode.AgentError;
+  return yield* runRegisteredCommand(command, [cmd, ...args]);
 });
+
+/** Run a registered command on the terminal, answering its exit code. */
+function runRegisteredCommand(
+  registered: string,
+  command: string | readonly [string, ...string[]],
+): Effect.Effect<number, Error, ChildProcessSpawner> {
+  return runForegroundCommand(command).pipe(
+    Effect.catch((error: PlatformError) =>
+      error.reason.method === 'exitCode'
+        ? Effect.succeed<number>(CliExitCode.AgentError)
+        : Effect.fail(
+            new Error(
+              `Could not run the registered command for this tool (${registered}): ${error.reason._tag}`,
+            ),
+          ),
+    ),
+  );
+}
 
 function toolGuideResult(
   id: string,

@@ -13,6 +13,7 @@ import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 import type { HttpClient } from 'effect/unstable/http';
 
@@ -44,6 +45,7 @@ const withRecords = <A, E>(
             Layer.provide(
               globalDatabaseLayer(storage).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+                Layer.provide(nodeSpawnerLayer),
                 Layer.orDie,
               ),
             ),

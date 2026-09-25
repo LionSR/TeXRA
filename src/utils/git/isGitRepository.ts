@@ -15,11 +15,12 @@ import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { executeCommand } from '@utils/system/execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export function isGitRepository(
   rootPath: string | undefined,
   settings: SettingsStores | undefined,
-): Effect.Effect<boolean> {
+): Effect.Effect<boolean, never, ChildProcessSpawner> {
   if (!rootPath) return Effect.succeed(false);
   return executeCommand(['git', 'rev-parse', '--is-inside-work-tree'], {
     cwd: rootPath,

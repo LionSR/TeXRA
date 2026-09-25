@@ -90,6 +90,7 @@ export async function loadDatabaseFixture(userDataPath) {
         export { resolveGlobalStoragePath, resolveWorkspaceStoragePath } from '@platform/defaults/workspaceStorage';
         export { openDesktopProjectRecords } from '@desktop/main/desktopProjectRecords';
         export { nodeProcesses, processOwnerId } from '@platform/defaults/nodeProcesses';
+        export { nodePlatformServices } from '@platform/defaults/nodePlatform';
       `,
       loader: 'ts',
       resolveDir: root,
@@ -114,6 +115,8 @@ export async function loadDatabaseFixture(userDataPath) {
  */
 export async function rememberOpenProject(userDataPath, workspacePath) {
   const fixture = await loadDatabaseFixture(userDataPath);
+  // The identity read and the database open spawn through the Node spawner
+  // the application's runtime serves.
   await Effect.runPromise(
     Effect.gen(function* () {
       const owner = fixture.processOwnerId(
@@ -129,6 +132,6 @@ export async function rememberOpenProject(userDataPath, workspacePath) {
             .pipe(Layer.provide(fixture.ProcessIdentity.layer(owner))),
         ),
       );
-    }),
+    }).pipe(Effect.provide(fixture.nodePlatformServices)),
   );
 }

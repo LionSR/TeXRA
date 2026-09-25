@@ -29,6 +29,7 @@ import type {
 import { runLatexdiffFromMetadata } from './diffOperations';
 import { discoverLatestRunOutputs } from './outputDiscovery';
 import { scanRunDirForOutputs } from './runOutputFiles';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type {
   DiffProgressReporter,
@@ -102,7 +103,7 @@ export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   ): Effect.fn.Return<
     LatexdiffExecutionResult,
     Error,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const {
       agent,

@@ -9,11 +9,12 @@ import {
 } from '@agent/prompt/PromptBuilder';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** The system prompt reads `.texrarules` through `FileSystem`, so the
  *  standard library's own is what these renders run over. */
 const overNodePlatform = <A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem>,
+  program: Effect.Effect<A, E, FileSystem.FileSystem | ChildProcessSpawner>,
 ): Effect.Effect<A, E> => Effect.provide(program, nodePlatformLayer);
 
 function buildMemoryPrompts(): ReturnType<typeof buildInitialToolUsePrompts> {

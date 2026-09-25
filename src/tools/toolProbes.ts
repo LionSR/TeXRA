@@ -30,6 +30,7 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { Cause } from 'effect';
 import type { HttpClientError } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
@@ -69,12 +70,16 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
  * credentials, the host's setup capabilities for the one plugin whose
  * availability depends on the editor host (Lean 4's VS Code extension), that
  * host's Lean port, which owns the roster of running servers the same plugin
- * reports, and the HTTP client the Zotero probes request through. All four are
- * `ProcessServices` arms, so every caller of the availability surface already
- * holds them.
+ * reports, the HTTP client the Zotero probes request through, and the spawner
+ * every probe runs its child processes on. All five are `ProcessServices`
+ * arms, so every caller of the availability surface already holds them.
  */
 export type ToolProbeServices =
-  Secrets | SetupPlatform | LeanLanguageServices | HttpClient.HttpClient;
+  | Secrets
+  | SetupPlatform
+  | LeanLanguageServices
+  | HttpClient.HttpClient
+  | ChildProcessSpawner;
 
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
@@ -220,8 +225,12 @@ function importProbedSdk(
 
 /** Resolve a CLI's native binary as a classified probe. */
 function findProbedBinary(
-  findBinary: () => Effect.Effect<string | undefined, Error>,
-): Effect.Effect<string | undefined, ToolProbeFailed> {
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >,
+): Effect.Effect<string | undefined, ToolProbeFailed, ChildProcessSpawner> {
   return Effect.mapError(
     findBinary(),
     (cause) =>
@@ -244,8 +253,12 @@ function wslInstallHint(): string {
  */
 export function probeSdkBinaryAvailable(
   importSdk: () => Effect.Effect<unknown, Error>,
-  findBinary: () => Effect.Effect<string | undefined, Error>,
-): Effect.Effect<boolean> {
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >,
+): Effect.Effect<boolean, never, ChildProcessSpawner> {
   return Effect.gen(function* () {
     yield* importProbedSdk(importSdk);
     return (yield* findProbedBinary(findBinary)) != null;
@@ -264,12 +277,16 @@ type SdkBinaryStatus =
  */
 export function probeSdkBinaryStatus(config: {
   importSdk: () => Effect.Effect<unknown, Error>;
-  findBinary: () => Effect.Effect<string | undefined, Error>;
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
-}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed> {
+}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed, ChildProcessSpawner> {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel.
