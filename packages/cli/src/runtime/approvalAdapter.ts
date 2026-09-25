@@ -13,6 +13,7 @@ import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { requestParksItsCaller } from '@shared/schemas';
 import type {
@@ -116,10 +117,9 @@ const askHeadlessUserQuestion = Effect.fn(
     ),
   );
   if (Result.isFailure(asked)) {
-    logWarning(
-      'cli.approval',
+    yield* Effect.logWarning(
       `The CLI user-question prompt failed: ${toErrorMessage(asked.failure)}`,
-    );
+    ).pipe(withLogChannel('cli.approval'));
     return {
       action: 'cancel',
       cause: 'CLI user question prompt failed.',

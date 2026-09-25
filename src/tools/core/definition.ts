@@ -9,8 +9,7 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import { findStorageRefusal } from '@shared/session/runLedger';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
@@ -102,12 +101,8 @@ export function defineTool<T, R = never>(
           Effect.flatMap(def.execute),
           Effect.catchCause((cause) => {
             if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+            if (findStorageRefusal(cause)) return Effect.failCause(cause);
             const error = Cause.squash(cause);
-            if (
-              error instanceof DatabaseWriteFailed ||
-              error instanceof RunLedgerRefused
-            )
-              return Effect.failCause(cause);
             if (error instanceof ZodError) {
               return Effect.succeed<ToolResult>({
                 status: 'error',

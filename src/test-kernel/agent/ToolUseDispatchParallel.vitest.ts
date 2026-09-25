@@ -442,6 +442,7 @@ function countStarts(probe: DispatchProbe, toolName = ''): number {
 describe('tool-use dispatch', () => {
   it.live.each([
     'failure',
+    'failure behind a tool error',
     'interrupted failure',
     'interrupted defect',
   ] as const)('leaves a durable tool write unsettled: %s', (mode) =>
@@ -454,10 +455,13 @@ describe('tool-use dispatch', () => {
         mode === 'interrupted defect'
           ? Cause.die(failure)
           : Cause.fail(failure);
-      const cause =
-        mode === 'failure'
-          ? failureCause
-          : Cause.combine(Cause.interrupt(), failureCause);
+      const beside = {
+        failure: Cause.empty,
+        'failure behind a tool error': Cause.fail(new Error('tool failed')),
+        'interrupted failure': Cause.interrupt(),
+        'interrupted defect': Cause.interrupt(),
+      }[mode];
+      const cause = Cause.combine(beside, failureCause);
       const kit = yield* openDispatch({
         tools: {
           write_state: {
@@ -471,7 +475,9 @@ describe('tool-use dispatch', () => {
       expect(Exit.isFailure(exit)).toBe(true);
       if (Exit.isFailure(exit)) {
         expect(Cause.squash(exit.cause)).toBe(failure);
-        expect(Cause.hasInterrupts(exit.cause)).toBe(mode !== 'failure');
+        expect(Cause.hasInterrupts(exit.cause)).toBe(
+          mode.startsWith('interrupted'),
+        );
       }
       const saved = yield* kit.session.ledger.load(kit.runId);
       expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);

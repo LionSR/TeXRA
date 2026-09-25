@@ -469,7 +469,10 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                this.log.error('Error handling message', { data: error });
+                yield* Effect.logError('Error handling message').pipe(
+                  withLogChannel(this.channel),
+                  Effect.annotateLogs({ data: error }),
+                );
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
@@ -480,9 +483,12 @@ export class SettingsViewMessageHandler {
               Exit.isFailure(reported) &&
               !Cause.hasInterruptsOnly(reported.cause)
             ) {
-              this.log.error('Failed to report settings message error', {
-                data: Cause.squash(reported.cause),
-              });
+              yield* Effect.logError(
+                'Failed to report settings message error',
+              ).pipe(
+                withLogChannel(this.channel),
+                Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
+              );
             }
           }),
         ),

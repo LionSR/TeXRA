@@ -8,6 +8,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports
 
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
+import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import {
@@ -54,6 +55,8 @@ describe('agent shutdown', () => {
         const lifecycle = createLifecycleHost();
         registerRuntimeShutdownHandlers(lifecycle, {
           flushArtifacts: Effect.void,
+          releaseSessions: Effect.void,
+          disposeRuntime: Effect.void,
         });
 
         yield* Effect.all([lifecycle.runShutdown, lifecycle.runShutdown], {
@@ -105,7 +108,21 @@ describe('agent shutdown', () => {
             order.push('after-settle');
           }),
         ],
+        releaseSessions: Effect.sync(() => {
+          order.push('release-sessions');
+        }),
+        disposeRuntime: Effect.sync(() => {
+          order.push('dispose-runtime');
+        }),
       });
+      // An ON handler registered after the host's shutdown order (a view or
+      // a polling source) still runs before the process is released.
+      lifecycle.onShutdown(
+        SHUTDOWN_PHASE.ON,
+        Effect.sync(() => {
+          order.push('late-on');
+        }),
+      );
 
       yield* lifecycle.runShutdown;
 
@@ -116,6 +133,9 @@ describe('agent shutdown', () => {
         'flush',
         'after-flush',
         'after-settle',
+        'late-on',
+        'release-sessions',
+        'dispose-runtime',
       ]);
     }),
   );
