@@ -18,6 +18,7 @@ import { RunUsageTotalsSchema, type RunEnd, type RunId } from '@shared/schemas';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
@@ -50,8 +51,9 @@ function createWorkflowScriptAgentRunner(
 
 // The deleted facade's `exists` probe read a `stat` that treated `ENOENT` and
 // `ENOTDIR` as absent; the conversion reads the process `FileSystem` instead,
-// so the stub replaces that one method of the real service (as the fingerprint
-// stub below does for `readFile`) rather than mocking a `stat` module.
+// so the stub replaces that method, and the `realPath` that
+// `resolveInvocationFileList` canonicalizes through, on the real service (as
+// the fingerprint stub below does for `readFile`) rather than mocking a module.
 function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -59,10 +61,17 @@ function withStubbedExists<A, E, R>(program: Effect.Effect<A, E, R>) {
       Effect.provideService(FileSystem.FileSystem, {
         ...fs,
         exists: (target: string) => mocks.exists(target),
+        realPath: (target: string) => mocks.realPath(target),
       }),
     );
   });
 }
+
+/** The node `realPath`, for a case that canonicalizes real temp files. */
+const nodeRealPath = (file: string) =>
+  FileSystem.FileSystem.use((real) => real.realPath(file)).pipe(
+    Effect.provide(nodePlatformLayer),
+  );
 
 // The fingerprint reads through the process `FileSystem`, so the stub
 // replaces one method of the real service (as GlobTool's suite does) instead
@@ -85,6 +94,7 @@ function fingerprintWorkflowAgentDependencies(
         ...fs,
         readFile: (file: string) => mocks.readFileBytes(file),
         exists: (target: string) => mocks.exists(target),
+        realPath: (target: string) => mocks.realPath(target),
       }),
     );
   }).pipe(Effect.provide(fakeProcessServices()));
@@ -107,7 +117,7 @@ const mocks = vi.hoisted(() => ({
   exists: vi.fn(),
   rejectOversizedBibAttachments: vi.fn(),
   configureDelegatedChildApprovals: vi.fn(),
-  realpath: vi.fn(),
+  realPath: vi.fn(),
   readFileBytes: vi.fn(),
 }));
 
@@ -165,13 +175,6 @@ vi.mock('@utils/files/runStorageFs', () => ({
 vi.mock('@tools/delegation/inputFields', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@tools/delegation/inputFields')>()),
   rejectOversizedBibAttachments: mocks.rejectOversizedBibAttachments,
-}));
-
-// `resolveInvocationFileList` canonicalizes through
-// `node:fs/promises.realpath`, so the stub stands in for that one export.
-vi.mock('node:fs/promises', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs/promises')>()),
-  realpath: mocks.realpath,
 }));
 
 const parentRunId = 'aaaaaa111111' as RunId;
@@ -436,7 +439,7 @@ describe('createWorkflowScriptAgentRunner', () => {
     mocks.rejectOversizedBibAttachments.mockReturnValue(Effect.succeed(null));
     mocks.runStorageLocation.mockReturnValue(undefined);
     sessionRoots = { workspace: WORKSPACE_PATH, storage: STORAGE_PATH };
-    mocks.realpath.mockImplementation(async (file: string) => file);
+    mocks.realPath.mockImplementation((file: string) => Effect.succeed(file));
     mocks.executeSubagentInBand.mockImplementation(inBandRunReturning(result));
   });
 
@@ -502,9 +505,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             try: () => fs.symlink(privateFile, link),
             catch: ensureError,
           });
-          mocks.realpath.mockImplementation((file: string) =>
-            fs.realpath(file),
-          );
+          mocks.realPath.mockImplementation(nodeRealPath);
           const spellings = {
             absolute: privateFile,
             'relative traversal': path.relative(workspace, privateFile),
@@ -564,9 +565,7 @@ describe('createWorkflowScriptAgentRunner', () => {
             try: () => fs.symlink(target, requested),
             catch: ensureError,
           });
-          mocks.realpath.mockImplementation((file: string) =>
-            fs.realpath(file),
-          );
+          mocks.realPath.mockImplementation(nodeRealPath);
 
           yield* defaultRunner()(
             invocation({ inputFiles: ['chapters/current.tex'] }),
@@ -759,10 +758,10 @@ describe('createWorkflowScriptAgentRunner', () => {
           runId: file === firstRequested ? 'bbbbbb222222' : 'cccccc333333',
         }),
       );
-      mocks.realpath.mockImplementation(async (file: string) => {
-        if (file === firstRequested) return firstCanonical;
-        if (file === secondRequested) return secondCanonical;
-        return file;
+      mocks.realPath.mockImplementation((file: string) => {
+        if (file === firstRequested) return Effect.succeed(firstCanonical);
+        if (file === secondRequested) return Effect.succeed(secondCanonical);
+        return Effect.succeed(file);
       });
       const runner = defaultRunner();
 

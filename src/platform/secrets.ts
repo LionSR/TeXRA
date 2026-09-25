@@ -1,10 +1,12 @@
 /**
  * Platform-agnostic secrets provider.
  *
- * Abstracts API key storage/retrieval. VS Code uses context.secrets +
- * process.env fallback. CLI/Electron uses process.env + config file.
+ * Abstracts API key storage/retrieval. VS Code uses context.secrets, the
+ * CLI a config file, Electron `safeStorage`; each `get` layers the process
+ * environment (read through the ambient ConfigProvider) over its store.
  */
 import { Context, Data, Effect, Layer } from 'effect';
+import { envVar } from '@utils/system/envFlags';
 
 /**
  * Why a secret operation failed, as the host implementations can actually
@@ -54,7 +56,7 @@ export class SecretsFailed extends Data.TaggedError('SecretsFailed')<{
 /**
  * Provider for secure secret storage (API keys, tokens).
  *
- * Every member but `getEnv` is an `Effect`, so a caller inside a program gets
+ * Every member is an `Effect`, so a caller inside a program gets
  * the failure typed as {@link SecretsFailed} instead of `unknown`, and a
  * credential read is interruptible like the program around it.
  * {@link PlatformSecrets.set} and {@link PlatformSecrets.delete}
@@ -97,50 +99,41 @@ export interface PlatformSecrets {
    * Used only by credential-audit surfaces.
    */
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed>;
-
-  /**
-   * Read a conventional environment variable (e.g. `ANTHROPIC_API_KEY`).
-   * Distinct from `get()`, which is keyed by the internal secret-storage
-   * name (e.g. `apiKey.anthropic`) and already applies its own env override
-   * for that name. Callers that fall back to a differently-named
-   * conventional env var (see `apiKeyEnvName`) go through this seam instead
-   * of reading `process.env` directly, so the fallback stays host-agnostic
-   * and mockable in tests.
-   */
-  getEnv(name: string): string | undefined;
 }
 
 /**
  * Default {@link PlatformSecrets.get} body: an environment-variable override,
- * else the persisted value. Every host implements `get()` this way over its
- * own `getEnv`/`getStored`, so each host's `get()` becomes a one-line
- * `secretsGet(this, key)`. A store read that fails here fails as `get`: the
- * operation names the member the caller invoked, not the one this body
- * delegated to.
+ * else the persisted value. The override comes from the ambient Effect
+ * `ConfigProvider` (`envVar`), the live process environment in production;
+ * tests replace it through a provider record rather than mutating
+ * `process.env`. An empty variable reads as unset, so it does not mask a
+ * stored value. Every host's `get()` is a one-line `secretsGet(this, key)`. A
+ * store read that fails here fails as `get`: the operation names the member
+ * the caller invoked, not the one this body delegated to.
  */
 export function secretsGet(
-  secrets: Pick<PlatformSecrets, 'getEnv' | 'getStored'>,
+  secrets: Pick<PlatformSecrets, 'getStored'>,
   key: string,
 ): Effect.Effect<string | undefined, SecretsFailed> {
-  return Effect.suspend(() => {
-    const envValue = secrets.getEnv(key);
-    if (envValue !== undefined) return Effect.succeed(envValue);
-    // `operation` names the member the caller invoked, so the store read this
-    // body delegates to is reported as the `get` it serves. Everything the
-    // store knows about the failure — reason, key, cause, message — is the
-    // store's and travels unchanged.
-    return Effect.mapError(
-      secrets.getStored(key),
-      (failure) =>
-        new SecretsFailed({
-          reason: failure.reason,
-          operation: 'get',
-          message: failure.message,
-          key: failure.key,
-          cause: failure.cause,
-        }),
-    );
-  });
+  return Effect.flatMap(envVar(key), (envValue) =>
+    envValue !== undefined
+      ? Effect.succeed(envValue)
+      : // `operation` names the member the caller invoked, so the store read
+        // this body delegates to is reported as the `get` it serves.
+        // Everything the store knows about the failure — reason, key, cause,
+        // message — is the store's and travels unchanged.
+        Effect.mapError(
+          secrets.getStored(key),
+          (failure) =>
+            new SecretsFailed({
+              reason: failure.reason,
+              operation: 'get',
+              message: failure.message,
+              key: failure.key,
+              cause: failure.cause,
+            }),
+        ),
+  );
 }
 
 /**

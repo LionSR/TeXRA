@@ -1,7 +1,10 @@
 // Production stand-in for `src/agent/runtime/run/validationModel.ts`: the
-// CI-only gate never opens, and the canned model never ships.
+// CI-only gate never opens (an Effect of `false`, matching the real module's
+// Effect-returning gate), and the canned model never ships.
+import { Effect } from 'effect';
+
 export function shouldUseInternalValidationModel() {
-  return false;
+  return Effect.succeed(false);
 }
 
 export function validationModel() {

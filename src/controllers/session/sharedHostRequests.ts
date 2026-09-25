@@ -50,7 +50,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'latexdiff',
   'latexdiffs',
   'onboarding',
-  'openDashboard',
   'openFile',
   'openInstallGuide',
   'openLabel',
@@ -68,7 +67,6 @@ const SHARED_HOST_REQUEST_KINDS = [
   'runCompileFixer',
   'runNew',
   'savePastedImage',
-  'signIn',
   'toolEdit',
   'useOwnApiKey',
 ] as const satisfies readonly HostRequest['kind'][];
@@ -146,7 +144,6 @@ export interface SharedHostRequestBindings {
   ): HostVerb<void>;
   mergeFiles(baseFile: string, editedFile: string): HostVerb<void>;
   latexdiffFiles(baseFile: string, editedFile: string): HostVerb<void>;
-  readonly openDashboard: HostVerb<void>;
   openSettings(
     section: OpenSettingsRequest['section'],
     sessionType: OpenSettingsRequest['sessionType'],
@@ -163,7 +160,6 @@ export interface SharedHostRequestBindings {
   readonly openAgentDocs: HostVerb<void>;
   readonly recheckDependencies: HostVerb<void>;
   openInstallGuide(tool: string): HostVerb<void>;
-  readonly signIn: HostVerb<void>;
   gettingStarted(action: GettingStartedRequest['action']): HostVerb<void>;
   /** The onboarding card's five verbs; its sixth, "set an API key", is
    *  {@link SharedHostRequestBindings.setApiKey}, the same verb the banner
@@ -348,9 +344,6 @@ export function handleSharedHostRequest(
       case 'latexdiffs':
         yield* latexdiffs(request);
         return done;
-      case 'openDashboard':
-        yield* host.openDashboard;
-        return done;
       case 'openSettings':
         yield* host.openSettings(request.section, request.sessionType);
         return done;
@@ -381,9 +374,6 @@ export function handleSharedHostRequest(
         return done;
       case 'openInstallGuide':
         yield* host.openInstallGuide(request.tool);
-        return done;
-      case 'signIn':
-        yield* host.signIn;
         return done;
       case 'gettingStarted':
         yield* host.gettingStarted(request.action);

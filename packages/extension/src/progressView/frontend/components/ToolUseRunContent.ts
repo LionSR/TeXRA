@@ -4,11 +4,9 @@ import { customElement } from 'lit/decorators.js';
 import { acceptsFollowUp } from '@shared/session/surface';
 import { BaseRunContent } from './BaseRunContent';
 import { conversationContentStyles } from './ConversationContent.styles';
-import './RunHeader';
 import './TodoList';
 import './PlanView';
 import './BackgroundTasksPanel';
-import './SessionBanners';
 import './SessionComposer';
 
 const RUN_ENDED_MESSAGE = 'This run has ended.';
@@ -31,7 +29,6 @@ export class ToolUseRunContent extends BaseRunContent {
     // the same rule Send and the run accelerator take (`acceptsFollowUp`).
     const showComposer = acceptsFollowUp(run);
     return html`
-      <run-header .run=${run} .view=${this.view}></run-header>
       <div class="conversation-content">
         ${this.renderApprovalDock()}
         <div class="conversation-column conversation-prelude">
@@ -58,10 +55,6 @@ export class ToolUseRunContent extends BaseRunContent {
       </div>
       <div class="conversation-composer-dock">
         <div class="conversation-column">
-          <session-banners
-            .banners=${this.host.banners}
-            .sessionType=${run.category}
-          ></session-banners>
           <div
             class=${
               showComposer

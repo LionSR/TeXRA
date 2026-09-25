@@ -1,7 +1,7 @@
 // Shared scaffolding for y/n approval modals — bordered frame, colored
 // title, padded body slot, key handling, and KeyHints footer.
 
-import { useState } from 'react';
+import { createContext, useState } from 'react';
 import { Box, Text, useInput, useWindowSize, type BoxProps } from 'ink';
 
 import { isEscapeInput } from '@cli/tui/inputKeys';
@@ -32,6 +32,10 @@ import { BaseTextInput } from '../input/BaseTextInput';
 /** Rejection-note prompt for every ConfirmCard-based approval modal. */
 export const CONFIRM_CARD_FEEDBACK_PLACEHOLDER =
   'Feedback to send with rejection';
+
+/** True while the enclosing card's feedback input owns the keyboard, so a
+ *  scrollable body releases ↑/↓ without each modal mirroring the mode. */
+export const ConfirmCardFeedbackMode = createContext(false);
 
 /** What the approve key answers with unless a card names its own. */
 const PLAIN_APPROVE: SurfaceDecision = { action: 'approve' };
@@ -221,15 +225,18 @@ export function ConfirmCard({
     );
   }
 
+  // Compact cards swap the body out for the feedback input instead.
   return (
-    <BorderedPanel
-      borderStyle={borderStyle}
-      color={color}
-      title={pulsedTitle}
-      footer={<KeyHints hints={hints} confirmCancel={false} />}
-    >
-      {children}
-      {feedbackMode ? feedbackInput(1) : null}
-    </BorderedPanel>
+    <ConfirmCardFeedbackMode value={feedbackMode}>
+      <BorderedPanel
+        borderStyle={borderStyle}
+        color={color}
+        title={pulsedTitle}
+        footer={<KeyHints hints={hints} confirmCancel={false} />}
+      >
+        {children}
+        {feedbackMode ? feedbackInput(1) : null}
+      </BorderedPanel>
+    </ConfirmCardFeedbackMode>
   );
 }

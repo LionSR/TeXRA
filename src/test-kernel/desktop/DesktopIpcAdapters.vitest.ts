@@ -113,14 +113,21 @@ function expectFunnelState(
 
 describe('desktop IPC adapters', () => {
   it('claims only the desktop-local shell commands', async () => {
-    const { postToRenderer, shellIpc } = await createShellHarness();
+    const openExternalUrl = vi.fn(() => Effect.void);
+    const { postToRenderer, shellIpc } = await createShellHarness({
+      openExternalUrl,
+    });
 
     expect(
       shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
     ).toBeUndefined();
-    expect(
-      shellIpc.handleMessage({ command: 'texra.desktop.openDesktopDocs' }),
-    ).toBeDefined();
+    const program = shellIpc.handleMessage({
+      command: 'texra.desktop.openDesktopDocs',
+    });
+    expect(program).toBeDefined();
+    await testRuntime().runPromise(program!);
+    await flushAsync();
+    expect(openExternalUrl).toHaveBeenCalledTimes(1);
     expect(postToRenderer).not.toHaveBeenCalled();
   });
 

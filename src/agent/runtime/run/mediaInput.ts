@@ -26,6 +26,7 @@ import {
   getBase64EncodedMedia,
   processPdf2Png,
 } from '@utils/media/img';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { MessageSchema } from '@texra-ai/llm/turn';
 import type { z } from 'zod';
 
@@ -58,7 +59,11 @@ const partsForFile = Effect.fn('mediaInput.file')(function* (
   capabilities: MediaCapabilities,
   logger: AgentTrace,
   config: ConfigProvider,
-): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  MediaInputParts,
+  Error,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   const path = location.absolutePath;
   const display = fileLocationDisplayPath(location);
   const mimeType = getMimeType(path);
@@ -138,7 +143,11 @@ export const mediaInputParts = Effect.fn('mediaInput')(function* (
   capabilities: MediaCapabilities,
   logger: AgentTrace,
   config: ConfigProvider,
-): Effect.fn.Return<MediaInputParts, Error, FileSystem.FileSystem> {
+): Effect.fn.Return<
+  MediaInputParts,
+  Error,
+  FileSystem.FileSystem | ChildProcessSpawner
+> {
   const parts: InputPart[] = [];
   const kinds: MediaAttachmentKind[] = [];
   for (const location of locations) {

@@ -1,5 +1,5 @@
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import { html, type TemplateResult } from 'lit';
+import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
@@ -8,12 +8,9 @@ import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
 import { capitalize } from '@utils/text/stringUtils';
-import { StateVisibleBanner } from './StateVisibleBanner';
 
 @customElement('api-key-banner')
-export class ApiKeyBanner extends StateVisibleBanner<
-  HostSnapshot['banners']['apiKey']
-> {
+export class ApiKeyBanner extends LitElement {
   static override styles = [designTokens, commonViewStyles, bannerStyles];
 
   @property({ attribute: false }) state: HostSnapshot['banners']['apiKey'] = {

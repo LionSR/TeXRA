@@ -20,6 +20,7 @@ import {
   postDesktopSettingsView,
   type DesktopCommandActions,
 } from '../shared/desktopCommandSurface.js';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type {
   DesktopCommandMessage,
   DesktopMessageHandler,
@@ -59,7 +60,7 @@ interface DesktopShellActionFactoryOptions extends Pick<
   openWorkspaceFolder(): Effect.Effect<
     void,
     Error,
-    FileSystem.FileSystem | Path.Path | ProjectDatabases
+    FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
   signIn(): Effect.Effect<void, Error>;
   onAsyncError: (error: unknown) => void;
@@ -95,7 +96,11 @@ export function createDesktopShellActions(
     program: Effect.Effect<
       void,
       ShellActionFailed | NotificationFailed,
-      GlobalStorageFs | FileSystem.FileSystem | Path.Path | ProjectDatabases
+      | GlobalStorageFs
+      | FileSystem.FileSystem
+      | Path.Path
+      | ProjectDatabases
+      | ChildProcessSpawner
     >,
   ): void {
     options.runtime.runFork(

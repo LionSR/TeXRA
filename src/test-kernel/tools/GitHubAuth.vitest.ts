@@ -1,8 +1,9 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { FakeSecrets } from '@test/support/FakePlatform';
+import { withEnv } from '@test/support/testEnv';
 import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -12,45 +13,24 @@ import {
 /** Secret/env fixture for one row of a token-precedence table. */
 interface TokenCase {
   readonly name: string;
-  /** Real process env, stubbed to prove tokens only flow via the secrets port. */
-  readonly processEnv?: Record<string, string>;
   /** Value persisted under `GITHUB_TOKEN_STORAGE_KEY`, if any. */
   readonly secret?: string;
-  /** Env the secret store reports through its `getEnv` member. */
-  readonly secretsEnv?: Record<string, string>;
+  /** The process environment the case's ConfigProvider serves. */
+  readonly env?: Record<string, string>;
 }
 
-/**
- * The case's secret store as the port both readers take: the token flows
- * through this object alone, never through `process.env`.
- */
-function secretsFor({ secret, secretsEnv }: TokenCase): FakeSecrets {
+/** The case's secret store as the port both readers take: secrets only. */
+function secretsFor({ secret }: TokenCase): FakeSecrets {
   return new FakeSecrets(
     secret === undefined ? {} : { [GITHUB_TOKEN_STORAGE_KEY]: secret },
-    secretsEnv ?? {},
   );
 }
-
-function stubProcessEnv({ processEnv }: TokenCase): void {
-  for (const [name, value] of Object.entries(processEnv ?? {})) {
-    vi.stubEnv(name, value);
-  }
-}
-
-beforeEach(() => {
-  vi.stubEnv('GITHUB_TOKEN', undefined);
-  vi.stubEnv('GH_TOKEN', undefined);
-});
-
-afterEach(() => {
-  vi.unstubAllEnvs();
-});
 
 describe('getGitHubToken', () => {
   it.effect.each<TokenCase & { expected: string }>([
     {
-      name: 'prefers GH_TOKEN over GITHUB_TOKEN from the secrets env port',
-      secretsEnv: {
+      name: 'prefers GH_TOKEN over GITHUB_TOKEN from the environment',
+      env: {
         GITHUB_TOKEN: 'github-env-token',
         GH_TOKEN: 'gh-env-token',
       },
@@ -58,12 +38,12 @@ describe('getGitHubToken', () => {
     },
     {
       name: 'ignores blank environment token values',
-      secretsEnv: { GITHUB_TOKEN: '   ', GH_TOKEN: 'gh-env-token' },
+      env: { GITHUB_TOKEN: '   ', GH_TOKEN: 'gh-env-token' },
       expected: 'gh-env-token',
     },
     {
       name: 'prefers the persisted secret over environment fallbacks',
-      processEnv: {
+      env: {
         GITHUB_TOKEN: 'github-env-token',
         GH_TOKEN: 'gh-env-token',
       },
@@ -73,17 +53,15 @@ describe('getGitHubToken', () => {
     {
       name: 'ignores blank platform secrets before using environment fallbacks',
       secret: '   ',
-      secretsEnv: { GH_TOKEN: 'gh-env-token' },
+      env: { GH_TOKEN: 'gh-env-token' },
       expected: 'gh-env-token',
     },
   ])('$name', (tokenCase) =>
     Effect.gen(function* () {
-      stubProcessEnv(tokenCase);
-
       expect(yield* getGitHubToken(secretsFor(tokenCase))).toBe(
         tokenCase.expected,
       );
-    }),
+    }).pipe(withEnv(tokenCase.env ?? {})),
   );
 });
 
@@ -92,7 +70,7 @@ describe('resolveGitHubTokenSource', () => {
     {
       name: 'reports "secret" when a persisted token exists, even with env vars set',
       secret: 'gh-secret-token',
-      secretsEnv: {
+      env: {
         GH_TOKEN: 'gh-env-token',
         GITHUB_TOKEN: 'github-env-token',
       },
@@ -100,7 +78,7 @@ describe('resolveGitHubTokenSource', () => {
     },
     {
       name: 'reports "env" when no persisted token exists but an env var does',
-      secretsEnv: { GH_TOKEN: 'gh-env-token' },
+      env: { GH_TOKEN: 'gh-env-token' },
       expected: 'env',
     },
     {
@@ -110,7 +88,7 @@ describe('resolveGitHubTokenSource', () => {
     {
       name: 'ignores a blank persisted token and falls back to an env var',
       secret: '   ',
-      secretsEnv: { GH_TOKEN: 'gh-env-token' },
+      env: { GH_TOKEN: 'gh-env-token' },
       expected: 'env',
     },
   ])('$name', (tokenCase) =>
@@ -118,6 +96,6 @@ describe('resolveGitHubTokenSource', () => {
       expect(yield* resolveGitHubTokenSource(secretsFor(tokenCase))).toBe(
         tokenCase.expected,
       );
-    }),
+    }).pipe(withEnv(tokenCase.env ?? {})),
   );
 });

@@ -3,12 +3,12 @@ import { mkdir, readdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 // Third-party imports
 import { Effect } from 'effect';
-import { execa } from 'execa';
 
 // Internal imports
 import { isFileNotFoundError } from '@common/errors';
 import {
   cloneOverleafProject,
+  gitClone,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
 import {
@@ -17,8 +17,6 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { executeCommandSync } from '@utils/system/execCore';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
@@ -74,17 +72,6 @@ function buildOverleafClonePorts(
         writeTextStderr(`Token instructions: ${OVERLEAF_TOKEN_DOCS_URL}`);
       }),
 
-    isGitAvailable: () =>
-      Effect.sync(
-        () =>
-          // Directory-independent probe that runs before the workspace roots
-          // exist, so it names the CLI's own resolved cwd and no setting
-          // slots.
-          executeCommandSync(['git', '--version'], {
-            cwd: context.cwd,
-            quiet: true,
-          }).success,
-      ),
     showGitMissing: () =>
       Effect.sync(() => {
         writeTextStderr(
@@ -112,23 +99,19 @@ function buildOverleafClonePorts(
 
     runClone: (remoteUrl, cloneInto) =>
       Effect.tryPromise({
-        try: async (signal) => {
+        try: async () => {
           await mkdir(cloneInto, { recursive: true });
-          canonicalWorkspacePath = await realpath(cloneInto);
-          // execa starts its child before observing an already-aborted
-          // cancelSignal, so do not enter it after the fiber is interrupted.
-          signal.throwIfAborted();
-          await execa('git', ['clone', remoteUrl, '.'], {
-            cwd: canonicalWorkspacePath,
-            // extendEnv: false is required — makeMachineGitEnv omits the
-            // helper-invoking keys, and execa's default merge re-adds them.
-            env: makeMachineGitEnv(),
-            extendEnv: false,
-            cancelSignal: signal,
-          });
+          return realpath(cloneInto);
         },
         catch: ensureError,
-      }),
+      }).pipe(
+        Effect.flatMap((canonical) => {
+          canonicalWorkspacePath = canonical;
+          return gitClone(remoteUrl, canonical).pipe(
+            Effect.mapError((error) => new Error(error.message)),
+          );
+        }),
+      ),
     showCloneSucceeded: (label) =>
       Effect.sync(() => {
         const result = {

@@ -367,16 +367,10 @@ export class FakeStateStore implements StateStore {
 export class FakeSecrets implements PlatformSecrets {
   private readonly values = new Map<string, string>();
 
-  private readonly env: Record<string, string>;
-
-  constructor(
-    values: Record<string, string> = {},
-    env: Record<string, string> = {},
-  ) {
+  constructor(values: Record<string, string> = {}) {
     for (const [key, value] of Object.entries(values)) {
       this.values.set(key, value);
     }
-    this.env = env;
   }
 
   get(key: string): Effect.Effect<string | undefined, SecretsFailed> {
@@ -401,10 +395,6 @@ export class FakeSecrets implements PlatformSecrets {
 
   listStoredKeys(): Effect.Effect<readonly string[], SecretsFailed> {
     return Effect.sync(() => [...this.values.keys()]);
-  }
-
-  getEnv(name: string): string | undefined {
-    return this.env[name];
   }
 }
 
@@ -433,8 +423,11 @@ export interface FakePlatformOptions {
    */
   files?: Record<string, string | Uint8Array>;
   secrets?: Record<string, string>;
-  /** Conventional env-var fallbacks (e.g. `ANTHROPIC_API_KEY`) surfaced via `PlatformSecrets.getEnv`. */
-  secretsEnv?: Record<string, string>;
+  /**
+   * The process environment the harness ConfigProvider serves; `{}` when
+   * absent, so no suite reads the developer's shell.
+   */
+  env?: Record<string, string>;
   /**
    * The workspace root, as a real path: `fakePath('workspace')` by default.
    * A suite pointing the workspace elsewhere passes a real directory it owns

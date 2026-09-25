@@ -3,18 +3,21 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { runCli } from '@cli/commands/root';
 import { NO_PLATFORM_INSTALL } from '@cli/runtime/cliProcessRuntime';
 import { defaultBranch } from '@cli/runtime/gitOps';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { createDeferred } from '@test/support/asyncTestUtils';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { parseGitHubSlug } from '@tools/github/githubSlug';
 
 const browserMocks = vi.hoisted(() => ({
-  tryOpenBrowser: vi.fn().mockResolvedValue(true),
+  tryOpenBrowser: vi.fn(),
   installCliProcessRuntime: vi.fn(),
 }));
 
@@ -86,7 +89,8 @@ describe('install-github-action command', () => {
   beforeEach(() => {
     spyOnStreamWrite(process.stdout);
     spyOnStreamWrite(process.stderr);
-    browserMocks.tryOpenBrowser.mockClear();
+    browserMocks.tryOpenBrowser.mockReset();
+    browserMocks.tryOpenBrowser.mockImplementation(() => Effect.succeed(true));
     browserMocks.installCliProcessRuntime.mockClear();
   });
 
@@ -147,12 +151,12 @@ describe('install-github-action command', () => {
     );
     let rejectBrowser: ((error: Error) => void) | undefined;
     const opened = createDeferred();
-    browserMocks.tryOpenBrowser.mockImplementationOnce(() => {
-      opened.resolve();
-      return new Promise<boolean>((_resolve, reject) => {
-        rejectBrowser = reject;
-      });
-    });
+    browserMocks.tryOpenBrowser.mockImplementationOnce(() =>
+      Effect.callback<boolean>((resume) => {
+        opened.resolve();
+        rejectBrowser = (error) => resume(Effect.die(error));
+      }),
+    );
 
     const install = runInstall(repo);
     await opened.promise;
@@ -226,16 +230,18 @@ describe('parseGitHubSlug', () => {
 });
 
 describe('defaultBranch', () => {
-  it('preserves slash-containing origin default branch names', () => {
-    const repo = makeRepo();
-    git(repo, 'update-ref', 'refs/remotes/origin/feature/default', 'HEAD');
-    git(
-      repo,
-      'symbolic-ref',
-      'refs/remotes/origin/HEAD',
-      'refs/remotes/origin/feature/default',
-    );
+  it.effect('preserves slash-containing origin default branch names', () =>
+    Effect.gen(function* () {
+      const repo = makeRepo();
+      git(repo, 'update-ref', 'refs/remotes/origin/feature/default', 'HEAD');
+      git(
+        repo,
+        'symbolic-ref',
+        'refs/remotes/origin/HEAD',
+        'refs/remotes/origin/feature/default',
+      );
 
-    expect(defaultBranch(repo)).toBe('feature/default');
-  });
+      expect(yield* defaultBranch(repo)).toBe('feature/default');
+    }).pipe(Effect.provide(nodeSpawnerLayer)),
+  );
 });

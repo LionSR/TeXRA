@@ -5,13 +5,14 @@
 //
 // Counts, per production file, the mechanisms the migration retires and
 // freezes them in config/ratchets/effect-migration-baseline.json as counts
-// that may only shrink: `platform()` reads,
-// `new AbortController(` constructions, imports of the superseded
-// concurrency/error packages, `Effect.run*` boundary calls (rule R1), and
-// raw catch clauses in files that already import `effect` at runtime (rule
-// R7). Every row is a per-file allowlist: a file absent from a row fails on
-// its first site. The PR that zeroes a row deletes the row from the
-// baseline; the survey list stays, so a later site fails as a new file.
+// that may only shrink: `new AbortController(` constructions and
+// `Effect.run*` calls below R1's boundary kinds. Every row is a per-file
+// allowlist: a file absent from a row fails on its first site. A category
+// that reaches zero retires with its counting code (#12887); the one
+// exception is the `Effect.run*` boundary check, which stays at zero as the
+// standing gate that keeps runs at R1's boundary kinds. The `platform()`,
+// ambient-carrier, superseded-package import and raw-catch rows retired this
+// way once their last site was gone.
 //
 // The owner's second ruling of 2026-09-06 ("fully embrace Effect. No more
 // pass-throughs nor adapters"; PRD R1 and execution rule 3 as amended) shapes
@@ -27,9 +28,8 @@
 //
 // Files are parsed with the TypeScript compiler API (the repo's `typescript`
 // devDependency) rather than grepped, so a comment or string literal that
-// merely mentions `platform()`, a getter that happens to be named
-// `runPromise`, or a `./delay` relative import classify the way the compiler
-// sees them.
+// merely mentions `Effect.runSync(`, or a getter that happens to be named
+// `runPromise`, classifies the way the compiler sees it.
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, posix, resolve } from 'node:path';
@@ -50,77 +50,9 @@ const baselinePath = join(
 );
 const PRD =
   '.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md';
-const INJECTION_PLAN =
-  '.agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md';
 /** This script, for the message that tells a reader where to retire a row. */
 const SCRIPT_REL = 'scripts/check-effect-migration-ratchet.mjs';
 
-const SUPERSEDED_PACKAGES = ['p-queue', 'p-defer', 'async-mutex'];
-/** Surveyed row IDs omitted from the baseline at zero. `--update` must not
- *  treat these as newly introduced rows and reseed them from the tree. */
-const RETIRED_ROW_IDS = new Set([
-  'import:p-queue',
-  'import:p-defer',
-  // #12696 deleted this row and kept the package in SUPERSEDED_PACKAGES; without
-  // the ID here, `--update` would read the absent row as newly introduced and
-  // reseed a future import instead of failing it.
-  'import:async-mutex',
-  // #12720 deleted the `effectRuntime` export with the process-runtime slot
-  // itself, so the row it counted has nothing left to count; the ID stays here
-  // so `--update` reads the absent row as retired rather than as new.
-  'effectRuntime()',
-  // `SessionHandleInit.roots` became required, which deleted the last reader
-  // of the process-roots holder and the holder with it; the reader lists in
-  // AMBIENT_CARRIERS stay, so a reintroduced carrier fails as a new file, and
-  // the ID stays here so `--update` reads the absent row as retired.
-  'ambient:asyncLocalStorage',
-]);
-const PLATFORM_MODULE = '@platform/platform';
-const PLATFORM_MODULE_PATH = 'src/platform/platform';
-/**
- * The ambient carriers (injection plan
- * .agents/docs/proposed/architecture/2026-09-10-effect-native-injection-context-pipelines.md
- * §5 rows 5, 6, 8, 9) and the reader exports through which production code
- * consumes them. The row counts CALLS of these readers in files that import
- * them, for the same reason the directory rows count consumers rather than
- * declarations: a carrier's own module is deleted with the carrier, while
- * every reader call is a site a cohort has to convert. `TraceEmitter`'s
- * per-instance storage (row 7) has no reader export and is not counted.
- *
- * Nothing is left behind the row: #12421 deleted the workspace-roots scope
- * (`workspaceRoots`, `tryWorkspaceRoots`, `runWithWorkspaceRoots`) and the
- * `@agent/runtime/RunContext` module with it, and making
- * `SessionHandleInit.roots` required deleted the process-roots holder those
- * readers fell back to. The row is retired from the baseline; the survey and
- * these reader lists stay, so a file that reintroduces any of these names
- * fails as a new file rather than passing unnoticed.
- */
-const AMBIENT_CARRIERS = [
-  {
-    alias: '@platform/workspaceRoots',
-    path: 'src/platform/workspaceRoots',
-    readers: [
-      'workspaceRoots',
-      'tryWorkspaceRoots',
-      'processWorkspaceRoots',
-      'tryProcessWorkspaceRoots',
-      'runWithWorkspaceRoots',
-    ],
-  },
-  {
-    alias: '@agent/runtime/RunContext',
-    path: 'src/agent/runtime/RunContext',
-    readers: ['runInSession'],
-  },
-  {
-    alias: '@agent/followUp/ToolFileInteractionContext',
-    path: 'src/agent/followUp/ToolFileInteractionContext',
-    readers: ['getCurrentToolCallContext', 'getCurrentToolContexts'],
-  },
-];
-const AMBIENT_READERS_TEXT = AMBIENT_CARRIERS.map(
-  (carrier) => `${carrier.alias} {${carrier.readers.join(', ')}}`,
-).join('; ');
 const RUN_BOUNDARY_NAMES = new Set([
   'runPromise',
   'runPromiseExit',
@@ -385,13 +317,13 @@ function bindsApprovedRuntime(sourceFile, fileName, spec) {
   const factoryLocals =
     spec.initializer == null
       ? null
-      : exportBindings(
+      : importedLocals(
           sourceFile,
           fileName,
           spec.factoryModule.alias,
           spec.factoryModule.path,
           new Set([spec.initializer]),
-        ).locals;
+        );
   const visit = (node) => {
     if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
       if (ts.isIdentifier(node.name)) {
@@ -443,12 +375,8 @@ function bindsApprovedRuntime(sourceFile, fileName, spec) {
 
 const BELOW_BOUNDARY = `below the boundary: R1's boundary kinds are ${BOUNDARY_PATHS_TEXT} (owner ruling 2026-09-06, ${PRD} R1). Convert this file and its callers so the run moves to one of them`;
 
-const ROW_PLATFORM = 'platform()';
-const ROW_AMBIENT = 'ambient:asyncLocalStorage';
 const ROW_ABORT_CONTROLLER = 'new AbortController()';
 const ROW_RUN_BOUNDARY = 'Effect.run*';
-const ROW_CATCH = 'catch:effect-importer';
-const importRow = (pkg) => `import:${pkg}`;
 
 /**
  * Baseline rows in output order. Every row is a per-file allowlist of
@@ -457,44 +385,18 @@ const importRow = (pkg) => `import:${pkg}`;
  * cites.
  */
 const ROWS = [
-  {
-    id: ROW_PLATFORM,
-    rule: `${PRD} goal 3 / R2: the global platform() reader is being retired; new code receives its services as inputs instead of reading the ambient locator`,
-  },
-  {
-    id: ROW_AMBIENT,
-    rule: `${INJECTION_PLAN} §3.2 and §6 steps 6, 7, 10, 11: the ambient carriers (workspace roots, run context, tool call context) become Context services, Context.Reference values on the fiber, or plain data the caller holds; a new call of one of their readers is a new dependency on the carrier being deleted`,
-  },
-  // At its floor (#12422, #12073): the four files it carries are the adapters
-  // that stay, and the counts are their allowlist — a fifth file fails as new
-  // debt. claudeAgent.ts: the Claude Agent SDK takes a controller, not a signal.
-  // lifecycleHost.ts: the shutdown phase deadline, which fires after the
-  // runtime's own fibers are gone. childRunLoop.ts: the one signal every
-  // child-run turn runs under, handed straight to execa's cancelSignal, the
-  // Codex SDK and the Claude Agent SDK; the loop's stop must not interrupt its
-  // fiber, because the turn's settlement, parent delivery and finalization all
-  // run after it. slashContext.ts: the chat TUI's busy-form abort, the one
-  // bridge from that synchronous abort into runPromise's `signal` option.
+  // The files it carries are adapters, and the counts are their allowlist — a
+  // new file fails as new debt. claudeAgent.ts: the Claude Agent SDK's query()
+  // options take a controller, not a signal. childRunLoop.ts: the one signal
+  // every child-run turn runs under, handed straight to executeCommand's abort
+  // waiter, the Codex SDK and the Claude Agent SDK.
   {
     id: ROW_ABORT_CONTROLLER,
     rule: `${PRD} R5: interruption replaces internal abort choreography; an AbortController is adapted only where an external SDK or host API requires a signal`,
   },
-  ...SUPERSEDED_PACKAGES.map((pkg) => ({
-    id: importRow(pkg),
-    rule: `${PRD} §11 Simplification: '${pkg}' is superseded by the Effect primitive for the same mechanism (§2.5 idiom table); do not add a new importer`,
-  })),
   {
     id: ROW_RUN_BOUNDARY,
     rule: `${PRD} R1 (amended 2026-09-06): Effect inside, Promises only at the three boundary kinds — a host entry (packages/extension, packages/desktop, packages/cli, plus runs on a local or parameter runtime in the named runtime entries: ${RUNTIME_ENTRY_NAMES.join(', ')} — owner ruling 2026-09-14), or the SDK's public API (packages/agent/src); the tool execute() contract stopped being a boundary kind when #12337 made every tool return an Effect, so a run inside src/tools/** counts here. This row holds below-boundary runs only: a run AT a boundary is not debt and is not counted here at all, so a lane that moves runs to a host entry changes nothing in this row. The row therefore only ever shrinks`,
-  },
-  // At its floor (#12073): both remaining catches sit in a plane of the catch
-  // budget. desktop/src/main/index.ts is the process entry's foreign boundary,
-  // guarding initializeElectronPlatform — which is what builds the runtime a
-  // fold would need. PollingSourceBase.ts is listener fan-out isolation on the
-  // synchronous onKeysChanged/Disposable contract, invoked outside any fiber.
-  {
-    id: ROW_CATCH,
-    rule: `${PRD} R7 and execution rule 2 (one pass per file): a file that imports 'effect' converts its catch sites in the same pass — typed recovery, scope finalizers, or Exit folds; a raw catch remains only inside a named foreign-runtime adapter`,
   },
 ];
 
@@ -502,14 +404,10 @@ const SEMANTICS =
   'Per-file counts of the mechanisms the Effect 4 migration retires (.agents/docs/archived/architecture/2026-08-26-effect-4-runtime-migration.md, execution rule 3), owned by scripts/check-effect-migration-ratchet.mjs. ' +
   'Scope: *.ts, *.tsx and *.mts under src/ and packages/*/src/, excluding src/test-kernel/, *.vitest.ts, and any dist/ or node_modules/ directory (packages/*/scripts and packages/*/tests are outside the scanned roots). ' +
   'Files are parsed with the TypeScript compiler API, so comments and string literals never count. ' +
-  "Rows: 'platform()' counts calls of the platform export of @platform/platform (src/platform/platform.ts) under whatever local name the file binds it to: `import { platform as p }` then p(), and `import * as P` then P.platform(), included; tryPlatform and unrelated bindings such as node:os platform excluded; " +
-  `'ambient:asyncLocalStorage' counts, binding-scoped again, calls of the reader exports of the three ambient carrier modules (${AMBIENT_READERS_TEXT}) in the files that import them, aliased names and namespace-member calls included, a carrier's own internal calls and bare references passed as values excluded; ` +
-  "'new AbortController()' counts new-expressions on the identifier AbortController; " +
-  "'import:<pkg>' counts import/export-from/import-equals/require()/import() specifiers exactly equal to the package name (type-only imports included, because they still pin the dependency); " +
-  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's); ` +
-  "'catch:effect-importer' counts, only in files with a runtime import specifier equal to effect or starting with effect/ or @effect/ (type-only imports and all-type specifier lists do not qualify), catch clauses plus .catch( calls, excluding the Effect.catch combinator; " +
+  "Rows: 'new AbortController()' counts new-expressions on the identifier AbortController; " +
+  `'Effect.run*' counts calls named runPromise, runPromiseExit, runSync, runFork, or runCallback, and counts them ONLY below R1's boundary kinds (packages/extension/src/**, packages/desktop/src/**, packages/cli/src/**, packages/agent/src/**, or a run on a runtime the file binds as a local or parameter inside a named runtime entry — ${RUNTIME_ENTRY_PATHS.join(', ')}; the tool execute() contract was a kind until #12337). A run at one of those kinds is the destination, not debt, and is absent from this row, so converting a subsystem cannot raise it. --update never adds a file to a row and writes the lower of the committed count and the tree's). ` +
   'Every row is a per-file allowlist of shrink-only counts: a count that rose, or a file absent from its row, fails. A count that shrank or a file that disappeared is stale headroom and also fails (unlike the dead-code ratchet, which only reports resolved findings), because a stale count is room a later PR could regrow into unnoticed; regenerate with `node scripts/check-effect-migration-ratchet.mjs --update` in the same PR. ' +
-  'The PR that zeroes a row deletes the row from the baseline; SUPERSEDED_PACKAGES and the other survey lists stay, so a later site fails as a new file.';
+  "The PR that zeroes a row retires it: the baseline row, the script's ROWS entry, counting site and self-test case go together. 'Effect.run*' is the exception: it stays surveyed at zero, omitted from the baseline, so a later below-boundary run fails as a new file.";
 
 const compareCodePoints = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
@@ -553,38 +451,6 @@ function staticSpecifierText(node) {
     : null;
 }
 
-/**
- * The module specifier a node contributes: import declarations (type-only
- * included), `export ... from`, `import x = require(...)`, and `require(...)`
- * / `import(...)` calls with a static argument. Null for every other node.
- */
-function moduleSpecifier(node) {
-  if (ts.isImportDeclaration(node)) {
-    return staticSpecifierText(node.moduleSpecifier);
-  }
-  if (ts.isExportDeclaration(node)) {
-    return node.moduleSpecifier == null
-      ? null
-      : staticSpecifierText(node.moduleSpecifier);
-  }
-  if (ts.isImportEqualsDeclaration(node)) {
-    const reference = node.moduleReference;
-    return ts.isExternalModuleReference(reference)
-      ? staticSpecifierText(reference.expression)
-      : null;
-  }
-  if (ts.isCallExpression(node) && node.arguments.length > 0) {
-    const callee = node.expression;
-    if (
-      callee.kind === ts.SyntaxKind.ImportKeyword ||
-      (ts.isIdentifier(callee) && callee.text === 'require')
-    ) {
-      return staticSpecifierText(node.arguments[0]);
-    }
-  }
-  return null;
-}
-
 /** Name a call is made under: the identifier or the member name. */
 function calleeName(call) {
   const callee = call.expression;
@@ -593,50 +459,10 @@ function calleeName(call) {
   return null;
 }
 
-function importsEffect(specifier) {
-  return (
-    specifier === 'effect' ||
-    specifier.startsWith('effect/') ||
-    specifier.startsWith('@effect/')
-  );
-}
-
-/**
- * Whether an import, `export ... from`, or import-equals declaration erases
- * at compile time: `import type`, `export type`, `import type X = require`,
- * or a specifier list whose every element is `type`-qualified.
- */
-function isTypeOnly(node) {
-  if (ts.isImportDeclaration(node)) {
-    const clause = node.importClause;
-    if (clause == null) return false;
-    if (clause.isTypeOnly) return true;
-    const bindings = clause.namedBindings;
-    return (
-      clause.name == null &&
-      bindings != null &&
-      ts.isNamedImports(bindings) &&
-      bindings.elements.length > 0 &&
-      bindings.elements.every((element) => element.isTypeOnly)
-    );
-  }
-  if (ts.isExportDeclaration(node)) {
-    if (node.isTypeOnly) return true;
-    const clause = node.exportClause;
-    return (
-      clause != null &&
-      ts.isNamedExports(clause) &&
-      clause.elements.length > 0 &&
-      clause.elements.every((element) => element.isTypeOnly)
-    );
-  }
-  return ts.isImportEqualsDeclaration(node) && node.isTypeOnly;
-}
-
 /**
  * Whether a specifier names the module at `modulePath`: its path alias, or a
- * relative path that resolves to it. The platform locator, the process
- * runtime, and each ambient carrier are matched this way.
+ * relative path that resolves to it. A named runtime entry's factory module
+ * is matched this way.
  */
 function isModuleAt(specifier, fileName, alias, modulePath) {
   if (specifier === alias) return true;
@@ -648,38 +474,22 @@ function isModuleAt(specifier, fileName, alias, modulePath) {
 }
 
 /**
- * Local names a file binds the given exports of one module to: `locals` are
- * bindings of the named exports themselves (aliased or not); `namespaces` are
- * namespace imports whose members of those names are the exports. Import
- * declarations are top-level statements, so no tree walk is needed. Used for
- * the platform locator (`platform`) and each ambient carrier's readers.
+ * Local names a file binds the given named exports of one module to, aliased
+ * or not. Import declarations are top-level statements, so no tree walk is
+ * needed. Used for a named runtime entry's factory.
  */
-function exportBindings(sourceFile, fileName, alias, modulePath, exports) {
+function importedLocals(sourceFile, fileName, alias, modulePath, exports) {
   const locals = new Set();
-  const namespaces = new Set();
   for (const statement of sourceFile.statements) {
-    if (ts.isImportEqualsDeclaration(statement)) {
-      const specifier = moduleSpecifier(statement);
-      if (
-        specifier != null &&
-        isModuleAt(specifier, fileName, alias, modulePath)
-      ) {
-        namespaces.add(statement.name.text);
-      }
-      continue;
-    }
     if (!ts.isImportDeclaration(statement)) continue;
     const specifier = staticSpecifierText(statement.moduleSpecifier);
     const bindings = statement.importClause?.namedBindings;
     if (
       specifier == null ||
       bindings == null ||
+      !ts.isNamedImports(bindings) ||
       !isModuleAt(specifier, fileName, alias, modulePath)
     ) {
-      continue;
-    }
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
       continue;
     }
     for (const element of bindings.elements) {
@@ -688,55 +498,7 @@ function exportBindings(sourceFile, fileName, alias, modulePath, exports) {
       }
     }
   }
-  return { locals, namespaces };
-}
-
-/** Whether a call's callee is one of the bound exports: `local()` or `NS.name()`. */
-function callsBoundExport(callee, { locals, namespaces }, exports) {
-  return (
-    (ts.isIdentifier(callee) && locals.has(callee.text)) ||
-    (ts.isPropertyAccessExpression(callee) &&
-      ts.isIdentifier(callee.expression) &&
-      namespaces.has(callee.expression.text) &&
-      exports.has(callee.name.text))
-  );
-}
-
-const PLATFORM_EXPORTS = new Set(['platform']);
-
-/**
- * Local names a file binds Effect's `Effect` module to, so `Effect.catch`
- * (the rc.112 combinator) is excluded from the catch row under any alias:
- * `locals` are bindings of the `Effect` export of 'effect' (aliased or not)
- * and namespace imports of 'effect/Effect'; `namespaces` are namespace
- * imports of 'effect', whose `.Effect.catch` is the combinator.
- */
-function effectBindings(sourceFile) {
-  const locals = new Set();
-  const namespaces = new Set();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const specifier = staticSpecifierText(statement.moduleSpecifier);
-    const bindings = statement.importClause?.namedBindings;
-    if (specifier == null || bindings == null) continue;
-    if (specifier === 'effect') {
-      if (ts.isNamespaceImport(bindings)) {
-        namespaces.add(bindings.name.text);
-        continue;
-      }
-      for (const element of bindings.elements) {
-        if ((element.propertyName ?? element.name).text === 'Effect') {
-          locals.add(element.name.text);
-        }
-      }
-    } else if (
-      specifier === 'effect/Effect' &&
-      ts.isNamespaceImport(bindings)
-    ) {
-      locals.add(bindings.name.text);
-    }
-  }
-  return { locals, namespaces };
+  return locals;
 }
 
 /**
@@ -754,43 +516,6 @@ function surveySource(text, fileName) {
   );
   const counts = new Map();
   const bump = (row) => counts.set(row, (counts.get(row) ?? 0) + 1);
-  const platform = exportBindings(
-    sourceFile,
-    fileName,
-    PLATFORM_MODULE,
-    PLATFORM_MODULE_PATH,
-    PLATFORM_EXPORTS,
-  );
-  const isPlatformRead = (callee) =>
-    callsBoundExport(callee, platform, PLATFORM_EXPORTS);
-  const ambient = AMBIENT_CARRIERS.map((carrier) => {
-    const readers = new Set(carrier.readers);
-    return {
-      readers,
-      bindings: exportBindings(
-        sourceFile,
-        fileName,
-        carrier.alias,
-        carrier.path,
-        readers,
-      ),
-    };
-  });
-  const isAmbientRead = (callee) =>
-    ambient.some(({ bindings, readers }) =>
-      callsBoundExport(callee, bindings, readers),
-    );
-  const effect = effectBindings(sourceFile);
-  const isEffectCombinator = (callee) =>
-    ts.isPropertyAccessExpression(callee) &&
-    ((ts.isIdentifier(callee.expression) &&
-      effect.locals.has(callee.expression.text)) ||
-      (ts.isPropertyAccessExpression(callee.expression) &&
-        ts.isIdentifier(callee.expression.expression) &&
-        effect.namespaces.has(callee.expression.expression.text) &&
-        callee.expression.name.text === 'Effect'));
-  let effectImporter = false;
-  let catches = 0;
   const entry = BOUNDARY_RUNTIME_ENTRIES.get(fileName);
   const approvedRuntime =
     entry != null && bindsApprovedRuntime(sourceFile, fileName, entry.runtime)
@@ -799,16 +524,9 @@ function surveySource(text, fileName) {
   let localRuntimeRuns = 0;
 
   const visit = (node) => {
-    const specifier = moduleSpecifier(node);
-    if (specifier != null) {
-      if (SUPERSEDED_PACKAGES.includes(specifier)) bump(importRow(specifier));
-      if (importsEffect(specifier) && !isTypeOnly(node)) effectImporter = true;
-    }
     if (ts.isCallExpression(node)) {
       const callee = node.expression;
       const name = calleeName(node);
-      if (isPlatformRead(callee)) bump(ROW_PLATFORM);
-      if (isAmbientRead(callee)) bump(ROW_AMBIENT);
       if (name != null && RUN_BOUNDARY_NAMES.has(name)) {
         bump(ROW_RUN_BOUNDARY);
         if (
@@ -819,27 +537,17 @@ function surveySource(text, fileName) {
           localRuntimeRuns += 1;
         }
       }
-      if (
-        name === 'catch' &&
-        ts.isPropertyAccessExpression(callee) &&
-        !isEffectCombinator(callee)
-      ) {
-        catches += 1;
-      }
     } else if (
       ts.isNewExpression(node) &&
       ts.isIdentifier(node.expression) &&
       node.expression.text === 'AbortController'
     ) {
       bump(ROW_ABORT_CONTROLLER);
-    } else if (ts.isCatchClause(node)) {
-      catches += 1;
     }
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
 
-  if (effectImporter && catches > 0) counts.set(ROW_CATCH, catches);
   return { counts, localRuntimeRuns };
 }
 
@@ -847,86 +555,12 @@ function surveySource(text, fileName) {
 function selfTestSurvey() {
   const cases = [
     {
-      text: "import { platform, tryPlatform } from '@platform/platform';\n// platform() in prose\nconst s = 'platform()';\ntryPlatform();\nhost.platform();\n",
-      expected: {},
-    },
-    {
-      text: "import { platform } from '@platform/platform';\nplatform();\nconst fs = platform().fs;\n",
-      expected: { [ROW_PLATFORM]: 2 },
-    },
-    {
-      text: "import { platform as p } from '@platform/platform';\nimport * as P from '@platform/platform';\nimport { platform } from 'node:os';\np();\nP.platform();\nP.tryPlatform();\nplatform();\n",
-      expected: { [ROW_PLATFORM]: 2 },
-    },
-    {
-      text: "import { platform } from '../platform/platform';\nplatform();\n",
-      expected: {},
-    },
-    {
-      text: "import { platform } from './platform';\nplatform();\n",
-      fileName: 'src/platform/probe.ts',
-      expected: { [ROW_PLATFORM]: 1 },
-    },
-    {
-      // Readers of all three carriers under their own names, an alias, and a
-      // namespace member; the bare reference passed as a value and the
-      // namespace's non-reader member do not count.
-      text: "import { workspaceRoots, tryWorkspaceRoots as tryRoots } from '@platform/workspaceRoots';\nimport * as RC from '@agent/runtime/RunContext';\nimport { getCurrentToolCallContext } from '@agent/followUp/ToolFileInteractionContext';\nworkspaceRoots().config;\ntryRoots();\nRC.runInSession(s, f);\nRC.isRunContext(x);\ngetCurrentToolCallContext();\nuse(workspaceRoots);\n",
-      fileName: 'src/agent/storage/probe.ts',
-      expected: { [ROW_AMBIENT]: 4 },
-    },
-    {
-      // A carrier's own module calling its own reader is the declaration
-      // site, not a consumer; a reader of ANOTHER carrier imported there
-      // still counts (RunContext nests the roots storage).
-      text: "import { workspaceRoots } from '@platform/workspaceRoots';\nexport function tryUseRunContext() { return storage.getStore(); }\nexport function getRunContextRunId() { return tryUseRunContext()?.runId; }\nworkspaceRoots();\n",
-      fileName: 'src/agent/runtime/RunContext.ts',
-      expected: { [ROW_AMBIENT]: 1 },
-    },
-    {
-      // Same names from unrelated modules: a similarly prefixed alias and
-      // a relative path that does not resolve to the carrier.
-      text: "import { workspaceRoots } from '@platform/workspaceRootsView';\nimport { runInSession } from './RunContext';\nworkspaceRoots();\nrunInSession(s, f);\n",
-      expected: {},
-    },
-    {
-      // The `await import(...)` is the only case exercising the
-      // ImportKeyword branch of moduleSpecifier, so it must always name a
-      // live row: without it, a dynamic `import('p-queue')` would dodge its
-      // row undetected, in a ratchet whose whole subject is import rows.
-      text: "import PQueue from 'p-queue';\nimport type { Options } from 'p-queue';\nimport pd from 'p-queue-plus';\nimport local from './p-queue';\nconst defer = require('p-queue');\nexport { default as deferred } from 'p-queue';\nawait import('async-mutex');\n",
-      expected: {
-        [importRow('p-queue')]: 4,
-        [importRow('async-mutex')]: 1,
-      },
-    },
-    {
       text: 'class S { get runPromise() { return this.p; } }\n// Effect.runSync(x)\n',
       expected: {},
     },
     {
       text: 'runtime.runFork(fiber);\nEffect.runSync(program);\nawait held.runPromiseExit(program);\n',
       expected: { [ROW_RUN_BOUNDARY]: 3 },
-    },
-    {
-      text: "import { Effect } from 'effect';\ntry { a(); } catch (error) { b(); }\ntry { c(); } catch { d(); }\nvoid p.catch(() => undefined);\nEffect.catch(program, handler);\n",
-      expected: { [ROW_CATCH]: 3 },
-    },
-    {
-      text: 'try { a(); } catch (error) { b(); }\nvoid p.catch(() => undefined);\n',
-      expected: {},
-    },
-    {
-      text: "import type { Stream } from 'effect';\nimport { type Effect } from 'effect';\nexport type { Exit } from 'effect';\ntry { a(); } catch { b(); }\n",
-      expected: {},
-    },
-    {
-      text: "import { Effect, type Stream } from 'effect';\ntry { a(); } catch { b(); }\n",
-      expected: { [ROW_CATCH]: 1 },
-    },
-    {
-      text: "import { Effect as Eff } from 'effect';\nimport * as E from 'effect';\nimport * as Fx from 'effect/Effect';\nEff.catch(a, h);\nE.Effect.catch(b, h);\nFx.catch(c, h);\nE.catch(d, h);\nEffect.catch(e, h);\nvoid p.catch(() => undefined);\n",
-      expected: { [ROW_CATCH]: 3 },
     },
     {
       text: 'const c = new AbortController();\n',
@@ -1202,24 +836,6 @@ function selfTestBoundary() {
       process.exit(1);
     }
   }
-
-  // A row the committed baseline does not carry has no ceiling yet, so
-  // `--update`'s pre-write diff must not report its entries as growth: they
-  // are about to be seeded, and saying "the check stays red" about them is
-  // false. Row-agnostic on purpose, so retiring a row does not touch it.
-  const emptyShape = Object.fromEntries(ROWS.map((row) => [row.id, {}]));
-  const oneEntry = {
-    ...emptyShape,
-    [ROWS[0].id]: { 'src/agent/runtime/probe.ts': 3 },
-  };
-  if (
-    diffRows(oneEntry, emptyShape, new Set([ROWS[0].id])).failures.length !==
-      0 ||
-    diffRows(oneEntry, emptyShape).failures.length !== 1
-  ) {
-    console.error('diffRows unseeded-row self-test failed');
-    process.exit(1);
-  }
 }
 
 const BASELINE_MISSING = `Baseline missing: ${baselinePath}. Restore it from git.`;
@@ -1273,8 +889,9 @@ function readBaseline() {
  * whose `semantics` text or row set has drifted from the script and tells the
  * reader to run `--update` — which would then call it and hit the same
  * rejection, so a legitimate script edit could never be recorded. The gates
- * need only the previous per-file counts; a row the script has since added
- * simply has nothing committed yet.
+ * need only the previous per-file counts. A row the baseline does not carry
+ * is at zero, and `--update` keeps it there: that is how the `Effect.run*`
+ * row stays a standing gate while omitted from the baseline.
  */
 function readCommittedCounts() {
   if (!existsSync(baselinePath)) throw new Error(BASELINE_MISSING);
@@ -1289,23 +906,9 @@ function readCommittedCounts() {
   const committed = parsed?.rows ?? {};
   const has = (row) =>
     typeof committed[row] === 'object' && committed[row] !== null;
-  return {
-    rows: Object.fromEntries(
-      ROWS.map((row) => [row.id, has(row.id) ? committed[row.id] : {}]),
-    ),
-    // Rows the committed baseline does not carry at all. A row the script has
-    // just gained has no ceiling to respect yet, so `--update` seeds it from
-    // the tree; without the distinction, "never add a file" would write it
-    // empty and then report every real entry as new, and the row could never
-    // be introduced at all. Retired IDs are surveyed at zero and omitted on
-    // purpose: seeding them would re-admit a row the no-regrowth contract
-    // deleted.
-    unseeded: new Set(
-      ROWS.map((row) => row.id).filter(
-        (id) => !has(id) && !RETIRED_ROW_IDS.has(id),
-      ),
-    ),
-  };
+  return Object.fromEntries(
+    ROWS.map((row) => [row.id, has(row.id) ? committed[row.id] : {}]),
+  );
 }
 
 function writeBaseline(rows) {
@@ -1321,22 +924,11 @@ function writeBaseline(rows) {
   );
 }
 
-/**
- * Compare a survey against the baseline: { failures, stale }.
- *
- * `unseeded` names rows the comparison has no committed opinion about, which
- * only `--update` has: a row the script has just gained reads as `{}` there,
- * so every real entry in it would be reported as a count that "grew" and as a
- * check that "stays red", moments before `--update` seeds the row from the
- * tree and the check goes green. Skipping those rows keeps the pre-write
- * report about actual growth. The post-write comparison passes nothing,
- * because `readBaseline` guarantees a row for every entry in ROWS.
- */
-function diffRows(current, baseline, unseeded = new Set()) {
+/** Compare a survey against the baseline: { failures, stale }. */
+function diffRows(current, baseline) {
   const failures = [];
   const stale = [];
   for (const row of ROWS) {
-    if (unseeded.has(row.id)) continue;
     const now = current[row.id];
     const was = baseline[row.id] ?? {};
     for (const [file, count] of Object.entries(now)) {
@@ -1390,11 +982,7 @@ function main() {
     // blocks the write -- refusing outright meant a tree with one new site
     // could not record any of its genuine shrinkage, which is how a
     // legitimate reduction ended up needing a hand edit.
-    const { failures: grew } = diffRows(
-      rows,
-      committed.rows,
-      committed.unseeded,
-    );
+    const { failures: grew } = diffRows(rows, committed);
     if (grew.length > 0) {
       console.error(
         `\n${grew.length} count(s) grew; the baseline keeps the committed ceiling for each and the check stays red until they are gone.`,
@@ -1412,16 +1000,14 @@ function main() {
     const tightened = Object.fromEntries(
       ROWS.map((row) => [
         row.id,
-        committed.unseeded.has(row.id)
-          ? rows[row.id]
-          : Object.fromEntries(
-              Object.entries(rows[row.id])
-                .filter(([file]) => committed.rows[row.id]?.[file] != null)
-                .map(([file, count]) => [
-                  file,
-                  Math.min(committed.rows[row.id][file], count),
-                ]),
-            ),
+        Object.fromEntries(
+          Object.entries(rows[row.id])
+            .filter(([file]) => committed[row.id][file] != null)
+            .map(([file, count]) => [
+              file,
+              Math.min(committed[row.id][file], count),
+            ]),
+        ),
       ]),
     );
     writeBaseline(tightened);
@@ -1448,9 +1034,7 @@ function main() {
   // a mechanism the tree no longer has. `import:neverthrow` sat that way.
   // The gate keys on the BASELINE row being empty, not on the tree count: a
   // tree that has fallen below a non-empty baseline is stale headroom, which
-  // the stale report below already names loudly and correctly. A surveyed
-  // row omitted from the baseline is the finished state: the survey still
-  // runs, so a later site fails as a new file.
+  // the stale report below already names loudly and correctly.
   const emptyRows = ROWS.filter(
     (row) =>
       Object.hasOwn(baseline.rows, row.id) &&
@@ -1462,17 +1046,10 @@ function main() {
       `\nEffect migration ratchet failed: ${emptyRows.length} baseline row(s) are empty. The PR that zeroes a row deletes the row: an empty row is not a finished ratchet, it is a row nobody removed.`,
     );
     for (const row of emptyRows) {
-      // Import rows are generated from SUPERSEDED_PACKAGES; the other three
-      // are hand-written, with their own row-id constant, counting site and
-      // self-test case. Retiring them is not the same edit, so do not print
-      // the same instructions for both.
-      const pkg = SUPERSEDED_PACKAGES.find(
-        (name) => importRow(name) === row.id,
-      );
       console.error(
-        pkg == null
-          ? `  - [${row.id}] Delete its empty object from the baseline; keep its row-id constant, ROWS entry, bump('${row.id}') site and selfTestSurvey case in ${SCRIPT_REL} so a later site fails as a new file.`
-          : `  - [${row.id}] Delete the empty '${row.id}' object from the baseline; keep '${pkg}' in SUPERSEDED_PACKAGES in ${SCRIPT_REL} so a later import fails as a new file. Drop the dependency from package.json once nothing outside the scanned roots needs it.`,
+        row.id === ROW_RUN_BOUNDARY
+          ? `  - [${row.id}] Delete its empty object from the baseline; the row stays surveyed in ${SCRIPT_REL} as the standing boundary gate.`
+          : `  - [${row.id}] Delete its empty object from the baseline, and its row-id constant, ROWS entry, bump('${row.id}') site and selfTestSurvey case from ${SCRIPT_REL}.`,
       );
     }
   }

@@ -614,12 +614,6 @@
       "name": "resetAgentCatalogAuthRefreshScopeForTests"
     },
     {
-      "file": "packages/extension/src/frontend/git/resolveGitRoot.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "resolveCommonRootFromGitdir"
-    },
-    {
       "file": "src/agent/index/agentRegistry.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -732,12 +726,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "SubscriptionUsageSnapshotSchema"
-    },
-    {
-      "file": "src/shared/settingsView/settingsViewMessages.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "SETTINGS_TAB_ORDER"
     },
     {
       "file": "src/shared/state/stateSettings.ts",

@@ -18,7 +18,7 @@ import { COLOR_SUCCESS } from '@cli/tui/ui/colors';
 import { POINTER } from '@cli/tui/ui/glyphs';
 import {
   clampModalWidth,
-  CONFIRM_CARD_HORIZONTAL_DECORATION,
+  confirmCardContentWidth,
   isCompactRows,
 } from '@cli/tui/ui/theme';
 import { clipToWidth, textDisplayWidth } from '@cli/runtime/terminalText';
@@ -266,9 +266,7 @@ interface QuestionShellProps extends Omit<
 function QuestionShell(props: QuestionShellProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const compact = isCompactUserQuestionRows(props.availableRows);
-  const contentWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = confirmCardContentWidth(columns);
   const promptRows = userQuestionPromptRowsBudget({
     availableRows: props.availableRows,
     controlRows: props.controlRows,
@@ -371,9 +369,7 @@ function ChoiceQuestion(props: QuestionVariantProps): React.JSX.Element {
 function FreeTextQuestion(props: QuestionVariantProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const [answer, setAnswer] = useState('');
-  const contentWidth = clampModalWidth(
-    columns - CONFIRM_CARD_HORIZONTAL_DECORATION,
-  );
+  const contentWidth = confirmCardContentWidth(columns);
   const optionRows = userQuestionFreeTextOptionRowsBudget({
     availableRows: props.availableRows,
     optionCount: props.question.options.length,

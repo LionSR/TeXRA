@@ -23,6 +23,7 @@ import {
 } from '@shared/tools/executionsDisplay';
 import {
   displayToolName,
+  isMcpToolName,
   normalizeToolName,
 } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
@@ -170,6 +171,9 @@ export interface ToolRowModel {
   readonly userInstruction?: TranscriptText;
   readonly showOutput: boolean;
   readonly outputSuppression?: ToolOutputSuppression;
+  /** A completed shell or MCP call that printed nothing: "it ran and printed
+   *  nothing" is a result for a call whose output is the point. */
+  readonly showsNoOutputMarker: boolean;
   readonly status?: ToolCallStatus;
   readonly isError: boolean;
   readonly isUserFeedback: boolean;
@@ -327,6 +331,11 @@ export function toolRowModel(
     ...(userInstruction ? { userInstruction } : {}),
     showOutput: suppression === undefined,
     ...(suppression ? { outputSuppression: suppression } : {}),
+    showsNoOutputMarker:
+      suppression === 'empty' &&
+      normalized.status === TOOL_CALL_STATUS.COMPLETED &&
+      (toolDisplayKind(normalized.toolName) === 'bash' ||
+        isMcpToolName(normalized.toolName)),
     ...(normalized.status ? { status: normalized.status } : {}),
     isError: normalized.status === TOOL_CALL_STATUS.FAILED,
     isUserFeedback: normalized.isUserFeedback,

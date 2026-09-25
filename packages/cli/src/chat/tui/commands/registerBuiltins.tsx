@@ -159,6 +159,30 @@ export function registerBuiltinSlashCommands(options: {
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
+  // Every picker's selection runs on this surface's runtime and error hook and
+  // completes through its slash form's done and persistence props; a picker
+  // passes only its action and what it overrides.
+  function bindSelection<T>(
+    props: SlashFormProps,
+    action: (value: T, output: SlashCommandOutput) => SlashCommandEffect,
+    overrides?: Partial<
+      Pick<
+        Parameters<typeof formSelectionHandler<T>>[0],
+        'onDone' | 'completion' | 'busyTitle'
+      >
+    >,
+  ): (value: T) => void {
+    return formSelectionHandler<T>({
+      runtime,
+      action,
+      onDone: props.onDone,
+      onError: options.onError,
+      onPersist: props.onPersist,
+      echoOnPersist: props.echoOnPersist,
+      ...overrides,
+    });
+  }
+
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
     const current = sessionMeta.get().agent;
     const selectable = canSelectAgent();
@@ -169,9 +193,7 @@ export function registerBuiltinSlashCommands(options: {
         currentAgent={current}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={formSelectionHandler<string>({
-          runtime,
-          action: onAgentSelect,
+        onSelect={bindSelection(props, onAgentSelect, {
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
           // picker instead of closing — but only while still choosing the root
@@ -185,9 +207,6 @@ export function registerBuiltinSlashCommands(options: {
                   openCliSlashCommandForm('model', '');
                 }
               : props.onDone,
-          onError: options.onError,
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />
@@ -201,9 +220,9 @@ export function registerBuiltinSlashCommands(options: {
         stores={stores}
         runtime={runtime}
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<AccountAccessFormValue>({
-          runtime,
-          action: (value, output) => {
+        onSelect={bindSelection<AccountAccessFormValue>(
+          props,
+          (value, output) => {
             switch (value.kind) {
               case 'access':
                 return onModelAccessSelect(value.selection, output);
@@ -213,24 +232,22 @@ export function registerBuiltinSlashCommands(options: {
                 return onLogoutSelect(value.target, output);
             }
           },
-          onDone: props.onDone,
-          onError: options.onError,
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-          completion: 'busy',
-          busyTitle: (value) => {
-            switch (value.kind) {
-              case 'access':
-                return 'Updating model access';
-              case 'login': {
-                const args = parseChatLoginSlashArgs(value.target);
-                return args ? loginStartMessage(args) : 'Signing in';
+          {
+            completion: 'busy',
+            busyTitle: (value) => {
+              switch (value.kind) {
+                case 'access':
+                  return 'Updating model access';
+                case 'login': {
+                  const args = parseChatLoginSlashArgs(value.target);
+                  return args ? loginStartMessage(args) : 'Signing in';
+                }
+                case 'logout':
+                  return 'Signing out';
               }
-              case 'logout':
-                return 'Signing out';
-            }
+            },
           },
-        })}
+        )}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -256,9 +273,9 @@ export function registerBuiltinSlashCommands(options: {
           toolEdit: bypassState('toolEdit'),
           goal: goalAutoApproveAll.get(),
         }}
-        onSelect={formSelectionHandler<ApprovalFormValue>({
-          runtime,
-          action: (value) => {
+        onSelect={bindSelection<ApprovalFormValue>(
+          props,
+          (value) => {
             switch (value) {
               case 'goal':
                 return Effect.sync(() => {
@@ -288,12 +305,8 @@ export function registerBuiltinSlashCommands(options: {
                 return value satisfies never;
             }
           },
-          onDone: props.onDone,
-          onError: options.onError,
-          completion: 'beforeAction',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
+          { completion: 'beforeAction' },
+        )}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -326,22 +339,14 @@ export function registerBuiltinSlashCommands(options: {
         availableRows={props.availableRows}
         selectable={selectable}
         getModelSwitchDisabledReason={options.getModelSwitchDisabledReason}
-        onSelect={formSelectionHandler<string>({
-          runtime,
-          action: onModelSelect,
-          onDone: props.onDone,
-          onError: options.onError,
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
-        })}
+        onSelect={bindSelection(props, onModelSelect)}
         onClose={() => props.onDone(undefined)}
       />
     );
   }
 
   // The plain list pickers differ only by their form and their selection
-  // action; the completion mode, error routing, and persistence plumbing are
-  // one shape, owned here rather than copied per command.
+  // action.
   function makeSelectFormAdapter<T>(
     Form: React.ComponentType<{
       readonly availableRows?: number;
@@ -353,14 +358,8 @@ export function registerBuiltinSlashCommands(options: {
     return (props) => (
       <Form
         availableRows={props.availableRows}
-        onSelect={formSelectionHandler<T>({
-          runtime,
-          action,
-          onDone: props.onDone,
-          onError: options.onError,
+        onSelect={bindSelection(props, action, {
           completion: 'beforeAction',
-          onPersist: props.onPersist,
-          echoOnPersist: props.echoOnPersist,
         })}
         onClose={() => props.onDone(undefined)}
       />

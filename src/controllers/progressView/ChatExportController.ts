@@ -47,6 +47,7 @@ import { pathToLocationIn } from '@utils/files/fileLocation';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
 import { TranscriptExportFailed } from './transcriptExportFailure';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Outcome of loading run data for export. */
 export type ExportInputStatus =
@@ -172,7 +173,7 @@ export class ChatExportController {
     ): Effect.fn.Return<
       LatexExportResult,
       PlatformError.PlatformError,
-      FileSystem.FileSystem | StorageFs | WorkspaceFs
+      FileSystem.FileSystem | StorageFs | WorkspaceFs | ChildProcessSpawner
     > {
       const { storagePath, absolutePath } = yield* this.writeExport(
         runId,

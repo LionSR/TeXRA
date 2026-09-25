@@ -5,7 +5,6 @@
 // an outcome or a request error; an arm the desktop does not perform is
 // `Rejected` with its reason, never dropped.
 
-import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
@@ -69,6 +68,7 @@ import {
   type WorkspaceFs,
 } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
+import latexPreamble from '@resources/templates/chatExport.tex';
 import {
   cloneRoundIndexed,
   type FileOpResult,
@@ -128,9 +128,6 @@ interface DesktopHostRequestsOptions {
   postToRenderer(message: unknown): boolean | void;
   /** A host-initiated change to the surface (PRD 8.5). */
   postSurfaceAction(action: SurfaceActionMessage['action']): void;
-  /** Start the browser sign-in. The failure is the sign-in's own; the arm
-   *  below names it for the request dialog. */
-  signIn(): Effect.Effect<void, Error>;
   getCustomAgentDirectory(): Effect.Effect<
     string,
     AgentDirectoriesFailed,
@@ -487,14 +484,7 @@ export function createDesktopHostRequests(
         try: async () => {
           const { ChatExportController: Controller } =
             await import('@controllers/progressView/ChatExportController');
-          const latexPreamble = await readFile(
-            path.join(options.resourcesPath, 'templates', 'chatExport.tex'),
-            'utf8',
-          );
-          return new Controller({
-            session,
-            latexPreamble,
-          });
+          return new Controller({ session, latexPreamble });
         },
         catch: (cause) =>
           new TranscriptExportFailed({
@@ -609,9 +599,6 @@ export function createDesktopHostRequests(
       fileActions.runMergeFile(baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       runLatexdiffFile(baseFile, editedFile),
-    openDashboard: Effect.sync(() =>
-      postDesktopSettingsView(options.postToRenderer),
-    ),
     openSettings: (section, sessionType) =>
       Effect.sync(() =>
         postDesktopSettingsView(
@@ -644,11 +631,6 @@ export function createDesktopHostRequests(
       Effect.sync(() =>
         postDesktopSettingsView(options.postToRenderer, 'tools'),
       ),
-    signIn: Effect.suspend(() =>
-      options
-        .signIn()
-        .pipe(Effect.mapError((cause) => hostFailure('signIn', cause))),
-    ),
     gettingStarted: (action) =>
       action === 'openWalkthrough'
         ? Effect.sync(() => options.showFirstRunWalkthrough())

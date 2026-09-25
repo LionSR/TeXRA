@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Writable } from 'node:stream';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, PlatformError } from 'effect';
 
 // Local imports
 import {
@@ -183,12 +183,26 @@ export function flushTextStderr(): Effect.Effect<void> {
 }
 
 /**
+ * The user-facing text of a caught error. A `PlatformError`'s own message is
+ * `Tag: FileSystem.method (path)`, with no errno text; its Node cause carries
+ * the real reason (`ENOSPC: no space left on device, copyfile 'a' -> 'b'`),
+ * so that is what the CLI prints.
+ */
+export function cliErrorMessage(error: unknown): string {
+  return toErrorMessage(
+    error instanceof PlatformError.PlatformError
+      ? (error.reason.cause ?? error)
+      : error,
+  );
+}
+
+/**
  * Write a caught error's human-readable message to stderr. Folds the
- * `writeTextStderr(toErrorMessage(error))` pair every command's catch block
+ * `writeTextStderr(cliErrorMessage(error))` pair every command's catch block
  * repeated so the error-formatting choice lives in one place.
  */
 export function writeErrorStderr(error: unknown): void {
-  writeTextStderr(toErrorMessage(error));
+  writeTextStderr(cliErrorMessage(error));
 }
 
 /**

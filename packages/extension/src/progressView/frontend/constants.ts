@@ -1,28 +1,30 @@
-import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
-import { APPROVAL_BYPASS_BADGE } from '@ui/copy/approvalBypass';
-import { DELEGATION_APPROVAL_COPY } from '@ui/copy/delegationApproval';
+import type { HostRequest } from '@shared/session/hostRequest';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 
-export interface ProgressToolbarButton {
+/** One run action in the run header's menu. Stop sits in the row itself. */
+export interface RunMenuAction {
   id: string;
   icon: TeXRAIconName;
-  /** Which per-run bypass this toggle reflects and dispatches. */
-  bypassKind?: ApprovalBypassKind;
+  label: string;
   /**
-   * Frontend-only action the header carries out itself instead of posting to
-   * the backend. A clipboard write has no backend leg, so such a button
-   * declares `localAction` rather than inventing a round trip.
+   * What choosing it sends: a host arm on the run, the runtime's
+   * compaction, or a clipboard write the header makes itself (it has no
+   * backend leg, so it invents no round trip).
    */
-  localAction?: 'copyRunContext';
-  title: string;
-  titleActive?: string;
-  /**
-   * Constant short accessible name for icon-only toggles, whose state is
-   * carried by `aria-pressed` — the name must not swap with state. Falls
-   * back to `title` when omitted.
-   */
-  label?: string;
-  className?: string;
+  arm:
+    | Extract<
+        HostRequest['kind'],
+        | 'resume'
+        | 'runNew'
+        | 'restoreIntoLauncher'
+        | 'openRunStorage'
+        | 'exportTranscript'
+        | 'latexdiff'
+        | 'pack'
+        | 'clean'
+      >
+    | 'run.compact'
+    | 'copyRunContext';
 }
 
 /**
@@ -33,6 +35,7 @@ export const ELEMENT_IDS = {
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
+  BYPASS_CHIP: 'bypassChip',
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',
@@ -46,9 +49,6 @@ export const ELEMENT_IDS = {
   OPEN_RUN_STORAGE_BTN: 'openRunStorageBtn',
   COPY_RUN_CONTEXT_BTN: 'copyRunContextBtn',
   COMPACT_RESPONSE_BTN: 'compactResponseBtn',
-  TOOL_EDIT_TOGGLE_BTN: 'toolEditToggleBtn',
-  BASH_TOGGLE_BTN: 'bashToggleBtn',
-  AUTO_TASK_TOGGLE_BTN: 'autoTaskToggleBtn',
 };
 
 export const GROUP_DOM_IDS = Object.freeze({
@@ -57,146 +57,92 @@ export const GROUP_DOM_IDS = Object.freeze({
   CONTENT_PREFIX: 'group-content-',
 });
 
-const STOP_STREAM_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.STOP_STREAM_BTN,
-  icon: 'circle-stop',
-  title:
-    'Request task interruption (current API call will be aborted if supported)',
-  className: 'stop-button',
-});
-
-const RESTORE_STATE_BUTTON = Object.freeze({
+const RESTORE_STATE_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.RESTORE_STATE_BTN,
+  arm: 'restoreIntoLauncher',
   icon: 'reply',
-  title: 'Edit as new task',
-  className: 'restore-button',
-});
+  label: 'Edit as new task',
+};
 
-const OPEN_RUN_STORAGE_BUTTON = Object.freeze({
+const OPEN_RUN_STORAGE_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
+  arm: 'openRunStorage',
   icon: 'folder-open',
-  title: 'Open in run storage: reveal this run folder and generated files',
-  className: 'storage-button',
-});
+  label: 'Open run folder',
+};
 
-const EXPORT_TRANSCRIPT_BUTTON = Object.freeze({
+const EXPORT_TRANSCRIPT_ACTION: RunMenuAction = {
   id: ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
+  arm: 'exportTranscript',
   icon: 'file-export',
-  title: 'Export this conversation as Markdown, HTML, or PDF',
-  className: 'export-button',
-});
+  label: 'Export conversation…',
+};
 
-const COPY_RUN_CONTEXT_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-  icon: 'copy',
-  localAction: 'copyRunContext',
-  title:
-    'Copy run context: this run and its output paths, as text to paste into a new chat',
-  className: 'copy-run-context-button',
-} satisfies ProgressToolbarButton);
-
-const WORKFLOW_TOOLBAR: readonly ProgressToolbarButton[] = [
-  STOP_STREAM_BUTTON,
+const WORKFLOW_ACTIONS: readonly RunMenuAction[] = [
   {
     id: ELEMENT_IDS.RUN_NEW_BTN,
+    arm: 'runNew',
     icon: 'play',
-    title: 'Start a fresh run (discards previous outputs)',
-    className: 'run-button run-new-button',
+    label: 'Run again from scratch',
   },
   {
     id: ELEMENT_IDS.RESUME_BTN,
+    arm: 'resume',
     icon: 'forward-step',
-    title: 'Resume from saved outputs (continues where it left off)',
-    className: 'run-button resume-button',
+    label: 'Resume from saved outputs',
   },
-  RESTORE_STATE_BUTTON,
-  OPEN_RUN_STORAGE_BUTTON,
-  EXPORT_TRANSCRIPT_BUTTON,
-  COPY_RUN_CONTEXT_BUTTON,
+  RESTORE_STATE_ACTION,
+  OPEN_RUN_STORAGE_ACTION,
+  EXPORT_TRANSCRIPT_ACTION,
+  {
+    id: ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
+    icon: 'copy',
+    arm: 'copyRunContext',
+    label: 'Copy run context',
+  },
   {
     id: ELEMENT_IDS.DIFF_STREAM_BTN,
+    arm: 'latexdiff',
     icon: 'code-compare',
-    title: 'Run latexdiff on existing tex files',
-    className: 'diff-button',
-  },
-  {
-    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
-    icon: 'trash',
-    title: 'Clean: Delete generated output files from this run',
-    className: 'clean-button',
+    label: 'Run latexdiff on the outputs',
   },
   {
     id: ELEMENT_IDS.PACK_STREAM_BTN,
+    arm: 'pack',
     icon: 'box-archive',
-    title: 'Pack: Archive output files into a timestamped History folder',
-    className: 'pack-button',
+    label: 'Archive outputs to History',
+  },
+  {
+    id: ELEMENT_IDS.CLEAN_STREAM_BTN,
+    arm: 'clean',
+    icon: 'trash',
+    label: 'Delete output files',
   },
 ];
 
-const TOOL_EDIT_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.TOOL_EDIT_TOGGLE_BTN,
-  icon: 'pencil',
-  bypassKind: 'toolEdit',
-  label: APPROVAL_BYPASS_BADGE.toolEdit,
-  title: `${APPROVAL_BYPASS_BADGE.toolEdit}: Auto-approve file edits in this run`,
-  titleActive:
-    'File edits are being auto-approved. Click to resume approval prompts.',
-  className: 'bypass-toggle-button',
-});
-
-const BASH_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.BASH_TOGGLE_BTN,
-  icon: 'terminal',
-  bypassKind: 'bash',
-  label: APPROVAL_BYPASS_BADGE.bash,
-  title: `${APPROVAL_BYPASS_BADGE.bash}: Auto-approve shell commands in this run`,
-  titleActive:
-    'Shell commands are being auto-approved. Click to resume approval prompts.',
-  className: 'bypass-toggle-button',
-});
-
-const AUTO_TASK_TOGGLE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.AUTO_TASK_TOGGLE_BTN,
-  icon: 'rocket',
-  bypassKind: 'superYolo',
-  label: APPROVAL_BYPASS_BADGE.superYolo,
-  title: DELEGATION_APPROVAL_COPY.progressViewToggle,
-  titleActive:
-    'Agent tasks, file edits, and shell commands are being auto-approved — click to resume prompts',
-  className: 'bypass-toggle-button bypass-toggle-button--task',
-});
-
-const COMPACT_RESPONSE_BUTTON = Object.freeze({
-  id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
-  icon: 'compress',
-  title:
-    'Compact conversation context (summarize history to reduce token usage)',
-  className: 'compact-button',
-});
-
-const TOOL_USE_TOOLBAR: readonly ProgressToolbarButton[] = [
-  STOP_STREAM_BUTTON,
-  TOOL_EDIT_TOGGLE_BUTTON,
-  BASH_TOGGLE_BUTTON,
-  AUTO_TASK_TOGGLE_BUTTON,
-  COMPACT_RESPONSE_BUTTON,
-  RESTORE_STATE_BUTTON,
-  OPEN_RUN_STORAGE_BUTTON,
-  EXPORT_TRANSCRIPT_BUTTON,
+const TOOL_USE_ACTIONS: readonly RunMenuAction[] = [
+  {
+    id: ELEMENT_IDS.COMPACT_RESPONSE_BTN,
+    arm: 'run.compact',
+    icon: 'compress',
+    label: 'Compact conversation',
+  },
+  RESTORE_STATE_ACTION,
+  OPEN_RUN_STORAGE_ACTION,
+  EXPORT_TRANSCRIPT_ACTION,
 ];
 
-export const TOOLBAR_BUTTONS = {
-  workflow: WORKFLOW_TOOLBAR,
-  toolUse: TOOL_USE_TOOLBAR,
+export const RUN_MENU_ACTIONS = {
+  workflow: WORKFLOW_ACTIONS,
+  toolUse: TOOL_USE_ACTIONS,
 };
 
 /**
- * Toolbar for a run with no known agent category — identity still pending,
+ * Actions for a run with no known agent category — identity still pending,
  * or a non-agent run (process, multi-agent workflow container). Only the
  * category-neutral actions; never a fabricated category's chrome.
  */
-export const NEUTRAL_TOOLBAR: readonly ProgressToolbarButton[] = [
-  STOP_STREAM_BUTTON,
-  OPEN_RUN_STORAGE_BUTTON,
-  EXPORT_TRANSCRIPT_BUTTON,
+export const NEUTRAL_RUN_ACTIONS: readonly RunMenuAction[] = [
+  OPEN_RUN_STORAGE_ACTION,
+  EXPORT_TRANSCRIPT_ACTION,
 ];

@@ -1,7 +1,7 @@
 export const ANSI_ESCAPE_START = String.fromCharCode(27);
 export const ANSI_C1_CSI_START = String.fromCharCode(0x9b);
 
-const ANSI_BEL = String.fromCharCode(7);
+export const ANSI_BEL = String.fromCharCode(7);
 const ANSI_C1_STRING_TERMINATOR = String.fromCharCode(0x9c);
 
 /** A CSI sequence (`ESC [`) ends at its final byte, in the range `@`–`~`. */
@@ -19,6 +19,11 @@ export function isCsiFinalByte(code: number): boolean {
 
 /** An OSC sequence (`ESC ]`) ends with BEL or the two-char ST (`ESC \`). */
 const OSC_STRING_TERMINATOR = `${ANSI_ESCAPE_START}\\`;
+
+/** Build an OSC sequence, BEL-terminated unless the protocol asks for ST. */
+export function osc(body: string, terminator: 'bel' | 'st' = 'bel'): string {
+  return `${ANSI_ESCAPE_START}]${body}${terminator === 'st' ? OSC_STRING_TERMINATOR : ANSI_BEL}`;
+}
 
 /** ISO-2022 intermediate bytes for charset/line-size designators (`ESC ( 0`, `ESC # 3`, etc.). */
 function isAnsiIntermediateByte(char: string | undefined): boolean {

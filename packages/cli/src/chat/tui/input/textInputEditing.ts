@@ -1,18 +1,8 @@
-import {
-  isEscapeInput,
-  isUnhandledControlInput,
-  normalizedCtrlInput,
-  SYNTHETIC_SHIFT_RETURN_INPUT,
-} from '@cli/tui/inputKeys';
 import { clamp } from '@utils/core';
 
 export interface TextEdit {
   readonly value: string;
   readonly cursor: number;
-}
-
-export interface TextInputChunkEdit extends TextEdit {
-  readonly submit: boolean;
 }
 
 /**
@@ -146,54 +136,4 @@ export function verticalCursorMove(
 
   const column = c - (starts[lineIndex] ?? 0);
   return (starts[target] ?? 0) + Math.min(column, lines[target]?.length ?? 0);
-}
-
-/** Readline edits honored inside batched terminal input chunks. */
-const CHUNK_CTRL_EDITS: Readonly<Record<string, CursorEdit>> = {
-  a: (v, c) => ({ value: v, cursor: lineStartCursor(v, c) }),
-  e: (v, c) => ({ value: v, cursor: lineEndCursor(v, c) }),
-  u: deleteToStart,
-  k: deleteToEnd,
-  w: deletePreviousWord,
-};
-
-export function applyTerminalInputChunk(
-  value: string,
-  cursor: number,
-  input: string,
-): TextInputChunkEdit {
-  let edit: TextEdit = { value, cursor: clampCursor(cursor, value.length) };
-  let submit = false;
-
-  const chars = [...input];
-  for (let index = 0; index < chars.length; index += 1) {
-    const ch = chars[index];
-    if (ch === SYNTHETIC_SHIFT_RETURN_INPUT || ch === '\n') {
-      edit = insertText(edit.value, edit.cursor, '\n');
-      continue;
-    }
-    if (ch === '\r') {
-      if (chars[index + 1] === '\n' && index + 2 < chars.length) {
-        edit = insertText(edit.value, edit.cursor, '\n');
-        index += 1;
-        continue;
-      }
-      submit = true;
-      break;
-    }
-
-    const ctrl = normalizedCtrlInput(ch, {});
-    const ctrlEdit = ctrl ? CHUNK_CTRL_EDITS[ctrl] : undefined;
-    if (ctrlEdit) {
-      edit = ctrlEdit(edit.value, edit.cursor);
-      continue;
-    }
-    if (ctrl || isEscapeInput(ch, {}) || isUnhandledControlInput(ch)) {
-      continue;
-    }
-
-    edit = insertText(edit.value, edit.cursor, ch);
-  }
-
-  return { ...edit, submit };
 }

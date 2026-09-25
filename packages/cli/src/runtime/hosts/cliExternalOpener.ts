@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 
 // Local imports
 import { ExternalOpenFailed, type ExternalOpener } from '@hosts/uiHosts';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 
 import { launchBrowser } from '../browser';
 
@@ -15,26 +15,28 @@ import { launchBrowser } from '../browser';
  * `launchBrowser` is the foreign API this port adapts — `open`, `rundll32`,
  * or `xdg-open`, whichever the platform answers with. It reports a spawn
  * failure and a non-zero exit as the same "could not open a browser" fault,
- * which is what this port's one failure means, so its rejection is worded
- * straight into {@link ExternalOpenFailed}. Nothing waits on the browser
- * itself, so an interrupted fiber detaches from the launch exactly as the two
- * graphical hosts detach from theirs.
+ * which is what this port's one failure means, so its failure is worded
+ * straight into {@link ExternalOpenFailed}. The port is served with nothing
+ * in context, so this module-level adapter is where the Node spawner is
+ * discharged, from the same layer value every process runtime merges.
  */
 class CliExternalOpener implements ExternalOpener {
   openExternal(url: string): Effect.Effect<void, ExternalOpenFailed> {
-    return Effect.tryPromise({
-      try: () => launchBrowser(url),
-      catch: (cause) =>
-        new ExternalOpenFailed({
-          kind: 'url',
-          target: url,
-          // `launchBrowser` already words the platform's own refusal (a
-          // missing `xdg-open`, a non-zero exit) without echoing the URL,
-          // which matters: these are sign-in and provider-key URLs.
-          message: toErrorMessage(cause),
-          cause,
-        }),
-    });
+    return launchBrowser(url).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ExternalOpenFailed({
+            kind: 'url',
+            target: url,
+            // `launchBrowser` already words the platform's own refusal (a
+            // missing `xdg-open`, a non-zero exit) without echoing the URL,
+            // which matters: these are sign-in and provider-key URLs.
+            message: cause.message,
+            cause,
+          }),
+      ),
+      Effect.provide(nodePlatformServices),
+    );
   }
 }
 

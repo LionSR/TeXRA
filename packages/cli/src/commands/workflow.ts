@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
@@ -314,6 +314,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* options.session;
+    const fileSystem = yield* FileSystem.FileSystem;
     let workflowResult: CliWorkflowRunResult | undefined;
     let workflowOutputError: unknown;
     let resumeHintWritten = false;
@@ -380,12 +381,11 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         tryCommitPublication,
       ) =>
         Effect.gen(function* () {
-          // Handed over by the launch, which is the only load of this run's
-          // definition: the defaults this run actually executed, not a reread
-          // of a catalog entry a nested refresh may have replaced with a
-          // remote listing that carries none. `cli.expectedOutputFiles` holds
-          // the input-derived names the launch computed, which stand in when
-          // the agent declares none.
+          // Handed over by the launch (the only load of this run's definition):
+          // the defaults this run actually executed, not a reread of a catalog
+          // entry a nested refresh may have swapped for a remote listing that
+          // carries none. The input-derived `cli.expectedOutputFiles` the
+          // launch computed stand in when the agent declares none.
           const declaredOutputFiles = agentDefaultOutputFiles.filter(Boolean);
           const expectedOutputFiles = declaredOutputFiles.length
             ? declaredOutputFiles
@@ -395,7 +395,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               expectedOutputFiles,
               storageRoot: session.roots.storage,
               tryCommitPublication,
-            }),
+            }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
           let outcome = result.outcome;
           if (Result.isFailure(outputResult)) {

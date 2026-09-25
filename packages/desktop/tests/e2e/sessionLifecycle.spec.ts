@@ -43,6 +43,7 @@ function inEventDatabase<A, E>(
                 fixture.ProcessIdentity.layer(
                   JSON.stringify([hostname().toLowerCase(), process.pid, null]),
                 ),
+                fixture.nodePlatformServices,
               ),
             ),
           ),

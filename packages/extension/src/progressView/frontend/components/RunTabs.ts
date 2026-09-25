@@ -284,20 +284,6 @@ class RunTab extends LitElement {
               >`
             : nothing
         }
-        <wa-button
-          id="run-tab-delete-button"
-          class="action-icon-button tab-delete"
-          appearance="plain"
-          variant="neutral"
-          size="s"
-          type="button"
-          aria-label=${`Delete ${runTitle}`}
-          data-run=${run.id}
-          data-action="delete"
-        >
-          ${waIcon('xmark')}
-        </wa-button>
-        <wa-tooltip for="run-tab-delete-button">Delete</wa-tooltip>
       </div>
     `;
   }
@@ -483,11 +469,6 @@ export class RunTabs extends LitElement {
     switch (action) {
       case 'select':
         this.dispatchEvent(SessionUiEvents.surface({ kind: 'select', runId }));
-        break;
-      case 'delete':
-        this.dispatchEvent(
-          SessionUiEvents.runtime({ kind: 'run.delete', runId }),
-        );
         break;
       case 'resume':
         this.dispatchEvent(SessionUiEvents.host({ kind: 'resume', runId }));

@@ -44,9 +44,12 @@ function displayWidthForTest(line: string): number {
 
 type RenderOptions = Parameters<typeof renderAnsiMarkdown>[1];
 
-/** Renders markdown and strips ANSI, for assertions on the visible text. */
+/** Normalizes and renders markdown the way a transcript row does, then strips
+ *  ANSI, for assertions on the visible text. */
 function renderPlain(markdown: string, options?: RenderOptions): string {
-  return stripAnsi(renderAnsiMarkdown(markdown, options));
+  return stripAnsi(
+    renderAnsiMarkdown(normalizeKnownHtmlForCliMarkdown(markdown), options),
+  );
 }
 
 /** Strips ANSI, asserts every line fits `width`, and returns the plain lines. */

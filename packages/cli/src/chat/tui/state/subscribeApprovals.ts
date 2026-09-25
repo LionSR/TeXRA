@@ -37,6 +37,7 @@ import {
 import { warn as logWarning } from '@logger/logUtils';
 import {
   API_PROVIDERS,
+  type ApiProvider,
   hasUsableApiKey,
   isApiProvider,
   lookupApiKeyUncached,
@@ -58,6 +59,7 @@ import {
   dropPresentation,
   forgetSettledRequests,
   landRequestDecision,
+  pruneToLive,
   stagePresentation,
   useHostCapability,
 } from './approvalQueue';
@@ -87,6 +89,12 @@ interface TuiApprovalStores {
 
 /** The pending requests this surface watches, as a level it subscribes to. */
 const pendingRequests = computed(() => attentionRequests(currentView()));
+
+/** The provider a retry failed on, when it names one this host has keys for. */
+function retryProvider(permission: RetryPermission): ApiProvider | undefined {
+  const requested = permission.errorDetails?.provider;
+  return requested && isApiProvider(requested) ? requested : undefined;
+}
 
 /**
  * Create the TUI's presentation host, and answer for its lifetime the
@@ -200,11 +208,7 @@ export function createTuiHostInteractions(
       );
       return;
     }
-    const requestedProvider = permission.errorDetails?.provider;
-    const provider =
-      requestedProvider && isApiProvider(requestedProvider)
-        ? requestedProvider
-        : undefined;
+    const provider = retryProvider(permission);
     stores.runtime.runFork(
       Effect.gen(function* () {
         const failure = yield* Effect.match(
@@ -274,11 +278,7 @@ export function createTuiHostInteractions(
       stagePresentation({ kind: 'retry', data: permission, tui: {} });
       return;
     }
-    const requestedProvider = permission.errorDetails?.provider;
-    const provider =
-      requestedProvider && isApiProvider(requestedProvider)
-        ? requestedProvider
-        : undefined;
+    const provider = retryProvider(permission);
     stores.runtime.runFork(
       Effect.gen(function* () {
         // Preparation only adorns the card, so no lookup outcome may stop it
@@ -342,11 +342,7 @@ export function createTuiHostInteractions(
     // it, however they settled: a decision taken on another surface or a run
     // interruption drops the fact without passing through this surface.
     forgetSettledRequests(live);
-    for (const id of acted) if (!live.has(id)) acted.delete(id);
-    for (const id of automaticSwitches) {
-      if (!live.has(id)) automaticSwitches.delete(id);
-    }
-    for (const id of switched) if (!live.has(id)) switched.delete(id);
+    pruneToLive(live, acted, automaticSwitches, switched);
     for (const request of pending) {
       if (acted.has(request.requestId)) continue;
       const payload = request.payload;
@@ -460,6 +456,11 @@ export function announceForegroundApprovals(): () => void {
   const check = (): void => {
     const pending = currentApproval.get();
     if (!pending) return;
+    // A settled request is never presented again, so its entry leaves too.
+    pruneToLive(
+      new Set(pendingRequests.get().map((request) => request.requestId)),
+      announced,
+    );
     const id = pending.payload.data.requestId;
     if (announced.has(id)) return;
     announced.add(id);

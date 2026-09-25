@@ -11,19 +11,28 @@ import {
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
+import { withEnv } from '@test/support/testEnv';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+
+import type { HttpClient } from 'effect/unstable/http';
 
 type Options = Parameters<typeof checkForDesktopUpdate>[0];
 const release = { version: '0.40.0' };
-const runCheck = (overrides: Partial<Options> = {}) =>
+const runCheck = (
+  overrides: Partial<Options> = {},
+  env: Record<string, string> = {},
+) =>
   checkForDesktopUpdate({
     currentVersion: '0.39.3',
     isPackaged: true,
-    env: {},
     notify: () => {},
     fetchRelease: Effect.succeed(release),
     ...overrides,
-  });
-const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
+  }).pipe(withEnv(env));
+const withRecords = <A, E>(
+  program: Effect.Effect<A, E, UpdateCheckRecords | HttpClient.HttpClient>,
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -36,6 +45,7 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
             Layer.provide(
               globalDatabaseLayer(storage).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+                Layer.provide(nodeSpawnerLayer),
                 Layer.orDie,
               ),
             ),
@@ -43,7 +53,9 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
         ),
       );
     }),
-  ).pipe(Effect.provide(NodeFileSystem.layer));
+  ).pipe(
+    Effect.provide(Layer.merge(NodeFileSystem.layer, testHttpClientLayer)),
+  );
 
 describe('desktop update checker', () => {
   it.live('skips entirely for unpackaged (dev) runs', () =>
@@ -65,10 +77,10 @@ describe('desktop update checker', () => {
     withRecords(
       Effect.gen(function* () {
         const fetchRelease = vi.fn(() => release);
-        yield* runCheck({
-          env: { TEXRA_NO_UPDATE_CHECK: '1' },
-          fetchRelease: Effect.sync(fetchRelease),
-        });
+        yield* runCheck(
+          { fetchRelease: Effect.sync(fetchRelease) },
+          { TEXRA_NO_UPDATE_CHECK: '1' },
+        );
         expect(fetchRelease).not.toHaveBeenCalled();
       }),
     ),

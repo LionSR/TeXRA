@@ -9,6 +9,7 @@ import {
   discoverSkillSources as discoverSkillSourcesEffect,
   type SkillSource,
 } from '@skills/loadSkills';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
@@ -16,7 +17,11 @@ const tempRoots = useTempDirs();
 
 /** One source-ordered tier: each root scanned in turn. */
 const discoverSkillSources = (sources: readonly SkillSource[]) =>
-  Effect.runPromise(discoverSkillSourcesEffect([{ order: 'source', sources }]));
+  Effect.runPromise(
+    discoverSkillSourcesEffect([{ order: 'source', sources }]).pipe(
+      Effect.provide(nodePlatformLayer),
+    ),
+  );
 
 async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-skills-', tempRoots);
