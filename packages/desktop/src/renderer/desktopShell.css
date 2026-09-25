@@ -323,7 +323,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-brand-fill-loud);
 }
 
-/* The row's own actions, shown while the row is hovered or focused. */
 /* The row's own actions take room only while the row is hovered or
    focused, so at rest the project name has the sidebar's whole width. */
 .shell-project-new,

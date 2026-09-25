@@ -83,7 +83,8 @@ export const progressAppStyles = css`
      empty page at the bottom. Its rail already lists the running tasks, so
      the Active now strip would be a second copy there. */
   :host([placement='desktop']) .empty {
-    justify-content: center;
+    /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
+    justify-content: safe center;
   }
   :host([placement='desktop']) .launch-banners {
     margin-top: 0;

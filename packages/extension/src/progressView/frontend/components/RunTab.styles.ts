@@ -236,8 +236,9 @@ export const runTabStyles = css`
     margin-inline-start: var(--wa-space-3xs);
   }
 
-  /* A row at rest is its title and status glyph; the interrupted notice and
-     Resume appear with the metadata line, on hover, focus, or selection. */
+  /* A row at rest is its title and status glyph; its status detail (the
+     interrupted, held-elsewhere or unreadable notice) and Resume appear with
+     the metadata line, on hover, focus, or selection. */
   .tab-container:not(:hover, :focus-within, .is-active)
     :is(.tab-detail, .tab-resume) {
     display: none;
