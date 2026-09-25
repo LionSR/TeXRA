@@ -100,8 +100,7 @@ function buildApprovedResult(): ToolResult {
 
 /**
  * Everything this tool's program needs from its invocation capability: the
- * call, whose workspace configuration the goal feature flag is read from,
- * and the run `execute` established — whose session owns this turn, its
+ * call, and the run `execute` established — whose session owns this turn, its
  * approval surface and its own `goalStateChanged` row, read and written
  * through `ports.run.session`.
  */
