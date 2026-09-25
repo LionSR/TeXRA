@@ -22,10 +22,8 @@ import * as tar from 'tar';
 import { withLogChannel } from '@logger/effectLog';
 import { randomizedExponentialBackoff } from '@utils/core/backoffSchedule';
 import { isTransientHttpStatus } from '@utils/core/httpStatus';
-import {
-  pathExists,
-  readDirectoryTypedTolerant,
-} from '@utils/files/fsDurability';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+import { entryExists } from '@utils/files/fsEntryExists';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { hasExtension } from '@utils/core/pathCore';
 import { normaliseArxivIdentifier } from './arxivIdentifier';
@@ -90,32 +88,6 @@ const permanentFs = <T, R>(
   effect: Effect.Effect<T, PlatformError.PlatformError, R>,
 ): Effect.Effect<T, ArxivSourcePermanentError, R> =>
   effect.pipe(Effect.mapError(permanentFsError));
-
-/**
- * Whether `target` names an entry, a dangling or circular symlink included.
- *
- * The standard library's `exists` asks the stricter question of whether the
- * path *resolves*, and answers `false` for such a link. `readLink` answers the
- * lstat half -- a path it names is a link, resolvable or not -- and
- * `pathExists` (ENOTDIR read as absent) answers for everything else.
- *
- * The link half is what makes the clobber refusal below fire: a `main.tex`
- * symlink whose target is gone names an entry, and `rename` must refuse it
- * rather than replace the user's link with a regular file.
- */
-const existsAt = (
-  fs: FileSystem.FileSystem,
-  target: string,
-): Effect.Effect<boolean, PlatformError.PlatformError> =>
-  Effect.gen(function* () {
-    const named = yield* fs.readLink(target).pipe(
-      Effect.as(true),
-      // Not a link, or not there at all: the probe below decides.
-      Effect.catch(() => Effect.succeed(false)),
-    );
-    if (named) return true;
-    return yield* pathExists(fs, target);
-  });
 
 /**
  * Abort foreign stream work on interruption, then join its actual promise.
@@ -553,7 +525,7 @@ class ArxivSourceProcessor {
         return false;
       }
       const fs = yield* FileSystem.FileSystem;
-      if (!(yield* permanentFs(existsAt(fs, paperDirFull)))) {
+      if (!(yield* permanentFs(entryExists(fs, paperDirFull)))) {
         return false;
       }
       // The tolerant listing is the facade's `readDir`: the provider typed
@@ -715,10 +687,12 @@ class ArxivSourceProcessor {
       // Rename to main.tex and move to paper root. The facade's `rename`
       // refused to clobber an existing target (its platform provider threw
       // `EEXIST`), while the standard library's `rename` is node's, which
-      // overwrites silently — so the refusal is spelled out here.
+      // overwrites silently — so the refusal is spelled out here. A dangling
+      // `main.tex` symlink names an entry too, and must block the rename
+      // rather than be replaced by a regular file.
       const targetPath = path.join(paperDirFull, 'main.tex');
       if (sourceFilePath !== targetPath) {
-        if (yield* permanentFs(existsAt(fs, targetPath))) {
+        if (yield* permanentFs(entryExists(fs, targetPath))) {
           return yield* Effect.fail(
             new ArxivSourcePermanentError({
               message: `Target already exists: ${targetPath}`,
