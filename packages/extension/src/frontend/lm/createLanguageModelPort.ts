@@ -61,7 +61,7 @@ export function createLanguageModelPort(
             toModelInfo(model, accessInformation),
           ),
         // The editor's own error travels on unchanged (a non-Error rejection
-        // is wrapped): the one production consumer (`runtimeModelRegistry`)
+        // is wrapped): the one production consumer (`discoverCopilotRoutes`)
         // hands it to the caller that asked for discovery, which reads its
         // message.
         catch: ensureError,

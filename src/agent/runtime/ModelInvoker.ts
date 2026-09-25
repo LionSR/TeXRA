@@ -16,6 +16,7 @@
  * billed attempt implicitly.
  */
 import { randomUUID } from 'node:crypto';
+import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
@@ -48,7 +49,6 @@ import {
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
@@ -906,8 +906,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             // endpoint) and binds the catalog model.
             const config =
               selection === 'personal'
-                ? ((yield* resolveRuntimeModelConfig(failed.modelId)) ??
-                  failed.config)
+                ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
                 : failed.config;
             const next = yield* bindModel({
               config,

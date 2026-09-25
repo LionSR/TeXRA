@@ -15,8 +15,8 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
-import type { RunId } from '@shared/schemas';
 import type { Surface } from '@shared/session/surface';
+import { unseenRuns } from '@shared/session/unseenRuns';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
@@ -34,8 +34,6 @@ export interface RailProject {
   readonly display: ProjectDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
-  /** Its runs that finished since the user last had them on screen. */
-  readonly unseen: ReadonlySet<RunId>;
 }
 
 interface ShellSidebarModel {
@@ -99,7 +97,7 @@ function projectStatus(
   if (interrupted > 0)
     return { tone: 'interrupted', label: `${interrupted} interrupted` };
   if (running > 0) return { tone: 'running', label: `${running} running` };
-  const unseen = project.unseen.size;
+  const unseen = unseenRuns(project.surface, project.view).size;
   if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
   return undefined;
 }
@@ -189,7 +187,6 @@ function projectSection(
             <run-tabs
               .view=${project.view}
               .surface=${project.surface}
-              .unseen=${project.unseen}
               .topLevelOnly=${true}
             ></run-tabs>
           </div>`

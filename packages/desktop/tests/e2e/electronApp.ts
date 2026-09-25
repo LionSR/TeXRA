@@ -236,9 +236,10 @@ export async function dismissOnboarding(page: Page): Promise<void> {
 }
 
 export async function showLauncher(launched: LaunchedApp): Promise<void> {
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'desktop:showLauncher' }, '*');
-  });
+  await launched.page
+    .locator('.shell-sidebar-primary .shell-sidebar-action')
+    .filter({ hasText: 'New task' })
+    .click();
   await launched.page.waitForFunction(
     () => {
       return (

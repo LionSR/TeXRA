@@ -99,7 +99,7 @@ describe('desktop preview host', () => {
     { kind: 'exportTranscript', runId: 'missing:stream' as RunId },
     { kind: 'polish', text: 'A conserved quantity.' },
   ] satisfies HostRequest[])(
-    'presents $kind failure once through the request dispatcher',
+    'answers a $kind failure without a host dialog',
     (request) =>
       Effect.gen(function* () {
         const { createDesktopPreviewHost } = yield* Effect.promise(() =>
@@ -202,13 +202,10 @@ describe('desktop preview host', () => {
             handler.handleHostRequest(request, 'window'),
           ),
         );
+        // The surface shows the answer; the host adds no dialog of its own.
         expect(error).toBeDefined();
-        expect(present).toHaveBeenCalledOnce();
-        expect(present).toHaveBeenCalledWith('requestShowError', {
-          message: expect.stringMatching(/\S/),
-        });
+        expect(present).not.toHaveBeenCalled();
         expect(showErrorMessage).not.toHaveBeenCalled();
-        present.mockClear();
         const cancelled = yield* Effect.flip(
           withProcessServices(
             testRuntime(),

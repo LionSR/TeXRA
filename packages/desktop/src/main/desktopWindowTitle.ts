@@ -1,13 +1,8 @@
-import { basename } from 'node:path';
 import { type BrowserWindow } from 'electron';
 import { Effect, type Scope, Stream, SubscriptionRef } from 'effect';
 import type { SessionHandle } from '@agent/runtime';
-import {
-  formatSessionTitle,
-  NATIVE_WINDOW_TITLE,
-  type SessionTitleState,
-} from '@shared/sessionTitle';
-import type { SessionView } from '@shared/session/sessionView';
+import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
+import { sessionActivity } from '@shared/session/sessionView';
 
 type DesktopTitleSession = Pick<SessionHandle, 'view'>;
 
@@ -16,21 +11,14 @@ type DesktopTitleWindow = Pick<
   'getTitle' | 'isDestroyed' | 'setTitle' | 'webContents'
 >;
 
-/** The paper-level activity, read from the fold's rollup and nothing else:
- *  a decision waiting on the user outranks a run in progress. */
-function sessionActivity(view: SessionView): SessionTitleState {
-  if (view.rollup.waiting > 0) return 'approval';
-  return view.rollup.running > 0 ? 'running' : 'idle';
-}
-
 /** Compute the current title synchronously, including before a window opens. */
 export function getDesktopWindowTitle(
   session: DesktopTitleSession,
-  workspacePath: string | undefined,
+  /** The project's display name; undefined for the no-workspace session. */
+  projectName: string | undefined,
 ): string {
-  const workspaceName = workspacePath ? basename(workspacePath) : undefined;
   return formatSessionTitle(
-    workspaceName,
+    projectName,
     sessionActivity(SubscriptionRef.getUnsafe(session.view)),
     { style: NATIVE_WINDOW_TITLE },
   );
@@ -47,7 +35,7 @@ export function getDesktopWindowTitle(
 export function installDesktopWindowTitle(
   window: DesktopTitleWindow,
   session: DesktopTitleSession,
-  workspacePath: string | undefined,
+  projectName: string | undefined,
   isCurrent: () => boolean,
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
@@ -55,7 +43,7 @@ export function installDesktopWindowTitle(
     let disposed = false;
     const update = (): void => {
       if (disposed || !isCurrent() || window.isDestroyed()) return;
-      const title = getDesktopWindowTitle(session, workspacePath);
+      const title = getDesktopWindowTitle(session, projectName);
       if (title === currentTitle) return;
       currentTitle = title;
       window.setTitle(title);

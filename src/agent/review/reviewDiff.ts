@@ -20,7 +20,6 @@ import { makeMachineGitEnv } from '@utils/system/gitEnv';
 import { splitOutputLines } from '@utils/text/stringUtils';
 
 // Local file imports
-import { normalizeReviewFilePath } from './reviewIssues';
 
 const LOG_CHANNEL = 'reviewDiff';
 
@@ -137,10 +136,12 @@ const resolveRepoRoot = Effect.fnUntraced(function* (cwd: string) {
 });
 
 /**
- * True when `file` belongs to the collected change set. `changedFiles` must
- * already be normalized with `normalizeReviewFilePath` — the collection
- * normalizes the list once when the diff lands rather than re-normalizing
- * the whole list per reported issue. Prefix matches keep issues inside
+ * True when `file` belongs to the collected change set. Both sides are
+ * already normalized with `normalizeReviewFilePath`: the collection
+ * normalizes the list once when the diff lands, and `createReviewIssue` the
+ * issue path once when the report is stored, so the path compares as given
+ * (normalizing it again would strip a real leading `a/` or `b/` directory).
+ * Prefix matches keep issues inside
  * changed submodules, whose diff entries name the submodule directory
  * rather than the inner file — this matcher lives next to the diff
  * collection so that knowledge stays in one module.
@@ -149,9 +150,8 @@ export function isPathInChangeSet(
   changedFiles: readonly string[],
   file: string,
 ): boolean {
-  const candidate = normalizeReviewFilePath(file);
   return changedFiles.some(
-    (entry) => entry === candidate || candidate.startsWith(`${entry}/`),
+    (entry) => entry === file || file.startsWith(`${entry}/`),
   );
 }
 

@@ -8,6 +8,7 @@
  * orchestrator delegation) leaves the flag off and keeps the chosen model.
  */
 
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -17,7 +18,6 @@ import {
   readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 
 import { AgentCategory } from '@shared/schemas';
 import { getHelperModelName } from './helperModelName';
@@ -39,7 +39,7 @@ export const applyHelperModelPreference = Effect.fn(
   const helperModel = yield* getHelperModelName(stores);
   if (helperModel === config.model) return config;
 
-  const helperModelConfig = getRuntimeModelConfig(helperModel);
+  const helperModelConfig = MODEL_CONFIGS[helperModel];
 
   // A tool-use agent (e.g. latexFixer) needs its tools, so do not assign a
   // helper model that does not declare function calling — not only one that

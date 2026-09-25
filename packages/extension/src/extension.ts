@@ -43,7 +43,6 @@ import { fromHost } from '@controllers/session/hostCallFailure';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
-import { refreshApiKeyStatusBar } from '@frontend/statusBar/apiKeyStatusBar';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   initializeLatexSupport,
@@ -65,7 +64,6 @@ import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
-import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -80,7 +78,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { createLog } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
-import { invalidateRuntimeModelRegistry } from '@model/runtimeModelRegistry';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import type {
   AgentResumePort,
@@ -123,7 +120,6 @@ import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -154,7 +150,6 @@ class WorkspaceEnvFileUnreadable extends Data.TaggedError(
 )<{ readonly cause: unknown }> {}
 
 let statusBarItem: vscode.StatusBarItem | undefined;
-let apiKeyStatusBarItem: vscode.StatusBarItem | undefined;
 // Re-instantiated on every activate(): the drain trips an internal
 // idempotency flag, so a stale module-level instance would silently swallow
 // handlers registered by a second activate() in the same process.
@@ -685,12 +680,10 @@ async function activateExtension(context: vscode.ExtensionContext) {
   // which reads the account plane's access token: with the provider in place
   // the refresh fetches the real catalog instead of short-circuiting on a null
   // token, so activation now performs that one background fetch.
-  const invalidateLanguageModels = () => {
-    invalidateRuntimeModelRegistry();
-    emitAppSignal('languageModelsChanged', undefined);
-  };
   context.subscriptions.push(
-    languageModel.onDidChange(invalidateLanguageModels),
+    languageModel.onDidChange(() =>
+      emitAppSignal('languageModelsChanged', undefined),
+    ),
   );
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
@@ -710,7 +703,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
   }
   // `disposeStatusListener` and `statusBarItem` are owned solely by
   // `context.subscriptions` (see the push near the end of `activate`), matching
-  // `apiKeyStatusBarItem`. Registering them here too would double-dispose.
+  // the setup pill. Registering them here too would double-dispose.
   registerRuntimeShutdownHandlers(lifecycle, {
     afterAgentShutdown: [killActiveRecording()],
     flushArtifacts: runtimeSession.settlePublications(),
@@ -763,13 +756,28 @@ async function activateExtension(context: vscode.ExtensionContext) {
     );
   }
 
+  // The setup pill: shown only while the host snapshot's API-key banner is,
+  // the one credential answer the welcome card also reads (a ChatGPT
+  // subscription and a direct API key count alike). The welcome card in the
+  // TeXRA panel is the one home for that choice.
+  const setupPill = vscode.window.createStatusBarItem(
+    'texra.setupStatus',
+    vscode.StatusBarAlignment.Left,
+  );
+  setupPill.name = 'TeXRA Setup';
+  setupPill.text = '$(rocket) TeXRA: Get Started';
+  setupPill.tooltip =
+    'Connect a model: sign in with ChatGPT or add a provider API key';
+  setupPill.command = EXTENSION_COMMANDS.SHOW_MAIN_VIEW;
+  setupPill.accessibilityInformation = { label: 'TeXRA setup, get started' };
+  context.subscriptions.push(setupPill);
   const progressViewProvider = new ProgressViewProvider(
     context,
     globalState,
     secrets,
     runtime,
     runtimeSession,
-    Effect.suspend(() => apiKeyStatusRefresh()),
+    (banner) => (banner.visible ? setupPill.show() : setupPill.hide()),
   );
   await runtime.runPromise(
     Effect.andThen(
@@ -859,38 +867,6 @@ async function activateExtension(context: vscode.ExtensionContext) {
   statusBarItem.command = 'texra.showProgressView';
   // Shown only while a run is active (`updateStatusBarText`).
 
-  apiKeyStatusBarItem = vscode.window.createStatusBarItem(
-    'texra.setupStatus',
-    vscode.StatusBarAlignment.Left,
-  );
-  apiKeyStatusBarItem.name = 'TeXRA Setup';
-  context.subscriptions.push(apiKeyStatusBarItem);
-  // One refresh at a time, in request order, so the last refresh sees the
-  // newest credential state and is the last one to update the UI. The
-  // refresh starts inside the lane, so no started refresh waits there.
-  const apiKeyStatusRefreshLanes = new Map<'refresh', PerKeyLane>();
-  const apiKeyStatusRefresh = () =>
-    withPerKeyLane(
-      apiKeyStatusRefreshLanes,
-      'refresh',
-    )(refreshApiKeyStatusBar(roots, secrets, apiKeyStatusBarItem));
-  const safeRefreshApiKeyStatus = (): Promise<void> =>
-    runtime.runPromise(
-      apiKeyStatusRefresh().pipe(
-        Effect.catchCause((cause) =>
-          Effect.logError(
-            `API key status refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-        ),
-      ),
-    );
-  void safeRefreshApiKeyStatus();
-  // Without this listener the pill stayed on "Get Started" forever after
-  // a sign-in or after the first API key was stored.
-  onTexraAuthSessionsChanged(context, () => {
-    void safeRefreshApiKeyStatus();
-  });
-
   const statusBarUsageTracker = new StatusBarUsageTracker(runtimeSession);
   const updateStatusBarTooltip = () => {
     if (!statusBarItem) return;
@@ -924,7 +900,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
   const updateStatusBarText = () => {
     if (!statusBarItem) return;
     const count = statusBarUsageTracker.activeRunCount;
-    if (count > 1) {
+    if (statusBarUsageTracker.activity === 'approval') {
+      statusBarItem.text = '$(bell-dot) TeXRA: Waiting for you';
+      statusBarItem.accessibilityInformation = {
+        label: 'TeXRA tasks, waiting for you',
+      };
+    } else if (count > 1) {
       statusBarItem.text = `$(loading~spin) TeXRA: ${count} active`;
       statusBarItem.accessibilityInformation = {
         label: `TeXRA tasks, ${count} active`,
@@ -972,24 +953,12 @@ async function activateExtension(context: vscode.ExtensionContext) {
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.
-    vscode.commands.registerCommand('texra.refreshApiKeyStatus', async () => {
-      await runtime.runPromise(apiKeyStatusRefresh());
-      // Credential facts changed (set/unset API key from any entry point —
-      // palette, walkthrough, welcome card), so the onboarding funnel must
-      // recompute too: the State 0 card has no other signal when a key is
-      // added outside the main view's own round-trip.
-      await runtime.runPromise(
-        progressViewProvider
-          .refreshOnboardingFunnel()
-          .pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-              ).pipe(withLogChannel(EXTENSION_CHANNEL)),
-            ),
-          ),
-      );
-    }),
+    // A credential changed outside the panel's own round trip (palette,
+    // walkthrough, a tool): the API-key banner, and with it the setup pill
+    // and the onboarding funnel, re-read.
+    vscode.commands.registerCommand('texra.refreshApiKeyStatus', () =>
+      runtime.runPromise(progressViewProvider.refreshApiKeyStatus),
+    ),
   );
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`

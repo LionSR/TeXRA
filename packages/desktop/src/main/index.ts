@@ -73,7 +73,6 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -294,7 +293,7 @@ function createWindow(options: {
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
-    initialProject.root,
+    initialProject.root && initialProject.display.name,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -818,9 +817,7 @@ function createWindow(options: {
   const projectBindings = new Map<string, ProjectBinding>();
   const bindProject = (project: DesktopProject): ProjectBinding => {
     const { workspace, browserViews } = createProjectWorkspace(project);
-    const agentRunHost = agentRunHostFor(
-      projectDisplayOf(project.key, project.root).name,
-    );
+    const agentRunHost = agentRunHostFor(project.display.name);
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
@@ -850,7 +847,7 @@ function createWindow(options: {
       ),
     );
     const snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(project.key, project.root),
+      project: project.display,
       root: project.root,
       stores: project.session.roots,
       secrets: options.secrets,
@@ -1049,8 +1046,8 @@ function createWindow(options: {
     );
     postToRendererIfAlive({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      projects: projects.flatMap(({ key, root }) =>
-        root === undefined ? [] : [{ key, root }],
+      open: projects.flatMap(({ key, root }) =>
+        root === undefined ? [] : [key],
       ),
       activeKey,
     });
@@ -1246,7 +1243,7 @@ function createWindow(options: {
           installDesktopWindowTitle(
             window,
             project.session,
-            project.root,
+            project.root && project.display.name,
             () => projectScope === owner,
           ),
         ),
@@ -1424,6 +1421,12 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn,
       showInfoMessage,
+      showLauncher: () => {
+        if (!attachedProject) return;
+        projectBindings
+          .get(attachedProject.key)
+          ?.bridge.surfaceAction({ kind: 'selectNew' });
+      },
       onAsyncError: reportAsyncError,
       runtime,
     },

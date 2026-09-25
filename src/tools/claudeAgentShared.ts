@@ -3,12 +3,17 @@
 import { warn } from '@logger/logUtils';
 import type {
   ClaudeAgentEffort,
+  TokenUsageStats,
   ToolUseLog,
   ToolCallStatus,
 } from '@shared/schemas';
 import { truncateSummary } from '@utils/text/stringUtils';
 
-import type { EffortLevel, ModelUsage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  EffortLevel,
+  ModelUsage,
+  SDKResultMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 
 const LOG_CHANNEL = 'claudeAgent';
 
@@ -50,32 +55,55 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
 
 const SUMMARY_MAX_LENGTH = 60;
 
-/** Raw per-turn usage as reported by the Claude Agent SDK (snake_case, all optional). */
-export interface ClaudeTurnUsage {
-  input_tokens?: number;
-  output_tokens?: number;
-  cache_read_input_tokens?: number;
-  cache_creation_input_tokens?: number;
-  cost_usd?: number;
+/** The Claude counts in the one usage shape; zero cache counts are omitted. */
+function claudeUsageStats(
+  inputTokens: number,
+  outputTokens: number,
+  cacheReadInputTokens: number,
+  cacheCreationInputTokens: number,
+  cost: number,
+): TokenUsageStats {
+  return {
+    inputTokens,
+    outputTokens,
+    cost,
+    ...(cacheReadInputTokens > 0 && { cacheReadInputTokens }),
+    ...(cacheCreationInputTokens > 0 && { cacheCreationInputTokens }),
+  };
 }
 
-/** Collapse the SDK's authoritative per-model totals into one turn summary. */
-export function aggregateClaudeModelUsage(
-  modelUsage: Readonly<Record<string, ModelUsage>> | undefined,
-): ClaudeTurnUsage | null {
-  const models = Object.values(modelUsage ?? {});
+/**
+ * A turn's spend, read once from the SDK's result message: the authoritative
+ * per-model totals (main loop plus nested model calls), or the main-loop
+ * counts from a result that carries no per-model totals.
+ */
+export function claudeResultUsage(
+  result: Pick<SDKResultMessage, 'modelUsage' | 'usage'>,
+): TokenUsageStats | null {
+  if (result.modelUsage == null) {
+    const { usage } = result;
+    return usage
+      ? claudeUsageStats(
+          usage.input_tokens,
+          usage.output_tokens,
+          usage.cache_read_input_tokens,
+          usage.cache_creation_input_tokens,
+          0,
+        )
+      : null;
+  }
+  const models = Object.values(result.modelUsage);
   if (models.length === 0) return null;
 
   const sum = (pick: (model: ModelUsage) => number): number =>
     models.reduce((total, model) => total + pick(model), 0);
-  const usage: Required<ClaudeTurnUsage> = {
-    input_tokens: sum((model) => model.inputTokens),
-    output_tokens: sum((model) => model.outputTokens),
-    cache_read_input_tokens: sum((model) => model.cacheReadInputTokens),
-    cache_creation_input_tokens: sum((model) => model.cacheCreationInputTokens),
-    cost_usd: sum((model) => model.costUSD),
-  };
-  return usage;
+  return claudeUsageStats(
+    sum((model) => model.inputTokens),
+    sum((model) => model.outputTokens),
+    sum((model) => model.cacheReadInputTokens),
+    sum((model) => model.cacheCreationInputTokens),
+    sum((model) => model.costUSD),
+  );
 }
 
 /** Narrow an SDK-sourced value to a plain record, the way every built-in

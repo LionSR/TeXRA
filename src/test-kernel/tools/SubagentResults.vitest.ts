@@ -68,7 +68,7 @@ describe('formatDelivery', () => {
       attributes: [{ name: 'thread-id', value: 'th-42' }],
       wallTime: seconds(1234),
       response: 'all done',
-      usage: { input: 100, output: 20 },
+      usage: { inputTokens: 100, outputTokens: 20 },
     });
     expect(xml).toBe(
       [
@@ -89,7 +89,7 @@ describe('formatDelivery', () => {
       attributes: [{ name: 'session-id', value: 'sess-7' }],
       wallTime: seconds(9000),
       response: 'summary',
-      usage: { input: 5, output: 0 },
+      usage: { inputTokens: 5, outputTokens: 0 },
       lines: ['<cost-usd>0.1234</cost-usd>'],
     });
     expect(xml).toBe(

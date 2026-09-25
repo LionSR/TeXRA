@@ -83,7 +83,7 @@ function withOpenRouterFlagOn<A, E, R>(
  * and then fail later as "No model is available"). Host-specific setup launch
  * routing belongs to `resolveSetupLaunchModel`.
  */
-export function hasAnyUsableSetupCredential(
+function hasAnyUsableSetupCredential(
   stores: SettingsStores,
   secrets: PlatformSecrets,
 ): Effect.Effect<boolean, never, LanguageModel> {

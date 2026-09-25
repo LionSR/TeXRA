@@ -122,7 +122,7 @@ function project(
   selected: RunId | null = null,
 ): RailProject {
   const surface: Surface = { ...emptySurface(displayRecord.key), selected };
-  return { display: displayRecord, view, surface, unseen: new Set() };
+  return { display: displayRecord, view, surface };
 }
 
 const LP = display('LP', 'LDT-Lean-Paper', 'Lean formalization · with JZF');
