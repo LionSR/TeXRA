@@ -130,7 +130,7 @@ import {
 import { applyTraceRow, createTranscriptFold } from './traceFold';
 import { isRunningStreamingTextEntry, StreamLog } from './traceEntries';
 
-import { emptySessionView } from './sessionView';
+import { emptySessionView, isLiveRun } from './sessionView';
 import type { SessionView, RunView, TranscriptView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -726,8 +726,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     const child = view.runs.get(childId);
     if (!child) continue;
     rollup.total += 1 + child.rollup.total;
-    rollup.running +=
-      (isInFlightPhase(child.status) ? 1 : 0) + child.rollup.running;
+    rollup.running += (isLiveRun(child) ? 1 : 0) + child.rollup.running;
     rollup.finished +=
       (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
@@ -1007,14 +1006,19 @@ function lifecycleToTaskGroups(run: RunView): boolean {
   );
 }
 
+/** Project one entry into `transcript`, the run's next slice. The session's
+ *  runs are the label context, so an `executions` tool row names the child
+ *  runs it targets in the fold itself, for every host alike. */
 function projectRow(
+  view: SessionView,
+  run: RunView,
   transcript: TranscriptView,
   entry: StreamLogEntry,
-  projectLifecycleToTaskGroups: boolean,
 ): void {
   const row = projectTranscriptRow(entry, {
     previousRow: rowById(transcript, entry.id),
-    projectLifecycleToTaskGroups,
+    projectLifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    runLabels: view.runs,
   });
   if (row) upsertRow(transcript, row);
 }
@@ -1071,7 +1075,7 @@ function applyEntry(
       ? { ...entry, text: live }
       : withToolOutput(entry, live);
   }
-  projectRow(next, projected, lifecycleToTaskGroups(run));
+  projectRow(view, run, next, projected);
   const row = rowById(next, entry.id);
   if (row?.kind === 'thinking') {
     const newest = indexes.thinkingRowId;
@@ -1283,11 +1287,7 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   if (!cursor) return true;
   if (isRunningToolEntry(cursor.entry)) {
     const transcript = replaceTranscript(run.transcript, {});
-    projectRow(
-      transcript,
-      withToolOutput(cursor.entry, text),
-      lifecycleToTaskGroups(run),
-    );
+    projectRow(view, run, transcript, withToolOutput(cursor.entry, text));
     setRun(view, { ...run, transcript });
     return true;
   }
@@ -1312,11 +1312,10 @@ function foldTextChunk(view: SessionView, chunk: TextChunk): boolean {
   } else {
     // The entry's own text was blank and projected no row; the chunk that
     // gives it one projects it once.
-    projectRow(
-      transcript,
-      { ...cursor.entry, text: cursor.text.full },
-      lifecycleToTaskGroups(run),
-    );
+    projectRow(view, run, transcript, {
+      ...cursor.entry,
+      text: cursor.text.full,
+    });
   }
   setRun(view, { ...run, transcript });
   return true;

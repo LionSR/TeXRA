@@ -13,7 +13,6 @@ import { Box, Static, Text } from 'ink';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import type { RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
-import type { RunLabels } from '@shared/tools/executionsDisplay';
 import type { TranscriptRow } from '@ui/transcript';
 import { safeHomedir } from '@utils/system/platformPaths';
 
@@ -144,13 +143,11 @@ function entryAbove(
 
 function StaticTranscriptItemContent({
   colorEnabled,
-  runLabels,
   item,
   previousItem,
   width,
 }: {
   readonly colorEnabled?: boolean;
-  readonly runLabels?: RunLabels;
   readonly item: StaticTranscriptItem;
   readonly previousItem?: StaticTranscriptItem;
   readonly width: number;
@@ -173,7 +170,6 @@ function StaticTranscriptItemContent({
           <TranscriptEntry
             entry={item.entry}
             previousEntry={entryAbove(previousItem)}
-            subagentRunLabels={runLabels}
             width={width}
             colorEnabled={colorEnabled}
           />
@@ -189,7 +185,6 @@ export function StaticConversationTranscript({
   ownerKey,
   renderKey = ownerKey,
   scrollbackRunId,
-  subagentRunLabels,
   width,
 }: {
   readonly colorEnabled?: boolean;
@@ -198,7 +193,6 @@ export function StaticConversationTranscript({
   readonly ownerKey: string;
   readonly renderKey?: string;
   readonly scrollbackRunId: RunId | undefined;
-  readonly subagentRunLabels?: RunLabels;
   readonly width?: number;
 }): React.JSX.Element {
   const normalizedWidth = transcriptColumns(width);
@@ -237,7 +231,6 @@ export function StaticConversationTranscript({
   const [state, setState] = useState<StaticTranscriptState>(() =>
     buildStaticTranscriptState({
       eraseRequest,
-      runLabels: subagentRunLabels,
       maxRows,
       meta: sessionMeta,
       ownerKey,
@@ -251,7 +244,6 @@ export function StaticConversationTranscript({
   // for every source change, even when only the scan position has advanced.
   const nextState = advanceStaticTranscriptState(state, {
     eraseRequest,
-    runLabels: subagentRunLabels,
     maxRows,
     meta: sessionMeta,
     ownerKey,
@@ -279,7 +271,6 @@ export function StaticConversationTranscript({
         <Box key={item.id} flexDirection="column">
           <StaticTranscriptItemContent
             colorEnabled={colorEnabled}
-            runLabels={subagentRunLabels}
             item={item}
             previousItem={staticItems[index - 1]}
             width={normalizedWidth}

@@ -15,7 +15,7 @@ import { when } from 'lit/directives/when.js';
 // Local imports
 import type { RunId } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
-import { resolveSelected, type Surface } from '@shared/session/surface';
+import type { Surface } from '@shared/session/surface';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import {
   RUN_GROUP_LABELS,
@@ -409,7 +409,7 @@ export class RunTabs extends LitElement {
   override render(): TemplateResult {
     const view = this.view;
     const surface = this.surface;
-    const selected = view && surface ? resolveSelected(view, surface) : null;
+    const selected = surface?.selected ?? null;
     const needle = (surface?.search ?? '').trim().toLowerCase();
     const rootRun = this.root === null ? undefined : this.runOfEvent(this.root);
     const top = (rootRun ? [rootRun.id] : (view?.order ?? []))

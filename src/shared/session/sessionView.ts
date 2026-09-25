@@ -39,6 +39,7 @@ import {
   WorktreeInfoSchema,
   type RunId,
 } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import { RUN_STATUS_TONE } from '@shared/runs/runStatusDisplay';
 import type { WorkflowRunModel } from '@shared/runs/workflowRunModel';
 import type { TranscriptRow } from '@ui/transcript';
@@ -153,8 +154,9 @@ const RunViewCommonSchema = z.object({
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
-  /** Descendants by status. No waiting or interrupted count: both force
-   *  expansion, so a collapsed parent never hides a row that needs the user. */
+  /** Descendants by status; `running` counts the live ones (`isLiveRun`).
+   *  No separate waiting or interrupted count: both force expansion, so a
+   *  collapsed parent never hides a row that needs the user. */
   rollup: z.object({
     total: z.int().nonnegative(),
     running: z.int().nonnegative(),
@@ -207,6 +209,17 @@ const RunViewSchema = z.discriminatedUnion('category', [
   WorkflowRunViewSchema,
 ]);
 export type RunView = z.infer<typeof RunViewSchema>;
+
+/**
+ * The one reading of "live" every host shares: a run somebody holds that has
+ * not ended. An interrupted run's durable phase may still say in flight, but
+ * nothing is working on it, so no roster, rollup, or status bar counts it.
+ * Not `group` alone: a spawned child that has not activated yet is `ready`
+ * and sorts under `recent`, yet it is live.
+ */
+export function isLiveRun(run: Pick<RunView, 'group' | 'status'>): boolean {
+  return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
+}
 
 /** A pending request: which run is asking, the payload the UI shows (its
  *  `kind` is the request's kind), and the earlier request it continues (an
