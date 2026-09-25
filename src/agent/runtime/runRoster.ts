@@ -258,13 +258,18 @@ export class RunRoster {
 
   // ---------------------------------------------------------------- liveness
 
-  /** Whether this process holds a live generation of the run: its fiber, an
-   *  admitted launch, or a live tool-use flow on its handle. */
+  /** Whether this process holds a live generation of the run: its fiber, a
+   *  hold, or an admitted launch. A live tool-use flow is not a fourth arm:
+   *  the flow attaches and detaches inside the run program, which runs on
+   *  the generation's fiber. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
-    if (entry.fiber ?? entry.hold ?? entry.launches > 0) return true;
-    return entry.handle?.getToolUseFlow() !== undefined;
+    return (
+      entry.fiber !== undefined ||
+      entry.hold !== undefined ||
+      entry.launches > 0
+    );
   }
 
   /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
