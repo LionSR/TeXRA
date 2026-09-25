@@ -2,9 +2,9 @@
 import { structuredPatch, type StructuredPatchHunk } from 'diff';
 
 // Local imports - common
-import { createLog } from '@logger/logUtils';
+import { warn } from '@logger/logUtils';
 
-const log = createLog('unifiedDiff');
+const CHANNEL = 'unifiedDiff';
 
 /** Unchanged lines kept on each side of a change, matching `diff -u`. */
 const DIFF_CONTEXT_LINES = 3;
@@ -46,7 +46,8 @@ export function buildDiffHunks(
 
   const oldLines = toLines(oldText);
   const newLines = toLines(newText);
-  log.warn(
+  warn(
+    CHANNEL,
     `Diff exceeded ${DIFF_TIMEOUT_MS}ms ` +
       `(${oldLines.length} → ${newLines.length} lines); ` +
       `reporting it as a whole-file replacement.`,

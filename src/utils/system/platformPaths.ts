@@ -9,7 +9,7 @@ import { LRUCache } from 'lru-cache';
 import which from 'which';
 
 // Local imports - log
-import { createLog } from '@logger/logUtils';
+import { warn } from '@logger/logUtils';
 import { normalizeFilePath, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -33,7 +33,7 @@ export const IS_WINDOWS = process.platform === 'win32';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-const log = createLog('platformPaths');
+const CHANNEL = 'platformPaths';
 
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
@@ -67,7 +67,8 @@ export function safeHomedir(): string | null {
  */
 function absoluteEnvRoot(value: string, variable: string): string | null {
   if (path.isAbsolute(value)) return value;
-  log.warn(
+  warn(
+    CHANNEL,
     `Ignoring ${variable}=${value}: it must be an absolute path to be searched for tools.`,
   );
   return null;
@@ -79,7 +80,7 @@ function globDescending(pattern: string): string[] {
   try {
     return globSync(pattern).sort().reverse();
   } catch (err) {
-    log.warn(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
+    warn(CHANNEL, `Glob failed for ${pattern}: ${toErrorMessage(err)}`);
     return [];
   }
 }

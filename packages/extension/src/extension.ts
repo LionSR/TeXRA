@@ -77,7 +77,7 @@ import { VscodeSecrets } from '@frontend/vscode/vscodeSecrets';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { error as logError, warn as logWarning } from '@logger/logUtils';
 import { setLogSink } from '@logger/logSink';
 import { formatFatalErrorDetail } from '@logger/redaction';
 import { invalidateApiKeyCache } from '@model/apiProviders';
@@ -131,8 +131,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { ProgressViewProvider } from './progressView/ProgressViewProvider';
 import { registerCommands } from './commands';
 
-const EXTENSION_CHANNEL = 'extension';
-const log = createLog(EXTENSION_CHANNEL);
+const CHANNEL = 'extension';
 
 /** The TeXRA account provider and its URI handler could not be registered. */
 class SupabaseAuthRegistrationFailed extends Data.TaggedError(
@@ -308,7 +307,7 @@ async function initVscodePlatform(
       openTexraConfigStores(
         DEFAULT_NODE_STORAGE_ROOT,
         workspaceRoot,
-        (message) => log.warn(message),
+        (message) => logWarning(CHANNEL, message),
       ),
     ),
   );
@@ -379,16 +378,16 @@ function installUnhandledRejectionSurface(
   subscriptions: vscode.Disposable[],
 ): void {
   const report = (error: unknown) => {
-    log.error('Unhandled extension-host rejection', { data: error });
+    logError(CHANNEL, 'Unhandled extension-host rejection', { data: error });
     void vscode.window
       .showErrorMessage(
         `The extension host encountered an unrecoverable error: ${formatFatalErrorDetail(error)}`,
       )
-      .then(undefined, (notificationError: unknown) => {
-        log.error('Failed to display unhandled rejection error', {
+      .then(undefined, (notificationError: unknown) =>
+        logError(CHANNEL, 'Failed to display unhandled rejection error', {
           data: notificationError,
-        });
-      });
+        }),
+      );
     // Installing an unhandled-rejection listener otherwise suppresses Node's
     // default fatal path. The host must not continue after an unowned failure.
     setImmediate(() => {
@@ -524,7 +523,7 @@ function registerSupabaseAuth(
           `Failed to initialize Supabase authentication: ${toErrorMessage(cause)}`,
         );
       }),
-      withLogChannel(EXTENSION_CHANNEL),
+      withLogChannel(CHANNEL),
     ),
   );
 }
@@ -545,7 +544,7 @@ export async function activate(context: vscode.ExtensionContext) {
                   'Extension cleanup after failed activation failed',
                 ).pipe(
                   Effect.annotateLogs({ data: Cause.squash(cause) }),
-                  withLogChannel(EXTENSION_CHANNEL),
+                  withLogChannel(CHANNEL),
                   // No runtime exists to hold the diagnostics layer yet, so
                   // the entry needs it provided to reach the host's sink.
                   Effect.provide(effectDiagnosticsLayer('Trace')),
@@ -748,7 +747,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       Effect.catchCause((cause) =>
         Effect.logError(
           `Failed to initialize agent index: ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(withLogChannel(EXTENSION_CHANNEL), Effect.as(false)),
+        ).pipe(withLogChannel(CHANNEL), Effect.as(false)),
       ),
     ),
   );
@@ -758,7 +757,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         Effect.catchCause((cause) =>
           Effect.logWarning(
             `Remote agent refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     );
@@ -776,7 +775,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
     Effect.andThen(
       progressViewProvider.initialize(),
       Effect.logInfo('TeXRA extension activated'),
-    ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+    ).pipe(withLogChannel(CHANNEL)),
   );
 
   // Deferred off the activation tick: extendEnvPath() inside performs
@@ -806,7 +805,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
       Effect.catchCause((cause) =>
         Effect.logError(
           `Tool availability refresh failed (${trigger}): ${toErrorMessage(Cause.squash(cause))}`,
-        ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+        ).pipe(withLogChannel(CHANNEL)),
       ),
     );
 
@@ -883,7 +882,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         Effect.catchCause((cause) =>
           Effect.logError(
             `API key status refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-          ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+          ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
     );
@@ -988,7 +987,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
             Effect.catchCause((cause) =>
               Effect.logWarning(
                 `Onboarding funnel refresh failed: ${toErrorMessage(Cause.squash(cause))}`,
-              ).pipe(withLogChannel(EXTENSION_CHANNEL)),
+              ).pipe(withLogChannel(CHANNEL)),
             ),
           ),
       );
@@ -1015,7 +1014,7 @@ async function activateExtension(context: vscode.ExtensionContext) {
         Effect.catchCause((cause) =>
           Effect.logWarning('Welcome failed', cause),
         ),
-        withLogChannel(EXTENSION_CHANNEL),
+        withLogChannel(CHANNEL),
       ),
     );
   }

@@ -20,7 +20,7 @@ import {
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
+import { info as logInfo, warn as logWarning } from '@logger/logUtils';
 
 import {
   SHUTDOWN_PHASE,
@@ -128,8 +128,6 @@ export abstract class PollingSourceBase<
 > {
   /** Puts an Effect's log entries on this source's channel, `config.name`. */
   protected readonly inLogChannel: ReturnType<typeof withLogChannel>;
-  /** The same channel for the fiberless listener bookkeeping below. */
-  private readonly syncLog: Log;
   private readonly subscriptions = new Map<K, S>();
   private readonly keysChangedListeners = new Set<
     (keys: readonly K[]) => void
@@ -143,7 +141,6 @@ export abstract class PollingSourceBase<
 
   constructor(protected readonly config: PollingSourceConfig) {
     this.inLogChannel = withLogChannel(config.name);
-    this.syncLog = createLog(config.name);
   }
 
   /**
@@ -394,7 +391,7 @@ export abstract class PollingSourceBase<
     state.listeners.delete(onEvent);
     if (state.listeners.size === 0) {
       this.subscriptions.delete(key);
-      this.syncLog.info(`Unsubscribed from ${key}`);
+      logInfo(this.config.name, `Unsubscribed from ${key}`);
       this.notifyKeysChanged();
     }
     if (this.subscriptions.size === 0) this.stopPolling();
@@ -412,7 +409,7 @@ export abstract class PollingSourceBase<
         catch: ensureError,
       });
       if (Result.isFailure(notified)) {
-        this.syncLog.warn('Keys-changed listener threw', {
+        logWarning(this.config.name, 'Keys-changed listener threw', {
           data: notified.failure,
         });
       }

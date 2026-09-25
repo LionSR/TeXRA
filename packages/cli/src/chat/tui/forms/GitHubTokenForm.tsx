@@ -1,4 +1,5 @@
 import { Text } from 'ink';
+import { Effect } from 'effect';
 import { useState } from 'react';
 
 import { tryOpenBrowser } from '@cli/runtime/browser';
@@ -12,7 +13,6 @@ import { formatStatusViewSummary } from './_shared/formatStatusViewSummary';
 import { ListForm } from './_shared/ListForm';
 import { TextEntryForm } from './_shared/TextEntryForm';
 import { runFormWrite } from './_shared/useAsyncListForm';
-import type { Effect } from 'effect';
 
 /**
  * Which source backs the GitHub token, as `resolveGitHubTokenSource` reports
@@ -159,13 +159,19 @@ export function GitHubTokenForm(
           runAction(() => props.onRemove());
           return;
         }
-        void props.runtime
-          .runPromise(tryOpenBrowser(GITHUB_TOKEN_CREATE_URL))
-          .then((opened) => {
-            if (!opened) {
-              setError(`Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`);
-            }
-          });
+        void props.runtime.runPromise(
+          tryOpenBrowser(GITHUB_TOKEN_CREATE_URL).pipe(
+            Effect.tap((opened) =>
+              Effect.sync(() => {
+                if (!opened) {
+                  setError(
+                    `Open ${GITHUB_TOKEN_CREATE_URL} to create a token.`,
+                  );
+                }
+              }),
+            ),
+          ),
+        );
       }}
       onCancel={props.onCancel}
     />

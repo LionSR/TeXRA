@@ -21,7 +21,7 @@ import {
 
 import type { AgentEvent } from '@agent/trace';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { warn as logWarning } from '@logger/logUtils';
 import {
   aggregateId as qualifyAggregateId,
   isDisplaySessionEvent,
@@ -45,7 +45,6 @@ import {
 } from '@shared/session/sessionEvents';
 
 const CHANNEL = 'sessionEvents';
-const logger = createLog(CHANNEL);
 
 /** One unit of the publisher's work: a job over the log's append that
  *  settles the deferred its enqueuer waits on with the job's own exit. */
@@ -238,7 +237,10 @@ export const sessionEventsLayer = Layer.effect(
       );
       if (!admitted) {
         pending.delete(done);
-        logger.warn('Session publication dropped: the plane has closed');
+        logWarning(
+          CHANNEL,
+          'Session publication dropped: the plane has closed',
+        );
       }
     };
     const settle: Effect.Effect<CommitOrdinal | null> = Effect.suspend(() =>

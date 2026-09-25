@@ -1,5 +1,7 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect, Fiber, FileSystem } from 'effect';
+import { describe, expect, vi } from 'vitest';
 
 // Local imports
 import {
@@ -54,98 +56,116 @@ function createHost(
   });
 }
 
+// The host reads the filesystem only to repair node-pty's own spawn helper,
+// which a stubbed module load never reaches.
+const noFileSystem = Effect.provide(FileSystem.layerNoop({}));
+
 describe('desktop pty host', () => {
-  it('ignores callbacks from a disposed session after its id is reused', async () => {
-    const oldPty = createFakePty(101);
-    const replacementPty = createFakePty(102);
-    const spawnPty = vi
-      .fn<SpawnPty>()
-      .mockReturnValueOnce(oldPty)
-      .mockReturnValueOnce(replacementPty);
-    const onData = vi.fn();
-    const onExit = vi.fn();
-    const host = createHost({ onData, onExit, loadPty: loadFakePty(spawnPty) });
+  it.effect(
+    'ignores callbacks from a disposed session after its id is reused',
+    () =>
+      Effect.gen(function* () {
+        const oldPty = createFakePty(101);
+        const replacementPty = createFakePty(102);
+        const spawnPty = vi
+          .fn<SpawnPty>()
+          .mockReturnValueOnce(oldPty)
+          .mockReturnValueOnce(replacementPty);
+        const onData = vi.fn();
+        const onExit = vi.fn();
+        const host = createHost({
+          onData,
+          onExit,
+          loadPty: loadFakePty(spawnPty),
+        });
 
-    const oldSession = await host.create({
-      id: TERMINAL_ID,
-      cols: 80,
-      rows: 24,
-    });
-    if (!oldSession) throw new Error('Expected the old session to start.');
-    oldSession.dispose();
-    const replacementSession = await host.create({
-      id: TERMINAL_ID,
-      cols: 100,
-      rows: 30,
-    });
-    if (!replacementSession) {
-      throw new Error('Expected the replacement session to start.');
-    }
+        const oldSession = yield* host.create({
+          id: TERMINAL_ID,
+          cols: 80,
+          rows: 24,
+        });
+        if (!oldSession) throw new Error('Expected the old session to start.');
+        oldSession.dispose();
+        const replacementSession = yield* host.create({
+          id: TERMINAL_ID,
+          cols: 100,
+          rows: 30,
+        });
+        if (!replacementSession) {
+          throw new Error('Expected the replacement session to start.');
+        }
 
-    expect(replacementSession).not.toBe(oldSession);
-    expect(spawnPty).toHaveBeenCalledTimes(2);
-    oldPty.emitData('late output');
-    oldPty.emitExit(0);
+        expect(replacementSession).not.toBe(oldSession);
+        expect(spawnPty).toHaveBeenCalledTimes(2);
+        oldPty.emitData('late output');
+        oldPty.emitExit(0);
 
-    expect(host.get(TERMINAL_ID)).toBe(replacementSession);
-    expect(onData).not.toHaveBeenCalled();
-    expect(onExit).not.toHaveBeenCalled();
+        expect(host.get(TERMINAL_ID)).toBe(replacementSession);
+        expect(onData).not.toHaveBeenCalled();
+        expect(onExit).not.toHaveBeenCalled();
 
-    replacementPty.emitData('new output');
-    replacementPty.emitExit(7);
+        replacementPty.emitData('new output');
+        replacementPty.emitExit(7);
 
-    expect(onData).toHaveBeenCalledWith(TERMINAL_ID, 'new output');
-    expect(onExit).toHaveBeenCalledWith(TERMINAL_ID, 7);
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-  });
+        expect(onData).toHaveBeenCalledWith(TERMINAL_ID, 'new output');
+        expect(onExit).toHaveBeenCalledWith(TERMINAL_ID, 7);
+        expect(host.get(TERMINAL_ID)).toBeUndefined();
+      }).pipe(noFileSystem),
+  );
 
-  it('abandons a session creation invalidated while its module loads', async () => {
-    const pty = createFakePty(201);
-    const spawnPty = vi.fn<SpawnPty>(() => pty);
-    const firstLoad = createDeferred<PtyModule>();
-    const loadPty = vi
-      .fn<LoadPty>()
-      .mockReturnValueOnce(firstLoad.promise)
-      .mockResolvedValue({ spawn: spawnPty });
-    const host = createHost({ loadPty });
+  it.effect(
+    'abandons a session creation invalidated while its module loads',
+    () =>
+      Effect.gen(function* () {
+        const pty = createFakePty(201);
+        const spawnPty = vi.fn<SpawnPty>(() => pty);
+        const firstLoad = createDeferred<PtyModule>();
+        const loadPty = vi
+          .fn<LoadPty>()
+          .mockReturnValueOnce(firstLoad.promise)
+          .mockResolvedValue({ spawn: spawnPty });
+        const host = createHost({ loadPty });
 
-    const staleCreation = host.create({
-      id: TERMINAL_ID,
-      cols: 80,
-      rows: 24,
-    });
-    host.disposeAll();
-    firstLoad.resolve({ spawn: spawnPty });
+        const staleCreation = yield* Effect.forkChild(
+          host.create({ id: TERMINAL_ID, cols: 80, rows: 24 }),
+        );
+        // Let the creation start and reach its module load before disposal.
+        yield* Effect.yieldNow;
+        host.disposeAll();
+        firstLoad.resolve({ spawn: spawnPty });
 
-    expect(await staleCreation).toBeUndefined();
-    expect(spawnPty).not.toHaveBeenCalled();
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
+        expect(yield* Fiber.join(staleCreation)).toBeUndefined();
+        expect(spawnPty).not.toHaveBeenCalled();
+        expect(host.get(TERMINAL_ID)).toBeUndefined();
 
-    const replacement = await host.create({
-      id: TERMINAL_ID,
-      cols: 100,
-      rows: 30,
-    });
-    expect(replacement).toBeDefined();
-    expect(spawnPty).toHaveBeenCalledOnce();
-    expect(host.get(TERMINAL_ID)).toBe(replacement);
-  });
+        const replacement = yield* host.create({
+          id: TERMINAL_ID,
+          cols: 100,
+          rows: 30,
+        });
+        expect(replacement).toBeDefined();
+        expect(spawnPty).toHaveBeenCalledOnce();
+        expect(host.get(TERMINAL_ID)).toBe(replacement);
+      }).pipe(noFileSystem),
+  );
 
-  it('ignores a module-load failure from an invalidated creation', async () => {
-    const loadFailure = createDeferred<PtyModule>();
-    const host = createHost({
-      loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure.promise),
-    });
+  it.effect('ignores a module-load failure from an invalidated creation', () =>
+    Effect.gen(function* () {
+      const loadFailure = createDeferred<PtyModule>();
+      const host = createHost({
+        loadPty: vi.fn<LoadPty>().mockReturnValue(loadFailure.promise),
+      });
 
-    const staleCreation = host.create({
-      id: TERMINAL_ID,
-      cols: 80,
-      rows: 24,
-    });
-    host.disposeAll();
-    loadFailure.reject(new Error('node-pty unavailable'));
+      const staleCreation = yield* Effect.forkChild(
+        host.create({ id: TERMINAL_ID, cols: 80, rows: 24 }),
+      );
+      // Let the creation start and reach its module load before disposal.
+      yield* Effect.yieldNow;
+      host.disposeAll();
+      loadFailure.reject(new Error('node-pty unavailable'));
 
-    await expect(staleCreation).resolves.toBeUndefined();
-    expect(host.get(TERMINAL_ID)).toBeUndefined();
-  });
+      expect(yield* Fiber.join(staleCreation)).toBeUndefined();
+      expect(host.get(TERMINAL_ID)).toBeUndefined();
+    }).pipe(noFileSystem),
+  );
 });

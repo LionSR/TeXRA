@@ -95,9 +95,9 @@ class WorkspaceRequestRefused extends Data.TaggedError(
 }> {}
 
 /**
- * A host promise this handler awaited rejected. `member` names which, so the
- * report says what actually failed, and `message` is the rejection's own text
- * so the sentence the renderer shows is unchanged.
+ * A host call this handler made failed. `member` names which, so the report
+ * says what actually failed, and `message` is the failure's own text so the
+ * sentence the renderer shows is unchanged.
  */
 class WorkspaceHostCallFailed extends Data.TaggedError(
   'WorkspaceHostCallFailed',
@@ -433,15 +433,15 @@ export function createDesktopWorkspaceIpc(
     initialCommand?: string,
   ) {
     return Effect.gen(function* () {
-      const session = yield* Effect.tryPromise({
-        try: () => options.ptyHost.create({ id: sessionId, cols, rows }),
-        catch: (cause) =>
+      const session = yield* Effect.mapError(
+        options.ptyHost.create({ id: sessionId, cols, rows }),
+        (cause) =>
           new WorkspaceHostCallFailed({
             member: 'ptyHost.create',
             message: toErrorMessage(cause),
             cause,
           }),
-      });
+      );
       if (!session) return;
       if (initialCommand) {
         session.write(`${initialCommand}\r`);

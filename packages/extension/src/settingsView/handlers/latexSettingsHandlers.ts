@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import { error as logError, warn as logWarning } from '@logger/logUtils';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -153,7 +154,8 @@ export class LatexSettingsHandlers {
       autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
     }),
     onDetectionError: (error) => {
-      this.ctx.log.error(
+      logError(
+        this.ctx.channel,
         `LaTeX settings detection failed: ${toErrorMessage(error)}`,
       );
     },
@@ -233,7 +235,8 @@ export class LatexSettingsHandlers {
       if (
         !this.toolingController.isAllowedInstallCommand(data.installCommand)
       ) {
-        this.ctx.log.warn(
+        logWarning(
+          this.ctx.channel,
           `Rejected unknown install command: ${data.installCommand}`,
         );
         return;

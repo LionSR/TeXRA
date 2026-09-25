@@ -27,6 +27,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   formatTexraApprovalPolicy,
@@ -233,7 +234,9 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
-const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
+const HARNESS_RESOURCES_PATH = await Effect.runPromise(
+  resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
+);
 const HARNESS_CLI_CONTEXT: CliContext = {
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   config: new MemoryConfigProvider(),

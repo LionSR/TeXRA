@@ -5,15 +5,16 @@
 // TeXRA defines no manifest of its own. Each file is validated with Zod here,
 // at the boundary; fields TeXRA does not read are stripped.
 
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem, PlatformError } from 'effect';
 import { z } from 'zod';
 
-import { isFileNotFoundError } from '@common/errors';
 import { SkillNameSchema } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { readDirectoryTypedTolerant } from '@utils/files/fsDurability';
+
+import { cliErrorMessage } from './logSinks';
 
 /** A plugin that cannot be read or installed; the message is for the user. */
 export class PluginError extends Data.TaggedError('PluginError')<{
@@ -21,6 +22,13 @@ export class PluginError extends Data.TaggedError('PluginError')<{
 }> {}
 
 const fail = (message: string) => Effect.fail(new PluginError({ message }));
+
+/** A filesystem failure as the user reads it: the OS error's own text. */
+export const pluginFsError = (error: PlatformError.PlatformError) =>
+  new PluginError({ message: cliErrorMessage(error) });
+
+const isNotFound = (error: PlatformError.PlatformError) =>
+  error.reason._tag === 'NotFound';
 
 /** A component path field: one relative path or several. */
 const ComponentPathsSchema = z.union([z.string(), z.array(z.string())]);
@@ -112,21 +120,20 @@ const escapes = (relative: string) =>
   path.isAbsolute(relative);
 
 const pathExists = (target: string) =>
-  Effect.tryPromise({ try: () => fs.stat(target), catch: ensureError }).pipe(
+  FileSystem.FileSystem.use((fs) => fs.stat(target)).pipe(
     Effect.as(true),
-    Effect.catchIf(isFileNotFoundError, () => Effect.succeed(false)),
-    Effect.mapError((error) => new PluginError({ message: error.message })),
+    Effect.catchIf(isNotFound, () => Effect.succeed(false)),
+    Effect.mapError(pluginFsError),
   );
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
 function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
   return Effect.gen(function* () {
-    const text = yield* Effect.tryPromise({
-      try: () => fs.readFile(file, 'utf8'),
-      catch: ensureError,
-    }).pipe(
-      Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
-      Effect.mapError((error) => new PluginError({ message: error.message })),
+    const text = yield* FileSystem.FileSystem.use((fs) =>
+      fs.readFileString(file),
+    ).pipe(
+      Effect.catchIf(isNotFound, () => Effect.succeed(undefined)),
+      Effect.mapError(pluginFsError),
     );
     if (text === undefined) return undefined;
     const json = yield* Effect.try({
@@ -161,10 +168,11 @@ function containedPath(root: string, declared: string) {
       );
     }
     if (!(yield* pathExists(resolved))) return undefined;
-    const [realRoot, realResolved] = yield* Effect.tryPromise({
-      try: () => Promise.all([fs.realpath(root), fs.realpath(resolved)]),
-      catch: (error) => new PluginError({ message: toErrorMessage(error) }),
-    });
+    const fs = yield* FileSystem.FileSystem;
+    const [realRoot, realResolved] = yield* Effect.all(
+      [fs.realPath(root), fs.realPath(resolved)],
+      { concurrency: 'unbounded' },
+    ).pipe(Effect.mapError(pluginFsError));
     const realRelative = path.relative(realRoot, realResolved);
     if (escapes(realRelative)) {
       return yield* fail(
@@ -375,20 +383,15 @@ export function readPluginCandidates(root: string, only: readonly string[]) {
 
 /** Count the skill directories (`<name>/SKILL.md`) under one skill root. */
 export function countSkills(root: string) {
-  return Effect.tryPromise({
-    try: () => fs.readdir(root, { withFileTypes: true }),
-    catch: ensureError,
-  }).pipe(
+  return readDirectoryTypedTolerant(root).pipe(
+    Effect.mapError(pluginFsError),
     Effect.flatMap((entries) =>
-      Effect.forEach(entries, (entry) =>
-        entry.isDirectory() || entry.isSymbolicLink()
-          ? pathExists(path.join(root, entry.name, 'SKILL.md'))
+      Effect.forEach(entries, ([name, type]) =>
+        type === 'Directory' || type === 'SymbolicLink'
+          ? pathExists(path.join(root, name, 'SKILL.md'))
           : Effect.succeed(false),
       ),
     ),
     Effect.map((found) => found.filter(Boolean).length),
-    Effect.mapError(
-      (error) => new PluginError({ message: toErrorMessage(error) }),
-    ),
   );
 }

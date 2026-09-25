@@ -248,16 +248,18 @@ function callbackHtml(): string {
   <script>
     const callbackQuery = window.location.search;
     window.history.replaceState(null, document.title, window.location.pathname);
-    fetch('/auth-callback/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: callbackQuery })
-    })
-      .then((response) => response.text())
-      .then((html) => { document.documentElement.innerHTML = html; })
-      .catch((error) => {
+    (async () => {
+      try {
+        const response = await fetch('/auth-callback/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: callbackQuery })
+        });
+        document.documentElement.innerHTML = await response.text();
+      } catch (error) {
         document.body.textContent = 'Sign-in failed: ' + error.message;
-      });
+      }
+    })();
   </script>
 </body>`;
 }

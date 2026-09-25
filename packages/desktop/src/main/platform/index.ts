@@ -107,7 +107,9 @@ export const initializeElectronPlatform = Effect.fn(
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
-  const dataRoot = resolveDesktopDataRoot(userDataPath);
+  const dataRoot = yield* resolveDesktopDataRoot(userDataPath).pipe(
+    Effect.provide(processEnvConfigLayer),
+  );
   // The process roots are the no-workspace roots. Each open project gets its
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.

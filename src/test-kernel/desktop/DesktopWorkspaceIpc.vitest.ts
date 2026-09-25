@@ -32,9 +32,9 @@ const REQUEST_ID = '123e4567-e89b-42d3-a456-426614174000';
 
 function createPtyHost(): DesktopPtyHost {
   return {
-    create: vi.fn(async () => {
-      throw new Error('Terminal is not used in this test.');
-    }),
+    create: vi.fn(() =>
+      Effect.fail(new Error('Terminal is not used in this test.')),
+    ),
     get: vi.fn(() => undefined),
     disposeAll: vi.fn(),
   };
@@ -407,12 +407,14 @@ describe('desktop workspace IPC', () => {
 
   it('runs setup commands only after the integrated pty is ready', async () => {
     const write = vi.fn();
-    const create = vi.fn(async () => ({
-      id: 'workbench:terminal:1',
-      write,
-      resize: vi.fn(),
-      dispose: vi.fn(),
-    }));
+    const create = vi.fn(() =>
+      Effect.succeed({
+        id: 'workbench:terminal:1',
+        write,
+        resize: vi.fn(),
+        dispose: vi.fn(),
+      }),
+    );
     const ipc = createIpc(vi.fn(), {
       ptyHost: { create, get: vi.fn(() => undefined), disposeAll: vi.fn() },
     });

@@ -26,13 +26,10 @@ vi.mock('@frontend/vscode/vscodeEditor', () => ({
 }));
 
 vi.mock('@logger/logUtils', () => ({
+  debug: vi.fn(),
   info: vi.fn(),
-  createLog: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
+  warn: vi.fn(),
+  error: vi.fn(),
 }));
 
 import {

@@ -39,7 +39,7 @@ import {
   showLoggedMessage,
 } from '@frontend/ui/errorHandlingUtils';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
-import { createLog } from '@logger/logUtils';
+import { info as logInfo, warn as logWarning } from '@logger/logUtils';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { presentLaunchedProgressRun } from '@progressView/progressNavigation';
 import { RUN_OUTCOME, type RunOutcome, AgentCategory } from '@shared/schemas';
@@ -52,7 +52,6 @@ import {
 } from './AgentReviewRunController';
 
 const CHANNEL = 'AgentReview';
-const log = createLog(CHANNEL);
 const COLLECTION_NAME = 'texra-agent-review';
 const SOURCE_LABEL = 'TeXRA Agent Review';
 /** Tool-use agent that performs the review and reports issues via the tool sink. */
@@ -236,7 +235,7 @@ class AgentReviewServiceImpl {
       // summary must never stay stuck on "Reviewing changes…".
       const errorMsg = toErrorMessage(err);
       this.summary = `Review failed: ${errorMsg}`;
-      log.warn(`Agent review failed unexpectedly: ${errorMsg}`);
+      logWarning(CHANNEL, `Agent review failed unexpectedly: ${errorMsg}`);
     } finally {
       if (this.reviewRuns.finish(run)) {
         const pending = this.pendingCommitReview;
@@ -280,7 +279,7 @@ class AgentReviewServiceImpl {
           showLoggedErrorMessage(CHANNEL, 'Agent review failed', reason),
         );
       } else {
-        log.warn(`Agent review failed: ${reason}`);
+        logWarning(CHANNEL, `Agent review failed: ${reason}`);
       }
       return;
     }
@@ -369,12 +368,13 @@ class AgentReviewServiceImpl {
       const errorMsg = toErrorMessage(err);
       const restored = this.restorePreviousResults(previous);
       this.summary = `Review failed: ${errorMsg}${restored ? ' · showing previous results' : ''}`;
-      log.warn(`Agent review session failed: ${errorMsg}`);
+      logWarning(CHANNEL, `Agent review session failed: ${errorMsg}`);
       return;
     }
 
     if (!this.reviewRuns.isCurrent(run)) {
-      log.info(
+      logInfo(
+        CHANNEL,
         'Agent review results were cleared while the session ran; discarding its outcome',
       );
       return;
@@ -394,7 +394,7 @@ class AgentReviewServiceImpl {
         suffix = ` · showing the ${formatResultCount(this.issues.length, 'issue')} reported before the session ended`;
       }
       this.summary = `Review ${verb}${suffix}`;
-      log.warn(`Agent review session ${verb}`);
+      logWarning(CHANNEL, `Agent review session ${verb}`);
       return;
     }
 
@@ -403,7 +403,8 @@ class AgentReviewServiceImpl {
       count === 0
         ? `No issues found (diff with ${baseDescription})`
         : `Found ${formatResultCount(count, 'potential issue')} (diff with ${baseDescription})${truncated ? ' · diff truncated' : ''}`;
-    log.info(
+    logInfo(
+      CHANNEL,
       `Agent review (${trigger}): ${count} issue(s) across ${changedFiles.length} changed file(s)`,
     );
   }

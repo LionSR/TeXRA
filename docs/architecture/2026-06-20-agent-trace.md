@@ -98,7 +98,7 @@ src/agent/trace/                  ← agent-general (no MESSAGE_TYPES, no TeXRA)
 └── index.ts                      ← the module's public surface
 
 src/logger/                       ← channel output and redaction only
-├── logUtils.ts                   ← channel sink, createLog, debug/info/warn/error
+├── logUtils.ts                   ← channel sink, debug/info/warn/error
 └── redaction.ts                  ← provider-key redaction for logged text
 
 src/transcript/                   ← TeXRA transcript plane

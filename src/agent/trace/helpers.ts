@@ -15,7 +15,7 @@ import {
   buildErrorLogData,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { createLog } from '@logger/logUtils';
+import { warn } from '@logger/logUtils';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
@@ -46,7 +46,7 @@ export function logSdkError(
   // can echo the request; it is a diagnostic for the process log.
   const body = normalizeProviderError(err).rawErrorBody;
   if (body !== undefined) {
-    createLog('agentTrace').warn(`${message} (provider response body)`, {
+    warn('agentTrace', `${message} (provider response body)`, {
       data: body,
     });
   }

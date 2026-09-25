@@ -2,10 +2,10 @@
 // in `texra.plugins.installed`, whose skill roots the skill catalog reads.
 // Nothing from a plugin runs: git only fetches, and v1 reads skills alone.
 
-import * as fs from 'node:fs/promises';
+import { cp } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Stream } from 'effect';
+import { Effect, FileSystem, Stream } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -22,6 +22,7 @@ import { CliUsageError } from './cliContext';
 import {
   countSkills,
   PluginError,
+  pluginFsError,
   readPlugin,
   readPluginCandidates,
   type PluginCandidate,
@@ -124,14 +125,10 @@ function fetchPinned(dir: string, url: string, ref: string | undefined) {
   });
 }
 
-const fsEffect = <A>(run: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => new PluginError({ message: toErrorMessage(error) }),
-  });
-
 const removeDir = (dir: string) =>
-  fsEffect(() => fs.rm(dir, { recursive: true, force: true }));
+  FileSystem.FileSystem.use((fs) =>
+    fs.remove(dir, { recursive: true, force: true }),
+  ).pipe(Effect.mapError(pluginFsError));
 
 /** Cleanup after a failure: a directory left behind is named, not hidden. */
 const cleanupDir = (dir: string) =>
@@ -208,7 +205,7 @@ function installFromRoot(
 ): Effect.Effect<
   InstalledPlugin[],
   PluginError | CliUsageError | Error,
-  ChildProcessSpawner
+  ChildProcessSpawner | FileSystem.FileSystem
 > {
   return Effect.gen(function* () {
     const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
@@ -243,20 +240,22 @@ function installFromRoot(
       // update and remove act on one plugin without touching another.
       const dest = path.join(run.env.pluginsDir, plugin.name);
       // A plain mkdir claims the directory: it fails if anything is there.
-      yield* Effect.tryPromise({
-        try: () => fs.mkdir(dest),
-        catch: (error) =>
-          new PluginError({
-            message:
-              (error as NodeJS.ErrnoException).code === 'EEXIST'
-                ? `${dest} already exists but no installed plugin records it. Delete it, then install again.`
-                : toErrorMessage(error),
-          }),
-      });
-      run.created.push(dest);
-      yield* fsEffect(() =>
-        fs.cp(root, dest, { recursive: true, verbatimSymlinks: true }),
+      yield* FileSystem.FileSystem.use((fs) => fs.makeDirectory(dest)).pipe(
+        Effect.mapError((error) =>
+          error.reason._tag === 'AlreadyExists'
+            ? new PluginError({
+                message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
+              })
+            : pluginFsError(error),
+        ),
       );
+      run.created.push(dest);
+      // Node's `cp`, not `FileSystem.copy`: only it keeps a relative link
+      // verbatim instead of pointing it into the soon-removed staging dir.
+      yield* Effect.tryPromise({
+        try: () => cp(root, dest, { recursive: true, verbatimSymlinks: true }),
+        catch: (error) => new PluginError({ message: toErrorMessage(error) }),
+      });
       const pluginPath = path.join(dest, path.relative(root, candidate.dir));
       records.push({
         name: plugin.name,
@@ -279,10 +278,10 @@ function installOrigin(
 ): Effect.Effect<
   InstalledPlugin[],
   PluginError | CliUsageError | Error,
-  ChildProcessSpawner
+  ChildProcessSpawner | FileSystem.FileSystem
 > {
   if (origin.kind === 'local') {
-    return fsEffect(() => fs.realpath(origin.path)).pipe(
+    return FileSystem.FileSystem.use((fs) => fs.realPath(origin.path)).pipe(
       Effect.mapError(
         () =>
           new CliUsageError(
@@ -309,10 +308,12 @@ function installOrigin(
   // Fetch into a staging directory beside the managed ones; it is removed
   // however the install ends, and each plugin is copied out of it.
   return Effect.acquireUseRelease(
-    fsEffect(async () => {
-      await fs.mkdir(run.env.pluginsDir, { recursive: true });
-      return fs.mkdtemp(path.join(run.env.pluginsDir, '.staging-'));
-    }),
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const directory = run.env.pluginsDir;
+      yield* fs.makeDirectory(directory, { recursive: true });
+      return yield* fs.makeTempDirectory({ directory, prefix: '.staging-' });
+    }).pipe(Effect.mapError(pluginFsError)),
     (staging) =>
       fetchPinned(staging, origin.url, origin.ref).pipe(
         Effect.flatMap((commit) =>

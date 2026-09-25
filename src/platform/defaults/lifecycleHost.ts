@@ -1,5 +1,5 @@
 import { Cause, Clock, Deferred, Effect, Option } from 'effect';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -7,7 +7,7 @@ import {
   type ShutdownPhase,
 } from '../interfaces';
 
-const log = createLog('LifecycleHost');
+const CHANNEL = 'LifecycleHost';
 
 /** One `onShutdown` call. Registrations are compared by entry identity, not by
  *  handler identity, so registering the same program twice yields two
@@ -44,11 +44,17 @@ export function createLifecycleHost(
   };
   let drain: Effect.Effect<void> | undefined;
 
-  const onError =
-    options.onError ??
-    ((phase, error) => {
-      log.error(`[lifecycle] ${phase} handler failed`, { data: error });
-    });
+  const { onError } = options;
+  const reportFailure = (
+    phase: ShutdownPhase,
+    error: unknown,
+  ): Effect.Effect<void> =>
+    onError
+      ? Effect.sync(() => onError(phase, error))
+      : Effect.logError(`[lifecycle] ${phase} handler failed`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        );
 
   // Sequential — handlers within a phase run in registration order. Parallel
   // disposal can race (e.g. flushState writing to UsageLogService while it is
@@ -73,14 +79,13 @@ export function createLifecycleHost(
           // failure or defect, never the interruption the timeout raises to
           // cut it short.
           Effect.catchCause((cause) =>
-            Effect.sync(() => {
-              onError(phase, Cause.squash(cause));
-              return Option.some<void>(undefined);
-            }),
+            reportFailure(phase, Cause.squash(cause)).pipe(
+              Effect.as(Option.some<void>(undefined)),
+            ),
           ),
         );
         if (Option.isNone(settled)) {
-          onError(
+          yield* reportFailure(
             phase,
             new Error(
               `Shutdown handler did not settle within ${SHUTDOWN_PHASE_DEADLINE_MS}ms; advancing without it`,

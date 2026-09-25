@@ -59,7 +59,7 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { error as logError, warn as logWarning } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
@@ -94,7 +94,6 @@ import { RequestAttention } from './requestAttention';
 const RECENT_COMMIT_LIMIT = 20;
 
 const CHANNEL = 'ProgressViewProvider';
-const log = createLog(CHANNEL);
 
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -276,7 +275,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
           })),
         ),
       onError: (error) => {
-        log.error('Host snapshot refresh failed', { data: error });
+        logError(CHANNEL, 'Host snapshot refresh failed', { data: error });
       },
       publish: (snapshot) => this.bridge.setHost(snapshot),
     });
@@ -593,11 +592,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         void Promise.resolve(view.webview.postMessage(message)).then(
           (delivered) => {
             if (!delivered) {
-              log.warn(`A ${message.kind} message was not delivered to ${id}`);
+              logWarning(
+                CHANNEL,
+                `A ${message.kind} message was not delivered to ${id}`,
+              );
             }
           },
           (error: unknown) => {
-            log.warn(
+            logWarning(
+              CHANNEL,
               `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
             );
           },

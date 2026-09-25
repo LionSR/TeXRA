@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { debug as logDebug, warn as logWarning } from '@logger/logUtils';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
@@ -24,7 +24,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import type { QueuedFollowUp, RunInput } from './RunInput';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
-const logger = createLog(CHANNEL);
 
 /** What a producer hands the admission boundary. */
 export interface FollowUpQueueInput {
@@ -639,7 +638,7 @@ export class ToolUseFollowUpQueue {
       entry.owner = undefined;
       if (next === 'recoverable' || this.entries.get(runId) !== entry) return;
       this.entries.delete(runId);
-      logger.debug(`Terminalized follow-up queue for run ${runId}.`);
+      logDebug(CHANNEL, `Terminalized follow-up queue for run ${runId}.`);
       this.notifyReleaseObservers(runId);
     };
     this.releaseAdoptedClaim(runId, entry, finish);
@@ -699,7 +698,7 @@ export class ToolUseFollowUpQueue {
     for (const notify of this.releaseObservers) {
       const ran = Result.try({ try: () => notify(runId), catch: ensureError });
       if (Result.isFailure(ran)) {
-        logger.warn(`Release observer threw for run ${runId}`, {
+        logWarning(CHANNEL, `Release observer threw for run ${runId}`, {
           data: ran.failure,
         });
       }

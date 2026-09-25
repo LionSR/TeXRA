@@ -712,14 +712,13 @@ export function openaiResponsesModel(
       });
     return yield* Effect.gen(function* () {
       const raw = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.responses
+        async (signal) => {
+          const response = await client.responses
             .cancel(operation.providerResponseId, { signal })
-            .asResponse()
-            .then((response) => {
-              requestId = response.headers.get('x-request-id') ?? undefined;
-              return response.json() as Promise<unknown>;
-            }),
+            .asResponse();
+          requestId = response.headers.get('x-request-id') ?? undefined;
+          return (await response.json()) as unknown;
+        },
         (cause) =>
           enrich(
             cause instanceof SyntaxError

@@ -42,7 +42,7 @@ import {
 } from '@frontend/ui/errorHandlingUtils';
 import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog, type Log } from '@logger/logUtils';
+import { debug as logDebug } from '@logger/logUtils';
 import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
@@ -107,7 +107,6 @@ type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
 export class SettingsViewMessageHandler {
   private readonly viewName = 'SettingsView';
   private readonly channel = `${this.viewName}MessageHandler`;
-  private readonly log: Log = createLog(this.channel);
 
   /** Active webview reference, tracked on every dispatch. */
   private activeView: SettingsWebview | undefined;
@@ -387,7 +386,7 @@ export class SettingsViewMessageHandler {
       commandKind: data.kind,
     });
     if (action.kind === 'none') {
-      this.log.debug('No command for tool', {
+      logDebug(this.channel, 'No command for tool', {
         data: { ...data, reason: action.reason },
       });
       return;
@@ -414,7 +413,6 @@ export class SettingsViewMessageHandler {
   private handlerContext(): SettingsHandlerContext {
     return {
       channel: this.channel,
-      log: this.log,
       extensionContext: this.context,
       withActiveWebview: (fn) => this.withActiveWebview(fn),
       postMessageToActiveWebview: (message) =>
@@ -457,7 +455,9 @@ export class SettingsViewMessageHandler {
     this.activeView = webviewView;
     const parsed = SettingsViewInboundMessageSchema.safeParse(message);
     if (!parsed.success) {
-      this.log.debug('Message validation failed', { data: parsed.error });
+      logDebug(this.channel, 'Message validation failed', {
+        data: parsed.error,
+      });
       return Promise.resolve();
     }
     return this.runtime.runPromise(
@@ -473,7 +473,10 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                this.log.error('Error handling message', { data: error });
+                yield* Effect.logError('Error handling message').pipe(
+                  Effect.annotateLogs({ data: error }),
+                  withLogChannel(this.channel),
+                );
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
@@ -484,9 +487,12 @@ export class SettingsViewMessageHandler {
               Exit.isFailure(reported) &&
               !Cause.hasInterruptsOnly(reported.cause)
             ) {
-              this.log.error('Failed to report settings message error', {
-                data: Cause.squash(reported.cause),
-              });
+              yield* Effect.logError(
+                'Failed to report settings message error',
+              ).pipe(
+                Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
+                withLogChannel(this.channel),
+              );
             }
           }),
         ),

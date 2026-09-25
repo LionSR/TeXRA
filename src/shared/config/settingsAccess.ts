@@ -3,7 +3,7 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
-import { createLog } from '@logger/logUtils';
+import { warn } from '@logger/logUtils';
 import type {
   ConfigProvider,
   ConfigTarget,
@@ -18,7 +18,7 @@ import type {
 } from '@shared/state/stateSettings';
 import { settingByKey } from '@shared/state/stateSettings';
 
-const log = createLog('settingsAccess');
+const CHANNEL = 'settingsAccess';
 
 /**
  * Host-aware read/write for {@link StateSettingEntry} rows.
@@ -161,7 +161,8 @@ function resolveStored(
   if (stored.kind === 'value') {
     return stored.value;
   }
-  log.warn(
+  warn(
+    CHANNEL,
     `Ignoring invalid persisted value for setting "${entry.key}": ${stored.cause}`,
   );
   return settingDefault(entry);

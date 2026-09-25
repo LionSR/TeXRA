@@ -1,11 +1,9 @@
 // Node imports
-import { mkdir, readdir, realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 // Internal imports
-import { isFileNotFoundError } from '@common/errors';
 import {
   cloneOverleafProject,
   gitClone,
@@ -17,14 +15,17 @@ import {
   parseLatexGitUrl,
   type OverleafRemote,
 } from '@latex/overleafProject';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 import { getCliSecrets } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
-import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
+import {
+  askCliQuestion,
+  cliErrorMessage,
+  writeTextStderr,
+} from '../runtime/logSinks';
 
 // Local imports - command helpers
 import { defineCliCommand } from './_helpers/defineCliCommand';
@@ -38,6 +39,7 @@ function buildOverleafClonePorts(
   context: CliContext,
   remote: OverleafRemote,
   workspacePath: string,
+  fs: FileSystem.FileSystem,
 ): OverleafCloneWorkflowPorts {
   const secrets = getCliSecrets(context.storageRoot);
   let canonicalWorkspacePath = workspacePath;
@@ -79,15 +81,18 @@ function buildOverleafClonePorts(
         );
       }),
     listWorkspaceEntries: (dir) =>
-      Effect.tryPromise({ try: () => readdir(dir), catch: ensureError }).pipe(
+      fs.readDirectory(dir).pipe(
         // A destination that does not exist yet is an empty destination, not
         // an unreadable one: `runClone` creates it.
-        Effect.catchIf(isFileNotFoundError, () => Effect.succeed<string[]>([])),
+        Effect.catchIf(
+          (error) => error.reason._tag === 'NotFound',
+          () => Effect.succeed<string[]>([]),
+        ),
       ),
     showWorkspaceUnreadable: (error) =>
       Effect.sync(() => {
         writeTextStderr(
-          `Cannot read destination directory: ${toErrorMessage(error)}`,
+          `Cannot read destination directory: ${cliErrorMessage(error)}`,
         );
       }),
     showWorkspaceNotEmpty: () =>
@@ -98,13 +103,9 @@ function buildOverleafClonePorts(
       }),
 
     runClone: (clone, cloneInto) =>
-      Effect.tryPromise({
-        try: async () => {
-          await mkdir(cloneInto, { recursive: true });
-          return realpath(cloneInto);
-        },
-        catch: ensureError,
-      }).pipe(
+      fs.makeDirectory(cloneInto, { recursive: true }).pipe(
+        Effect.andThen(fs.realPath(cloneInto)),
+        Effect.mapError((error) => new Error(cliErrorMessage(error))),
         Effect.flatMap((canonical) => {
           canonicalWorkspacePath = canonical;
           return gitClone(clone, canonical).pipe(
@@ -202,7 +203,12 @@ export const cloneCommand = withUsageSections(
         const outcome = yield* cloneOverleafProject(
           remote,
           workspacePath,
-          buildOverleafClonePorts(context, remote, workspacePath),
+          buildOverleafClonePorts(
+            context,
+            remote,
+            workspacePath,
+            yield* FileSystem.FileSystem,
+          ),
         );
         switch (outcome.status) {
           case 'success':

@@ -11,11 +11,14 @@
 // if the addon is missing on some platform the failure surfaces as "terminal
 // unavailable" instead of preventing the app from starting.
 
-import { chmodSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { platform as osPlatform } from 'node:os';
 import { dirname, join } from 'node:path';
 
+import { Effect, FileSystem } from 'effect';
+
+import { ensureError } from '@utils/errors/errorMessage';
+import { envVar } from '@utils/system/envFlags';
 import { withExtendedPath } from '@utils/system/platformPaths';
 
 /**
@@ -69,17 +72,18 @@ export interface DesktopPtyHostOptions {
 
 export interface DesktopPtyHost {
   /**
-   * Starts a session. Rejects when the native module is unavailable, so the
-   * caller can report "terminal unavailable" rather than hanging on a
-   * terminal that will never produce output. Returns `undefined` when resource
-   * disposal invalidates the request while the native module is loading.
+   * Starts a session. Fails when the native module is unavailable or the
+   * shell cannot be spawned, so the caller can report "terminal unavailable"
+   * rather than hanging on a terminal that will never produce output. Returns
+   * `undefined` when resource disposal invalidates the request while the
+   * native module is loading.
    */
   create(input: {
     id: string;
     cols: number;
     rows: number;
     cwd?: string;
-  }): Promise<PtySessionHandle | undefined>;
+  }): Effect.Effect<PtySessionHandle | undefined, Error, FileSystem.FileSystem>;
   get(id: string): PtySessionHandle | undefined;
   disposeAll(): void;
 }
@@ -89,18 +93,20 @@ export interface DesktopPtyHost {
  * choice; the per-platform fallbacks only matter when it is unset (some launch
  * contexts, notably a GUI app started by launchd, don't inherit it).
  */
-function defaultShell(): string {
-  if (process.env.SHELL) return process.env.SHELL;
+const defaultShell = Effect.gen(function* () {
+  const shell = yield* envVar('SHELL');
+  if (shell) return shell;
   if (osPlatform() === 'win32') {
-    return process.env.COMSPEC ?? 'powershell.exe';
+    return (yield* envVar('COMSPEC')) ?? 'powershell.exe';
   }
   return '/bin/bash';
-}
+});
 
 /**
  * Environment for the pty. Electron injects variables that confuse child
  * processes into thinking they are the Electron app rather than a plain shell,
- * so they are stripped.
+ * so they are stripped. It enumerates the whole environment, which `Config`
+ * cannot, so it reads `process.env` directly.
  */
 function ptyEnvironment(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -136,45 +142,51 @@ function ptyEnvironment(): Record<string, string> {
  * Fixed here rather than in a postinstall script so it survives any install
  * path, including a packaged app whose files were copied by the builder.
  */
-function ensureSpawnHelperExecutable(): void {
+const ensureSpawnHelperExecutable = Effect.gen(function* () {
   if (osPlatform() === 'win32') return;
-  try {
-    const require_ = createRequire(import.meta.url);
-    const packageRoot = dirname(require_.resolve('node-pty/package.json'));
-    const helper = join(
-      packageRoot,
-      'prebuilds',
-      `${osPlatform()}-${process.arch}`,
-      'spawn-helper',
-    );
-    const mode = statSync(helper).mode;
-    // Only write when a bit is actually missing: chmod on every launch would be
-    // a pointless syscall, and on a read-only install it would throw.
-    if ((mode & 0o111) === 0o111) return;
-    chmodSync(helper, mode | 0o111);
-  } catch {
-    // A missing helper or read-only filesystem is not fatal here: the spawn
-    // below will fail with its own error, which the caller surfaces in the
-    // terminal as "Could not start a terminal".
-  }
-}
+  const fs = yield* FileSystem.FileSystem;
+  const helper = yield* Effect.try({
+    try: () =>
+      join(
+        dirname(
+          createRequire(import.meta.url).resolve('node-pty/package.json'),
+        ),
+        'prebuilds',
+        `${osPlatform()}-${process.arch}`,
+        'spawn-helper',
+      ),
+    catch: ensureError,
+  });
+  const { mode } = yield* fs.stat(helper);
+  // Only write when a bit is actually missing: chmod on every launch would be
+  // a pointless syscall, and on a read-only install it would fail.
+  if ((mode & 0o111) === 0o111) return;
+  yield* fs.chmod(helper, mode | 0o111);
+}).pipe(
+  // A missing helper or read-only filesystem is not fatal here: the spawn
+  // below will fail with its own error, which the caller surfaces in the
+  // terminal as "Could not start a terminal".
+  Effect.ignore,
+);
 
-let nodePtyLoad: Promise<NodePtyModule> | undefined;
+let nodePty: NodePtyModule | undefined;
 
-function loadNodePty(): Promise<NodePtyModule> {
-  // Cached so repeated terminals don't re-resolve the addon; a failure clears
-  // the cache so a later attempt can retry.
-  nodePtyLoad ??= import('node-pty')
-    .then((module) => {
-      ensureSpawnHelperExecutable();
-      return module as unknown as NodePtyModule;
-    })
-    .catch((error: unknown) => {
-      nodePtyLoad = undefined;
-      throw error;
-    });
-  return nodePtyLoad;
-}
+// Kept once loaded so repeated terminals don't re-resolve the addon; a failed
+// load is not kept, so a later attempt can retry.
+const loadNodePty = Effect.suspend(() =>
+  nodePty
+    ? Effect.succeed(nodePty)
+    : Effect.tryPromise({
+        try: () => import('node-pty'),
+        catch: ensureError,
+      }).pipe(
+        Effect.tap(() => ensureSpawnHelperExecutable),
+        Effect.map((module) => {
+          nodePty = module as unknown as NodePtyModule;
+          return nodePty;
+        }),
+      ),
+);
 
 export function createDesktopPtyHost(
   options: DesktopPtyHostOptions,
@@ -183,68 +195,82 @@ export function createDesktopPtyHost(
   let generation = 0;
 
   return {
-    async create({ id, cols, rows, cwd }) {
-      const existing = sessions.get(id);
-      if (existing) return existing;
-
+    create({ id, cols, rows, cwd }) {
+      // The request begins at the call, not when its program runs: disposeAll
+      // marks every request begun by the old renderer as stale, including
+      // requests that had not yet reached the sessions map.
       const creationGeneration = generation;
-      let pty: NodePtyModule;
-      try {
-        pty = await (options.loadPty?.() ?? loadNodePty());
-      } catch (error) {
-        if (creationGeneration !== generation) return undefined;
-        throw error;
-      }
-      // disposeAll marks every request begun by the old renderer as stale,
-      // including requests that had not yet reached the sessions map.
-      if (creationGeneration !== generation) return undefined;
-      // Two starts for the same renderer ID can share the module-load await.
-      // Whichever resumes second adopts the handle installed by the first.
-      const loadedExisting = sessions.get(id);
-      if (loadedExisting) return loadedExisting;
+      const loadPty = options.loadPty
+        ? Effect.tryPromise({ try: options.loadPty, catch: ensureError })
+        : loadNodePty;
+      return Effect.gen(function* () {
+        const existing = sessions.get(id);
+        if (existing) return existing;
 
-      const child = pty.spawn(defaultShell(), [], {
-        name: 'xterm-256color',
-        // A pty spawned at 0 columns makes shells emit unusable line wrapping,
-        // so clamp to a sane minimum until the renderer reports real bounds.
-        cols: Math.max(cols, 20),
-        rows: Math.max(rows, 5),
-        cwd: cwd ?? options.cwd?.() ?? process.cwd(),
-        env: ptyEnvironment(),
-      });
+        const pty = yield* loadPty.pipe(
+          Effect.catch((error) =>
+            creationGeneration === generation
+              ? Effect.fail(error)
+              : Effect.succeed(undefined),
+          ),
+        );
+        if (pty === undefined || creationGeneration !== generation) {
+          return undefined;
+        }
+        // Two starts for the same renderer ID can share the module load.
+        // Whichever resumes second adopts the handle installed by the first.
+        const loadedExisting = sessions.get(id);
+        if (loadedExisting) return loadedExisting;
 
-      const handle: PtySessionHandle = {
-        id,
-        write: (data) => child.write(data),
-        resize: (nextCols, nextRows) => {
-          try {
-            child.resize(Math.max(nextCols, 20), Math.max(nextRows, 5));
-          } catch (error) {
-            // Resizing a pty whose process already exited throws; the exit
-            // handler has cleaned up, so this is not actionable.
-            options.onError(error);
-          }
-        },
-        dispose: () => {
-          if (sessions.get(id) === handle) sessions.delete(id);
-          try {
-            child.kill();
-          } catch (error) {
-            options.onError(error);
-          }
-        },
-      };
-      child.onData((data) => {
-        if (sessions.get(id) !== handle) return;
-        options.onData(id, data);
+        const shell = yield* defaultShell;
+        const child = yield* Effect.try({
+          try: () =>
+            pty.spawn(shell, [], {
+              name: 'xterm-256color',
+              // A pty spawned at 0 columns makes shells emit unusable line
+              // wrapping, so clamp to a sane minimum until the renderer
+              // reports real bounds.
+              cols: Math.max(cols, 20),
+              rows: Math.max(rows, 5),
+              cwd: cwd ?? options.cwd?.() ?? process.cwd(),
+              env: ptyEnvironment(),
+            }),
+          catch: ensureError,
+        });
+
+        const handle: PtySessionHandle = {
+          id,
+          write: (data) => child.write(data),
+          resize: (nextCols, nextRows) => {
+            try {
+              child.resize(Math.max(nextCols, 20), Math.max(nextRows, 5));
+            } catch (error) {
+              // Resizing a pty whose process already exited throws; the exit
+              // handler has cleaned up, so this is not actionable.
+              options.onError(error);
+            }
+          },
+          dispose: () => {
+            if (sessions.get(id) === handle) sessions.delete(id);
+            try {
+              child.kill();
+            } catch (error) {
+              options.onError(error);
+            }
+          },
+        };
+        child.onData((data) => {
+          if (sessions.get(id) !== handle) return;
+          options.onData(id, data);
+        });
+        child.onExit(({ exitCode }) => {
+          if (sessions.get(id) !== handle) return;
+          sessions.delete(id);
+          options.onExit(id, exitCode);
+        });
+        sessions.set(id, handle);
+        return handle;
       });
-      child.onExit(({ exitCode }) => {
-        if (sessions.get(id) !== handle) return;
-        sessions.delete(id);
-        options.onExit(id, exitCode);
-      });
-      sessions.set(id, handle);
-      return handle;
     },
 
     get: (id) => sessions.get(id),

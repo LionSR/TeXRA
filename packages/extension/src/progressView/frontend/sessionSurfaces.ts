@@ -317,7 +317,10 @@ export function createSessionSurfaces(options: {
   const settleHostResponse =
     hostResponseHandlers[options.hostRequestFailureOwner];
 
-  function hostRequestFor(entry: Held, request: HostRequest): void {
+  async function hostRequestFor(
+    entry: Held,
+    request: HostRequest,
+  ): Promise<void> {
     const surface = entry.surface$.get();
     let runId = surface.selected;
     if (request.kind === 'record' && request.action.kind === 'start') {
@@ -332,26 +335,26 @@ export function createSessionSurfaces(options: {
         polishing: new Set([...surface.polishing, target]),
       });
     }
-    void transport
-      .request({
-        kind: 'host.request',
-        session: entry.key,
-        requestId: requestId(),
-        request,
-      })
-      .then((result) => {
-        if (held.get(entry.key) !== entry) return;
-        if (request.kind === 'polish') {
-          const current = entry.surface$.get();
-          const polishing = new Set(current.polishing);
-          polishing.delete(target);
-          setSurface(entry, { ...current, polishing });
-        }
-        settleHostResponse(entry, request, origin, result);
-      });
+    const result = await transport.request({
+      kind: 'host.request',
+      session: entry.key,
+      requestId: requestId(),
+      request,
+    });
+    if (held.get(entry.key) !== entry) return;
+    if (request.kind === 'polish') {
+      const current = entry.surface$.get();
+      const polishing = new Set(current.polishing);
+      polishing.delete(target);
+      setSurface(entry, { ...current, polishing });
+    }
+    settleHostResponse(entry, request, origin, result);
   }
 
-  function runtimeRequestFor(entry: Held, request: RuntimeRequest): void {
+  async function runtimeRequestFor(
+    entry: Held,
+    request: RuntimeRequest,
+  ): Promise<void> {
     const { key } = entry;
     const runId = 'runId' in request ? request.runId : null;
     if (request.kind === 'followUp.send') {
@@ -375,43 +378,40 @@ export function createSessionSurfaces(options: {
       request.kind === 'followUp.send'
         ? entry.surface$.get().drafts.get(request.runId)
         : undefined;
-    void transport
-      .request({
-        kind: 'runtime.request',
-        session: key,
-        requestId: requestId(),
-        request,
-      })
-      .then((result) => {
-        if (held.get(key) !== entry) return;
-        presentResult(entry, result);
-        // The runtime's refusal also reaches the run it was made on
-        // (7.6): that run's controls paint it, and nothing here
-        // swallows it.
-        if (!result.ok && result.error._tag !== 'Cancelled' && runId !== null) {
-          const current = entry.surface$.get();
-          setSurface(entry, {
-            ...current,
-            rejected: new Map(current.rejected).set(runId, result.error),
-          });
-        }
-        if (request.kind !== 'followUp.send') return;
-        const current = entry.surface$.get();
-        const sending = new Set(current.sending);
-        sending.delete(request.runId);
-        setSurface(entry, { ...current, sending });
-        if (!result.ok) return;
-        if (
-          submitted !== undefined &&
-          entry.surface$.get().drafts.get(request.runId) === submitted
-        ) {
-          act(entry, {
-            kind: 'draft',
-            runId: request.runId,
-            patch: EMPTY_DRAFT,
-          });
-        }
+    const result = await transport.request({
+      kind: 'runtime.request',
+      session: key,
+      requestId: requestId(),
+      request,
+    });
+    if (held.get(key) !== entry) return;
+    presentResult(entry, result);
+    // The runtime's refusal also reaches the run it was made on
+    // (7.6): that run's controls paint it, and nothing here
+    // swallows it.
+    if (!result.ok && result.error._tag !== 'Cancelled' && runId !== null) {
+      const current = entry.surface$.get();
+      setSurface(entry, {
+        ...current,
+        rejected: new Map(current.rejected).set(runId, result.error),
       });
+    }
+    if (request.kind !== 'followUp.send') return;
+    const current = entry.surface$.get();
+    const sending = new Set(current.sending);
+    sending.delete(request.runId);
+    setSurface(entry, { ...current, sending });
+    if (!result.ok) return;
+    if (
+      submitted !== undefined &&
+      entry.surface$.get().drafts.get(request.runId) === submitted
+    ) {
+      act(entry, {
+        kind: 'draft',
+        runId: request.runId,
+        patch: EMPTY_DRAFT,
+      });
+    }
   }
 
   /** A follow-up sends once the host has stored every pasted image; an
@@ -432,7 +432,7 @@ export function createSessionSurfaces(options: {
       const mediaFiles = draft.images.flatMap((image) =>
         image.path === null ? [] : [image.path],
       );
-      runtimeRequestFor(entry, {
+      void runtimeRequestFor(entry, {
         kind: 'followUp.send',
         runId,
         text: text === '' ? '(image)' : text,
@@ -443,7 +443,7 @@ export function createSessionSurfaces(options: {
     const { launch } = surface;
     const instruction = launch.instruction.trim();
     if (instruction === '') return;
-    hostRequestFor(entry, { kind: 'launch', launch, instruction });
+    void hostRequestFor(entry, { kind: 'launch', launch, instruction });
   }
 
   transport.onSurfaceAction((key, action) => {
@@ -482,11 +482,11 @@ export function createSessionSurfaces(options: {
     },
     runtimeRequest(key, request) {
       const entry = held.get(key);
-      if (entry) runtimeRequestFor(entry, request);
+      if (entry) void runtimeRequestFor(entry, request);
     },
     hostRequest(key, hostRequest) {
       const entry = held.get(key);
-      if (entry) hostRequestFor(entry, hostRequest);
+      if (entry) void hostRequestFor(entry, hostRequest);
     },
     submit(key) {
       const entry = held.get(key);

@@ -19,7 +19,7 @@ import {
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { SUPABASE_CUSTOM_DOMAIN } from '@auth/config';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
+import { debug as logDebug, warn as logWarning } from '@logger/logUtils';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { UsageRoute } from '@shared/schemas';
 import {
@@ -41,7 +41,6 @@ import { isEnvFlagEnabled } from '@utils/system/envFlags';
 import { unrefSleepClock } from '@utils/system/unrefSleepClock';
 
 const CHANNEL = 'UsageLogService';
-const log = createLog(CHANNEL);
 
 const USAGE_LOG_ENDPOINT = `https://${SUPABASE_CUSTOM_DOMAIN}/functions/v1/log-usage`;
 const MAX_QUEUE_SIZE = 1000;
@@ -131,7 +130,8 @@ function isTelemetryEnabledBySetting(config: ConfigProvider): boolean {
     (value) => typeof value !== 'boolean',
   );
   if (malformed !== undefined) {
-    log.warn(
+    logWarning(
+      CHANNEL,
       `Ignoring non-boolean ${TELEMETRY_ENABLED_KEY} (got ${typeof malformed}); treating optional usage logging as disabled`,
     );
     return false;
@@ -265,7 +265,7 @@ class UsageLogServiceImpl {
     }
 
     if (this.queue.length >= MAX_QUEUE_SIZE) {
-      log.warn('Queue full, dropping oldest entry');
+      logWarning(CHANNEL, 'Queue full, dropping oldest entry');
       this.queue.shift();
     }
 
@@ -278,7 +278,7 @@ class UsageLogServiceImpl {
       },
       config,
     });
-    log.debug(`Queued usage entry (queue size: ${this.queue.length})`);
+    logDebug(CHANNEL, `Queued usage entry (queue size: ${this.queue.length})`);
 
     if (this.queue.length >= this.config.batchSize) {
       this.requestFlush();

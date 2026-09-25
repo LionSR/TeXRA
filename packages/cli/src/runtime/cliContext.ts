@@ -455,7 +455,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
       // `version.ts` and the chat TUI read it too — so it is wrapped once
       // here. It answers `unknown` rather than failing.
       version: yield* Effect.promise(readCliVersion),
-      resourcesPath: resolveCliResourcesPath(),
+      resourcesPath: yield* resolveCliResourcesPath(),
       config,
       configWarnings,
       configDegradations: degradations,
