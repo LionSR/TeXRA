@@ -521,8 +521,9 @@ const WorkflowCheckpointDraftSchema = z.discriminatedUnion('type', [
    *
    * `supersededRunId` is the one authorization that closes a child which
    * already started work: a user retrying that child through the workflow's
-   * control surface. The engine writes this row for the next attempt before
-   * it asks for the replacement, naming the child the retry superseded, so
+   * control surface. The engine writes this row at that child's own attempt,
+   * naming it, before it asks for the replacement (the mark stays put, so the
+   * replacement's id reads as the free slot above it), so
    * the recovery probe advances past an attempt it would otherwise refuse to
    * repeat. Absent on every mark a launch writes for itself, which is what
    * keeps restart recovery fail-closed for a child nobody retried.
@@ -584,10 +585,10 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * database holds. TeXRA keeps no compatibility with earlier persisted data
  * (AGENTS.md "Compatibility and format retirement"), so `Database` clears a
  * store stamped with any other version at open and stamps this one. Bump it
- * with any change to the stored shape of `SessionEventSchema`, which
- * `sessionEventFormat.vitest.ts` pins.
+ * with any change to the stored shape of `SessionEventSchema` (pinned by
+ * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 15;
+export const SESSION_EVENT_FORMAT = 16;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

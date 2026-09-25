@@ -160,6 +160,14 @@ const captureStartedLaunch = Effect.fn(function* (
           'run.end',
         );
         expect(ends).toHaveLength(1);
+        if (options.resumedRunId) {
+          // No `run.start` re-stamps the policy, so the activation does: the
+          // view shows what enforcement holds for the resumed run.
+          const view = yield* session.readView([options.resumedRunId]);
+          expect(view.policy.get(options.resumedRunId)).toStrictEqual(
+            session.approvalPolicySnapshotFor(options.resumedRunId),
+          );
+        }
         return {
           session,
           start: starts[0],

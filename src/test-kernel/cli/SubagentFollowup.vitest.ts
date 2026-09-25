@@ -23,13 +23,26 @@ const CODEX_STREAMING_TEXT = [
 ].join('\n');
 
 // XML-escaped workflow-summary JSON for the workflow-script-result/error tests.
+function tally(ok: number, failed = 0): Record<string, number> {
+  return {
+    total: ok + failed,
+    ok,
+    running: 0,
+    queued: 0,
+    planned: 0,
+    failed,
+    cancelled: 0,
+    skipped: 0,
+    notRun: 0,
+  };
+}
+
 function workflowSummary(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     name: 'proofread-pipeline',
     outcome: 'completed',
     phaseCount: 2,
-    taskDone: 4,
-    taskTotal: 4,
+    tally: tally(4),
     costUsd: 0.19,
     durationMs: 724_000,
     files: [
@@ -256,11 +269,10 @@ describe('summarizeSubagentFollowup', () => {
 
     expect(summarizeSubagentFollowup(xml)).toBe(
       [
-        '✓ proofread-pipeline completed · 2 phases · 4/4 calls succeeded · $0.190 · 12m 4s',
+        '✓ proofread-pipeline completed · 2 phases · 4 ok · $0.190 · 12m 4s',
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
         '  script: .texra/workflow-scripts/proofread-pipeline.mjs',
-        '  rerun: edit the script, then call delegate_multi_agents with scriptPath',
       ].join('\n'),
     );
   });
@@ -270,7 +282,7 @@ describe('summarizeSubagentFollowup', () => {
       '<workflow-script-error id="abc">',
       `<workflow-summary>${workflowSummary({
         outcome: 'failed',
-        taskDone: 1,
+        tally: tally(1, 3),
         costUsd: 0.03,
         durationMs: 5_000,
         files: [],
@@ -286,7 +298,9 @@ describe('summarizeSubagentFollowup', () => {
     ].join('\n');
 
     const rendered = summarizeSubagentFollowup(xml);
-    expect(rendered).toContain('✗ proofread-pipeline failed');
+    expect(rendered).toContain(
+      '✗ proofread-pipeline failed · 2 phases · 1 ok · 3 failed',
+    );
     expect(rendered).toContain('Model request failed: quota exhausted');
     expect(rendered).not.toContain('=== Run log ===');
     expect(rendered).not.toContain('Finished: earlier task');
@@ -298,8 +312,7 @@ describe('summarizeSubagentFollowup', () => {
       `<workflow-summary>${workflowSummary({
         outcome: 'failed',
         phaseCount: 0,
-        taskDone: 0,
-        taskTotal: 0,
+        tally: tally(0),
         costUsd: 0,
         durationMs: 100,
         files: [],
