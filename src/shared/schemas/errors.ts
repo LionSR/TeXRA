@@ -92,13 +92,19 @@ export type ErrorContext = z.infer<typeof ErrorContextSchema>;
  * must fail loudly rather than have them stripped into a classification-less
  * row that reads as an ordinary provider failure.
  */
-export const ErrorLogDataSchema = ProviderErrorObjectSchema.extend({
-  // Compose the shared operation/model context pair from ErrorContextSchema
-  // so adding a field there propagates to the flattened log-row shape instead
-  // of silently diverging (mirrors the omit-based RetryErrorInfoSchema).
-  ...ErrorContextSchema.shape,
-  rawMessage: z.string().optional(),
-}).strict();
+export const ErrorLogDataSchema = ProviderErrorObjectSchema.omit({
+  // The raw provider response body can echo the request, credentials
+  // included; it goes to the process log, never into a stream-log row.
+  rawErrorBody: true,
+})
+  .extend({
+    // Compose the shared operation/model context pair from ErrorContextSchema
+    // so adding a field there propagates to the flattened log-row shape instead
+    // of silently diverging (mirrors the omit-based RetryErrorInfoSchema).
+    ...ErrorContextSchema.shape,
+    rawMessage: z.string().optional(),
+  })
+  .strict();
 export type ErrorLogData = z.infer<typeof ErrorLogDataSchema>;
 
 /** Canonical provider error with all fields optional for event transport. */

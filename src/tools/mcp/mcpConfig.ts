@@ -95,6 +95,19 @@ const readConfigText = (
     ),
   );
 
+/**
+ * What `JSON.parse` rejected, without the file's text. V8 quotes an excerpt
+ * of the source into the messages that carry no position, and this file
+ * holds server credentials; those messages are cut at the first quote. The
+ * messages with a position quote no source and pass whole.
+ */
+function jsonSyntaxError(error: unknown): string {
+  const message = toErrorMessage(error);
+  if (message.includes(' at position ')) return message;
+  const kind = message.split(/['"]/, 1)[0].replace(/[,\s]+$/, '');
+  return kind || 'Unexpected content';
+}
+
 /** Parse the config file's servers, skipping each invalid entry loudly. */
 function parseConfig(
   file: string,
@@ -167,7 +180,7 @@ export const mcpPluginLoader =
       const json = yield* Effect.try({
         try: (): unknown => JSON.parse(text),
         catch: (error) =>
-          new Error(`${file} is not valid JSON: ${toErrorMessage(error)}`),
+          new Error(`${file} is not valid JSON: ${jsonSyntaxError(error)}`),
       });
       const { servers, warnings } = parseConfig(file, json);
       return {

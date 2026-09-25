@@ -135,7 +135,6 @@ const ERROR_DETAIL_FIELDS = [
   'classification',
   'requestId',
   'rawMessage',
-  'rawErrorBody',
 ] as const satisfies readonly (keyof ErrorLogData)[];
 
 function errorDetails(
