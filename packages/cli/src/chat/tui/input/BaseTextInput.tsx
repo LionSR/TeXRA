@@ -91,6 +91,9 @@ interface BaseTextInputProps {
    *  accept) is received at the start of an input chunk — the chunk's remaining
    *  input is then routed through `applyTerminalInputChunk`. */
   readonly escapeEdit?: CursorEdit;
+  /** Esc pressed while this input owns the keyboard (after `escapeEdit`):
+   *  the owner backs out, so no sibling handler has to catch Esc. */
+  readonly onEscape?: () => void;
   /** Render the value as bullets (secret entry, e.g. an API key). Display-only:
    *  the captured value, edits, and paste are unaffected. */
   readonly masked?: boolean;
@@ -262,6 +265,7 @@ export function BaseTextInput(props: BaseTextInputProps): React.JSX.Element {
         if (props.escapeEdit) {
           applyLatestEdit(props.escapeEdit);
         }
+        props.onEscape?.();
         return;
       }
       if (imagePasteQueue.hasDeferredAction) {
