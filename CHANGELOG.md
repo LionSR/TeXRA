@@ -127,6 +127,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **The VS Code dashboard shows your agents, teams and saved settings
+  again.** The Agents page listed no tool-use or workflow agents and no
+  teams, and several pages showed defaults instead of your saved values
+  (compaction, retries, team coordination, approval, skills, memory, telemetry,
+  LaTeX and commit attribution), because the extension sent those updates
+  in a form the dashboard discarded.
 - **Usage recorded just before quitting is no longer lost** — on the desktop
   app and the CLI, a quit while live runs took more than a few seconds to
   stop could cut off sending the last usage records. Every host now sends

@@ -568,7 +568,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateProfileMessageSchema,
 ]);
 
-type SettingsViewOutboundMessage = z.infer<
+export type SettingsViewOutboundMessage = z.infer<
   typeof SettingsViewOutboundMessageSchema
 >;
 
