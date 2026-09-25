@@ -89,14 +89,14 @@ return summary.structured;
 
 ### 2.2 The operation set
 
-| Operation                     | Script meaning                                                                    | Host combinator                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `agent(prompt, options)`      | one delegated call                                                                | today's journaled `agentPrimitive`, unchanged: identity, fingerprints, permits, the skip/retry decision      |
-| `all(items, { concurrency })` | run items concurrently; the first failure fails the whole and interrupts the rest | `Effect.forEach(items, run, { concurrency: min(requested, budget) })`                                        |
-| `forEach(items, fn, opts)`    | `all(items.map(fn), opts)`                                                        | realm-side shorthand; never crosses the wire                                                                 |
-| `attempt(body)`               | never fails: a `Success` or `Failure` value                                       | `Effect.catchTag('OpFailure', …)`                                                                            |
-| `retry(body, { times })`      | re-run a call or a whole branch                                                   | `Effect.retry({ times, while: isOpFailure })`                                                                |
-| `timeout(body, ms)`           | bound a call or a branch                                                          | `Effect.timeoutOrElse`, failing with `TimedOut`; the loser is interrupted, which reaches the child as a stop |
+| Operation                     | Script meaning                                                                    | Host combinator                                                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `agent(prompt, options)`      | one delegated call                                                                | today's journaled `agentPrimitive`, unchanged: identity, fingerprints, permits, the skip/retry decision                            |
+| `all(items, { concurrency })` | run items concurrently; the first failure fails the whole and interrupts the rest | `Effect.forEach(items, run, { concurrency: requested ?? 'unbounded' })`; the session `Semaphore` inside `agent()` bounds what runs |
+| `forEach(items, fn, opts)`    | `all(items.map(fn), opts)`                                                        | realm-side shorthand; never crosses the wire                                                                                       |
+| `attempt(body)`               | never fails: a `Success` or `Failure` value                                       | `Effect.catchTag('OpFailure', …)`                                                                                                  |
+| `retry(body, { times })`      | re-run a call or a whole branch                                                   | `Effect.retry({ times, while: isOpFailure })`                                                                                      |
+| `timeout(body, ms)`           | bound a call or a branch                                                          | `Effect.timeoutOrElse`, failing with `TimedOut`; the loser is interrupted, which reaches the child as a stop                       |
 
 `race` is deliberately left out until a script needs it.
 

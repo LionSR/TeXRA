@@ -76,7 +76,7 @@ return (
 );
 ```
 
-A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the progress view can show all three tasks before any of them run. The script is a generator: `agent()` and `all()` describe work, and `yield*` runs it and hands back the result. `all()` runs the two fixes concurrently and waits for both. On its own, `all()` stops at the first failure; wrapping each fix in `attempt()` lets the script keep the fixes that succeeded, so a failed or skipped fix is left out of the merge rather than stopping the run. Each workflow-agent call resolves to a result that lists the files it produced, and their paths (`output.absolutePath`) can be handed straight to the next call.
+A few things to notice. The `meta` block is the plan: because `tasks` is declared, the proposal and the progress view can show all three tasks before any of them run. The script is a generator: `agent()` and `all()` describe work, and `yield*` runs it and hands back the result. `all()` runs the two fixes concurrently and waits for both. On its own, `all()` stops at the first failure; wrapping each fix in `attempt()` lets the script keep the fixes that succeeded, so a failed or skipped fix is left out of the merge rather than stopping the run. Each workflow-agent call resolves to a result that lists the files it produced, and each output's `absolutePath` can be handed straight to the next call.
 
 ## The script API
 
