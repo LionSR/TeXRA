@@ -82,12 +82,14 @@ function dispatch(
 }
 
 describe('extension command surface — catalog-tagged command dispatch', () => {
-  it('texra.auth.viewProfile opens the general page', async () => {
+  it('texra.auth.viewProfile opens General on its Account section', async () => {
     const actions = makeActions();
     await expect(
       dispatch(actions, 'texra.auth.viewProfile'),
     ).resolves.toBeUndefined();
-    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith('general');
+    expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
+      'general/account',
+    );
   });
 
   it('texra.showMemory passes the memory panel name', async () => {
@@ -104,7 +106,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       dispatch(actions, 'texra.showAgents', 'toolUse'),
     ).resolves.toBeUndefined();
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      'agents',
+      'agents/library',
       'toolUse',
     );
   });
@@ -115,7 +117,7 @@ describe('extension command surface — catalog-tagged command dispatch', () => 
       dispatch(actions, 'texra.showAgents'),
     ).resolves.toBeUndefined();
     expect(actions.showSettings).toHaveBeenCalledExactlyOnceWith(
-      'agents',
+      'agents/library',
       undefined,
     );
   });

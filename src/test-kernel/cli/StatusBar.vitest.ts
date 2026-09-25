@@ -143,13 +143,11 @@ const EXIT_NOTICE = {
   kind: 'exit',
   text: 'Press Ctrl-C again to exit',
   resumeId: 'abc123',
-  expiresAt: 1,
 } as const;
 
 const UNKNOWN_COMMAND_NOTICE = {
   kind: 'message',
   text: 'Unknown command: /wat',
-  expiresAt: 1,
 } as const;
 
 type TokenUsage = NonNullable<StatusBarCase['usage']>;
@@ -1242,7 +1240,6 @@ describe('CLI StatusBar display model', () => {
         transientNotice: {
           kind: 'message',
           text: 'Signed in successfully',
-          expiresAt: 1,
         },
         queuedFollowUpMessages: ['Continue with the proof.'],
       }),
@@ -1314,7 +1311,6 @@ describe('CLI StatusBar display model', () => {
         transientNotice: {
           kind: 'exit',
           text: 'Press Ctrl-C again to exit',
-          expiresAt: 1,
         },
         queuedFollowUpMessages: ['Continue with the proof.'],
         width,

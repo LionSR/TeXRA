@@ -29,7 +29,7 @@
  *
  * The run model (`transcript.run`) is derived only when one of its inputs
  * moved: the run's own `run.start`, a status change, a transcript entry the
- * model reads (a workflow card, a group boundary, a plan marker), or a
+ * model reads (a workflow card, a group boundary, a plan), or a
  * direct child's progress. Folding a frame defers that derivation to the
  * end of the frame, so a replay of R events derives each board once.
  *
@@ -79,7 +79,7 @@ import {
 import { hasIncompleteEmbeddedSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
 import {
-  applyCompactionActivityEntry,
+  applyCompactionActivityEvent,
   createCompactionActivityProjection,
   settleCompactionActivities,
   type CompactionActivityProjection,
@@ -99,12 +99,8 @@ import {
   runInterruptedMessage,
   runStatusCopy,
 } from '@shared/runs/runStatusDisplay';
+import { taskGroupOnStage } from '@shared/runs/taskGroupProjection';
 import {
-  isTaskGroupLifecycleEntry,
-  upsertTaskGroupFromStreamLog,
-} from '@shared/runs/taskGroupProjection';
-import {
-  workflowMarkerOf,
   workflowRunModel,
   type ChildRunProgress,
 } from '@shared/runs/workflowRunModel';
@@ -407,9 +403,8 @@ interface TranscriptIndexes {
   readonly streaming: Map<string, StreamingCursor>;
   /** The newest thinking row, for `thinkingActive`. */
   thinkingRowId: string | undefined;
-  /** The newest workflow plan marker, for the run model. */
+  /** The newest `workflow.plan`, for the run model. */
   plan: WorkflowDeclaredPlan | undefined;
-  /** The newest attempt boundary, even when its plan was malformed. */
   workflowAttemptId: string | undefined;
 }
 
@@ -1027,8 +1022,7 @@ function projectRow(
 }
 
 /**
- * Fold one transcript row into the slice: the row, task-group, compaction,
- * and run-marker reducers, each called unchanged. A streaming row joins its
+ * Fold one transcript entry into the slice's rows. A streaming row joins its
  * durable fields with its session `inflight` entry, which may have arrived
  * first (5.2, "In-flight text"); a finalizing row drops that entry, so a
  * late chunk cannot reopen settled text.
@@ -1040,24 +1034,6 @@ function applyEntry(
 ): TranscriptView {
   const next = replaceTranscript(run.transcript, {});
   const indexes = indexesOf(next);
-  // Task groups are copied by the entry that lands one, never by an
-  // ordinary model or log entry, which the projection would not write.
-  if (isTaskGroupLifecycleEntry(entry)) {
-    upsertTaskGroupFromStreamLog(
-      writableTranscriptArray(next, 'taskGroups'),
-      indexes.taskGroupIndex,
-      entry,
-    );
-  }
-  const marker = workflowMarkerOf(entry);
-  if (marker) {
-    indexes.workflowAttemptId = marker.attemptId ?? indexes.workflowAttemptId;
-    indexes.plan = marker.kind === 'plan' ? marker.plan : undefined;
-  }
-  reconcileCompactionRows(
-    next,
-    applyCompactionActivityEntry(indexes.compactionState, entry),
-  );
   const key = inflightKey(run.id, entry.id);
   const { inflight } = sessionIndexesOf(view);
   // One holder of a row's live text, the session `inflight` index, whichever
@@ -1768,13 +1744,48 @@ function foldTraceEvent(
   const indexes = indexesOf(run.transcript);
   applyTraceRow(indexes.trace, event, view.debug);
   const change = indexes.source.drainEmission();
-  for (const entry of [...change.appended, ...change.dirtied]) {
+  const entries = [...change.appended, ...change.dirtied];
+  // Task groups, the plan and compaction fold straight from the event.
+  const { transcript } = run;
+  let sides: TranscriptView | undefined;
+  const slice = () => (sides ??= replaceTranscript(transcript, {}));
+  if (event.type === 'workflow.plan') {
+    indexes.workflowAttemptId = event.attemptId;
+    indexes.plan = { phases: [...event.phases], tasks: [...event.tasks] };
+    slice();
+  } else if (event.type === 'stage.start' || event.type === 'stage.end') {
+    const at = indexes.taskGroupIndex.get(event.id);
+    const group = taskGroupOnStage(
+      at === undefined ? undefined : transcript.taskGroups[at],
+      event,
+      event.at,
+      indexes.workflowAttemptId,
+    );
+    if (group) {
+      const groups = writableTranscriptArray(slice(), 'taskGroups');
+      if (at !== undefined) groups[at] = group;
+      else indexes.taskGroupIndex.set(event.id, groups.push(group) - 1);
+    }
+  }
+  // A transcript event writes at most one entry; its seqNo is the event's
+  // row position (a tool's first-seen one).
+  if (isTranscriptEvent(event) && entries.length > 0) {
+    const changed = applyCompactionActivityEvent(
+      indexes.compactionState,
+      event,
+      entries[0].seqNo,
+      event.at,
+    );
+    if (changed.length > 0) reconcileCompactionRows(slice(), changed);
+  }
+  if (sides) run = { ...run, transcript: sides };
+  for (const entry of entries) {
     run = { ...run, transcript: applyEntry(view, run, entry) };
   }
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.
-  if (change.appended.length === 0 && change.dirtied.length === 0) return true;
+  if (entries.length === 0 && !sides) return true;
   setRun(
     view,
     runModelAt(

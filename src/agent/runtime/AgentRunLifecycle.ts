@@ -584,6 +584,11 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     });
     return yield* run.pipe(
       Effect.catchCause((cause) => {
+        // An interruption the program raised on itself (a prompt closed
+        // under it) is a stop, not a failure: squashed, it would record
+        // "All fibers interrupted without error" as the run's FAILED
+        // verdict. Re-raised, `onInterrupt` below finalizes it CANCELLED.
+        if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
         const err = ensureError(Cause.squash(cause));
         // A failure already classified and published retains its one error path.
         if (err instanceof FinalizedRunFailure) return Effect.fail(err);

@@ -285,7 +285,6 @@ function scriptedBoundModel(
       config.fullName,
       config.name,
     ]),
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }

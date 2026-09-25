@@ -80,7 +80,10 @@ import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
-import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import {
+  processOwnerId,
+  type ProcessProbe,
+} from '@platform/defaults/nodeProcesses';
 import { nodePlatformServices } from '@platform/defaults/nodePlatform';
 import { RunLedger } from '@shared/session/runLedger';
 import {
@@ -668,7 +671,7 @@ const sessionGraphLayer = (key: SessionKey) => {
   const database: Layer.Layer<
     Database,
     DatabaseOpenFailed,
-    ProjectDatabases | ProcessIdentity | WorkspaceRoots | ChildProcessSpawner
+    ProjectDatabases | ProcessIdentity | WorkspaceRoots | ProcessProbe
   > =
     key.open.transcriptMode?.kind === 'ephemeral'
       ? databaseLayer('ephemeral')
@@ -933,11 +936,7 @@ const closeSession = (root: string) =>
  * entry without application state supplies a refusing store and database.
  */
 interface ProcessRuntimeOptions {
-  readonly processStart: Effect.Effect<
-    string | undefined,
-    never,
-    ChildProcessSpawner
-  >;
+  readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
   readonly secrets: PlatformSecrets;
   /**
@@ -971,7 +970,7 @@ interface ProcessRuntimeOptions {
   readonly appState: Layer.Layer<
     AppState,
     DatabaseOpenFailed,
-    GlobalDatabase | ProcessIdentity | ChildProcessSpawner
+    GlobalDatabase | ProcessIdentity | ProcessProbe
   >;
   /**
    * The root's account plane, served as `SupabaseAuth`. Every shipped host
@@ -1033,7 +1032,7 @@ interface ProcessRuntimeOptions {
   readonly globalDatabase: Layer.Layer<
     GlobalDatabase,
     DatabaseOpenFailed,
-    ProcessIdentity | ChildProcessSpawner
+    ProcessIdentity | ProcessProbe
   >;
   /**
    * The runtime's emission threshold for Effect diagnostics, from facts the

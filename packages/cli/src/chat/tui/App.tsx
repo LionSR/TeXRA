@@ -1,6 +1,7 @@
 // Ink root: conversation and optional panels above stable status, approval, and input chrome.
 
 // Third-party imports
+import { Effect } from 'effect';
 import { useInput, useStdin, useWindowSize } from 'ink';
 import {
   Fragment,
@@ -25,7 +26,8 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp } from '@shared/session/sessionView';
-import { type RunId, type WorkflowControlAction } from '@shared/schemas';
+import { type RunId } from '@shared/schemas';
+import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
@@ -71,7 +73,10 @@ import {
   slashPaletteOpen as slashPaletteOpenSignal,
   sessionListRunIds,
 } from './state/cliState';
-import { appendLocalAssistantTranscript } from './state/transcript';
+import {
+  appendLocalAssistantTranscript,
+  describeRequestError,
+} from './state/transcript';
 import {
   INITIAL_CHILD_LIST_SELECTION,
   reduceChildListSelection,
@@ -118,24 +123,18 @@ export interface AppProps {
   /** The session's three setting slots, for the status bar's route probe. */
   readonly stores: SettingsStores;
   /**
-   * The process runtime the input bar's history write and image paste run
-   * on, threaded from the same chat surface — this component runs no Effect.
+   * The process runtime the input bar's history write, image paste and run
+   * requests run on, threaded from the same chat surface.
    */
   readonly runtime: ProcessRuntime;
-  /** The chat's session: the approval modal's decisions land on it and the
-   *  work-plan reader renders from it, threaded from the chat surface that
+  /** The chat's session: approval decisions and run requests land on it and
+   *  the work-plan reader renders from it, threaded from the chat surface that
    *  opened it. */
   readonly session: SessionHandle;
   readonly onSubmit: (
     line: string,
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
-  ) => void;
-  readonly onKillRun: (runId: RunId) => void;
-  /** Skip or retry a focused, in-flight workflow-script grandchild `agent()` call. */
-  readonly onWorkflowControl: (
-    runId: RunId,
-    action: WorkflowControlAction,
   ) => void;
   readonly colorEnabled?: boolean;
   readonly commandName?: string;
@@ -292,6 +291,16 @@ export function App(props: AppProps): React.JSX.Element {
       dispatchChildListSelection({ kind: 'focus', value: firstChildValue });
     }
   }, [childListValues]);
+  // Kill, skip and retry; a refusal (a settled call) reads into the transcript.
+  const request = (req: RuntimeRequest): void => {
+    props.runtime.runFork(
+      Effect.catch(props.session.requests.request(req), (error) =>
+        Effect.sync(() =>
+          appendLocalAssistantTranscript(describeRequestError(error)),
+        ),
+      ),
+    );
+  };
   const focusSession = (runId: RunId): void => {
     dispatchChildListSelection({ kind: 'focusRun', runId });
     if (resumableRunId(view.runs.get(runId))) {
@@ -341,10 +350,9 @@ export function App(props: AppProps): React.JSX.Element {
               closeForegroundReader();
               focusRunAndPromoteApprovals(runId);
             }}
-            onKillRun={props.onKillRun}
             onOpenTranscript={openTranscriptReader}
+            onRequest={request}
             onViewChange={updateWorkflowPopupView}
-            onWorkflowControl={props.onWorkflowControl}
             runId={reader.runId}
             view={workflowPopup}
           />
@@ -667,7 +675,7 @@ export function App(props: AppProps): React.JSX.Element {
         }}
         onCancelChildList={cancelChildList}
         onFocusSession={focusSession}
-        onKillRun={props.onKillRun}
+        onKillRun={(runId) => request({ kind: 'run.stop', runId })}
         onChildSelectionChange={(value) =>
           dispatchChildListSelection({ kind: 'highlight', value })
         }

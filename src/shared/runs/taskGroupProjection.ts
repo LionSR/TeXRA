@@ -1,15 +1,14 @@
-// Host-neutral projection of task-group lifecycle rows from a StreamLog.
+// Host-neutral projection of task groups from stage events.
 //
-// The session fold (`sessionFold.ts`) is the one caller; ordering and orphan
-// GROUP_END behavior live here.
+// The session fold (`sessionFold.ts`) is the one caller; it owns the group
+// positions, this module what one stage event writes.
 
 import {
-  STREAM_LOG_ENTRY_TYPES,
   RUN_PHASE,
   type RunOutcome,
-  type StreamLogEntry,
   type TaskGroup,
   type TaskGroupStatus,
+  type TranscriptEvent,
 } from '@shared/schemas';
 
 /**
@@ -45,107 +44,36 @@ export function taskGroupDisplayStatus(
     : group.status;
 }
 
-type TaskGroupLifecycleEntry = Extract<
-  StreamLogEntry,
-  {
-    type:
-      | typeof STREAM_LOG_ENTRY_TYPES.GROUP_START
-      | typeof STREAM_LOG_ENTRY_TYPES.GROUP_END;
-  }
+type StageEvent = Extract<
+  TranscriptEvent,
+  { readonly type: 'stage.start' | 'stage.end' }
 >;
 
 /**
- * Whether an entry is a task-group lifecycle row: the one rule for what
- * `upsertTaskGroupFromStreamLog` writes, so a caller that must know before
- * the call (the session fold, which copies the array it is about to write)
- * reads the same answer the reducer does.
+ * The task group one stage event writes over `current`, the group it names
+ * (undefined when none is open), at the event's clock `at`. A start opens
+ * the group whole, tagging a workflow phase with `attemptId`, the attempt the
+ * newest `workflow.plan` declared; an end closes the group its start opened
+ * and writes nothing for a group no start opened.
  */
-export function isTaskGroupLifecycleEntry(
-  entry: StreamLogEntry,
-): entry is TaskGroupLifecycleEntry {
-  return (
-    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START ||
-    entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_END
-  );
-}
-
-/**
- * Apply one StreamLog entry to an existing task-group projection.
- *
- * Returns `true` exactly when the entry is a task-group lifecycle row. The
- * array and index are mutated together so incremental consumers retain O(1)
- * replacement, and a from-scratch replay over a complete log through this
- * same reducer yields the identical result (the resync path).
- */
-export function upsertTaskGroupFromStreamLog(
-  taskGroups: TaskGroup[],
-  taskGroupIndex: Map<string, number>,
-  entry: StreamLogEntry,
-): boolean {
-  if (!isTaskGroupLifecycleEntry(entry)) return false;
-
-  const cachedIndex = taskGroupIndex.get(entry.id);
-  const groupIndex =
-    cachedIndex !== undefined && taskGroups[cachedIndex]?.id === entry.id
-      ? cachedIndex
-      : taskGroups.findIndex((group) => group.id === entry.id);
-
-  if (groupIndex >= 0 && groupIndex !== cachedIndex) {
-    taskGroupIndex.set(entry.id, groupIndex);
+export function taskGroupOnStage(
+  current: TaskGroup | undefined,
+  event: StageEvent,
+  at: number,
+  attemptId: string | undefined,
+): TaskGroup | undefined {
+  if (event.type === 'stage.end') {
+    return current && { ...current, status: event.status, endTime: at };
   }
-
-  const payload = entry.data;
-  const lifecycleFields = {
-    ...(entry.groupId ? { parentGroupId: entry.groupId } : {}),
-    ...(payload.kind !== undefined ? { kind: payload.kind } : {}),
-    ...(payload.index !== undefined ? { index: payload.index } : {}),
-    ...(payload.attemptId !== undefined
-      ? { attemptId: payload.attemptId }
-      : {}),
-    ...(payload.total !== undefined ? { total: payload.total } : {}),
+  return {
+    id: event.id,
+    name: event.label,
+    startTime: at,
+    status: RUN_PHASE.RUNNING,
+    ...(event.parentId ? { parentGroupId: event.parentId } : {}),
+    ...(event.kind != null ? { kind: event.kind } : {}),
+    ...(event.index != null ? { index: event.index } : {}),
+    ...(event.kind === 'phase' && attemptId !== undefined ? { attemptId } : {}),
+    ...(event.total != null ? { total: event.total } : {}),
   };
-
-  if (entry.type === STREAM_LOG_ENTRY_TYPES.GROUP_START) {
-    const name = entry.text ?? entry.id;
-    const nextGroup: TaskGroup = {
-      id: entry.id,
-      name,
-      startTime: entry.timestamp,
-      status: payload.status,
-      ...lifecycleFields,
-    };
-
-    if (groupIndex === -1) {
-      taskGroupIndex.set(entry.id, taskGroups.length);
-      taskGroups.push(nextGroup);
-    } else {
-      taskGroups[groupIndex] = nextGroup;
-    }
-    return true;
-  }
-
-  const status = payload.status;
-  const endTime = payload.endTime;
-
-  if (groupIndex === -1) {
-    const name = entry.text ?? entry.id;
-    taskGroupIndex.set(entry.id, taskGroups.length);
-    taskGroups.push({
-      id: entry.id,
-      name,
-      startTime: entry.timestamp,
-      status,
-      ...lifecycleFields,
-      ...(endTime !== undefined ? { endTime } : {}),
-    });
-  } else {
-    const current = taskGroups[groupIndex];
-    taskGroups[groupIndex] = {
-      ...current,
-      status,
-      ...(endTime !== undefined ? { endTime } : {}),
-    };
-  }
-
-  return true;
 }

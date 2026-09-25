@@ -6,7 +6,7 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { ProjectDatabases } from '@shared/session/database';
 import type { AgentCategory } from '@shared/schemas';
-import type { SettingsTabPanelName } from '@shared/settingsView/settingsViewMessages';
+import type { SettingsTarget } from '@shared/settingsView/settingsViewMessages';
 import {
   DESKTOP_SHELL_COMMANDS,
   type DesktopLayoutPanel,
@@ -119,10 +119,7 @@ export function createDesktopShellActions(
     });
   }
 
-  function showSettings(
-    tab?: SettingsTabPanelName,
-    agentSubTab?: AgentCategory,
-  ) {
+  function showSettings(tab?: SettingsTarget, agentSubTab?: AgentCategory) {
     postDesktopSettingsView(
       (message) => renderer.postToRenderer(message),
       tab,
@@ -138,7 +135,7 @@ export function createDesktopShellActions(
 
   function openAgentDirectory(customDirSet?: boolean) {
     if (customDirSet !== true) {
-      showSettings('agents');
+      showSettings('agents/library');
       return;
     }
     runShellAction(openCustomAgentDirectory);

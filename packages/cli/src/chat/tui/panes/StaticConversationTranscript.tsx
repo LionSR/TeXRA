@@ -204,11 +204,7 @@ export function StaticConversationTranscript({
   const source = useMemo((): StaticScrollbackSource => {
     const stream = runViewOf(view, scrollbackRunId);
     const runNotices = noticesFor(allNotices, scrollbackRunId);
-    const merged = mergeLocalNotices(
-      stream?.transcript.rows ?? [],
-      stream?.transcript.settledRows ?? 0,
-      runNotices,
-    );
+    const merged = mergeLocalNotices(stream, runNotices);
     return {
       entries:
         stream === undefined && runNotices.length === 0

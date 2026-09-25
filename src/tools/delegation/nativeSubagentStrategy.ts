@@ -51,7 +51,7 @@ export interface ChildRunLaunchOptions {
    * resolves its own.
    */
   readonly composition?: CompositionKey;
-  readonly onApprovalPolicyDenial?: () => void;
+  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }

@@ -318,8 +318,8 @@ export interface SubagentRunOptions {
    * resolves its own under the recorded-toolset rule.
    */
   composition?: CompositionKey;
-  /** Record that this run encountered an executable policy denial. */
-  onApprovalPolicyDenial?: () => void;
+  /** Record that this run met an approval-policy denial (see `AgentRun`). */
+  onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /**

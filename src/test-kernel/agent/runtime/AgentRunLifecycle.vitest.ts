@@ -513,6 +513,25 @@ describe('runFlowWithLifecycle', () => {
     }),
   );
 
+  // A runner that interrupts itself (a prompt closed under it) is a stop:
+  // squashed, the cause read "All fibers interrupted without error" and the
+  // run ended FAILED over the loop's own cancelled halt.
+  it.effect('finalizes a self-interrupted runner as cancelled', () =>
+    Effect.gen(function* () {
+      const { runId, ctx } = lifecycleFixture();
+
+      const exit = yield* Effect.exit(runFlow(ctx, () => Effect.interrupt));
+
+      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
+        true,
+      );
+      expect(storageMocks.finalizeRun).toHaveBeenCalledWith(
+        testDefaultSession(),
+        expect.objectContaining({ runId, outcome: RUN_OUTCOME.CANCELLED }),
+      );
+    }),
+  );
+
   it.effect(
     'passes flow-carried terminal results to subagent error delivery',
     () =>

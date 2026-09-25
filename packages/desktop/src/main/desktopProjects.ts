@@ -4,11 +4,13 @@
 // the process; the window switches which project it shows.
 
 import {
+  Context,
   Data,
   Effect,
   Exit,
   FileSystem,
   Scope,
+  SubscriptionRef,
   type Path,
   type PlatformError,
 } from 'effect';
@@ -41,10 +43,8 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
+import { DesktopProjectRecords } from './desktopProjectRecords.js';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
-import type { DesktopProjectRecords } from './desktopProjectRecords.js';
-
-import type { DesktopProjectsMessage } from '../shared/desktopProjectMessages.js';
 
 export interface DesktopProject {
   /** The session key: the storage root the fold's `SessionView.key`
@@ -56,6 +56,19 @@ export interface DesktopProject {
   readonly session: SessionHandle;
   /** Release the session from its owner; settles once its entry has unwound. */
   dispose(): Effect.Effect<void>;
+}
+
+/** What the window shows and offers, as one value its surfaces follow. */
+export interface DesktopProjectsState {
+  /** Open projects in the order they were opened; the no-workspace session
+   *  is not one. */
+  readonly projects: readonly DesktopProject[];
+  /** The session key of the project the window shows: an open project's,
+   *  or the no-workspace session's. */
+  readonly activeKey: string;
+  /** Closed projects File > Open Recent offers, the most recently closed
+   *  first. */
+  readonly recent: readonly string[];
 }
 
 interface DesktopProjectRegistryOptions {
@@ -72,14 +85,12 @@ interface DesktopProjectRegistryOptions {
    * another project changed until the next launch.
    */
   readonly globalConfigStore: ConfigStore;
-  readonly records: DesktopProjectRecords;
   /**
    * The process secret store and global state the helper model behind the
    * latex text-connector resolves against, threaded from the composition root
    * that opened them.
    */
   readonly stores: ModelOptionStores;
-  warn(message: string): void;
 }
 
 export interface DesktopProjectRegistry {
@@ -95,6 +106,9 @@ export interface DesktopProjectRegistry {
     Error,
     FileSystem.FileSystem | Path.Path | ProjectDatabases | ChildProcessSpawner
   >;
+  /** The open projects, the shown one and the recent list; every surface
+   *  that follows a project switch reads its `changes`. */
+  readonly state: SubscriptionRef.SubscriptionRef<DesktopProjectsState>;
   /** Open projects in the order they were opened; the no-workspace session is not one. */
   list(): readonly DesktopProject[];
   /** The project the window shows: the active folder, else the no-workspace session. */
@@ -104,22 +118,54 @@ export interface DesktopProjectRegistry {
   /** Make an open project the one the window shows, and remember it as such. */
   activate(root: string | undefined): Effect.Effect<void, Error>;
   /**
-   * Close an open project: forget it for the next launch, stop its runs and
-   * wait for them to settle, dispose its session in its own scope, and show
-   * the most recently shown remaining project if it was the active one. The
-   * other projects' runs are untouched.
+   * Close an open project: forget it for the next launch (it joins the
+   * recent list), stop its runs and wait for them to settle, dispose its
+   * session in its own scope, and show the most recently shown remaining
+   * project if it was the active one. The other projects' runs are untouched.
    */
   close(root: string): Effect.Effect<void, Error>;
-  summary(): Omit<DesktopProjectsMessage, 'command'>;
-  /** Fires after a project opens or closes, or the active project changes. */
-  onChange(listener: () => void): () => void;
+  /** Empty File > Open Recent. */
+  clearRecent(): Effect.Effect<void, Error>;
   flushArtifacts(): Effect.Effect<void, Error>;
   /** Dispose every session, the most recently opened first, then the
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
 }
 
-export interface RememberedDesktopProjects {
+/** The open projects, served to the surfaces that follow them (the dock
+ *  badge and notifications) by the startup program that opened them. */
+export class DesktopProjects extends Context.Service<
+  DesktopProjects,
+  DesktopProjectRegistry
+>()('@texra/desktop/DesktopProjects') {}
+
+/** The folder paths among `candidates` that are still folders, deduplicated
+ *  by canonical root, and the ones that are not. */
+const partitionFolders = Effect.fn('desktopProjects.partitionFolders')(
+  function* (candidates: readonly string[]) {
+    const fs = yield* FileSystem.FileSystem;
+    const roots: string[] = [];
+    const missing: string[] = [];
+    for (const candidate of candidates) {
+      const root = canonicalizeWorkspacePath(candidate);
+      if (roots.includes(root) || missing.includes(root)) continue;
+      const isProject = yield* fs.stat(root).pipe(
+        Effect.map((info) => info.type === 'Directory'),
+        Effect.catch((error: PlatformError.PlatformError) =>
+          absentReason(error)
+            ? Effect.succeed(false)
+            : Effect.logWarning(
+                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error.reason.cause ?? error)}`,
+              ).pipe(Effect.as(false)),
+        ),
+      );
+      (isProject ? roots : missing).push(root);
+    }
+    return { roots, missing };
+  },
+);
+
+interface RememberedDesktopProjects {
   /** Canonical roots to reopen, the one to show last. */
   readonly roots: readonly string[];
   /** Remembered roots whose folder no longer exists; forgotten. */
@@ -131,39 +177,21 @@ export interface RememberedDesktopProjects {
  * canonical root, with entries that are no longer a folder dropped (a
  * remembered path that a regular file has since replaced is not a project
  * either, nor is one that cannot be read at all: permissions, a dead mount).
- * The list is written back whenever that changed it.
+ * The recent list is pruned the same way, silently: nothing asked for those.
+ * Both lists are written back whenever that changed them.
  */
-export function readRememberedDesktopProjects(
-  records: DesktopProjectRecords,
-  warn: (message: string) => void,
-): Effect.Effect<RememberedDesktopProjects, Error, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const stored = yield* records.read;
-    const roots: string[] = [];
-    const missing: string[] = [];
-    for (const candidate of stored) {
-      const root = canonicalizeWorkspacePath(candidate);
-      if (roots.includes(root) || missing.includes(root)) continue;
-      const isProject = yield* fs.stat(root).pipe(
-        Effect.map((info) => info.type === 'Directory'),
-        Effect.catch((error: PlatformError.PlatformError) =>
-          Effect.sync(() => {
-            if (!absentReason(error)) {
-              warn(
-                `Cannot read the remembered project ${root}; forgetting it: ${toErrorMessage(error.reason.cause ?? error)}`,
-              );
-            }
-            return false;
-          }),
-        ),
-      );
-      (isProject ? roots : missing).push(root);
-    }
-    yield* records.replace(roots);
-    return { roots, missing };
-  });
-}
+export const readRememberedDesktopProjects = Effect.fn(
+  'desktopProjects.readRemembered',
+)(function* () {
+  const records = yield* DesktopProjectRecords;
+  const remembered = yield* partitionFolders(yield* records.read);
+  const recent = yield* partitionFolders(yield* records.readRecent);
+  yield* records.replace(remembered.roots);
+  yield* records.replaceRecent(
+    recent.roots.filter((root) => !remembered.roots.includes(root)),
+  );
+  return remembered satisfies RememberedDesktopProjects;
+});
 
 /**
  * Stop every run the project still owns and wait for their drivers to settle
@@ -244,13 +272,11 @@ function openProjectSession(
  */
 export function openDesktopProjectRegistry(
   options: DesktopProjectRegistryOptions,
-): Effect.Effect<DesktopProjectRegistry, Error> {
+): Effect.Effect<DesktopProjectRegistry, Error, DesktopProjectRecords> {
   return Effect.gen(function* () {
-    const projects = new Map<string, DesktopProject>();
+    const records = yield* DesktopProjectRecords;
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
-    const listeners = new Set<() => void>();
-    let activeRoot: string | undefined;
     const fallback = yield* Effect.uninterruptible(
       openProjectSession(
         undefined,
@@ -261,29 +287,38 @@ export function openDesktopProjectRegistry(
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
     );
-    const notify = () => {
-      for (const listener of [...listeners]) listener();
-    };
-    const openProjects = () => [...projects.values()];
+    const state = yield* SubscriptionRef.make<DesktopProjectsState>({
+      projects: [],
+      activeKey: fallback.key,
+      recent: yield* records.readRecent,
+    });
+    const current = () => SubscriptionRef.getUnsafe(state);
+    const byRoot = (root: string) =>
+      current().projects.find((project) => project.root === root);
     const active = (): DesktopProject =>
-      (activeRoot === undefined ? undefined : projects.get(activeRoot)) ??
-      fallback;
+      current().projects.find(
+        (project) => project.key === current().activeKey,
+      ) ?? fallback;
+    const syncRecent = Effect.gen(function* () {
+      const recent = yield* records.readRecent;
+      yield* SubscriptionRef.update(state, (s) => ({ ...s, recent }));
+    });
     const activate = (root: string | undefined) =>
       Effect.gen(function* () {
-        const next =
-          root !== undefined && projects.has(root) ? root : undefined;
-        if (next !== undefined) yield* options.records.activate(next);
-        if (next === activeRoot) return;
-        activeRoot = next;
-        notify();
+        const next = root === undefined ? undefined : byRoot(root);
+        if (next?.root !== undefined) yield* records.activate(next.root);
+        const activeKey = (next ?? fallback).key;
+        if (activeKey === current().activeKey) return;
+        yield* SubscriptionRef.update(state, (s) => ({ ...s, activeKey }));
       }).pipe(withPerKeyLane(lanes, selection));
     return {
+      state,
       open(rootInput) {
         const root = canonicalizeWorkspacePath(rootInput);
         return Effect.gen(function* () {
-          const existing = projects.get(root);
+          const existing = byRoot(root);
           if (existing) return existing;
-          yield* options.records.remember(root);
+          yield* records.remember(root);
           const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
@@ -298,7 +333,9 @@ export function openDesktopProjectRegistry(
                     ),
                   ),
                 ),
-                openTexraWorkspaceConfigStore(storage, root, options.warn),
+                openTexraWorkspaceConfigStore(storage, root, (message) =>
+                  console.warn(`[desktop] ${message}`),
+                ),
               ],
               { concurrency: 'unbounded' },
             );
@@ -318,9 +355,13 @@ export function openDesktopProjectRegistry(
             return yield* Effect.uninterruptible(
               openProjectSession(root, roots, options.stores.secrets).pipe(
                 Effect.tap((project) =>
-                  Effect.sync(() => {
-                    projects.set(root, project);
-                    notify();
+                  Effect.gen(function* () {
+                    const recent = yield* records.readRecent;
+                    yield* SubscriptionRef.update(state, (s) => ({
+                      ...s,
+                      projects: [...s.projects, project],
+                      recent,
+                    }));
                   }).pipe(withPerKeyLane(lanes, selection)),
                 ),
               ),
@@ -328,20 +369,18 @@ export function openDesktopProjectRegistry(
           }).pipe(
             Scope.provide(projectScope),
             Effect.onError(() =>
-              projects.has(root)
-                ? Effect.void
-                : Scope.close(projectScope, Exit.void),
+              byRoot(root) ? Effect.void : Scope.close(projectScope, Exit.void),
             ),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
-      list: openProjects,
+      list: () => current().projects,
       active,
       fallback: () => fallback,
       activate,
       close(root) {
         return Effect.gen(function* () {
-          const project = projects.get(root);
+          const project = byRoot(root);
           if (!project) return;
           // Stop while the registry still owns the project. A failed stop or
           // persistence operation leaves that owner available to the host.
@@ -358,46 +397,43 @@ export function openDesktopProjectRegistry(
                 ),
               );
               yield* Effect.gen(function* () {
-                const remembered = yield* options.records.read;
+                const wasActive = active() === project;
+                const remembered = yield* records.read;
                 const next =
                   remembered.findLast(
-                    (candidate) =>
-                      candidate !== root && projects.has(candidate),
+                    (candidate) => candidate !== root && byRoot(candidate),
                   ) ??
-                  openProjects().findLast(
+                  current().projects.findLast(
                     (candidate) => candidate.root !== root,
                   )?.root;
-                yield* options.records.forget(
-                  root,
-                  activeRoot === root ? next : undefined,
-                );
-                projects.delete(root);
-                if (activeRoot === root) activeRoot = next;
-                notify();
+                yield* records.forget(root, wasActive ? next : undefined);
+                const recent = yield* records.readRecent;
+                yield* SubscriptionRef.update(state, (s) => ({
+                  projects: s.projects.filter(
+                    (candidate) => candidate !== project,
+                  ),
+                  activeKey: wasActive
+                    ? (
+                        (next === undefined ? undefined : byRoot(next)) ??
+                        fallback
+                      ).key
+                    : s.activeKey,
+                  recent,
+                }));
                 yield* project.dispose();
               }).pipe(withPerKeyLane(lanes, selection));
             }),
           );
         }).pipe(withPerKeyLane(lanes, root), Effect.mapError(ensureError));
       },
-      summary: () => ({
-        projects: openProjects().flatMap((project) =>
-          project.root === undefined
-            ? []
-            : [{ key: project.key, root: project.root }],
-        ),
-        activeKey: active().key,
-      }),
-      onChange(listener) {
-        listeners.add(listener);
-        return () => {
-          listeners.delete(listener);
-        };
-      },
+      clearRecent: () =>
+        records
+          .replaceRecent([])
+          .pipe(Effect.andThen(syncRecent), Effect.mapError(ensureError)),
       flushArtifacts: () =>
         Effect.gen(function* () {
           const failures: string[] = [];
-          for (const project of [fallback, ...projects.values()]) {
+          for (const project of [fallback, ...current().projects]) {
             yield* project.session.settlePublications().pipe(
               Effect.catch((error) =>
                 Effect.sync(() => {
@@ -416,17 +452,24 @@ export function openDesktopProjectRegistry(
             );
         }),
       dispose: () =>
-        [...projects.values()]
-          .toReversed()
-          .reduce(
-            (cleanup, project) =>
-              cleanup.pipe(Effect.ensuring(project.dispose())),
-            Effect.void,
-          )
-          .pipe(
-            Effect.ensuring(fallback.dispose()),
-            Effect.ensuring(Effect.sync(() => projects.clear())),
+        Effect.suspend(() =>
+          current()
+            .projects.toReversed()
+            .reduce(
+              (cleanup, project) =>
+                cleanup.pipe(Effect.ensuring(project.dispose())),
+              Effect.void,
+            ),
+        ).pipe(
+          Effect.ensuring(fallback.dispose()),
+          Effect.ensuring(
+            SubscriptionRef.update(state, (s) => ({
+              ...s,
+              projects: [],
+              activeKey: fallback.key,
+            })),
           ),
+        ),
     } satisfies DesktopProjectRegistry;
   }).pipe(Effect.uninterruptible, Effect.mapError(ensureError));
 }

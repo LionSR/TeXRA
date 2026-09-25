@@ -1,6 +1,6 @@
 ---
 name: lean-blueprint
-description: Create and maintain Lean blueprint documents that connect informal mathematics to Lean 4 formalization. Use when Codex needs to draft or sync blueprint entries, map paper results to Lean declarations, track dependencies between statements, or keep blueprint prose aligned with a changing Lean codebase.
+description: Create and maintain Lean blueprint documents that connect informal mathematics to Lean 4 formalization. Use when you need to draft or sync blueprint entries, map paper results to Lean declarations, track dependencies between statements, or keep blueprint prose aligned with a changing Lean codebase.
 ---
 
 # Lean Blueprint

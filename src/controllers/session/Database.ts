@@ -30,6 +30,7 @@ import {
   Scope,
   Effect,
   Exit,
+  FileSystem,
   Layer,
   Result,
   Stream,
@@ -40,6 +41,7 @@ import { proveOwnerLiveness } from '@agent/storage/leaseOwnerLiveness';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withLogChannel } from '@logger/effectLog';
+import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
   RunIdSchema,
@@ -249,16 +251,18 @@ export const databaseLayer = (
 ): Layer.Layer<
   Database,
   DatabaseOpenFailed,
-  WorkspaceRoots | ProcessIdentity | ChildProcessSpawner
+  WorkspaceRoots | ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(
     Database,
     Effect.gen(function* () {
       const roots = yield* WorkspaceRoots;
       const identity = yield* ProcessIdentity;
+      const fs = yield* FileSystem.FileSystem;
       const spawner = yield* ChildProcessSpawner;
       const liveness = (owner: string) =>
         proveOwnerLiveness(ownerIdentity(owner)).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
           Effect.provideService(ChildProcessSpawner, spawner),
         );
       const path =
@@ -1212,7 +1216,7 @@ export const globalDatabaseLayer = (
 ): Layer.Layer<
   GlobalDatabase,
   DatabaseOpenFailed,
-  ProcessIdentity | ChildProcessSpawner
+  ProcessIdentity | ProcessProbe
 > =>
   Layer.effect(GlobalDatabase, Database).pipe(
     Layer.provide(
@@ -1319,15 +1323,11 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot for it. One
-  // written under another version is unsupported state: there are no legacy
-  // readers, so its tables are dropped here, at the boundary that owns the
-  // file, before this build's schema touches them, and a row of another
-  // vocabulary never reaches a fold. The stamp is read before the tables are
-  // created, so a layout this schema cannot extend is dropped rather than
-  // failing the open; and the reset runs under the write lock, re-reading
-  // the stamp inside it, so two processes opening the same store clear it
-  // once. The stamp is written last, inside the same transaction.
+  // A store holds one vocabulary, stamped in SQLite's own slot. One written
+  // under another version is unsupported (no legacy readers): its tables go
+  // here, before this build's schema touches them, and the stamp is read
+  // before the tables exist, so an unextendable layout is dropped rather than
+  // failing the open. resetStore owns the write lock and the stamp write.
   const cleared =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null

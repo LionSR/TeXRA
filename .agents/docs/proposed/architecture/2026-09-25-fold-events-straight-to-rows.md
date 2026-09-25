@@ -200,6 +200,15 @@ production change about -940 lines across the four, before test deletions.
   view folds every run the loop parks. If a parked run's aggregate is not
   folded in the view, S1 reads it through `readEvents` and the cold fold
   instead (then it moves to S4).
+  Checked in S1: it does not. The view folds a run's transcript tier only
+  while some port subscribes it (`foldSubscriptions`), and a headless or
+  child run parks unsubscribed, so S1 took the alternative
+  (`readEntries`, the cold fold over the run's committed rows). The same
+  holds for `skills.snapshot`: it is no listing row, so a `RunView` field
+  would be filled only for subscribed runs, and making it one would add every
+  run's snapshot to each listing read. The CLI status line reads the newest
+  row through `readEvents` instead. After S1 the store's cache has no reader,
+  so S4's cache deletion no longer waits on S3.
 - **`sessionFold.ts` is 1 932 L**, over the file-size budget. S3 lands the
   reducer in its own file so `sessionFold.ts` shrinks; it must not grow.
 
@@ -234,7 +243,7 @@ production change about -940 lines across the four, before test deletions.
   hosts render one `SessionView`; old entries were imported as events, with no
   `legacy.entry` kind. This proposal removes the last entry-shaped step inside
   that fold.
-- [Single-owner liveness and one fold](./2026-09-20-single-owner-liveness-and-one-fold.md),
+- [Single-owner liveness and one fold](../../implemented/architecture/2026-09-20-single-owner-liveness-and-one-fold.md),
   step 5: `StreamLogStore` becomes a cache of the view (landed, #12944). S4
   finishes it: a cache with no reader is deleted.
 - [Effect-native runtime system design](./2026-09-10-effect-native-runtime-system-design.md):

@@ -106,7 +106,6 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
     ...overrides,
   };

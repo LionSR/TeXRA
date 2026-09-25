@@ -97,8 +97,6 @@ import { createChatSessionController } from '@cli/chat/chatSessionController';
 import { makeFollowUpDeliveryQueue } from '@cli/chat/followUpDeliveryQueue';
 import {
   patchSessionMeta,
-  rootRunPending,
-  claimedRunId,
   draftRestoreRequest,
   rootRunId,
   sessionMeta,
@@ -107,6 +105,7 @@ import {
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
   chatTuiCanStartRootRun,
+  runStopFacts,
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
@@ -282,7 +281,8 @@ function makeInit(
   const scope = Scope.makeUnsafe();
   onTestFinished(() => Effect.runPromise(Scope.close(scope, Exit.void)));
   return {
-    session: makeSession(),
+    // Only when the test brings none: a new session resets the one claim.
+    session: overrides.session ?? makeSession(),
     runtimeSession: mocks.sessionStub(),
     getSessionContext: () => makeSessionContext(),
     disposables: new DisposableStore(),
@@ -634,8 +634,6 @@ describe('createChatSessionController', () => {
     installResumeRunStore();
     seedView(viewWith([]));
     rootRunId.set(undefined);
-    rootRunPending.set(false);
-    claimedRunId.set(undefined);
   });
 
   it('does not surface an intentional stop as an error', async () => {
@@ -1160,8 +1158,8 @@ describe('createChatSessionController', () => {
     // #8273 regression: the controller must publish the run facts so status
     // rendering can derive the Ctrl-C hint from signals instead of calling
     // impure session closures that memoized renders cache stale.
-    expect(rootRunPending.get()).toBe(true);
-    expect(claimedRunId.get()).toBe('aaaaaa');
+    expect(runStopFacts.get().runPending).toBe(true);
+    expect(runStopFacts.get().runId).toBe('aaaaaa');
 
     // No live tool-use flow yet, so a Ctrl-C now is a clean exit, never a
     // resumable-idle one.

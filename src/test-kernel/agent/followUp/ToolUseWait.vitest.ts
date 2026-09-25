@@ -72,7 +72,12 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { releaseRunResources } from '@tools/approval';
-import { clearGoal, goalOf, startGoal } from '@tools/goal';
+import {
+  clearGoal,
+  goalOf,
+  setGoalSessionAutoApproval,
+  startGoal,
+} from '@tools/goal';
 import { generateRunId, generateShortId } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
@@ -129,7 +134,6 @@ function testBoundModel(supportsVision: boolean): BoundModel {
     supportsForcedToolChoice: true,
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
-    routedOnKimiCode: false,
     backgroundCapable: false,
   };
 }
@@ -371,10 +375,10 @@ const runUntilSpent = Effect.fn('test.runUntilSpent')(function* (
 
 /**
  * Start a run that parks, for scenarios that drive it while it waits. The
- * loop calls `attachment.detach()` on its own fiber immediately before it
- * blocks for input, after the batch carrying the `waiting` step has
- * committed, so one Deferred per park is the loop's own 'parked for the Nth
- * time' signal: `park(n)` is what those scenarios wait on. The wait resumes
+ * loop calls `onIdle` on its own fiber immediately before it blocks for
+ * input, after the batch carrying the `waiting` step has committed, so one
+ * Deferred per park is the loop's own 'parked for the Nth time' signal:
+ * `park(n)` is what those scenarios wait on. The wait resumes
  * inside that callback, before the loop enters `followUps.wait`, so input a
  * scenario enqueues after `park` lands on the queue rather than on a waiting
  * consumer; the wait takes what is queued first, so both orders deliver the
@@ -388,14 +392,11 @@ const forkLoop = Effect.fn('test.forkLoop')(function* (init: LoopInit) {
     loopProgram(
       {
         ...init,
-        attachment: {
-          attach: (context) => init.attachment?.attach(context),
-          detach: (context) => {
-            init.attachment?.detach(context);
-            const park = parks[parked];
-            parked += 1;
-            if (park) Deferred.doneUnsafe(park, Effect.void);
-          },
+        onIdle: () => {
+          init.onIdle?.();
+          const park = parks[parked];
+          parked += 1;
+          if (park) Deferred.doneUnsafe(park, Effect.void);
         },
       },
       requests,
@@ -1077,6 +1078,8 @@ describe('an active goal at the wait', () => {
         const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
+        // The grant an approved plan makes; pausing revokes what it granted.
+        setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
         try {

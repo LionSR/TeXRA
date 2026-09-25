@@ -30,6 +30,7 @@ import {
   listRunGeneratedFiles,
   type RunGeneratedFile,
 } from '@tools/executions/runGeneratedFiles';
+import { serializeFilteredConfig } from '@tools/executions/configView';
 import {
   hasCompletedRunConversationEvidence,
   readCompletedRunConversation,
@@ -535,15 +536,14 @@ export function formatCliHistoryDetailsText(
   } else if (!details.report && details.conversationPreview) {
     lines.push('', formatConversationPreview(details.conversationPreview));
   }
-  lines.push('', 'Config:', JSON.stringify(config ?? {}, null, 2));
-  lines.push('', `Files (${details.files.length}):`);
-  lines.push(
-    ...(details.files.length
-      ? details.files.map(
-          (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
-        )
-      : ['(none)']),
+  const shown = config
+    ? serializeFilteredConfig(config, config.agentCategory)
+    : '{}';
+  const files = details.files.map(
+    (file) => `${file.isDirectory ? '<dir>' : file.size}\t${file.path}`,
   );
+  lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
+  lines.push(...(files.length ? files : ['(none)']));
   if (details.hasFlowRecord) lines.push('', 'Flow record: present');
   return lines.join('\n');
 }

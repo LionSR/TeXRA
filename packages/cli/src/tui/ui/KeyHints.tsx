@@ -45,11 +45,24 @@ const DEFAULT_TAIL: readonly KeyHint[] = [
   { key: 'Esc', action: 'cancel' },
 ];
 
-/** Footer for the closable scroll-only readers (transcript, work plan). */
-export const READER_SCROLL_HINTS: readonly KeyHint[] = [
-  { key: '↑/↓', action: 'scroll' },
-  { key: 'PgUp/PgDn', action: 'page' },
+/** The whole footer of a surface Esc only closes. */
+export const CLOSE_HINTS: readonly KeyHint[] = [
   { key: 'Esc', action: 'close' },
+];
+
+/** The ↑/↓ + PgUp/PgDn pair a scrollable body binds while it can scroll. */
+export function scrollKeyHints(action: string): readonly KeyHint[] {
+  return [
+    { key: '↑/↓', action },
+    { key: 'PgUp/PgDn', action: 'page' },
+  ];
+}
+
+/** The fullest footer a closable scroll-only reader (transcript, work plan)
+ *  paints, which its row budget measures. */
+export const READER_SCROLL_HINTS: readonly KeyHint[] = [
+  ...scrollKeyHints('scroll'),
+  ...CLOSE_HINTS,
 ];
 
 /** Hint spans without the surrounding dim/truncating `<Text>`. Callers that

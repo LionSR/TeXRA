@@ -97,9 +97,7 @@ import {
   openRegisteredCliSlashForm,
 } from '../src/chat/tui/commands/slashForms';
 import {
-  claimedRunId,
   focusRun,
-  rootRunPending,
   rootRunId,
   resetCliState,
   selectedRunId,
@@ -114,6 +112,10 @@ import {
   sessionView,
   runViewOf,
 } from '../src/chat/tui/state/sessionView';
+import {
+  chatTuiCanStartRootRun,
+  TuiSession,
+} from '../src/chat/tui/state/sessionRunState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
 import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
@@ -237,6 +239,7 @@ const HARNESS_CLI_CONTEXT: CliContext = {
   config: new MemoryConfigProvider(),
   commandName: 'texra',
   configWarnings: [],
+  configDegradations: [],
   cwd: HARNESS_CWD,
   mode: 'interactive',
   outputFormat: 'text',
@@ -1479,7 +1482,7 @@ if (SHOW_AGENT_PROPOSAL) {
 
 function markHarnessInterrupted(): void {
   canInterrupt = false;
-  rootRunPending.set(false);
+  harnessSession.markRunCompleted();
   cancelHarnessRequests('Session interrupted.');
   appendHarnessAssistantTranscript(
     'Harness interrupt requested.',
@@ -1550,20 +1553,6 @@ function applyHarnessApprovalPolicySelection(
   setHarnessApprovalPolicy(policy);
 }
 
-function markHarnessRunStopped(runId: RunId): void {
-  const child = currentView().runs.get(runId);
-  if (!child) return;
-  appendHarnessAssistantTranscript(
-    `Harness kill requested for ${runId}.`,
-    HARNESS_RUN_ID,
-  );
-  appendHarnessAssistantTranscript(
-    'Harness kill requested for this sub-workflow.',
-    child.id,
-  );
-  seedRunEnd(child.id, RUN_OUTCOME.CANCELLED);
-}
-
 function handleHarnessSubmit(line: string): void {
   if (handleHarnessSlashCommand(line)) return;
   const view = currentView();
@@ -1601,7 +1590,7 @@ function appendHarnessStatus(): void {
         run?.category === AgentCategory.ToolUse && run.goal.active
           ? run.goal
           : undefined,
-      // The harness never emits an ACTIVE_SKILLS snapshot.
+      // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(
         (followUp) => followUp.text,
@@ -1679,6 +1668,9 @@ function handleHarnessSlashCommand(line: string): boolean {
   }
 }
 
+/** The harness's root-run claim, held the way `texra chat` holds its own. */
+const harnessSession = new TuiSession(() => undefined);
+
 registerBuiltinSlashCommands({
   secrets: HARNESS_PLATFORM_SERVICES.secrets,
   stores: HARNESS_PLATFORM_SERVICES,
@@ -1686,7 +1678,7 @@ registerBuiltinSlashCommands({
   runtimeSession: harnessRuntimeSession,
   // Mirror `texra chat`: agent selection is open exactly while no root run
   // is pending.
-  canSelectAgent: () => !rootRunPending.get(),
+  canSelectAgent: () => chatTuiCanStartRootRun(harnessSession),
   canSelectModel: () => CAN_SELECT_MODEL,
   getModelSwitchDisabledReason: (model) =>
     Effect.succeed(
@@ -1743,11 +1735,13 @@ registerBuiltinSlashCommands({
     );
   },
 });
-// Mirror the real publisher's run facts: an interruptible harness run is a
-// pending root-run claim on the harness run, so the status bar derives
-// the Ctrl-C stop hint from these signals exactly as `texra chat` does.
-rootRunPending.set(canInterrupt);
-claimedRunId.set(canInterrupt ? HARNESS_RUN_ID : undefined);
+// An interruptible harness run is a pending root-run claim on the harness
+// run, so the status bar derives the Ctrl-C stop hint exactly as `texra chat`
+// does.
+if (canInterrupt) {
+  harnessSession.markRunPending(Effect.never);
+  harnessSession.runId = HARNESS_RUN_ID;
+}
 
 const inkRef: { current?: ReturnType<typeof render> } = {};
 const viewportController = createTuiViewportController(inkRef);
@@ -1768,8 +1762,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      onKillRun={markHarnessRunStopped}
-      onWorkflowControl={() => undefined}
       colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}

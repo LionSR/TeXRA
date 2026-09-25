@@ -42,11 +42,7 @@ export function ConversationPane(
   const view = useSignal(sessionView());
   const allNotices = useSignal(noticesSignal);
   const stream = runViewOf(view, activeRunId);
-  const merged = mergeLocalNotices(
-    stream?.transcript.rows ?? [],
-    stream?.transcript.settledRows ?? 0,
-    noticesFor(allNotices, activeRunId),
-  );
+  const merged = mergeLocalNotices(stream, noticesFor(allNotices, activeRunId));
   const displayEntries = pendingTranscriptEntries(
     merged.rows,
     merged.settledRows,

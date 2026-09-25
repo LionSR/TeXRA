@@ -26,7 +26,7 @@ to compare two LaTeX versions.
 
 ### Controlling between-round diffs
 
-TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are off by default. Enable **Diff consecutive rounds** on the **Dashboard → LaTeX** tab (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-round comparisons, so fewer diff files are created.
+TeXRA compares each round of agent output to your original input and can also create diffs between consecutive rounds (`_diffr1r0.tex` for the r0→r1 comparison). Between-round diffs are off by default. Enable **Diff consecutive rounds** on **Dashboard → LaTeX → Compile & diff** (the `texra.latexdiff.generateBetweenRoundDiffs` setting). When off, the run command and progress notifications only account for the original-vs-round comparisons, so fewer diff files are created.
 
 ### Focusing diff PDFs on changed pages
 

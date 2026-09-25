@@ -121,8 +121,8 @@ export const MODEL_AVAILABILITY_STATUS = {
     available: false,
     requiresKey: false,
   },
-  // Only the OpenRouter route produces this kind (`computeModelOptions`
-  // resolves it from `isOpenRouterRoutingUnsupported`), so the one label the
+  // Only the OpenRouter route produces this kind (`computeModelOptions` maps
+  // the decided `openrouter-unsupported` route to it), so the one label the
   // kind carries names that route.
   'provider-unavailable': {
     label: 'Unavailable through OpenRouter',
