@@ -7,8 +7,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AGENT_ERROR_OUTCOME,
-  type AgentErrorKind,
   agentErrorPresentation,
   classifyAgentError,
 } from '@common/errors/agentErrorClassification';
@@ -16,7 +14,6 @@ import {
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME } from '@shared/schemas';
 
 describe('classifyAgentError', () => {
   it('classifies a user abort ahead of every other kind', () => {

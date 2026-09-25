@@ -33,7 +33,7 @@ interface ModelListFormProps {
   readonly onClose: () => void;
 }
 
-export function modelListDescription({
+function modelListDescription({
   itemCount,
   selectable,
 }: {

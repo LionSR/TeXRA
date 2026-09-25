@@ -28,7 +28,7 @@ import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
-import { builtInToolUseRoots } from './BundledAgentDirectories';
+import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
@@ -159,21 +159,20 @@ function queueLoad(
           }),
       ),
     );
-
+    const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
           scanDirectory([customDir], 'custom'),
           scanDirectory([builtInDir], 'builtInWorkflow'),
-          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
+          scanDirectory(toolUseRoots, 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
         ],
         { concurrency: 'unbounded' },
       );
-    // builtInScan.issues and toolUseScan.issues are intentionally unused:
-    // only custom-agent scan failures are a product surface.
+    // Only custom-agent scan issues are a product surface; the rest go unused.
 
     // Register all entries.
     const allEntries = [
@@ -222,26 +221,6 @@ export function getAgent(identifier: string): AgentEntry | undefined {
     if (entry) return entry;
   }
   return undefined;
-}
-
-/** Refresh the live catalog entry from a remote agent's validated YAML. */
-export function updateAgentMeta(
-  identifier: string,
-  meta: {
-    description?: string;
-    tools?: string[];
-    defaultOutputFiles?: string[];
-  },
-): void {
-  const entry = getAgent(identifier);
-  if (!entry) return;
-  if (meta.description) entry.description = meta.description;
-  if ('tools' in meta)
-    entry.tools = meta.tools?.length ? meta.tools : undefined;
-  if ('defaultOutputFiles' in meta)
-    entry.defaultOutputFiles = meta.defaultOutputFiles?.length
-      ? meta.defaultOutputFiles
-      : undefined;
 }
 
 /** Get agents for a category, deduplicated by name. */

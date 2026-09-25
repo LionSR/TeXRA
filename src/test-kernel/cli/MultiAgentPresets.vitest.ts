@@ -1,5 +1,5 @@
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
 import type { AgentEntry } from '@agent/index';
@@ -12,11 +12,7 @@ import {
   formatCliMultiAgentPresetRunWarnings,
   type CliMultiAgentPresetRunPlan,
 } from '@cli/runtime/multiAgentPresets';
-import {
-  planTeamRun,
-  planTeamRuns,
-  teamPlanHasGaps,
-} from '@common/teams/TeamPlan';
+import { planTeamRun, teamPlanHasGaps } from '@common/teams/TeamPlan';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import {
   AgentCategory,

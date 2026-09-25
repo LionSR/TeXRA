@@ -527,7 +527,6 @@ describe('BashTool', () => {
           parentRunId,
           'flow',
         )!;
-        const recorded = recordSessionEvents(testDefaultSession());
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);

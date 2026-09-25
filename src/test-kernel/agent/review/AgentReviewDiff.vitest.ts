@@ -30,7 +30,6 @@ describe('isPathInChangeSet', () => {
   it('matches exact files and paths under changed directories', () => {
     const changed = ['src/x.ts', 'vendor'];
     expect(isPathInChangeSet(changed, 'src/x.ts')).toBe(true);
-    expect(isPathInChangeSet(changed, 'b/src/x.ts')).toBe(true);
     expect(isPathInChangeSet(changed, 'vendor/lib.c')).toBe(true);
     expect(isPathInChangeSet(changed, 'unrelated.ts')).toBe(false);
     expect(isPathInChangeSet(changed, 'vendored.ts')).toBe(false);

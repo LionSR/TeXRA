@@ -71,13 +71,6 @@ vi.mock('@frontend/ui/dialogs', () => ({
   selectFolder: mocks.selectFolder,
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-}));
-
 const { agentDirectories } =
   await import('@frontend/agents/AgentDirectoryManager');
 

@@ -108,7 +108,7 @@ function EditApprovalDiff({
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
-    () => buildDiffHunks(tui.originalContent, tui.proposedContent),
+    () => buildDiffHunks(tui.originalContent, tui.proposedContent).hunks,
     [tui.originalContent, tui.proposedContent],
   );
   const diffRows = useMemo(

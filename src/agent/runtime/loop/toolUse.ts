@@ -18,6 +18,7 @@
  * pending response dispatches what is unsettled, and a halted run that is
  * launched again waits for the input that resumes it.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
@@ -30,12 +31,8 @@ import {
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
-import {
-  getRuntimeModelConfig,
-  resolveRuntimeModelConfig,
-} from '@model/runtimeModelRegistry';
 import type { ProcessServices } from '@platform/processRuntime';
-import type { LanguageModel } from '@platform/languageModel';
+import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
@@ -142,6 +139,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
   const followUps = yield* FollowUps;
+  const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => runs.getHandle(runId)?.isChild === true;
 
@@ -201,9 +199,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       function* (model: string) {
         const current = SynchronizedRef.getUnsafe(run.model);
         if (current.modelId === model) return undefined;
-        const nextConfig = getRuntimeModelConfig(model);
+        const nextConfig = MODEL_CONFIGS[model];
         if (!nextConfig) return `Model ${model} is not registered`;
-        const route = yield* resolveModelRoute(run.stores, nextConfig);
+        const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
+          Effect.provideService(LanguageModel, languageModel),
+        );
         const nextKey = yield* routeCompatibilityKey(nextConfig, route);
         if (!nextKey)
           return `Unsupported model provider: ${nextConfig.provider}`;
@@ -256,7 +256,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (model === null) return state;
       const current = yield* SynchronizedRef.get(run.model);
       if (current.modelId === model) return state;
-      const nextConfig = yield* resolveRuntimeModelConfig(model);
+      const nextConfig = MODEL_CONFIGS[model];
       if (!nextConfig) {
         return yield* Effect.fail(
           new Error(`Model ${model} is not registered`),
@@ -271,6 +271,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         temperature: run.setting.temperature,
       }).pipe(Scope.provide(run.scope));
       userChannels[USER_VAR_MODEL] = next.modelId;
+      // The snapshot's model id is the run's one model fact. The record a
+      // listing or a resume reads and the display row both restate it in
+      // the same batch, so no reader sees one without the other.
+      const config = { ...run.config, model: next.modelId };
       const switched = yield* cell.append([
         {
           type: 'model.compaction',
@@ -284,6 +288,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               state.continuation === null ? null : 'history-replaced',
           },
         },
+        {
+          type: 'run.record',
+          aggregateId: rowAggregate(runId),
+          record: config,
+        },
+        { type: 'run.config', aggregateId: rowAggregate(runId), config },
         snapshot(state, {
           phase: state.phase ?? 'model.ready',
           runtime: {
@@ -292,18 +302,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           },
         }),
       ]);
-      const nextAgentConfig = { ...run.config, model: next.modelId };
-      session.publish([
-        {
-          type: 'run.record',
-          aggregateId: rowAggregate(runId),
-          record: nextAgentConfig,
-        },
-      ]);
       yield* SynchronizedRef.set(run.model, next);
       yield* releaseBindingUploads(current.model, current.modelId);
-      run.callbacks.onModelChanged(next.modelId);
-      logger.emit({ type: 'run.config', runId, config: nextAgentConfig });
       return switched;
     },
   );
@@ -739,7 +739,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* cell.append([
           snapshot(state, { phase: 'waiting' }),
           stepRow(runId, state, 'turn.end'),
-          ...(yield* session.streamClosureFacts(runId)),
+          ...session.streamClosureFacts(runId),
           stepRow(runId, state, 'waiting'),
         ]);
         publishTouchedFiles();

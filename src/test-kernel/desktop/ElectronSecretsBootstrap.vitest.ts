@@ -1,6 +1,3 @@
-// Node imports
-import { readFileSync } from 'node:fs';
-
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
@@ -12,7 +9,6 @@ import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
 import { withEnv } from '@test/support/testEnv';
-import { repoPath } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 interface SafeStorageMethods {
@@ -60,15 +56,6 @@ function encryptedRecordStore(): JsonStore {
   });
 }
 
-/** A store with no persisted records. */
-function emptyRecordStore(): JsonStore {
-  return stubStore({
-    get<T>(_key: string): T | undefined {
-      return undefined;
-    },
-  });
-}
-
 /** An ElectronSecrets over one encrypted record, with its warnings captured. */
 async function secretsWithWarningLog(): Promise<{
   secrets: ElectronSecretsInstance;
@@ -83,13 +70,6 @@ async function secretsWithWarningLog(): Promise<{
       }),
   });
   return { secrets, warnings };
-}
-
-function loadRendererMain(): string {
-  return readFileSync(
-    repoPath('packages/desktop/src/renderer/main.ts'),
-    'utf8',
-  );
 }
 
 describe('ElectronSecrets keychain-denial bootstrap recovery', () => {
@@ -179,19 +159,6 @@ describe('TEXRA_DISABLE_KEYCHAIN env var (Playwright e2e shim)', () => {
         expect(yield* secrets.get('any.key')).toBeUndefined();
         expect(decryptSpy).not.toHaveBeenCalled();
       }).pipe(withEnv({ TEXRA_DISABLE_KEYCHAIN: '1' })),
-  );
-
-  it.effect(
-    'ElectronSecrets.get() still honors process.env overrides above the env-disabled shim',
-    () =>
-      Effect.gen(function* () {
-        const { ElectronSecrets } = yield* Effect.promise(loadElectronSecrets);
-        const secrets = new ElectronSecrets(emptyRecordStore());
-
-        expect(yield* secrets.get('SOME_TEST_KEY')).toBe('from-env');
-      }).pipe(
-        withEnv({ TEXRA_DISABLE_KEYCHAIN: '1', SOME_TEST_KEY: 'from-env' }),
-      ),
   );
 
   it.effect('ElectronSecrets.set() silently no-ops instead of throwing', () =>

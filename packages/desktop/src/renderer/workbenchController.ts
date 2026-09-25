@@ -41,8 +41,6 @@ interface WorkbenchControllerDeps {
   settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopShellState;
-  /** Root of the project this window shows; new terminals start there. */
-  getWorkspacePath(): string | undefined;
   updateShell(next: DesktopShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
@@ -72,7 +70,6 @@ export function createWorkbenchController({
   settingsView,
   logsPane,
   getState,
-  getWorkspacePath,
   updateShell,
   postMessage,
 }: WorkbenchControllerDeps): WorkbenchController {
@@ -162,10 +159,8 @@ export function createWorkbenchController({
   function openKind(kind: WorkbenchKind): void {
     if (kind === 'terminal') {
       updateShell(
-        openWorkbenchTab(getState(), {
-          kind,
-          target: getWorkspacePath() ?? '',
-        }),
+        // The main process starts it in the project's folder.
+        openWorkbenchTab(getState(), { kind }),
       );
       return;
     }
@@ -192,7 +187,6 @@ export function createWorkbenchController({
     const next = openWorkbenchTab(getState(), {
       kind: 'terminal',
       placement: 'bottom',
-      target: getWorkspacePath() ?? '',
     });
     const terminal = activeWorkbenchTab(next, 'bottom');
     if (terminal?.kind !== 'terminal') return;

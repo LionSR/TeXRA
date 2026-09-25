@@ -12,6 +12,7 @@ import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRoster } from '@agent/runtime/runRoster';
 import { Runs } from '@agent/runtime/runRegistry';
+import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
@@ -24,7 +25,10 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import {
+  emptyPinnedComposition,
+  testModelCell,
+} from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -291,6 +295,7 @@ function parentContext(): DelegationParent {
         agent: 'chat',
         model: PARENT_MODEL,
       }),
+      model: testModelCell(PARENT_MODEL),
       logger: noopTrace,
       delegationAgentScope: {
         workflow: ['builtInWorkflow:correct'],
@@ -1752,6 +1757,33 @@ describe('createWorkflowScriptAgentRunner', () => {
           configPayload: expect.objectContaining({ agentCategory: 'toolUse' }),
         }),
       );
+    }),
+  );
+
+  it.live('leaves parallel siblings running when the first call settles', () =>
+    Effect.gen(function* () {
+      // Staggered children: the first settles while its siblings still run,
+      // and the fence it takes over its own child must outlive its runner.
+      useToolUseAgentEntries();
+      mocks.executeSubagentInBand.mockImplementation(
+        (options: InBandRunOptions) =>
+          Effect.gen(function* () {
+            const prepared = (yield* options.prepare()) as {
+              configPayload: { instruction: string };
+            };
+            const slow = prepared.configPayload.instruction.includes('slow');
+            yield* Effect.sleep(slow ? 200 : 10);
+            return launched(options.runId, structuredResult);
+          }),
+      );
+      const outcome = yield* runWorkflowScript({
+        script: `export const meta = { name: 'staggered', description: 'fan out' }
+const found = await parallel(['fast', 'slow', 'fast again'].map((what, i) => () =>
+  agent('Review ' + what, { id: 'call' + i, agentName: 'assistant', schema: { type: 'object' } })))
+return found.map((value) => value && value.outcome)`,
+        runAgent: defaultRunner(),
+      });
+      expect(outcome.result).toEqual(['completed', 'completed', 'completed']);
     }),
   );
 });

@@ -55,7 +55,6 @@ interface ConversationRegionSnapshot {
 }
 
 interface ConversationRegionProps {
-  readonly colorEnabled?: boolean;
   readonly columns: number;
   readonly inputBarVisible: boolean;
   readonly onStaticTranscriptChange?: () => void;
@@ -70,7 +69,6 @@ interface ConversationRegionProps {
 }
 
 export function ConversationRegion({
-  colorEnabled,
   columns,
   inputBarVisible,
   onCancelChildList,
@@ -187,7 +185,6 @@ export function ConversationRegion({
   return (
     <>
       <StaticConversationTranscript
-        colorEnabled={colorEnabled}
         maxRows={staticTranscriptRows}
         ownerKey={scrollbackTarget.ownerKey}
         onRenderKeyChange={onStaticTranscriptChange}
@@ -200,7 +197,6 @@ export function ConversationRegion({
           {conversationRows > 0 ? (
             <ConversationPane
               availableWidth={columns}
-              colorEnabled={colorEnabled}
               width={transcriptWidth}
               maxRows={conversationRows}
             />

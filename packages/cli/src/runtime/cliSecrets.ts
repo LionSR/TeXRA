@@ -6,15 +6,12 @@ import { Effect } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { invalidateApiKeyCache } from '@model/apiProviders';
 import {
   SecretsFailed,
-  secretsGet,
   type PlatformSecrets,
   type SecretsOperation,
 } from '@platform/secrets';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   type PerKeyLane,
@@ -34,15 +31,14 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
 /**
  * CLI secret storage.
  *
- * Environment variables remain the highest-priority source so automation can
- * keep using ephemeral keys. Values written by CLI login are persisted under
+ * Values written by CLI login are persisted under
  * the user's TeXRA state directory through the shared `JsonStore` (the same
  * owner `ElectronSecrets` wraps for the desktop host), with a fail-on-corrupt
  * policy so a corrupt secrets file aborts a write instead of silently wiping
  * every other stored credential.
  *
  * Each operation opens its own `JsonStore` rather than caching one for the
- * lifetime of this instance, so reads (`get`/`getStored`/`listStoredKeys`)
+ * lifetime of this instance, so reads (`get`/`listStoredKeys`)
  * always observe the current on-disk file. Mutations take the file's lane in
  * {@link mutationLanes}, claimed in the program's first synchronous step —
  * before the open — so same-key writes preserve caller order. `JsonStore`
@@ -56,13 +52,9 @@ const mutationLanes: PerKeyLanes<string> = new Map<string, PerKeyLane>();
  * holds no runtime and outlives any of them.
  */
 export class CliSecrets implements PlatformSecrets {
-  constructor(private readonly filePath = cliSecretsPath()) {}
+  constructor(private readonly filePath: string) {}
 
   get(key: string) {
-    return secretsGet(this, key);
-  }
-
-  getStored(key: string) {
     return Effect.map(this.openStore(), (store) => {
       const value = store.get<unknown>(key, undefined);
       return typeof value === 'string' ? value : undefined;
@@ -71,7 +63,7 @@ export class CliSecrets implements PlatformSecrets {
         (cause) =>
           new SecretsFailed({
             reason: 'io',
-            operation: 'getStored',
+            operation: 'get',
             key,
             message: `Could not read the CLI secrets file at ${this.filePath}: ${toErrorMessage(cause)}`,
             cause,
@@ -106,8 +98,8 @@ export class CliSecrets implements PlatformSecrets {
    * One mutation of the secrets file. Taking this lane and opening the store
    * are both interruptible; the commit `JsonStore.set` runs behind the file's
    * own write lane is not, so a cancelled caller either never started the
-   * commit or observes a finished one. The key cache drop and the
-   * `credentialChanged` signal run on every exit, because a commit that
+   * commit or observes a finished one. The `credentialChanged` signal runs
+   * on every exit, because a commit that
    * landed still exits as interrupted when its caller was cancelled.
    */
   private mutate(
@@ -130,10 +122,7 @@ export class CliSecrets implements PlatformSecrets {
           }),
       ),
       Effect.ensuring(
-        Effect.sync(() => {
-          invalidateApiKeyCache();
-          emitAppSignal('credentialChanged', { key });
-        }),
+        Effect.sync(() => emitAppSignal('credentialChanged', { key })),
       ),
     );
   }
@@ -145,9 +134,7 @@ export class CliSecrets implements PlatformSecrets {
   }
 }
 
-export function cliSecretsPath(
-  storageRoot = DEFAULT_NODE_STORAGE_ROOT,
-): string {
+export function cliSecretsPath(storageRoot: string): string {
   return path.join(storageRoot, 'secrets.json');
 }
 
@@ -155,12 +142,12 @@ let cliSecrets: CliSecrets | undefined;
 
 /**
  * The one secret store of this process, over the storage root the first
- * caller names: a later caller that names another root, or none, gets that
+ * caller names: a later caller that names another root gets that
  * same store rather than a second view over a different file. Nothing here
  * is bound to a process runtime, so a runtime that replaced a disposed one
  * (an init retried after its failure disposed the first) keeps this store.
  */
-export function getCliSecrets(storageRoot?: string): CliSecrets {
+export function getCliSecrets(storageRoot: string): CliSecrets {
   cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
   return cliSecrets;
 }

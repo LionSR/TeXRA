@@ -11,7 +11,7 @@ import {
   type SessionTitleState,
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
-import { RUN_PHASE } from '@shared/schemas';
+import { isWorkingRun } from '@shared/session/sessionView';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 
 import { rootRunIds } from './state/cliState';
@@ -55,7 +55,10 @@ const terminalTitleState = computed((): SessionTitleState => {
   const { runs } = sessionView().get();
   if (
     chatTuiCanStopActiveRun(runStopFacts.get()) ||
-    rootRunIds.get().some((id) => runs.get(id)?.status === RUN_PHASE.RUNNING)
+    rootRunIds.get().some((id) => {
+      const run = runs.get(id);
+      return run !== undefined && isWorkingRun(run);
+    })
   ) {
     return 'running';
   }

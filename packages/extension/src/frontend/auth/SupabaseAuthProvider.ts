@@ -1,4 +1,4 @@
-import { Deferred, Effect, Exit, FileSystem } from 'effect';
+import { Deferred, Effect, Exit } from 'effect';
 import * as vscode from 'vscode';
 
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -29,15 +29,12 @@ import {
   type SignInCallbackOutcome,
 } from '@controllers/auth/supabaseSignIn';
 import { withLogChannel } from '@logger/effectLog';
-import type { AgentDirectories } from '@platform/interfaces';
 import type {
   AgentCatalogServices,
   ProcessRuntime,
 } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import type { HttpClient } from 'effect/unstable/http';
 import type { SupabaseUriHandler } from './UriHandler';
 
 const CHANNEL = 'SupabaseAuthProvider';
@@ -63,7 +60,7 @@ function secretPendingOAuthSlots(secrets: PlatformSecrets): PendingOAuthSlots {
   const key = (nonce: string): string =>
     `${PENDING_OAUTH_STATE_PREFIX}${nonce}`;
   return {
-    read: (nonce) => secrets.getStored(key(nonce)),
+    read: (nonce) => secrets.get(key(nonce)),
     write: (nonce, value) => secrets.set(key(nonce), value),
     erase: (nonce) => secrets.delete(key(nonce)),
     nonces: () =>
@@ -217,10 +214,7 @@ export class SupabaseAuthProvider implements vscode.AuthenticationProvider {
   private loadUsableSessions(): Effect.Effect<
     vscode.AuthenticationSession[],
     AuthPortError,
-    | GlobalStorageFs
-    | HttpClient.HttpClient
-    | FileSystem.FileSystem
-    | AgentDirectories
+    AgentCatalogServices
   > {
     return Effect.gen({ self: this }, function* () {
       const session = yield* this.sessionCoordinator.loadSession();

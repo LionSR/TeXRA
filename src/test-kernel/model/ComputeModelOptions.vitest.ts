@@ -13,7 +13,7 @@ import {
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import { apiKeySecretName, invalidateApiKeyCache } from '@model/apiProviders';
+import { apiKeySecretName } from '@model/apiProviders';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { LanguageModel } from '@platform/languageModel';
 import { SecretsFailed } from '@platform/secrets';
@@ -94,7 +94,6 @@ async function installAccessPlatform(
     },
     secrets: options.secrets ?? OPENAI_KEY_SECRETS,
   });
-  invalidateApiKeyCache();
   // Coordinators are keyed by the secret store, so the reinstalled host's
   // store is what the probes installed here read.
   installTexraAccountProbes(hostStores().secrets);
@@ -157,7 +156,6 @@ describe('model availability', () => {
   });
 
   beforeEach(() => {
-    invalidateApiKeyCache();
     // The picker reads the app's account plane through the model layer's
     // seam; install the same probes the three hosts install.
     installTexraAccountProbes(hostStores().secrets);
@@ -267,7 +265,6 @@ describe('model availability', () => {
             { secrets },
           ),
         );
-        invalidateApiKeyCache();
         const logs = captureLogEntries();
 
         const [gpt55, gpt56] = modelOptionsFrom(
@@ -310,7 +307,6 @@ describe('model availability', () => {
         yield* Effect.promise(() =>
           installPlatform({}, { secrets, globalState }),
         );
-        invalidateApiKeyCache();
         const logs = captureLogEntries();
 
         const rows = modelOptionsFrom(
@@ -357,7 +353,6 @@ describe('model availability', () => {
         yield* Effect.promise(() =>
           installPlatform({}, { secrets, globalState }),
         );
-        invalidateApiKeyCache();
 
         const inputs = yield* availabilityInputs(hostStores(), [
           'gpt55',
@@ -627,10 +622,6 @@ describe('model availability', () => {
 });
 
 describe('model availability Kimi Code routing (dual-backend kimi3)', () => {
-  beforeEach(() => {
-    invalidateApiKeyCache();
-  });
-
   const kimi3Option = (
     globalState: Record<string, unknown>,
     secrets: Record<string, string>,

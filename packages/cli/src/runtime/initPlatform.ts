@@ -28,7 +28,6 @@ import {
   type ProcessRuntime,
 } from '@platform/processRuntime';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
@@ -38,7 +37,7 @@ import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
@@ -69,10 +68,14 @@ let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
 
 type CliPlatformInitOptions = Pick<
   CliContext,
-  'config' | 'cwd' | 'resourcesPath' | 'skillSourceOptions' | 'version'
+  | 'config'
+  | 'cwd'
+  | 'resourcesPath'
+  | 'skillSourceOptions'
+  | 'storageRoot'
+  | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
-  readonly storageRoot?: string;
 };
 
 /**
@@ -295,7 +298,7 @@ export function initCliPlatform(
         return yield* Effect.gen(function* () {
           // The project's `texra.db` lives in its storage directory and is
           // owned by the project scope; AppState (global) is the runtime's.
-          const storageRoot = context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT;
+          const { storageRoot } = context;
           const storage = resolveWorkspaceStoragePath(storageRoot, context.cwd);
           const workspaceState = yield* openProjectStateStore(storage).pipe(
             Scope.provide(projectScope),
@@ -373,11 +376,10 @@ export function initCliPlatform(
               const session = tryDefaultSession();
               return session ? session.settlePublications() : Effect.void;
             }),
-            afterRunSettlement: [
-              closeProject,
-              flushNdjsonStdout(),
-              disposeCliProcessRuntime,
-            ],
+            releaseSessions: closeProject.pipe(
+              Effect.ensuring(flushNdjsonStdout()),
+            ),
+            disposeRuntime: disposeCliProcessRuntime,
           });
 
           installedRoots = roots;
@@ -405,9 +407,7 @@ export function initCliPlatform(
       // The pure path calculator over this process's storage root (no mkdir),
       // so every CLI entry, including the ones that find the roots already
       // installed, names one root without touching the filesystem again.
-      globalStorage: resolveGlobalStoragePath(
-        context.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT,
-      ),
+      globalStorage: resolveGlobalStoragePath(context.storageRoot),
       globalState,
       secrets: getCliSecrets(context.storageRoot),
       session:

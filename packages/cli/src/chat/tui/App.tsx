@@ -17,6 +17,7 @@ import {
 import { type SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
+  isCtrlInput,
   isEscapeInput,
   isUnhandledControlInput,
   metaChordInput,
@@ -136,7 +137,6 @@ export interface AppProps {
     mediaFiles?: readonly string[],
     images?: readonly PastedImageEntry[],
   ) => void;
-  readonly colorEnabled?: boolean;
   readonly commandName?: string;
   readonly onStaticTranscriptChange?: () => void;
   /** Hand the second Ctrl+C (the one no draft consumed) to the host's SIGINT
@@ -407,7 +407,6 @@ export function App(props: AppProps): React.JSX.Element {
         infoPane ? (
           <InfoPane
             availableRows={availableRows}
-            colorEnabled={props.colorEnabled}
             lines={infoPane.lines}
             onClose={closeInfoPane}
             onOverflow={archiveInfoPane}
@@ -591,7 +590,7 @@ export function App(props: AppProps): React.JSX.Element {
     // keyboard.
     if (!focusShortcutsActive) return;
 
-    if (key.ctrl && input.toLowerCase() === 't') {
+    if (isCtrlInput(input, key, 't')) {
       if (activeRunId) openTranscriptReader(activeRunId);
       return;
     }
@@ -624,7 +623,6 @@ export function App(props: AppProps): React.JSX.Element {
   return (
     <ActiveDraftScope registry={activeDraftRegistry}>
       <ConversationRegion
-        colorEnabled={props.colorEnabled}
         columns={columns}
         inputBarVisible={inputBarVisible}
         onStaticTranscriptChange={props.onStaticTranscriptChange}

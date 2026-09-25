@@ -9,7 +9,8 @@ import * as vscode from 'vscode';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
 
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
-import { error as logError, warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
+import type { ProcessRuntime } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
 import {
@@ -153,15 +154,21 @@ export class LatexSettingsHandlers {
       outDir: isRecommendedValueSet('outDir'),
       autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
     }),
+    // A synchronous controller callback with no program of its own: the
+    // entry runs on the process runtime the view already holds.
     onDetectionError: (error) => {
-      logError(
-        this.ctx.channel,
-        `LaTeX settings detection failed: ${toErrorMessage(error)}`,
+      this.runtime.runFork(
+        Effect.logError(
+          `LaTeX settings detection failed: ${toErrorMessage(error)}`,
+        ).pipe(withLogChannel(this.ctx.channel)),
       );
     },
   });
 
-  constructor(private readonly ctx: SettingsHandlerContext) {
+  constructor(
+    private readonly ctx: SettingsHandlerContext,
+    private readonly runtime: ProcessRuntime,
+  ) {
     // Each arm is a settings-view message, so its program settles on the
     // view's boundary here rather than in the view's own registry.
     this.handlers = {
@@ -231,15 +238,13 @@ export class LatexSettingsHandlers {
   private handleRunInstallCommand(
     data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND>,
   ) {
-    return Effect.sync(() => {
+    return Effect.gen({ self: this }, function* () {
       if (
         !this.toolingController.isAllowedInstallCommand(data.installCommand)
       ) {
-        logWarning(
-          this.ctx.channel,
+        return yield* Effect.logWarning(
           `Rejected unknown install command: ${data.installCommand}`,
-        );
-        return;
+        ).pipe(withLogChannel(this.ctx.channel));
       }
 
       const terminal = vscode.window.createTerminal({

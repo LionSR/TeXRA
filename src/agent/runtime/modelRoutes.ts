@@ -18,7 +18,9 @@ import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata'
 import { withLogChannel } from '@logger/effectLog';
 import {
   copilotRouteUnavailableReason,
+  discoverCopilotRoutes,
   prefersCopilotRoute,
+  type CopilotModelRoute,
 } from '@model/copilotRouting';
 import { codexBackendModelId } from '@model/providerCapabilities';
 import { exposeApiKey, getApiKey, type ApiProvider } from '@model/apiProviders';
@@ -29,6 +31,7 @@ import {
 } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type {
   DeclinableUsageRoute,
@@ -38,6 +41,7 @@ import type {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { findModelProviderPlugin } from '@shared/constants/modelProviderPlugins';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import type { HttpClient } from 'effect/unstable/http';
 
 const CHANNEL = 'modelRoutes';
@@ -263,11 +267,13 @@ export const resolveRouteCredential = Effect.fn('resolveRouteCredential')(
   },
 );
 
-/** The routes a binding can take: the unsupported one fails in resolution. */
-export type BindableRoute = Exclude<
-  ModelRoute,
-  { kind: 'openrouter-unsupported' }
->;
+/**
+ * The routes a binding can take: the unsupported one fails in resolution, and
+ * a Copilot route binds only with the editor route discovered for it.
+ */
+export type BindableRoute =
+  | Exclude<ModelRoute, { kind: 'openrouter-unsupported' | 'copilot' }>
+  | { readonly kind: 'copilot'; readonly route: CopilotModelRoute };
 
 /**
  * The route `config` binds under, decided once over this workspace's facts.
@@ -275,9 +281,12 @@ export type BindableRoute = Exclude<
  * for: its OpenRouter, Copilot and validation choice are the format's, and a
  * subscription serves it only on the protocol the format names, so turning a
  * preference on since cannot silently move the conversation's billing. An
- * own-key quota fallback declines the Copilot preference. The two routes
- * nothing can bind fail here as the user's instruction: a mode-selected model
- * on OpenRouter, and a preferred Copilot route the editor cannot serve now.
+ * own-key quota fallback declines the Copilot preference. When the decision
+ * can land on Copilot, the editor's routes are discovered here, once, and the
+ * decided route carries the one it found; a discovery failure fails the
+ * decision as the host's error. The routes nothing can bind fail here as the
+ * user's instruction: a mode-selected model on OpenRouter, and a Copilot
+ * route the editor cannot serve now.
  */
 export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
   stores: SettingsStores & {
@@ -290,23 +299,32 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
     readonly ownApiKeyFallback?: boolean;
     readonly declinedRoutes?: readonly DeclinableUsageRoute[];
   } = {},
-): Effect.fn.Return<BindableRoute, Error> {
+): Effect.fn.Return<BindableRoute, Error, LanguageModel> {
   const host = yield* readRouteFacts(stores, options.declinedRoutes);
   const key = options.compatibilityKey;
+  const prefersCopilot =
+    key == null
+      ? !options.ownApiKeyFallback &&
+        (yield* prefersCopilotRoute(config.name, stores.globalState))
+      : key === 'VscodeLm';
+  const copilotRoute =
+    prefersCopilot || config.provider === ModelProvider.COPILOT
+      ? (yield* discoverCopilotRoutes()).get(config.name)
+      : undefined;
   const route = decideModelRoute(
     config,
     key == null
       ? {
           ...host,
           validation: yield* shouldUseInternalValidationModel(),
-          prefersCopilot:
-            !options.ownApiKeyFallback &&
-            (yield* prefersCopilotRoute(config.name, stores.globalState)),
+          prefersCopilot,
+          copilotRoute,
         }
       : {
           ...host,
           validation: key === 'Validation',
-          prefersCopilot: key === 'VscodeLm',
+          prefersCopilot,
+          copilotRoute,
           useOpenRouter: key === 'OpenRouterNative',
           chatgptSubscription:
             host.chatgptSubscription && key === 'OpenAIResponse',
@@ -320,16 +338,24 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
       ),
     );
   }
-  if (route.kind === 'copilot' && key == null) {
-    const unavailableReason = yield* copilotRouteUnavailableReason(
-      config.name,
-      stores.globalState,
-    );
-    if (unavailableReason) {
-      return yield* Effect.fail(new AgentError(unavailableReason));
-    }
+  if (route.kind !== 'copilot') return route;
+  // A fresh run needs the editor to allow the route; a resumed conversation
+  // keeps its format and binds whatever route the editor offers.
+  const unavailableReason =
+    key == null
+      ? copilotRouteUnavailableReason(config.name, route.route)
+      : undefined;
+  if (unavailableReason) {
+    return yield* Effect.fail(new AgentError(unavailableReason));
   }
-  return route;
+  if (route.route === undefined) {
+    return yield* Effect.fail(
+      new Error(
+        `No editor route is discovered for model ${config.name}; refresh the model list.`,
+      ),
+    );
+  }
+  return { kind: 'copilot', route: route.route };
 });
 
 /**
@@ -341,14 +367,14 @@ export const resolveModelRoute = Effect.fn('resolveModelRoute')(function* (
  */
 export const withShortModelName = Effect.fn('withShortModelName')(function* (
   config: ModelConfig,
-  globalState: StateStore,
+  stores: SettingsStores,
 ) {
   const short = config.shortName;
   if (
     // Read live so a mid-session change is honored on the next binding.
-    !(yield* globalState.get<boolean>(
+    !(yield* readSettingFrom<boolean>(
+      stores,
       GlobalStateKey.PREFER_SHORT_MODEL_NAMES,
-      false,
     )) ||
     // Mode-selected registry entries share another entry's wire id. Their
     // display-oriented shortName is not an API model identifier.

@@ -30,7 +30,7 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import { discoveredCopilotRoutes } from '@model/runtimeModelRegistry';
+import { discoverCopilotRoutes } from '@model/copilotRouting';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
@@ -214,7 +214,7 @@ export class DefaultDesktopCredentialSettingsController implements DesktopCreden
           readModelAvailabilityInputs(stores, models),
           modelOptionsFrom,
         ),
-      copilotRoutes: discoveredCopilotRoutes(),
+      copilotRoutes: discoverCopilotRoutes(),
     });
     this.profileController = new SettingsProfileController({
       host: 'desktop',

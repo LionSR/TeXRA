@@ -5,6 +5,7 @@ import { Box, Text, useInput } from 'ink';
 import { useState, useEffect } from 'react';
 
 import { isPlainReturnInput } from '@cli/tui/inputKeys';
+import { moreRowsText, previousRowsText } from '@cli/tui/overflowText';
 import { BorderedPanel } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints } from '@cli/tui/ui/KeyHints';
 import { nextWrappingHighlightIndex } from '@cli/tui/ui/Select';
@@ -39,7 +40,7 @@ interface SlashPaletteWindow {
 // Wraparound highlight stepping is shared with `ui/Select.tsx`. The window
 // below stays local: scrolling through the middle of a long list shows one
 // fewer row than at the edges, on purpose, so both overflow markers ("… N
-// earlier" / "… N more") can be visible at once — unlike `Select`'s simple
+// previous rows" / "… N more rows") can be visible at once — unlike `Select`'s simple
 // centered `visibleSelectRange`.
 export function slashPaletteWindow({
   highlight,
@@ -103,7 +104,7 @@ export function slashPaletteOwnsArrows(matchCount: number): boolean {
   return matchCount > 1;
 }
 
-export function slashPaletteEnterHintAction(
+function slashPaletteEnterHintAction(
   command: SlashCommand | undefined,
 ): string {
   return command?.formComponent ? 'open' : 'run';
@@ -187,7 +188,9 @@ export function SlashPalette(
       }
     >
       {window.hiddenBefore > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenBefore} earlier`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${previousRowsText(window.hiddenBefore)}`}
+        </Text>
       ) : null}
       {visible.map((cmd, offset) => {
         const i = window.start + offset;
@@ -207,7 +210,9 @@ export function SlashPalette(
         );
       })}
       {window.hiddenAfter > 0 ? (
-        <Text dimColor>{`  … ${window.hiddenAfter} more`}</Text>
+        <Text dimColor wrap="truncate-end">
+          {`  ${moreRowsText(window.hiddenAfter)}`}
+        </Text>
       ) : null}
     </BorderedPanel>
   );

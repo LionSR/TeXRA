@@ -13,46 +13,33 @@ import { Box, Text, useInput, useWindowSize } from 'ink';
 import { useMemo } from 'react';
 
 // Local imports - TUI primitives
-import {
-  isCtrlInput,
-  isEscapeInput,
-  isPlainReturnInput,
-} from '@cli/tui/inputKeys';
+import { isCtrlInput, isEscapeInput } from '@cli/tui/inputKeys';
 import { ReaderPanel, readerLayout } from '@cli/tui/ui/BorderedPanel';
 import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import {
-  fillRows,
-  safeTerminalText,
-  textDisplayWidth,
-} from '@cli/runtime/terminalText';
+import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas, model, and copy
 import {
-  WORKFLOW_TASK_STATUS_LABEL,
   runIdentityDisplayName,
   type RunId,
-  type WorkflowCallIdentity,
   type WorkflowCallProgress,
 } from '@shared/schemas';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import {
   formatWorkflowCallLiveParts,
-  formatWorkflowRowGroup,
   workflowPhaseRows,
-  type ChildRunProgress,
   type WorkflowPhaseModel,
   type WorkflowPhaseRow,
   type WorkflowRunModel,
 } from '@shared/runs/workflowRunModel';
+import { resolvePhase } from '@shared/session/surface';
 import type { WorkflowTaskRow as WorkflowTaskRowModel } from '@ui/transcript';
 import {
   WORKFLOW_CALL_STATUS_GLYPH,
   WORKFLOW_PHASE_GLYPH,
-  formatWorkflowPhaseHeading,
-  formatWorkflowPhaseTally,
   formatWorkflowTally,
 } from '@ui/copy/workflowCall';
 import { clampIndex, filterNotNullish } from '@utils/core';
@@ -60,34 +47,30 @@ import { formatCompactDuration, formatCostUsd } from '@utils/text/stringUtils';
 
 // Local imports - TUI state and policy
 import { formFrameWidth } from '../forms/_shared/FormFrame';
+import { BaseTextInput } from '../input/BaseTextInput';
 import { type WorkflowPopupView } from '../state/cliState';
 import { killableRunId, sessionView, runViewOf } from '../state/sessionView';
 import { useSignal } from '../state/useSignal';
 
 // Local imports - sibling panes
-import { ApprovalSegments, RowSegment } from './SubagentList';
-import { pendingApprovalRowDisplay } from './SubagentListDisplay';
-import { WORKFLOW_TASK_STATUS_COLOR } from './transcriptEntryLayout';
-import {
-  pendingApprovalKindsByRun,
-  type PendingApprovalKind,
-} from '../state/approvalQueue';
+import { DeclaredTaskRow, GroupRow, TaskRow } from './WorkflowPopupRows';
+import { pendingApprovalKindsByRun } from '../state/approvalQueue';
 
 /** Rows the popup paints above its list: the tab strip and the per-call
- *  status strip. The filter line adds one while it shows. */
-const POPUP_HEADER_ROWS = 2;
+ *  status strip. The focused call's detail line below it adds one, and the
+ *  filter line one more while it shows. */
+const POPUP_HEADER_ROWS = 3;
+const ALL_ROW_GROUPS = new Set([
+  'finished',
+  'queued',
+  'planned',
+  'not run',
+] as const);
 const TAB_SEPARATOR = '    ';
 const TAB_SCROLL_MARK = '‹ ';
 
-/** The three-column marker cell every popup row starts its text after, so a
- *  phase's rows line up whether or not one is focused. A glyph that counts as
- *  two columns takes its own cell instead of shoving the label right. */
-function markerCell(marker: string): string {
-  return fillRows(` ${marker}`, 3);
-}
-
 function phaseTabText(phase: WorkflowPhaseModel): string {
-  return `${phase.opened ? WORKFLOW_PHASE_GLYPH.opened : WORKFLOW_PHASE_GLYPH.declared} ${formatWorkflowPhaseHeading(phase.heading)} · ${formatWorkflowPhaseTally(phase)}`;
+  return `${phase.opened ? WORKFLOW_PHASE_GLYPH.opened : WORKFLOW_PHASE_GLYPH.declared} ${phase.heading.phaseLabel} · ${formatWorkflowTally(phase.tally)}`;
 }
 
 /** First tab to draw so the active one is on screen: walk the window start
@@ -127,91 +110,6 @@ function statusStrip(
   return `${cells.slice(0, shownCount).map(glyph).join('')}+${cells.length - shownCount}`;
 }
 
-function TaskRow({
-  live,
-  nowMs,
-  pendingKinds,
-  row,
-}: {
-  readonly live: ChildRunProgress | undefined;
-  readonly nowMs: number;
-  readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
-  readonly row: WorkflowTaskRowModel;
-}): React.JSX.Element {
-  // The row's own parts name the call and, once settled, what it cost; the
-  // model's live join adds the in-flight window the card cannot carry.
-  const parts = [
-    ...row.metadataParts,
-    ...formatWorkflowCallLiveParts(row.call, live, nowMs),
-  ];
-  const metadata = parts.length > 0 ? parts.join(' · ') : undefined;
-  const approval = pendingApprovalRowDisplay(pendingKinds);
-  return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Box flexShrink={0}>
-        <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR[row.call.status]}>
-          {markerCell(WORKFLOW_CALL_STATUS_GLYPH[row.call.status])}
-        </Text>
-      </Box>
-      <RowSegment flexShrink={1}>{safeTerminalText(row.call.label)}</RowSegment>
-      {/* The status word outranks the metadata column: it is its own segment
-          at the label's shrink weight, so a wide row sheds metadata (weight 2)
-          long before it clips `· Running`. */}
-      <RowSegment flexShrink={1}>{` · ${row.statusLabel}`}</RowSegment>
-      <ApprovalSegments approval={approval} />
-      {metadata ? (
-        <RowSegment dimColor flexShrink={2}>{`  ${metadata}`}</RowSegment>
-      ) : null}
-    </Box>
-  );
-}
-
-/** A plan task the run has not issued yet: label and status, nothing to
- *  focus, kill, or retry. */
-function DeclaredTaskRow({
-  task,
-}: {
-  readonly task: WorkflowCallIdentity;
-}): React.JSX.Element {
-  return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Box flexShrink={0}>
-        <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR.declared}>
-          {markerCell(WORKFLOW_CALL_STATUS_GLYPH.declared)}
-        </Text>
-      </Box>
-      <RowSegment dimColor flexShrink={1}>
-        {safeTerminalText(task.label)}
-      </RowSegment>
-      <RowSegment dimColor flexShrink={1}>
-        {` · ${WORKFLOW_TASK_STATUS_LABEL.declared}`}
-      </RowSegment>
-    </Box>
-  );
-}
-
-/** A counted group of quiet rows; Enter unfolds it in place. */
-function GroupRow({
-  focused,
-  row,
-}: {
-  readonly focused: boolean;
-  readonly row: Extract<WorkflowPhaseRow, { kind: 'group' }>;
-}): React.JSX.Element {
-  return (
-    <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
-      <Box flexShrink={0}>
-        <Text aria-hidden dimColor>
-          {markerCell(row.expanded ? '▾' : '▸')}
-        </Text>
-      </Box>
-      <RowSegment dimColor={!focused} flexShrink={1}>
-        {formatWorkflowRowGroup(row)}
-      </RowSegment>
-    </Box>
-  );
-}
-
 interface WorkflowPopupProps {
   readonly availableRows: number;
   /** The workflow-script stream the popup looks into. */
@@ -242,7 +140,13 @@ export function WorkflowPopup({
   const pendingApprovals = useSignal(pendingApprovalKindsByRun);
   const stream = runViewOf(sessionState, runId);
   const { phases } = model;
-  const phaseIndex = clampIndex(view.phaseIndex, phases.length);
+  // The board's rule: the user's tab while the model still has it, else the
+  // run's active phase.
+  const activeKey = resolvePhase(view.phaseKey, phases);
+  const phaseIndex = Math.max(
+    0,
+    phases.findIndex((candidate) => candidate.key === activeKey),
+  );
   const phase = phases[phaseIndex];
   // The cards whose child run needs the user, its own approval or a
   // descendant's: the fold's `approval` aggregate, read off the child
@@ -263,6 +167,7 @@ export function WorkflowPopup({
       phase
         ? workflowPhaseRows(phase, {
             expanded: view.expanded,
+            settled: model.settled,
             filter: view.filter,
             waiting: waitingOf(phase),
           })
@@ -273,15 +178,32 @@ export function WorkflowPopup({
     () => new Map(rows.map((row) => [row.key, row] as const)),
     [rows],
   );
-  // Declared rows are display-only; the highlight settles on the first row
-  // that can be acted on when the remembered one is gone or not selectable.
+  // Declared rows are display-only. A remembered call that settled into a
+  // folded group keeps the highlight on that group's row, so the cursor does
+  // not jump when a card changes status; otherwise it lands on the first row
+  // that can be acted on.
   const firstSelectableKey = rows.find((row) => row.kind !== 'declared')?.key;
   const remembered =
     view.selectedKey !== undefined ? rowByKey.get(view.selectedKey) : undefined;
+  const foldedInto = (key: string): string | undefined => {
+    if (!phase) return undefined;
+    const unfolded = workflowPhaseRows(phase, {
+      expanded: ALL_ROW_GROUPS,
+      settled: model.settled,
+      filter: view.filter,
+      waiting: waitingOf(phase),
+    });
+    const at = unfolded.findIndex((row) => row.key === key);
+    return at < 0
+      ? undefined
+      : unfolded.slice(0, at).findLast((row) => row.kind === 'group')?.key;
+  };
   const selectedKey =
     remembered && remembered.kind !== 'declared'
       ? remembered.key
-      : firstSelectableKey;
+      : ((view.selectedKey !== undefined && remembered === undefined
+          ? foldedInto(view.selectedKey)
+          : undefined) ?? firstSelectableKey);
   const selectedRow =
     selectedKey !== undefined ? rowByKey.get(selectedKey) : undefined;
 
@@ -317,6 +239,18 @@ export function WorkflowPopup({
   const selectedChildRunId = selectedTask
     ? childRunOf(selectedTask)
     : undefined;
+  // What the focused call is and has cost: its card's parts, and the live
+  // window the model joins from its child run.
+  const selectedDetail = selectedTask
+    ? [
+        ...selectedTask.metadataParts,
+        ...formatWorkflowCallLiveParts(
+          selectedTask.call,
+          model.liveOf.get(selectedTask.id),
+          nowMs,
+        ),
+      ].join(' · ')
+    : '';
   const selectedChildRun = runViewOf(sessionState, selectedChildRunId);
   const selectedRunId = killableRunId(selectedChildRun);
   // A workflow-script grandchild `agent()` call is the only skip/retry-able
@@ -363,91 +297,76 @@ export function WorkflowPopup({
     else onClose();
   };
 
-  useInput((input, key) => {
-    if (view.filterEditing) {
-      if (isEscapeInput(input, key)) {
-        onViewChange({ filter: '', filterEditing: false });
-      } else if (isPlainReturnInput(input, key)) {
-        onViewChange({ filterEditing: false });
-      } else if (key.backspace || key.delete) {
-        onViewChange({ filter: view.filter.slice(0, -1) });
-      } else if (
-        input &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.upArrow &&
-        !key.downArrow &&
-        !key.leftArrow &&
-        !key.rightArrow &&
-        !key.tab
-      ) {
-        onViewChange({ filter: view.filter + input, selectedKey: undefined });
+  useInput(
+    (input, key) => {
+      if (isCtrlInput(input, key, 't')) {
+        onOpenTranscript(runId);
+        return;
       }
-      return;
-    }
-    if (isCtrlInput(input, key, 't')) {
-      onOpenTranscript(runId);
-      return;
-    }
-    if (key.ctrl || key.meta) return;
-    if (rows.length === 0 && isEscapeInput(input, key)) {
-      // The list owns Escape while it has rows; with none, this does.
-      clearFilterOrClose();
-      return;
-    }
-    if (key.leftArrow || key.rightArrow) {
-      const next = clampIndex(
-        phaseIndex + (key.rightArrow ? 1 : -1),
-        phases.length,
-      );
-      if (next !== phaseIndex) {
-        onViewChange({ phaseIndex: next, selectedKey: undefined });
+      if (key.ctrl || key.meta) return;
+      if (rows.length === 0 && isEscapeInput(input, key)) {
+        // The list owns Escape while it has rows; with none, this does.
+        clearFilterOrClose();
+        return;
       }
-      return;
-    }
-    if (input === '/') {
-      onViewChange({ filterEditing: true });
-      return;
-    }
-    if (input === 'f') {
-      const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
-        workflowPhaseRows(candidate, {
-          expanded: view.expanded,
-          filter: view.filter,
-          waiting: waitingOf(candidate),
-        }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
-      );
-      const current = allRows.findIndex(
-        (item) =>
-          item.phaseIndex === phaseIndex && item.row.key === selectedKey,
-      );
-      const failed = allRows
-        .map((item, index) => ({ ...item, index }))
-        .filter(
-          ({ row }) => row.kind === 'task' && row.row.call.status === 'failed',
+      if (key.leftArrow || key.rightArrow) {
+        const next = clampIndex(
+          phaseIndex + (key.rightArrow ? 1 : -1),
+          phases.length,
         );
-      const next = failed.find(({ index }) => index > current) ?? failed[0];
-      if (next) {
-        onViewChange({
-          phaseIndex: next.phaseIndex,
-          selectedKey: next.row.key,
-        });
+        if (next !== phaseIndex) {
+          onViewChange({ phaseKey: phases[next]?.key, selectedKey: undefined });
+        }
+        return;
       }
-      return;
-    }
-    if ((input === 's' || input === 'r') && controllable && selectedRunId) {
-      onRequest({
-        kind: 'workflow.control',
-        runId,
-        childRunId: selectedRunId,
-        action: input === 's' ? 'skip' : 'retry',
-      });
-      return;
-    }
-    if ((input === 'x' || input === 'k') && selectedRunId) {
-      onRequest({ kind: 'run.stop', runId: selectedRunId });
-    }
-  });
+      if (input === '/') {
+        onViewChange({ filterEditing: true });
+        return;
+      }
+      if (input === 'f') {
+        const allRows = phases.flatMap((candidate, candidatePhaseIndex) =>
+          workflowPhaseRows(candidate, {
+            expanded: view.expanded,
+            settled: model.settled,
+            filter: view.filter,
+            waiting: waitingOf(candidate),
+          }).map((row) => ({ phaseIndex: candidatePhaseIndex, row })),
+        );
+        const current = allRows.findIndex(
+          (item) =>
+            item.phaseIndex === phaseIndex && item.row.key === selectedKey,
+        );
+        const failed = allRows
+          .map((item, index) => ({ ...item, index }))
+          .filter(
+            ({ row }) =>
+              row.kind === 'task' && row.row.call.status === 'failed',
+          );
+        const next = failed.find(({ index }) => index > current) ?? failed[0];
+        if (next) {
+          onViewChange({
+            phaseKey: phases[next.phaseIndex]?.key,
+            selectedKey: next.row.key,
+          });
+        }
+        return;
+      }
+      if ((input === 's' || input === 'r') && controllable && selectedRunId) {
+        onRequest({
+          kind: 'workflow.control',
+          runId,
+          childRunId: selectedRunId,
+          action: input === 's' ? 'skip' : 'retry',
+        });
+        return;
+      }
+      if (input === 'x' && selectedRunId) {
+        onRequest({ kind: 'run.stop', runId: selectedRunId });
+      }
+    },
+    // The filter input owns every key while it edits.
+    { isActive: !view.filterEditing },
+  );
 
   const items: SelectItem<string>[] = rows.map((row) => ({
     label: row.key,
@@ -465,8 +384,9 @@ export function WorkflowPopup({
         const childRunId = childRunOf(row.row);
         return (
           <TaskRow
-            live={model.liveOf.get(row.row.id)}
-            nowMs={nowMs}
+            latestLine={
+              runViewOf(sessionState, childRunId)?.latestLine ?? undefined
+            }
             row={row.row}
             pendingKinds={
               childRunId === undefined
@@ -477,7 +397,7 @@ export function WorkflowPopup({
         );
       }
       case 'declared':
-        return <DeclaredTaskRow task={row.task} />;
+        return <DeclaredTaskRow settled={model.settled} task={row.task} />;
       case 'group':
         return <GroupRow focused={state.focused} row={row} />;
     }
@@ -541,8 +461,19 @@ export function WorkflowPopup({
           <Box height={1} overflowY="hidden">
             <Text wrap="truncate-end">
               <Text color={COLOR_HINT}>{'/ '}</Text>
-              <Text bold>{view.filter}</Text>
-              {view.filterEditing ? <Text color={COLOR_HINT}>▏</Text> : null}
+              <Text bold>
+                <BaseTextInput
+                  focus={view.filterEditing}
+                  value={view.filter}
+                  onChange={(filter) =>
+                    onViewChange({ filter, selectedKey: undefined })
+                  }
+                  onEscape={() =>
+                    onViewChange({ filter: '', filterEditing: false })
+                  }
+                  onSubmit={() => onViewChange({ filterEditing: false })}
+                />
+              </Text>
               <Text dimColor>
                 {`  ${rows.length} of ${phase ? phase.tasks.length + phase.declaredTasks.length : 0}`}
                 {view.filterEditing ? ' · Enter keep · Esc clear' : ''}
@@ -567,6 +498,11 @@ export function WorkflowPopup({
             wrap={false}
           />
         )}
+        <Box height={1} overflowY="hidden">
+          <Text dimColor wrap="truncate-end">
+            {selectedDetail}
+          </Text>
+        </Box>
       </Box>
     </ReaderPanel>
   );

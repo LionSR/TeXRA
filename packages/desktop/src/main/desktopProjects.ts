@@ -39,6 +39,10 @@ import {
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
 import type { ProjectDatabases } from '@shared/session/database';
+import {
+  projectDisplayOf,
+  type ProjectDisplay,
+} from '@shared/session/hostSnapshot';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -52,6 +56,9 @@ export interface DesktopProject {
   readonly key: string;
   /** Canonical folder path, or undefined for the no-workspace session. */
   readonly root: string | undefined;
+  /** What the rail, the snapshot, notifications, and the window title print
+   *  for it, derived once from `key` and `root`. */
+  readonly display: ProjectDisplay;
   readonly roots: WorkspaceRoots;
   readonly session: SessionHandle;
   /** Release the session from its owner; settles once its entry has unwound. */
@@ -259,6 +266,7 @@ function openProjectSession(
     return {
       key: roots.storage,
       root,
+      display: projectDisplayOf(roots.storage, root),
       roots,
       session,
       dispose: () => Scope.close(scope, Exit.void),

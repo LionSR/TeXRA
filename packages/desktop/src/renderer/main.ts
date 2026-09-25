@@ -87,7 +87,7 @@ import { createDesktopPromptOverlay } from './promptOverlay';
 import { createLogsPane } from './logsPane';
 import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
-import { createProjectRail, unseenRuns } from './projectRail';
+import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
@@ -170,11 +170,9 @@ let shell: Shell = {
 };
 let projectsKnown = false;
 let applyingProjectList = false;
-// The folder of every open project, by session key; the no-workspace session
-// is never among them. How a project is named is its host snapshot's.
-let projectRoots: ReadonlyMap<string, string> = new Map();
-const activeProjectRoot = () => projectRoots.get(shell.active);
-const hasWorkspace = () => !projectsKnown || activeProjectRoot() !== undefined;
+// The no-workspace session is never among the open projects; how a project
+// is named is its host snapshot's.
+const hasWorkspace = () => !projectsKnown || shell.open.includes(shell.active);
 function setShell(next: Shell): void {
   shell = next;
   persistedShell.setState({ collapsed: [...next.collapsed] });
@@ -185,7 +183,6 @@ function setShell(next: Shell): void {
 // chrome read those three records and nothing else.
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
-  hostRequestFailureOwner: 'host',
 });
 projectSessions.onChange(rerenderShell);
 // A project whose session has not framed its host snapshot yet is not listed:
@@ -196,15 +193,7 @@ const railProjects = (): RailProject[] =>
     const display = session?.host$.get()?.project;
     if (!session || !display) return [];
     const view = session.view$.get();
-    const workbench = projectWorkbenches.get(key);
-    return [
-      {
-        display,
-        view,
-        surface: session.surface$.get(),
-        unseen: workbench ? unseenRuns(workbench.getState(), view) : new Set(),
-      },
-    ];
+    return [{ display, view, surface: session.surface$.get() }];
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
@@ -262,8 +251,15 @@ const projectRail = createProjectRail({
   sessions: projectSessions,
   workbenches: projectWorkbenches,
 });
-projectSessions.onChange(projectRail.markShownRunSeen);
-window.addEventListener('focus', projectRail.markShownRunSeen);
+// Seen only while the window has focus: a run finishing behind another app is
+// news when the user comes back.
+const markShownRunSeen = () => {
+  const view = projectSessions.get(shell.active)?.view$.get();
+  if (view && document.hasFocus())
+    projectSessions.act(shell.active, { kind: 'seen', view });
+};
+projectSessions.onChange(markShownRunSeen);
+window.addEventListener('focus', markShownRunSeen);
 const selectProject = projectRail.selectProject;
 
 function currentWorkbench() {
@@ -376,15 +372,6 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 );
 applyTheme();
 
-/** The task on screen, named in the conversation header: the rail
- *  already names its project. */
-function conversationTitle(project: RailProject | undefined): string {
-  if (!project) return '';
-  const { selected } = project.surface;
-  const run = selected === null ? undefined : project.view.runs.get(selected);
-  return run ? (run.description ?? run.label) : 'New task';
-}
-
 function shellConversationTemplate(): TemplateResult {
   const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
@@ -435,9 +422,7 @@ function shellConversationTemplate(): TemplateResult {
   // a row of its own to drag the window by.
   render(
     html`<span slot="header-start" class="shell-header-start"
-        >${sidebarToggle}<span class="shell-header-title"
-          >${conversationTitle(activeProject)}</span
-        ></span
+        >${sidebarToggle}</span
       ><span slot="header-end" class="shell-header-end"
         >${subagentsButtonTemplate(activeProject, () =>
           currentWorkbench().workbench.openKind('subagents'),
@@ -878,7 +863,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
     void projectWorkbenches.get(session)?.editorPane.refresh();
   },
   isBootstrapFailed: () => bootstrapFailed,
-  returnToLauncher,
   openKind: (kind) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
   toggleLayoutPanel: (panel) => {
@@ -948,11 +932,8 @@ const MESSAGE_ROUTES = createMessageRoutes({
     // notifications from painting an intermediate owner during this adoption.
     applyingProjectList = true;
     try {
-      projectRoots = new Map(
-        message.projects.map((project) => [project.key, project.root] as const),
-      );
       projectsKnown = true;
-      const open = message.projects.map((project) => project.key);
+      const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {
         if (sessions.includes(key)) continue;
@@ -964,7 +945,6 @@ const MESSAGE_ROUTES = createMessageRoutes({
         if (projectWorkbenches.has(key)) continue;
         const project = createProjectWorkbench({
           session: key,
-          root: projectRoots.get(key),
           surfaces: projectSessions,
           settingsView,
           logsPane,
@@ -983,7 +963,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
         });
         projectWorkbenches.set(key, project);
         project.setTheme(currentTheme());
-        if (projectRoots.has(key)) void project.editorPane.refresh();
+        if (open.includes(key)) void project.editorPane.refresh();
       }
       setShell({
         ...shell,

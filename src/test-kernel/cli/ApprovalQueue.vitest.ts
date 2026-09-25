@@ -136,6 +136,20 @@ describe('CLI approval surface', () => {
     ]);
   });
 
+  it('presents no request this window cannot answer', () => {
+    // A child another process holds: its answer would be refused, and the
+    // refusal reopens the modal, trapping the keys.
+    const held = bashPayload(RUN_A);
+    const view = viewOfRequests(held);
+    const run = view.runs.get(RUN_A);
+    if (!run) throw new Error('fixture lost its run');
+    view.runs.set(RUN_A, { ...run, readOnly: true });
+    seedView(view);
+
+    expect(currentApproval.get()).toBeUndefined();
+    expect(attentionRequests.get()).toEqual([]);
+  });
+
   it('drops a request the moment the fold resolves it', () => {
     const first = bashPayload(RUN_A);
     const second = bashPayload(RUN_B);

@@ -7,6 +7,7 @@ import {
 } from '@cli/runtime/userQuestionAnswer';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
 import {
+  hiddenRowsText,
   previousRowsText,
   selectVisibleInlineOverflowText,
 } from '@cli/tui/overflowText';
@@ -76,7 +77,7 @@ function userQuestionInlineClipIndicator({
   readonly line: UserQuestionPromptLine;
   readonly width: number;
 }): UserQuestionPromptLine {
-  const prefix = `… ${hiddenRows} clipped rows - `;
+  const prefix = `${hiddenRowsText(hiddenRows)} - `;
   const clippedPrefix = clipToWidth(prefix, width);
   const remainingWidth = width - textDisplayWidth(clippedPrefix);
   if (remainingWidth <= 0) return { kind: 'overflow', text: clippedPrefix };
@@ -99,13 +100,11 @@ function userQuestionChoiceHints({
   ];
 }
 
-export function isCompactUserQuestionRows(
-  availableRows: number | undefined,
-): boolean {
+function isCompactUserQuestionRows(availableRows: number | undefined): boolean {
   return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
 }
 
-export function userQuestionChoiceRowsBudget({
+function userQuestionChoiceRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -125,7 +124,7 @@ export function userQuestionChoiceRowsBudget({
   return Math.min(optionCount, maxRows);
 }
 
-export function userQuestionFreeTextOptionRowsBudget({
+function userQuestionFreeTextOptionRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -141,11 +140,11 @@ export function userQuestionFreeTextOptionRowsBudget({
   );
 }
 
-export function userQuestionFreeTextControlRows(optionRows: number): number {
+function userQuestionFreeTextControlRows(optionRows: number): number {
   return optionRows + 1 + (optionRows > 0 ? 1 : 0);
 }
 
-export function userQuestionPromptRowsBudget({
+function userQuestionPromptRowsBudget({
   availableRows,
   controlRows,
 }: {

@@ -4,14 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  beforeEach,
-  afterEach,
-  vi,
-} from 'vitest';
+import { afterAll, beforeAll, describe, afterEach, vi } from 'vitest';
 
 import { getAgent, loadAgents, refresh } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -22,10 +15,12 @@ import {
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
+  AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
   installPlatform,
@@ -52,6 +47,7 @@ function onGlobalStorage<A, E>(
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }
@@ -260,6 +256,7 @@ describe('agent registry load state', () => {
           counter.scans += 1;
           return agentDir;
         }),
+      customConfigured: () => Effect.succeed(false),
       builtIn: () => Effect.sync(() => agentDir),
       builtInToolUse: () => Effect.sync(() => agentDir),
     };
@@ -324,6 +321,7 @@ describe('agent registry load state', () => {
                 cause: scanFailure,
               }),
             ),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () => Effect.sync(() => agentDir),
           builtInToolUse: () => Effect.sync(() => agentDir),
         }),

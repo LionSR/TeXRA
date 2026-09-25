@@ -12,7 +12,7 @@ import {
   type OAuthFormEndpoint,
 } from '@auth/oauth/formTokenClient';
 import { decodeJwtClaimsWithSchema } from '@auth/oauth/jwtDecode';
-import { oauthTokenErrorKind, postOAuth } from '@auth/oauth/oauthRequest';
+import { postOAuth } from '@auth/oauth/oauthRequest';
 import { jsonResponse } from '@test/support/fetchTestUtils';
 
 const TokenSchema = z.object({

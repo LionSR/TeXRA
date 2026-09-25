@@ -19,13 +19,6 @@ vi.mock('vscode', () => ({
   },
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  debug: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-}));
-
 const { registerDiffRefresh, disposeDiffRefresh } =
   await import('@frontend/ui/diffView');
 

@@ -6,6 +6,7 @@
  *
  * Helper turns are unmetered: no ledger row and no usage log, as before.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Data, Effect, Schedule, type Scope } from 'effect';
 
 import {
@@ -13,7 +14,6 @@ import {
   readModelAvailabilityInputs,
   type ModelOptionStores,
 } from '@model/computeModelOptions';
-import { getRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 
@@ -48,11 +48,11 @@ export const helperModel = Effect.fn('helperModel')(function* (
   HelperModelUnavailable | Error,
   Scope.Scope | LanguageModel | HttpClient.HttpClient
 > {
-  const modelName = yield* getHelperModelName(stores.globalState);
+  const modelName = yield* getHelperModelName(stores);
   const inputs = yield* readModelAvailabilityInputs(stores, [modelName]);
   const reason = modelUnavailableReasonFrom(inputs, modelName);
   if (reason) return yield* new HelperModelUnavailable({ message: reason });
-  const config = getRuntimeModelConfig(modelName);
+  const config = MODEL_CONFIGS[modelName];
   if (!config) {
     return yield* new HelperModelUnavailable({
       message: `Model "${modelName}" is not recognized.`,

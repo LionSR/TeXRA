@@ -93,7 +93,7 @@
         {
           "file": "packages/cli/src/runtime/cliProcessRuntime.ts",
           "symbol": "installCliProcessRuntime",
-          "signature": "export function installCliProcessRuntime( storageRoot?: string, options?: CliProcessRuntimeInstall, ): Promise<ProcessRuntime> {…}"
+          "signature": "export function installCliProcessRuntime( storageRoot: string, options?: CliProcessRuntimeInstall, ): Promise<ProcessRuntime> {…}"
         }
       ]
     },

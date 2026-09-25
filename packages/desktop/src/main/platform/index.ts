@@ -12,12 +12,11 @@ import {
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { NotificationFailed } from '@hosts/uiHosts';
-import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
-  LifecycleHost,
   StateStore,
 } from '@platform/interfaces';
 import { AgentDirectories, AppState } from '@platform/interfaces';

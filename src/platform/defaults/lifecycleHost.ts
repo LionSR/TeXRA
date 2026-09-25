@@ -1,5 +1,5 @@
 import { Cause, Clock, Deferred, Effect, Option } from 'effect';
-import { withLogChannel } from '@logger/effectLog';
+import { writeLogLine } from '@logger/logSink';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -41,20 +41,23 @@ export function createLifecycleHost(
   const handlers: Record<ShutdownPhase, Registration[]> = {
     [SHUTDOWN_PHASE.BEFORE]: [],
     [SHUTDOWN_PHASE.ON]: [],
+    [SHUTDOWN_PHASE.RELEASE]: [],
   };
   let drain: Effect.Effect<void> | undefined;
 
-  const { onError } = options;
-  const reportFailure = (
-    phase: ShutdownPhase,
-    error: unknown,
-  ): Effect.Effect<void> =>
-    onError
-      ? Effect.sync(() => onError(phase, error))
-      : Effect.logError(`[lifecycle] ${phase} handler failed`).pipe(
-          Effect.annotateLogs({ data: error }),
-          withLogChannel(CHANNEL),
-        );
+  const onError =
+    options.onError ??
+    ((phase, error) => {
+      // Direct sink write: the hosts run the drain on a bare runtime (it is
+      // the path that disposes the process runtime), whose logger is not the
+      // host sink.
+      writeLogLine(
+        'ERROR',
+        CHANNEL,
+        `[lifecycle] ${phase} handler failed`,
+        error,
+      );
+    });
 
   // Sequential — handlers within a phase run in registration order. Parallel
   // disposal can race (e.g. flushState writing to UsageLogService while it is
@@ -79,13 +82,14 @@ export function createLifecycleHost(
           // failure or defect, never the interruption the timeout raises to
           // cut it short.
           Effect.catchCause((cause) =>
-            reportFailure(phase, Cause.squash(cause)).pipe(
-              Effect.as(Option.some<void>(undefined)),
-            ),
+            Effect.sync(() => {
+              onError(phase, Cause.squash(cause));
+              return Option.some<void>(undefined);
+            }),
           ),
         );
         if (Option.isNone(settled)) {
-          yield* reportFailure(
+          onError(
             phase,
             new Error(
               `Shutdown handler did not settle within ${SHUTDOWN_PHASE_DEADLINE_MS}ms; advancing without it`,
@@ -117,6 +121,7 @@ export function createLifecycleHost(
       drain = Deferred.await(joined);
       return runPhase(SHUTDOWN_PHASE.BEFORE).pipe(
         Effect.andThen(runPhase(SHUTDOWN_PHASE.ON)),
+        Effect.andThen(runPhase(SHUTDOWN_PHASE.RELEASE)),
         Effect.onExit((exit) =>
           Effect.sync(() => {
             Deferred.doneUnsafe(joined, exit);

@@ -80,7 +80,6 @@ import {
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
-import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -118,7 +117,6 @@ import {
   TuiSession,
 } from '../src/chat/tui/state/sessionRunState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
-import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import {
@@ -142,7 +140,6 @@ import {
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
-import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
@@ -233,11 +230,13 @@ const HARNESS_CWD_INPUT = process.env.HARNESS_CWD?.trim();
 // Keep platform state writes out of the repository unless a scenario opts in.
 const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
+const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
 const HARNESS_RESOURCES_PATH = await Effect.runPromise(
   resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
 );
 const HARNESS_CLI_CONTEXT: CliContext = {
+  storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
   config: new MemoryConfigProvider(),
   commandName: 'texra',
@@ -320,7 +319,6 @@ if (SHOW_PROJECT_SKILL) {
   seedHarnessProjectSkill();
 }
 
-const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_PLATFORM_SERVICES = await (
   await installCliProcessRuntime(HARNESS_STORAGE_ROOT, {
     minimumLogLevel: HARNESS_CLI_CONTEXT.minimumLogLevel,
@@ -1353,7 +1351,7 @@ if (SHOW_TODOS) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const permission = prepareToolEditApprovalPrompt(session(), {
+    const { permission } = prepareToolEditApprovalPrompt(session(), {
       requestId: 'harness-edit-approval',
       request,
       relativePath: request.path,
@@ -1758,7 +1756,6 @@ function renderHarnessApp(): React.JSX.Element {
       runtime={harnessRuntime}
       session={session()}
       onSubmit={handleHarnessSubmit}
-      colorEnabled={HARNESS_COLOR_ENABLED}
       history={HARNESS_INPUT_HISTORY}
       onStaticTranscriptChange={viewportController.repaintTranscript}
       onCtrlC={handleHarnessCtrlC}

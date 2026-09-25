@@ -182,18 +182,6 @@ export function createLatexRunDiscovery(
   session: SessionHandle,
 ): LatexRunDiscoveryPort {
   return {
-    listAgentRuns: () =>
-      listRuns(session).pipe(
-        Effect.map((runs) =>
-          runs.filter(isAgentRunEntry).map((entry) => ({
-            id: entry.id,
-            timestamp: entry.timestamp,
-            agent: entry.record.agent,
-            model: entry.record.model,
-            inputFiles: entry.record.inputFiles,
-          })),
-        ),
-      ),
     readRunOutputs: (runId) =>
       session.readView([runId]).pipe(
         Effect.map((view) => {

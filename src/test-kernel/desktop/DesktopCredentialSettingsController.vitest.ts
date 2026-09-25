@@ -15,7 +15,6 @@ import { withProcessServices } from '@platform/processRuntime';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { ModelOptionData } from '@shared/schemas';
 import { assertSupported } from '@shared/utils/dispatcher';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -88,7 +87,6 @@ vi.mock('@model/computeModelOptions', async (importOriginal) => ({
 type ControllerOptions = ConstructorParameters<
   typeof DefaultDesktopCredentialSettingsController
 >[0];
-type Fixture = Awaited<ReturnType<typeof createFixture>>;
 
 /** Prompt answers the fixture's recording `prompt` port replies with. */
 type FixtureOverrides = Partial<ControllerOptions> & {

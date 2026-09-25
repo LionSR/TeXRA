@@ -5,6 +5,7 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { MinimumLogLevel } from '@logger/effectDiagnostics';
+import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import type { ConfigProvider } from '@platform/interfaces';
 import {
@@ -38,7 +39,8 @@ export interface CliPromptRequest {
 
 /** Fully normalized CLI state produced by {@link buildCliContext}. */
 export interface CliContext {
-  readonly storageRoot?: string;
+  /** Root of the shared TeXRA storage directory, decided once at build. */
+  readonly storageRoot: string;
   readonly cwd: string;
   readonly mode: CliMode;
   readonly outputFormat: CliOutputFormat;
@@ -380,6 +382,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
   > {
     const ambient = init.ambient ?? readCliAmbientState();
     const cwd = yield* resolveCliCwd(init.globalArgs.cwd);
+    const storageRoot = init.storageRoot ?? DEFAULT_NODE_STORAGE_ROOT;
     // The project file over the user file, resolved by the same
     // `JsonConfigProvider` that `roots.config` gives the extension and desktop
     // hosts — and, from `initCliPlatform` on, this host too. This is the
@@ -387,7 +390,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     // rather than the process runtime.
     const { config, warnings, degradations } = yield* loadCliStartupConfig(
       cwd,
-      init.storageRoot,
+      storageRoot,
     );
     const configWarnings = [...warnings];
     const envModel = yield* pickEnv(
@@ -438,7 +441,7 @@ export const buildCliContext = Effect.fn('cliContext.buildCliContext')(
     if (init.globalArgs.quiet) minimumLogLevel = 'None';
     else if (init.globalArgs.verbose) minimumLogLevel = 'Debug';
     return {
-      storageRoot: init.storageRoot,
+      storageRoot,
       cwd,
       mode: cliMode(init.globalArgs, ambient),
       outputFormat,

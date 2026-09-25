@@ -4,11 +4,10 @@ type DesktopPdfMessagesModule =
   typeof import('@desktop/shared/desktopPdfMessages');
 
 describe('desktop PDF messages', () => {
-  let DesktopShowPdfMessageSchema: DesktopPdfMessagesModule['DesktopShowPdfMessageSchema'];
   let isSafeAbsolutePdfPath: DesktopPdfMessagesModule['isSafeAbsolutePdfPath'];
 
   beforeAll(async () => {
-    ({ DesktopShowPdfMessageSchema, isSafeAbsolutePdfPath } =
+    ({ isSafeAbsolutePdfPath } =
       await import('@desktop/shared/desktopPdfMessages'));
   });
 
