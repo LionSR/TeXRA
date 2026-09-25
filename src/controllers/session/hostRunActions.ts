@@ -39,11 +39,8 @@ import {
   AgentCategory,
   agentKey,
   agentName,
-  cloneRoundIndexed,
   ExhaustionReasonSchema,
   isPlainAgentIdentity,
-  type OutputFileInfo,
-  type ReadonlyRoundIndexed,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -77,15 +74,10 @@ import {
 const CHANNEL = 'HostRunActions';
 
 /** The workflow toolbar's latexdiff over a run's outputs, as each host's
- *  diff command takes it. */
+ *  diff command takes it. The run id is the whole request: the diff reads
+ *  the run's recorded outputs from the session's fold when it starts. */
 export interface WorkflowDiffRequest {
-  agent: string;
-  model: string;
-  inputFile: string;
-  outputFiles: string[];
-  outputFilesActive: boolean;
   runId: RunId;
-  outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo>;
 }
 
 /** The workflow toolbar's pack and clean over a run's output files. */
@@ -611,30 +603,7 @@ export const createHostRunActions = (
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
           const config = yield* workflowConfig(runId);
-          if (!config) return undefined;
-          // Round keys are canonical non-negative integers by construction
-          // (`roundIndexedRecord` in `@shared/schemas/roundIndexed.ts`), so
-          // this record already enumerates ascending per the ES2015+
-          // integer-key spec rule; runLatexdiffForRun consumes
-          // `outputsByRound` in that order without needing a sort here.
-          // Frozen at click time. `getOutputFiles` returns the store's live
-          // record, and this request crosses an interactive quick pick
-          // (`promptForLatexdiffMathMarkup`, `ignoreFocusOut`) before
-          // `handleRunLatexdiff` reads `outputsByRound`, so a run finishing a
-          // round mid-prompt would otherwise widen the diff scope under the
-          // user.
-          const outputs = getOutputFiles(runId);
-          return {
-            agent: config.agent,
-            model: config.model,
-            inputFile: config.inputFiles[0] ?? '',
-            outputFiles: config.outputFiles,
-            outputFilesActive: config.outputFiles.length > 0,
-            runId,
-            outputsByRound: Object.keys(outputs).length
-              ? cloneRoundIndexed(outputs)
-              : undefined,
-          };
+          return config ? { runId } : undefined;
         },
       ),
       workflowFileOperationRequest: Effect.fn(

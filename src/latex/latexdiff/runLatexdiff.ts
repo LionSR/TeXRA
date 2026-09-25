@@ -1,34 +1,23 @@
 /**
  * Host-neutral orchestration for a full latexdiff run.
  *
- * Resolves which round outputs to diff: preferring caller-supplied metadata,
- * then a run-id-scoped run-dir scan, then agent/model/input auto-discovery —
- * and runs the metadata-driven diff engine over them. When none resolve, the
- * run has no diff operations; no workspace filename is parsed instead. This is
- * the single source of truth shared by every host (VS Code command, CLI,
- * desktop); each host keeps only its own UX (progress chrome, prompts, result
+ * Reads the run's recorded round outputs from the session's fold (the
+ * `output.produced` facts, via {@link LatexRunDiscoveryPort.readRunOutputs})
+ * and runs the metadata-driven diff engine over them. That fold is the only
+ * source: run storage is never rescanned and no workspace filename is parsed,
+ * so a run with no recorded outputs has no diff operations. This is the
+ * single source of truth shared by every host (VS Code command, desktop);
+ * each host keeps only its own UX (progress chrome, prompts, result
  * rendering) and calls this with a {@link DiffProgressReporter}.
  */
 
-import { Effect, FileSystem, type Path } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
-import {
-  RunIdSchema,
-  OutputFileInfoSchema,
-  roundIndexedRecord,
-} from '@shared/schemas';
-import type {
-  RunId,
-  OutputFileInfo,
-  ReadonlyRoundIndexed,
-  RoundIndexed,
-} from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 import { runLatexdiffFromMetadata } from './diffOperations';
-import { discoverLatestRunOutputs } from './outputDiscovery';
-import { scanRunDirForOutputs } from './runOutputFiles';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type {
@@ -37,53 +26,17 @@ import type {
   LatexdiffRuntime,
 } from './types';
 
-/**
- * Validate a command payload's round outputs against the canonical record.
- * VS Code commands can be invoked with any argument shape: a malformed
- * payload is warned about and yields `null`, which sends the run to output
- * discovery instead.
- */
-export function normalizeRunLatexdiffOutputsByRound(
-  value: unknown,
-): RoundIndexed<OutputFileInfo> | null {
-  if (value == null) return null;
-  const result = roundIndexedRecord(OutputFileInfoSchema).safeParse(value);
-  if (!result.success) {
-    console.warn(
-      `[latexdiff] Ignoring malformed outputsByRound payload: ${result.error.message}`,
-    );
-    return null;
-  }
-  return Object.values(result.data).some((files) => files.length > 0)
-    ? result.data
-    : null;
-}
-
-export interface RunLatexdiffForRunParams {
-  readonly agent: string;
-  readonly model: string;
-  readonly inputFile: string;
+interface RunLatexdiffForRunParams {
+  /** The run whose recorded outputs are diffed. */
+  readonly runId: RunId;
   /**
    * The calling session's workspace folder, carried as data: the cwd every
    * diff operation runs in and the root workspace-relative output paths
    * resolve against. `undefined` when no folder is open.
    */
   readonly workspaceRoot: string | undefined;
-  /**
-   * The same session's storage root, carried as data: where run-dir output
-   * discovery looks for this run's rounds.
-   */
-  readonly storageRoot: string;
-  /** Agent-owned run listing injected by hosts (metadata auto-discovery). */
+  /** Agent-owned read of the run's recorded outputs, injected by hosts. */
   readonly runDiscovery: LatexRunDiscoveryPort;
-  readonly outputFiles?: string[];
-  /** Run to scope output discovery to (progress-toolbar invocations). */
-  readonly runId?: string | null;
-  /**
-   * Pre-resolved round outputs (e.g. from a progress-toolbar payload). When
-   * present, discovery is skipped and the metadata engine runs directly.
-   */
-  readonly outputsByRound?: ReadonlyRoundIndexed<OutputFileInfo> | null;
   readonly mathMarkup?: LatexdiffMathMarkupValue;
   readonly generateBetweenRoundDiffs: boolean;
   /** Host-supplied diff service + logger channel (see {@link LatexdiffRuntime}). */
@@ -91,107 +44,34 @@ export interface RunLatexdiffForRunParams {
   readonly progress: DiffProgressReporter;
 }
 
-interface LatexdiffExecutionResult {
-  readonly outcome: DiffRunOutcome;
-  /** Resolved run, when one was identified. */
-  readonly runId?: RunId;
-}
-
 export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (
     params: RunLatexdiffForRunParams,
   ): Effect.fn.Return<
-    LatexdiffExecutionResult,
+    DiffRunOutcome,
     Error,
     FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
-    const {
-      agent,
-      model,
-      inputFile,
-      workspaceRoot,
-      storageRoot,
-      runDiscovery,
-      outputFiles,
-      mathMarkup,
-      generateBetweenRoundDiffs,
-      latexdiff,
-      progress,
-    } = params;
-    const runId = params.runId ?? undefined;
-
-    let outputsByRound = params.outputsByRound ?? null;
-    let discoveredRunId: RunId | undefined;
-
-    // When the caller pins a runId (progress-toolbar invocations do), scope
-    // output discovery to that run first. Otherwise metadata
-    // auto-discovery can return a different, newer run with the same
-    // agent/model/inputFile: silently diffing against the wrong outputs.
-    if (!outputsByRound && runId) {
-      const parsedRunId = RunIdSchema.safeParse(runId);
-      if (parsedRunId.success) {
-        const scanned = yield* scanRunDirForOutputs(
-          parsedRunId.data,
-          storageRoot,
-          workspaceRoot,
-          inputFile,
-          outputFiles,
-          latexdiff.channel,
-        );
-        if (scanned) {
-          outputsByRound = scanned;
-          discoveredRunId = parsedRunId.data;
-          yield* Effect.logDebug(
-            `Using run-dir scan outputs from run ${parsedRunId.data}`,
-          );
-        }
-      }
-    }
-
-    // No runId given: fall back to searching executions by agent/model/inputFile
-    // and pulling their persisted metadata. When the caller pinned a runId but
-    // the run-dir scan turned up nothing, DO NOT drop to latest-matching
-    // auto-discovery: that would silently diff against a different (usually
-    // newer) run with the same agent/model/input.
-    if (!outputsByRound && !runId) {
-      const discovered = yield* discoverLatestRunOutputs(
-        runDiscovery,
-        storageRoot,
-        workspaceRoot,
-        {
-          agent,
-          model,
-          inputFile,
-        },
-        latexdiff.channel,
-      );
-      if (discovered) {
-        outputsByRound = discovered.rounds;
-        discoveredRunId = discovered.runId;
-        yield* Effect.logDebug(
-          `Using metadata outputs from run ${discovered.runId}`,
-        );
-      }
-    }
+    const rounds = yield* params.runDiscovery.readRunOutputs(params.runId);
 
     // Hosts report an empty outcome as "no diff operations for this run".
-    if (!outputsByRound) {
-      yield* Effect.logWarning(`No workflow outputs found for ${inputFile}`);
-      return { outcome: { results: [] } };
+    if (!Object.values(rounds).some((files) => files.length > 0)) {
+      yield* Effect.logWarning(
+        `No recorded outputs for run ${params.runId}; nothing to diff`,
+      );
+      return { results: [] };
     }
 
-    const outcome = yield* runLatexdiffFromMetadata({
-      rounds: outputsByRound,
-      workspaceRoot,
-      mathMarkup,
-      generateBetweenRoundDiffs,
-      latexdiff,
-      progress,
+    return yield* runLatexdiffFromMetadata({
+      rounds,
+      workspaceRoot: params.workspaceRoot,
+      mathMarkup: params.mathMarkup,
+      generateBetweenRoundDiffs: params.generateBetweenRoundDiffs,
+      latexdiff: params.latexdiff,
+      progress: params.progress,
     });
-
-    return { outcome, runId: discoveredRunId };
   },
-  // One channel for the whole run, so the discovery steps and the diff engine
-  // below both land on the caller's channel.
+  // One channel for the whole run, so the read and the diff engine below
+  // both land on the caller's channel.
   (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
 );

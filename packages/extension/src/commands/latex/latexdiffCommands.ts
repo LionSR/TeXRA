@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { SessionHandle } from '@agent/runtime';
 import { createLatexRunDiscovery } from '@agent/storage';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
+import type { WorkflowDiffRequest } from '@controllers/session/hostRunActions';
 import {
   prepareBuildDisplay,
   scheduleViewerDisplay,
@@ -23,14 +24,8 @@ import {
 } from '@housekeeping/packLatexdiffvc';
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
-import type {
-  DiffRunResult,
-  RunLatexdiffCommandConfig,
-} from '@latex/latexdiff/types';
-import {
-  normalizeRunLatexdiffOutputsByRound,
-  runLatexdiffForRun,
-} from '@latex/latexdiff/runLatexdiff';
+import type { DiffRunResult } from '@latex/latexdiff/types';
+import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
 import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
@@ -399,24 +394,12 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
 
 const handleRunLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
-  config: RunLatexdiffCommandConfig,
+  request: WorkflowDiffRequest,
 ) {
   yield* withLatexdiffTool(
     'latexdiff',
     'Error running LaTeX diffs',
     Effect.gen(function* () {
-      yield* Effect.logDebug(`Command config: ${JSON.stringify(config)}`);
-
-      const { agent, model, inputFile } = config;
-
-      if (!agent || !model || !inputFile) {
-        yield* showLoggedMessage(
-          CHANNEL,
-          'Missing required configuration parameters',
-        );
-        return;
-      }
-
       const mathMarkup = yield* promptForLatexdiffMathMarkup(session);
       if (!mathMarkup) return;
 
@@ -429,11 +412,7 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
         );
       yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
 
-      const outputsByRound = normalizeRunLatexdiffOutputsByRound(
-        config.outputsByRound,
-      );
-
-      const { outcome } = yield* withVSCodeProgress(
+      const { results } = yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
           title: 'Running LaTeX diffs',
@@ -445,10 +424,8 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
             message: 'Preparing LaTeX diffs...',
           });
           return runLatexdiffForRun({
-            ...config,
+            runId: request.runId,
             workspaceRoot: session.roots.workspace,
-            storageRoot: session.roots.storage,
-            outputsByRound,
             mathMarkup,
             generateBetweenRoundDiffs,
             runDiscovery: createLatexRunDiscovery(session),
@@ -460,8 +437,6 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
           });
         },
       );
-
-      const { results } = outcome;
 
       if (results.length === 0) {
         vscode.window.showInformationMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
@@ -538,8 +513,8 @@ export function registerLatexdiffCommands(
     },
     {
       id: 'texra.runLatexdiff',
-      handler: (config: RunLatexdiffCommandConfig) =>
-        runtime.runPromise(handleRunLatexdiff(session, config)),
+      handler: (request: WorkflowDiffRequest) =>
+        runtime.runPromise(handleRunLatexdiff(session, request)),
     },
   ]);
 }
