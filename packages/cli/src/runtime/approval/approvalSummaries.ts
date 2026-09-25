@@ -209,7 +209,8 @@ export function formatBashApprovalSummary(payload: BashPermission): string {
 function toolEditDiffLines(
   request: Omit<ToolEditApprovalRequest, 'permission' | 'roots'>,
 ): readonly string[] {
-  const hunks = buildDiffHunks(
+  // The approval flow that raised this request reports a diff timeout.
+  const { hunks } = buildDiffHunks(
     request.originalContent,
     request.proposedContent,
   );

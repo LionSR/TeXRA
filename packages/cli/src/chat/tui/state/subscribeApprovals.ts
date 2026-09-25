@@ -28,7 +28,6 @@ import {
   ApiKeyPromptFailed,
   ProgressApiKeyRetryController,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
-import { warn as logWarning } from '@logger/logUtils';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableApiKey, lookupApiKey } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
@@ -163,9 +162,10 @@ export function createTuiHostInteractions(
   const useOwnApiKey = (requestId: string): void => {
     const permission = pendingRetry(requestId);
     if (!permission) {
-      logWarning(
-        'cli.tui',
-        `Request ${requestId} is no longer a pending retry: no credential switch was made.`,
+      stores.runtime.runFork(
+        Effect.logWarning(
+          `Request ${requestId} is no longer a pending retry: no credential switch was made.`,
+        ).pipe(withLogChannel('cli.tui')),
       );
       return;
     }
@@ -225,9 +225,10 @@ export function createTuiHostInteractions(
     }
     // Every other capability belongs to a windowed host's surfaces; no TUI
     // action names one, so reaching here is a defect.
-    logWarning(
-      'cli.tui',
-      `The TUI does not perform the ${arm.kind} host capability.`,
+    stores.runtime.runFork(
+      Effect.logWarning(
+        `The TUI does not perform the ${arm.kind} host capability.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
   };
 
