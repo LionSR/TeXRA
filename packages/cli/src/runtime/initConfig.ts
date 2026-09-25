@@ -1,21 +1,17 @@
-// Pure helpers for `texra init`: turn collected answers into a canonical
-// `.texra/config.json`, resolve the target path by scope, and keep the
+// Helpers for `texra init`: turn collected answers into a canonical
+// `.texra/config.json`, write it through the FileSystem service, and keep the
 // workspace config directory out of version control. The interactive wizard
 // (init/runInitWizard) and the command (commands/init) build on these; keeping
 // the logic here makes it unit-testable without a TTY.
 
-import { constants as fsConstants } from 'node:fs';
-import { access, mkdir, open, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { Effect } from 'effect';
-import writeFileAtomic from 'write-file-atomic';
+import { Effect, FileSystem, PlatformError } from 'effect';
 
-import { isFileNotFoundError, isNotADirectoryError } from '@common/errors';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import type { CliOutputFormat } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
+import { writeFileAtomic } from '@utils/files/fsDurability';
 
 export interface InitAnswers {
   readonly agent: string;
@@ -43,65 +39,30 @@ export function buildInitConfig(answers: InitAnswers): InitConfigShape {
 }
 
 /**
- * `false` only for a genuinely absent path; any other failure (EACCES, EIO)
- * propagates instead of being reported as "absent".
- *
- * Still Promise-shaped, unlike its neighbours. Both callers are Effect
- * programs now (`commands/init.ts` and `commands/installGithubAction.ts`, the
- * latter as of the `defineCliCommand` Effect contract), and each wraps this
- * one call itself: `init` as a defect it does not report on, the GitHub
- * action as a typed failure its `catchExitCode` writes. Giving this function
- * one Effect shape would have to pick between those two readings, which is a
- * change to what the callers report, not a lift. Written with a rejection
- * handler rather than `try`/`catch` because this module imports `effect`, and
- * such a module carries no raw catch clause.
- */
-export async function pathExists(filePath: string): Promise<boolean> {
-  return access(filePath).then(
-    () => true,
-    (error: unknown) => {
-      if (isFileNotFoundError(error) || isNotADirectoryError(error)) {
-        return false;
-      }
-      throw error;
-    },
-  );
-}
-
-/**
- * Probe for write permission before `write-file-atomic` creates its temp
+ * Probe for write permission before the atomic write stages its temp
  * file, so an unwritable target fails without leaving one behind. An absent
- * target is the normal case and is not a failure.
+ * target is the normal case and is not a failure. The probe checks
+ * permission only: a directory at the path fails at the atomic rename.
  */
 function writeInitFileAtomic(
   filePath: string,
   data: string,
-): Effect.Effect<void, Error> {
-  return Effect.tryPromise({
-    try: async () => {
-      const target = await open(filePath, fsConstants.O_WRONLY);
-      await target.close();
-    },
-    catch: ensureError,
-  }).pipe(
-    Effect.catchIf(isFileNotFoundError, () => Effect.void),
-    Effect.andThen(
-      Effect.tryPromise({
-        try: () => writeFileAtomic(filePath, data),
-        catch: ensureError,
-      }),
-    ),
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  return FileSystem.FileSystem.use((fs) =>
+    fs.access(filePath, { writable: true }),
+  ).pipe(
+    Effect.catchReason('PlatformError', 'NotFound', () => Effect.void),
+    Effect.andThen(writeFileAtomic(filePath, new TextEncoder().encode(data))),
   );
 }
 
 export function writeInitConfig(
   filePath: string,
   config: InitConfigShape,
-): Effect.Effect<void, Error> {
-  return Effect.tryPromise({
-    try: () => mkdir(path.dirname(filePath), { recursive: true }),
-    catch: ensureError,
-  }).pipe(
+): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  return FileSystem.FileSystem.use((fs) =>
+    fs.makeDirectory(path.dirname(filePath), { recursive: true }),
+  ).pipe(
     Effect.andThen(
       // Stable, pretty JSON with a trailing newline (matches
       // editor/formatter output).
@@ -130,18 +91,22 @@ export type GitignoreOutcome = 'added' | 'present' | 'created';
 
 export function ensureTexraGitignored(
   cwd: string,
-): Effect.Effect<GitignoreOutcome, Error> {
+): Effect.Effect<
+  GitignoreOutcome,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const gitignorePath = path.join(cwd, '.gitignore');
-    const existing = yield* Effect.tryPromise({
-      try: () => readFile(gitignorePath, 'utf8'),
-      catch: ensureError,
-    }).pipe(
+    const existing = yield* fs.readFileString(gitignorePath).pipe(
       // A missing .gitignore is fine — we create one. Anything else (EACCES,
       // a transient I/O error, ...) must not be treated as "file absent":
       // doing so would fall through to the write below and overwrite
       // unreadable-but-present content instead of surfacing the failure.
-      Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+      Effect.catchReason('PlatformError', 'NotFound', () =>
+        Effect.succeed(undefined),
+      ),
     );
     const next = gitignoreWithTexra(existing ?? '');
     if (next === null) return 'present';

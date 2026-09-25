@@ -151,9 +151,9 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // begins, and an init that fails disposes the runtime it installed before it
   // re-raises (see `initPlatform.ts` above), leaving the degraded report —
   // node, workspace, resources, LaTeX, config and the platform-failure row —
-  // nothing to run on. That report reads no service and nothing in it logs
-  // through Effect; the healthy one settles on the context the init hands
-  // back.
+  // nothing to run on. That report provides the Node filesystem itself, reads
+  // no other service, and nothing in it logs through Effect; the healthy one
+  // settles on the context the init hands back.
   'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
   // lifecycle host and no runtime — the drain it runs is what disposes the
