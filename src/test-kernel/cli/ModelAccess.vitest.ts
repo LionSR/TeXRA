@@ -107,10 +107,6 @@ function resolveModelFromAccessList(
   return run(selectCliRunnableModel(model, { ...options, accessList, stores }));
 }
 
-const INTERACTIVE_RECOVERY = {
-  configureKeyAction: 'configure a provider API key',
-} as const;
-
 const MISSING_KEY_ONLY_ENTRIES: CliModelAccess[] = [
   missingKeyModel('gemini31p'),
 ];

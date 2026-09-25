@@ -77,24 +77,12 @@ function publishWorkflowBoard(
   });
 }
 
-// Local file imports
-import {
-  createRecordingHost,
-  recordSessionEvents,
-} from '../agent/progressTestUtils';
-
 const PARENT_RUN_ID = RunIdSchema.parse('ba5e00000001');
 
 type ExecChunkSink = Pick<
   Parameters<typeof execUtils.executeCommand>[1] & object,
   'onStdout' | 'onStderr'
 >;
-
-interface BackgroundRun {
-  readonly runId: RunId;
-  /** Settle the mocked process and wait for its completion follow-up. */
-  readonly finish: () => Promise<void>;
-}
 
 /**
  * Launch a real background `bash` run whose mocked process emits `chunks`
@@ -124,8 +112,6 @@ function launchBackgroundRun(emit: (sink: ExecChunkSink) => void) {
       .spyOn(toolUseFollowUp, 'submitFollowUp')
       .mockReturnValue(Effect.succeed({ status: 'sent' }));
 
-    const { host } = createRecordingHost();
-    const recorded = recordSessionEvents(testDefaultSession());
     publishTestRunStart(testDefaultSession(), PARENT_RUN_ID);
     // No settle before the launch. `registerRun` opens the parent check with an
     // empty batch on the session's publisher, so the child's admission read

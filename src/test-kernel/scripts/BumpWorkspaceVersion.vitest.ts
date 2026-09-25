@@ -3,13 +3,11 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
-import { parse as parseYaml } from 'yaml';
 
 import { withTempDir } from '@test/support/tempDirPlatform';
 
 const repoRoot = process.cwd();
 const scriptPath = path.join(repoRoot, 'scripts/bump-workspace-version.mjs');
-const workflowPath = path.join(repoRoot, '.github/workflows/version-bump.yml');
 const manifestPaths = [
   'package.json',
   'packages/agent/package.json',

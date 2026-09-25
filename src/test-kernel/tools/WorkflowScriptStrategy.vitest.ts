@@ -8,7 +8,6 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
-import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';

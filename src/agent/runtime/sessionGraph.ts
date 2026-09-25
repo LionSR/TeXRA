@@ -18,7 +18,6 @@ import {
   type SubscriptionRef,
 } from 'effect';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   AggregateId,
   CommitOrdinal,

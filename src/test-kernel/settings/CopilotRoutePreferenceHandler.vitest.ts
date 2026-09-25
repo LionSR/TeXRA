@@ -195,7 +195,7 @@ describe('Copilot route preference handler', () => {
   it.each(['allowed', 'consent-required'] as const)(
     'revalidates and persists an opt-in whose current access is %s',
     async (access) => {
-      const port = await installModels({ ...GEMINI_PRO, access });
+      await installModels({ ...GEMINI_PRO, access });
       await requestModelAccess();
       expect(mocks.setCopilotRoutePreference).toHaveBeenCalledWith(
         'gemini31p',

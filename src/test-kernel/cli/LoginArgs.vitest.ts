@@ -6,14 +6,9 @@ import {
 } from '@cli/commands/auth';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import {
-  githubSelectAccountWarning,
-  hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
-  unsupportedLoginProviderMessage,
 } from '@cli/runtime/loginOptions';
-import { formatCliManualAuthUrlMessage } from '@cli/runtime/supabaseAuth';
-import { RESEARCHER_ACCESS_AUTH } from '@ui/copy/accountAuth';
 
 describe('CLI login arguments (texra login)', () => {
   it.each<{

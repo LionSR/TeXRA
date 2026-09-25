@@ -8,7 +8,6 @@ import {
   installDesktopWindowTitle,
 } from '@desktop/main/desktopWindowTitle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
-import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import {
   emptySessionView,
   type SessionView,

@@ -4,9 +4,6 @@ import { TestClock } from 'effect/testing';
 import { afterEach, expect, vi } from 'vitest';
 
 import {
-  CLI_DEVICE_AUTH_URL_PROMPT,
-  DeviceAuthorizationSchema,
-  formatCliDeviceAuthMessage,
   pollForDeviceSession,
   requestDeviceAuthorization,
 } from '@cli/runtime/supabaseAuthDeviceCode';
