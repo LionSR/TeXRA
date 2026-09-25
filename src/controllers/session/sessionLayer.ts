@@ -287,7 +287,7 @@ const sessionHandleLayer = (
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, settle, openStreams, ...reads } =
+      const { publish, exclusive, detach, settle, openWork, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
@@ -383,7 +383,7 @@ const sessionHandleLayer = (
             }
             return pieces.reverse().join('');
           },
-          openStreams: (runId) => openStreams(qualifyAggregateId('run', runId)),
+          openWork: (runId) => openWork(qualifyAggregateId('run', runId)),
           acquireClaims: (id) =>
             eventLog
               .acquireClaims([id])

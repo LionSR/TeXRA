@@ -5,11 +5,6 @@ import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports - tools
-import type { HostInteractions } from '@agent/runtime/HostInteractions';
-import type { RunId } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { ReportReviewIssueTool } from '@tools/ReportReviewIssueTool';
 import {
   buildTerminalTool,
   normalizeStructuredOutputSchema,
@@ -197,50 +192,5 @@ describe('buildTerminalTool', () => {
       });
       expect(capture).toHaveBeenCalledTimes(1);
     }),
-  );
-});
-
-// `report_review_issue` takes its input through a normalized structured-output
-// schema; the host sink must still receive the finding as the agent sent it.
-describe('report_review_issue', () => {
-  it.effect('hands the host sink each finding with omitted fields unset', () =>
-    Effect.gen(function* () {
-      const sink = vi.fn<NonNullable<HostInteractions['reportReviewIssue']>>(
-        () => ({ accepted: true }),
-      );
-      const detach = yield* testDefaultSession().interactions.use({
-        reportReviewIssue: sink,
-      });
-      yield* Effect.addFinalizer(() => Effect.sync(detach));
-      const report = {
-        file: 'src/x.ts',
-        startLine: 5,
-        severity: 'critical',
-        title: 'Broken loop',
-        description: 'Off-by-one in bounds.',
-      } as const;
-
-      const result = yield* ReportReviewIssueTool.call(report);
-
-      expect(result.summary).toBe(
-        'Reported review issue src/x.ts:5 [critical] Broken loop',
-      );
-      expect(sink).toHaveBeenCalledExactlyOnceWith({
-        ...report,
-        endLine: undefined,
-        suggestion: undefined,
-      });
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-      Effect.scoped,
-    ),
   );
 });

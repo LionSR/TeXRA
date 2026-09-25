@@ -88,6 +88,36 @@ describe('CLI platform signal handlers', () => {
     expect(killSpy).not.toHaveBeenCalled();
   }, 30_000);
 
+  it('defers SIGINT while a foreground command owns the terminal', async () => {
+    vi.resetModules();
+    vi.doMock('@cli/runtime/foregroundCommand', async (importOriginal) => ({
+      ...(await importOriginal<
+        typeof import('@cli/runtime/foregroundCommand')
+      >()),
+      terminalForegroundHeld: () => true,
+    }));
+    const handlers = captureSignalHandlers();
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit);
+    const runShutdown = vi.fn(async () => undefined);
+
+    const { installCliShutdownSignalHandlers } =
+      await import('@cli/runtime/initPlatform');
+    installCliShutdownSignalHandlers(fakeLifecycle(runShutdown));
+    const sigint = handlers.get('SIGINT');
+    handlers.delete('SIGINT');
+
+    await sigint?.();
+
+    // The pager (or installer) gets the Ctrl-C; the CLI keeps running and
+    // listens again, so the next SIGINT reaches it.
+    expect(runShutdown).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(handlers.get('SIGINT')).toBe(sigint);
+    vi.doUnmock('@cli/runtime/foregroundCommand');
+  });
+
   it('waits for persistent stderr writes before shutdown resolves', async () => {
     vi.resetModules();
     const order: string[] = [];

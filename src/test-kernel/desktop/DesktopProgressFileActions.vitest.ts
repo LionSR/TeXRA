@@ -5,16 +5,45 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
 
+import { DesktopProgressFileActions } from '@desktop/main/desktopProgressFileActions';
 import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import { Rejected } from '@shared/session/requestErrors';
-import { createModuleMocks } from '@test/support/moduleMocks';
 
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
-const mocks = createModuleMocks();
+// The desktop adapter delegates the read + dispatch to the shared
+// host-neutral `runLatexdiffForRun`; mock it at that boundary so these
+// tests cover the desktop param-building + outcome-handling, not the core
+// (which `RunLatexdiff.vitest.ts` exercises in isolation). The module under
+// test is imported once; each test sets these mocks' behaviour, because
+// re-importing its graph per test is what timed the suite out under load.
+const latexdiff = vi.hoisted(() => ({
+  runLatexdiffForRun: vi.fn(),
+  runDiff: vi.fn(),
+}));
+
+vi.mock('@latex/latexdiff/runLatexdiff', () => ({
+  runLatexdiffForRun: latexdiff.runLatexdiffForRun,
+}));
+vi.mock('@latex/latexdiff', () => ({
+  LaTeXdiffService: class {
+    runDiff = latexdiff.runDiff;
+  },
+}));
+vi.mock('@utils/files/fileLocation', async (importActual) => ({
+  ...(await importActual<typeof import('@utils/files/fileLocation')>()),
+  createExternalLocation: (absolutePath: string) => ({
+    kind: 'external',
+    absolutePath,
+  }),
+  pathToLocationIn: (_root: string | undefined, absolutePath: string) => ({
+    kind: 'external',
+    absolutePath,
+  }),
+}));
 
 function absolutePath(...segments: string[]): string {
   return path.join(path.sep, ...segments);
@@ -56,27 +85,21 @@ async function loadFileActions(options: {
   interrupts?: boolean;
   fallbackResult?: LaTeXdiffResult;
 }): Promise<{
-  actions: InstanceType<
-    typeof import('@desktop/main/desktopProgressFileActions').DesktopProgressFileActions
-  >;
+  actions: DesktopProgressFileActions;
   openBuildDisplay: ReturnType<typeof vi.fn>;
   runLatexdiffForRun: ReturnType<typeof vi.fn>;
   runDiff: ReturnType<typeof vi.fn>;
 }> {
-  vi.resetModules();
-
-  // The desktop adapter delegates the read + dispatch to the shared
-  // host-neutral `runLatexdiffForRun`; mock it at that boundary so these
-  // tests cover the desktop param-building + outcome-handling, not the core
-  // (which `RunLatexdiff.vitest.ts` exercises in isolation).
-  const runLatexdiffForRun = vi.fn(() => {
+  const runLatexdiffForRun = latexdiff.runLatexdiffForRun.mockReset();
+  runLatexdiffForRun.mockImplementation(() => {
     if (options.interrupts) return Effect.interrupt;
     if (options.throws)
       return Effect.fail(new Error('No workspace path found'));
     return Effect.succeed(options.outcome ?? { results: [] });
   });
 
-  const runDiff = vi.fn((): Effect.Effect<LaTeXdiffResult> =>
+  const runDiff = latexdiff.runDiff.mockReset();
+  runDiff.mockImplementation((): Effect.Effect<LaTeXdiffResult> =>
     Effect.succeed(
       options.fallbackResult ?? {
         success: true,
@@ -85,34 +108,6 @@ async function loadFileActions(options: {
       },
     ),
   );
-
-  mocks.doMock('@latex/latexdiff/runLatexdiff', () => ({
-    runLatexdiffForRun,
-  }));
-  mocks.doMock('@latex/latexdiff', () => ({
-    LaTeXdiffService: class {
-      runDiff = runDiff;
-    },
-  }));
-  mocks.doMock('@utils/files/fileLocation', async () => {
-    const actual = await vi.importActual<
-      typeof import('@utils/files/fileLocation')
-    >('@utils/files/fileLocation');
-    return {
-      ...actual,
-      createExternalLocation: (absolutePath: string) => ({
-        kind: 'external',
-        absolutePath,
-      }),
-      pathToLocationIn: (_root: string | undefined, absolutePath: string) => ({
-        kind: 'external',
-        absolutePath,
-      }),
-    };
-  });
-
-  const { DesktopProgressFileActions } =
-    await import('@desktop/main/desktopProgressFileActions');
 
   const openBuildDisplay = vi.fn(() => Effect.void);
   const actions = new DesktopProgressFileActions(

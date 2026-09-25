@@ -12,7 +12,6 @@ import { registerLatexdiffCommands } from '@commands/latex/latexdiffCommands';
 import { registerMergeCommands } from '@commands/agent/mergeCommands';
 import { registerMainViewCommands } from '@commands/system/mainViewCommands';
 import { registerGitCommands } from '@commands/git/gitCommands';
-import { registerAgentReviewCommands } from '@commands/review/agentReviewCommands';
 
 // Local imports - components
 import type { StateStore } from '@platform/interfaces';
@@ -31,7 +30,6 @@ export function registerCommands(
 ): void {
   registerLatexdiffCommands(context, runtime, session);
   registerGitCommands(context, runtime, session);
-  registerAgentReviewCommands(context, runtime, session);
   registerMergeCommands(context, runtime, session);
   const settingsViewProvider = new SettingsViewProvider(
     context,
