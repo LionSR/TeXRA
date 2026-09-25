@@ -19,10 +19,7 @@ import type { ConfigProvider } from '@platform/interfaces';
 
 // Local imports - shared
 import { canonicalConfigKey } from '@shared/config/configKeys';
-import {
-  settingDefault,
-  type SettingsStores,
-} from '@shared/config/settingsAccess';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   CLI_CONFIG_SLOT_KEYS,
   settingByKey,
@@ -216,7 +213,7 @@ const COMMAND_SECTION_CONFIG_KEYS: ReadonlySet<string> = new Set(
  * Names the config-file entries that cannot apply. An unknown project key (a
  * typo such as `texra.modle` or `texra.chat.modle`) is a setting that silently
  * never applies, and so is a known key whose value its catalog row rejects:
- * every read resolves it to the default. Unknown keys are reported for the
+ * every read passes over it to the next tier (or the default). Unknown keys are reported for the
  * project file only: the user file is shared by all three hosts and holds rows
  * the CLI does not honor, so its unrecognized keys are not the CLI's to report.
  * Invalid values are reported for both files, since the CLI reads both.
@@ -241,7 +238,7 @@ function configFileWarnings(
       const entry = settingByKey(key);
       if (entry && !entry.schema.safeParse(value).success) {
         warnings.push(
-          `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}"; using the default ${JSON.stringify(settingDefault(entry))}.`,
+          `Ignoring invalid ${filePath} value ${JSON.stringify(value)} for "${key}".`,
         );
         continue;
       }
