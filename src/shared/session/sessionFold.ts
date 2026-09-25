@@ -93,6 +93,7 @@ import {
   applyRunRow,
   freshRunRows,
   isSharedRunRow,
+  phaseMoveOf,
   type RunRows,
   type SharedRunRow,
 } from './runRows';
@@ -918,10 +919,10 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       // start is a no-op. The rest move session slices alone.
       return run;
     case 'run.activate': {
-      // Every activation, the launch and each resume, opens a running
-      // window (one run model, 3.3): the phase, the run window and a fresh
-      // incarnation's progress fold from it. A first activation is starting
-      // and a later one resuming (A9-1); the first `flow.step` clears it.
+      // Every activation, the launch and each resume, opens a running window
+      // (one run model, 3.3); the tool-call count is the run's and carries
+      // over. A first activation is starting and a later one resuming (A9-1);
+      // the first `flow.step` clears it.
       let substate: RunView['substate'] = null;
       if (isPlainAgentIdentity(run.identity)) {
         substate =
@@ -935,7 +936,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         substate,
         runStartedAt: event.at,
         flow: null,
-        conversationProgress: { toolCallCount: 0 },
       };
     }
     case 'run.config': {
@@ -994,7 +994,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'child.park':
       // An agent-CLI child's park, on the row the child protocol owns.
       // `flow` stays null: a run with no ledger has no position to paint.
-      return parked(run, event.phase === 'parked', event.at);
+      return parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
@@ -1017,15 +1017,15 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 }
 
 /** The run's loop position, projected from the slice the rows folded
- *  (one run model, 3.3): `halted` is the loop's own word and moves nothing,
- *  the terminal phase is `run.end`'s; every other step carries the park. */
-function withPosition(run: RunView, rows: RunRows, at: number): RunView {
+ *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
+function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
   const { family, step, round, turn, continuationIndex } = rows;
   if (family === null || step === null) return run;
   const flow = { family, step, round, turn, continuationIndex };
-  return step === 'halted'
+  const phase = phaseMoveOf(row);
+  return phase === null
     ? { ...run, flow }
-    : parked({ ...run, flow }, step === 'waiting', at);
+    : parked({ ...run, flow }, phase === RUN_PHASE.WAITING, row.at);
 }
 
 /** The run window (3.3): a park closes it and settles the transcript, any
@@ -1107,8 +1107,7 @@ function applyRowFacts(
   rows.set(run.id, after);
   if (moved.requests !== undefined) projectRequests(view, run.id, after);
   if (moved.followUps !== undefined) projectFollowUps(view, run.id, after);
-  const next =
-    moved.step === undefined ? run : withPosition(run, after, event.at);
+  const next = moved.step === undefined ? run : withPosition(run, after, event);
   const rounds = moved.roundOutputs;
   if (rounds === undefined) return next;
   const byRound = <T>(pick: (round: RoundOutput) => T) =>
@@ -1217,11 +1216,7 @@ function foldDurable(
 ): boolean {
   const traceChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) ||
-      event.type === 'run.activate' ||
-      event.type === 'flow.step' ||
-      event.type === 'child.park' ||
-      event.type === 'run.end')
+    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
       ? foldTraceEvent(view, event, deferred)
       : false;
   const listingType = listingKeyOf(event);

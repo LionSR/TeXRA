@@ -364,23 +364,23 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     );
 
     const isRemote = agentEntry.source === 'remote';
-    // Registration committed creation, configuration and initial activation,
-    // each awaited; a resumed turn appends only its new activation, awaited
-    // here. Both are durable before the run resolves, so this path drains
-    // nothing: a barrier over the run's publications would answer for facts
-    // the run's own fibers queued, and their loss is the terminal drain's to
-    // report on the row it decides.
+    // Registration committed creation, configuration and first activation; a
+    // resume appends its activation here, with the approval snapshot that
+    // enforcement holds (no `run.start` re-stamps it). Both are durable before
+    // the run resolves, so nothing drains here (lost facts are the terminal
+    // drain's), and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      // A durable append: uninterruptible, like every row commit, so a stop
-      // lands either before this activation or after it, never inside it.
+      const aggregateId = qualifyAggregateId('run', runId);
+      const snapshot = session.approvalPolicySnapshotFor(runId);
       yield* Effect.uninterruptible(
         session.commit([
           {
             type: 'run.activate',
-            aggregateId: qualifyAggregateId('run', runId),
+            aggregateId,
             category: setting.agentCategory,
             isRemote,
           },
+          { type: 'approval.policy', aggregateId, snapshot },
         ]),
       );
     }

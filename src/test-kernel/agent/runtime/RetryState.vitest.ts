@@ -305,7 +305,7 @@ function agentRun(
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
-    callbacks: { onModelChanged: () => undefined },
+    callbacks: {},
   };
 }
 

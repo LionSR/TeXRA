@@ -275,11 +275,12 @@ return await agent('Inspect src', { id: 'core' })`,
       }),
   );
 
-  it.effect('settles a plan label the run never reached as not-reached', () =>
+  it.effect('leaves a plan label the run never reached as planned', () =>
     Effect.gen(function* () {
-      // One writer of call outcomes: the terminal sweep skips the plan
-      // labels the run never issued with the not-reached reason, and a call
-      // that settled through its own path carries no reason.
+      // Nothing sweeps a plan label the run never issued into a settled
+      // card: it stays declared, and the hosts read it as not run once the
+      // run has ended. A call that settled through its own path carries no
+      // reason.
       const recorded = recordCalls();
       const run = runWorkflowScript({
         script: `export const meta = {
@@ -302,7 +303,7 @@ throw new Error('script stops before the second task')`,
       });
       expect(recorded.calls()).toMatchObject([
         { id: 'first', status: 'completed' },
-        { id: 'second', status: 'skipped', reason: 'not-reached' },
+        { id: 'second', status: 'declared' },
       ]);
       expect(recorded.calls()[0]).not.toHaveProperty('reason');
     }),
@@ -1666,21 +1667,19 @@ return 'done'`,
             status: 'failed',
             error: WORKFLOW_CALL_UNFINISHED_NOTE,
           },
-          { id: 'unreached', status: 'skipped', reason: 'not-reached' },
-          { id: 'bypassed', status: 'skipped', reason: 'not-reached' },
+          { id: 'unreached', status: 'declared' },
         ]);
         const closes = recorded.events.filter(
           (event) => event.type === 'phase.close',
         );
         // Settled closed when the script left it; A, whose own call the sweep
         // failed, reads failed; B was entered and issued nothing before the
-        // run ended, so the run's own outcome is its outcome; C was never
-        // entered and closes with the run for the not-reached card it owns.
+        // run ended, so it completed; C was never entered, so nothing
+        // announced it and nothing closes it.
         expect(closes).toEqual([
           { type: 'phase.close', title: 'Settled', outcome: 'completed' },
           { type: 'phase.close', title: 'A', outcome: 'failed' },
           { type: 'phase.close', title: 'B', outcome: 'completed' },
-          { type: 'phase.close', title: 'C', outcome: 'completed' },
         ]);
         const openA = recorded.events.findIndex(
           (event) => event.type === 'phase.open' && event.title === 'A',
@@ -2150,15 +2149,12 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
             },
           ),
         ).rejects.toThrow(/timed out/);
-        // The call that reached its queue slot after the timeout fails with the
-        // reason that stopped the run, and that reason does not outrank the
-        // sandbox's timeout error.
+        // The call still queued when the timeout stopped the run did not
+        // fail on its own: it is cancelled with the run, and the run reports
+        // the sandbox's timeout error.
         expect(
           recorded.calls().find((call) => call.label === 'queued'),
-        ).toMatchObject({
-          status: 'failed',
-          error: expect.stringContaining('timed out'),
-        });
+        ).toMatchObject({ status: 'cancelled' });
       }),
   );
 
@@ -2630,7 +2626,6 @@ return 'done'`,
           model: 'model-a',
           childRunId: 'abcdef123456',
         },
-        { id: 'review', status: 'skipped', reason: 'not-reached' },
       ]);
       // One report carrying every fact re-sends the running card exactly once.
       expect(

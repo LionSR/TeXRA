@@ -72,6 +72,7 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   DerivedSettingsSnapshot,
   SettingsMessageFor,
+  SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { SettingsViewInboundMessageSchema } from '@shared/settingsView/settingsViewMessages';
 
@@ -430,13 +431,10 @@ export class SettingsViewMessageHandler {
     });
   }
 
-  /**
-   * Post a message to the active view's webview. A `null` or `undefined`
-   * message posts nothing, so callers can forward an optional response
-   * payload without a guard of their own.
-   */
+  /** Post to the active view's webview. A `null` or `undefined` message posts
+   * nothing, so callers forward an optional response payload unguarded. */
   private postMessageToActiveWebview(
-    message: unknown,
+    message: SettingsViewOutboundMessage | null | undefined,
   ): Effect.Effect<void, Error> {
     return message == null
       ? Effect.void
@@ -585,10 +583,11 @@ export class SettingsViewMessageHandler {
     webview: vscode.Webview,
     snapshot: DerivedSettingsSnapshot,
   ) {
-    return postToWebview(
-      webview,
-      buildSettingsSnapshotMessage(snapshot, this.session.roots, 'vscode'),
-    );
+    return buildSettingsSnapshotMessage(
+      snapshot,
+      this.session.roots,
+      'vscode',
+    ).pipe(Effect.flatMap((message) => postToWebview(webview, message)));
   }
 
   private rebroadcastSnapshot(snapshot: DerivedSettingsSnapshot) {
