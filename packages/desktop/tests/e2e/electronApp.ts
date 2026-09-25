@@ -157,7 +157,7 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
 }
 
 /**
- * Dismiss the shell's first-run startup panel when one is present. Resolves
+ * Dismiss the shell's first-run work-type dialog when one is present. Resolves
  * without acting on profiles that never show it, so callers that only need the
  * launcher can share this step. Pass `required` when the panel is part of what
  * the test asserts, so a missing one fails here instead of silently changing
@@ -168,7 +168,7 @@ export async function dismissStartupPanel(
   options: { required?: boolean } = {},
 ): Promise<void> {
   const waitForDismissButton = page.waitForFunction(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
+    const panel = document.querySelector('wa-dialog.desktop-onboarding');
     const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
@@ -183,14 +183,14 @@ export async function dismissStartupPanel(
   }
 
   await page.evaluate(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
+    const panel = document.querySelector('wa-dialog.desktop-onboarding');
     const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
     if (btn instanceof HTMLElement) btn.click();
   });
   await page.waitForFunction(
-    () => document.querySelector('.desktop-startup-panel') == null,
+    () => document.querySelector('wa-dialog.desktop-onboarding') == null,
     undefined,
     { timeout: 5000 },
   );

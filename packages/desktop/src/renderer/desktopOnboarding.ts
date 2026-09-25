@@ -17,7 +17,7 @@
 // the "don't show" preference.
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/card/card.js';
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
@@ -28,7 +28,6 @@ import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 interface StartupPanelController {
-  isVisible(): boolean;
   template(): TemplateResult | typeof nothing;
   show(): void;
   hide(): void;
@@ -367,26 +366,29 @@ export function createStartupTeamPanel({
     done: doneStepTemplate,
   };
 
+  /** A modal over the window, not a page in the conversation's place:
+   *  the task behind it stays mounted, and Esc or a click outside closes it
+   *  as Skip would. `wa-hide` bubbles from the dialog's own popups too, so
+   *  only the dialog's own close counts. */
   function panelTemplate(): TemplateResult {
     return html`
-      <section
-        class="desktop-startup-panel"
+      <wa-dialog
+        class="desktop-onboarding"
+        open
+        light-dismiss
+        without-header
         aria-labelledby=${titleId}
         data-step=${step}
+        @wa-hide=${(event: Event) => {
+          if (event.target === event.currentTarget) closePanel();
+        }}
       >
-        <wa-card
-          class="desktop-onboarding"
-          appearance="filled-outlined"
-          with-footer
-        >
-          ${STEP_TEMPLATES[step]()}
-        </wa-card>
-      </section>
+        ${STEP_TEMPLATES[step]()}
+      </wa-dialog>
     `;
   }
 
   return {
-    isVisible: () => visible,
     template: () => (visible ? panelTemplate() : nothing),
     show: () => {
       if (visible) return;
