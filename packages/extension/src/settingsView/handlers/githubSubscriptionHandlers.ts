@@ -154,7 +154,7 @@ export class GitHubSubscriptionHandlers {
       if (result === 'unavailable') {
         yield* showLoggedMessage(
           this.ctx.channel,
-          'Progress View is not available. Please try again.',
+          'The Sessions view is not available. Please try again.',
         );
         return;
       }

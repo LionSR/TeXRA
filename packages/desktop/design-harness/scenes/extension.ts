@@ -192,7 +192,7 @@ function desktopColumn(
 function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
   return html`<div class="h-ext h-ext-wide" id="frame">
     <div class="h-vscode-strip">
-      <span>TeXRA Dashboard</span><span class="active">TeXRA Progress</span>
+      <span>TeXRA Settings</span><span class="active">TeXRA Sessions</span>
     </div>
     <progress-app
       .view=${view}

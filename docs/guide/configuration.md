@@ -1,19 +1,19 @@
 # Configuration
 
 TeXRA uses its own settings system across the VS Code extension, desktop app,
-and command-line interface. Configure TeXRA in its Dashboard or CLI settings
-view; TeXRA does not contribute product settings to VS Code's Settings editor.
+and command-line interface. Configure TeXRA in its own Settings view or the
+CLI's settings; TeXRA does not contribute product settings to VS Code's Settings editor.
 
 ## Open TeXRA settings
 
-- **VS Code extension:** run **TeXRA: Open Settings** from the
-  Command Palette.
+- **VS Code extension:** select the gear (**Settings**) in the TeXRA panel
+  header, or run **TeXRA: Open Settings** from the Command Palette.
 - **Desktop app:** open **Settings**.
 - **CLI:** run `texra config`, or enter `/config` during a chat.
 
-The Dashboard has six pages along its top row. A page with more than one
+Settings has six pages along its top row. A page with more than one
 section shows a second row of sub-tabs, and each sub-tab shows one section.
-The page remembers the sub-tab you last opened while the Dashboard stays open.
+The page remembers the sub-tab you last opened while Settings stays open.
 
 - **Models**: **API keys** (including Kimi Code and the GLM Coding Plan),
   **Subscriptions** (ChatGPT and Grok sign-in, Copilot in VS Code), and
@@ -150,7 +150,7 @@ TeXRA's native configuration.
 
 Per-run controls in the task composer affect only the task being launched. They
 include attached files and optional context helpers such as TeX count.
-Persistent agent visibility and team selection belong in the Dashboard instead.
+Persistent agent visibility and team selection belong in Settings instead.
 
 ## Debugging
 

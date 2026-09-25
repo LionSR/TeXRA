@@ -34,7 +34,7 @@ Read the [installation guide](./installation.md) for details on installing LaTeX
 ## Integration with LaTeX Workshop
 
 TeXRA works alongside the [LaTeX Workshop](https://marketplace.visualstudio.com/items?itemName=James-Yu.latex-workshop) extension, which provides compilation, previewing, and IntelliSense.
-If the extension isn't detected and your workspace contains LaTeX files, TeXRA prompts you to install it. On a workspace without LaTeX files there is no prompt; you can still install it from the Dashboard's LaTeX tab.
+If the extension isn't detected and your workspace contains LaTeX files, TeXRA prompts you to install it. On a workspace without LaTeX files there is no prompt; you can still install it from the Settings LaTeX tab.
 
 **Workflow interaction:**
 
@@ -44,7 +44,7 @@ TeXRA uses LaTeX Workshop when available. For example, after generating a compar
 
 To keep your project directory clean, configure LaTeX Workshop to place its build output files (such as `.aux`, `.log`, `.pdf`) in a separate subdirectory. TeXRA is aware of this common practice.
 
-The Dashboard's LaTeX tab applies this for you. Its **Recommended VS Code settings** section lists **LaTeX Output Directory** (`latex-workshop.latex.outDir`, set to `%DIR%/build/`) and **Explorer Auto-Reveal Exclude** (so the `build/` folder stays out of the Explorer), each with an **Apply** button, plus **Apply all** in the section heading to set both at once.
+The Settings LaTeX tab applies this for you. Its **Recommended VS Code settings** section lists **LaTeX Output Directory** (`latex-workshop.latex.outDir`, set to `%DIR%/build/`) and **Explorer Auto-Reveal Exclude** (so the `build/` folder stays out of the Explorer), each with an **Apply** button, plus **Apply all** in the section heading to set both at once.
 
 If you prefer to set it by hand, LaTeX Workshop is a separate VS Code extension, so the setting lives in VS Code's own settings:
 
