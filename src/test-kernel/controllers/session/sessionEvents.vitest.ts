@@ -106,6 +106,7 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -2127,7 +2128,9 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* first.aggregateState([unrelated.aggregateId])).toEqual(
           [],
         );
-      }).pipe(Effect.provide(substrate(storage)));
+      }).pipe(
+        Effect.provide(Layer.merge(substrate(storage), nodePlatformLayer)),
+      );
     },
   );
 

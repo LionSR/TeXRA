@@ -55,7 +55,7 @@ import {
 import {
   assertWorkflowFilesExist,
   memoriesField,
-  rejectDisabledWorktreeDirectory,
+  rejectUnusableWorkingDirectory,
   workingDirectoryField,
   withToolUseSubagentHandoffInstruction,
   rejectOversizedBibAttachments,
@@ -236,14 +236,14 @@ function executeDelegateAgentTool(
       'delegate_agent',
       yield* ToolCall,
     );
-    // The `working_directory` opt-in, over this call's project: the schema
+    // The `working_directory` gate, over this call's project: the schema
     // parses the path, the session it runs on says whether worktrees are
-    // enabled for it.
-    const disabled = yield* rejectDisabledWorktreeDirectory(
+    // enabled for it, and the path must be an existing directory.
+    const unusable = yield* rejectUnusableWorkingDirectory(
       call.roots,
       input.working_directory ?? undefined,
     );
-    if (disabled) return disabled;
+    if (unusable) return unusable;
     // Resume path: execution_id is set
     if (input.execution_id) {
       return yield* resumeAgent(

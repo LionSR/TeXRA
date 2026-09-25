@@ -9,6 +9,7 @@ import {
 } from '@platform/languageModel';
 import type { ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import type { CompositionKey } from '@tools/compositions';
 import { toolTableLayer } from '@tools/compositions';
@@ -45,7 +46,7 @@ describe('tool-use tool resolution', () => {
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      Effect.provide(toolRegistryLayer),
+      Effect.provide(toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer))),
     );
   }
 

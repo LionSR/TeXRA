@@ -4,8 +4,6 @@
 
 // Node imports
 import { createHash } from 'node:crypto';
-import { statSync } from 'node:fs';
-import { realpath } from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
@@ -17,7 +15,7 @@ import { resolveChildRunOutput } from '@agent/storage';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentCallOptions } from '@agent/workflowScript/types';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { formatError, isFileNotFoundError } from '@common/errors';
+import { formatError } from '@common/errors';
 import type { RunId } from '@shared/schemas';
 import type { ToolResult } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -113,20 +111,35 @@ const WORKTREE_DISABLED_MESSAGE =
   "git worktree support is disabled in this workspace. Omit working_directory, or ask the user to turn on `texra.git.worktreeSupport` ('Subagent worktrees' on the Multi-Agent settings tab).";
 
 /**
- * The `working_directory` opt-in gate, over the settings of the project the
- * call belongs to. It lives here beside the field it guards, but runs in the
- * tool's `execute`, where `call.roots` names that project — the schema is
- * static, parsed once by the tool facade before any call exists, so a gate in
- * its transform could only ever answer for whichever workspace the process
- * came up in.
+ * The `working_directory` gate, over the settings of the project the call
+ * belongs to: the worktree opt-in first, then that the path is an existing
+ * directory. It lives here beside the field it guards, but runs in the tool's
+ * `execute`, where `call.roots` names that project — the schema is static,
+ * parsed once by the tool facade before any call exists, so a gate in its
+ * transform could only ever answer for whichever workspace the process came
+ * up in.
  */
-export const rejectDisabledWorktreeDirectory = Effect.fn(function* (
+export const rejectUnusableWorkingDirectory = Effect.fn(function* (
   stores: SettingsStores,
   workingDirectory: string | undefined,
 ) {
   if (!workingDirectory) return null;
-  if (yield* isWorktreeSupportEnabled(stores)) return null;
-  return errorResult(WORKTREE_DISABLED_MESSAGE);
+  if (!(yield* isWorktreeSupportEnabled(stores))) {
+    return errorResult(WORKTREE_DISABLED_MESSAGE);
+  }
+  const fs = yield* FileSystem.FileSystem;
+  const stat = yield* Effect.result(fs.stat(workingDirectory));
+  if (Result.isFailure(stat)) {
+    return errorResult(
+      `working_directory must be an existing directory: ${stat.failure.message}`,
+    );
+  }
+  if (stat.success.type !== 'Directory') {
+    return errorResult(
+      `working_directory must be a directory: ${workingDirectory}`,
+    );
+  }
+  return null;
 });
 const TOOL_USE_SUBAGENT_HANDOFF_INSTRUCTION = [
   'The delegated instruction above is your full task contract. This includes any tool, network, file, approval, output-format, or scope constraints it states. If a requested action conflicts with those constraints or needs missing context, report the conflict instead of assuming permission.',
@@ -152,19 +165,6 @@ export function withToolUseSubagentHandoffInstruction(
   return parts.join('\n\n');
 }
 
-function ensureWorkingDirectoryExists(dir: string): void {
-  const inspected = Result.try(() => statSync(dir));
-  if (Result.isFailure(inspected)) {
-    const e = inspected.failure;
-    throw new Error(
-      `working_directory must be an existing directory: ${toErrorMessage(e)}`,
-      { cause: e },
-    );
-  }
-  if (inspected.success.isDirectory()) return;
-  throw new Error(`working_directory must be a directory: ${dir}`);
-}
-
 /**
  * Shared Zod field for the `working_directory` parameter on delegation tools.
  * Validates and normalizes in one step so downstream code always receives the
@@ -184,16 +184,11 @@ export const workingDirectoryField = z
     };
     const parsed = Result.try(() => parseWorkingDirectory(value));
     if (Result.isFailure(parsed)) return fail(toErrorMessage(parsed.failure));
-    const trimmed = parsed.success;
-    if (!trimmed) return trimmed;
-    // The worktree opt-in is NOT checked here: it belongs to the project the
-    // call is on, and this transform runs on the tool facade's one parse of a
-    // static schema, before any call exists. `rejectDisabledWorktreeDirectory`
-    // applies it in `execute`, where `call.roots` names that project.
-    const existing = Result.try(() => ensureWorkingDirectoryExists(trimmed));
-    if (Result.isFailure(existing))
-      return fail(toErrorMessage(existing.failure));
-    return trimmed;
+    // Neither the worktree opt-in nor the path's existence is checked here:
+    // this transform runs on the tool facade's one parse of a static schema,
+    // before any call exists. Both run in `execute`, through
+    // `rejectUnusableWorkingDirectory`, where `call.roots` names the project.
+    return parsed.success;
   });
 
 /**
@@ -320,26 +315,24 @@ export const resolveInvocationFileList = Effect.fn('resolveInvocationFileList')(
     Error,
     FileSystem.FileSystem
   > {
+    const fs = yield* FileSystem.FileSystem;
     return yield* Effect.gen(function* () {
       const { storage, workspace } = session.roots;
       // Storage is created by the first store that writes to it, so a
       // session that has not written (an ephemeral one) may have none yet;
       // then no referenced file can lie under it.
-      const storageRoot = yield* Effect.tryPromise({
-        try: () => realpath(storage),
-        catch: ensureError,
-      }).pipe(
-        Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
+      const storageRoot = yield* fs.realPath(storage).pipe(
+        Effect.catchIf(
+          (error) => error.reason._tag === 'NotFound',
+          () => Effect.succeed(undefined),
+        ),
       );
       const references = yield* Effect.forEach(
         files,
         (file) =>
           Effect.gen(function* () {
             const absolutePath = yield* absoluteWorkspacePath(workspace, file);
-            const canonicalPath = yield* Effect.tryPromise({
-              try: () => realpath(absolutePath),
-              catch: ensureError,
-            });
+            const canonicalPath = yield* fs.realPath(absolutePath);
             const relative =
               storageRoot === undefined
                 ? undefined

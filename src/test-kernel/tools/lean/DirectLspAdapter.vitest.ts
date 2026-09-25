@@ -157,9 +157,10 @@ process.stdin.on('data', (chunk) => {
 /** The `FileSystem`/`Path` pair the process runtime provides the spawner. */
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-/** The same spawner graph `directLeanLanguageServices` builds for the pool. */
+/** The same spawner graph `directLeanLanguageServices` builds for the pool,
+ *  with the `FileSystem` the pool and its servers read through. */
 const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provide(nodePlatform),
+  Layer.provideMerge(nodePlatform),
 );
 
 const NO_RUN: RunId | undefined = undefined;
