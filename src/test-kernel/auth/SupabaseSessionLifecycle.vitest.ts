@@ -209,6 +209,13 @@ function createClearingStorageCoordinator(options: {
 }
 
 describe('SupabaseSession', () => {
+  describe('parseStoredSupabaseSession', () => {
+    it('returns null for invalid stored session data', () => {
+      assert.equal(parseStoredSupabaseSession('{'), null);
+      assert.equal(parseStoredSupabaseSession(JSON.stringify({ id: 1 })), null);
+    });
+  });
+
   describe('toStorableSupabaseSession', () => {
     it('falls back to the user id when email is missing', () => {
       const nativeSession = makeNativeSession({

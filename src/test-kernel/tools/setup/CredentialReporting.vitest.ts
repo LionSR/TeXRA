@@ -8,11 +8,14 @@ import { afterEach, beforeEach, describe, vi } from 'vitest';
 
 // Local imports
 import * as apiProviders from '@model/apiProviders';
+import * as setupCredentialAccess from '@model/setupCredentialAccess';
 import { SecretsFailed } from '@platform/secrets';
 import { apiKeyEnvName } from '@shared/constants/providers';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { ProbeEnvironmentTool } from '@tools/setup/ProbeEnvironmentTool';
+import { VerifySetupTool } from '@tools/setup/VerifySetupTool';
+import * as setupPlatformModule from '@tools/setup/platform';
 
 // Local file imports
 import { createFakeSetupPlatform } from './fixtures';
@@ -36,6 +39,19 @@ vi.mock('@tools/setup/toolProbing', async (importOriginal) => ({
 
 function outputOf(result: { output?: string }): string {
   return result.output ?? '';
+}
+
+/**
+ * No provider key anywhere, but the aggregate readiness probe reports a
+ * usable credential: the ChatGPT-subscription-only shape.
+ */
+function installChatGptOnlySetupPlatform(): void {
+  vi.spyOn(setupCredentialAccess, 'hasUsableSetupCredential').mockReturnValue(
+    Effect.succeed(true),
+  );
+  vi.spyOn(setupPlatformModule, 'getChatGptSubscriptionStatus').mockReturnValue(
+    Effect.succeed({ signedIn: true, enabled: true }),
+  );
 }
 
 setupPlatform({}, { setup: createFakeSetupPlatform() });
@@ -104,5 +120,23 @@ describe('setup credential reporting', () => {
       assert.match(outputOf(result), /"anyApiKeySet": false/);
       assert.match(outputOf(result), /"hasAnyUsableCredential": false/);
     }),
+  );
+
+  it.effect(
+    'reports a usable non-API-key credential in setup verification',
+    () =>
+      Effect.gen(function* () {
+        installChatGptOnlySetupPlatform();
+
+        const result = yield* VerifySetupTool.call({}).pipe(
+          Effect.provide(nativeToolTestLayer()),
+        );
+
+        assert.equal(result.status, 'executed');
+        assert.match(
+          outputOf(result),
+          /Credentials: usable model credential available\./,
+        );
+      }),
   );
 });

@@ -52,6 +52,28 @@ describe('CLI shell completion', () => {
     bash = await generateCompletionScript(rootCommand, 'bash');
   });
 
+  it('wires zsh and fish value choices and dynamic sources from the command tree', async () => {
+    const zsh = await generateCompletionScript(rootCommand, 'zsh');
+    expect(zsh.startsWith('#compdef texra\n')).toBe(true);
+    expect(zsh).toContain('TEXRA_COMPLETION_DYNAMIC');
+    expect(zsh).toContain("'1:shell:(bash zsh fish)'");
+    expect(zsh).toContain(
+      "'--model[Model for the agent]:model:($(_texra_models))'",
+    );
+    expect(zsh).toContain(
+      "'--output-format[Output format for headless commands (default: text)]: :(text json ndjson)'",
+    );
+
+    const fish = await generateCompletionScript(rootCommand, 'fish');
+    expect(fish).toContain(
+      "complete -c texra -n '__fish_seen_subcommand_from completion' -a 'bash zsh fish'",
+    );
+    expect(fish).toContain("-l 'output-format' -r -a 'text json ndjson'");
+    expect(fish).toContain(
+      `complete -c texra -l model -s m -r -a '(test "$TEXRA_COMPLETION_DYNAMIC" != 0; and texra models list --quiet 2>/dev/null | awk "{print \\$1}")'`,
+    );
+  });
+
   it('consumes every bash value flag while resolving command paths', async () => {
     const commands = await collectCommands(rootCommand);
     const lines = bash.split('\n');

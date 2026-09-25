@@ -4,6 +4,7 @@ import { it as effectIt } from '@effect/vitest';
 
 import {
   findCliModelAccessEntry,
+  formatCliModelDetails,
   getCliModelAccessList,
   modelSelectItemsForCli,
   runnableCliModelAccessEntries,
@@ -317,6 +318,47 @@ describe('CLI model access resolution', () => {
         }),
       ),
     ).rejects.toThrow('Model "haiku3" is not available (retired).');
+  });
+
+  it.each([
+    {
+      name: 'shows terminal recovery text for retired models in model details',
+      entry: model('haiku3', {
+        available: false,
+        status: 'retired',
+        model: modelOption('haiku3', {
+          label: 'Haiku 3',
+          availability: 'retired',
+        }),
+      }),
+      contains: [
+        'status: retired',
+        'availability: Retired',
+        'recovery: Choose an active model.',
+      ],
+      excludes: ['texra setup'],
+    },
+    {
+      name: 'shows a recovery hint for missing provider-key models in model details',
+      entry: model('glm52', {
+        available: false,
+        status: 'missing api key',
+        model: modelOption('glm52', {
+          label: 'GLM-5.2',
+          availability: 'missing-key',
+        }),
+      }),
+      contains: [
+        'status: missing api key',
+        'recovery: Add a provider API key with `texra setup`.',
+      ],
+      excludes: [],
+    },
+  ])('$name', ({ entry, contains, excludes }) => {
+    const text = formatCliModelDetails(entry);
+
+    for (const expected of contains) expect(text).toContain(expected);
+    for (const absent of excludes) expect(text).not.toContain(absent);
   });
 
   it('keeps ChatGPT models available without TeXRA sign-in or API keys', async () => {

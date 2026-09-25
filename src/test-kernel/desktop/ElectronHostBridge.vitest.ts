@@ -162,4 +162,21 @@ describe('desktop Electron host bridge', () => {
     closedListeners[0]?.();
     expect(ipcMain.off).toHaveBeenCalledTimes(1);
   });
+
+  // #8123: `postToRenderer` routes every message through the outbound Zod
+  // schemas (dev/test only) before `webContents.send`.
+  it('throws on a malformed desktop-only command', async () => {
+    const { installDesktopHostBridge } = await loadMainHostBridgeModule({
+      on: vi.fn(),
+      off: vi.fn(),
+    });
+    const { window } = fakeMainWindow([]);
+    const bridge = installDesktopHostBridge(window);
+    // `desktop:showPdf` is claimed by `DesktopOutboundMessageSchema`, so a
+    // payload missing `pdfPath` fails validation instead of passing through
+    // unchecked.
+    expect(() =>
+      bridge.postToRenderer({ command: 'desktop:showPdf', title: 't' }),
+    ).toThrow(/Outbound message failed schema validation/);
+  });
 });

@@ -16,7 +16,10 @@ import {
 } from 'vitest';
 
 import { handleTuiSlashCommand } from '@cli/chat/tui/commands/handleSlashCommand';
-import { applyCliModelAccessSelection } from '@cli/chat/tui/commands/handlers/modelAccessCommands';
+import {
+  applyCliModelAccessSelection,
+  applyCliProviderApiKey,
+} from '@cli/chat/tui/commands/handlers/modelAccessCommands';
 import {
   loginFromChat,
   logoutFromChat,
@@ -46,6 +49,7 @@ import * as subscriptionLogin from '@cli/runtime/subscriptionLogin';
 import type { CliContext } from '@cli/runtime/cliContext';
 import type { CliLogoutTarget } from '@cli/runtime/loginOptions';
 import * as modelAccessSelection from '@cli/runtime/modelAccessSelection';
+import * as cliProviderKeys from '@cli/chat/tui/hosts/cliProviderKeys';
 import * as supabaseAuth from '@cli/runtime/supabaseAuth';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import * as codexSubscription from '@model/codex/codexSubscription';
@@ -596,6 +600,31 @@ describe('handleTuiSlashCommand', () => {
 
         expect(signIn.interrupted()).toBe(true);
       }),
+  );
+
+  it.effect('explains the shared GLM key routes after saving it', () =>
+    Effect.gen(function* () {
+      const save = vi
+        .spyOn(cliProviderKeys, 'commitCliProviderApiKey')
+        .mockReturnValue(Effect.void);
+
+      const notice = yield* applyCliProviderApiKey(
+        services.secrets,
+        services.stores,
+        'glm',
+        'glm-secret',
+      );
+
+      expect(save).toHaveBeenCalledWith(
+        services.secrets,
+        services.stores,
+        'glm',
+        'glm-secret',
+      );
+      expect(notice).toBe(
+        "Tip: the regular GLM endpoint is the default; enable 'Prefer GLM Coding Plan' in `/login` or `/config` to use GLM Coding Plan.",
+      );
+    }),
   );
 
   it.effect(

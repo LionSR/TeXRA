@@ -33,6 +33,7 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   DEBUG_MODE_KEY,
+  FoldEventSchema,
   MESSAGE_TYPES,
   RUN_PHASE,
   type RunId,
@@ -211,6 +212,28 @@ const framerSource = Effect.gen(function* () {
 });
 
 describe('session framer', () => {
+  it('rejects a run event carried by an inquiry aggregate at the wire boundary', () => {
+    const input = {
+      _tag: 'event',
+      read: 'listing',
+      event: {
+        ...runStart,
+        aggregateId: qualifyAggregateId('inquiry', 'ei_012345abcdef'),
+        seq: 1,
+        commit: 1,
+        ownerId: SELF,
+        at: 0,
+      },
+    };
+    expect(FoldEventSchema.safeParse(input).success).toBe(false);
+    expect(
+      FoldEventSchema.safeParse({
+        ...input,
+        event: { ...input.event, aggregateId: runStart.aggregateId },
+      }).success,
+    ).toBe(true);
+  });
+
   it.live('preserves run subscription keys across the webview bridge', () =>
     Effect.gen(function* () {
       const session = createTestSession();

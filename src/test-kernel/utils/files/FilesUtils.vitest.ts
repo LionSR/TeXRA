@@ -1,14 +1,27 @@
 // Suites for src/utils/files (workspaceFS, mime, entry probes, pasted images,
 // rooted filesystem confinement).
 
+import * as assert from 'node:assert';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { it as effectIt } from '@effect/vitest';
 import { Cause, Effect, Exit, FileSystem, Path } from 'effect';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { getMimeType } from '@utils/files/mimeUtils';
 import { pastedImageFullPath } from '@utils/files/pastedImageUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { rootedFileSystem } from '@utils/files/rootedFileSystem';
+
+// ---------------------------------------------------------------------------
+// mimeUtils
+// ---------------------------------------------------------------------------
+
+describe('getMimeType', () => {
+  it('applies audio override for known extensions from file paths', () => {
+    assert.strictEqual(getMimeType('/tmp/clip.opus'), 'audio/opus');
+    assert.strictEqual(getMimeType('C:\\tmp\\clip.l16'), 'audio/l16');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // PastedImageUtils

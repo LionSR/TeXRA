@@ -135,6 +135,7 @@ import {
   parseCliHistoryId,
   readCliHistoryDetails,
   readCliHistoryExportInput,
+  readCliHistoryStandaloneTemplate,
 } from '@cli/runtime/history';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
@@ -906,6 +907,20 @@ describe('CLI history runtime', () => {
             yield* Effect.promise(() => historyDetails('facade' as RunId)),
           ).toBeNull();
         }),
+    );
+
+    it.live(
+      'returns null instead of throwing when the default template is absent',
+      () =>
+        Effect.gen(function* () {
+          const resourcesPath = yield* Effect.promise(() =>
+            makeTempDir('texra-history-standalone-empty-', tempDirs),
+          );
+
+          expect(
+            yield* readCliHistoryStandaloneTemplate(resourcesPath),
+          ).toBeNull();
+        }).pipe(Effect.provide(nodePlatformLayer)),
     );
 
     describe('runHistoryExport html', () => {

@@ -12,6 +12,7 @@ import {
   sessionListRunIds,
   actOnSurface,
 } from '@cli/chat/tui/state/cliState';
+import { allocateMiddleRows } from '@cli/chat/tui/appLayout';
 import {
   chatTuiCanStartRootRun,
   runStopFacts,
@@ -121,6 +122,56 @@ describe('cliState surface fields', () => {
       kind: 'message',
       text: 'Usage: /login target · /login chatgpt --device',
     });
+  });
+});
+
+describe('CLI TUI row allocation', () => {
+  it.each([
+    {
+      name: 'keeps foreground approval and form surfaces inside the middle row budget',
+      options: { footerRows: 5, foregroundOpen: true, rows: 24 },
+      transcriptRows: 1,
+      foregroundRows: 18,
+    },
+    {
+      name: 'returns disabled input rows to tiny foreground surfaces',
+      options: { footerRows: 2, foregroundOpen: true, rows: 10 },
+      transcriptRows: 1,
+      foregroundRows: 7,
+    },
+    {
+      name: 'can cap compact foreground surfaces on tall terminals',
+      options: {
+        footerRows: 5,
+        foregroundMaxRows: 12,
+        foregroundOpen: true,
+        rows: 40,
+      },
+      transcriptRows: 1,
+      foregroundRows: 12,
+    },
+    {
+      name: 'reserves queued follow-up, palette and static rows before the transcript',
+      options: {
+        footerRows: 5,
+        foregroundOpen: false,
+        queuedFollowUpPanelRows: 3,
+        rows: 24,
+        slashPaletteOpen: true,
+        staticTranscriptRows: 2,
+      },
+      transcriptRows: 1,
+      foregroundRows: 0,
+    },
+  ])('$name', ({ options, transcriptRows, foregroundRows }) => {
+    const layout = allocateMiddleRows({
+      reverseSearchOpen: false,
+      slashPaletteOpen: false,
+      ...options,
+    });
+
+    expect(layout.transcriptRows).toBe(transcriptRows);
+    expect(layout.foregroundRows).toBe(foregroundRows);
   });
 });
 

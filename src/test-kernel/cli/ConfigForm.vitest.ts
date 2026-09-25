@@ -13,6 +13,7 @@ import {
   validateSettingInput,
 } from '@cli/chat/tui/forms/ConfigForm';
 import { CliConfigForm } from '@cli/chat/tui/forms/CliConfigForm';
+import { formatProviderApiKeySummary } from '@cli/chat/tui/forms/ProviderApiKeyForm';
 import { installSlashCommands } from '@cli/chat/tui/commands/slashRegistry';
 import { registerBuiltinSlashCommands } from '@cli/chat/tui/commands/registerBuiltins';
 import { openCliSlashCommandForm } from '@cli/chat/tui/commands/slashForms';
@@ -238,6 +239,24 @@ describe('ConfigForm helpers', () => {
     const invalid = validateSettingInput(timeout, '0', true);
     expect(invalid.ok).toBe(false);
     if (!invalid.ok) expect(invalid.message).not.toBe('');
+  });
+
+  it.each<[Parameters<typeof formatProviderApiKeySummary>[0], string]>([
+    [
+      {
+        statuses: { openai: 'set', anthropic: 'not-set', kimiCode: 'env' },
+        loading: false,
+        error: false,
+      },
+      'Configured: OpenAI, Kimi Code',
+    ],
+    [
+      { statuses: { openai: 'not-set' }, loading: false, error: false },
+      'No provider keys set',
+    ],
+    [{ loading: false, error: true }, 'Status unavailable'],
+  ])('summarizes key status without exposing values', (view, summary) => {
+    expect(formatProviderApiKeySummary(view)).toBe(summary);
   });
 
   it('marks an unsupported schema kind read-only', () => {

@@ -4,6 +4,7 @@ import '@test/support/defaultSessionTestSetup';
 import { describe, expect, it } from 'vitest';
 
 import {
+  boundedTranscriptEntryLayout,
   transcriptEntryLayout,
   transcriptEntryLayoutRows,
 } from '@cli/chat/tui/panes/transcriptEntryLayout';
@@ -406,6 +407,20 @@ describe('CLI conversation transcript', () => {
     expect(selectTranscriptEntriesForViewport([tool], 20, 20).usedRows).toBe(
       transcriptEntryLayoutRows(liveLayout),
     );
+  });
+
+  it('keeps bounded user-band margins only while a content row still fits', () => {
+    const user = entry('u1', 'user', 'x'.repeat(77), true);
+    const layout = transcriptEntryLayout(user, { width: 80 });
+    expect(layout.lines).toHaveLength(2);
+
+    const roomy = boundedTranscriptEntryLayout(layout, 3);
+    expect(roomy.lines).toEqual(layout.lines.slice(-1));
+    expect(roomy.marginTopRows + roomy.marginBottomRows).toBe(2);
+
+    const tight = boundedTranscriptEntryLayout(layout, 2);
+    expect(tight.lines).toEqual(layout.lines);
+    expect(tight.marginTopRows + tight.marginBottomRows).toBe(0);
   });
 
   it('does not render empty assistant placeholders between user and tool rows', () => {
@@ -980,6 +995,30 @@ describe('CLI conversation transcript', () => {
         RUN_PHASE.RUNNING,
       ).map((row) => row.id),
     ).toEqual(['b', 'a', 'c']);
+  });
+
+  it('labels preset-launched sessions with team and root identity', () => {
+    const identityLine = (
+      meta: Parameters<typeof buildStaticTranscriptItems>[0]['meta'],
+    ) => {
+      const [header] = buildStaticTranscriptItems({
+        source: sourceOf([]),
+        meta,
+      }).items;
+      return header?.kind === 'header' ? header.identityLine : undefined;
+    };
+
+    expect(
+      identityLine({
+        ...SESSION_META,
+        agent: 'orchestrator',
+        model: 'gpt56-',
+        teamName: 'Physicist',
+      }),
+    ).toBe('team: Physicist · root: orchestrator · model: GPT-5.6 Terra');
+    expect(identityLine(SESSION_META)).toBe(
+      'agent: research · model: DeepSeek V4 Flash (Thinking)',
+    );
   });
 
   it('only feeds the root scrollback run, not background subagents', () => {
