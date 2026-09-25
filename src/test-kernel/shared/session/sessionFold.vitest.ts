@@ -1699,6 +1699,45 @@ describe('foldRunState', () => {
       },
     ],
     [
+      'a length continuation in a non-final reflection round: the next round opens at continuation 0',
+      () => {
+        const step = (
+          name: string,
+          round: number,
+          continuationIndex: number,
+        ) => ({
+          type: 'flow.step',
+          payload: {
+            family: 'reflection',
+            step: name,
+            round,
+            continuationIndex,
+          },
+        });
+        const rows = [
+          message({
+            kind: 'append',
+            messages: [USER('draft the introduction')],
+            sourceResponse: null,
+          }),
+          reflectionSnapshot,
+          step('round.begin', 0, 0),
+          step('round.end', 0, 1),
+          step('round.begin', 1, 0),
+          step('round.end', 1, 1),
+        ].map((draft, index) => ledgerRow(index + 1, draft));
+        const state = stateOf(foldRunState(null, rows));
+        expect(state?.round).toBe(1);
+        expect(state?.continuationIndex).toBe(1);
+        // Within one round the index still never goes back.
+        expect(
+          reasonOf(
+            foldRunState(state, [ledgerRow(7, step('round.end', 1, 0))]),
+          ),
+        ).toBe('out-of-order');
+      },
+    ],
+    [
       'two priced responses and a settlement add: the run cost is the sum',
       () => {
         const second = {

@@ -91,6 +91,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   app and the CLI, a quit while live runs took more than a few seconds to
   stop could cut off sending the last usage records. Every host now sends
   them as the final shutdown step, after runs and sessions have closed.
+
+- **Workflow agents no longer fail when an intermediate round hits the
+  output length limit.** A multi-round (reflection) agent whose response in
+  any round but the last was cut off and continued stopped at the next round
+  with `continuationIndex 0 is below 1`. The continuation count now restarts
+  with each round, as the agent always wrote it.
+
 - **The desktop app shuts down cleanly when startup fails early.** If
   startup failed before the project list opened (for example, when the
   project records could not be read), shutdown reported two errors and left a

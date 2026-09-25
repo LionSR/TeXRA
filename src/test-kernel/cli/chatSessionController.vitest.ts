@@ -42,7 +42,6 @@ const mocks = vi.hoisted(() => ({
   attachTerminalResultToast: vi.fn(),
   createTuiHostInteractions: vi.fn(),
   resumeRun: vi.fn(),
-  notify: vi.fn(),
   appendLocalAssistantTranscript: vi.fn(),
   appendLocalErrorTranscript: vi.fn(),
   appendLocalUserTranscript: vi.fn(),
@@ -73,10 +72,6 @@ vi.mock('@cli/chat/tui/state/transcript', () => ({
   clearLocalTranscript: mocks.clearLocalTranscript,
   moveLocalTranscriptToRun: mocks.moveLocalTranscriptToRun,
   reportRequestDefect: mocks.reportRequestDefect,
-}));
-
-vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
-  notify: mocks.notify,
 }));
 
 import {
@@ -111,11 +106,7 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { currentView } from '@cli/chat/tui/state/sessionView';
 import {
-  chatTuiCanInterruptActiveRun,
   chatTuiCanStartRootRun,
-  chatTuiCanStopActiveRun,
-  chatTuiIsResumableIdleOnExit,
-  chatTuiSigintAction,
   TuiSession,
   type RootRunSettled,
 } from '@cli/chat/tui/state/sessionRunState';
@@ -182,7 +173,7 @@ interface SessionFixture {
 }
 
 function makeSession(overrides: SessionFixture = {}): TuiSession {
-  const session = new TuiSession();
+  const session = new TuiSession(() => undefined);
   if (overrides.runSettled) session.markRunPending(overrides.runSettled);
   if (overrides.runCompleted) session.markRunCompleted();
   if (overrides.runId) session.runId = overrides.runId;
@@ -1045,7 +1036,6 @@ describe('createChatSessionController', () => {
     await awaitRunSettled(session);
 
     expect(session.runExitCode).toBe(CliExitCode.Success);
-    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
   });
 
   it('manual resume supersedes stale interrupted recovery state', async () => {
@@ -1169,24 +1159,9 @@ describe('createChatSessionController', () => {
     expect(rootRunPending.get()).toBe(true);
     expect(claimedRunId.get()).toBe('aaaaaa');
 
-    const canInterruptActiveRun = chatTuiCanInterruptActiveRun(session);
-    const canStopActiveRun = chatTuiCanStopActiveRun({
-      runPending: Boolean(session.runSettled && !session.runCompleted),
-      runId: session.runId,
-      status: RUN_PHASE.WAITING,
-    });
-    const resumableIdle = chatTuiIsResumableIdleOnExit({
-      canInterruptActiveRun,
-      canStopActiveRun,
-      hasActiveToolUseFlow: false,
-    });
-    expect(
-      chatTuiSigintAction({
-        exitArmed: false,
-        canStopActiveRun,
-        resumableIdle,
-      }),
-    ).toBe('clean-exit');
+    // No live tool-use flow yet, so a Ctrl-C now is a clean exit, never a
+    // resumable-idle one.
+    expect(session.isResumableIdle()).toBe(false);
 
     // Ctrl-C fires while resume() is still rehydrating.
     ctrl.stop();
@@ -1448,7 +1423,6 @@ describe('createChatSessionController', () => {
     session.stopRequested = true;
     expect(resumeOptions?.isCancellationRequested?.()).toBe(true);
     expect(rootRunId.get()).toBe('a11111');
-    expect(mocks.notify).not.toHaveBeenCalledWith('agentFinished');
     expect(sessionMeta.get().cliMultiAgentPresetId).toBeUndefined();
     expect(sessionMeta.get().delegationAgentScope).toBeUndefined();
   });
@@ -1757,7 +1731,6 @@ describe('createChatSessionController', () => {
     await expect(runTryResume(ctrl, child)).resolves.toBe(true);
 
     expect(rootRunId.get()).toBe(root);
-    expect(mocks.notify).toHaveBeenCalledWith('agentFinished');
   });
 
   it('does not auto-resume after stop during helper-model setup', async () => {

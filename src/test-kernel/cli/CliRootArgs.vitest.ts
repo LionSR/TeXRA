@@ -49,6 +49,7 @@ import {
 } from '@cli/runtime/cliConfig';
 import { pickGlobalArgs } from '@cli/runtime/globalArgs';
 import { RUN_OUTCOME, AgentCategory, type RunId } from '@shared/schemas';
+import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
@@ -148,7 +149,7 @@ const expandSpecs = (
     }
     const { inputFiles } = yield* expandRunInputs(specs, [], cwd, options);
     return inputFiles;
-  });
+  }).pipe(Effect.provide(nodePlatformLayer));
 
 describe('CLI root argument routing', () => {
   it('routes top-level version shortcuts to the version command', () => {
@@ -647,7 +648,7 @@ describe('CLI root argument routing', () => {
         const error = yield* Effect.flip(
           expandRunInputs(['-'], ['missing-context.tex'], root, {
             readStdinText,
-          }),
+          }).pipe(Effect.provide(nodePlatformLayer)),
         );
         expect(error.message).toMatch(
           /--context: file not found: missing-context\.tex/,
@@ -672,7 +673,7 @@ describe('CLI root argument routing', () => {
             ['-'],
             root,
             { readStdinText },
-          );
+          ).pipe(Effect.provide(nodePlatformLayer));
 
           expect(inputFiles).toEqual(['main.tex']);
           expect(contextFiles).toHaveLength(1);
@@ -696,7 +697,9 @@ describe('CLI root argument routing', () => {
         Effect.gen(function* () {
           const { readStdinText } = trackedStdinReader('piped body');
           const error = yield* Effect.flip(
-            expandRunInputs(['-'], ['-'], root, { readStdinText }),
+            expandRunInputs(['-'], ['-'], root, { readStdinText }).pipe(
+              Effect.provide(nodePlatformLayer),
+            ),
           );
           expect(error.message).toMatch(
             /Use `-` for either --input or --context/,
@@ -716,7 +719,7 @@ describe('CLI root argument routing', () => {
           const error = yield* Effect.flip(
             expandRunInputs([external], [], root, {
               requireWorkspaceFiles: true,
-            }),
+            }).pipe(Effect.provide(nodePlatformLayer)),
           );
           expect(error.message).toMatch(/--input: file is outside --cwd:/);
         }),
@@ -729,7 +732,7 @@ describe('CLI root argument routing', () => {
         const error = yield* Effect.flip(
           expandRunInputs([externalDir], [], root, {
             requireWorkspaceFiles: true,
-          }),
+          }).pipe(Effect.provide(nodePlatformLayer)),
         );
         expect(error.message).toMatch(/--input: file is outside --cwd:/);
       }),
@@ -812,7 +815,11 @@ describe('CLI root argument routing', () => {
         );
         const pattern = path.join('refs', '*.bib');
 
-        expect(yield* expandRunInputs([pattern], [pattern], root)).toEqual({
+        expect(
+          yield* expandRunInputs([pattern], [pattern], root).pipe(
+            Effect.provide(nodePlatformLayer),
+          ),
+        ).toEqual({
           inputFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
           contextFiles: ['refs/alpha.bib', 'refs/zeta.bib'],
         });
@@ -919,7 +926,7 @@ describe('CLI root argument routing', () => {
           },
           createRunCommandCliContext(),
           { storageRoot: '/tmp/storage' },
-        ),
+        ).pipe(Effect.provide(nodePlatformLayer)),
       ).toMatchObject({
         outcome: RUN_OUTCOME.FAILED,
         runDirectory: runDirUnder(
@@ -1034,7 +1041,7 @@ describe('CLI root argument routing', () => {
             },
             createRunCommandCliContext(),
             { storageRoot: '/tmp/storage' },
-          ),
+          ).pipe(Effect.provide(nodePlatformLayer)),
         );
 
         expect(error).toEqual(
@@ -1064,7 +1071,7 @@ describe('CLI root argument routing', () => {
           },
           createRunCommandCliContext(),
           { storageRoot: '/tmp/storage' },
-        );
+        ).pipe(Effect.provide(nodePlatformLayer));
 
         expect(result).toMatchObject({
           outcome: RUN_OUTCOME.CANCELLED,

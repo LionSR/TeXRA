@@ -25,10 +25,7 @@ import {
   shouldCollapsePaste,
   type PastedImageEntry,
 } from '../input/draftAttachments';
-import {
-  ImagePasteQueue,
-  type ImagePasteAttempt,
-} from '../input/imagePasteQueue';
+import { ImagePasteQueue } from '../input/imagePasteQueue';
 import { ReverseSearch } from '../input/ReverseSearch';
 import {
   appendSlashCommandEcho,
@@ -258,9 +255,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
   const onImagePaste = useMemo(
     () => ({
       runtime,
-      probe: (attempt: ImagePasteAttempt) =>
+      probe: () =>
         Effect.map(attachClipboardImage(roots), (result): string | null => {
-          if (!attempt.isCurrent()) return null;
           if (!result.ok) {
             setTransientNotice(result.reason);
             return null;

@@ -17,6 +17,7 @@ import {
 } from '@shared/constants/latexTiming';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { captureLogEntries } from '@test/support/logSinkCapture';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const mocks = vi.hoisted(() => ({
   exists: vi.fn(async (_path: string) => true),
@@ -67,7 +68,11 @@ const session = { roots: { config: {} } } as unknown as SessionHandle;
  * in for the disk.
  */
 const withHostFs = <A, E>(
-  program: Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
+  program: Effect.Effect<
+    A,
+    E,
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
+  >,
 ): Effect.Effect<A, E> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

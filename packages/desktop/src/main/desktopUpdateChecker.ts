@@ -2,11 +2,12 @@ import { Effect } from 'effect';
 
 import { ensureError } from '@utils/errors/errorMessage';
 import { UPDATE_CHECK_SKIP_ENV } from '@utils/system/semverUpdateCheck';
-import { isEnvFlagEnabled } from '@utils/system/envFlags';
+import { envFlag } from '@utils/system/envFlags';
 import {
   fetchJsonStringField,
   runDailyUpdateCheck,
 } from '@utils/system/updateCheck';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * Lightweight desktop update check (issue #7682, decision: arm b).
@@ -56,8 +57,11 @@ interface CheckForDesktopUpdateOptions {
   /** Skip entirely for unpackaged/dev runs, whose version is not meaningful. */
   isPackaged: boolean;
   notify: (release: DesktopLatestRelease) => Promise<void> | void;
-  fetchRelease?: Effect.Effect<DesktopLatestRelease | undefined, Error>;
-  env?: NodeJS.ProcessEnv;
+  fetchRelease?: Effect.Effect<
+    DesktopLatestRelease | undefined,
+    Error,
+    HttpClient.HttpClient
+  >;
 }
 
 let desktopUpdateCheckNotify:
@@ -88,10 +92,9 @@ const runDesktopUpdateCheck = ({
   isPackaged,
   notify,
   fetchRelease = fetchLatestDesktopRelease(),
-  env = process.env,
 }: CheckForDesktopUpdateOptions) =>
   Effect.gen(function* () {
-    if (!isPackaged || isEnvFlagEnabled(UPDATE_CHECK_SKIP_ENV, env)) return;
+    if (!isPackaged || (yield* envFlag(UPDATE_CHECK_SKIP_ENV))) return;
     yield* runDailyUpdateCheck({
       currentVersion,
       host: 'desktop',

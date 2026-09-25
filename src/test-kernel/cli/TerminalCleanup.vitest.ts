@@ -20,11 +20,7 @@ import {
   rootRunPending,
   rootRunId,
 } from '@cli/chat/tui/state/cliState';
-import {
-  installTerminalRestoreOnExit,
-  restoreTuiInputModes,
-  supportsTerminalJobControl,
-} from '@cli/tui/terminalCleanup';
+import { acquireTuiTerminal } from '@cli/tui/terminalCleanup';
 import {
   installTerminalTitleUpdates,
   terminalTitleText,
@@ -225,19 +221,24 @@ describe('installTerminalTitleUpdates', () => {
   });
 });
 
-describe('restoreTuiInputModes', () => {
-  it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
-    restoreTuiInputModes({ kittyKeyboard: false });
+describe('acquireTuiTerminal resume', () => {
+  const resumeWith = (kittyKeyboard: boolean): void => {
+    const title = { suspend: vi.fn(), resume: vi.fn(), dispose: vi.fn() };
+    const terminal = acquireTuiTerminal({ kittyKeyboard, title });
+    terminal.resume();
+    terminal.release();
+    expect(title.resume).toHaveBeenCalledOnce();
+  };
 
-    expect(writeSync).toHaveBeenLastCalledWith(1, '\x1b[?2004h\x1b[?25l');
+  it('re-arms bracketed paste and cursor hide after a SIGCONT resume', () => {
+    resumeWith(false);
+
+    expect(writeSync).toHaveBeenCalledWith(1, '\x1b[?2004h\x1b[?25l');
   });
 
   it("re-pushes Ink's kitty disambiguate flag on kitty terminals", () => {
-    restoreTuiInputModes({ kittyKeyboard: true });
+    resumeWith(true);
 
-    expect(writeSync).toHaveBeenLastCalledWith(
-      1,
-      '\x1b[>1u\x1b[?2004h\x1b[?25l',
-    );
+    expect(writeSync).toHaveBeenCalledWith(1, '\x1b[>1u\x1b[?2004h\x1b[?25l');
   });
 });

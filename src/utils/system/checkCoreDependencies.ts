@@ -16,6 +16,7 @@ import {
   reportMissingImageTools,
   toolLabel,
 } from './toolUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 function missingTool(
   id: keyof typeof DEPENDENCY_USE,
@@ -34,7 +35,9 @@ function missingTool(
  */
 export const checkCoreDependencies = Effect.fn(
   'toolUtils.checkCoreDependencies',
-)(function* (showError: boolean = true): Effect.fn.Return<MissingTool[]> {
+)(function* (
+  showError: boolean = true,
+): Effect.fn.Return<MissingTool[], never, ChildProcessSpawner> {
   const probes = yield* Effect.all(
     // The catalog's core set, not a second list beside it.
     CORE_DEPENDENCY_TOOLS.map((tool) => checkToolInstalled(tool, showError)),

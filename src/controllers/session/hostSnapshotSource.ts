@@ -18,9 +18,8 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type { AgentDirectories } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type { AgentCatalogServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { type FileOptions, type SessionType } from '@shared/schemas';
@@ -28,6 +27,7 @@ import type {
   HostSnapshot,
   ProjectDisplay,
 } from '@shared/session/hostSnapshot';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 type Banners = HostSnapshot['banners'];
 
@@ -72,7 +72,8 @@ interface HostSnapshotSourceOptions {
   >;
   readRecentCommits(): Effect.Effect<
     { commits: string[]; isGitRepo: boolean },
-    HostSnapshotReadFailed
+    HostSnapshotReadFailed,
+    ChildProcessSpawner
   >;
   /** The launcher's root picker; empty where a session has exactly one. */
   workspaceRoots?: () => HostSnapshot['workspaceRoots'];
@@ -85,7 +86,8 @@ interface HostSnapshotSourceOptions {
   >;
   dependencyBanner?: () => Effect.Effect<
     Banners['dependency'],
-    HostSnapshotReadFailed
+    HostSnapshotReadFailed,
+    ChildProcessSpawner
   >;
   /** Write directly to the bridge's host snapshot, which its runs replay. */
   publish(snapshot: HostSnapshot): Effect.Effect<void>;
@@ -97,20 +99,24 @@ export interface HostSnapshotSource {
   readonly refresh: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices | LanguageModel | ChildProcessSpawner
   >;
   /** The agent, team, and model catalogs changed (a roster edit, a
    *  credential, a sign-in). */
   readonly refreshCatalogs: Effect.Effect<
     void,
     never,
-    GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+    AgentCatalogServices | LanguageModel
   >;
   /** The project's files changed on disk, or the surface asked for a relist. */
   readonly refreshFiles: Effect.Effect<void, never, FileSystem.FileSystem>;
-  readonly refreshCommits: Effect.Effect<void>;
+  readonly refreshCommits: Effect.Effect<void, never, ChildProcessSpawner>;
   /** The host's own banners changed (a key stored, a tool installed). */
-  readonly refreshHostBanners: Effect.Effect<void, never, LanguageModel>;
+  readonly refreshHostBanners: Effect.Effect<
+    void,
+    never,
+    LanguageModel | ChildProcessSpawner
+  >;
   /** The workspace folders changed. */
   refreshWorkspaceRoots(): Effect.Effect<void>;
   /** The one recorder per process started or stopped. */
@@ -250,11 +256,11 @@ export function createHostSnapshotSource(
 
   return {
     refresh: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
+      AgentCatalogServices | LanguageModel | ChildProcessSpawner
     >(...catalogLoads, loadFiles, loadCommits, loadHostBanners),
-    refreshCatalogs: guarded<
-      GlobalStorageFs | LanguageModel | FileSystem.FileSystem | AgentDirectories
-    >(...catalogLoads),
+    refreshCatalogs: guarded<AgentCatalogServices | LanguageModel>(
+      ...catalogLoads,
+    ),
     refreshFiles: guarded(loadFiles),
     refreshCommits: guarded(loadCommits),
     refreshHostBanners: guarded(loadHostBanners),

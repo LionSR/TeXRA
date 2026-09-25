@@ -1,9 +1,10 @@
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import { getVisibleAgents, loadAgents } from '@agent/index';
 import { workspaceTexraConfigPath } from '@platform/defaults/nodeStorage';
 import { AgentCategory } from '@shared/schemas';
 import { implicitDefaultToolUseAgents } from '@shared/constants/agents';
+import { pathExists } from '@utils/files/fsDurability';
 
 import { CLI_CHEAP_START_MODEL } from '../runtime/cliConfig';
 import { type CliContext } from '../runtime/cliContext';
@@ -11,7 +12,6 @@ import { pickDefaultToolUseAgent } from '../runtime/defaultAgents';
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   buildInitConfig,
-  pathExists,
   ensureTexraGitignored,
   writeInitConfig,
   type GitignoreOutcome,
@@ -153,7 +153,10 @@ const runInit = Effect.fn('runInit')(function* (
   const services = yield* initCliPlatform({ ...context, quietLogs: true });
 
   const filePath = workspaceTexraConfigPath(context.cwd);
-  if (!opts.force && (yield* Effect.promise(() => pathExists(filePath)))) {
+  if (
+    !opts.force &&
+    (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, filePath)))
+  ) {
     writeTextStderr(
       `Refusing to overwrite existing config at ${filePath}. Re-run with --force to replace it.`,
     );

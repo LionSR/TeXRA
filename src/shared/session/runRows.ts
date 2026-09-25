@@ -139,10 +139,16 @@ export function applyRunRow(
       if (rows.family !== null && rows.family !== p.family) {
         return { kind: 'contradiction', detail: 'a step of another family' };
       }
+      // A continuation counts within its round: a reflection round opens at
+      // continuation 0, so the index is monotone only while the round holds.
+      const round = p.round ?? rows.round;
       const coordinates = [
         ['round', p.round],
         ['turn', p.turn],
-        ['continuationIndex', p.continuationIndex],
+        [
+          'continuationIndex',
+          round === rows.round ? p.continuationIndex : null,
+        ],
       ] as const;
       for (const [name, value] of coordinates) {
         if (value != null && value < rows[name]) {
@@ -155,7 +161,7 @@ export function applyRunRow(
       return applied({
         family: p.family,
         step: p.step,
-        round: p.round ?? rows.round,
+        round,
         turn: p.turn ?? rows.turn,
         continuationIndex: p.continuationIndex ?? rows.continuationIndex,
         outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,

@@ -1,14 +1,8 @@
-import { Cause, Effect } from 'effect';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Effect } from 'effect';
 
 import { commitCliProviderApiKey } from '@cli/chat/tui/hosts/cliProviderKeys';
 import { storeCredential } from '@common/secrets/storeCredential';
-import {
-  API_PROVIDERS,
-  loadApiKeyStatusMap,
-  type ApiKeyStatus,
-  type ApiProvider,
-} from '@model/apiProviders';
+import { API_PROVIDERS, loadApiKeyStatusMap } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
@@ -30,12 +24,11 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { bumpCodexPreferenceVersion } from '../state/cliState';
 import { AgentRosterForm } from './AgentRosterForm';
 import { ConfigForm } from './ConfigForm';
-import { useAsyncListForm } from './_shared/useAsyncListForm';
+import { useAsyncListForm, useAsyncResource } from './_shared/useAsyncListForm';
 import { renderAsyncListFormTransient } from './_shared/FormFrame';
 import {
   formatGitHubTokenSummary,
   GitHubTokenForm,
-  type GitHubTokenStatus,
   type GitHubTokenStatusView,
 } from './GitHubTokenForm';
 import {
@@ -70,153 +63,34 @@ export interface CliConfigFormProps {
   readonly onApprovalPolicyChanged?: (policy: TexraApprovalPolicy) => void;
 }
 
-type StatusViewBase = { readonly loading: boolean; readonly error: boolean };
-
-const INITIAL_STATUS_VIEW: StatusViewBase = Object.freeze({
-  loading: true,
-  error: false,
-} as const);
-
-function useAsyncStatusView<Status, View extends StatusViewBase>(options: {
-  readonly initial: View;
-  /**
-   * The status read, as the program its module exposes. The hook settles it
-   * on the surface's runtime and recovers from the whole cause there, so a
-   * failed read reaches the view without a Promise rejection in between.
-   */
-  readonly load: () => Effect.Effect<Status, Error>;
-  readonly runtime: ProcessRuntime;
-  readonly buildView: (status: Status) => View;
-  readonly onErrorRef: {
-    readonly current: ((error: unknown) => void) | undefined;
-  };
-}): {
-  readonly view: View;
-  /** The read as a program: the mount runs it, and a row that writes first
-   *  sequences it after its own write in one run. */
-  readonly refresh: () => Effect.Effect<void>;
-  readonly mark: (updater: (current: View) => Partial<View>) => void;
-} {
-  const [view, setView] = useState<View>(options.initial);
-  const mounted = useRef(false);
-  const requestSequence = useRef(0);
-
-  const mark = useCallback((updater: (current: View) => Partial<View>) => {
-    if (!mounted.current) return;
-    setView(
-      (current) =>
-        ({
-          ...current,
-          ...updater(current),
-          loading: current.loading,
-          error: false,
-        }) as View,
-    );
-  }, []);
-
-  // `suspend` so the sequence number is claimed when the read starts, not
-  // when its program is built: a row that composes this after a write must
-  // not reserve the slot before that write lands.
-  const refresh = useCallback(
-    (): Effect.Effect<void> =>
-      Effect.suspend(() => {
-        const request = ++requestSequence.current;
-        if (mounted.current) {
-          setView(
-            (current) => ({ ...current, loading: true, error: false }) as View,
-          );
-        }
-        return options.load().pipe(
-          Effect.matchCause({
-            onSuccess: (status) => {
-              if (!mounted.current || request !== requestSequence.current) {
-                return;
-              }
-              setView(options.buildView(status));
-            },
-            onFailure: (cause) => {
-              if (!mounted.current || request !== requestSequence.current) {
-                return;
-              }
-              setView(
-                (current) =>
-                  ({ ...current, loading: false, error: true }) as View,
-              );
-              // The squashed cause is the value the runtime would have
-              // rejected this read with, so the surface's error hook still
-              // sees the failure the status module reported.
-              options.onErrorRef.current?.(Cause.squash(cause));
-            },
-          }),
-        );
-      }),
-    [options.load, options.buildView, options.onErrorRef],
-  );
-
-  useEffect(() => {
-    mounted.current = true;
-    void options.runtime.runPromise(refresh());
-    return () => {
-      mounted.current = false;
-      requestSequence.current += 1;
-    };
-  }, [refresh, options.runtime]);
-
-  return { view, refresh, mark };
-}
-
-const buildApiKeyStatusView = (
-  statuses: Record<ApiProvider, ApiKeyStatus>,
-): ProviderApiKeyStatusView => ({ statuses, loading: false, error: false });
-
-const buildGitHubTokenStatusView = (
-  status: GitHubTokenStatus,
-): GitHubTokenStatusView => ({ status, loading: false, error: false });
-
 /**
  * Canonical CLI configuration form. Both `texra config` and `/config` mount
  * it, so persistence and runtime side effects cannot diverge between them.
  */
 export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
-  const { stores } = props;
-  const onError = useRef(props.onError);
-  onError.current = props.onError;
-  const { secrets } = props;
-  const { runtime } = props;
-  const loadApiKeyStatuses = useCallback(
-    () => loadApiKeyStatusMap(secrets, API_PROVIDERS),
-    [secrets],
-  );
-  // The status read is a program like the save and remove rows below it, so
-  // this surface settles all three on the runtime it was handed.
-  const loadGitHubToken = useCallback(
-    () => resolveGitHubTokenSource(secrets),
-    [secrets],
-  );
-
-  const {
-    view: apiKeyStatusView,
-    refresh: refreshApiKeyStatuses,
-    mark: markApiKey,
-  } = useAsyncStatusView({
-    initial: INITIAL_STATUS_VIEW as ProviderApiKeyStatusView,
-    load: loadApiKeyStatuses,
+  const { stores, secrets, runtime } = props;
+  // The status reads are programs like the save and remove rows below them,
+  // so this surface settles all of them on the runtime it was handed.
+  const apiKeys = useAsyncResource({
+    load: () => loadApiKeyStatusMap(secrets, API_PROVIDERS),
     runtime,
-    buildView: buildApiKeyStatusView,
-    onErrorRef: onError,
+    onError: props.onError,
   });
-
-  const {
-    view: githubTokenStatusView,
-    refresh: refreshGitHubTokenStatus,
-    mark: markGitHubToken,
-  } = useAsyncStatusView({
-    initial: INITIAL_STATUS_VIEW as GitHubTokenStatusView,
-    load: loadGitHubToken,
+  const apiKeyStatusView: ProviderApiKeyStatusView = {
+    statuses: apiKeys.data,
+    loading: apiKeys.loading,
+    error: apiKeys.error !== undefined,
+  };
+  const githubToken = useAsyncResource({
+    load: () => resolveGitHubTokenSource(secrets),
     runtime,
-    buildView: buildGitHubTokenStatusView,
-    onErrorRef: onError,
+    onError: props.onError,
   });
+  const githubTokenStatusView: GitHubTokenStatusView = {
+    status: githubToken.data,
+    loading: githubToken.loading,
+    error: githubToken.error !== undefined,
+  };
 
   const settings = useAsyncListForm<Record<string, unknown>>({
     load: () =>
@@ -336,10 +210,10 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
             onSave={(provider, key) =>
               Effect.gen(function* () {
                 yield* commitCliProviderApiKey(secrets, stores, provider, key);
-                markApiKey((current) => ({
-                  statuses: { ...current.statuses, [provider]: 'set' },
-                }));
-                yield* refreshApiKeyStatuses();
+                apiKeys.setData(
+                  (current) => current && { ...current, [provider]: 'set' },
+                );
+                yield* apiKeys.refresh();
               })
             }
             onDone={onBack}
@@ -358,14 +232,14 @@ export function CliConfigForm(props: CliConfigFormProps): React.JSX.Element {
                   value: token,
                   kind: 'github',
                 });
-                markGitHubToken(() => ({ status: 'secret' }));
-                yield* refreshGitHubTokenStatus();
+                githubToken.setData(() => 'secret');
+                yield* githubToken.refresh();
               })
             }
             onRemove={() =>
               Effect.gen(function* () {
                 yield* secrets.delete(GITHUB_TOKEN_STORAGE_KEY);
-                yield* refreshGitHubTokenStatus();
+                yield* githubToken.refresh();
               })
             }
             onDone={onBack}

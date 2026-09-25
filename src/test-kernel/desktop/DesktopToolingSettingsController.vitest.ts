@@ -160,7 +160,7 @@ function createFixture(
     },
     latexToolingController: new LatexToolingController({
       checkToolInstalled: () => Effect.succeed(false),
-      findPath: () => null,
+      findPath: () => Effect.succeed(null),
       detectPackageManager: () => null,
       getPlatform: () => 'linux',
       isLatexWorkshopInstalled: () => false,

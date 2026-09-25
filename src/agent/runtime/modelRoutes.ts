@@ -421,7 +421,7 @@ export const resolveModelCompatibilityKey = Effect.fn(
   useOpenRouter: boolean,
   ownApiKeyFallback = false,
 ) {
-  if (shouldUseInternalValidationModel()) {
+  if (yield* shouldUseInternalValidationModel()) {
     return 'Validation';
   }
 

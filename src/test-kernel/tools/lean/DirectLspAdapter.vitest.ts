@@ -157,9 +157,9 @@ process.stdin.on('data', (chunk) => {
 /** The `FileSystem`/`Path` pair the process runtime provides the spawner. */
 const nodePlatform = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 
-/** The same spawner graph `directLeanLanguageServices` builds for the pool. */
+/** The spawner graph the process runtime serves the pool. */
 const spawnerLayer = NodeChildProcessSpawner.layer.pipe(
-  Layer.provide(nodePlatform),
+  Layer.provideMerge(nodePlatform),
 );
 
 const NO_RUN: RunId | undefined = undefined;
@@ -739,7 +739,9 @@ describe('directLeanLanguageServices', () => {
       const scope = yield* Scope.make();
       yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
       const adapter = yield* Layer.build(
-        directLeanLanguageServices(options).pipe(Layer.provide(nodePlatform)),
+        directLeanLanguageServices(options).pipe(
+          Layer.provide(Layer.mergeAll(nodePlatform, spawnerLayer)),
+        ),
       ).pipe(
         Scope.provide(scope),
         Effect.map((context) => Context.get(context, LeanLanguageServices)),

@@ -10,6 +10,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import { hasExtension } from '@utils/core/pathCore';
 
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { LatexFormatter } from './texFormatter';
 
 export type IndentLatexResult =
@@ -59,7 +60,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
 ): Effect.fn.Return<
   IndentLatexResult,
   PlatformError.PlatformError,
-  FileSystem.FileSystem | Path.Path
+  FileSystem.FileSystem | Path.Path | ChildProcessSpawner
 > {
   yield* Effect.logDebug(
     `Starting LaTeX indentation process for directory: ${directory}`,
@@ -104,7 +105,7 @@ export const indentLatexFilesInDirectory = Effect.fn(
   ): Effect.fn.Return<
     void,
     PlatformError.PlatformError,
-    FileSystem.FileSystem | Path.Path
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
     const entries = yield* readDirectoryTypedTolerant(dirPath);
     for (const [name, type] of entries) {

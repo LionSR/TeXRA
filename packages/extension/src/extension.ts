@@ -67,7 +67,6 @@ import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
 import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
-import { resolveGitCommonRoot } from '@frontend/git/resolveGitRoot';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
   getInlineCommentProvider,
@@ -106,7 +105,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
-import { WorktreeStateStore } from '@platform/defaults/worktreeStateStore';
+import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
 import {
   formatTexraApprovalPolicy,
@@ -202,9 +201,8 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out.
-  // The account plane and the process identity both resolve before the
-  // runtime that serves them: an opener that uses the synchronous `open`
-  // would otherwise face an asynchronous identity layer build.
+  // The account plane resolves before the runtime that serves it; the
+  // process identity is the runtime's own layer, built by its first run.
   const auth = yield* createSupabaseAuth({
     secrets,
     whenReady: () =>
@@ -216,7 +214,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   }).pipe(
     Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
   );
-  const processStart = yield* nodeProcesses.selfIdentity();
   // The resume port closes over the runtime installed just below: a resume
   // attempt runs on it, and the port is only invoked after activation has
   // returned. It is served as the runtime's `AgentResume` service. The
@@ -244,7 +241,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       ? context.extension.packageJSON.version
       : undefined;
   const runtime = installProcessRuntime({
-    processStart: Effect.succeed(processStart),
+    processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     secrets,
     appState,
@@ -308,9 +305,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       const projectState = yield* openProjectStateStore(storage).pipe(
         Scope.provide(projectScope),
       );
-      const gitRepoRoot = workspaceRoot
-        ? yield* resolveGitCommonRoot(workspaceRoot)
-        : undefined;
       // VS Code restarts the extension host when the first workspace folder
       // changes, so the configuration stores stay pinned for this process.
       const config = new JsonConfigProvider(
@@ -325,8 +319,12 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
         storage,
         globalStorage,
         config,
-        workspaceState: gitRepoRoot
-          ? new WorktreeStateStore(projectState, globalState, gitRepoRoot)
+        workspaceState: workspaceRoot
+          ? yield* openWorktreeStateStore(
+              projectState,
+              globalState,
+              workspaceRoot,
+            )
           : projectState,
         globalState,
       });

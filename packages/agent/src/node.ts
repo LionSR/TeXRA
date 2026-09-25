@@ -17,6 +17,7 @@ import {
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import { envVar } from '@utils/system/envFlags';
 
 import type { AgentPlatform } from './index.js';
 
@@ -41,12 +42,11 @@ const unpersisted = (operation: 'set' | 'delete', key: string) =>
   );
 
 const environmentSecrets: PlatformSecrets = {
-  get: (key) => Effect.sync(() => process.env[key]),
+  get: (key) => envVar(key),
   getStored: () => Effect.succeed(undefined),
   set: (key) => unpersisted('set', key),
   delete: (key) => unpersisted('delete', key),
   listStoredKeys: () => Effect.succeed([]),
-  getEnv: (name) => process.env[name],
 };
 
 /**

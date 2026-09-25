@@ -1,6 +1,4 @@
-import { existsSync } from 'node:fs';
-import { rm, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve as resolvePath } from 'node:path';
+import { join, resolve as resolvePath } from 'node:path';
 import { Scope } from 'effect';
 import {
   app,
@@ -82,14 +80,17 @@ import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { readRecentCommits } from '@utils/git/repositoryOverview';
-import { findToolInCommonPaths } from '@utils/system/platformPaths';
+import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
   checkToolInstalled,
   detectPackageManager,
 } from '@utils/system/toolUtils';
 import { openDesktopProjectRecords } from './desktopProjectRecords.js';
 import { DesktopProcessResumeOwner } from './desktopAgentResume.js';
-import { createDesktopDiffHost } from './desktopDiffHost.js';
+import {
+  createDesktopDiffHost,
+  removeExternalDiffPatchDirs,
+} from './desktopDiffHost.js';
 import { createDesktopFileSelection } from './desktopFileSelection.js';
 import { createDesktopHostRequests } from './desktopHostRequests.js';
 import { createDesktopAgentRun } from './desktopAgentRun.js';
@@ -174,7 +175,6 @@ import type { DesktopSetupAuth } from './desktopSetupAuth.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
 
 const moduleDirname = import.meta.dirname;
-const desktopMainDir = findDesktopMainDir(moduleDirname);
 /**
  * Maximum number of commits the renderer displays in the launcher banner.
  * Mirrors the extension's `texra.git.numberOfCommitsToShow` default (20). The
@@ -187,38 +187,6 @@ let reopenMainWindow: (() => void) | undefined;
  *  this; createWindow assigns it when onboarding IPC exists. */
 const afterLaunchFunnelRefresh: { current?: Effect.Effect<void> } = {};
 let continueQuitAfterWindowClose: (() => void) | undefined;
-// Temp directories holding the `.diff` patch files written by the
-// external-editor fallback of every window's diff host. The OS editor may
-// still be reading a patch when its window closes, and on macOS the app
-// outlives its windows, so the process owns these directories and removes them
-// once from the quit lifecycle rather than at window close.
-const externalDiffPatchDirs = new Set<string>();
-
-// Removes every recorded patch directory, reporting each failure instead of
-// swallowing it: a directory that survives is left for OS temp cleanup, and
-// quit must not stall on it.
-const removeExternalDiffPatchDirs: Effect.Effect<void> = Effect.suspend(() => {
-  const tempDirs = [...externalDiffPatchDirs];
-  externalDiffPatchDirs.clear();
-  return Effect.forEach(
-    tempDirs,
-    (tempDir) =>
-      Effect.tryPromise({
-        try: () => rm(tempDir, { recursive: true, force: true }),
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((reason: unknown) =>
-          Effect.sync(() => {
-            console.warn(
-              `[desktop] Failed to remove the temporary diff directory ${tempDir}; it is left for OS temp cleanup: ${toErrorMessage(reason)}`,
-            );
-          }),
-        ),
-      ),
-    { concurrency: 'unbounded', discard: true },
-  );
-});
-
 // Playwright tests need a deterministic Electron profile so app-scoped stores
 // survive across launches. Normal desktop launches keep Electron's default
 // userData path.
@@ -244,23 +212,6 @@ const protocolLifecycle = installDesktopProtocolCallbackLifecycle({
   devAppArg: process.argv[1] ? resolvePath(process.argv[1]) : undefined,
   focusMainWindow: focusOrReopenMainWindow,
 });
-
-function findDesktopMainDir(startDir: string): string {
-  let currentDir = startDir;
-  for (let depth = 0; depth < 3; depth += 1) {
-    if (
-      existsSync(join(currentDir, '../preload/index.cjs')) &&
-      existsSync(join(currentDir, '../renderer/index.html'))
-    ) {
-      return currentDir;
-    }
-
-    const parentDir = dirname(currentDir);
-    if (parentDir === currentDir) break;
-    currentDir = parentDir;
-  }
-  return startDir;
-}
 
 // The packaged renderer uses Lit style attributes and bundled font data URLs
 // (codicons/KaTeX). Keep script run locked to app files while allowing
@@ -320,6 +271,8 @@ function createWindow(options: {
   agentDirectories: AgentDirectoriesPort;
   /** See ElectronPlatformInitResult.resourcesPath. */
   resourcesPath: string;
+  /** See ElectronPlatformInitResult.mainDir. */
+  mainDir: string;
   /**
    * The process runtime the composition root built. Every Effect this window
    * runs settles on it, and every handler and service below is handed it.
@@ -366,7 +319,7 @@ function createWindow(options: {
     // contrasting flash behind the frameless window.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#212121' : '#f7f7f7',
     webPreferences: {
-      preload: join(desktopMainDir, '../preload/index.cjs'),
+      preload: join(options.mainDir, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
@@ -578,6 +531,7 @@ function createWindow(options: {
   );
   const previewOptions = {
     shell,
+    runtime,
     // The in-app PDF overlay is preferred when the renderer is available.
     postToRenderer: postToRendererIfAlive,
   };
@@ -886,9 +840,6 @@ function createWindow(options: {
   const desktopDiffHost = createDesktopDiffHost({
     runtime,
     openPath: previewHost.openPath,
-    recordPatchDir: (tempDir) => {
-      externalDiffPatchDirs.add(tempDir);
-    },
     // Prefer the in-app overlay (<texra-diff-view> inside a wa-dialog).
     // Returning `false` when the IPC bridge is not yet wired (startup race)
     // or the BrowserWindow has been destroyed falls the host back to the
@@ -916,9 +867,6 @@ function createWindow(options: {
   const requestDiffHost = createDesktopDiffHost({
     runtime,
     openPath: requestPreviewHost.openPath,
-    recordPatchDir: (tempDir) => {
-      externalDiffPatchDirs.add(tempDir);
-    },
     postToRenderer: postToRendererIfAlive,
   });
   const agentRunHost: Omit<
@@ -1690,17 +1638,11 @@ function createWindow(options: {
     {
       readLog: () =>
         readDesktopLogSnapshot({ workspacePath: activeProject().root }),
-      copyLog: async (text) => clipboard.writeText(text),
-      exportLog: async (text) => {
-        const result = await dialog.showSaveDialog(window, {
-          title: 'Export TeXRA Desktop Log',
-          defaultPath: 'texra-desktop-log.txt',
-          filters: [{ name: 'Text Logs', extensions: ['txt', 'log'] }],
-        });
-        if (result.canceled || !result.filePath) return;
-        await writeFile(result.filePath, text, 'utf8');
-      },
+      copyLog: (text) => clipboard.writeText(text),
+      showSaveDialog: (dialogOptions) =>
+        dialog.showSaveDialog(window, dialogOptions),
       onAsyncError: reportAsyncError,
+      runtime,
     },
   );
   // One handler per inbound command namespace: the message's `command` names
@@ -1773,7 +1715,11 @@ function createWindow(options: {
         Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }]));
       }
     }
-    continueQuit?.();
+    // Resume the quit once Electron has finished closing this window. A quit
+    // requested from inside `closed` lands before the window leaves the
+    // window list, so Electron abandons it and emits `window-all-closed`
+    // instead of `will-quit`, which on macOS leaves the process running.
+    if (continueQuit) setImmediate(continueQuit);
   });
   let windowPresented = false;
   const presentWindow = (): void => {
@@ -1796,7 +1742,7 @@ function createWindow(options: {
     return;
   }
 
-  void window.loadFile(join(desktopMainDir, '../renderer/index.html'));
+  void window.loadFile(join(options.mainDir, '../renderer/index.html'));
 }
 
 if (protocolLifecycle.ownsSingleInstanceLock) {
@@ -1827,7 +1773,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
       const { lifecycle, runtime, processScope, initialize } =
-        yield* initializeElectronPlatform(desktopMainDir, processResumeOwner);
+        yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
         afterAgentShutdown: [killActiveRecording()],
@@ -1839,7 +1785,9 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         ),
         // The external-editor patch directories recorded by every window's
         // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [removeExternalDiffPatchDirs],
+        afterFlushArtifacts: [
+          withProcessServices(runtime, removeExternalDiffPatchDirs),
+        ],
         // Every project's session, most recently opened first, released
         // before the runtime they run on goes (or, before the registry
         // opened, the fallback project's scope it would own).
@@ -1924,6 +1872,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
                 secrets: platformInit.secrets,
                 agentDirectories: platformInit.agentDirectories,
                 resourcesPath: platformInit.resourcesPath,
+                mainDir: platformInit.mainDir,
                 runtime,
                 setupAuth: platformInit.setupAuth,
               });

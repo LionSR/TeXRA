@@ -1,10 +1,9 @@
-import { readFile } from 'node:fs/promises';
-
-import { Effect, Option } from 'effect';
+import { Effect, FileSystem, Option } from 'effect';
 import * as vscode from 'vscode';
 
 import {
   fromHost,
+  hostFailure,
   type HostCallFailed,
 } from '@controllers/session/hostCallFailure';
 import { type DiffSource, type DiffViewHost } from '@hosts/uiHosts';
@@ -135,7 +134,7 @@ export class VscodeDiffViewHost implements DiffViewHost {
 
   readProposedContent(
     session: DiffSession,
-  ): Effect.Effect<string, EditorCallFailed> {
+  ): Effect.Effect<string, EditorCallFailed, FileSystem.FileSystem> {
     return Effect.suspend(() => {
       const proposedUri = this.toUri(session.proposed);
       const openDocument = vscode.workspace.textDocuments.find(
@@ -143,8 +142,12 @@ export class VscodeDiffViewHost implements DiffViewHost {
       );
       return openDocument
         ? Effect.succeed(openDocument.getText())
-        : fromHost('readProposedContent', () =>
-            readFile(proposedUri.fsPath, 'utf8'),
+        : FileSystem.FileSystem.use((fs) =>
+            fs.readFileString(proposedUri.fsPath),
+          ).pipe(
+            Effect.mapError((cause) =>
+              hostFailure('readProposedContent', cause),
+            ),
           );
     });
   }

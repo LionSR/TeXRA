@@ -126,18 +126,12 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // runs builds the whole `CliContext`, which opens the project and user
   // `config.json` stores BEFORE `initCliPlatform` (and with it
   // `installCliProcessRuntime`), so no process runtime exists to borrow; the
-  // program needs the filesystem and nothing else. `initCliPlatform` installs
+  // program needs the filesystem and the process environment (as a
+  // ConfigProvider). `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
   // here. Its four citty callers take the resolved context as a value.
   'packages/cli/src/commands/_helpers/context.ts': 1,
-  // The CLI's process-runtime install, which reads the process identity and
-  // opens the global state store it provides as `AppState` before it installs
-  // the runtime that serves them: both are values that install is given, so
-  // neither can run on the runtime it is being installed into. The program
-  // needs the filesystem and nothing else, and this module is the only place
-  // the CLI installs from.
-  'packages/cli/src/runtime/cliProcessRuntime.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
   // process-runtime install with the plane as one of the values that install
@@ -151,22 +145,23 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // begins, and an init that fails disposes the runtime it installed before it
   // re-raises (see `initPlatform.ts` above), leaving the degraded report —
   // node, workspace, resources, LaTeX, config and the platform-failure row —
-  // nothing to run on. That report reads no service and nothing in it logs
-  // through Effect; the healthy one settles on the context the init hands
-  // back.
+  // nothing to run on. That report provides the Node platform services (the
+  // filesystem its probes read, the spawner its LaTeX probes run on) itself,
+  // and nothing in it logs through Effect; the healthy one settles on the
+  // context the init hands back.
   'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
   // lifecycle host and no runtime — the drain it runs is what disposes the
   // process runtime — so the quit follows the drain on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
-  // which builds the process runtime (its identity, stores and account plane
-  // resolve before `installProcessRuntime`, being the values that install is
-  // given) and, when startup fails, runs the drain that disposes it.
+  // which builds the process runtime (its stores and account plane resolve
+  // before `installProcessRuntime`, being the values that install is given)
+  // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
   // The VS Code entry: one program from `activate` to the last registration,
-  // which builds the process runtime (its account plane and identity resolve
-  // before `installProcessRuntime`, being values that install is given) and
+  // which builds the process runtime (its account plane resolves before
+  // `installProcessRuntime`, being a value that install is given) and
   // closes its scope when activation fails; and `deactivate`, which closes
   // that same scope. The scope's finalizer is the shutdown drain that
   // disposes the process runtime, so neither can settle on it. Every other

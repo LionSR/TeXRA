@@ -34,9 +34,9 @@ const CLEAR_SCREEN_AND_SCROLLBACK = '\x1b[2J\x1b[3J\x1b[H';
 const CLEAR_VISIBLE_SCREEN = '\x1b[2J\x1b[H';
 
 // The terminal may be gone (exit paths, a suspend, a closed window) and no
-// caller can surface a failed restore usefully, so every mode write is
-// best-effort.
-function writeTerminalSequence(sequence: string): void {
+// caller can surface a failed write usefully, so every terminal-control write
+// is best-effort. Synchronous, so it also works from the process `exit` hook.
+export function writeTerminalSequence(sequence: string): void {
   try {
     writeSync(1, sequence);
   } catch {
@@ -50,7 +50,7 @@ export function supportsTerminalJobControl(
   return platform !== 'win32';
 }
 
-export function cleanupTerminalModes(): void {
+function cleanupTerminalModes(): void {
   // TERM_PROGRAM is fixed for the process, so the writer owns the emulator
   // check rather than having it threaded through the exit controller.
   writeTerminalSequence(
@@ -60,30 +60,67 @@ export function cleanupTerminalModes(): void {
   );
 }
 
-/**
- * Last-resort terminal restore: an uncaught exception (or a stray
- * `process.exit` outside the TUI's own teardown) must not strand the user's
- * shell with mouse reporting / kitty keyboard / bracketed paste on and the
- * cursor hidden. The `exit` event fires on every non-signal death, the writes
- * are synchronous, and re-emitting the resets after an orderly
- * `cleanupTerminalModes` is harmless — so install once while the TUI is
- * mounted and dispose with the other subscriptions.
- */
-export function installTerminalRestoreOnExit(): () => void {
-  const onExit = (): void => cleanupTerminalModes();
-  process.on('exit', onExit);
-  return () => {
-    process.off('exit', onExit);
-  };
+/** The live terminal title the TUI projects while it owns the terminal. */
+interface TuiTerminalTitle {
+  /** Show the idle title and stop projecting live state. */
+  readonly suspend: () => void;
+  /** Project live state again. */
+  readonly resume: () => void;
+  /** Show the idle title and stop for good. */
+  readonly dispose: () => void;
 }
 
-/** Re-enable the input modes the TUI relies on after a SIGCONT resume. */
-export function restoreTuiInputModes(options: {
+/** The mounted TUI's hold on the terminal: raw mode, emulator modes, title. */
+export interface TuiTerminal {
+  /** Hand the terminal to the shell before a job-control stop. */
+  readonly suspend: () => void;
+  /** Take it back after SIGCONT; the caller repaints. */
+  readonly resume: () => void;
+  /** Restore the terminal for good. Idempotent and synchronous. */
+  readonly release: () => void;
+}
+
+/**
+ * The one owner of the terminal state the TUI changes. Every restore writes
+ * the idle title first, then resets the modes, synchronously. `release` is
+ * also the last-resort `exit` hook: an uncaught exception or a stray
+ * `process.exit` must not strand the user's shell with mouse reporting, kitty
+ * keyboard or bracketed paste on and the cursor hidden.
+ */
+export function acquireTuiTerminal(options: {
   readonly kittyKeyboard: boolean;
-}): void {
-  writeTerminalSequence(
-    `${options.kittyKeyboard ? KITTY_PUSH_DISAMBIGUATE : ''}${REARM_INPUT_MODES}`,
-  );
+  readonly title: TuiTerminalTitle;
+}): TuiTerminal {
+  const { title } = options;
+  let released = false;
+  const setRawMode = (raw: boolean): void => {
+    if (process.stdin.isTTY) process.stdin.setRawMode(raw);
+  };
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    process.off('exit', release);
+    title.dispose();
+    cleanupTerminalModes();
+  };
+  process.on('exit', release);
+  return {
+    suspend: () => {
+      title.suspend();
+      cleanupTerminalModes();
+      setRawMode(false);
+    },
+    // The shell restores only the termios snapshot from suspend time
+    // (non-raw); the emulator-side modes were popped outright, so re-arm both.
+    resume: () => {
+      setRawMode(true);
+      writeTerminalSequence(
+        `${options.kittyKeyboard ? KITTY_PUSH_DISAMBIGUATE : ''}${REARM_INPUT_MODES}`,
+      );
+      title.resume();
+    },
+    release,
+  };
 }
 
 export function clearTerminalScrollback(): void {

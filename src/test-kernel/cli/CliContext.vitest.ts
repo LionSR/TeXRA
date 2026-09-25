@@ -23,6 +23,7 @@ import * as logSinks from '@cli/runtime/logSinks';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 
 const ambient = {
   isCi: true,
@@ -52,12 +53,17 @@ const tempDirs = useTempDirs();
  * developer's own `~/.texra/v1/global-storage/config.json` must never decide an
  * assertion. Tests that exercise the user layer pass their own `storageRoot`.
  */
-async function cliContext(init: BuildCliContextInit): Promise<CliContext> {
+async function cliContext({
+  env,
+  ...init
+}: BuildCliContextInit & {
+  readonly env?: Record<string, string>;
+}): Promise<CliContext> {
   return Effect.runPromise(
     buildCliContext({
       storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
       ...init,
-    }),
+    }).pipe(withEnv(env ?? {})),
   );
 }
 
@@ -274,7 +280,7 @@ describe('CLI context config defaults', () => {
           globalArgs: { cwd: workspace },
         });
 
-        // Degraded to the internal workspace config store, never fatal.
+        // The unreadable file is ignored, loudly, never fatal.
         expect(context.approvalPolicy).toBe('ask');
         expect(warnSpy).toHaveBeenCalledWith(
           expect.stringContaining('.texra/config.json'),

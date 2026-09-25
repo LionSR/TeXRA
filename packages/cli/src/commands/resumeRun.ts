@@ -1,7 +1,6 @@
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, PlatformError, Result } from 'effect';
 
 import {
   classifyRun,
@@ -17,14 +16,15 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { runHeldByProcessMessage } from '@shared/runs/runStatusDisplay';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
 
 import { executeCliWorkflowConfig } from './workflow';
 import { formatResumeCommand } from '../chat/tui/state/resumeHint';
 import { CliExitCode } from '../runtime/exitCodes';
 import { installCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeTextStderr } from '../runtime/logSinks';
+import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
 import { resolveCliLaunchAgent } from '../runtime/agents';
 import {
@@ -40,27 +40,32 @@ import {
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 function loadFailureMessage(id: RunId, error: unknown): string {
-  return `Could not load session ${id}: ${toErrorMessage(error)}`;
+  return `Could not load session ${id}: ${cliErrorMessage(error)}`;
 }
 
-function workflowRecoveryInputsAreDurable(
+/** Every recorded input and context file is still there: an absent path
+ *  (ENOENT or ENOTDIR) means "not durable"; any other failure fails the
+ *  resume instead of reading as absent. */
+const workflowRecoveryInputsAreDurable = Effect.fn(
+  'workflowRecoveryInputsAreDurable',
+)(function* (
   config: Parameters<typeof executeCliWorkflowConfig>[0],
   fallbackCwd: string,
-): Effect.Effect<boolean> {
+): Effect.fn.Return<
+  boolean,
+  PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
+  const fs = yield* FileSystem.FileSystem;
   const cwd = config.workingDirectory || fallbackCwd;
   const paths = [...(config.inputFiles ?? []), ...(config.contextFiles ?? [])];
-  return Effect.forEach(
+  const present = yield* Effect.forEach(
     paths,
-    (inputPath) =>
-      Effect.promise(() =>
-        fs.access(path.resolve(cwd, inputPath)).then(
-          () => true,
-          () => false,
-        ),
-      ),
+    (inputPath) => pathExists(fs, path.resolve(cwd, inputPath)),
     { concurrency: 'unbounded' },
-  ).pipe(Effect.map((checks) => checks.every(Boolean)));
-}
+  );
+  return present.every(Boolean);
+});
 
 /**
  * What the resume program decided. The chat arm carries the persisted record
