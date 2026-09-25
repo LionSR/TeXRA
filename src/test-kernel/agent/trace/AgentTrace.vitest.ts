@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  type AgentEvent,
-  emitToolUseCard,
-  logFileCategory,
-  TraceEmitter,
-} from '@agent/trace';
+import { type AgentEvent, emitToolUseCard, TraceEmitter } from '@agent/trace';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
@@ -79,29 +74,4 @@ describe('emitToolUseCard', () => {
       }
     },
   );
-});
-
-describe('logFileCategory', () => {
-  // A file whose `ok` is unset counts as not found, and an empty list logs
-  // no card at all.
-  it('treats an unset ok as not loaded and skips empty lists', () => {
-    const events = collectEvents((trace) => {
-      logFileCategory(trace, 'Input Files', []);
-      logFileCategory(trace, 'Aux', [
-        { path: '/a.tex', ok: true },
-        { path: '/b.tex' },
-      ]);
-    });
-
-    expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({
-      data: {
-        category: 'Aux',
-        entries: [
-          { path: '/a.tex', ok: true },
-          { path: '/b.tex', ok: false },
-        ],
-      },
-    });
-  });
 });

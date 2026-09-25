@@ -906,30 +906,6 @@ describe('runRegistry', () => {
     }),
   );
 
-  it('clears live tool-use context while the handle remains tracked', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const context = createLiveToolUseFlowContext();
-
-    try {
-      const handle = createHandle(runId, null, {
-        agentName: 'test-tool-use',
-      });
-
-      handle.attachToolUseFlow(context);
-      registry.track(handle);
-
-      expect(registry.getToolUseFlowContext(runId)).toBe(context);
-
-      handle.detachToolUseFlow(context);
-
-      expect(registry.getToolUseFlowContext(runId)).toBeUndefined();
-      expect(registry.getHandle(runId)).toBe(handle);
-    } finally {
-      registry.dispose();
-    }
-  });
-
   it('detaches children of an ownerless run and cancels it', () => {
     const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);

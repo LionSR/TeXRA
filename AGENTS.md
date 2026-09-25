@@ -337,7 +337,8 @@ Three rules come first and override anything below that seems to allow more:
    a **verifiable, repeatable artifact** — a screenshot compared against a
    committed baseline, a saved transcript, run ledger, or output file —
    written to a known path (`packages/desktop/tests/e2e/test-results/`), so a
-   reviewer can re-run the test and diff the artifact rather than trusting a green checkmark.
+   reviewer can re-run the test and diff the artifact rather than trusting a
+   green checkmark.
 3. **If you must test a system in isolation, write down how it can fail
    first, then write the code.** Before any implementation, list every way the
    unit can fail — bad input, malformed persisted data, ordering and
