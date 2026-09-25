@@ -75,9 +75,11 @@ import {
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { foldRunRows } from '@shared/session/runRows';
-import type { Append, SessionEventReads } from '@shared/session/sessionEvents';
-import { openWork } from '@shared/session/transcriptReads';
-import { readRunTranscript } from '@transcript/runTranscript';
+import type {
+  Append,
+  OpenWork,
+  SessionEventReads,
+} from '@shared/session/sessionEvents';
 import { aggregateError, throwAggregated } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
@@ -641,12 +643,24 @@ export class SessionHandle {
   streamClosureFacts(
     runId: RunId,
   ): Extract<RunLedgerDraft, { type: 'stream.end' }>[] {
-    return this.graph.openStreams(runId).map((id) => ({
-      type: 'stream.end' as const,
-      aggregateId: qualifyAggregateId('run', runId),
-      id,
-      finalText: this.graph.readText(runId, id),
-    }));
+    return this.graph.openWork(runId).flatMap(({ kind, id }) =>
+      kind === 'stream'
+        ? [
+            {
+              type: 'stream.end' as const,
+              aggregateId: qualifyAggregateId('run', runId),
+              id,
+              finalText: this.graph.readText(runId, id),
+            },
+          ]
+        : [],
+    );
+  }
+
+  /** What the publisher holds open on `runId` (`SessionEvents.openWork`):
+   *  what the host exit closes. Read after this run's publications settled. */
+  openWork(runId: RunId): readonly OpenWork[] {
+    return this.graph.openWork(runId);
   }
 
   /**
@@ -1262,14 +1276,12 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
       const settlement = Effect.gen(function* () {
         if (!(yield* session.ownsRun(runId))) return;
         const tracked = session.runs.getHandle(runId) !== undefined;
-        // Read the committed transcript once after queued publications settle.
-        const transcript = yield* Effect.exit(
-          Effect.gen(function* () {
-            yield* session.settlePublications();
-            return tracked
-              ? openWork(yield* readRunTranscript(session, runId))
-              : [];
-          }),
+        // Read what the publisher holds open once queued publications
+        // settle, so every row they commit is counted.
+        const open = yield* Effect.exit(
+          session
+            .settlePublications()
+            .pipe(Effect.map(() => (tracked ? session.openWork(runId) : []))),
         );
         // The run's closure facts, queued and settled under the same lease
         // *before* the terminal row: that row is the one place their loss is
@@ -1287,13 +1299,14 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
               ).pipe(withLogChannel(CHANNEL));
               return undefined;
             }
-            // A failed read leaves nothing to close; it is reported after the
-            // terminal row, through the owner's release choreography.
-            if (Exit.isFailure(transcript)) return undefined;
+            // A failed settle leaves nothing known to close; it is reported
+            // after the terminal row, through the owner's release
+            // choreography.
+            if (Exit.isFailure(open)) return undefined;
             // These are ordinary canonical facts. The lease owner settles their
             // publication before unlinking the claim, so replay sees the same
             // closure as the resident transcript.
-            for (const work of transcript.value) {
+            for (const work of open.value) {
               if (work.kind === 'stage') {
                 session.publishRunEvent(runId, {
                   type: 'stage.end',
@@ -1357,11 +1370,10 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
                 { cause: finalization.error },
               );
             }
-            // A failed read or a rolled-back closure must still pass through
-            // the owner's release choreography after recording the terminal
-            // outcome.
-            if (Exit.isFailure(transcript))
-              throw Cause.squash(transcript.cause);
+            // A failed settle or a rolled-back closure must still pass
+            // through the owner's release choreography after recording the
+            // terminal outcome.
+            if (Exit.isFailure(open)) throw Cause.squash(open.cause);
             if (closureFailure !== undefined) throw closureFailure;
           }),
         );

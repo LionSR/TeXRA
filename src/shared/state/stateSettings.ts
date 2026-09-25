@@ -638,17 +638,6 @@ const CORE_SETTING_ROWS: Record<
       cli: { writer: 'src/tools/setup/ConfigTools.ts' },
     },
   },
-  'agentReview.runOnCommit': {
-    schema: z.boolean().prefault(false),
-    description:
-      'Automatically review your changes for issues after each commit.',
-    honoredBy: {
-      vscode: {
-        reader:
-          'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts',
-      },
-    },
-  },
   'audio.soxPath': {
     schema: z.string().prefault(''),
     description: 'Path to the SoX executable. Overrides automatic detection.',

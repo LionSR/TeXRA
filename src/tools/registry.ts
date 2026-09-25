@@ -22,7 +22,6 @@ import { toolTable, type PluginLayer } from '@tools/toolTable';
 import { BashTool } from './bash';
 import { DiagnosticsTool } from './DiagnosticsTool';
 import { InlineCommentTool } from './comment/InlineCommentTool';
-import { ReportReviewIssueTool } from './ReportReviewIssueTool';
 import { EditFileTool } from './EditTool';
 import { GlobTool } from './glob';
 import { GrepTool } from './grep';
@@ -160,7 +159,6 @@ const PLUGIN_TOOLS = {
   'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
   core: {
     inline_comment: InlineCommentTool,
-    report_review_issue: ReportReviewIssueTool,
     open_pdf: OpenPdfTool,
     ask_user_question: AskUserQuestionTool,
     lean_loogle: LeanLoogleTool,

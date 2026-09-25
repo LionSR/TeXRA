@@ -167,6 +167,41 @@ describe('tool availability app signals', () => {
   );
 
   it.effect(
+    're-probes for a caller that joins before the probe fiber starts',
+    () =>
+      Effect.gen(function* () {
+        const check = vi.fn(() => Effect.succeed(true));
+        vi.doMock('@tools/plugins', () => ({
+          TOOL_PLUGINS: [
+            {
+              id: 'probed-tool',
+              toolNames: ['probed'],
+              name: 'Probed tool',
+              category: 'ai-agents',
+              availability: { check },
+            },
+          ],
+        }));
+        const { runExternalToolChecks } = yield* Effect.promise(
+          () => import('@tools/toolAvailability'),
+        );
+        // The first caller claims the slot and forks the probe; the second
+        // joins before that fiber's first step and asks for a rerun.
+        const first = yield* Effect.forkChild(
+          runExternalToolChecks(probeInputs),
+          { startImmediately: true },
+        );
+        const second = yield* Effect.forkChild(
+          runExternalToolChecks(probeInputs),
+          { startImmediately: true },
+        );
+        yield* Fiber.join(first);
+        yield* Fiber.join(second);
+        expect(check).toHaveBeenCalledTimes(2);
+      }).pipe(Effect.provide(probeServices)),
+  );
+
+  it.effect(
     'derives unavailable tool names from the last probe results, with no cache to refresh',
     () =>
       Effect.gen(function* () {
