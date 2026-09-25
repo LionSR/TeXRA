@@ -66,7 +66,6 @@ import {
   type AggregateClaim,
   type DatabaseReadFailed,
   type DatabaseWriteFailed,
-  type SessionOpenError,
 } from '@shared/session/database';
 import { fold } from '@shared/session/sessionFold';
 import {
@@ -873,26 +872,23 @@ export class SessionHandle {
   }
 
   /** Read and append as one job of the publisher, with no other write
-   *  between them. C5 excludes foreign writers; losing the claim between
-   *  the read and the append comes back as `DatabaseNotOwner` with nothing
-   *  written. */
-  updateRecordFacts<A>(
+   *  between them (the update may read more of the run inside that job). C5
+   *  excludes foreign writers; losing the claim between the read and the
+   *  append comes back as `DatabaseNotOwner` with nothing written. */
+  updateRecordFacts<A, E>(
     runId: RunId,
-    update: (rows: readonly SessionEvent[]) => {
-      readonly events: readonly SessionEventDraft[];
-      readonly value: A;
-    },
+    update: (
+      rows: readonly SessionEvent[],
+    ) => Effect.Effect<{ events: readonly SessionEventDraft[]; value: A }, E>,
   ): Effect.Effect<
     A,
-    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+    E | DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
-    const graph = this.graph;
-    return graph.exclusive((append) =>
-      Effect.gen(function* () {
-        const updateResult = update(yield* graph.runRecords(runId));
-        yield* append(updateResult.events);
-        return updateResult.value;
-      }),
+    return this.graph.exclusive((append) =>
+      this.graph.runRecords(runId).pipe(
+        Effect.flatMap(update),
+        Effect.flatMap((next) => Effect.as(append(next.events), next.value)),
+      ),
     );
   }
 

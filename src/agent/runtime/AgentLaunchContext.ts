@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, Scope } from 'effect';
 import { ZodError } from 'zod';
-import { ModelProvider, type ModelConfig } from 'llm-zoo';
+import { MODEL_CONFIGS, ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
@@ -12,12 +12,7 @@ import {
   type StageHandle,
 } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
@@ -30,12 +25,10 @@ import {
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
-  type AgentSource,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
@@ -170,7 +163,7 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
     modelName: string,
     interactions: Pick<SessionHostInteractions, 'emit'>,
   ) {
-    const modelConfig = yield* resolveRuntimeModelConfig(modelName);
+    const modelConfig = MODEL_CONFIGS[modelName];
     if (modelConfig) return modelConfig;
 
     return yield* presentLaunchError(

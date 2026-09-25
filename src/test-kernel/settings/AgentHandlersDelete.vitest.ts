@@ -128,11 +128,6 @@ const CUSTOMIZE_MY_AGENT = {
 
 const AGENT_YAML = 'name: my-agent\n';
 
-const APPLY_AGENT_MODE_PRESET = {
-  command: 'applyAgentModePreset',
-  presetId: 'my-preset',
-} as const;
-
 /** Whether `target` names an entry, read through the same filesystem the
  *  handlers write with. */
 function onDisk(target: string): Promise<boolean> {

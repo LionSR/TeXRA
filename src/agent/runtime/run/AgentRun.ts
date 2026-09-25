@@ -7,6 +7,7 @@
  * replaces. Nothing here is threaded through node fields or a services bag;
  * the loop and the invoker take it from context.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
 import { Context, Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -24,7 +25,6 @@ import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { resolveRuntimeModelConfig } from '@model/runtimeModelRegistry';
 import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
@@ -46,7 +46,6 @@ import type {
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { processToolHost } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
@@ -312,9 +311,7 @@ export const agentRunLayer = (
           ? persisted.modelCompatibilityKey
           : ctx.modelCompatibilityKey;
       const modelConfig =
-        modelId === config.model
-          ? ctx.modelConfig
-          : yield* resolveRuntimeModelConfig(modelId);
+        modelId === config.model ? ctx.modelConfig : MODEL_CONFIGS[modelId];
       if (!modelConfig) {
         return yield* Effect.fail(
           new Error(`Model ${modelId} is not registered`),

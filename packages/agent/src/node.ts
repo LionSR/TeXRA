@@ -74,6 +74,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     lifecycle: createLifecycleHost(),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
+      customConfigured: () => Effect.succeed(true),
       builtIn: () => Effect.succeed(''),
       builtInToolUse: () => Effect.succeed(''),
     },

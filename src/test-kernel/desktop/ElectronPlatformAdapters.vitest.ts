@@ -9,7 +9,6 @@ import { afterEach, describe, expect, vi } from 'vitest';
 // Local imports - platform
 import type { ElectronSecrets } from '@desktop/main/platform/electronSecrets';
 import { NotificationFailed } from '@hosts/uiHosts';
-import type { JsonStore } from '@platform/defaults/jsonStore';
 
 // Local imports - test support
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -19,13 +18,11 @@ import {
 } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
 import {
-  app as electronApp,
   configureElectronTestStub,
   getElectronTestStubUserDataPath,
   resetElectronTestStub,
   safeStorage as electronSafeStorage,
 } from './electronTestStub.ts';
-import { REPO_ROOT } from './desktopTestPaths.ts';
 import { loadSourceModule } from './loadSourceModule.ts';
 
 type ElectronSecretsModule =

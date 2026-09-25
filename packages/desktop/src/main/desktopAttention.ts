@@ -1,14 +1,18 @@
 // What the desktop tells the user about projects they are not looking at: the
-// dock badge counts every decision waiting on them across the open projects,
-// and a top-level run that starts waiting or finishes where the user cannot
-// see it raises one OS notification that leads back to it.
+// dock badge counts the requests this window can answer across the open
+// projects (`attentionOf`), and a new one, or a top-level run that finishes,
+// where the user cannot see it raises one OS notification that leads back to
+// its run.
 
 import { app, Notification, type BrowserWindow } from 'electron';
 import { Context, Effect, Stream, SubscriptionRef } from 'effect';
 
 import type { RunId } from '@shared/schemas';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
-import type { RunView, SessionView } from '@shared/session/sessionView';
+import {
+  attentionOf,
+  type RunView,
+  type SessionView,
+} from '@shared/session/sessionView';
 
 import { DesktopProjects, type DesktopProject } from './desktopProjects.js';
 
@@ -65,20 +69,17 @@ export function electronAttentionPort(options: {
   };
 }
 
-/** The line a notification prints for a run that changed, or undefined
- *  when the change is not one the user is told about. */
-function attentionLine(
+/** A top-level run that reached its outcome since `previous`: the one
+ *  change besides a new request the user is told about. A run first seen in
+ *  its current state is history, not news. */
+function finishedLine(
   run: RunView,
   previous: RunView | undefined,
 ): string | undefined {
-  // A run first seen in its current state is history, not news.
   if (previous === undefined || run.parentId !== null) return undefined;
-  const name = run.description ?? run.label;
-  if (run.group === 'waiting' && previous.group !== 'waiting')
-    return `${name} is waiting for you.`;
-  if (run.durableOutcome !== null && previous.durableOutcome === null)
-    return `${name}: ${run.statusLabel}.`;
-  return undefined;
+  if (run.durableOutcome === null || previous.durableOutcome !== null)
+    return undefined;
+  return `${run.description ?? run.label}: ${run.statusLabel}.`;
 }
 
 /**
@@ -108,15 +109,24 @@ export const followDesktopAttention = Effect.gen(function* () {
         previous !== undefined &&
         !(activeKey === project.key && port.windowFocused())
       ) {
-        const title = projectDisplayOf(project.key, project.root).name;
+        const title = project.display.name;
+        const notify = (runId: RunId, body: string) =>
+          port.notify({ title, body, key: project.key, runId });
+        const asking = new Set<RunId>();
+        for (const { runId } of attentionOf(view, previous).arrived) {
+          const run = view.runs.get(runId);
+          if (run === undefined || asking.has(runId)) continue;
+          asking.add(runId);
+          notify(runId, `${run.description ?? run.label} is waiting for you.`);
+        }
         for (const run of view.runs.values()) {
-          const body = attentionLine(run, previous.runs.get(run.id));
-          if (body !== undefined)
-            port.notify({ title, body, key: project.key, runId: run.id });
+          const body = finishedLine(run, previous.runs.get(run.id));
+          if (body !== undefined) notify(run.id, body);
         }
       }
       let waiting = 0;
-      for (const each of latest.values()) waiting += each.rollup.waiting;
+      for (const each of latest.values())
+        waiting += attentionOf(each).requests.length;
       if (waiting !== badge) {
         badge = waiting;
         port.setBadgeCount(waiting);

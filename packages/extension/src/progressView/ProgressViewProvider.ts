@@ -21,7 +21,6 @@ import {
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
   getCombinedLocalResourceRoots,
@@ -77,7 +76,10 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
+import {
+  projectDisplayOf,
+  type HostSnapshot,
+} from '@shared/session/hostSnapshot';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -135,6 +137,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** The last API-key banner the snapshot published. */
+  private apiKeyBanner: HostSnapshot['banners']['apiKey'] = { visible: false };
+
+  /**
+   * A credential changed: re-read the API-key banner, which repaints the
+   * setup pill, then the funnel that reads it.
+   */
+  public readonly refreshApiKeyStatus = Effect.suspend(() =>
+    this.snapshot.refreshHostBanners.pipe(
+      Effect.andThen(this.refreshOnboardingFunnel()),
+    ),
+  );
+
   private readonly attention = new RequestAttention({
     sidebar: () => this.sidebarView,
     panel: () => this.editor?.panel,
@@ -159,17 +174,17 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
+    globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
     /** Session created by the extension entry. */
     session: SessionHandle,
-    public readonly refreshApiKeyStatus: Effect.Effect<
-      void,
-      Error,
-      ProcessServices
-    >,
+    /** The setup pill: painted from the snapshot's API-key banner on every
+     *  publish, so the pill and the welcome card read one credential answer. */
+    private readonly paintSetupPill: (
+      banner: HostSnapshot['banners']['apiKey'],
+    ) => void,
   ) {
     this.session = session;
     this.contentProvider = new BundledViewContentProvider(
@@ -178,7 +193,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      hasCredential: () => hasAnyUsableSetupCredential(session.roots, secrets),
+      // The snapshot's API-key banner is the one credential answer: every
+      // credential change re-reads it (`refreshApiKeyStatus`) before this
+      // refresher runs.
+      hasCredential: () => Effect.sync(() => !this.apiKeyBanner.visible),
       flags: globalState,
       apply: (transition) =>
         Effect.gen({ self: this }, function* () {
@@ -255,7 +273,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       onError: (error) => {
         log.error('Host snapshot refresh failed', { data: error });
       },
-      publish: (snapshot) => this.bridge.setHost(snapshot),
+      publish: (snapshot) =>
+        this.bridge.setHost(snapshot).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              this.apiKeyBanner = snapshot.banners.apiKey;
+              this.paintSetupPill(snapshot.banners.apiKey);
+            }),
+          ),
+        ),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -469,7 +495,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(this.runtime, [
           this.snapshot.refreshCatalogs,
-          this.refreshOnboardingFunnel(),
+          this.refreshApiKeyStatus,
         ]);
         return;
       }
@@ -485,11 +511,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,
         ProcessServices
-      >([
-        this.snapshot.refreshCatalogs,
-        this.snapshot.refreshHostBanners,
-        this.refreshOnboardingFunnel(),
-      ]);
+      >([this.snapshot.refreshCatalogs, this.refreshApiKeyStatus]);
     });
   }
 
@@ -522,7 +544,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     agentName: string,
     sessionType: SessionType,
   ): Effect.Effect<void> {
-    return this.snapshot.showAgentConfigBanner(agentName, sessionType);
+    return withProcessServices(
+      this.runtime,
+      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+    );
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */

@@ -46,7 +46,7 @@ function providerApiKeyFormLabel(provider: ApiProvider): string {
     : providerName;
 }
 
-export function buildProviderApiKeyItems(
+function buildProviderApiKeyItems(
   view: ProviderApiKeyStatusView,
 ): Array<{ value: ApiProvider; label: string; description: string }> {
   return API_PROVIDERS.map((provider) => ({

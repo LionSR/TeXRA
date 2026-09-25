@@ -465,13 +465,6 @@ export function dispatchAgentCliTool<R = never>(params: {
 // Shared session loop — one turn per enqueued prompt, delivers to parent
 // ============================================================================
 
-/** Minimal token-usage shape the loop's turn summary needs. Structurally
- * compatible with `ChildRunStrategy`'s own (unexported) turn-usage type. */
-interface AgentCliTurnUsage {
-  input_tokens?: number;
-  output_tokens?: number;
-}
-
 interface AgentCliLoopParams<TTurn> {
   childRun: ChildRun;
   runId: RunId;
@@ -499,10 +492,9 @@ interface AgentCliLoopParams<TTurn> {
    * entries (not-yet-known ids) are skipped.
    */
   resolveSessionIds: (turn: TTurn) => readonly (string | null | undefined)[];
-  /** Token usage for the turn summary (null when none). */
-  getUsage: (turn: TTurn) => AgentCliTurnUsage | null;
-  /** Usage-stats payload to publish to the UI, or undefined to skip publishing. */
-  buildUsageStats: (turn: TTurn) => TokenUsageStats | undefined;
+  /** The turn's own spend: the turn summary logs it and the loop adds it to
+   *  the child run's published total. Null when the provider reported none. */
+  getUsage: (turn: TTurn) => TokenUsageStats | null;
   formatDelivery: (
     turn: TTurn,
     wallTimeMs: number,
@@ -543,7 +535,6 @@ export function buildAgentCliLaunch<TTurn>(
       runProviderTurn,
       resolveSessionIds,
       getUsage,
-      buildUsageStats,
       formatDelivery,
       formatError,
       isTurnError,
@@ -599,7 +590,7 @@ export function buildAgentCliLaunch<TTurn>(
         }
       },
       publishUsage: (turn) => {
-        const usage = buildUsageStats(turn);
+        const usage = getUsage(turn);
         if (!usage) return;
         // Each provider reports only the turn it just ran, so the loop holds
         // the child run's running total and publishes that. Not a transcript

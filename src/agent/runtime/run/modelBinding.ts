@@ -49,9 +49,10 @@ import {
   reasoningEffortOverrides,
   supportsReasoningLevel,
 } from '@model/reasoningLevel';
-import { copilotRouteForModel } from '@model/runtimeModelRegistry';
+import type { CopilotModelRoute } from '@model/copilotRouting';
 import { routeConfig, type ModelRoute } from '@model/modelRoute';
 import type { StateStore } from '@platform/interfaces';
+import type { LanguageModel } from '@platform/languageModel';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
@@ -879,27 +880,18 @@ export const backgroundDelivery = Effect.fn('backgroundDelivery')(function* (
   );
 });
 
-/**
- * Bind a model the editor serves, on the route the registry discovered for
- * the base model (exact id, vendor, version), from the host's port.
- */
+/** Bind a model the editor serves over the route its decision discovered
+ *  (exact id, vendor and version), into the caller's scope. */
 const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
   compatibilityKey: ModelCompatibilityKey,
+  route: CopilotModelRoute,
 ): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
   const editor = yield* Effect.serviceOption(EditorModel);
   if (Option.isNone(editor)) {
     return yield* Effect.fail(
       new Error(
         `Model ${config.name} is served by the editor's language-model API, which this host does not expose.`,
-      ),
-    );
-  }
-  const route = copilotRouteForModel(config.name);
-  if (route === undefined) {
-    return yield* Effect.fail(
-      new Error(
-        `No editor route is discovered for model ${config.name}; refresh the model list.`,
       ),
     );
   }
@@ -932,7 +924,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
       requestedModel,
       deployment,
     },
-    route: { kind: 'copilot' },
+    route: { kind: 'copilot', route },
     usageRoute: 'api-key',
     contextWindow: routed.contextWindow,
     supportsVision: routed.capabilities.supportsVision,
@@ -994,7 +986,11 @@ export function releaseBindingUploads(
  */
 export const bindModel = Effect.fn('bindModel')(function* (
   input: BindModelInput,
-): Effect.fn.Return<BoundModel, Error, Scope.Scope | HttpClient.HttpClient> {
+): Effect.fn.Return<
+  BoundModel,
+  Error,
+  Scope.Scope | HttpClient.HttpClient | LanguageModel
+> {
   // The wire identity the preference promises, applied to the bound config.
   const requested = yield* withShortModelName(input.config, input.stores);
   const route = yield* resolveModelRoute(input.stores, requested, input);
@@ -1006,8 +1002,8 @@ export const bindModel = Effect.fn('bindModel')(function* (
     );
   }
   const protocol = PROTOCOL_BY_KEY[compatibilityKey];
-  if (protocol === 'vscode-lm') {
-    return yield* bindEditorModel(requested, compatibilityKey);
+  if (protocol === 'vscode-lm' && route.kind === 'copilot') {
+    return yield* bindEditorModel(requested, compatibilityKey, route.route);
   }
   if (protocol === 'validation') {
     const bound = validationModel(requested);
@@ -1028,7 +1024,11 @@ export const bindModel = Effect.fn('bindModel')(function* (
       backgroundCapable: false,
     };
   }
-  if (route.kind === 'copilot' || route.kind === 'validation') {
+  if (
+    protocol === 'vscode-lm' ||
+    route.kind === 'copilot' ||
+    route.kind === 'validation'
+  ) {
     return yield* Effect.fail(
       new Error(
         `Model ${requested.name} routes through ${route.kind}, which the recorded ${compatibilityKey} format cannot bind.`,

@@ -27,13 +27,8 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import { SignInFailed } from '@common/errors/signInFailed';
-import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
-import {
-  teamAvailabilityPrompt,
-  type TeamAvailabilityPrompt,
-} from '@common/teams/TeamPlan';
+import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
-import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   SessionBridge,
@@ -45,11 +40,7 @@ import {
 } from '@controllers/session/hostSnapshotSource';
 import { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
-import {
-  ExternalOpenFailed,
-  NotificationFailed,
-  PromptFailed,
-} from '@hosts/uiHosts';
+import { ExternalOpenFailed, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
 import { DisposableStore } from '@platform/disposable';
@@ -68,12 +59,10 @@ import {
   INSTRUCTION_ACTION,
   RunIdSchema,
   type RunId,
-  type AgentCategory,
   type AgentSource,
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
@@ -294,7 +283,7 @@ function createWindow(options: {
   const initialProject = activeProject();
   const initialWindowTitle = getDesktopWindowTitle(
     initialProject.session,
-    initialProject.root,
+    initialProject.root && initialProject.display.name,
   );
   const window = new BrowserWindow({
     // The task canvas remains useful with a project sidebar and an optional
@@ -818,9 +807,7 @@ function createWindow(options: {
   const projectBindings = new Map<string, ProjectBinding>();
   const bindProject = (project: DesktopProject): ProjectBinding => {
     const { workspace, browserViews } = createProjectWorkspace(project);
-    const agentRunHost = agentRunHostFor(
-      projectDisplayOf(project.key, project.root).name,
-    );
+    const agentRunHost = agentRunHostFor(project.display.name);
     const files = createDesktopFileSelection({
       workspacePath: project.root,
       showOpenFileDialog: openFileDialog,
@@ -850,7 +837,7 @@ function createWindow(options: {
       ),
     );
     const snapshot = createHostSnapshotSource({
-      project: projectDisplayOf(project.key, project.root),
+      project: project.display,
       root: project.root,
       stores: project.session.roots,
       secrets: options.secrets,
@@ -889,7 +876,10 @@ function createWindow(options: {
       },
       session: project.session,
       showAgentConfigBanner: ({ agentName, category }) =>
-        snapshot.showAgentConfigBanner(agentName, category),
+        withProcessServices(
+          runtime,
+          snapshot.showAgentConfigBanner(agentName, category),
+        ),
       // A resolved agent also retires the missing-agent warning.
       onLaunched: (runId) => {
         bridge.surfaceAction({ kind: 'select', runId });
@@ -1046,8 +1036,8 @@ function createWindow(options: {
     );
     postToRendererIfAlive({
       command: DESKTOP_PROJECT_COMMANDS.PROJECTS,
-      projects: projects.flatMap(({ key, root }) =>
-        root === undefined ? [] : [{ key, root }],
+      open: projects.flatMap(({ key, root }) =>
+        root === undefined ? [] : [key],
       ),
       activeKey,
     });
@@ -1243,7 +1233,7 @@ function createWindow(options: {
           installDesktopWindowTitle(
             window,
             project.session,
-            project.root,
+            project.root && project.display.name,
             () => projectScope === owner,
           ),
         ),
@@ -1421,6 +1411,12 @@ function createWindow(options: {
       openWorkspaceFolder,
       signIn,
       showInfoMessage,
+      showLauncher: () => {
+        if (!attachedProject) return;
+        projectBindings
+          .get(attachedProject.key)
+          ?.bridge.surfaceAction({ kind: 'selectNew' });
+      },
       onAsyncError: reportAsyncError,
       runtime,
     },
@@ -1714,15 +1710,13 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         afterFlushArtifacts: [
           withProcessServices(runtime, removeExternalDiffPatchDirs),
         ],
-        afterRunSettlement: [
-          // Every project's session, most recently opened first, settled
-          // before the runtime they run on goes (or, before the registry
-          // opened, the fallback project's scope it would own).
-          Effect.suspend(
-            () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
-          ),
-          disposeProcessRuntime(runtime),
-        ],
+        // Every project's session, most recently opened first, released
+        // before the runtime they run on goes (or, before the registry
+        // opened, the fallback project's scope it would own).
+        releaseSessions: Effect.suspend(
+          () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
+        ),
+        disposeRuntime: disposeProcessRuntime(runtime),
       });
 
       // Until the initial window is fully wired, any startup failure (platform

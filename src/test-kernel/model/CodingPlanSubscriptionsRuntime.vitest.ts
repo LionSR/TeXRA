@@ -6,7 +6,6 @@ import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import { apiKeySecretName } from '@model/apiProviders';
-import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { decideModelRoute, readRouteFacts } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
@@ -30,6 +29,7 @@ const boundEndpoint = (
       ...(yield* readRouteFacts(hostStores(), declinedRoutes)),
       validation: false,
       prefersCopilot: false,
+      copilotRoute: undefined,
     });
     if (route.kind !== 'api-key' && route.kind !== 'openrouter') {
       throw new Error(`unexpected ${route.kind} route`);

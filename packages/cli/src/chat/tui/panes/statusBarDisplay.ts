@@ -14,7 +14,6 @@ import {
   type ContextStateData,
   type SubscriptionUsageSnapshot,
   type SubscriptionUsageProvider,
-  type RunPhase,
   type ApprovalPolicySnapshot,
   type RunId,
   type TokenUsageStats,
@@ -576,7 +575,7 @@ function childListBindingsText(
   });
   const expandBinding = keyHintText({ key: '←/→', action: 'collapse/expand' });
   const killBinding = selectionKillable
-    ? keyHintText({ key: 'k', action: 'kill' })
+    ? keyHintText({ key: 'x', action: 'kill' })
     : undefined;
   const selectBinding = keyHintText({ key: '↑/↓', action: 'select' });
   const tabBinding = keyHintText({ key: 'Tab', action: 'input' });

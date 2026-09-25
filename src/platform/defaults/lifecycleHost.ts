@@ -41,6 +41,7 @@ export function createLifecycleHost(
   const handlers: Record<ShutdownPhase, Registration[]> = {
     [SHUTDOWN_PHASE.BEFORE]: [],
     [SHUTDOWN_PHASE.ON]: [],
+    [SHUTDOWN_PHASE.RELEASE]: [],
   };
   let drain: Effect.Effect<void> | undefined;
 
@@ -112,6 +113,7 @@ export function createLifecycleHost(
       drain = Deferred.await(joined);
       return runPhase(SHUTDOWN_PHASE.BEFORE).pipe(
         Effect.andThen(runPhase(SHUTDOWN_PHASE.ON)),
+        Effect.andThen(runPhase(SHUTDOWN_PHASE.RELEASE)),
         Effect.onExit((exit) =>
           Effect.sync(() => {
             Deferred.doneUnsafe(joined, exit);

@@ -78,7 +78,6 @@ import {
   describeFollowUpFailure,
   type FollowUpRecoveryLease,
 } from '@agent/followUp';
-import type { AgentEvent } from '@agent/trace';
 import type {
   AgentConfig,
   AgentConfigPayload,
@@ -125,7 +124,7 @@ import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import {
   admitInterruptibleRun,
@@ -1385,7 +1384,6 @@ describe('createChatSessionController', () => {
 
   it('allows WAITING results when auto-resuming queued tool-use snapshots', async () => {
     const session = makeSession({ runCompleted: true });
-    const config = makeResumeConfig();
     patchSessionMeta({
       cliMultiAgentPresetId: 'stale-team',
       delegationAgentScope: {

@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Deferred, Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -60,6 +60,7 @@ import {
   AgentDirectories,
   AgentResume,
   AgentResumeFailed,
+  AppState,
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
@@ -69,6 +70,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -335,6 +337,7 @@ async function integrationPlatform(): Promise<FakeHost> {
       ...host.platform,
       agentDirectories: {
         custom: () => Effect.sync(() => agentsDir),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () => Effect.sync(() => agentsDir),
         builtInToolUse: () => Effect.sync(() => agentsDir),
       },
@@ -590,6 +593,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           nodePlatformLayer,
           testHttpClientLayer,
           AgentDirectories.layer(fakeHostAgentDirectories),
+          AppState.layer(new FakeStateStore()),
         ),
       ),
     );

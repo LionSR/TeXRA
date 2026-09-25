@@ -5,8 +5,7 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Stream } from 'effect';
-import * as ChildProcess from 'effect/unstable/process/ChildProcess';
+import { Effect } from 'effect';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { InstalledPlugin } from '@shared/schemas';
@@ -16,7 +15,6 @@ import {
   writeSettingTo,
 } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
 
 import { CliUsageError } from './cliContext';
 import {
@@ -26,6 +24,7 @@ import {
   readPluginCandidates,
   type PluginCandidate,
 } from './pluginManifest';
+import { checkoutDetached, fetchPinned } from './pluginGit';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
@@ -45,84 +44,6 @@ export interface PluginEnv {
 export const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
 /** A ref git takes as a plain name: no leading dash, no option smuggling. */
 export const SAFE_REF = /^[\w][\w./-]*$/;
-
-// Machine git env only: extending would merge back the helper-invoking keys
-// makeMachineGitEnv strips. A failure names the command and git's stderr.
-function git(
-  args: readonly string[],
-): Effect.Effect<string, PluginError, ChildProcessSpawner> {
-  const commandLine = `git ${args.join(' ')}`;
-  return Effect.gen(function* () {
-    const handle = yield* ChildProcess.make('git', args, {
-      env: makeMachineGitEnv(),
-      extendEnv: false,
-      stdin: 'ignore',
-      detached: false,
-      forceKillAfter: '5 seconds',
-    });
-    const [stdout, stderr, code] = yield* Effect.all(
-      [
-        handle.stdout.pipe(Stream.decodeText(), Stream.mkString),
-        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
-        handle.exitCode,
-      ],
-      { concurrency: 'unbounded' },
-    );
-    return { stdout, stderr: stderr.trim(), code };
-  }).pipe(
-    Effect.scoped,
-    Effect.mapError((error) => {
-      const message = `${commandLine} could not start: ${toErrorMessage(error)}`;
-      return new PluginError({ message });
-    }),
-    Effect.flatMap(({ stdout, stderr, code }) =>
-      code === 0
-        ? Effect.succeed(stdout.trim())
-        : Effect.fail(
-            new PluginError({
-              message: `${commandLine} exited with code ${code}${stderr ? `: ${stderr}` : ''}`,
-            }),
-          ),
-    ),
-  );
-}
-
-/**
- * Check `rev` out detached in `dir`, forced and cleaned, so the directory
- * matches that commit exactly. Symlinks check out as plain files, so nothing
- * in the tree can point outside it.
- */
-function checkoutDetached(dir: string, rev: string) {
-  const inDir = ['-C', dir, '-c', 'core.symlinks=false'];
-  return git([
-    ...inDir,
-    '-c',
-    'advice.detachedHead=false',
-    'checkout',
-    '--quiet',
-    '--force',
-    '--detach',
-    rev,
-  ]).pipe(Effect.andThen(git([...inDir, 'clean', '--quiet', '-ffdx'])));
-}
-
-/**
- * Fetch `ref` (the remote's HEAD when absent) from `url` into `dir` and check
- * it out, returning the commit. Install and update take the same steps: a
- * shallow fetch of exactly one commit, then {@link checkoutDetached}.
- */
-function fetchPinned(dir: string, url: string, ref: string | undefined) {
-  return Effect.gen(function* () {
-    yield* git(['init', '--quiet', dir]);
-    yield* git([
-      ...['-C', dir, '-c', 'protocol.file.allow=never', 'fetch', '--quiet'],
-      ...['--depth', '1', '--no-tags'],
-      ...['--', url, ref ?? 'HEAD'],
-    ]);
-    yield* checkoutDetached(dir, 'FETCH_HEAD');
-    return yield* git(['-C', dir, 'rev-parse', 'HEAD']);
-  });
-}
 
 const fsEffect = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
@@ -236,6 +157,7 @@ function installFromRoot(
           source: candidate.dir,
           path: candidate.dir,
           skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
+          enabled: true,
         });
         continue;
       }
@@ -265,6 +187,7 @@ function installFromRoot(
         commit: fetched.commit,
         path: pluginPath,
         skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+        enabled: true,
       });
     }
     return records;
@@ -386,6 +309,29 @@ export function removePlugin(name: string, env: PluginEnv) {
       yield* removeDir(path.join(env.pluginsDir, plugin.name));
     }
     return plugin;
+  });
+}
+
+/**
+ * Switch a recorded plugin on or off. A disabled plugin stays installed and
+ * pinned, and contributes nothing: its skills leave the catalog until it is
+ * enabled again.
+ */
+export function setPluginEnabled(
+  name: string,
+  enabled: boolean,
+  env: PluginEnv,
+) {
+  return Effect.gen(function* () {
+    const installed = yield* readInstalledPlugins(env.stores);
+    const plugin = yield* requireInstalled(installed, name);
+    yield* writeInstalledPlugins(
+      env.stores,
+      installed.map((entry) =>
+        entry.name === name ? { ...entry, enabled } : entry,
+      ),
+    );
+    return { ...plugin, enabled };
   });
 }
 

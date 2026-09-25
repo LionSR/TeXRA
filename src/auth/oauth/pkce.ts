@@ -14,7 +14,7 @@ export interface PkcePair {
 }
 
 /** 32 random bytes, base64url (no padding). */
-export function generateCodeVerifier(): string {
+function generateCodeVerifier(): string {
   return randomBytes(32).toString('base64url');
 }
 

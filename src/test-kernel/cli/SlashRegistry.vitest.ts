@@ -36,7 +36,7 @@ import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { FakeSecrets, FakeStateStore } from '@test/support/FakePlatform';
+import { FakeSecrets } from '@test/support/FakePlatform';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { loadInk, renderInteractive } from '@test/support/inkTestHarness.ts';
 import {

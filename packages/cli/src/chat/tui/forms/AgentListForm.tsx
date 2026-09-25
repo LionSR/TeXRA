@@ -5,6 +5,7 @@ import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
 import { computeAgentOptionsData, type AgentRosterStores } from '@agent/index';
+import { moreRowsText } from '@cli/tui/overflowText';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
@@ -43,7 +44,7 @@ interface AgentGroups {
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
 type AgentDelegationFlag = Pick<AgentOptionData, 'isOrchestrator'>;
 
-export function agentPickerPrimarySectionTitle(
+function agentPickerPrimarySectionTitle(
   agents: readonly AgentDelegationFlag[],
 ): string {
   const hasDelegatingAgents = agents.some(
@@ -249,9 +250,9 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
             </Text>
           ))}
           {selectWindow.showWorkflowOverflow ? (
-            <Text dimColor>{`… ${
-              workflowRows.length - visibleWorkflowRows.length
-            } more workflows`}</Text>
+            <Text dimColor>
+              {moreRowsText(workflowRows.length - visibleWorkflowRows.length)}
+            </Text>
           ) : null}
           <Text dimColor wrap="truncate-end">
             {'Run a workflow with texra run <name> --input=<file>.'}

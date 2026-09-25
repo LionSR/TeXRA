@@ -1,3 +1,4 @@
+import { hiddenRowsText } from '@cli/tui/overflowText';
 import {
   AgentCategory,
   agentProposalCategoryLabel,
@@ -91,7 +92,7 @@ function boundedAgentProposalInstructionLines(
   return boundedLines(instructionLines, {
     maxLines: AGENT_PROPOSAL_INSTRUCTION_MAX_LINES,
     maxChars: AGENT_PROPOSAL_INSTRUCTION_MAX_CHARS,
-    hiddenTrailer: (count) => `… +${count} instruction lines hidden`,
+    hiddenTrailer: (count) => hiddenRowsText(count, 'instruction lines'),
     truncateLine: (line) =>
       truncateLineToWidth(line, AGENT_PROPOSAL_INSTRUCTION_MAX_LINE_CHARS),
   });
@@ -227,7 +228,7 @@ function boundedToolEditDiffLines(
   return boundedLines(diffLines, {
     maxLines: TOOL_EDIT_APPROVAL_DIFF_MAX_LINES,
     maxChars: TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS,
-    hiddenTrailer: (count) => `… +${count} diff lines hidden`,
+    hiddenTrailer: (count) => hiddenRowsText(count, 'diff lines'),
     truncateLine: (line) =>
       truncateLineToWidth(line, TOOL_EDIT_APPROVAL_DIFF_MAX_LINE_CHARS),
   });

@@ -3,10 +3,8 @@
  *
  * This class owns the inbound registry, the memory/profile/model/tool commands,
  * and the refresh fan-out after a mutation. Tab-shaped groups are delegated to
- * focused handler classes in `./handlers/`: `AgentHandlers`,
- * `LatexSettingsHandlers`, `MemoryHandlers`,
- * `GitHubSubscriptionHandlers`, and `SubscriptionHandlers` (one instance per
- * subscription provider).
+ * `./handlers/`: `AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
+ * `GitHubSubscriptionHandlers` and `SubscriptionHandlers` (one per provider).
  */
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
@@ -14,6 +12,7 @@ import { ModelError } from '@texra-ai/llm/turn';
 
 // Shared schemas and dispatchers
 import type { SessionHandle } from '@agent/runtime';
+import { refresh as refreshAgentCatalog } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import {
   settingsViewProgram,
@@ -53,12 +52,9 @@ import {
   loadApiKeyStatusMap,
 } from '@model/apiProviders';
 import {
-  invalidateRuntimeModelRegistry,
-  copilotRouteForModel,
-  discoveredCopilotRoutes,
-  refreshRuntimeModelRegistry,
-} from '@model/runtimeModelRegistry';
-import { setCopilotRoutePreference } from '@model/copilotRouting';
+  discoverCopilotRoutes,
+  setCopilotRoutePreference,
+} from '@model/copilotRouting';
 import { withSessionFs } from '@platform/rootedFs';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
@@ -153,7 +149,7 @@ export class SettingsViewMessageHandler {
           readModelAvailabilityInputs(stores, models),
           modelOptionsFrom,
         ),
-      copilotRoutes: discoveredCopilotRoutes(),
+      copilotRoutes: discoverCopilotRoutes(),
     });
     this.profileController = new SettingsProfileController({
       host: 'vscode',
@@ -227,12 +223,10 @@ export class SettingsViewMessageHandler {
           ),
         );
       }),
-      // `apply_team` writes the roster straight from the setup agent, so the
-      // open view is showing agents and a team it just replaced. The catalog
-      // is already fresh: a team change moves no agent files, and the
-      // agent-creator reloads before it emits. Without that flag this listener
-      // would rescan the YAML and re-fetch the remote catalog on every roster
-      // write.
+      // `apply_team` writes the roster from the setup agent, so the open view
+      // shows a team it just replaced. The catalog is already fresh (a team
+      // change moves no agent files; the agent-creator reloads before it
+      // emits), so the flag skips a YAML rescan and remote re-fetch per write.
       subscribeAppSignal(this.runtime, 'agentRosterChanged', () => {
         this.runtime.runFork(this.refreshAfterAgentMutation(undefined, true));
       }),
@@ -255,10 +249,9 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Sign in to a subscription provider from outside the settings webview.
-   * Routes to the same handler the Settings → Models sign-in button runs, so
-   * the command palette gets the status round-trip and credential refresh
-   * tail instead of a bespoke sign-in that leaves both stale.
+   * Sign in to a subscription provider from outside the settings webview,
+   * through the Settings → Models button's handler, so the command palette
+   * gets the same status round-trip and credential refresh tail.
    */
   public signInSubscription(providerId: SubscriptionProviderId) {
     const handlers = { chatgpt: this.chatgptHandlers, grok: this.grokHandlers };
@@ -367,6 +360,8 @@ export class SettingsViewMessageHandler {
         this.latexHandlers.installExtension(message.extensionId),
       toggleTool: (message) =>
         setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
+          // A plugin's bundled agents follow its switch.
+          Effect.andThen(refreshAgentCatalog()),
           Effect.andThen(
             this.withActiveWebview((w) =>
               this.sendToolDashboardData(w, { skipChecks: true }),
@@ -423,9 +418,8 @@ export class SettingsViewMessageHandler {
   }
 
   /**
-   * Run a program with the active view's webview, if available. The view is
-   * read when the program runs, not when it is built: a panel disposed
-   * between a mutation and its refresh leaves nothing to post to.
+   * Run a program with the active webview, read when the program runs (not
+   * when built): a panel disposed before its refresh leaves nothing to post.
    */
   private withActiveWebview<E, R>(
     fn: (webview: vscode.Webview) => Effect.Effect<void, E, R>,
@@ -473,7 +467,10 @@ export class SettingsViewMessageHandler {
               if (error instanceof UnsupportedCommandError) {
                 yield* vscodeUi.showInfoMessage(error.reason);
               } else {
-                this.log.error('Error handling message', { data: error });
+                yield* Effect.logError('Error handling message').pipe(
+                  withLogChannel(this.channel),
+                  Effect.annotateLogs({ data: error }),
+                );
                 yield* vscodeUi.showErrorMessage(
                   `TeXRA could not handle a ${this.viewName} message. See the TeXRA output for details.`,
                 );
@@ -484,9 +481,12 @@ export class SettingsViewMessageHandler {
               Exit.isFailure(reported) &&
               !Cause.hasInterruptsOnly(reported.cause)
             ) {
-              this.log.error('Failed to report settings message error', {
-                data: Cause.squash(reported.cause),
-              });
+              yield* Effect.logError(
+                'Failed to report settings message error',
+              ).pipe(
+                withLogChannel(this.channel),
+                Effect.annotateLogs({ data: Cause.squash(reported.cause) }),
+              );
             }
           }),
         ),
@@ -503,11 +503,10 @@ export class SettingsViewMessageHandler {
     webview: vscode.Webview,
   ): Effect.Effect<void, Error, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
-      // Tool dashboard involves network I/O (Zotero probe, etc.) — fire on a
-      // detached fiber so it doesn't block the initial render. The frontend
-      // shows a loading spinner until data arrives, so a failed build still
-      // posts an empty dashboard to end it, and nothing joins this fiber, so
-      // each failure is logged on it.
+      // The tool dashboard does network I/O (Zotero probe, …), so it runs on
+      // a detached fiber off the initial render. The frontend spins until data
+      // arrives, so a failed build still posts an empty dashboard to end it;
+      // nothing joins this fiber, so each failure is logged on it.
       yield* Effect.forkDetach(
         this.sendToolDashboardData(webview).pipe(
           Effect.catch((error) =>
@@ -701,13 +700,11 @@ export class SettingsViewMessageHandler {
   // ============================================================
 
   /**
-   * The shared refresh tail for a credential change (API key or subscription
-   * auth): drop the cached usage, refresh status and catalogs, and push
-   * fresh profile/model/usage data to the active webview. Model selection
-   * availability depends on key state, so status and onboarding refresh finish
-   * before any model/profile data is sent. `refreshProfileData` selects which
-   * profile surface to push (profile+model for key changes, model-only for
-   * subscription changes).
+   * The shared refresh tail for a credential change (API key or subscription):
+   * drop cached usage, refresh status and catalogs, then push profile/model/
+   * usage data. Status and onboarding finish first, since model availability
+   * depends on key state. `refreshProfileData` picks profile+model (key
+   * change) or model-only (subscription change).
    */
   private refreshCredentialDependentSurfaces(options: {
     usageProvider?: SubscriptionUsageProvider;
@@ -768,20 +765,10 @@ export class SettingsViewMessageHandler {
     context: vscode.ExtensionContext,
   ) {
     return Effect.gen({ self: this }, function* () {
-      // Repeat one superseded discovery, then fail closed rather than
-      // authorize from the retained presentation catalogue. A failed probe
-      // fails the program: authorization never falls back to the retained
-      // catalogue.
+      // Discover now: authorization acts only on the route the editor
+      // reports for this request, and a failed probe fails the program.
       const discovery = yield* Effect.exit(
-        refreshRuntimeModelRegistry({ forceDiscovery: true }).pipe(
-          Effect.repeat({
-            until: (result): boolean => result === 'current',
-            times: 1,
-          }),
-          Effect.map((result) =>
-            result === 'current' ? copilotRouteForModel(modelName) : undefined,
-          ),
-        ),
+        Effect.map(discoverCopilotRoutes(), (routes) => routes.get(modelName)),
       );
       const route = Exit.isSuccess(discovery) ? discovery.value : undefined;
       let result: Exit.Exit<unknown, unknown> = discovery;
@@ -883,7 +870,6 @@ export class SettingsViewMessageHandler {
     }).pipe(
       Effect.ensuring(
         Effect.gen({ self: this }, function* () {
-          invalidateRuntimeModelRegistry();
           yield* allSettledVoid([
             this.progressView.refreshCatalogs(),
             this.withActiveWebview((webview) =>

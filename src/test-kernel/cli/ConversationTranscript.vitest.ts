@@ -21,7 +21,6 @@ import {
   advanceStaticTranscriptState,
   buildStaticTranscriptItems,
   buildStaticTranscriptState,
-  DEFAULT_STATIC_TRANSCRIPT_RING_BUDGETS,
   sessionHeaderIdentityLine,
   trimStaticTranscriptItems,
   type StaticTranscriptItem,
@@ -41,11 +40,9 @@ import {
 import { transcriptToLines } from '@cli/chat/tui/state/transcriptLines';
 import { CLI_LOCAL_RUN_ID } from '@cli/chat/tui/state/cliState';
 import {
-  RUN_OUTCOME,
   RUN_PHASE,
   TOOL_CALL_STATUS,
   type NormalizedToolUse,
-  type RunOutcome,
   type RunPhase,
   type RunId,
   type WorkflowCallProgress,

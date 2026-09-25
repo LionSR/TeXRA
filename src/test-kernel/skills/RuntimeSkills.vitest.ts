@@ -1,7 +1,3 @@
-import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';

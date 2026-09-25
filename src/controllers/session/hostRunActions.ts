@@ -11,7 +11,11 @@ import {
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
-import type { RunRequest } from '@agent/core/state/runRequests';
+import {
+  validateRunRequest,
+  type RunRequest,
+  type ValidatedRunRequest,
+} from '@agent/core/state/runRequests';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -22,7 +26,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
 import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
-import { getRuntimeModelDirectFallback } from '@model/runtimeModelRegistry';
+import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { StateReadFailed } from '@platform/interfaces';
 import {
   AgentResume,
@@ -40,6 +44,7 @@ import {
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
+  isRequestRefusal,
   Rejected,
   Unavailable,
   type RequestRefusal,
@@ -84,32 +89,20 @@ export interface WorkflowFileOperationRequest {
 }
 
 /**
- * The host's launcher could not start the run. `runAgent` and the desktop's
- * launch program still fail with a bare `Error`, so each host lifts that one
- * channel into this tag where it binds the port, and a refusal the launcher
- * already worded travels as the refusal it is. `cause` is exactly what the
- * launch failed with, so a host that classifies a failure still reads the
- * launch's own error rather than this wrapper.
- *
- * {@link HostRunActionPorts.runAgentRequest} settles only when the launched
- * run itself settles, so the copilot fallback below races it against the
- * launcher's own start callback rather than awaiting it; a launch that faults
- * before that callback reaches the waiter as this failure.
+ * The host's launcher could not start the run: it fails with a bare `Error`,
+ * lifted here with that error as `cause`. {@link HostRunActionPorts.runValidated}
+ * settles only with the run itself, so the copilot fallback races it against
+ * the launcher's start callback; a launch that faults first reaches the
+ * waiter as this failure.
  */
-export class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
+class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
-/**
- * The run's saved setup could not be read: the database would not answer, or
- * it refused the committed `run.record` row. The read is named here and
- * carries its own failure as `cause`, so the host that classifies it reads
- * the record read's typed error rather than this wrapper.
- */
-export class RunConfigUnreadable extends Data.TaggedError(
-  'RunConfigUnreadable',
-)<{
+/** The run's saved setup could not be read: the database would not answer,
+ *  or it refused the committed `run.record` row (`cause`). */
+class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly runId: RunId;
   readonly message: string;
   readonly cause: DatabaseReadFailed;
@@ -118,15 +111,14 @@ export class RunConfigUnreadable extends Data.TaggedError(
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /**
-   * Launch or resume a run; the host's own launcher reaches `runAgent`. The
-   * Effect settles with the launched run itself — a caller that wants only
-   * the launch acknowledged races it against the `onRun` gate instead of
-   * awaiting it. A request the launcher refuses before it starts travels as
-   * the refusal it was worded with; every other launch failure is
-   * {@link RunLaunchFailed}, which carries the launch's own error as `cause`.
+   * Launch or resume a validated run; the host's own launcher reaches
+   * `runAgent`. The Effect settles with the launched run itself — a caller
+   * that wants only the launch acknowledged races it against the `onRun`
+   * gate instead of awaiting it. It fails with the launcher's own error; the
+   * actions below name that channel once.
    */
-  runAgentRequest(
-    request: RunRequest,
+  runValidated(
+    request: ValidatedRunRequest,
     options?: {
       preferHelperModel?: boolean;
       /** This launch replaces a quota-exhausted retry the user answered
@@ -134,7 +126,7 @@ export interface HostRunActionPorts {
       ownApiKeyFallback?: boolean;
       onRun?: () => Effect.Effect<void>;
     },
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
+  ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed
@@ -239,6 +231,34 @@ export const createHostRunActions = (
     const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
+
+    /** Validate a request an action built, then launch it: one that does
+     *  not validate is refused before anything starts, a refusal the
+     *  launcher worded travels as itself, anything else is RunLaunchFailed. */
+    const runAgentRequest = (
+      request: RunRequest,
+      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+    ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> => {
+      const validated = validateRunRequest(request);
+      if (!validated.valid) {
+        return Effect.logError(validated.message).pipe(
+          Effect.annotateLogs({ data: validated.issue }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new Rejected({ reason: validated.message })),
+          ),
+        );
+      }
+      return ports
+        .runValidated(validated.request, options)
+        .pipe(
+          Effect.mapError((cause) =>
+            isRequestRefusal(cause)
+              ? cause
+              : new RunLaunchFailed({ message: toErrorMessage(cause), cause }),
+          ),
+        );
+    };
 
     const getOutputFiles = (runId: RunId) => {
       const run = session.runView(runId);
@@ -482,7 +502,7 @@ export const createHostRunActions = (
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
             const requestFiber = yield* Effect.forkDetach(
-              ports.runAgentRequest(
+              runAgentRequest(
                 { config: { ...config, model } },
                 {
                   ownApiKeyFallback: true,
@@ -577,11 +597,11 @@ export const createHostRunActions = (
           yield* (yield* AgentResume).tryResumeRun(runId);
           return;
         }
-        yield* ports.runAgentRequest({ config, runId });
+        yield* runAgentRequest({ config, runId });
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');
-        yield* ports.runAgentRequest({ config });
+        yield* runAgentRequest({ config });
       }),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
@@ -624,7 +644,7 @@ export const createHostRunActions = (
         } else if (plan.kind === 'info') {
           yield* ports.showInfo(plan.message);
         } else {
-          yield* ports.runAgentRequest(plan.request, {
+          yield* runAgentRequest(plan.request, {
             preferHelperModel: true,
           });
         }

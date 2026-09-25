@@ -29,6 +29,7 @@ import {
   ProgressApiKeyRetryController,
 } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import { hasUsableApiKey, lookupApiKey } from '@model/apiProviders';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -202,10 +203,9 @@ export function createTuiHostInteractions(
         const reason =
           failure ??
           `No ${providerDisplayName(provider)} API key was entered, so the retry did not switch to it. Use \`/key\` to add one.`;
-        logWarning(
-          'cli.tui',
+        yield* Effect.logWarning(
           `The retry could not switch to your own API key: ${reason}`,
-        );
+        ).pipe(withLogChannel('cli.tui'));
         landRequestDecision(
           stores.session,
           stores.runtime,

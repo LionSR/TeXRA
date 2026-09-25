@@ -63,6 +63,7 @@ import {
   shouldRouteModelThroughOpenRouter,
 } from './openRouterRouting';
 import { zeroCostAccessOverrides } from './subscriptionAccessOverrides';
+import type { CopilotModelRoute } from './copilotRouting';
 
 /** The facts one route decision reads, and nothing else. */
 export interface RouteFacts {
@@ -70,6 +71,12 @@ export interface RouteFacts {
   readonly validation: boolean;
   /** The user asked the editor (Copilot) to serve this model. */
   readonly prefersCopilot: boolean;
+  /**
+   * The route the editor offers for this model, discovered for this decision
+   * (only when the decision can land on Copilot). A Copilot decision carries
+   * it, so nothing downstream re-reads the editor.
+   */
+  readonly copilotRoute: CopilotModelRoute | undefined;
   /** The OpenRouter choice: the live toggle, or a resumed format's. */
   readonly useOpenRouter: boolean;
   /** ChatGPT subscription preferred, signed in, and not declined. */
@@ -89,6 +96,7 @@ export interface RouteFacts {
 export const OWN_KEY_ROUTE_FACTS: RouteFacts = {
   validation: false,
   prefersCopilot: false,
+  copilotRoute: undefined,
   useOpenRouter: false,
   chatgptSubscription: false,
   xaiSubscription: false,
@@ -98,7 +106,10 @@ export const OWN_KEY_ROUTE_FACTS: RouteFacts = {
 };
 
 /** The host half of {@link RouteFacts}, shared by every model. */
-export type HostRouteFacts = Omit<RouteFacts, 'validation' | 'prefersCopilot'>;
+export type HostRouteFacts = Omit<
+  RouteFacts,
+  'validation' | 'prefersCopilot' | 'copilotRoute'
+>;
 
 /** What a direct provider key pays through. */
 type ApiKeyUsageRoute =
@@ -107,7 +118,11 @@ type ApiKeyUsageRoute =
 /** The route a model's next request takes, decided by {@link decideModelRoute}. */
 export type ModelRoute =
   | { readonly kind: 'validation' }
-  | { readonly kind: 'copilot' }
+  | {
+      readonly kind: 'copilot';
+      /** The discovered route; absent when the editor offers none now. */
+      readonly route: CopilotModelRoute | undefined;
+    }
   | { readonly kind: 'openrouter-unsupported' }
   | { readonly kind: 'chatgpt-subscription' }
   | { readonly kind: 'xai-subscription' }
@@ -143,7 +158,7 @@ export function decideModelRoute(
   // Editor-supplied models cannot be proxied through OpenRouter, and a
   // preference is a hard route choice (#9635).
   if (facts.prefersCopilot || config.provider === ModelProvider.COPILOT) {
-    return { kind: 'copilot' };
+    return { kind: 'copilot', route: facts.copilotRoute };
   }
   if (isOpenRouterRoutingUnsupported(config, facts.useOpenRouter)) {
     return { kind: 'openrouter-unsupported' };

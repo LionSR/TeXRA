@@ -3,8 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 // Local imports
 import {
-  buildFixInstruction,
-  buildReviewInstruction,
   createReviewIssue,
   normalizeReviewFilePath,
 } from '@agent/review/reviewIssues';
