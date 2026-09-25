@@ -358,58 +358,6 @@
         "icon": "$(gear)"
       },
       {
-        "command": "texra.agentReview.run",
-        "title": "Find Issues (Agent Review)",
-        "shortTitle": "Find Issues",
-        "category": "TeXRA",
-        "icon": "$(search)"
-      },
-      {
-        "command": "texra.agentReview.runWithOptions",
-        "title": "Find Issues with Options (Agent Review)",
-        "shortTitle": "Options…",
-        "category": "TeXRA",
-        "icon": "$(ellipsis)"
-      },
-      {
-        "command": "texra.agentReview.stop",
-        "title": "Stop Agent Review",
-        "shortTitle": "Stop",
-        "category": "TeXRA",
-        "icon": "$(debug-stop)"
-      },
-      {
-        "command": "texra.agentReview.fixAllIssues",
-        "title": "Fix All Agent Review Issues",
-        "shortTitle": "Fix All Issues",
-        "category": "TeXRA",
-        "icon": "$(tools)"
-      },
-      {
-        "command": "texra.agentReview.fixIssue",
-        "title": "Fix with Agent",
-        "category": "TeXRA",
-        "icon": "$(wand)"
-      },
-      {
-        "command": "texra.agentReview.dismissIssue",
-        "title": "Dismiss Agent Review Issue",
-        "shortTitle": "Dismiss",
-        "category": "TeXRA",
-        "icon": "$(close)"
-      },
-      {
-        "command": "texra.agentReview.openIssue",
-        "title": "Open Agent Review Issue",
-        "category": "TeXRA"
-      },
-      {
-        "command": "texra.agentReview.clear",
-        "title": "Clear Agent Review Results",
-        "category": "TeXRA",
-        "icon": "$(clear-all)"
-      },
-      {
         "command": "texra.replyComment",
         "title": "Reply",
         "category": "TeXRA"
@@ -505,25 +453,8 @@
           "name": "TeXRA",
           "contextualTitle": "TeXRA"
         }
-      ],
-      "scm": [
-        {
-          "type": "tree",
-          "id": "texra.scmAgentReviewView",
-          "name": "Agent Review",
-          "contextualTitle": "Agent Review",
-          "visibility": "collapsed",
-          "when": "texra.activated"
-        }
       ]
     },
-    "viewsWelcome": [
-      {
-        "view": "texra.scmAgentReviewView",
-        "contents": "Review changes against the main branch for issues.\n[Find Issues](command:texra.agentReview.run)",
-        "when": "texra.activated && !texra.agentReview.running"
-      }
-    ],
     "menus": {
       "editor/title": [
         {
@@ -537,78 +468,9 @@
           "command": "texra.showDashboard",
           "when": "texra.activated && view == texra.mainView",
           "group": "navigation@0"
-        },
-        {
-          "command": "texra.agentReview.run",
-          "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running",
-          "group": "navigation@1"
-        },
-        {
-          "command": "texra.agentReview.stop",
-          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.running",
-          "group": "navigation@1"
-        },
-        {
-          "command": "texra.agentReview.runWithOptions",
-          "when": "texra.activated && view == texra.scmAgentReviewView && !texra.agentReview.running",
-          "group": "navigation@2"
-        },
-        {
-          "command": "texra.agentReview.fixAllIssues",
-          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues",
-          "group": "navigation@3"
-        },
-        {
-          "command": "texra.agentReview.clear",
-          "when": "texra.activated && view == texra.scmAgentReviewView && texra.agentReview.hasIssues",
-          "group": "navigation@4"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "texra.agentReview.fixIssue",
-          "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue",
-          "group": "inline@1"
-        },
-        {
-          "command": "texra.agentReview.dismissIssue",
-          "when": "view == texra.scmAgentReviewView && viewItem == texraReviewIssue",
-          "group": "inline@2"
         }
       ],
       "commandPalette": [
-        {
-          "command": "texra.agentReview.run",
-          "when": "texra.activated && !texra.agentReview.running"
-        },
-        {
-          "command": "texra.agentReview.runWithOptions",
-          "when": "false"
-        },
-        {
-          "command": "texra.agentReview.stop",
-          "when": "texra.activated && texra.agentReview.running"
-        },
-        {
-          "command": "texra.agentReview.fixAllIssues",
-          "when": "texra.activated && texra.agentReview.hasIssues"
-        },
-        {
-          "command": "texra.agentReview.clear",
-          "when": "texra.activated && texra.agentReview.hasIssues"
-        },
-        {
-          "command": "texra.agentReview.fixIssue",
-          "when": "false"
-        },
-        {
-          "command": "texra.agentReview.dismissIssue",
-          "when": "false"
-        },
-        {
-          "command": "texra.agentReview.openIssue",
-          "when": "false"
-        },
         {
           "command": "texra.createSampleProject",
           "when": "texra.activated"
