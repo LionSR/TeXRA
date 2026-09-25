@@ -23,7 +23,7 @@ import { writeTextStderr } from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import type { CliContext } from '../runtime/cliContext';
 
 export function listAgents(
@@ -47,21 +47,17 @@ export function listAgents(
       }
     }
 
-    emitCliResult(
-      context,
-      {
-        json: result.agents,
-        ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
-        text: formatCliAgentList(result.agents, {
-          category: options.category,
-          showEmptyState:
-            options.includeHidden !== true &&
-            !context.quietLogs &&
-            context.outputFormat === 'text',
-        }),
-      },
-      { paged: true },
-    );
+    yield* emitPagedCliResult(context, {
+      json: result.agents,
+      ndjson: result.agents.map((agent) => ({ kind: 'agent', agent })),
+      text: formatCliAgentList(result.agents, {
+        category: options.category,
+        showEmptyState:
+          options.includeHidden !== true &&
+          !context.quietLogs &&
+          context.outputFormat === 'text',
+      }),
+    });
     return CliExitCode.Success;
   });
 }

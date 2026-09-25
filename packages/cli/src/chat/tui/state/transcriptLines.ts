@@ -19,10 +19,10 @@ interface EntryLinesMemo {
 // Wrapped-line memo keyed by the immutable entry object. Entries are replaced
 // (never mutated in place) when their content changes, so a hit is always
 // current, and the WeakMap needs no eviction: a replaced/discarded entry takes
-// its slot with it. One slot per entry suffices — the sole caller
-// (`TranscriptReader`) lays every entry out at one width under one labels
-// snapshot per frame, so only a resize or roster change misses, and then
-// exactly once per entry.
+// its slot with it. One slot per entry suffices: the sole caller
+// (`TranscriptReader`) lays every entry out at one width under one labels map
+// per frame, and the App keeps that map identity-stable until a child's label
+// changes, so only a resize or a label change misses, once per entry.
 const entryLinesCache = new WeakMap<TranscriptRow, EntryLinesMemo>();
 
 function transcriptEntryLines(

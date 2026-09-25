@@ -21,14 +21,19 @@ import {
 } from '@platform/rootedFs';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 
+import { nodeSpawnerLayer } from './childProcessTestLayer';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+
 /**
- * The `FileSystem` and `Path` services `installProcessRuntime` provides once
- * per process, for a suite that runs a real-filesystem program on
- * `it.effect`'s own runtime rather than the installed one.
+ * The `FileSystem`, `Path` and `ChildProcessSpawner` services
+ * `installProcessRuntime` provides once per process, for a suite that runs a
+ * real-filesystem or child-process program on `it.effect`'s own runtime
+ * rather than the installed one. The spawner is the harness's lazy one.
  */
 export const nodePlatformLayer = Layer.mergeAll(
   NodeFileSystem.layer,
   NodePath.layer,
+  nodeSpawnerLayer,
 );
 
 /**
@@ -43,7 +48,12 @@ export function rootedFsLayer(roots: {
   readonly storage: string;
   readonly globalStorage: string;
 }): Layer.Layer<
-  WorkspaceFs | StorageFs | GlobalStorageFs | FileSystem.FileSystem | Path.Path
+  | WorkspaceFs
+  | StorageFs
+  | GlobalStorageFs
+  | FileSystem.FileSystem
+  | Path.Path
+  | ChildProcessSpawner
 > {
   return Layer.provideMerge(
     Layer.merge(

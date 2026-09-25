@@ -14,7 +14,8 @@
 // The two services by their own modules, not the package barrel: a setup
 // file loads before a suite's `vi.mock` registrations, and the barrel would
 // cache `NodeChildProcessSpawner`'s `node:child_process` ahead of a suite
-// that mocks it.
+// that mocks it. The harness spawner is lazy for the same reason
+// (`nodeSpawnerLayer`).
 import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import * as NodePath from '@effect/platform-node/NodePath';
 import { ConfigProvider, Effect, RcMap } from 'effect';
@@ -60,6 +61,7 @@ import {
 import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
 import { toolTableLayer } from '@tools/compositions';
 import { toolTable } from '@tools/toolTable';
+import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {
   createFakePlatform,
   createFakeWorkspaceRoots,
@@ -428,7 +430,8 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ProcessIdentity.layer(processOwnerId('test')),
     testHttpClientLayer,
     // The same standard-library filesystem and path services the process
-    // roots provide, over the real temp roots the harness runs on.
+    // roots provide, over the real temp roots the harness runs on; the
+    // spawner is merged below, since the tool table's compositions take it.
     NodeFileSystem.layer,
     NodePath.layer,
     // The process environment, hermetic: the installed host's `env`, never
@@ -477,7 +480,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
       globalStorageFsLayer(current?.roots.globalStorage ?? ''),
       Layer.mergeAll(NodeFileSystem.layer, NodePath.layer),
     ),
-  );
+  ).pipe(Layer.provideMerge(nodeSpawnerLayer));
   initTestWorkspaceRoots(host.roots);
   // A bare process runtime for the Promise-facing boundaries that run
   // fibers (the loopback sign-in). The session graph family is not installed

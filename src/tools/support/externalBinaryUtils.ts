@@ -29,6 +29,7 @@ import { nodeHostEnvironment } from '@platform/defaults/nodeHostEnvironment';
 import { ensureError } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
 import { IS_WINDOWS, extendEnvPath } from '@utils/system/platformPaths';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'ExternalBinaryUtils';
 
@@ -119,7 +120,7 @@ export interface ResolveBinaryConfig {
  */
 const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
   config: ResolveBinaryConfig,
-): Effect.fn.Return<string | undefined> {
+): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   if (config.platformPackages.length === 0) return undefined;
 
   // Strategy 1: packaged Electron app.asar.unpacked resources
@@ -196,7 +197,7 @@ const resolveBinary = Effect.fn('externalBinaryUtils.resolveBinary')(function* (
  */
 export function createCachedBinaryResolver(
   buildConfig: () => ResolveBinaryConfig | undefined,
-): () => Effect.Effect<string | undefined, Error> {
+): () => Effect.Effect<string | undefined, Error, ChildProcessSpawner> {
   let cached: string | undefined;
   return () =>
     Effect.suspend(() => {

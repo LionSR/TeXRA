@@ -23,6 +23,7 @@ import { executeCommand } from '@utils/system/execUtils';
 import { isGitRepository } from '@utils/git/isGitRepository';
 
 import { COMMIT_LABEL_FORMAT, splitCommitLines } from './commitLogFormat';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
  * Hard upper bound on git output bytes (8 MiB). Commit subjects and numstat
@@ -58,7 +59,7 @@ const readGit = Effect.fn('repositoryOverview.readGit')(function* (
   args: readonly string[],
   options: GitReadOptions,
   reportFailure = true,
-): Effect.fn.Return<string | undefined> {
+): Effect.fn.Return<string | undefined, never, ChildProcessSpawner> {
   const result = yield* executeCommand(['git', ...args], {
     cwd: workspace,
     settings: options.settings,
@@ -98,7 +99,7 @@ export const readRecentCommitLabels = Effect.fn(
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Effect.fn.Return<string[] | undefined> {
+): Effect.fn.Return<string[] | undefined, never, ChildProcessSpawner> {
   const output = yield* readGit(
     workspacePath,
     [
@@ -125,7 +126,7 @@ export const readRecentCommits = Effect.fn(
   workspacePath: string,
   limit: number,
   options: GitReadOptions,
-): Effect.fn.Return<GitRecentCommits> {
+): Effect.fn.Return<GitRecentCommits, never, ChildProcessSpawner> {
   if (!(yield* isGitRepository(workspacePath, options.settings))) {
     return { commits: [], isGitRepo: false };
   }

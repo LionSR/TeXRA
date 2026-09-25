@@ -45,7 +45,11 @@ import {
 } from '../desktopSetupAuth.js';
 import { ElectronSecrets } from './electronSecrets.js';
 import { repairLaunchPath } from './pathFix.js';
-import { resolveDesktopDataRoot, resolveResourcesPath } from './paths.js';
+import {
+  resolveDesktopDataRoot,
+  resolveDesktopMainDir,
+  resolveResourcesPath,
+} from './paths.js';
 import { showDesktopWarningDialog } from './warningDialog.js';
 interface ElectronPlatformInitResult {
   /**
@@ -79,10 +83,12 @@ interface ElectronPlatformInitResult {
   /**
    * Resolved `packages/extension/resources` tree (bundled verbatim as
    * `extraResources` — see `electron-builder.yml`). Threaded out so callers
-   * that need a specific bundled asset (e.g. the chat-export templates) don't
+   * that need a specific bundled asset (e.g. the trace viewer page) don't
    * each re-resolve it.
    */
   resourcesPath: string;
+  /** The directory of the built main bundle, beside its preload and renderer. */
+  mainDir: string;
   /**
    * The setup sign-in registration installed with the runtime. Each window
    * registers its own sign-in flow here, since the flow needs the window to
@@ -93,7 +99,7 @@ interface ElectronPlatformInitResult {
 
 export const initializeElectronPlatform = Effect.fn(
   'initializeElectronPlatform',
-)(function* (mainDirname: string, agentResume: AgentResumePort) {
+)(function* (moduleDirname: string, agentResume: AgentResumePort) {
   // The default handler's console.error is mirrored into the desktop app log,
   // so shutdown-handler failures land at error severity like the other hosts.
   const lifecycle = createLifecycleHost();
@@ -107,11 +113,12 @@ export const initializeElectronPlatform = Effect.fn(
   // folder is open.
   const storage = resolveWorkspaceStoragePath(dataRoot, undefined);
   const globalStorage = resolveGlobalStoragePath(dataRoot);
-  // Identity and secrets precede the runtime; application state is acquired
-  // by its own runtime layer, whose scope owns the database.
-  const { processStart, configStores, secrets, supabaseAuth } =
+  // Secrets precede the runtime; the process identity and application state
+  // are acquired by its own layers, over the spawner and database it serves.
+  const { mainDir, resourcesPath, configStores, secrets, supabaseAuth } =
     yield* Effect.gen(function* () {
-      const processStart = yield* nodeProcesses.selfIdentity();
+      const mainDir = yield* resolveDesktopMainDir(moduleDirname);
+      const resourcesPath = yield* resolveResourcesPath(mainDir);
       const [configStores, secretsStore] = yield* Effect.all(
         [
           openTexraConfigStores(dataRoot, undefined, (message) =>
@@ -134,7 +141,7 @@ export const initializeElectronPlatform = Effect.fn(
           }),
       });
       const supabaseAuth = yield* createSupabaseAuth({ secrets });
-      return { processStart, configStores, secrets, supabaseAuth };
+      return { mainDir, resourcesPath, configStores, secrets, supabaseAuth };
     }).pipe(
       Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),
     );
@@ -142,7 +149,6 @@ export const initializeElectronPlatform = Effect.fn(
   // serves: every project's session graph and Promise-facing fiber runs on
   // it, and the entry disposes it last (`disposeProcessRuntime`), after run
   // settlement and the projects' release of their graphs.
-  const resourcesPath = resolveResourcesPath(mainDirname);
   const agentDirectoriesLayer = Layer.effect(
     AgentDirectories,
     Effect.map(
@@ -160,7 +166,7 @@ export const initializeElectronPlatform = Effect.fn(
   );
   const setupAuth = createDesktopSetupAuth();
   const runtime = installProcessRuntime({
-    processStart: Effect.succeed(processStart),
+    processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     secrets,
     // Electron profile state intentionally differs from the shared global DB.
@@ -230,6 +236,7 @@ export const initializeElectronPlatform = Effect.fn(
       agentDirectories,
       dataRoot,
       resourcesPath,
+      mainDir,
       setupAuth,
     };
   });

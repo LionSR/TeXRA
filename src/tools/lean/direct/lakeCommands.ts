@@ -10,17 +10,16 @@
 import * as path from 'node:path';
 
 import { Effect } from 'effect';
-import { execa } from 'execa';
 
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import { deriveCommandStderr } from '@utils/system/execCore';
+import { executeCommand } from '@utils/system/execUtils';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const LAKE_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 const LAKE_MAX_OUTPUT_CHARS = 4 * 1024 * 1024;
-// Keep execa 10's current per-stream failure ceiling explicit. capOutput()
-// preserves successful chatty builds by retaining their last 4,194,304 characters, while
-// this higher character cap prevents a dependency-default change from silently
-// changing when a command is terminated for excessive output.
+// The per-stream failure ceiling, explicit. capOutput() preserves successful
+// chatty builds by retaining their last 4,194,304 characters, while this
+// higher character cap decides when a command is stopped for excessive output.
 const LAKE_PROCESS_MAX_BUFFER_CHARS = 100_000_000;
 
 /**
@@ -60,7 +59,7 @@ interface LakeCommandOptions {
  */
 export const runLakeCommand = (
   options: LakeCommandOptions,
-): Effect.Effect<LakeCommandResult> =>
+): Effect.Effect<LakeCommandResult, never, ChildProcessSpawner> =>
   options.serialize
     ? // `path.resolve` stays inside the suspend: a relative `workspaceRoot`
       // resolves against the process cwd at run time, as it did before.
@@ -71,31 +70,12 @@ export const runLakeCommand = (
       )
     : executeLake(options);
 
-/** The raw `lake` spawn, split out so its exact execa result type stays
- *  inferred rather than widened by the generic `Result`. */
-function spawnLake(options: LakeCommandOptions) {
-  return execa(options.lakeCommand, [...options.args], {
-    cwd: options.workspaceRoot,
-    timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
-    reject: false,
-    maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
-    windowsHide: true,
-    stdin: 'ignore',
-  });
-}
-
-type LakeExecaResult = Awaited<ReturnType<typeof spawnLake>>;
-
 function executeLake(
   options: LakeCommandOptions,
-): Effect.Effect<LakeCommandResult> {
+): Effect.Effect<LakeCommandResult, never, ChildProcessSpawner> {
   // Lake remains buffer-then-cap deliberately: preserving the current tail
   // result and complete exit diagnostics is simpler than duplicating bash's
   // head/tail streaming policy for this serialized, lower-risk path.
-  //
-  // `reject: false` means execa settles on a failed command rather than
-  // rejecting, so the failure channel stays empty here — as the Promise
-  // contract this replaces did; a genuine spawn error is still a defect.
   //
   // The child is owned across interruption rather than abandoned. An
   // interrupt (a sibling root's `lease` failing under the unbounded
@@ -103,48 +83,36 @@ function executeLake(
   // not release this workspace's permit while `lake` is still writing
   // `.lake/build`: the next `build`/`clean` would then run concurrently with
   // an orphan, which is exactly what this module's lock exists to prevent.
-  // The returned canceller terminates the child and awaits its exit, and the
-  // interrupt only propagates once that finishes — so the workspace lane is
-  // handed to the next waiter only after the process is gone. A bare abort
-  // signal is not enough: Effect aborts the controller
-  // but does not wait for the abortee.
-  return Effect.callback<LakeExecaResult>((resume) => {
-    const child = spawnLake(options);
-    child.then(
-      (result) => resume(Effect.succeed(result)),
-      (error: unknown) => resume(Effect.die(error)),
-    );
-    // `Effect.exit` absorbs however the child settles — including a spawn
-    // rejection — without a raw catch clause, which this file may not carry.
-    return Effect.asVoid(
-      Effect.exit(
-        Effect.promise(() => {
-          child.kill();
-          return child;
-        }),
-      ),
-    );
+  // `executeCommand` scopes the child inside this call, and that scope's
+  // release terminates it and awaits its exit, so the lane is handed to the
+  // next waiter only after the process is gone.
+  return executeCommand([options.lakeCommand, ...options.args], {
+    cwd: options.workspaceRoot,
+    settings: undefined,
+    timeout: options.timeoutMs ?? LAKE_RUN_TIMEOUT_MS,
+    maxBuffer: LAKE_PROCESS_MAX_BUFFER_CHARS,
+    quiet: true,
   }).pipe(
-    Effect.map((result) => {
-      const { stdout, stderr } = result;
-      const shouldUseShortMessage =
-        result.isMaxBuffer ||
-        result.exitCode === undefined ||
+    Effect.map((result) => ({
+      // A deadline, an output-limit trip, a spawn failure or a signal death
+      // has no exit code of the command's own.
+      exitCode:
         result.timedOut ||
-        !stdout;
-      const stderrOrMessage = deriveCommandStderr(
-        stderr,
-        result.shortMessage,
-        shouldUseShortMessage,
-      );
-      return {
-        exitCode:
-          result.failed && (!result.exitCode || result.isMaxBuffer)
-            ? -1
-            : (result.exitCode ?? -1),
-        stdout: capOutput(stdout),
-        stderr: capOutput(stderrOrMessage),
-      };
-    }),
+        result.outputLimitExceeded === true ||
+        result.noExitCode === true
+          ? -1
+          : result.exitCode,
+      // executeCommand trims both ends of each stream, so leading
+      // whitespace on lake's first line is not kept.
+      stdout: capOutput(result.stdout),
+      // A non-zero exit that printed nothing still tells the agent why the
+      // command failed.
+      stderr: capOutput(
+        result.stderr ||
+          (result.exitCode !== 0 && !result.stdout
+            ? `lake exited with code ${result.exitCode}: ${[options.lakeCommand, ...options.args].join(' ')}`
+            : ''),
+      ),
+    })),
   );
 }

@@ -5,8 +5,8 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
-import { execa } from 'execa';
+import { Effect, Stream } from 'effect';
+import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { InstalledPlugin } from '@shared/schemas';
@@ -26,6 +26,7 @@ import {
   readPluginCandidates,
   type PluginCandidate,
 } from './pluginManifest';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
 export type PluginOrigin =
@@ -45,21 +46,45 @@ export const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
 /** A ref git takes as a plain name: no leading dash, no option smuggling. */
 export const SAFE_REF = /^[\w][\w./-]*$/;
 
-function git(args: readonly string[]) {
-  return Effect.tryPromise({
-    try: (signal) =>
-      execa('git', args, {
-        // extendEnv: false keeps the helper-invoking keys makeMachineGitEnv
-        // strips from coming back through execa's default merge.
-        env: makeMachineGitEnv(),
-        extendEnv: false,
-        stdin: 'ignore',
-        cancelSignal: signal,
-      }),
-    catch: (error) =>
-      // execa's message names the command line and carries git's stderr.
-      new PluginError({ message: toErrorMessage(error) }),
-  }).pipe(Effect.map((result) => result.stdout.trim()));
+// Machine git env only: extending would merge back the helper-invoking keys
+// makeMachineGitEnv strips. A failure names the command and git's stderr.
+function git(
+  args: readonly string[],
+): Effect.Effect<string, PluginError, ChildProcessSpawner> {
+  const commandLine = `git ${args.join(' ')}`;
+  return Effect.gen(function* () {
+    const handle = yield* ChildProcess.make('git', args, {
+      env: makeMachineGitEnv(),
+      extendEnv: false,
+      stdin: 'ignore',
+      detached: false,
+      forceKillAfter: '5 seconds',
+    });
+    const [stdout, stderr, code] = yield* Effect.all(
+      [
+        handle.stdout.pipe(Stream.decodeText(), Stream.mkString),
+        handle.stderr.pipe(Stream.decodeText(), Stream.mkString),
+        handle.exitCode,
+      ],
+      { concurrency: 'unbounded' },
+    );
+    return { stdout, stderr: stderr.trim(), code };
+  }).pipe(
+    Effect.scoped,
+    Effect.mapError((error) => {
+      const message = `${commandLine} could not start: ${toErrorMessage(error)}`;
+      return new PluginError({ message });
+    }),
+    Effect.flatMap(({ stdout, stderr, code }) =>
+      code === 0
+        ? Effect.succeed(stdout.trim())
+        : Effect.fail(
+            new PluginError({
+              message: `${commandLine} exited with code ${code}${stderr ? `: ${stderr}` : ''}`,
+            }),
+          ),
+    ),
+  );
 }
 
 /**
@@ -180,7 +205,11 @@ function installFromRoot(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<InstalledPlugin[], PluginError | CliUsageError | Error> {
+): Effect.Effect<
+  InstalledPlugin[],
+  PluginError | CliUsageError | Error,
+  ChildProcessSpawner
+> {
   return Effect.gen(function* () {
     const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
       root,
@@ -247,7 +276,11 @@ function installOrigin(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<InstalledPlugin[], PluginError | CliUsageError | Error> {
+): Effect.Effect<
+  InstalledPlugin[],
+  PluginError | CliUsageError | Error,
+  ChildProcessSpawner
+> {
   if (origin.kind === 'local') {
     return fsEffect(() => fs.realpath(origin.path)).pipe(
       Effect.mapError(

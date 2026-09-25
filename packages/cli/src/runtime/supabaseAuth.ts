@@ -1,5 +1,6 @@
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
+import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Local imports
 import { invalidateRemoteAgentsAfterSignOut } from '@agent/index';
@@ -17,15 +18,16 @@ import {
   memoryPendingOAuthSlots,
   PendingOAuthStore,
 } from '@controllers/auth/pendingOAuthStore';
-import type { AgentDirectories } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type {
+  AgentCatalogServices,
+  ProcessRuntime,
+} from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import { ensureError } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
 // Local file imports
-import { openBrowser } from './browser';
+import { launchBrowser } from './browser';
 import { loopbackCallbackTransport } from './supabaseAuthCallbackServer';
 import {
   pollForDeviceSession,
@@ -122,12 +124,18 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
         .clearSession()
         .pipe(Effect.mapError(unwrapAuthPortCause));
     }
+    // The loopback port runs its launcher with nothing in context, so the
+    // spawner this program holds is handed to each launch.
+    const spawner = yield* ChildProcessSpawner;
     const coordinator = new SupabaseSignInCoordinator({
       auth,
       store: new PendingOAuthStore(memoryPendingOAuthSlots()),
       transport: loopbackCallbackTransport({
         runtime,
-        openBrowser: (url) => presentCliSignInUrl(url, options),
+        openBrowser: (url) =>
+          presentCliSignInUrl(url, options).pipe(
+            Effect.provideService(ChildProcessSpawner, spawner),
+          ),
       }),
     });
     return yield* coordinator
@@ -148,18 +156,19 @@ export const signInCliSupabase = Effect.fn('supabaseAuth.signInCliSupabase')(
 function presentCliSignInUrl(
   url: string,
   options: CliLoginOptions,
-): Effect.Effect<void, Error> {
+): Effect.Effect<void, Error, ChildProcessSpawner> {
   return Effect.suspend(() => {
     options.onAuthUrl?.(url);
     if (!(options.openBrowser ?? true)) return Effect.void;
-    return Effect.tryPromise({
-      try: () =>
-        openBrowser(
-          url,
-          options.manualBrowserHint ?? 'texra login --no-browser',
-        ),
-      catch: (cause) => ensureError(cause),
-    });
+    const hint = options.manualBrowserHint ?? 'texra login --no-browser';
+    return launchBrowser(url).pipe(
+      Effect.mapError(
+        (error) =>
+          new Error(
+            `${error.message}. Run ${hint} to open the sign-in URL manually.`,
+          ),
+      ),
+    );
   });
 }
 
@@ -212,7 +221,7 @@ export const signInCliSupabaseDeviceCode = Effect.fn(
 export function signOutCliSupabase(): Effect.Effect<
   void,
   Error,
-  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
+  AgentCatalogServices
 > {
   return Effect.gen(function* () {
     const authCoordinator = yield* Effect.try({

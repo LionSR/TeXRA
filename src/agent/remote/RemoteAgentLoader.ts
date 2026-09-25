@@ -20,6 +20,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { fetchRemoteAgentConfigYaml } from './remoteAgentConfigClient';
 import { CHANNEL } from './remoteAgentList';
 import type { RemoteAgentConfig } from './types';
+import type { HttpClient } from 'effect/unstable/http';
 
 /**
  * Load a remote agent configuration by name. A composition with no account
@@ -27,7 +28,9 @@ import type { RemoteAgentConfig } from './types';
  * the authentication-required failure.
  */
 export const loadRemoteAgent = Effect.fn('RemoteAgentLoader.loadRemoteAgent')(
-  function* (agentName: string): Effect.fn.Return<RemoteAgentConfig, Error> {
+  function* (
+    agentName: string,
+  ): Effect.fn.Return<RemoteAgentConfig, Error, HttpClient.HttpClient> {
     const auth = yield* Effect.serviceOption(SupabaseAuth);
     const token = auth._tag === 'Some' ? yield* auth.value.accessToken : null;
     if (!token) {

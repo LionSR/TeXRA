@@ -8,6 +8,7 @@ import {
   HOMEBREW_INSTALL_COMMAND,
   type OSPlatform,
 } from '@shared/constants/latexToolchain';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 /** The controller's deps and probe-tool names are file-local; derive them. */
 type LatexToolingControllerDeps = ConstructorParameters<
@@ -46,7 +47,7 @@ function createController(
   const paths = options?.paths ?? {};
   const deps: LatexToolingControllerDeps = {
     checkToolInstalled: (tool) => Effect.succeed(installedTools[tool]),
-    findPath: (tool) => paths[tool] ?? null,
+    findPath: (tool) => Effect.succeed(paths[tool] ?? null),
     detectPackageManager: () => options?.packageManager ?? null,
     getPlatform: () => options?.platform ?? 'linux',
     isLatexWorkshopInstalled: () => options?.extensionInstalled ?? false,
@@ -75,7 +76,7 @@ describe('LatexToolingController', () => {
         expect(status.texDistributionInstalled).toBe(true);
         expect(status.latexindentInstalled).toBe(false);
         expect(status.imageProcessingInstalled).toBe(false);
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   it.effect('falls back to defaults when detection fails', () =>
@@ -86,7 +87,7 @@ describe('LatexToolingController', () => {
           Effect.sync(() => {
             throw new Error('probe failed');
           }),
-        findPath: () => null,
+        findPath: () => Effect.succeed(null),
         detectPackageManager: () => 'apt',
         getPlatform: () => 'win32',
         isLatexWorkshopInstalled: () => true,
@@ -99,7 +100,7 @@ describe('LatexToolingController', () => {
         platform: 'win32',
       });
       expect(errors).toHaveLength(1);
-    }),
+    }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   it('allowlists structured install commands only', () => {

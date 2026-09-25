@@ -105,7 +105,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   previousEntry,
   width,
   colorEnabled,
-  fillWidth,
   subagentRunLabels,
 }: {
   readonly entry: TranscriptRow;
@@ -114,7 +113,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   readonly previousEntry?: TranscriptRow;
   readonly width?: number;
   readonly colorEnabled?: boolean;
-  readonly fillWidth?: boolean;
   readonly subagentRunLabels?: RunLabels;
 }): React.JSX.Element {
   if (entry.kind === 'tool') {
@@ -135,19 +133,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
   });
 
   switch (entry.kind) {
-    case 'phase':
-      // A bold, colored divider that separates a workflow-script run's phases
-      // from the per-agent rows beneath. Stateless props-in → JSX-out.
-      return (
-        <Box
-          marginBottom={layout.marginBottomRows}
-          marginTop={layout.marginTopRows}
-        >
-          <Text bold color={colorEnabled !== false ? COLOR_HINT : undefined}>
-            {layout.lines.join('\n')}
-          </Text>
-        </Box>
-      );
     case 'assistant':
     case 'log':
       return (
@@ -159,7 +144,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
             content={transcriptRowHeadline(entry)}
             width={layout.columns}
             colorEnabled={colorEnabled}
-            fillWidth={fillWidth}
           />
         </Box>
       );
@@ -168,7 +152,6 @@ export const TranscriptEntry = memo(function TranscriptEntry({
         <PlainEntryRows
           colorEnabled={colorEnabled}
           entry={entry}
-          fillWidth={fillWidth}
           layout={layout}
         />
       );

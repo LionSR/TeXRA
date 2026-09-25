@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { vi } from 'vitest';
 
 /**
@@ -19,7 +20,12 @@ import { vi } from 'vitest';
  */
 const cliOutputMock = vi.hoisted(() => ({
   emitCliResult: vi.fn(),
+  emitPagedCliResult: vi.fn(),
 }));
+
+// The paged emitter is an Effect the command yields; the default double
+// completes it.
+cliOutputMock.emitPagedCliResult.mockImplementation(() => Effect.void);
 
 vi.mock('@cli/commands/_helpers/output', () => ({ ...cliOutputMock }));
 

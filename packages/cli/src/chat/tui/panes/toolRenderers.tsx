@@ -347,14 +347,6 @@ function buildStyledLines(
   const feedbackRows = model.userInstruction
     ? cornerRows(labeledLines('Feedback:', model.userInstruction, elide))
     : [];
-  // "It ran and printed nothing" is only meaningful for a call whose output is
-  // the point: a shell command or an MCP call.
-  const showNoOutput =
-    model.outputSuppression === 'empty' &&
-    !model.isError &&
-    model.status === TOOL_CALL_STATUS.COMPLETED &&
-    (isBashKind || isMcpToolName(toolUse.toolName));
-
   const compactOutput: ToolDisplayLine[] = [];
   // The full transcript prints what the card withheld, unless the card
   // already painted that exact text in full (the full transcript does not
@@ -416,7 +408,7 @@ function buildStyledLines(
       : []),
     ...errorRows,
     ...feedbackRows,
-    ...(showNoOutput
+    ...(model.showsNoOutputMarker
       ? [row([CORNER_PREFIX_SPAN, { text: '(no output)', dim: true }])]
       : []),
     ...compactOutput,

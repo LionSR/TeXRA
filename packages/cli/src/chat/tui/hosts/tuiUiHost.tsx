@@ -28,7 +28,7 @@ import type {
   PromptMessageOptions,
 } from '@hosts/uiHosts';
 
-import { CredentialEntryForm } from '../forms/ApiKeyEntryForm';
+import { TextEntryForm } from '../forms/_shared/TextEntryForm';
 import { ListForm } from '../forms/_shared/ListForm';
 import { closeActiveForm, openActiveForm } from '../state/formSlot';
 import {
@@ -179,11 +179,11 @@ class TuiUiHost implements MessageHost, PromptHost {
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
     return openDialog<string>('input', (answer) => (
-      <CredentialEntryForm
+      <TextEntryForm
         title={options.prompt ?? 'Enter a value'}
         masked={options.password ?? false}
         placeholder={options.placeHolder ?? ''}
-        savedHint="Press Enter to submit."
+        hint="Press Enter to submit."
         onSubmit={answer}
         onCancel={() => answer(undefined)}
       />

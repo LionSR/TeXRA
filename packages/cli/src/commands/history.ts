@@ -34,7 +34,7 @@ import {
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { GLOBAL_ARGS, optString } from './_helpers/globalArgs';
-import { emitCliResult } from './_helpers/output';
+import { emitCliResult, emitPagedCliResult } from './_helpers/output';
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 export function parseHistoryListLimit(
@@ -54,17 +54,13 @@ function runHistoryList(context: CliContext, options: { limit?: number }) {
     const visibleEntries =
       options.limit !== undefined ? entries.slice(0, options.limit) : entries;
 
-    emitCliResult(
-      context,
-      {
-        json: visibleEntries,
-        ndjson: cliHistoryNdjsonRecords(visibleEntries),
-        text: visibleEntries.length
-          ? formatCliHistoryText(visibleEntries)
-          : 'No history yet. Runs appear here after you start an agent.',
-      },
-      { paged: true },
-    );
+    yield* emitPagedCliResult(context, {
+      json: visibleEntries,
+      ndjson: cliHistoryNdjsonRecords(visibleEntries),
+      text: visibleEntries.length
+        ? formatCliHistoryText(visibleEntries)
+        : 'No history yet. Runs appear here after you start an agent.',
+    });
     return CliExitCode.Success;
   });
 }

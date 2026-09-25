@@ -4,25 +4,17 @@
 
 import { Box, Text } from 'ink';
 
-import {
-  clipToWidth,
-  fillRows,
-  textDisplayWidth,
-} from '@cli/runtime/terminalText';
+import { fillRows } from '@cli/runtime/terminalText';
 import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
-import {
-  hiddenRowsText,
-  moreRowsText,
-  previousRowsText,
-} from '@cli/tui/overflowText';
 import { clampModalWidth } from '@cli/tui/ui/theme';
 import { clamp } from '@utils/core';
 import { formatHunkHeader } from '@utils/text/unifiedDiff';
 
 import {
+  boundedScrollableLines,
   COMPACT_SCROLLABLE_CONTENT_ROWS,
-  maxScrollableRowOffset,
-  scrollBoundedRows,
+  compactAwareMaxScrollOffset,
+  type ScrollableDisplayLine,
 } from './scrollBounds';
 import type { StructuredPatchHunk } from 'diff';
 
@@ -33,15 +25,12 @@ export interface InlinePatchGroup {
   readonly hunks: readonly Hunk[];
 }
 
-interface DiffDisplayLine {
-  readonly kind: 'added' | 'context' | 'header' | 'removed' | 'overflow';
-  readonly text: string;
-}
+type DiffDisplayLine = ScrollableDisplayLine<
+  'added' | 'context' | 'header' | 'removed'
+>;
 
 const NO_NEWLINE_MARKER = '\\';
 const DEFAULT_DIFF_WIDTH = 74;
-
-type OverflowMarkerKind = 'hidden' | 'more' | 'previous';
 
 export function diffDisplayLines(hunks: readonly Hunk[]): DiffDisplayLine[] {
   return hunks.flatMap((hunk) => [
@@ -78,10 +67,11 @@ export function initialDiffScrollOffset(
   width: number,
   maxDisplayLines: number,
 ): number {
-  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) return 0;
-
   const lines = wrappedDiffDisplayLines(hunks, width);
   if (lines.length <= maxDisplayLines) return 0;
+  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
+    return representativeDiffLineIndex(lines);
+  }
 
   const changedIndex = lines.findIndex(
     (line) => line.kind === 'added' || line.kind === 'removed',
@@ -90,7 +80,7 @@ export function initialDiffScrollOffset(
 
   const initiallyVisibleContentRows = Math.max(1, maxDisplayLines - 1);
   const firstChange = lines.at(changedIndex);
-  const maxOffset = maxScrollableRowOffset({
+  const maxOffset = compactAwareMaxScrollOffset({
     maxDisplayLines,
     totalLines: lines.length,
   });
@@ -114,111 +104,36 @@ export function initialDiffScrollOffset(
   return clamp(addedIndex - Math.max(1, maxDisplayLines - 2) + 1, 0, maxOffset);
 }
 
-function overflowMarkerCandidates(
-  kind: OverflowMarkerKind,
-  count: number,
-): readonly [string, string] {
-  switch (kind) {
-    case 'hidden':
-      return [hiddenRowsText(count), `… ${count} hidden`];
-    case 'previous':
-      return [previousRowsText(count), `… ${count} prev rows`];
-    case 'more':
-      return [moreRowsText(count), `… +${count} rows`];
-  }
-}
-
-function overflowMarkerText(
-  kind: OverflowMarkerKind,
-  count: number,
-  width?: number,
-): string {
-  const candidates = overflowMarkerCandidates(kind, count);
-  if (width === undefined) return candidates[0];
-
-  const markerWidth = clampModalWidth(width);
-  return (
-    candidates.find(
-      (candidate) => textDisplayWidth(candidate) <= markerWidth,
-    ) ?? clipToWidth(candidates[1], markerWidth)
-  );
-}
-
+// Compact windows cannot scroll far enough to find the edit, so they anchor on
+// the first changed row (or the first content row when nothing changed).
 function representativeDiffLineIndex(
   lines: readonly DiffDisplayLine[],
 ): number {
   const changedIndex = lines.findIndex(
     (line) => line.kind === 'added' || line.kind === 'removed',
   );
-  if (changedIndex >= 0) return changedIndex;
-
-  const contentIndex = lines.findIndex((line) => line.kind !== 'overflow');
-  return Math.max(0, contentIndex);
+  return Math.max(0, changedIndex);
 }
 
-function compactBoundedDiffDisplayLines(
-  lines: readonly DiffDisplayLine[],
-  maxDisplayLines: number,
-  width?: number,
-): DiffDisplayLine[] {
-  const visibleBudget = Math.max(1, maxDisplayLines);
-  const visibleCount = visibleBudget === 1 ? 1 : visibleBudget - 1;
-  const anchor = representativeDiffLineIndex(lines);
-  const start = clamp(anchor, 0, lines.length - visibleCount);
-  const visibleLines = lines.slice(start, start + visibleCount);
-  if (visibleBudget === 1) return visibleLines;
-
-  const hiddenRows = lines.length - visibleLines.length;
-  if (hiddenRows === 0) return visibleLines;
-
-  return [
-    ...visibleLines,
-    {
-      kind: 'overflow',
-      text: overflowMarkerText('hidden', hiddenRows, width),
-    },
-  ];
-}
-
+/** Wrapped diff lines bounded to `maxDisplayLines`; 0 = no truncation. An
+ *  omitted `scrollOffset` anchors compact windows on the first change. */
 export function scrollBoundedDiffDisplayLines(
   hunks: readonly Hunk[],
-  maxDisplayLines = 0,
-  scrollOffset = 0,
-  width?: number,
+  maxDisplayLines: number,
+  scrollOffset: number | undefined,
+  width: number,
 ): DiffDisplayLine[] {
-  const lines =
-    width === undefined
-      ? diffDisplayLines(hunks)
-      : wrappedDiffDisplayLines(hunks, width);
-  if (maxDisplayLines <= 0 || lines.length <= maxDisplayLines) return lines;
-  if (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS) {
-    return compactBoundedDiffDisplayLines(lines, maxDisplayLines, width);
-  }
-
-  const { hiddenAfter, hiddenBefore, visibleRows } = scrollBoundedRows({
+  const lines = wrappedDiffDisplayLines(hunks, width);
+  return boundedScrollableLines({
+    lines,
     maxDisplayLines,
-    rows: lines,
-    scrollOffset,
+    scrollOffset:
+      scrollOffset ??
+      (maxDisplayLines <= COMPACT_SCROLLABLE_CONTENT_ROWS
+        ? representativeDiffLineIndex(lines)
+        : 0),
+    width: clampModalWidth(width),
   });
-  return [
-    ...(hiddenBefore > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: overflowMarkerText('previous', hiddenBefore, width),
-          },
-        ]
-      : []),
-    ...visibleRows,
-    ...(hiddenAfter > 0
-      ? [
-          {
-            kind: 'overflow' as const,
-            text: overflowMarkerText('more', hiddenAfter, width),
-          },
-        ]
-      : []),
-  ];
 }
 
 interface DiffViewProps {
@@ -236,7 +151,7 @@ export function DiffView(props: DiffViewProps): React.JSX.Element {
   const lines = scrollBoundedDiffDisplayLines(
     props.hunks,
     maxDisplayLines,
-    props.scrollOffset ?? 0,
+    props.scrollOffset,
     width,
   );
 
