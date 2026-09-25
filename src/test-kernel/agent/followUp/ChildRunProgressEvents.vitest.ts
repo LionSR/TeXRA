@@ -67,6 +67,8 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
     );
+    // What the child loop does once its stop target is reserved.
+    child.track();
     return {
       ...child,
       finalize: (
@@ -264,8 +266,8 @@ describe('child run progress events', () => {
     'rolls back a failed rehydrated setup so the same run can retry',
     () => {
       const recorded = recordSessionEvents(testDefaultSession());
-      const trackRun = vi
-        .spyOn(testDefaultSession().runs, 'track')
+      const attachTrace = vi
+        .spyOn(testDefaultSession(), 'attachRunTrace')
         .mockImplementationOnce(() => {
           throw new Error('run setup failed');
         });
@@ -332,7 +334,7 @@ describe('child run progress events', () => {
           ),
         ).toHaveLength(2);
         yield* retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }).pipe(Effect.ensuring(Effect.sync(() => trackRun.mockRestore())));
+      }).pipe(Effect.ensuring(Effect.sync(() => attachTrace.mockRestore())));
     },
   );
 
@@ -497,6 +499,7 @@ describe('child run progress events', () => {
         const recorded = recordSessionEvents(session);
         let childRun: ChildRun | undefined;
         let childRunId: RunId | undefined;
+        let visibleBeforeLoop = true;
 
         // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
         // defect, so flip the defect back into the error channel.
@@ -512,6 +515,10 @@ describe('child run progress events', () => {
               buildLaunch: (context) => {
                 childRun = context.childRun;
                 childRunId = context.runId;
+                // Before the loop reserves its stop target, no stop can find
+                // the handle: a stop never reaches a run it cannot interrupt.
+                visibleBeforeLoop =
+                  session.runs.getHandle(context.runId) !== undefined;
                 throw setupError;
               },
               summary: 'unreachable',
@@ -521,6 +528,7 @@ describe('child run progress events', () => {
           ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
         );
         expect(defect).toBe(setupError);
+        expect(visibleBeforeLoop).toBe(false);
 
         expect(childRun).toBeDefined();
         expect(childRunId).toBeDefined();

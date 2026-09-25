@@ -84,22 +84,20 @@ export interface ChildRunPorts {
  */
 interface ChildRunPort {
   readonly logger: AgentTrace;
+  /** Show the handle to stops, once the loop has reserved their target. */
+  track(): void;
   /**
    * Complete the child stream lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
    * untracked.
    */
   finalize(options: {
-    /**
-     * The child's report of its own exit. A report, not a verdict: the stream
-     * phase owns the terminal outcome, so an explicit stop/kill that already
-     * landed CANCELLED outranks a FAILED this reports.
-     */
+    /** The child's report of its own exit, not a verdict: a stop that
+     *  already landed CANCELLED outranks a FAILED this reports. */
     outcome: RunOutcome;
     /** Cause behind a FAILED outcome, for diagnosis. */
     error?: unknown;
-    /** The loop's stop observation at finalize time: a landed stop outranks
-     *  the outcome report, so the row and stage resolve to CANCELLED. */
+    /** A stop the loop observed by finalize time: it outranks `outcome`. */
     stopped?: boolean;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
@@ -265,15 +263,12 @@ export interface ChildRunLoopParams<TTurn, R = never> {
 }
 
 /**
- * The child loop's stop, registered on the run's roster activation for the
- * loop's whole lifetime, so a stop finds a live target in the inter-turn
- * WAITING gap too. A process child's turns are reached through `signal`
- * alone — `execa`'s `cancelSignal`, the Codex SDK, the Claude Agent SDK — and
- * its loop fiber survives the abort to settle, deliver and finalize (the
- * ruled permanent resident, architecture rulings ledger 2026-08-01). A native
- * child has no foreign process: its turn is this session's own run program,
- * so its stop ALSO interrupts the run's fiber, and the loop's terminal runs
- * as that fiber's uninterruptible exit.
+ * The child loop's stop, on the run's roster activation for the loop's whole
+ * life, so a stop finds a target in the inter-turn gap too. A process child's
+ * turns are reached through `signal` alone (`execa`'s `cancelSignal`, the
+ * Codex and Claude Agent SDKs) and its loop fiber survives the abort to
+ * deliver and finalize (rulings ledger 2026-08-01). A native child's turn is
+ * this session's own run program, so its stop also interrupts the run fiber.
  */
 class ChildRunInterruptible {
   private readonly controller = new AbortController();
@@ -295,17 +290,16 @@ class ChildRunInterruptible {
     return this.controller.signal.aborted;
   }
 
-  /**
-   * The one cancellation signal every turn of this child runs under. No turn
-   * starts after an interrupt (the loop checks `isInterrupted()` first), so a
-   * per-turn controller would only ever mirror this one.
-   */
+  /** The one cancellation signal every turn of this child runs under: no
+   *  turn starts after an interrupt, so a per-turn one would mirror it. */
   get signal(): AbortSignal {
     return this.controller.signal;
   }
 }
 
 const CHANNEL = 'childRunLoop';
+const SLOT_CANCELLED =
+  'Child run turn cancelled while awaiting a concurrency slot.';
 
 const EFFECT_LOG = {
   debug: Effect.logDebug,
@@ -710,11 +704,8 @@ const submitPendingDelivery = Effect.fn('submitPendingDelivery')(function* (
   }
 });
 
-/**
- * The child loop's abort as an Effect: it settles with `outcome()` the moment
- * `signal` aborts, and never otherwise. Built per race, so the outcome is
- * constructed only when the abort actually fires.
- */
+/** The child loop's abort as an Effect: settles with `outcome()`, built
+ *  only when `signal` aborts, and never otherwise. */
 function onceAborted<A, E>(
   signal: AbortSignal,
   outcome: () => Effect.Effect<A, E>,
@@ -833,21 +824,14 @@ export function startChildRunLoop<TTurn, R = never>(
 
   return Effect.gen(function* () {
     const runs = yield* Runs;
-    const budget = params.budgeted
-      ? yield* runs.childRunBudget(
-          yield* resolveChildRunConcurrencyBudget(runSession.roots),
-        )
-      : undefined;
     const { childRun, parentRunId, agentName, strategy } = params;
     // An agent-CLI child presents on its own trace; `loopLog` sends every
     // other child's driver diagnostics to the process log.
     const trace = childRun?.logger;
     const loop = new ChildRunInterruptible(runs, runId, childRun === undefined);
     // Every child loop reserves its stop target on the run's roster entry for
-    // its whole life. Only a native child also retains a terminal parent's
-    // continuation; a process child's would make a terminal parent look
-    // recoverable. The parent edge is the roster's shared cell, so a
-    // detaching stop severs it for the activation and every handle.
+    // its whole life; only a native one retains a terminal parent's
+    // continuation. The parent edge is the roster's shared cell.
     const parent = runs.getHandle(runId)?.parentState ?? {
       current: parentRunId,
     };
@@ -857,6 +841,12 @@ export function startChildRunLoop<TTurn, R = never>(
       retainsTerminalParent: childRun === undefined,
       interrupt: () => loop.interrupt(),
     });
+    // Read after the reservation, so no stop lands while there is no target.
+    const budget = params.budgeted
+      ? yield* runs.childRunBudget(
+          yield* resolveChildRunConcurrencyBudget(runSession.roots),
+        )
+      : undefined;
     let sessionOwnershipReleased = false;
     releaseSessionOwnershipOnce = (): void => {
       if (sessionOwnershipReleased) return;
@@ -871,6 +861,8 @@ export function startChildRunLoop<TTurn, R = never>(
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
       Effect.sync(() => {
+        // A stop sees the handle only from here, with its target reserved.
+        childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
@@ -983,13 +975,26 @@ export function startChildRunLoop<TTurn, R = never>(
     // Terminal delivery wakes only after the child's finalization and claim
     // release. Interim delivery wakes immediately, while the child stays live.
     let pendingDelivery: PendingChildDelivery | undefined;
-    // Acquire the concurrency slot only while a turn runs. No mask inside
-    // the permit: an interrupted turn releases its slot, and the loop's own
-    // signal — not the permit's retention — is what aborts the turn's work.
+    // Hold the slot only while a turn runs, unmasked. A stop races the slot
+    // wait alone; an admitted turn observes the loop's signal itself.
     const gateTurn = (
       base: (signal: AbortSignal) => Effect.Effect<TTurn, Error, R>,
     ): ((signal: AbortSignal) => Effect.Effect<TTurn, Error, R>) =>
-      budget === undefined ? base : (signal) => budget.withPermit(base(signal));
+      budget === undefined
+        ? base
+        : (signal) => {
+            let admitted = false;
+            return Effect.raceFirst(
+              budget.withPermit(
+                Effect.suspend(() => ((admitted = true), base(signal))),
+              ),
+              onceAborted(signal, () =>
+                admitted
+                  ? Effect.never
+                  : Effect.fail(new Error(SLOT_CANCELLED)),
+              ),
+            );
+          };
 
     let runStarted = false;
     const run = Effect.gen(function* () {

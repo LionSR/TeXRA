@@ -55,6 +55,9 @@ interface FinalizeChildRunOptions {
 export interface ChildRun {
   childRunId: RunId;
   logger: AgentTrace;
+  /** Track the run's handle; the child loop calls it once its activation
+   *  reserves the stop target (`startChildRunLoop`). */
+  track: () => void;
   /**
    * Complete the child run lifecycle through the owning run handle.
    * Resolves once the shared terminal finalizer has persisted, settled, and
@@ -101,13 +104,13 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   let started = false;
   const setup = yield* Effect.exit(
     Effect.sync(() => {
-      // Attach the run's canonical event publication before activation.
-      detachSessionTrace = session.attachRunTrace(trace, runId);
-      const disposeTrace = () => detachSessionTrace?.();
-
       // Registration already committed the launch and activation together.
       started = true;
-      runs.track(handle);
+      // Attach the run's canonical event publication before activation. The
+      // handle is tracked by the loop (`track`) once its stop target exists,
+      // so a stop never finds this handle with nothing to interrupt.
+      detachSessionTrace = session.attachRunTrace(trace, runId);
+      const disposeTrace = () => detachSessionTrace?.();
       trace.emit({
         type: 'run.config',
         runId,
@@ -117,6 +120,7 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
       return {
         childRunId: runId,
         logger: trace,
+        track: () => runs.track(handle),
         finalize: (finalizeOptions) =>
           finalizeChildRun({
             handle,

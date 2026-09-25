@@ -11,6 +11,7 @@ export function createFakeAgentCliChildRun(childRunId: RunId): ChildRun {
   return {
     childRunId,
     logger,
+    track: () => undefined,
     finalize: () => Effect.void,
   };
 }

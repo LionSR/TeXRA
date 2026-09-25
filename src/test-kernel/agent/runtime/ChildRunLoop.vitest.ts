@@ -1446,7 +1446,7 @@ describe('childRunLoop E2E fixtures', () => {
   );
 
   it.effect(
-    'gates budgeted child turns through the session child-run budget',
+    'gates budgeted child turns through the budget, and a stop the slot wait',
     () =>
       Effect.gen(function* () {
         const config = testWorkspaceRoots().config as FakeConfigProvider;
@@ -1479,8 +1479,23 @@ describe('childRunLoop E2E fixtures', () => {
           const firstLoop = yield* startLoop(first, firstStrategy, {
             budgeted: true,
           });
+          // A process child: its stop reaches it through the loop signal
+          // alone, not a fiber interrupt.
+          const childRun = yield* createChildRun(
+            session,
+            second,
+            PARENT_RUN_ID,
+            {
+              run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
+              userFollowUpSupport: 'terminalBacked',
+              description: 'Wait for a budget slot',
+              config: childRunConfig,
+            },
+          ).pipe(Effect.provideService(Runs, session.runs));
+          trackedRunIds.add(second);
           const secondLoop = yield* startLoop(second, secondStrategy, {
             budgeted: true,
+            childRun,
           });
 
           yield* Deferred.await(firstStarted);
@@ -1492,13 +1507,17 @@ describe('childRunLoop E2E fixtures', () => {
           yield* settle;
           expect(started).toEqual(['first']);
 
+          // A stop while it waits for the slot settles it at once, although
+          // the first child still holds the slot.
+          yield* stopChildRun(second);
+          yield* Fiber.join(secondLoop);
+          expect(started).toEqual(['first']);
+
           yield* Deferred.succeed<FakeTurn, never>(firstRelease, {
             kind: 'terminal',
             value: 'done',
           });
-          yield* Fiber.join(secondLoop);
           yield* Fiber.join(firstLoop);
-          expect(started).toEqual(['first', 'second']);
         } finally {
           config.set(
             CHILD_RUN_CONCURRENCY_BUDGET_CONFIG_KEY,
