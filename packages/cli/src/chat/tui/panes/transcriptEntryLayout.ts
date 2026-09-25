@@ -139,7 +139,8 @@ const ROW_GEOMETRY = {
   },
 } as const satisfies Record<TranscriptRowKind, RowGeometry>;
 
-/** Marker glyph + color per compaction status. */
+/** Marker glyph + color per activity status: compaction activity rows and
+ *  workflow task groups (whose RunPhase statuses are a subset) share it. */
 export const COMPACTION_ACTIVITY_STATUS_STYLE = {
   running: { marker: STATUS_DOT, color: COLOR_HINT },
   completed: { marker: TICK, color: COLOR_SUCCESS },

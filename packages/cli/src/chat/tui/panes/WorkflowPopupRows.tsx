@@ -3,8 +3,6 @@
 
 import { Box, Text } from 'ink';
 
-import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER } from '@cli/tui/ui/glyphs';
 import { fillRows } from '@cli/runtime/terminalText';
 import type { WorkflowCallIdentity } from '@shared/schemas';
 import {
@@ -31,12 +29,10 @@ function markerCell(marker: string): string {
  *  its child last said, cut to the width left. What the call is (kind,
  *  agent, model, spend) is the focused row's detail line, not every row's. */
 export function TaskRow({
-  focused,
   latestLine,
   pendingKinds,
   row,
 }: {
-  readonly focused: boolean;
   readonly latestLine: string | undefined;
   readonly pendingKinds: readonly PendingApprovalKind[] | undefined;
   readonly row: WorkflowTaskRowModel;
@@ -46,9 +42,6 @@ export function TaskRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-          {focused ? POINTER : ' '}
-        </Text>
         <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR[row.call.status]}>
           {markerCell(WORKFLOW_CALL_STATUS_GLYPH[row.call.status])}
         </Text>
@@ -84,7 +77,6 @@ export function DeclaredTaskRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden> </Text>
         <Text aria-hidden color={WORKFLOW_TASK_STATUS_COLOR.declared}>
           {markerCell(WORKFLOW_CALL_STATUS_GLYPH.declared)}
         </Text>
@@ -107,9 +99,6 @@ export function GroupRow({
   return (
     <Box flexDirection="row" height={1} minWidth={0} overflowY="hidden">
       <Box flexShrink={0}>
-        <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-          {focused ? POINTER : ' '}
-        </Text>
         <Text aria-hidden dimColor>
           {markerCell(row.expanded ? '▾' : '▸')}
         </Text>

@@ -11,22 +11,21 @@
  * loading stays in `RemoteAgentLoader.ts`, which nothing under `src/tools/`
  * reaches.
  */
-import ky, { HTTPError } from 'ky';
 import { z } from 'zod';
 
-import { Effect, Result } from 'effect';
+import { Cause, Duration, Effect, Result } from 'effect';
+import {
+  HttpClient,
+  HttpClientError,
+  HttpClientRequest,
+} from 'effect/unstable/http';
 import { SUPABASE_CONFIG } from '@auth/config';
 import { SupabaseAuth } from '@auth/SupabaseAuth';
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
 import { filterNotNull } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import {
-  errorDataToString,
-  FETCH_TIMEOUT_MS,
-  RemoteAgentListError,
-} from './errorData';
+import { FETCH_TIMEOUT_MS, RemoteAgentListError } from './errorData';
 import { RemoteAgentListItemSchema, type RemoteAgentListItem } from './types';
 
 export const CHANNEL = 'RemoteAgentLoader';
@@ -34,40 +33,32 @@ export const CHANNEL = 'RemoteAgentLoader';
 const REMOTE_AGENT_LIST_COLUMNS =
   'id, name, description, tools, agent_category';
 
-interface RemoteAgentListRow {
-  id: string;
-  name: string;
-  description?: string | null;
-  tools?: string[] | null;
-  agent_category: string;
-}
+/** One DB row, renamed onto the list item's camelCase column. */
+const RemoteAgentListRowSchema = z
+  .looseObject({ agent_category: z.unknown() })
+  .transform(({ agent_category, ...row }) => ({
+    ...row,
+    agentCategory: agent_category,
+  }))
+  .pipe(RemoteAgentListItemSchema);
 
 const RemoteAgentListQueryErrorSchema = z.object({
   message: z.string().nullish(),
 });
-type RemoteAgentListQueryError = z.infer<
-  typeof RemoteAgentListQueryErrorSchema
->;
 
-/** Parse DB row to RemoteAgentListItem, returning null on validation failure. */
+/** Parse one DB row, returning null (logged) on validation failure. */
 function parseListItemRow(
-  row: RemoteAgentListRow,
+  row: unknown,
 ): Effect.Effect<RemoteAgentListItem | null> {
-  const result = RemoteAgentListItemSchema.safeParse({
-    id: row.id,
-    name: row.name,
-    description: row.description,
-    tools: row.tools,
-    agentCategory: row.agent_category,
-  });
-
-  if (!result.success) {
-    return Effect.logWarning(
-      `Invalid metadata for agent "${row.name}": ${z.prettifyError(result.error)}`,
-    ).pipe(withLogChannel(CHANNEL), Effect.as(null));
-  }
-
-  return Effect.succeed(result.data);
+  const result = RemoteAgentListRowSchema.safeParse(row);
+  if (result.success) return Effect.succeed(result.data);
+  const name =
+    typeof row === 'object' && row !== null && 'name' in row
+      ? String(row.name)
+      : 'unknown';
+  return Effect.logWarning(
+    `Invalid metadata for agent "${name}": ${z.prettifyError(result.error)}`,
+  ).pipe(withLogChannel(CHANNEL), Effect.as(null));
 }
 
 /**
@@ -77,7 +68,11 @@ function parseListItemRow(
  * unreachable relay, or a rejected query all yield an empty list (logged at
  * debug) rather than a failure of the catalog load that awaits it.
  */
-export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
+export function listRemoteAgents(): Effect.Effect<
+  RemoteAgentListItem[],
+  never,
+  HttpClient.HttpClient
+> {
   return Effect.gen(function* () {
     // `serviceOption`, not a required service: the embeddable agent package
     // composes no account plane, and its catalog load answers signed-out.
@@ -101,57 +96,72 @@ export function listRemoteAgents(): Effect.Effect<RemoteAgentListItem[]> {
 
 function fetchRemoteAgentListRows(
   accessToken: string,
-): Effect.Effect<RemoteAgentListRow[], RemoteAgentListError> {
+): Effect.Effect<
+  ReadonlyArray<unknown>,
+  RemoteAgentListError,
+  HttpClient.HttpClient
+> {
   const url = new URL('/rest/v1/remote_agents', SUPABASE_CONFIG.url);
   url.searchParams.set('select', REMOTE_AGENT_LIST_COLUMNS);
   url.searchParams.set('order', 'name.asc');
 
-  // retry: 0 preserves the old fetch's fail-fast contract — listRemoteAgents
-  // is awaited by registry/settings refreshes and treats failure as an empty
-  // list, so ky's default GET retries (which honor Retry-After on 429/503)
-  // would block the UI rather than surfacing immediately.
-  // The fiber's own signal aborts the request when the load is interrupted.
-  return Effect.tryPromise({
-    try: (signal) =>
-      ky
-        .get(url, {
-          headers: {
-            apikey: SUPABASE_CONFIG.publicKey,
-            Authorization: `Bearer ${accessToken}`,
-            Accept: 'application/json',
-          },
-          retry: 0,
-          timeout: false,
-          signal: AbortSignal.any([
-            signal,
-            AbortSignal.timeout(FETCH_TIMEOUT_MS),
-          ]),
-        })
-        .json<RemoteAgentListRow[]>(),
-    catch: remoteAgentListError,
-  });
+  // No retries (HttpClient's default): listRemoteAgents is awaited by
+  // registry/settings refreshes and treats failure as an empty list, so a
+  // retried request would block the UI rather than surface immediately.
+  // Interrupting the load aborts the request.
+  return HttpClient.execute(
+    HttpClientRequest.get(url).pipe(
+      HttpClientRequest.setHeader('apikey', SUPABASE_CONFIG.publicKey),
+      HttpClientRequest.bearerToken(accessToken),
+      HttpClientRequest.acceptJson,
+    ),
+  ).pipe(
+    Effect.flatMap((response) =>
+      response.status >= 200 && response.status < 300
+        ? response.json.pipe(
+            Effect.flatMap((body) => {
+              const rows = z.array(z.unknown()).safeParse(body);
+              return rows.success
+                ? Effect.succeed(rows.data)
+                : Effect.fail(
+                    new RemoteAgentListError({
+                      message: 'remote list response is not an array',
+                      cause: rows.error,
+                    }),
+                  );
+            }),
+          )
+        : response.text.pipe(
+            Effect.flatMap((text) =>
+              Effect.fail(remoteAgentListStatusError(response.status, text)),
+            ),
+          ),
+    ),
+    Effect.timeout(Duration.millis(FETCH_TIMEOUT_MS)),
+    Effect.mapError(
+      (
+        error:
+          | RemoteAgentListError
+          | HttpClientError.HttpClientError
+          | Cause.TimeoutError,
+      ) =>
+        error instanceof RemoteAgentListError
+          ? error
+          : new RemoteAgentListError({ message: error.message, cause: error }),
+    ),
+  );
 }
 
 /** A rejected list request, worded from the query's own error body when the
  *  relay sent one. */
-function remoteAgentListError(error: unknown): RemoteAgentListError {
-  if (!(error instanceof HTTPError)) {
-    return new RemoteAgentListError({
-      message: toErrorMessage(error),
-      cause: error,
-    });
-  }
-  const rawBody = errorDataToString(error.data);
-  const parsedError: RemoteAgentListQueryError = rawBody
-    ? Result.getOrElse(
-        parseJsonWith(rawBody, RemoteAgentListQueryErrorSchema),
-        () => ({ message: rawBody }),
-      )
-    : {};
-  const fallbackMessage =
-    `${error.response.status} ${error.response.statusText}`.trim();
+function remoteAgentListStatusError(
+  status: number,
+  text: string,
+): RemoteAgentListError {
+  const parsed = Result.getOrUndefined(
+    parseJsonWith(text, RemoteAgentListQueryErrorSchema),
+  );
   return new RemoteAgentListError({
-    message:
-      parsedError.message || fallbackMessage || 'remote list request failed',
+    message: parsed?.message || text || `HTTP ${status}`,
   });
 }

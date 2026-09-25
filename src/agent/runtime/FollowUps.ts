@@ -49,6 +49,7 @@ import {
   stepRow,
   type Message,
 } from './loop/rows';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 export interface ConsumedFollowUps {
   readonly state: RunState;
@@ -80,7 +81,11 @@ export class FollowUps extends Context.Service<
     readonly consume: (
       state: RunState,
       batch: FollowUpBatch,
-    ) => Effect.Effect<ConsumedFollowUps, Error, FileSystem.FileSystem>;
+    ) => Effect.Effect<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    >;
   }
 >()('@texra/agent/FollowUps') {}
 
@@ -136,7 +141,7 @@ export const followUpsLayer: Layer.Layer<
     ): Effect.fn.Return<
       { message: Message; kinds: readonly MediaAttachmentKind[] },
       Error,
-      FileSystem.FileSystem
+      FileSystem.FileSystem | ChildProcessSpawner
     > {
       const bound = yield* SynchronizedRef.get(run.model);
       const parts: InputPart[] = [];
@@ -176,7 +181,11 @@ export const followUpsLayer: Layer.Layer<
     const consume = Effect.fn('FollowUps.consume')(function* (
       state: RunState,
       batch: FollowUpBatch,
-    ): Effect.fn.Return<ConsumedFollowUps, Error, FileSystem.FileSystem> {
+    ): Effect.fn.Return<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    > {
       const followUps = batch.synthetic ? [] : batch.followUps;
       const built = yield* (
         batch.synthetic

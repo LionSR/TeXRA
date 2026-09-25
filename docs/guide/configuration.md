@@ -48,9 +48,9 @@ User-wide values are stored in:
 
 Project values override user-wide values. Explicit command-line flags and
 environment variables override saved values when a command documents such an
-override. If a host cannot write the project directory, it uses an internal
-workspace store so that its settings view remains usable; that fallback is not
-shared with the other hosts.
+override. If the project directory is read-only, saving a project setting
+fails with an error; if `.texra/config.json` cannot be read (for example,
+malformed JSON), the host warns and ignores the file until it is fixed.
 
 Configuration files are ordinary JSON. Persistent application state—including
 session history, execution records, and run events—is stored separately in an

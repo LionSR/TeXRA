@@ -35,14 +35,6 @@ import type { PastedImageEntry } from '../input/draftAttachments';
 // (one record per run + an `activeRunId`) so future feature parity is a
 // port, not a rewrite.
 
-/**
- * One transcript-projection candidate: a rendered row plus the ordering key
- * that places it in the final merged transcript order (log rows by seqNo,
- * compaction rows by start position, CLI-synthetic rows by their insertion
- * anchor). `rank` preserves the relative order of equal keys across the three
- * sources. `rendered` is replaced in place when the source row changes or the
- * settled-prefix promotion reaches it; the item object itself is stable.
- */
 export interface SessionMeta {
   readonly agent: string;
   /** The source of the entry `agent` resolved to, pinned on every root run. */

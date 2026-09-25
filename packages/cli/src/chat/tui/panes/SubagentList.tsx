@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
-import { POINTER, TICK } from '@cli/tui/ui/glyphs';
+import { TICK } from '@cli/tui/ui/glyphs';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { AgentCategory, type RunId } from '@shared/schemas';
@@ -135,9 +135,6 @@ function SessionRow({
       minWidth={0}
       overflowY="hidden"
     >
-      <Text aria-hidden color={focused ? COLOR_HINT : undefined}>
-        {focused ? POINTER : ' '}
-      </Text>
       <Text aria-hidden color={active ? COLOR_HINT : undefined}>
         {active ? ` ${TICK} ` : '   '}
       </Text>

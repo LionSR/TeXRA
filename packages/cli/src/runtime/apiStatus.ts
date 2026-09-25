@@ -46,7 +46,7 @@ function formatAccountStatusLine(
   return `${label}: ${formatAccountStatus(signedIn, accountLabel)}`;
 }
 
-export interface CliModelAccessOverview {
+interface CliModelAccessOverview {
   readonly access: CliAccountStatus;
   readonly lines: readonly string[];
   /** Stale-metadata warning from the auth profile, when any. */

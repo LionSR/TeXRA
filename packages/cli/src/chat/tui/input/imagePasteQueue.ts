@@ -1,45 +1,26 @@
 import { warn as logWarning } from '@logger/logUtils';
+import type { Fiber } from 'effect';
 
-export interface ImagePasteAttempt {
-  readonly isCurrent: () => boolean;
-}
-
+/** The in-flight clipboard image pastes of one input bar, as the fibers the
+ *  runtime forked for them, and the submit deferred until they land. */
 export class ImagePasteQueue {
-  private readonly pending = new Set<Promise<void>>();
+  private readonly pastes = new Set<Fiber.Fiber<void>>();
   private deferredAction: (() => void) | null = null;
-  private generation = 0;
 
   get hasPending(): boolean {
-    return this.pending.size > 0;
+    return this.pastes.size > 0;
   }
 
   get hasDeferredAction(): boolean {
     return this.deferredAction !== null;
   }
 
-  beginAttempt(): ImagePasteAttempt {
-    const generation = this.generation;
-    return { isCurrent: () => generation === this.generation };
-  }
-
-  track(work: Promise<void>): void {
-    this.pending.add(work);
-    // This catch keeps only the bookkeeping chain alive — whoever created
-    // `work` owns its rejection — and the warn is that chain's one rejection
-    // observer: a throw out of `flush`'s deferred action would otherwise
-    // vanish here.
-    void work
-      .finally(() => {
-        this.pending.delete(work);
-        this.flush();
-      })
-      .catch((error: unknown) => {
-        logWarning(
-          'cli.tui',
-          'The image-paste bookkeeping chain rejected after the paste settled.',
-          { data: error },
-        );
-      });
+  add(paste: Fiber.Fiber<void>): void {
+    this.pastes.add(paste);
+    paste.addObserver(() => {
+      this.pastes.delete(paste);
+      this.flush();
+    });
   }
 
   runWhenIdle(action: () => void): void {
@@ -57,17 +38,25 @@ export class ImagePasteQueue {
     this.deferredAction = null;
   }
 
-  /** Detach all work that belongs to a discarded draft. */
+  /** Interrupt all work that belongs to a discarded draft. */
   discardPending(): void {
-    this.generation += 1;
-    this.pending.clear();
     this.deferredAction = null;
+    for (const paste of this.pastes) paste.interruptUnsafe();
+    this.pastes.clear();
   }
 
+  /** Run the deferred submit once the last paste lands. A throw out of it is
+   *  logged: it runs inside a fiber observer, where it would otherwise vanish. */
   private flush(): void {
     if (this.hasPending) return;
     const action = this.deferredAction;
     this.deferredAction = null;
-    action?.();
+    try {
+      action?.();
+    } catch (error) {
+      logWarning('cli.tui', 'The deferred image-paste action failed.', {
+        data: error,
+      });
+    }
   }
 }

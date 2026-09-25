@@ -5,6 +5,8 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 
+import { scriptedSpawnerLayer } from '@test/support/childProcessTestLayer';
+
 const mocks = vi.hoisted(() => ({
   codexCoordinator: vi.fn(() => ({})),
   loginWithDeviceCode: vi.fn(),
@@ -30,6 +32,8 @@ const { signInCliSubscription } =
 const signInServices = Layer.mergeAll(
   Secrets.layer(new FakeSecrets()),
   testHttpClientLayer,
+  // The browser launch is mocked, so nothing is spawned.
+  scriptedSpawnerLayer(() => ({})).layer,
 );
 /** Run the program as the login command does, on the test's own fiber. */
 const signInCliChatGpt = (
@@ -76,7 +80,7 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
     'prints the sign-in link once, then browser status without repeating the URL',
     () =>
       Effect.gen(function* () {
-        mocks.tryOpenBrowser.mockResolvedValue(true);
+        mocks.tryOpenBrowser.mockReturnValue(Effect.succeed(true));
 
         const progress = yield* runSignIn(
           'https://auth.openai.com/authorize?x=1',
@@ -92,7 +96,7 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
 
   it.effect('prints the URL once when the browser fails to launch', () =>
     Effect.gen(function* () {
-      mocks.tryOpenBrowser.mockResolvedValue(false);
+      mocks.tryOpenBrowser.mockReturnValue(Effect.succeed(false));
 
       const progress = yield* runSignIn(
         'https://auth.openai.com/authorize?x=2',
@@ -124,12 +128,8 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
 
   it.effect('publishes the URL before a slow browser launcher returns', () =>
     Effect.gen(function* () {
-      let finishLaunch: ((result: boolean) => void) | undefined;
-      mocks.tryOpenBrowser.mockReturnValue(
-        new Promise<boolean>((resolve) => {
-          finishLaunch = resolve;
-        }),
-      );
+      const launch = yield* Deferred.make<boolean>();
+      mocks.tryOpenBrowser.mockReturnValue(Deferred.await(launch));
       publishLoopbackUrl('https://auth.openai.com/authorize?x=slow');
       const progress: string[] = [];
 
@@ -151,7 +151,7 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
       expect(yield* Deferred.await(published)).toContain(
         'https://auth.openai.com/authorize?x=slow',
       );
-      finishLaunch?.(true);
+      yield* Deferred.succeed(launch, true);
       yield* Fiber.join(signIn);
     }),
   );

@@ -1,6 +1,5 @@
 // Third-party imports
 import { Effect } from 'effect';
-import { execa } from 'execa';
 import * as vscode from 'vscode';
 
 // Local imports - utilities
@@ -9,6 +8,7 @@ import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
 import {
   cloneOverleafProject as runOverleafClone,
+  gitClone,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
 import {
@@ -23,14 +23,14 @@ import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { COMMIT_HASH_PATTERN } from '@utils/git/commitHashPattern';
 import { COMMIT_LABEL_FORMAT } from '@utils/git/commitLogFormat';
 import { readRecentCommitLabels } from '@utils/git/repositoryOverview';
-import { executeCommandSync } from '@utils/system/execCore';
-import { getGitAuthorEnv } from '@utils/system/gitAuthorEnv';
-import { makeMachineGitEnv } from '@utils/system/gitEnv';
+import { executeCommand } from '@utils/system/execUtils';
+import { whichOnExtendedPath } from '@utils/system/platformPaths';
 import { isGitRepository } from '@utils/git/isGitRepository';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'gitCommands';
 
@@ -70,7 +70,7 @@ export function registerGitCommands(
 const getRecentCommits = Effect.fn('gitCommands.getRecentCommits')(function* (
   session: SessionHandle,
   rootPath?: string,
-): Effect.fn.Return<string[] | null, Error> {
+): Effect.fn.Return<string[] | null, Error, ChildProcessSpawner> {
   const workspacePath = rootPath ?? session.roots.workspace;
   if (
     !workspacePath ||
@@ -130,19 +130,23 @@ function findCommitInHistory(
       return null;
     }
 
-    const env = yield* getGitAuthorEnv(session.roots);
-    const verifyResult = executeCommandSync(
+    const gitOptions = {
+      cwd: workspacePath,
+      settings: session.roots,
+      quiet: true,
+    };
+    const verifyResult = yield* executeCommand(
       ['git', 'rev-parse', '--verify', `${sanitizedCommit}^{commit}`],
-      { cwd: workspacePath, env },
+      gitOptions,
     );
 
     if (!verifyResult.success) {
       return null;
     }
 
-    const labelResult = executeCommandSync(
+    const labelResult = yield* executeCommand(
       ['git', 'show', '-s', `--format=${COMMIT_LABEL_FORMAT}`, sanitizedCommit],
-      { cwd: workspacePath, env },
+      gitOptions,
     );
 
     if (!labelResult.success) {
@@ -196,16 +200,10 @@ const GIT_DOWNLOAD_URL = 'https://git-scm.com/downloads';
 
 const promptGitMissing = Effect.fnUntraced(function* () {
   const option = GIT_INSTALL_OPTIONS[process.platform] ?? null;
+  // A PATH lookup, not a spawn: the manager only has to be installed for
+  // its install command to be worth offering.
   const command =
-    option &&
-    // A `--version` probe is directory- and project-independent; name the
-    // process cwd and no setting slots rather than the workspace it does not
-    // read.
-    executeCommandSync([option.tool, '--version'], {
-      cwd: process.cwd(),
-    }).success
-      ? option.command
-      : null;
+    option && whichOnExtendedPath(option.tool) !== null ? option.command : null;
 
   let message: string;
   if (command) {
@@ -277,14 +275,6 @@ function buildOverleafClonePorts(
         ),
       ),
 
-    isGitAvailable: () =>
-      Effect.sync(
-        // Directory-independent probe: see `promptGitMissing`.
-        () =>
-          executeCommandSync(['git', '--version'], {
-            cwd: process.cwd(),
-          }).success,
-      ),
     showGitMissing: () => promptGitMissing(),
     listWorkspaceEntries: (workspacePath) =>
       workspaceFs.readDirectory(workspacePath),
@@ -305,32 +295,30 @@ function buildOverleafClonePorts(
       ).pipe(Effect.asVoid),
 
     runClone: (remoteUrl, workspacePath) =>
-      Effect.tryPromise({
-        try: (signal) =>
-          vscode.window.withProgress(
+      // The notification shows for exactly as long as the clone runs: its
+      // task is a promise the release settles on every exit, and the acquire
+      // that opens it cannot be interrupted before the release is installed.
+      Effect.acquireUseRelease(
+        Effect.sync(() => {
+          let resolve!: () => void;
+          const promise = new Promise<void>((settle) => {
+            resolve = settle;
+          });
+          void vscode.window.withProgress(
             {
               location: vscode.ProgressLocation.Notification,
               title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
             },
-            () => {
-              // execa starts its child before observing an already-aborted
-              // cancelSignal, so do not enter it after the fiber is interrupted.
-              signal.throwIfAborted();
-              return execa('git', ['clone', remoteUrl, '.'], {
-                cwd: workspacePath,
-                // Same extended PATH as the executeCommandSync preflight
-                // above, so the probe can't pass while the clone misses git
-                // (bot review). extendEnv: false is required —
-                // makeMachineGitEnv omits the helper-invoking keys, and
-                // execa's default merge re-adds them.
-                env: makeMachineGitEnv(),
-                extendEnv: false,
-                cancelSignal: signal,
-              });
-            },
+            () => promise,
+          );
+          return resolve;
+        }),
+        () =>
+          gitClone(remoteUrl, workspacePath).pipe(
+            Effect.mapError((error) => new Error(error.message)),
           ),
-        catch: ensureError,
-      }).pipe(Effect.asVoid),
+        (resolve) => Effect.sync(resolve),
+      ),
     showCloneSucceeded: (label) =>
       Effect.sync(() => {
         vscode.window.showInformationMessage(`${label} project cloned.`);

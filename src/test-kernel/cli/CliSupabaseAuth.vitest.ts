@@ -20,6 +20,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import {
   LeanLanguageServices,
@@ -192,6 +193,7 @@ async function loadSupabaseAuth() {
         Layer.provideMerge(
           globalDatabaseLayer(globalStorage).pipe(
             Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+            Layer.provide(nodeSpawnerLayer),
             Layer.orDie,
           ),
         ),
@@ -317,6 +319,7 @@ describe('CLI Supabase auth', () => {
       yield* signOutCliSupabase().pipe(
         Effect.provide(globalStorageFsTestLayer(globalStorage)),
         Effect.provide(nodePlatformLayer),
+        Effect.provide(testHttpClientLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
       );
 
@@ -374,6 +377,7 @@ describe('CLI Supabase auth', () => {
         yield* signOutCliSupabase().pipe(
           Effect.provide(globalStorageFsTestLayer(globalStorage)),
           Effect.provide(nodePlatformLayer),
+          Effect.provide(testHttpClientLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
           Effect.withLogger(capture),
         ),

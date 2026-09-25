@@ -1,4 +1,4 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 import { bumpCodexPreferenceVersion } from '@cli/chat/tui/state/cliState';
 import { setCliSubscriptionPreference } from '@cli/chat/tui/state/subscriptionPreference';
@@ -16,7 +16,6 @@ import {
   hasLoginTransportConflict,
   LOGIN_TRANSPORT_CONFLICT_MESSAGE,
   parseChatLoginSlashArgs,
-  parseCliLogoutTarget,
   type CliLoginSlashArgs,
   type CliLogoutTarget,
   type CliTexraLoginSlashArgs,
@@ -29,9 +28,10 @@ import {
 } from '@cli/runtime/supabaseAuth';
 import { formatCliDeviceAuthMessage } from '@cli/runtime/supabaseAuthDeviceCode';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
-import type { AgentDirectories } from '@platform/interfaces';
-import type { ProcessRuntime } from '@platform/processRuntime';
-import type { GlobalStorageFs } from '@platform/rootedFs';
+import type {
+  AgentCatalogServices,
+  ProcessRuntime,
+} from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -54,7 +54,6 @@ const CHAT_LOGIN_USAGE = [
   '       /login grok [--no-browser] [--device]',
   '       /login status',
 ].join('\n');
-const CHAT_LOGOUT_USAGE = 'Usage: /logout chatgpt | grok | texra | all';
 
 /** Sign-in copy shared by the subscription auth objects. */
 interface SubscriptionAuthCopy {
@@ -69,8 +68,14 @@ const SUBSCRIPTION_AUTH_COPY: Record<
   SubscriptionAuthCopy
 > = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
 
+function isSubscriptionLogin(
+  args: CliLoginSlashArgs,
+): args is Exclude<CliLoginSlashArgs, CliTexraLoginSlashArgs> {
+  return args.target === 'chatgpt' || args.target === 'grok';
+}
+
 export function loginStartMessage(args: CliLoginSlashArgs): string {
-  if (args.target === 'chatgpt' || args.target === 'grok') {
+  if (isSubscriptionLogin(args)) {
     const copy = SUBSCRIPTION_AUTH_COPY[args.target];
     if (args.device) return copy.startingDevice;
     if (args.noBrowser) return copy.startingNoBrowser;
@@ -157,7 +162,7 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
   }
 
   let loginArgs = args;
-  if (context && (args.target === 'chatgpt' || args.target === 'grok')) {
+  if (context && isSubscriptionLogin(args)) {
     loginArgs = {
       ...args,
       device: shouldUseSubscriptionDeviceCode(context, args),
@@ -165,7 +170,7 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
   }
   output.writeProgress(loginStartMessage(loginArgs));
 
-  if (loginArgs.target === 'chatgpt' || loginArgs.target === 'grok') {
+  if (isSubscriptionLogin(loginArgs)) {
     yield* loginToSubscription(stores, loginArgs.target, loginArgs, output);
     return;
   }
@@ -173,7 +178,7 @@ export const loginFromChat = Effect.fn('loginFromChat')(function* (
 });
 
 /**
- * The sign-out lines for one `/logout` target. Every leg reports its failure
+ * The sign-out lines for one sign-out target. Every leg reports its failure
  * as a line instead of throwing, so one failed provider never hides the
  * others' outcomes — the fold happens where each call settles, on the typed
  * channel.
@@ -182,11 +187,7 @@ const logoutLines = (
   target: CliLogoutTarget,
   stores: SettingsStores,
   secrets: PlatformSecrets,
-): Effect.Effect<
-  readonly string[],
-  never,
-  Secrets | GlobalStorageFs | FileSystem.FileSystem | AgentDirectories
-> =>
+): Effect.Effect<readonly string[], never, Secrets | AgentCatalogServices> =>
   Effect.gen(function* () {
     const lines: string[] = [];
 
@@ -250,17 +251,11 @@ const logoutLines = (
   });
 
 export const logoutFromChat = Effect.fn('logoutFromChat')(function* (
-  input: string,
+  target: CliLogoutTarget,
   stores: SettingsStores,
   secrets: PlatformSecrets,
   output: SlashCommandOutput = transcriptSlashCommandOutput,
 ) {
-  const target = parseCliLogoutTarget(input);
-  if (!target) {
-    output.setNotice(CHAT_LOGOUT_USAGE);
-    return;
-  }
-
   const lines = yield* logoutLines(target, stores, secrets);
   output.appendOutcome(collapseWhitespace(lines.join(' · ')));
 });

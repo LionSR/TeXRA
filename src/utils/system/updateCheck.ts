@@ -1,12 +1,16 @@
-import { Clock, Effect } from 'effect';
+import { Clock, Duration, Effect } from 'effect';
+import { HttpClient, HttpClientResponse } from 'effect/unstable/http';
 
+import { withLogChannel } from '@logger/effectLog';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
-import { ensureError } from '@utils/errors/errorMessage';
+import { isObject } from '@utils/core';
 
 import {
   DAILY_UPDATE_CHECK_INTERVAL_MS,
   isNewerSemverVersion,
 } from './semverUpdateCheck';
+import type { Cause } from 'effect';
+import type { HttpClientError } from 'effect/unstable/http';
 
 /** Result of consulting an update source. */
 export interface UpdateCheckFetchResult {
@@ -16,26 +20,26 @@ export interface UpdateCheckFetchResult {
   refreshed: boolean;
 }
 
-interface DailyUpdateCheckOptions {
+interface DailyUpdateCheckOptions<R> {
   currentVersion: string;
   host: 'cli' | 'desktop';
   /** Desktop announces each release only once. */
   notifyOnce?: boolean;
-  fetchLatest: Effect.Effect<UpdateCheckFetchResult, Error>;
+  fetchLatest: Effect.Effect<UpdateCheckFetchResult, Error, R>;
   notify: (latest: string) => Effect.Effect<void, Error>;
   /** Whether failure to persist the throttle stamp rejects the check. */
   stampFailure?: 'throw' | 'ignore';
 }
 
 /** Consult the source, notify, then persist the successful check in that order. */
-export const runDailyUpdateCheck = ({
+export const runDailyUpdateCheck = <R>({
   currentVersion,
   host,
   notifyOnce = false,
   fetchLatest,
   notify,
   stampFailure = 'throw',
-}: DailyUpdateCheckOptions) =>
+}: DailyUpdateCheckOptions<R>) =>
   Effect.gen(function* () {
     const records = yield* UpdateCheckRecords;
     const previous = yield* records.read(host);
@@ -77,33 +81,38 @@ interface FetchJsonStringFieldOptions {
   url: string;
   field: string;
   timeoutMs: number;
-  headers?: HeadersInit;
-  fetchImpl?: typeof fetch;
+  headers?: Readonly<Record<string, string>>;
 }
 
 /**
  * Fetch one string field from a JSON response. Update checks are best-effort:
  * non-success responses, malformed payloads, timeouts, and network failures
- * all yield `undefined`.
+ * all yield `undefined`, logged at debug (a warning would print on every
+ * offline CLI start).
  */
 export const fetchJsonStringField = ({
   url,
   field,
   timeoutMs,
   headers,
-  fetchImpl = fetch,
-}: FetchJsonStringFieldOptions) =>
-  Effect.tryPromise({
-    try: async (signal) => {
-      const response = await fetchImpl(url, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)]),
-        headers,
-      });
-      if (!response.ok) return undefined;
-      const body: unknown = await response.json();
-      if (typeof body !== 'object' || body === null) return undefined;
-      const value = (body as Record<string, unknown>)[field];
+}: FetchJsonStringFieldOptions): Effect.Effect<
+  string | undefined,
+  never,
+  HttpClient.HttpClient
+> =>
+  HttpClient.get(url, { headers }).pipe(
+    Effect.flatMap(HttpClientResponse.filterStatusOk),
+    Effect.flatMap((response) => response.json),
+    Effect.map((body) => {
+      const value = isObject(body) ? body[field] : undefined;
       return typeof value === 'string' && value !== '' ? value : undefined;
-    },
-    catch: ensureError,
-  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
+    }),
+    Effect.timeout(Duration.millis(timeoutMs)),
+    Effect.catch(
+      (error: HttpClientError.HttpClientError | Cause.TimeoutError) =>
+        Effect.logDebug(`Update check of ${url} failed: ${error.message}`).pipe(
+          withLogChannel('updateCheck'),
+          Effect.as(undefined),
+        ),
+    ),
+  );

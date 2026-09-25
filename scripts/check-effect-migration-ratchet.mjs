@@ -388,8 +388,8 @@ const ROWS = [
   // The files it carries are adapters, and the counts are their allowlist — a
   // new file fails as new debt. claudeAgent.ts: the Claude Agent SDK's query()
   // options take a controller, not a signal. childRunLoop.ts: the one signal
-  // every child-run turn runs under, handed straight to execa's cancelSignal,
-  // the Codex SDK and the Claude Agent SDK.
+  // every child-run turn runs under, handed straight to executeCommand's abort
+  // waiter, the Codex SDK and the Claude Agent SDK.
   {
     id: ROW_ABORT_CONTROLLER,
     rule: `${PRD} R5: interruption replaces internal abort choreography; an AbortController is adapted only where an external SDK or host API requires a signal`,

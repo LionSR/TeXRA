@@ -45,7 +45,6 @@ export interface SlashCommandContext {
   readonly requestInputExit: () => void;
   readonly getApprovalPolicy: () => TexraApprovalPolicy;
   readonly setApprovalPolicy: (policy: TexraApprovalPolicy) => void;
-  readonly canSelectModel: () => boolean;
   readonly resetSession: () => void;
   readonly resumeRun: (id: RunId) => Effect.Effect<void, Error>;
 }

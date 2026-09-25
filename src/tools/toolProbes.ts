@@ -7,7 +7,8 @@
  */
 
 // Third-party imports
-import { Cause, Data, Effect } from 'effect';
+import { Data, Duration, Effect } from 'effect';
+import { HttpClient } from 'effect/unstable/http';
 
 // Local imports
 import {
@@ -25,7 +26,11 @@ import {
   SYSTEM_PACKAGE_MANAGERS,
   type SystemPackageManager,
 } from '@utils/system/toolUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+
+import type { Cause } from 'effect';
+import type { HttpClientError } from 'effect/unstable/http';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const ZOTERO_PROBE_TIMEOUT_MS = 2000;
 
@@ -34,15 +39,12 @@ const ZOTERO_PROBE_TIMEOUT_MS = 2000;
  *
  * Read off what the probed surfaces raise: a dynamic `import()` of a CLI's
  * SDK (the package is absent, or it failed for another reason), the native
- * binary lookup that follows it, and the localhost request the Zotero probe
- * makes (refused, or still unanswered at {@link ZOTERO_PROBE_TIMEOUT_MS}). A
- * tool that is simply not installed is `check` answering `false`.
+ * binary lookup that follows it. The localhost request the Zotero probe makes
+ * folds its own failures to `false`. A tool that is simply not installed is
+ * `check` answering `false`.
  */
 type ToolProbeFailureReason =
-  | 'module-not-found'
-  | 'sdk-import-failed'
-  | 'binary-lookup-failed'
-  | 'probe-request-failed';
+  'module-not-found' | 'sdk-import-failed' | 'binary-lookup-failed';
 
 /**
  * The one failure of this module's probes. `reason` is what a caller reads:
@@ -66,12 +68,18 @@ export type ToolProbeError = ToolProbeFailed | SecretsFailed;
 /**
  * The process services a plugin's availability callbacks read: provider
  * credentials, the host's setup capabilities for the one plugin whose
- * availability depends on the editor host (Lean 4's VS Code extension), and
- * that host's Lean port, which owns the roster of running servers the same
- * plugin reports. All three are `ProcessServices` arms, so every caller of the
- * availability surface already holds them.
+ * availability depends on the editor host (Lean 4's VS Code extension), that
+ * host's Lean port, which owns the roster of running servers the same plugin
+ * reports, the HTTP client the Zotero probes request through, and the spawner
+ * every probe runs its child processes on. All five are `ProcessServices`
+ * arms, so every caller of the availability surface already holds them.
  */
-export type ToolProbeServices = Secrets | SetupPlatform | LeanLanguageServices;
+export type ToolProbeServices =
+  | Secrets
+  | SetupPlatform
+  | LeanLanguageServices
+  | HttpClient.HttpClient
+  | ChildProcessSpawner;
 
 /**
  * The asking workspace, carried into a plugin's probe as data rather than read
@@ -124,51 +132,50 @@ export interface ToolAvailabilityChecks {
 // Zotero probe helpers
 // ============================================================
 
-function fetchLocalhost(
+function probeLocalhost(
   url: string,
-  timeoutMs = ZOTERO_PROBE_TIMEOUT_MS,
 ): Effect.Effect<
-  Pick<Response, 'ok' | 'status'>,
-  ToolProbeFailed | Cause.TimeoutError
+  { ok: boolean; status: number },
+  HttpClientError.HttpClientError | Cause.TimeoutError,
+  HttpClient.HttpClient
 > {
-  // The deadline sits on the request itself, which stays interruptible. A
-  // bracket would not do: its acquire phase is uninterruptible, so a timeout
-  // around one cannot cut a connection that never returns headers. The fiber's
-  // signal is the request's, so both the deadline and a caller interrupting
-  // the probe abort the socket rather than abandon it.
-  return Effect.tryPromise({
-    try: (signal) => fetch(url, { signal }),
-    catch: (cause) =>
-      new ToolProbeFailed({
-        reason: 'probe-request-failed',
-        message: `Probe request to ${url} failed: ${toErrorMessage(cause)}`,
-        cause,
-      }),
+  // The probe never reads the body: the request scope aborts the socket once
+  // the status is read, and the deadline (or a caller interrupting the probe)
+  // interrupts the request itself, so a connection that never returns
+  // headers is cut rather than abandoned.
+  return Effect.gen(function* () {
+    const client = yield* HttpClient.HttpClient;
+    const response = yield* HttpClient.withScope(client).get(url);
+    return {
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+    };
   }).pipe(
-    // A deadline that expires fails as `TimeoutError`: both callers fold
-    // every failure of this probe to `false`, so re-minting it as a
-    // `ToolProbeFailed` told nobody anything.
-    Effect.timeout(timeoutMs),
-    // Status is read off the response before anything can suspend; cancelling
-    // the body then frees the socket, since the probe never reads it, and a
-    // cancel that itself fails says nothing about availability. An interrupt
-    // here instead aborts the request's signal, tearing the same socket down.
-    Effect.flatMap((response) =>
-      Effect.ignore(
-        Effect.tryPromise({
-          try: () => response.body?.cancel() ?? Promise.resolve(),
-          catch: ensureError,
-        }),
-      ).pipe(Effect.as({ ok: response.ok, status: response.status })),
-    ),
+    Effect.scoped,
+    Effect.timeout(Duration.millis(ZOTERO_PROBE_TIMEOUT_MS)),
   );
 }
 
+/**
+ * A Zotero probe that could not reach its endpoint answers "not running"; the
+ * failure's tag is logged so a transport fault stays distinguishable from an
+ * absent Zotero.
+ */
+function zoteroProbeUnreachable(
+  error: HttpClientError.HttpClientError | Cause.TimeoutError,
+): Effect.Effect<boolean> {
+  return Effect.logDebug('Zotero probe unreachable', {
+    reason: error._tag === 'HttpClientError' ? error.reason._tag : error._tag,
+  }).pipe(Effect.as(false));
+}
+
 /** Probe the Zotero connector endpoint (responds if Zotero is running). */
-export function probeZoteroConnector(port: number): Effect.Effect<boolean> {
-  return fetchLocalhost(`http://127.0.0.1:${port}/connector/ping`).pipe(
+export function probeZoteroConnector(
+  port: number,
+): Effect.Effect<boolean, never, HttpClient.HttpClient> {
+  return probeLocalhost(`http://127.0.0.1:${port}/connector/ping`).pipe(
     Effect.as(true),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catch(zoteroProbeUnreachable),
   );
 }
 
@@ -184,10 +191,12 @@ export function zoteroProbePort(probeResult: unknown): number {
 }
 
 /** Probe the Better BibTeX JSON-RPC endpoint. */
-export function probeZoteroBbt(port: number): Effect.Effect<boolean> {
-  return fetchLocalhost(`http://127.0.0.1:${port}/better-bibtex/json-rpc`).pipe(
+export function probeZoteroBbt(
+  port: number,
+): Effect.Effect<boolean, never, HttpClient.HttpClient> {
+  return probeLocalhost(`http://127.0.0.1:${port}/better-bibtex/json-rpc`).pipe(
     Effect.map((response) => response.ok || response.status === 405),
-    Effect.catch(() => Effect.succeed(false)),
+    Effect.catch(zoteroProbeUnreachable),
   );
 }
 
@@ -216,8 +225,12 @@ function importProbedSdk(
 
 /** Resolve a CLI's native binary as a classified probe. */
 function findProbedBinary(
-  findBinary: () => Effect.Effect<string | undefined, Error>,
-): Effect.Effect<string | undefined, ToolProbeFailed> {
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >,
+): Effect.Effect<string | undefined, ToolProbeFailed, ChildProcessSpawner> {
   return Effect.mapError(
     findBinary(),
     (cause) =>
@@ -240,8 +253,12 @@ function wslInstallHint(): string {
  */
 export function probeSdkBinaryAvailable(
   importSdk: () => Effect.Effect<unknown, Error>,
-  findBinary: () => Effect.Effect<string | undefined, Error>,
-): Effect.Effect<boolean> {
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >,
+): Effect.Effect<boolean, never, ChildProcessSpawner> {
   return Effect.gen(function* () {
     yield* importProbedSdk(importSdk);
     return (yield* findProbedBinary(findBinary)) != null;
@@ -260,12 +277,16 @@ type SdkBinaryStatus =
  */
 export function probeSdkBinaryStatus(config: {
   importSdk: () => Effect.Effect<unknown, Error>;
-  findBinary: () => Effect.Effect<string | undefined, Error>;
+  findBinary: () => Effect.Effect<
+    string | undefined,
+    Error,
+    ChildProcessSpawner
+  >;
   missingPackageMessage: string;
   importFailedLabel: string;
   binaryNotFoundMessage: string;
   classifyImportError?: (msg: string) => string | undefined;
-}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed> {
+}): Effect.Effect<SdkBinaryStatus, ToolProbeFailed, ChildProcessSpawner> {
   return Effect.gen(function* () {
     // Only the import is classified into a message; a binary-resolution
     // failure stays on the error channel.

@@ -17,6 +17,7 @@ import {
   resolveLatexFile,
   texPathField,
 } from './figureExtractionShared';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const ExtractTikzInputSchema = z.strictObject({
   texPath: texPathField('Path to the LaTeX file containing TikZ figures.'),
@@ -37,7 +38,7 @@ const extractTikzFigures = Effect.fn('ExtractTikzFiguresTool.execute')(
   }: ExtractTikzInput): Effect.fn.Return<
     ToolResult,
     Error,
-    ToolCall | FileSystem.FileSystem | WorkspaceFs
+    ToolCall | FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner
   > {
     const call = yield* ToolCall;
     const { path, display } = yield* resolveLatexFile(texPath);

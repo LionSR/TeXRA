@@ -35,9 +35,10 @@ const GIT_UNSAFE_ENV_KEYS = new Set([
  * git was installed for Git Bash only) can still resolve the `git` binary.
  *
  * This omits the unsafe keys rather than setting them to `undefined`, so it
- * only strips anything when it fully replaces the child environment. With
- * `execa` that means passing `extendEnv: false` alongside it — execa's default
- * merges `process.env` back in and every stripped key returns.
+ * only strips anything when it fully replaces the child environment. On a
+ * ChildProcess command the env replaces the child environment unless
+ * `extendEnv` is true; pass `extendEnv: false` explicitly so a later
+ * `extendEnv: true` cannot merge the stripped keys back in.
  */
 export function makeMachineGitEnv(): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = Object.fromEntries(

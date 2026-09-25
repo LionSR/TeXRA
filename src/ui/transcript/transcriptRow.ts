@@ -329,6 +329,40 @@ export function isSettledRow(
   }
 }
 
+/** The headline a row leads with: its own text, untrimmed and unsanitized;
+ *  a host sanitizes for its surface at paint. */
+export function rowHeadline(row: TranscriptRow): string {
+  switch (row.kind) {
+    case 'assistant':
+    case 'log':
+      return row.text.full;
+    case 'user':
+    case 'error':
+    case 'progressStatus':
+      return row.summary.full;
+    case 'workflowTask':
+      return row.line;
+    case 'phase':
+      return row.heading;
+    case 'thinking':
+      return 'Thinking';
+    case 'scratchpad':
+      return 'Scratchpad';
+    case 'webSearch':
+    case 'statistics':
+    case 'contextManagement':
+    case 'compactionActivity':
+      return row.label;
+    case 'fileList':
+    case 'missingOutputs':
+      return row.summary;
+    case 'latexdiff':
+      return `Latexdiff results (${row.entries.length})`;
+    case 'tool':
+      return '';
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Compaction activity
 // ---------------------------------------------------------------------------

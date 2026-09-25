@@ -9,7 +9,7 @@
 
 import { request as octokitRequest } from '@octokit/request';
 import { RequestError } from '@octokit/request-error';
-import { Data, Effect } from 'effect';
+import { Cause, Data, Duration, Effect } from 'effect';
 import { StatusCodes } from 'http-status-codes';
 import { Secrets } from '@platform/secrets';
 import { isNonEmptyString } from '@utils/text/stringUtils';
@@ -76,7 +76,7 @@ function escapeOctokitLegacyTemplate(path: string): string {
  * rejects it, though it is the cached answer), otherwise the failure to
  * report, tagged when it is an HTTP status a caller acts on.
  */
-function classifyRequestError(err: unknown, timedOut: boolean): Error | null {
+function classifyRequestError(err: unknown): Error | null {
   if (err instanceof RequestError) {
     const status = err.status;
     const responseHeaders = err.response?.headers;
@@ -130,14 +130,9 @@ function classifyRequestError(err: unknown, timedOut: boolean): Error | null {
       });
     }
   }
-  // Network-level errors (timeout, connection refused, DNS failure) reach
-  // here without a response. Answer a plain Error with a human-readable
-  // message so callers and the follow-up queue never see SDK internals.
-  if (timedOut) {
-    return new Error(
-      `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
-    );
-  }
+  // Network-level errors (connection refused, DNS failure) reach here
+  // without a response. Answer a plain Error with a human-readable message so
+  // callers and the follow-up queue never see SDK internals.
   if (err instanceof Error) {
     return new Error(`GitHub request failed: ${err.message}`);
   }
@@ -157,16 +152,15 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
   if (token) headers.authorization = `Bearer ${token}`;
   if (etag) headers['if-none-match'] = etag;
 
-  const timeout = AbortSignal.timeout(TIMEOUT_MS);
   let signal: AbortSignal | undefined;
   let pending: ReturnType<typeof octokitRequest> | undefined;
   let primary: { error: unknown } | undefined;
   return yield* Effect.tryPromise({
     try: (interruption) => {
-      signal = AbortSignal.any([interruption, timeout]);
+      signal = interruption;
       pending = octokitRequest(`GET ${escapeOctokitLegacyTemplate(path)}`, {
         headers,
-        request: { signal },
+        request: { signal: interruption },
       });
       return pending;
     },
@@ -177,13 +171,26 @@ export const ghGet = Effect.fn('ghGet')(function* <T>(
       data: res.data as T,
       etag: res.headers.etag,
     })),
-    Effect.catch((err): Effect.Effect<ConditionalResponse<T>, Error> => {
-      primary = { error: err };
-      const failure = classifyRequestError(err, timeout.aborted);
-      return failure === null
-        ? Effect.succeed({ status: 304 })
-        : Effect.fail(failure);
-    }),
+    // The deadline interrupts the request, which aborts its signal.
+    Effect.timeout(Duration.millis(TIMEOUT_MS)),
+    Effect.catch(
+      (
+        err: Error | Cause.TimeoutError,
+      ): Effect.Effect<ConditionalResponse<T>, Error> => {
+        if (Cause.isTimeoutError(err)) {
+          return Effect.fail(
+            new Error(
+              `GitHub request failed (TIMEOUT): request exceeded ${TIMEOUT_MS}ms`,
+            ),
+          );
+        }
+        primary = { error: err };
+        const failure = classifyRequestError(err);
+        return failure === null
+          ? Effect.succeed({ status: 304 })
+          : Effect.fail(failure);
+      },
+    ),
     // Effect aborts the request before this uninterruptible join. Octokit's
     // public promise includes body consumption; errors it hides stay hidden.
     Effect.onExit(() => {

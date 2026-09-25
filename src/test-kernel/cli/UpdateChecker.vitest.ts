@@ -1,5 +1,6 @@
 import { it as effectIt } from '@effect/vitest';
 import { Effect } from 'effect';
+import { FetchHttpClient } from 'effect/unstable/http';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -12,6 +13,7 @@ import {
 } from '@cli/runtime/updateChecker';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
 import { jsonResponse } from '@test/support/fetchTestUtils';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({ readCliAmbientState: vi.fn() }));
 
@@ -100,32 +102,33 @@ describe('fetchLatestCliVersion', () => {
   effectIt.effect.each([
     {
       name: 'returns the version field from the latest dist-tag',
-      fetchImpl: async () => jsonResponse({ version: '9.9.9' }),
+      impl: async () => jsonResponse({ version: '9.9.9' }),
       expected: '9.9.9',
     },
     {
       name: 'returns undefined on non-ok responses',
-      fetchImpl: async () => jsonResponse({ version: '9.9.9' }, 500),
+      impl: async () => jsonResponse({ version: '9.9.9' }, 500),
       expected: undefined,
     },
     {
       name: 'returns undefined when the fetch throws (offline)',
-      fetchImpl: async () => {
+      impl: async () => {
         throw new Error('offline');
       },
       expected: undefined,
     },
     {
       name: 'returns undefined when the body lacks a version',
-      fetchImpl: async () => jsonResponse({}),
+      impl: async () => jsonResponse({}),
       expected: undefined,
     },
-  ])('$name', ({ fetchImpl, expected }) =>
+  ])('$name', ({ impl, expected }) =>
     Effect.gen(function* () {
-      expect(
-        yield* fetchLatestCliVersion({ fetchImpl: fetchImpl as typeof fetch }),
-      ).toBe(expected);
-    }),
+      expect(yield* fetchLatestCliVersion()).toBe(expected);
+    }).pipe(
+      Effect.provideService(FetchHttpClient.Fetch, impl as typeof fetch),
+      Effect.provide(FetchHttpClient.layer),
+    ),
   );
 });
 
@@ -149,7 +152,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
               ),
           }),
         ).toEqual({ version: '0.39.0', refreshed: true });
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   effectIt.effect(
@@ -166,7 +169,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
             runCommand: () => Effect.succeed(JSON.stringify({ formulae: [] })),
           }),
         ).toEqual({ version: undefined, refreshed: true });
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 
   effectIt.effect(
@@ -191,7 +194,7 @@ describe('fetchLatestHomebrewFormulaVersion', () => {
           { command: 'brew', args: ['update', '--quiet'] },
           { command: 'brew', args: ['info', '--json=v2', 'texra'] },
         ]);
-      }),
+      }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
 });
 

@@ -3,7 +3,7 @@ import { useLayoutEffect } from 'react';
 import { useInput, useWindowSize } from 'ink';
 
 // Local imports - TUI layout, input, and markdown rendering
-import { wrapAnsiToWidth } from '@cli/tui/ansiWrap';
+import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { isEscapeInput } from '@cli/tui/inputKeys';
 import { FormFrame, formFrameWidth } from '../forms/_shared/FormFrame';
 import { renderAnsiMarkdown } from '../render/ansiMarkdown';
@@ -18,7 +18,7 @@ function infoPaneRequiredRows(
   textWidth: number,
 ): number {
   const width = Math.max(1, textWidth);
-  const titleRows = wrapAnsiToWidth(title, width).split('\n').length;
+  const titleRows = wrappedRowCount(title, width);
   const rendered = renderAnsiMarkdown(lines.join('\n'), {
     colorEnabled: false,
     width,

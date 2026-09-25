@@ -17,6 +17,7 @@ import {
   type ProbedLatexTool,
 } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'LatexToolingController';
 
@@ -29,8 +30,12 @@ type LatexRecommendedStatus = Pick<
 >;
 
 interface LatexToolingControllerDeps {
-  checkToolInstalled(tool: ProbedLatexTool): Effect.Effect<boolean>;
-  findPath(tool: LatexPathTool): string | null;
+  checkToolInstalled(
+    tool: ProbedLatexTool,
+  ): Effect.Effect<boolean, never, ChildProcessSpawner>;
+  findPath(
+    tool: LatexPathTool,
+  ): Effect.Effect<string | null, never, ChildProcessSpawner>;
   detectPackageManager(): LatexSettingsStatus['packageManager'];
   getPlatform(): OSPlatform;
   isLatexWorkshopInstalled(): boolean;
@@ -54,9 +59,28 @@ export class LatexToolingController {
     return ALLOWED_INSTALL_COMMANDS.has(command);
   }
 
-  detectStatus(): Effect.Effect<LatexSettingsStatus> {
+  detectStatus(): Effect.Effect<
+    LatexSettingsStatus,
+    never,
+    ChildProcessSpawner
+  > {
     return Effect.gen({ self: this }, function* () {
       const installed = yield* this.checkTools();
+      const find = this.deps.findPath;
+      const paths = yield* Effect.all(
+        {
+          pdflatexPath: find('pdflatex'),
+          latexmkPath: find('latexmk'),
+          latexdiffPath: find('latexdiff'),
+          latexindentPath: find('latexindent'),
+          texcountPath: find('texcount'),
+          ghostscriptPath: find('gs'),
+          gm: find('gm'),
+          magick: find('magick'),
+        },
+        { concurrency: 'unbounded' },
+      );
+      const { gm, magick, ...toolPaths } = paths;
       return {
         ...this.deps.getRecommendedStatus(),
         texDistributionInstalled: SUPPORTED_LATEX_COMPILERS.some(
@@ -69,14 +93,8 @@ export class LatexToolingController {
         imageProcessingInstalled:
           installed.gs && IMAGE_LATEX_TOOLS.some((tool) => installed[tool]),
         platform: this.deps.getPlatform(),
-        pdflatexPath: this.deps.findPath('pdflatex'),
-        latexmkPath: this.deps.findPath('latexmk'),
-        latexdiffPath: this.deps.findPath('latexdiff'),
-        latexindentPath: this.deps.findPath('latexindent'),
-        texcountPath: this.deps.findPath('texcount'),
-        ghostscriptPath: this.deps.findPath('gs'),
-        graphicsmagickPath:
-          this.deps.findPath('gm') ?? this.deps.findPath('magick'),
+        ...toolPaths,
+        graphicsmagickPath: gm ?? magick,
         packageManager: this.deps.detectPackageManager(),
       } satisfies LatexSettingsStatus;
     }).pipe(
@@ -106,7 +124,11 @@ export class LatexToolingController {
     );
   }
 
-  private checkTools(): Effect.Effect<Record<ProbedLatexTool, boolean>> {
+  private checkTools(): Effect.Effect<
+    Record<ProbedLatexTool, boolean>,
+    never,
+    ChildProcessSpawner
+  > {
     return Effect.all(
       PROBED_LATEX_TOOLS.map((tool) =>
         Effect.map(

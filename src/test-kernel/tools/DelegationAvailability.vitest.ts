@@ -10,6 +10,7 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { ModelOptionData, ToolDefinition } from '@shared/schemas';
 import { fakeProcessServices, hostStores } from '@test/support/setupPlatform';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 
 const mocks = vi.hoisted(() => ({
   getVisibleAgents: vi.fn(),
@@ -167,6 +168,7 @@ function resolveToolList(
     // The delegation-annotation availability read yields `LanguageModel`;
     // this host has no editor models.
     Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+    Effect.provide(nodeSpawnerLayer),
   );
 }
 

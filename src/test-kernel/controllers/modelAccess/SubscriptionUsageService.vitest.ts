@@ -27,7 +27,7 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import type { HttpClient } from 'effect/unstable/http';
 
 /** The request the adapters make through `FetchHttpClient.Fetch`. */
-type UsageFetch = (url: string, init: RequestInit) => Promise<Response>;
+type UsageFetch = (url: string | URL, init: RequestInit) => Promise<Response>;
 
 /** The API keys the coding-plan adapters read out of secret storage. */
 const CODING_PLAN_KEYS = {
@@ -494,8 +494,8 @@ describe('SubscriptionUsageService', () => {
       },
       authorization: 'Bearer chatgpt-secret',
       extraHeaders: {
-        'ChatGPT-Account-Id': 'account-123',
-        'User-Agent': 'codex-cli',
+        'chatgpt-account-id': 'account-123',
+        'user-agent': 'codex-cli',
       },
     },
     {
@@ -515,7 +515,7 @@ describe('SubscriptionUsageService', () => {
         },
       },
       authorization: 'glm-secret',
-      extraHeaders: { 'Accept-Language': 'en-US,en' },
+      extraHeaders: { 'accept-language': 'en-US,en' },
     },
   ])(
     'sends the required $provider authentication headers',
@@ -530,11 +530,12 @@ describe('SubscriptionUsageService', () => {
       );
       expect(http).toHaveBeenCalledTimes(1);
       const [calledUrl, init] = http.mock.calls[0];
-      expect(calledUrl).toBe(url);
+      // The client calls fetch with a URL object and lowercased header keys.
+      expect(String(calledUrl)).toBe(url);
       expect(init.method).toBe('GET');
       expect(init.signal).toBeInstanceOf(AbortSignal);
       expect(init.headers).toMatchObject({
-        Authorization: authorization,
+        authorization,
         ...extraHeaders,
       });
     },
@@ -548,7 +549,7 @@ describe('SubscriptionUsageService', () => {
           limits: [
             {
               type: 'TOKENS_LIMIT',
-              percentage: url === GLM_CODING_PLAN_USAGE_URL ? 10 : 80,
+              percentage: String(url) === GLM_CODING_PLAN_USAGE_URL ? 10 : 80,
               unit: 3,
             },
           ],
@@ -565,7 +566,7 @@ describe('SubscriptionUsageService', () => {
       http,
     );
 
-    expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
+    expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
       GLM_CODING_PLAN_USAGE_URL,
       GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
     ]);
@@ -618,7 +619,7 @@ describe('SubscriptionUsageService', () => {
       );
       const olderCaller = await olderRequest;
 
-      expect(http.mock.calls.map(([url]) => url)).toStrictEqual([
+      expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
         olderUrl,
         newerUrl,
       ]);
@@ -662,9 +663,9 @@ describe('SubscriptionUsageService', () => {
       http,
     );
 
-    expect(http).toHaveBeenCalledExactlyOnceWith(
+    expect(http).toHaveBeenCalledOnce();
+    expect(String(http.mock.calls[0][0])).toBe(
       GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
-      expect.any(Object),
     );
     expect(snapshot).toMatchObject({
       state: 'unavailable',

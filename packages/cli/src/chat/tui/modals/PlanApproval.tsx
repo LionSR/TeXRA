@@ -174,7 +174,6 @@ export function PlanApproval(props: PlanApprovalProps): React.JSX.Element {
         hiddenNoun={PLAN_APPROVAL_HIDDEN_NOUN}
         marginWhenSpacious={!compact}
         maxRows={maxBodyRows}
-        scrollActive={!feedbackMode}
         scrollHint="scroll plan"
         showScrollHints={!compact}
         text={plan.objective}

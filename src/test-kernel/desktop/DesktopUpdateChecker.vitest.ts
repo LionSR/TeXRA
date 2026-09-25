@@ -11,7 +11,11 @@ import {
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { withEnv } from '@test/support/testEnv';
+import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+
+import type { HttpClient } from 'effect/unstable/http';
 
 type Options = Parameters<typeof checkForDesktopUpdate>[0];
 const release = { version: '0.40.0' };
@@ -26,7 +30,9 @@ const runCheck = (
     fetchRelease: Effect.succeed(release),
     ...overrides,
   }).pipe(withEnv(env));
-const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
+const withRecords = <A, E>(
+  program: Effect.Effect<A, E, UpdateCheckRecords | HttpClient.HttpClient>,
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -39,6 +45,7 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
             Layer.provide(
               globalDatabaseLayer(storage).pipe(
                 Layer.provide(ProcessIdentity.layer(processOwnerId(undefined))),
+                Layer.provide(nodeSpawnerLayer),
                 Layer.orDie,
               ),
             ),
@@ -46,7 +53,9 @@ const withRecords = <A, E>(program: Effect.Effect<A, E, UpdateCheckRecords>) =>
         ),
       );
     }),
-  ).pipe(Effect.provide(NodeFileSystem.layer));
+  ).pipe(
+    Effect.provide(Layer.merge(NodeFileSystem.layer, testHttpClientLayer)),
+  );
 
 describe('desktop update checker', () => {
   it.live('skips entirely for unpackaged (dev) runs', () =>
