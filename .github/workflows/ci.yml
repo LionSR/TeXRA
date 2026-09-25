@@ -98,12 +98,42 @@ jobs:
             exit 1
           fi
 
-          # The desktop e2e suite runs when a PR touches what the desktop
-          # window renders or boots: its own package, the conversation and
-          # settings views it hosts, the shared UI and session code under
-          # them, the e2e profile seed, the lockfile, or this workflow.
-          desktop_paths='^(packages/desktop/|packages/extension/src/(progressView|settingsView)/|src/ui/|src/shared/|src/controllers/|src/platform/|scripts/desktop-package-smoke-environment|pnpm-lock\.yaml$|\.github/workflows/ci\.yml$)'
-          if printf '%s\n' "$files" | grep -Eq "$desktop_paths"; then
+          # The desktop e2e suite runs unless every changed path is out of
+          # the desktop's reach. The window bundles nearly all of src/ and
+          # packages/ (tools, utils, agent and llm included), so the reach is
+          # stated as its complement: the CLI, the trace viewer, docs, and
+          # markdown. Paths come from --name-status, as above, so a rename
+          # out of a reached path still counts.
+          desktop_change_match() {
+            awk -F '\t' '{
+              for (i = 2; i <= NF; i++) {
+                if ($i !~ /^packages\/cli\// && $i !~ /^packages\/trace-viewer\// &&
+                    $i !~ /^docs\// && $i !~ /\.md$/) found = 1
+              }
+            }
+            END { exit !found }'
+          }
+
+          # A slip in this classifier would silently skip the job it gates, so
+          # it is self-tested the same way.
+          if ! printf 'M\tsrc/tools/bash.ts\n' | desktop_change_match; then
+            echo 'desktop classifier self-test failed (src/tools)' >&2
+            exit 1
+          fi
+          if ! printf 'R100\tsrc/ui/a.ts\tpackages/cli/src/a.ts\n' | desktop_change_match; then
+            echo 'desktop classifier self-test failed (rename out of reach)' >&2
+            exit 1
+          fi
+          if ! printf 'M\t.github/actions/setup-workspace/action.yml\n' | desktop_change_match; then
+            echo 'desktop classifier self-test failed (setup action)' >&2
+            exit 1
+          fi
+          if printf 'M\tpackages/cli/src/app.tsx\nM\tdocs/guide/cli.md\n' | desktop_change_match; then
+            echo 'desktop classifier self-test failed (cli and docs only)' >&2
+            exit 1
+          fi
+
+          if printf '%s\n' "$name_status" | desktop_change_match; then
             echo "desktop=true" >> "$GITHUB_OUTPUT"
           else
             echo "desktop=false" >> "$GITHUB_OUTPUT"
@@ -378,8 +408,8 @@ jobs:
     # project seed, workbench tabs, Monaco, the pty. Nothing else exercises
     # the app end to end, and it broke twice unnoticed before it ran here.
     # macOS because its window-lifecycle specs are macOS behaviour and the
-    # runner needs no virtual display; gated to PRs that touch the desktop,
-    # since macOS bills at 10x Linux rates.
+    # runner needs no virtual display; skipped on PRs confined to the CLI,
+    # the trace viewer, or docs, since macOS bills at 10x Linux rates.
     if: needs.changes.outputs.code == 'true' && needs.changes.outputs.desktop == 'true' && github.event_name != 'schedule'
     runs-on: macos-latest
     timeout-minutes: 20
