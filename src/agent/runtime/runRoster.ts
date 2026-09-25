@@ -40,9 +40,8 @@ export class RunLive extends Data.TaggedError('RunLive')<{
 /** Everything this process holds for one run. The entry exists exactly while
  *  one of its fields does, which is what makes it the liveness authority. */
 interface RunEntry {
-  /** The fiber running this run here — its liveness, stop target and
-   *  terminal owner — written with the fork that admits the run and erased
-   *  by that fiber's own exit. */
+  /** The fiber running this run here — its liveness, stop target and terminal
+   *  owner — written by that fiber's first step, erased by its own exit. */
   fiber?: Fiber.Fiber<unknown, unknown>;
   handle?: RunHandle;
   activation?: ChildRunActivation;
@@ -55,9 +54,8 @@ interface RunEntry {
 
 export class RunRoster {
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Every change a waiter can wake on ({@link waitForAnyChange}), published
-   *  apart from the entries since a waiter is no record of a live run. Opened
-   *  by the first waiter; unbounded, so a synchronous publish never blocks. */
+  /** Every change a waiter can wake on ({@link waitForAnyChange}), apart from
+   *  the entries; opened by the first waiter, unbounded so publish never blocks. */
   private changes: PubSub.PubSub<RunId> | undefined;
   /** The stops begun for each run ({@link beginStop}), one token apiece, so
    *  of two overlapping stops the first to settle cannot admit a child the
@@ -124,9 +122,8 @@ export class RunRoster {
     });
   }
 
-  /** The run's stop, by run id: interrupt the fiber the entry names.
-   *  Synchronously callable from every host surface, and answered straight
-   *  away: the entry has a fiber or it does not. */
+  /** The run's stop, by run id: interrupt the fiber the entry names. Sync,
+   *  and answered straight away: the entry has a fiber or it does not. */
   interrupt(runId: RunId): boolean {
     const fiber = this.entries.get(runId)?.fiber;
     if (fiber === undefined) return false;
@@ -258,8 +255,7 @@ export class RunRoster {
   }
 
   /** Runs with a live interrupt target: tracked handles and native child
-   *  activations. A lane still releasing resources can outlive both; the
-   *  drain waits for its entry without trying to stop it again. */
+   *  activations. A lane still releasing outlives both; the drain waits on it. */
   activeIds(): RunId[] {
     const ids: RunId[] = [];
     for (const [runId, entry] of this.entries)
@@ -270,9 +266,8 @@ export class RunRoster {
 
   // ---------------------------------------------------------------- liveness
 
-  /** Whether this process holds a live generation of the run: the fiber
-   *  running it, a launch admitted for it, or a live tool-use flow on its
-   *  handle. */
+  /** Whether this process holds a live generation of the run: its fiber, an
+   *  admitted launch, or a live tool-use flow on its handle. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);
     if (entry === undefined) return false;
@@ -281,8 +276,8 @@ export class RunRoster {
   }
 
   /** Run `operation` on `runId`'s lane: claim the lane synchronously, fork
-   *  the operation and register the fiber on the entry in the same turn, and
-   *  hold the lane until that fiber settles, finalizers included.
+   *  the operation registered on the entry from its first step, and hold
+   *  the lane until that fiber settles, finalizers included.
    *
    *  The claim is conditional: {@link isLive} reads the entry in the same
    *  synchronous step as the tail swap, so this is the one admission.
@@ -323,18 +318,20 @@ export class RunRoster {
       };
       const step = Effect.gen({ self: this }, function* () {
         this.waiting.delete(refusal);
-        // Admission is the fork: the fiber starts registered, so a stop by
-        // run id reaches the run's live stack from the first instant; a fiber
-        // only scheduled would take a pre-start interrupt and skip its
-        // finalizers.
-        const fiber = yield* Effect.forkChild(operation, {
-          startImmediately: true,
-        });
-        // An inactive-run step is not a generation: it holds the lane, and
-        // the run's next generation queues behind it rather than refusing.
-        if (!refuseWhenLive) this.setFiber(runId, fiber);
-        // The lane is held until the fiber settles, finalizers included: an
-        // interrupted join interrupts the fiber and awaits its cleanup.
+        // The fiber registers itself as its first step (the forking fiber
+        // may yield first), so a stop by run id reaches it from the first
+        // instant; one only scheduled would skip its finalizers on a
+        // pre-start interrupt. An inactive-run step is not a generation.
+        const fiber = yield* Effect.forkChild(
+          refuseWhenLive
+            ? operation
+            : Effect.withFiber((self) => {
+                this.setFiber(runId, self);
+                return operation;
+              }),
+          { startImmediately: true },
+        );
+        // An interrupted join interrupts the fiber and awaits its cleanup.
         return yield* Fiber.join(fiber).pipe(
           Effect.onInterrupt(() => Fiber.interrupt(fiber)),
         );
