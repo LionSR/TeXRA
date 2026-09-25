@@ -259,7 +259,7 @@ const lowerMessages = Effect.fn('llm.google.lowerMessages')(function* (
             break;
           }
           case 'reasoning':
-            // Another model's thoughts are omitted, as the other codecs do.
+            // Omit another model's thoughts, as the Anthropic and Chat codecs do.
             if (!sameModelOrigin(message.origin, origin)) break;
             if (
               part.content !== undefined ||

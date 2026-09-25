@@ -28,7 +28,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import type { SessionView } from '@shared/session/sessionView';
+import type { RunGroup, SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
@@ -106,14 +106,14 @@ type PendingApprovalFact = SessionView['requests'][number] & {
  * not an `externalInquiry`, which this surface never renders, nor one a
  * stopped run left for its resume to ask again, whose modal would trap keys.
  */
-const LIVE_GROUPS: ReadonlySet<string> = new Set(['running', 'waiting']);
+const LIVE_GROUPS: ReadonlySet<RunGroup> = new Set(['running', 'waiting']);
 function pendingApprovalFacts(view: SessionView): PendingApprovalFact[] {
   const included = currentSessionRunIds(view);
   return view.requests.filter(
     (request): request is PendingApprovalFact =>
       included.has(request.runId) &&
       request.payload.kind !== 'externalInquiry' &&
-      LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? ''),
+      LIVE_GROUPS.has(view.runs.get(request.runId)?.group ?? 'recent'),
   );
 }
 
