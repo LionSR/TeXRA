@@ -86,6 +86,26 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
   });
 });
 
+describe('attachTestTranscriptFold undecodable compaction payload', () => {
+  it('writes an error row naming the diagnostic instead of dropping it', () => {
+    const { trace, rows } = attachRecorder();
+
+    trace.info('Compacting context', {
+      messageType: MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY,
+      data: { activity: 'context_compaction', state: 'started' },
+    });
+
+    expect(rows()).toMatchObject([
+      {
+        level: 'error',
+        messageType: MESSAGE_TYPES.ERROR,
+        text: 'Malformed contextCompactionActivity payload',
+        data: { message: expect.stringContaining('operationId') },
+      },
+    ]);
+  });
+});
+
 describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
     const { trace, rows } = attachRecorder();

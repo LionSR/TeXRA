@@ -5,6 +5,8 @@
  */
 // Shared contracts and utilities
 import {
+  CompactionActivityDataSchema,
+  ContextManagementDataSchema,
   MESSAGE_TYPES,
   RUN_OUTCOME,
   STREAM_LOG_ENTRY_TYPES,
@@ -28,6 +30,7 @@ import type {
   StreamLogUpdatePatch,
 } from '@shared/session/traceEntries';
 import { isObject } from '@utils/core';
+import type { z } from 'zod';
 
 const KNOWN_MESSAGE_TYPES = new Set<string>(Object.values(MESSAGE_TYPES));
 
@@ -42,6 +45,12 @@ function asMessageType(candidate: string | undefined): MessageType {
     ? (candidate as MessageType)
     : MESSAGE_TYPES.DEFAULT;
 }
+
+/** The compaction payloads the fold decodes (`compactionActivityProjection`). */
+const DECODED_PAYLOADS: Partial<Record<MessageType, z.ZodType>> = {
+  [MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY]: CompactionActivityDataSchema,
+  [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
+};
 
 /** The source event's stable coordinates and the surface's display policy. */
 interface TraceStamp {
@@ -78,15 +87,20 @@ export function createTranscriptFold(
       data?: unknown;
       verbose?: boolean;
     }): void => {
+      // A payload its schema rejects is written as an error row naming the
+      // diagnostic, never dropped: the compaction reducer skips it.
+      const issue = DECODED_PAYLOADS[params.messageType]?.safeParse(
+        params.data,
+      ).error;
       writer.appendSettled({
         id: stamp.id,
         type: STREAM_LOG_ENTRY_TYPES.LOG,
-        level: params.level ?? 'info',
+        level: issue ? 'error' : (params.level ?? 'info'),
         timestamp: stamp.at,
         groupId: params.groupId,
-        messageType: params.messageType,
-        text: params.text,
-        data: params.data,
+        messageType: issue ? MESSAGE_TYPES.ERROR : params.messageType,
+        text: issue ? `Malformed ${params.messageType} payload` : params.text,
+        data: issue ? { message: issue.message } : params.data,
         verbose: params.verbose ?? stamp.debug,
       });
     };
