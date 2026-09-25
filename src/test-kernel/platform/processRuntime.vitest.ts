@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Effect, ManagedRuntime } from 'effect';
+import { Effect, Fiber, ManagedRuntime, Stream, SubscriptionRef } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
@@ -75,5 +75,24 @@ describe('withForkFailureReporting', () => {
 
       expect(capture.entries()).toHaveLength(0);
     }),
+  );
+
+  it.live(
+    'stays silent when an interrupted stream consumer ends with Done',
+    () =>
+      Effect.gen(function* () {
+        const capture = captureLogEntries();
+        const runtime = yield* makeReportingRuntime();
+        const level = yield* SubscriptionRef.make(0);
+
+        const consumer = runtime.runFork(
+          Stream.runForEach(SubscriptionRef.changes(level), () => Effect.void),
+        );
+        yield* Effect.sleep(20);
+        yield* Fiber.interrupt(consumer);
+        yield* Effect.sleep(50);
+
+        expect(capture.at('ERROR')).toHaveLength(0);
+      }),
   );
 });
