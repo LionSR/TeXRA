@@ -264,7 +264,7 @@ Note for the run-program-and-dispatch-dedup lane: its step 4 is this design's st
 - `rg -n 'gateTurn|attemptTurn|onceAborted|untilInterrupted' src/agent/runtime/childRunLoop.ts` returns nothing; `rg -n 'turnPermit' src/agent/runtime/loop/toolUse.ts` returns exactly one application, around `runTurn`.
 - `rg -n 'claimChildRun' src/agent/runtime/childRunLoop.ts` is reached only under `if (childRun)`, and one `claimLive`/`claimChildRun` per run holds for the run's whole life (no alternating consumer).
 - `rg -n 'RunChangeListeners|waitForAnyChange|notifyWaiters|handleStatus' src/ packages/` returns nothing; src/agent/runtime/runChangeListeners.ts is deleted.
-- `grep -n 'SESSION_EVENT_FORMAT' src/shared/schemas/sessionEvent.ts` still reads `= 7`, and the pinned format-fingerprint test is untouched in all five PRs.
+- `grep -n 'SESSION_EVENT_FORMAT' src/shared/schemas/sessionEvent.ts` still reads `= 14` (its value on main), and the pinned format-fingerprint test is untouched in all five PRs.
 - Behavioural: interrupting a run's fiber mid-tool leaves the ledger at the last committed batch, and `resumeToolUseFromResumeData` re-enters at that same row — identical to the state a `SIGKILL` at that point leaves. Verify once with the crash-boundary check the liveness proposal names; do not add a suite for it.
 - Element count in the PR body of step 5: mechanisms answering 'is this run live here / how is it stopped' went from 22 to 8, enumerated.
 
