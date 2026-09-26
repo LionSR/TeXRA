@@ -10,7 +10,7 @@ import {
   resolveTeamRoster,
   type TeamRosterCatalog,
 } from '@common/teams/TeamRoster';
-import type { StateStore } from '@platform/interfaces';
+import { type StateStore, withStateKeyLane } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
@@ -198,7 +198,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           preset,
         ])
         .pipe(Effect.as(preset));
-    });
+    }).pipe(this.customPresetsLane());
   }
 
   deleteCustomPreset(presetId: string) {
@@ -218,7 +218,16 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           ),
         )
         .pipe(Effect.as(target));
-    });
+    }).pipe(this.customPresetsLane());
+  }
+
+  /** Save and delete each rewrite the preset list they read: one lane, so
+   *  two overlapping edits cannot drop each other's preset. */
+  private customPresetsLane() {
+    return withStateKeyLane(
+      this.deps.workspaceState,
+      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+    );
   }
 
   /**
