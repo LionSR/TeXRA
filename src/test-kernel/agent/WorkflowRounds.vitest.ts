@@ -1,10 +1,10 @@
 /**
- * The reflection family's loop-boundary suite: `runReflection` driven over a
- * real session ledger with the model faked at the `ModelInvoker` seam. It
- * pins what the durable rows must say at the boundary — the round loop's
- * compile repair, resume from the last snapshot, the output facts a round
- * publishes, the token-limited response, and the interrupt — replacing the
- * per-node suites the retired engine's internals used to pin.
+ * A workflow agent's loop-boundary suite: `runToolUse` in round mode (the
+ * documents plugin's rounds) driven over a real session ledger with the
+ * model faked at the `ModelInvoker` seam. It pins what the durable rows must
+ * say at the boundary — the round loop's compile repair, resume from the
+ * rows, the output facts a round publishes, the token-limited response, and
+ * the interrupt.
  */
 import '@test/support/defaultSessionTestSetup';
 
@@ -23,13 +23,8 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import {
-  familyState,
-  rowAggregate,
-  snapshotRow,
-  stepRow,
-} from '@agent/runtime/loop/rows';
-import { runReflection } from '@agent/runtime/loop/reflection';
+import { rowAggregate, snapshotRow, stepRow } from '@agent/runtime/loop/rows';
+import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -59,6 +54,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -76,6 +72,7 @@ import {
 } from '@test/support/setupPlatform';
 import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -85,16 +82,11 @@ import { createRecordingHost } from './progressTestUtils';
 import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 /**
- * The reflection loop over a real session ledger: the round loop, the
- * compile-rejection policy, the cut-off round and resume are production code; the
- * model is faked at the `ModelInvoker` seam and the round's output pipeline at
- * its module seams, so a scenario scripts turns and compile verdicts and the
- * loop decides what to do with them.
- *
- * These cases carry the round-limit, compile-repair, output-fact,
- * cut-off and interrupt coverage that the retired flow engine's node
- * suites held: their subject was never the engine but the behaviour the loop
- * now owns, so one harness replaces four node fixtures.
+ * Round mode over a real session ledger: the round loop, the
+ * compile-rejection policy, the cut-off round and resume are production
+ * code; the model is faked at the `ModelInvoker` seam and the round's output
+ * pipeline at its module seams, so a scenario scripts turns and compile
+ * verdicts and the loop decides what to do with them.
  */
 
 const scripted = vi.hoisted(() => ({
@@ -233,6 +225,15 @@ const unusedModel = new Proxy({} as Model, {
     throw new Error(`The harness model has no ${String(property)}.`);
   },
 });
+
+/** The pinned composition of a workflow run: the documents plugin's rounds. */
+const DOCUMENTS_COMPOSITION = {
+  ...emptyPinnedComposition,
+  key: new CompositionKey('0'.repeat(64), {
+    ...emptyPinnedComposition.key.composition,
+    plugins: ['documents'],
+  }),
+};
 
 function testBoundModel(): BoundModel {
   return {
@@ -428,7 +429,7 @@ function agentRunTestLayer(init: LoopInit) {
         tools: new MapToolRegistry({}),
         finalToolName: null,
         toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
+        composition: DOCUMENTS_COMPOSITION,
         structured: { value: undefined },
         model,
         scope,
@@ -451,7 +452,7 @@ function agentRunTestLayer(init: LoopInit) {
 }
 
 function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
-  return runReflection({ resume: init.resume === true }).pipe(
+  return runToolUse({ resume: init.resume === true }).pipe(
     Effect.provide(
       invokerLayer(init, requests).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
@@ -463,13 +464,14 @@ function loopProgram(init: LoopInit, requests: InvokeRequest[]) {
         ),
         Layer.provideMerge(testHttpClientLayer),
         Layer.provideMerge(nodeSpawnerLayer),
+        Layer.provideMerge(Layer.effectContext(testRuntime().contextEffect)),
       ),
     ),
   );
 }
 
-/** Run one scripted reflection run to its own exit. */
-const runLoop = Effect.fn('test.runReflection')(function* (init: LoopInit) {
+/** Run one scripted workflow run to its own exit. */
+const runLoop = Effect.fn('test.runRounds')(function* (init: LoopInit) {
   const requests: InvokeRequest[] = [];
   const result = yield* loopProgram(init, requests);
   const state = yield* loadState(init);
@@ -572,19 +574,12 @@ function canonicalOutputOf(
   ).absolutePath;
 }
 
-/** The persisted reflection state of a folded run. */
-function flowOf(state: RunState) {
-  const flow = familyState(state, 'reflection');
-  if (flow === null) throw new Error('The run persisted no reflection state.');
-  return flow;
-}
-
 const PROVIDER_FAILURE: RetryErrorInfo = {
   message: 'provider failed',
   userRetryable: true,
 };
 
-describe('the reflection round loop', () => {
+describe('the workflow round loop', () => {
   it.effect('runs its configured rounds and completes', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
@@ -616,7 +611,6 @@ describe('the reflection round loop', () => {
         const repairPrompt = userTexts(state).at(-1) ?? '';
         expect(repairPrompt).toContain(REJECTED);
         expect(repairPrompt).toContain('! Missing $ inserted.');
-        expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
@@ -636,7 +630,6 @@ describe('the reflection round loop', () => {
       expect(requests).toHaveLength(1);
       expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       expect(result.error).toBeUndefined();
-      expect(flowOf(state).unresolvedCompileRejection).toBe(true);
     }),
   );
 
@@ -650,8 +643,6 @@ describe('the reflection round loop', () => {
 
         const { result, state } = yield* runLoop({ runId, session, rounds: 2 });
 
-        expect(flowOf(state).compileFailureContext).toBeUndefined();
-        expect(flowOf(state).unresolvedCompileRejection).toBe(true);
         expect(result.outcome).toBe(RUN_OUTCOME.FAILED);
       }),
   );
@@ -695,7 +686,6 @@ describe('the reflection round loop', () => {
 
       const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
 
-      expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
       expect(userTexts(state).at(-1)).not.toContain('rejected');
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
     }),
@@ -722,8 +712,6 @@ describe('the reflection round loop', () => {
 
         expect(requests.map((request) => request.round)).toEqual([0, 1]);
         expect(userTexts(state).at(-1)).toContain(REJECTED);
-        expect(flowOf(state).compileFailureContext).toBeUndefined();
-        expect(flowOf(state).unresolvedCompileRejection).toBeUndefined();
         expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
@@ -739,12 +727,10 @@ describe('the reflection round loop', () => {
 
         const halted = yield* interruptedAt({ runId, session, rounds: 2 }, 1);
 
-        // The repair prompt was consumed into the round, so the one-shot
-        // feedback is gone, while the durable rejection survives the stop.
+        // The repair prompt was consumed into the round, while the rejection
+        // survives the stop in the rows a resume reads.
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
         expect(userTexts(halted).at(-1)).toContain(REJECTED);
-        expect(flowOf(halted).compileFailureContext).toBeUndefined();
-        expect(flowOf(halted).unresolvedCompileRejection).toBe(true);
 
         const resumed = yield* runLoop({
           runId,
@@ -753,9 +739,6 @@ describe('the reflection round loop', () => {
           resume: true,
         });
         expect(resumed.requests.map((request) => request.round)).toEqual([1]);
-        expect(
-          flowOf(resumed.state).unresolvedCompileRejection,
-        ).toBeUndefined();
         expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
@@ -826,7 +809,7 @@ describe('the reflection round loop', () => {
   );
 });
 
-describe('a resumed reflection run', () => {
+describe('a resumed workflow run', () => {
   it.effect(
     'fails the persisted rejection when the round cap was lowered',
     () =>
@@ -842,7 +825,6 @@ describe('a resumed reflection run', () => {
           turns: [COMPLETE, { failWith: PROVIDER_FAILURE }],
         });
         expect(stopped.result.outcome).toBe(RUN_OUTCOME.FAILED);
-        expect(flowOf(stopped.state).unresolvedCompileRejection).toBe(true);
 
         const resumed = yield* runLoop({
           runId,
@@ -883,9 +865,6 @@ describe('a resumed reflection run', () => {
         expect(resumed.requests.map((request) => request.round)).toEqual([
           1, 2,
         ]);
-        expect(
-          flowOf(resumed.state).unresolvedCompileRejection,
-        ).toBeUndefined();
         expect(resumed.result.outcome).toBe(RUN_OUTCOME.COMPLETED);
       }),
   );
@@ -900,7 +879,6 @@ describe('a resumed reflection run', () => {
 
         const stopped = yield* runLoop({ runId, session, rounds: 1 });
         expect(stopped.result.outcome).toBe(RUN_OUTCOME.FAILED);
-        expect(flowOf(stopped.state).unresolvedCompileRejection).toBe(true);
 
         yield* setRejectOnCompileFailure(false);
         const resumed = yield* runLoop({
@@ -920,7 +898,7 @@ describe('a resumed reflection run', () => {
   );
 });
 
-describe('the output facts a reflection round publishes', () => {
+describe('the output facts a workflow round publishes', () => {
   it.effect('keeps extracted outputs when presentation settings fail', () =>
     Effect.gen(function* () {
       const stateStore = new FakeStateStore();
@@ -1032,7 +1010,7 @@ describe('the output facts a reflection round publishes', () => {
   );
 });
 
-describe('a token-limited reflection response', () => {
+describe('a token-limited workflow response', () => {
   it.effect('processes a cut-off response as the round output, loudly', () =>
     Effect.gen(function* () {
       // A response cut off by the output limit is not continued: its text is
@@ -1095,7 +1073,7 @@ describe('a token-limited reflection response', () => {
   );
 });
 
-describe('an interrupted reflection run', () => {
+describe('an interrupted workflow run', () => {
   it.effect('halts as cancelled and leaves a resumable round behind', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
@@ -1105,8 +1083,9 @@ describe('an interrupted reflection run', () => {
 
       expect(state.step).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
-      // The round the stop interrupted is still the round a resume reopens.
-      expect(state.round).toBe(0);
+      // The round the stop interrupted is still the round a resume reopens:
+      // round 0 is the run's first turn.
+      expect(state.turn).toBe(1);
 
       const resumed = yield* runLoop({
         runId,
@@ -1143,7 +1122,7 @@ describe('an interrupted reflection run', () => {
           RUN_OUTCOME.CANCELLED,
         ]);
         expect(halted.outcome).toBe(RUN_OUTCOME.CANCELLED);
-        expect(halted.round).toBe(1);
+        expect(halted.turn).toBe(2);
         expect(halted.roundOutputs[0]?.outputs).toHaveLength(1);
 
         const resumed = yield* runLoop({
@@ -1179,7 +1158,7 @@ describe('an interrupted reflection run', () => {
         );
         // The response row is committed; the raw output is not yet written.
         expect(halted.lastTurn).not.toBeNull();
-        const canonical = canonicalOutputOf(session, runId, halted.round);
+        const canonical = canonicalOutputOf(session, runId, halted.turn - 1);
         yield* Effect.promise(async () => {
           if (!seed) return;
           await mkdir(dirname(canonical), { recursive: true });

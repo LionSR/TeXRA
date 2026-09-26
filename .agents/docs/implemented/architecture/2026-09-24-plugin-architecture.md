@@ -223,8 +223,9 @@ decision:
   prompt, which is recorded on the snapshot next to `offeredTools`. Plugin
   prompt fragments would make the recorded prompt depend on inputs the
   composition does not capture.
-- **The run loop.** `src/agent/runtime/loop/toolUse.ts` and `reflection.ts`
-  are the only run programs. v1 plugins have no hooks and no task kinds, so a
+- **The run loop.** `src/agent/runtime/loop/toolUse.ts` is the only run
+  program (workflow agents run it in round mode since the one-run-program
+  series). v1 plugins have no hooks and no task kinds, so a
   plugin cannot add a step, a node or a wait.
 - **The ledger.** `appendBatch` on the run ledger
   (`src/shared/session/runLedger.ts`) is the one writer. Plugins own no durable state and no

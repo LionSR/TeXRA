@@ -150,7 +150,7 @@ export function runningChildCount(
 }
 
 /**
- * The nearest ancestor's position, for a child's location: a reflection
+ * The nearest ancestor's position, for a child's location: a workflow
  * ancestor's round off `RunView.flow`, and the open phase for a
  * workflow-script ancestor, which drives no loop of its own — its child loop
  * is terminal on the first turn, so it never writes a `flow.step` and its

@@ -56,7 +56,6 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  familyState,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -175,7 +174,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
       ...patch,
-      state: { family: 'toolUse', state: flowState() },
+      state: flowState(),
     });
 
   const instruct = (instruction: string | undefined): void => {
@@ -326,7 +325,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: { family: 'toolUse', state: flowState() },
+        state: flowState(),
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
@@ -334,8 +333,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const restore = (state: RunState): void => {
-    const flow = familyState(state, 'toolUse');
-    if (flow === null) {
+    const flow = state.flow?.state;
+    if (flow === undefined) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
     if (flow.stateSlices) {
@@ -599,7 +598,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // The follow-ups the rows still queue (input admitted while no consumer
     // held this run, or a batch a crash left unconsumed, C3) are the
     // publisher's, seeded where `loadRun`'s claim moved here.
-    const entry = yield* loadRun(runId, 'toolUse', start.resume);
+    const entry = yield* loadRun(runId, start.resume);
     const opened =
       entry._tag === 'fresh'
         ? yield* openFresh(entry.opening)

@@ -1128,7 +1128,7 @@ Appendix.
   );
 
   // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
-  // accepting several attached input files. runReflectionFlow.ts then builds
+  // accepting several attached input files. documentRounds.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
   const singleArtifactOptions: XmlManagerOptions = {

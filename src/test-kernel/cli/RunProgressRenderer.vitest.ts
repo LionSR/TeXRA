@@ -222,15 +222,16 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-/** The loop's round as `flow.step` states it. `RunView.flow` carries the
- *  coordinate alone: a planned total is the agent registry's fact. */
+/** A workflow run's round as `flow.step` states it: round `n` is turn
+ *  `n + 1`. `RunView.flow` carries the coordinate alone: a planned total is
+ *  the agent registry's fact. */
 async function handleRound(
   renderer: TestRunProgressRenderer,
   runId: string,
   round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    flow: { family: 'reflection', step: 'round.begin', round },
+    flow: { family: 'toolUse', step: 'turn.begin', turn: round + 1 },
   });
 }
 async function handleConversationProgress(
