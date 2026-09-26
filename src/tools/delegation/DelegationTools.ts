@@ -23,6 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
@@ -83,7 +84,11 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
     yield* Effect.logWarning(
       `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
     ).pipe(withLogChannel(CHANNEL));
-    const msg = formatSubagentError(runId, handle.agentName, err);
+    const msg = formatSubagentError(
+      runId,
+      handle.agentName,
+      normalizeProviderError(err),
+    );
     const targetRunId = handle.deliveryTarget;
     if (targetRunId === undefined) {
       yield* Effect.logWarning(

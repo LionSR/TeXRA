@@ -3,13 +3,7 @@ import { Effect } from 'effect';
 import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { TexraRetryApprovalDecision } from '@shared/approvalPolicy';
-import { getExhaustionReason } from '@shared/schemas';
-import type { RequestDecision, RetryPermission, RunId } from '@shared/schemas';
-import {
-  quotaFallbackRouteForExhaustion,
-  type QuotaFallbackRoute,
-} from '@shared/quotaFallbackRoutes';
-import { isKimiCodeExclusiveRetryModel } from '@shared/model/kimiCodeRetryGate';
+import type { RequestDecision, RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
@@ -136,42 +130,6 @@ export function warnApprovalDenied(
   writeTextStderr(
     `[warn] [cli-approval] ${approvalDenialMessage(denial, session.approvalPolicy, context)}`,
   );
-}
-
-/**
- * The quota-fallback route a failed retry would switch off, decided once in
- * one place, or `undefined` when the retry offers no API-key switch. Consumers
- * (the retry modal's switch decision, the retry request message, and the
- * auto-switch) read this instead of re-deriving precedence from overlapping
- * predicates.
- */
-export function cliRetryQuotaRoute(
-  payload: RetryPermission,
-): QuotaFallbackRoute | undefined {
-  const details = payload.errorDetails;
-  const route = quotaFallbackRouteForExhaustion(getExhaustionReason(details));
-  if (!route) return undefined;
-  // Kimi Code-exclusive models are served only by the coding endpoint, so
-  // turning the plan off cannot reroute them to a Moonshot fallback. They
-  // keep the retry modal without an API-key switch, exactly like the
-  // auto-switch gate in the TUI.
-  if (route.id === 'kimiCode' && isKimiCodeExclusiveRetryModel(payload.model)) {
-    return undefined;
-  }
-  return route;
-}
-
-/** The switch hint line for a retry's quota route, or undefined when there is none. */
-export function cliRetryActionHint(
-  route: QuotaFallbackRoute | undefined,
-): string | undefined {
-  if (!route) return undefined;
-  return `Press \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
-}
-
-/** Whether a retry could be re-run against a personal API key. */
-export function isCliApiSwitchableRetry(payload: RetryPermission): boolean {
-  return cliRetryQuotaRoute(payload) !== undefined;
 }
 
 const askCliApprovalQuestion = Effect.fn(

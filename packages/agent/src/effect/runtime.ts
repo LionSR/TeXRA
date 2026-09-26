@@ -79,7 +79,7 @@ export interface AgentPlatform {
 /**
  * What the package answers a setup tool with: nothing, loudly. It is
  * embedded in someone else's process, so it is none of the three product
- * hosts `ToolHost` names and it has no sign-in flow of its own to start.
+ * hosts `SettingHost` names and it has no sign-in flow of its own to start.
  * Claiming to be the CLI would make `collectCoreSetupStatus` and the probe
  * tools branch on a surface that is not there, and answering `signIn` with
  * `false` would report a sign-in that can never happen as one that merely

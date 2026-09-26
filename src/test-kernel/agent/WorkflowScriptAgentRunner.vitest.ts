@@ -1351,7 +1351,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         defaultRunner()({ ...invocation(), report }),
       );
 
-      expect(error.name).toBe('Error');
+      expect(error.name).not.toBe('WorkflowRunAbortError');
       expect(error.message).toMatch(/ended with failed outcome/);
       expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
       // Nothing ran now, so the recovered child's id is attached and the
@@ -1775,7 +1775,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       const outcome = yield* runWorkflowScript({
         script: `export const meta = { name: 'staggered', description: 'fan out' }
-const found = await parallel(['fast', 'slow', 'fast again'].map((what, i) => () =>
+const found = yield* all(['fast', 'slow', 'fast again'].map((what, i) =>
   agent('Review ' + what, { id: 'call' + i, agentName: 'assistant', schema: { type: 'object' } })))
 return found.map((value) => value && value.outcome)`,
         runAgent: defaultRunner(),

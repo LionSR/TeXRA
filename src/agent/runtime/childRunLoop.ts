@@ -9,7 +9,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import type { RunInput } from '@agent/followUp/RunInput';
+import {
+  FollowUpContinuationOwned,
+  type RunInput,
+} from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
@@ -838,15 +841,15 @@ export function startChildRunLoop<TTurn, R = never>(
     // Fresh children already own their DB claim. Recovery retains its pending
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
-      Effect.sync(() => {
+      Effect.gen(function* () {
         // A stop sees the handle only from here, with its target reserved.
         childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
-          throw new Error(
-            `Follow-up continuation already has an owner for child ${runId}.`,
-          );
+          return yield* new FollowUpContinuationOwned({
+            message: `Follow-up continuation already has an owner for child ${runId}.`,
+          });
         }
         if (!params.queueLease)
           input = runSession.followUps.attachInput(runId, queueLease)!;

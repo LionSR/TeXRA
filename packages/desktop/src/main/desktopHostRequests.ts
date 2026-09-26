@@ -185,7 +185,7 @@ export function createDesktopHostRequests(
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
       // The controller re-reads the secret store after this returns.
-      promptForApiKey: () =>
+      promptForApiKey: (provider) =>
         Effect.gen(function* () {
           postDesktopSettingsView(options.postToRenderer, 'models/keys');
           yield* host.showInfoMessage(
@@ -197,7 +197,7 @@ export function createDesktopHostRequests(
             (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
               Effect.fail(
                 new ApiKeyPromptFailed({
-                  provider: undefined,
+                  provider,
                   message:
                     'The desktop could not show the API key instruction.',
                   cause: failure.cause,

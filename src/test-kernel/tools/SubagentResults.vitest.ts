@@ -134,7 +134,7 @@ describe('formatSubagentError', () => {
     const xml = formatSubagentError(
       'abc123',
       'reviewer',
-      new Error('subagent exploded <&>'),
+      { message: 'subagent exploded <&>', userRetryable: true },
       {
         wallTimeMs: 65000,
         workingDirectory: '/ws/project',

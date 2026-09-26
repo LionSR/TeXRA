@@ -44,7 +44,7 @@
 import { Effect } from 'effect';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { MapToolRegistry, type ToolHost } from '@agent/core/tools/ToolTypes';
+import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -53,6 +53,7 @@ import {
   type ModelOptionStores,
 } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
@@ -87,7 +88,7 @@ interface ResolveAgentToolsInput {
    * The product host this process is; tools excluded from it are dropped.
    * `undefined` (no composition root named one) drops every host-bound tool.
    */
-  host: ToolHost | undefined;
+  host: SettingHost | undefined;
   /** Tools only this run holds, laid over the resolved list (step 4). */
   runTools?: readonly ITool[];
   /** Whether the manifest's injected tools join (step 2); not for reflection. */
