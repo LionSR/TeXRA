@@ -26,6 +26,42 @@ and the host shells. Its defects are listed under
 [Defects from the second survey](#defects-from-the-second-survey) and its
 structural findings became moves 8 to 13.
 
+### Assumes #13359
+
+The owner confirmed that #13359 ("retire seven dual systems and pass-through
+layers") will be merged, so this programme treats it as landed. Where it
+settles or shrinks a move:
+
+- **Move 3, the child edge.** `ChildRunPort` is the one child-run handle
+  contract, and `runLiveness.ts` is deleted, so the aggregate claim
+  (`probeChild`, `claimStanding`) is the only liveness authority. The launch
+  door builds on `ChildRunPort`, not on the old `ChildRun` or
+  `registerChildRun` shapes.
+- **Move 4, the process.**
+  - The `getCliSecrets` singleton is deleted.
+  - The extension serves `AgentDirectories` as a runtime layer.
+  - `bootstrapHost` reads `host` and `secrets` from `SetupPlatform` and
+    `Secrets`.
+
+  The module-slot inventory below is recounted on that basis.
+
+- **Move 5, the wire.** The Tools and LaTeX settings pages have one shared
+  body (`settingsToolCommands.ts`), so only the CLI still restates the
+  plugin-toggle side effect.
+- **Move 7, the trace.** `AgentTrace` keeps `emit` and its real producers; the
+  six sugar emitters are gone, which leaves the dropped rename even less to do.
+  PRs 1 to 3 are unchanged.
+- **Move 8, the model.** `Model.generateTurn` is gone (one path,
+  `completedTurn`). Subscription providers are data: one
+  `SubscriptionOAuthError`, policies that carry the token endpoint, and one
+  `subscriptionAccess.ts`. PR 9 builds on that data. Compaction and
+  `helperModel` still bypass `ModelInvoker`, so PR 4 stands.
+- **Move 13, output.** latexdiff has one `runDiff` entry, and the duplicate
+  `mergeFiles`/`latexdiffFiles` host verbs are gone.
+- **Decisions 7 and 8.** #13359 leaves "one approval-policy authority" and
+  "CLI follow-ups to an interrupted run" for owner decisions. That is the
+  evidence that no shared path exists yet.
+
 Relation to the owners in [INDEX.md](../../INDEX.md): this note owns no topic.
 Each move names the owning note it amends, and a move that lands updates that
 owner rather than this note.
@@ -56,7 +92,7 @@ and the corrections that change a move are repeated in its verdict.
 Most of the redundancy in the session plane has one of five causes. There is
 no single state that runtime decisions read. Plugin state and resources have
 no owner of their own. Three run programs each own their own claim and
-terminal. The process is a runtime plus about fifteen module slots. Each host
+terminal. The process is a runtime plus about a dozen module slots. Each host
 repeats decisions the core should make.
 
 The first drafts of these moves were larger than the code supports. The
@@ -412,10 +448,14 @@ no `@tools` to `@agent` edges.
 - **Presets are stored compositions.** Today's switches become the preset
   `default`, an agent YAML may name a preset, and the session records the
   preset id. The plugin note already promised this.
-- **Trust is per content digest.** Trust is keyed on a restart-stable,
-  non-secret digest of the plugin's content (a SHA-256 of the server
-  definition, or the commit or tree hash of an installed plugin): a changed
-  digest is a new, untrusted revision. Today's MCP revision is an HMAC under a
+- **Trust is per content digest.** Trust is keyed on a restart-stable digest
+  of the plugin's content: a changed digest is a new, untrusted revision. For
+  an installed plugin that is its commit or tree hash. An MCP definition can
+  carry secrets in `env`, so a plain SHA-256 of it would let anyone holding a
+  snapshot or trace check guessed passwords offline. Its digest is instead an
+  HMAC under a key created once and kept in `Secrets`, never in the log. It
+  is stable across restarts, changes when a credential changes, and is no
+  oracle without the key. Today's MCP revision is an HMAC under a
   per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
   unguessable and different after every restart, so it stays the in-process
   resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
@@ -547,6 +587,9 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
   and could replace the user's label.
 - **The follow-up lease is not owned here.** #13348 moves it into
   `runToolUse`'s own scope; nothing in this move takes it back.
+- **The child edge is `ChildRunPort`** (#13359). `runWithLaunchGuard` and the
+  child-loop tail build on it, and liveness is read from the aggregate claim
+  (`probeChild`, `claimStanding`) alone.
 - Drivers are move 2's `PLUGIN_DRIVERS`. The `Run` handle is move 7's.
 
 ### PRs
@@ -582,14 +625,16 @@ hits in 5 files.
 
 Five composition roots install the process runtime (extension, desktop, CLI
 `cliProcessRuntime.ts`, the SDK, and the test harness that 79 suites import).
-`bootstrapHost` is a separate step the SDK skips. About fourteen Node-side
-module slots live outside the runtime, including the `SessionOwner`, the
-`AppSignals` hub (never shut down), the setting host, two account probes,
-skill contributions, plugin agent directories, the agent catalog, rate
-limiters, external roots (now two writers), `cliSecrets` (ignores later
-roots) and the CLI log runtime. Process-lifetime `forkDetach` fibers outlive
-`runtime.dispose` (the reprobe at `hostBootstrap.ts:112`, the extension's
-remote catalog and welcome, `AgentDirectoryManager.ts:250`). Four
+`bootstrapHost` is a separate step the SDK skips. After #13359 deletes
+`cliSecrets` and serves the extension's `AgentDirectories` as a layer, about
+twelve Node-side module slots live outside the runtime: the `SessionOwner`,
+the `AppSignals` hub (never shut down), the setting host
+(`initProcessSettingHost`), two account probes, skill contributions, plugin
+agent directories, the agent catalog, the `agentDirectories` watcher
+singleton, rate limiters, external roots (two writers) and the CLI log
+runtime. Process-lifetime `forkDetach` fibers outlive `runtime.dispose` (the
+reprobe at `hostBootstrap.ts:112`, the extension's remote catalog and
+welcome, and the watcher's `forkDetach` in `AgentDirectoryManager.ts`). Four
 hand-registered shutdown chains repeat "close sessions first, runtime last".
 
 ### Target
@@ -1032,7 +1077,9 @@ A new service is added only if a PR shows it deletes more than it adds.
 8. Classify from `ModelError`.
 9. Extend `MODEL_PROVIDER_PLUGINS` (`src/shared/constants/modelProviderPlugins.ts`)
    with the Node-side binding quirks, price tiers and detection (provider names
-   appear in 14 to 23 files each), rather than starting a second table.
+   appear in 14 to 23 files each), rather than starting a second table. It
+   builds on the subscription-provider data #13359 lands (the policies and
+   `subscriptionAccess.ts`), not the per-provider modules it deletes.
 
 Estimated net: −300 to −800 lines, most of it from PR 8.
 
@@ -1158,7 +1205,12 @@ builds on that.
 live entry is notified, and a resumable one is woken by the session-bound
 resume (move 6), which launches through the path move 3 selects
 (`runWithLaunchGuard`), forked into the session scope, with no host port. The caller never chooses, so a run that turns live or idle while the
-delivery is prepared cannot leave the row unwoken. `'deferred'` admits the row
+delivery is prepared cannot leave the row unwoken. The in-memory wake cannot
+commit with the append, so a crash between them is recovered from the log:
+pending input is a fold (queued, minus consumed, minus deferred and not
+released). When a session opens, it wakes each resumable run that has
+pending input and no live claim, through the same session-bound resume. User,
+GitHub and released child input therefore never waits for a manual resume. `'deferred'` admits the row
 durably, wakes nobody, and stays invisible to consumption until `wake`: the
 run entry holds its delivery ids in a deferred set that `take` skips, as the
 manager's `deferred` set does today (`ToolUseFollowUpQueueManager.ts:53-58,287`),
@@ -1212,7 +1264,8 @@ directories, although the published docs promise live rescan
 own inheritance, the launch loader re-reads and re-resolves the YAML, and a
 third parse serves the creator wizard, so an agent can appear in the dropdown
 and fail at launch. Resume re-reads the definition live while the composition
-is pinned. `AgentDirectories` is built three ways.
+is pinned. `AgentDirectories` is built three ways; #13359 makes the extension
+serve it as a runtime layer, as the desktop already does.
 
 ### Target
 
@@ -1239,9 +1292,13 @@ interface AgentSource {
 declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 ```
 
-- **Rebuilt from empty.** Each refresh folds the sources' reads into a fresh
-  catalog. That deletes `agentRegistry.ts`'s epoch, carry-over and "re-remove"
-  special cases rather than wrapping them in a service.
+- **Rebuilt from empty, latest wins.** Each refresh folds the sources' reads
+  into a fresh catalog. Refreshes run through one `FiberHandle` in the
+  catalog's scope, and a new refresh interrupts the in-flight one before it
+  can publish. That replaces the epoch check (`agentRegistry.ts:76-90,185`)
+  with interruption, so a stale read from a watcher, auth change or remote
+  retry cannot publish over a newer one. It also deletes the carry-over and
+  "re-remove" special cases rather than wrapping them in a service.
 - **A remote status.** The remote source records `NotLoaded`, `SignedOut`,
   `Loaded` or `Failed`, so a failed fetch keeps the previous rows instead of
   being recorded as success. A `Failed` source is retried by its own
@@ -1386,6 +1443,11 @@ for each child (inference). The host-neutral controllers still carry
   exist only in the live pipeline. They are added to the fact first, on a
   format bump, so a host opens the right PDF and does not reopen earlier
   rounds' files.
+- **Presentation is checkpointed in the log.** After the host presents a
+  round it publishes `output.presented {runId, roundId}`. An attaching host
+  presents only facts with no `output.presented` row, so a reattached window
+  neither replays earlier rounds nor loses outputs produced while no host was
+  attached.
 
 ### PRs
 
@@ -1467,10 +1529,14 @@ the owner confirms them:
    layer requires `Sessions` and drains in its finalizer, with no
    `beforeSessionsClose` hook and no drain layer.
 7. What do `yolo` and `never` do for plan, proposal, retry and question
-   requests, on every host? Move 9 PR 2 applies the answer in core.
+   requests, on every host? Move 9 PR 2 applies the answer in core. #13359
+   left "one approval-policy authority" open for this decision, which shows
+   that no shared path exists yet.
 8. May a follow-up typed into a stopped, resumable run be admitted and resume
    it on every host (the CLI does this today in host memory), or refused
-   everywhere?
+   everywhere? #13359 left "CLI follow-ups to an interrupted run" open for
+   this decision: core refuses a follow-up to a cancelled run
+   (`getToolUseFollowUpTarget`), so there is no shared path to converge on.
 9. Guard kinds on the tool contract (move 9 PR 4) touch the frozen
    `defineTool` contract: allowed?
 10. Does a run pin its agent definition (setting and prompt) the way it pins
