@@ -357,12 +357,16 @@ function checkConfig(
     // exactly the `skip` row below, and it is reported there.
     Effect.catch((_: PlatformError.PlatformError) => Effect.succeed(false)),
     Effect.map((readable) => {
-      if (context.configWarnings.length > 0) {
+      const warnings = [
+        ...context.configDegradations,
+        ...context.configWarnings,
+      ];
+      if (warnings.length > 0) {
         return warn(
           'config',
           'Config',
           `Workspace config has warnings: ${filePath}`,
-          context.configWarnings.join(' '),
+          warnings.join(' '),
         );
       }
       if (!readable) {

@@ -67,7 +67,7 @@
         {
           "file": "src/utils/core/index.ts",
           "symbol": "jitteredExponentialBackoffMs",
-          "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, jitterFraction = 0.2, ): number {…}"
+          "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, unitRandom: number, jitterFraction = 0.2, ): number {…}"
         }
       ]
     },
@@ -107,19 +107,6 @@
           "file": "packages/cli/src/runtime/logSinks.ts",
           "symbol": "writeRawAndWait",
           "signature": "function writeRawAndWait(key: StreamKey, text: string): Promise<void> {…}"
-        }
-      ]
-    },
-    {
-      "id": "RT-run-resume-command",
-      "candidate": "runResumeCommand as a round trip",
-      "why": "Not a round trip: resume.ts's citty run(ctx) awaits the promise at an R1 entry.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-17-effect-round-trips-and-dual-systems.md#refuted-or-declined-at-implementation",
-      "symbols": [
-        {
-          "file": "packages/cli/src/commands/resumeRun.ts",
-          "symbol": "runResumeCommand",
-          "signature": "export async function runResumeCommand( context: CliContext, id: RunId, ): Promise<number> {…}"
         }
       ]
     },

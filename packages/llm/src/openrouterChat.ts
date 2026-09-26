@@ -4,6 +4,12 @@ import { isDeepStrictEqual } from 'node:util';
 // Third-party imports
 import { Effect, Stream } from 'effect';
 import { z } from 'zod';
+import { OpenRouterCore } from '@openrouter/sdk/core';
+import { chatSend } from '@openrouter/sdk/funcs/chatSend';
+import { HTTPClient } from '@openrouter/sdk/lib/http';
+import { HTTPClientError } from '@openrouter/sdk/models/errors/httpclienterrors';
+import { OpenRouterError } from '@openrouter/sdk/models/errors/openroutererror';
+import { SDKValidationError } from '@openrouter/sdk/models/errors/sdkvalidationerror';
 
 // Local imports - canonical model contract
 import { chatDeltaAccumulator, chatUsageCounts } from './chatStream.js';
@@ -20,15 +26,29 @@ import {
   completedTurn,
 } from './turn.js';
 import { sameModelOrigin } from './protocol.js';
-import { ModelError, enrichModelError, hasErrorField } from './errors.js';
-import { authOrRejectionKind, parseJsonOrModelError } from './errors.js';
+import {
+  ModelError,
+  authOrRejectionKind,
+  enrichModelError,
+  hasErrorField,
+  parseJsonOrModelError,
+  sdkModelError,
+} from './errors.js';
 import {
   chatToolResultMessages,
   parseInboundToolArguments,
   pullStream,
-  sseEvents,
   readerAbortSignal,
 } from './transport.js';
+import type {
+  ChatContentItems,
+  ChatMessages,
+  ChatRequest,
+  ChatStreamChunk,
+  ChatUsage,
+  ReasoningDetailUnion,
+  ReasoningFormat,
+} from '@openrouter/sdk/models';
 
 type OpenRouterTurn = Extract<ResolvedTurn, { protocol: 'openrouter-chat' }>;
 type Part = TurnResult['content'][number];
@@ -36,288 +56,124 @@ type Reasoning = Extract<
   NonNullable<Extract<Part, { kind: 'reasoning' }>['evidence']>,
   { kind: 'openrouter-reasoning' }
 >;
-type Annotation = Extract<Part, { kind: 'file-annotation' | 'url-citation' }>;
+type Detail = NonNullable<Reasoning['details']>[number];
 
-const DetailMetadataSchema = z.strictObject({
-  format: z.string().nullish(),
-  id: z.string().nullish(),
-  index: z.number().optional(),
-});
-const DetailSchema = z
-  .discriminatedUnion('type', [
-    DetailMetadataSchema.extend({
-      type: z.literal('reasoning.text'),
-      text: z.string().nullish(),
-      signature: z.string().nullish(),
-    }),
-    DetailMetadataSchema.extend({
-      type: z.literal('reasoning.summary'),
-      summary: z.string(),
-    }),
-    DetailMetadataSchema.extend({
-      type: z.literal('reasoning.encrypted'),
-      data: z.string(),
-    }),
-    DetailMetadataSchema.extend({
-      type: z.literal('reasoning.server_tool_call'),
-      tool_name: z.string(),
-      tool_call_id: z.string().nullish(),
-      arguments: z.string(),
-      result: z.string(),
-    }),
-  ])
-  .transform((detail): NonNullable<Reasoning['details']>[number] => {
-    switch (detail.type) {
-      case 'reasoning.text': {
-        const { type: _, ...fields } = detail;
-        return { ...fields, kind: 'text' };
-      }
-      case 'reasoning.summary': {
-        const { type: _, ...fields } = detail;
-        return { ...fields, kind: 'summary' };
-      }
-      case 'reasoning.encrypted': {
-        const { type: _, ...fields } = detail;
-        return { ...fields, kind: 'encrypted' };
-      }
-      case 'reasoning.server_tool_call': {
-        const { type: _, tool_name, tool_call_id, ...rest } = detail;
-        return {
-          ...rest,
-          kind: 'server-tool-call',
-          toolName: tool_name,
-          ...(tool_call_id !== undefined ? { toolCallId: tool_call_id } : {}),
-        };
-      }
-    }
-  });
-const FileAnnotationSchema = z
-  .strictObject({
-    type: z.literal('file'),
-    file: z.strictObject({
-      hash: z.string(),
-      name: z.string().optional(),
-      content: z
-        .array(
-          z.discriminatedUnion('type', [
-            z.strictObject({ type: z.literal('text'), text: z.string() }),
-            z.strictObject({
-              type: z.literal('image_url'),
-              image_url: z.strictObject({ url: z.string() }),
-            }),
-          ]),
-        )
-        .optional(),
-    }),
-  })
-  .transform(({ file }): Extract<Annotation, { kind: 'file-annotation' }> => ({
-    kind: 'file-annotation',
-    hash: file.hash,
-    ...(file.name !== undefined ? { name: file.name } : {}),
-    ...(file.content !== undefined
-      ? {
-          content: file.content.map((part) =>
-            part.type === 'text'
-              ? { kind: 'text' as const, text: part.text }
-              : { kind: 'image-url' as const, url: part.image_url.url },
-          ),
-        }
-      : {}),
-    evidence: { kind: 'openrouter-file-annotation' },
-  }));
-const AnnotationSchema = z.union([
-  FileAnnotationSchema,
-  z
-    .strictObject({
-      type: z.literal('url_citation'),
-      url_citation: z.strictObject({
-        url: z.string(),
-        title: z.string().optional(),
-        start_index: z.number().optional(),
-        end_index: z.number().optional(),
-        content: z.string().optional(),
-      }),
-    })
-    .transform(
-      ({
-        url_citation: item,
-      }): Extract<Annotation, { kind: 'url-citation' }> => ({
-        kind: 'url-citation',
-        url: item.url,
-        ...(item.title !== undefined ? { title: item.title } : {}),
-        ...(item.start_index !== undefined
-          ? { startIndex: item.start_index }
-          : {}),
-        ...(item.end_index !== undefined ? { endIndex: item.end_index } : {}),
-        ...(item.content !== undefined ? { content: item.content } : {}),
-        evidence: { kind: 'openrouter-url-citation' },
-      }),
-    ),
-]);
-const CountSchema = z.int().nonnegative().nullish();
-const UsageSchema = z
-  .strictObject({
-    prompt_tokens: CountSchema,
-    completion_tokens: CountSchema,
-    total_tokens: CountSchema,
-    cost: z.number().nullish(),
-    is_byok: z.boolean().optional(),
-    cost_details: z
-      .strictObject({
-        upstream_inference_cost: z.number().nullish(),
-        upstream_inference_prompt_cost: z.number().nullish(),
-        upstream_inference_completions_cost: z.number().nullish(),
-        server_tool_cost: z.number().nullish(),
-      })
-      .nullish(),
-    prompt_tokens_details: z
-      .strictObject({
-        cached_tokens: CountSchema,
-        cache_write_tokens: CountSchema,
-        audio_tokens: CountSchema,
-        video_tokens: CountSchema,
-      })
-      .nullish(),
-    completion_tokens_details: z
-      .strictObject({
-        reasoning_tokens: CountSchema,
-        audio_tokens: CountSchema,
-        accepted_prediction_tokens: CountSchema,
-        rejected_prediction_tokens: CountSchema,
-        image_tokens: CountSchema,
-      })
-      .nullish(),
-    server_tool_use_details: z
-      .strictObject({
-        tool_calls_requested: CountSchema,
-        tool_calls_executed: CountSchema,
-        web_search_requests: CountSchema,
-      })
-      .nullish(),
-  })
-  .transform((usage): NonNullable<TurnResult['usage']> => ({
-    ...chatUsageCounts(usage),
-    providerUsage: {
-      kind: 'openrouter',
-      ...(usage.cost !== undefined ? { cost: usage.cost } : {}),
-      ...(usage.is_byok !== undefined ? { isByok: usage.is_byok } : {}),
-      ...(usage.cost_details !== undefined
-        ? {
-            costDetails:
-              usage.cost_details === null
-                ? null
-                : {
-                    upstreamInferenceCost:
-                      usage.cost_details.upstream_inference_cost,
-                    upstreamInferencePromptCost:
-                      usage.cost_details.upstream_inference_prompt_cost,
-                    upstreamInferenceCompletionsCost:
-                      usage.cost_details.upstream_inference_completions_cost,
-                    serverToolCost: usage.cost_details.server_tool_cost,
-                  },
-          }
-        : {}),
-      ...(usage.prompt_tokens_details !== undefined
-        ? {
-            inputDetails:
-              usage.prompt_tokens_details === null
-                ? null
-                : {
-                    cacheWriteTokens:
-                      usage.prompt_tokens_details.cache_write_tokens,
-                    audioTokens: usage.prompt_tokens_details.audio_tokens,
-                    videoTokens: usage.prompt_tokens_details.video_tokens,
-                  },
-          }
-        : {}),
-      ...(usage.completion_tokens_details !== undefined
-        ? {
-            outputDetails:
-              usage.completion_tokens_details === null
-                ? null
-                : {
-                    audioTokens: usage.completion_tokens_details.audio_tokens,
-                    acceptedPredictionTokens:
-                      usage.completion_tokens_details
-                        .accepted_prediction_tokens,
-                    rejectedPredictionTokens:
-                      usage.completion_tokens_details
-                        .rejected_prediction_tokens,
-                    imageTokens: usage.completion_tokens_details.image_tokens,
-                  },
-          }
-        : {}),
-      ...(usage.server_tool_use_details !== undefined
-        ? {
-            serverToolUseDetails:
-              usage.server_tool_use_details === null
-                ? null
-                : {
-                    toolCallsRequested:
-                      usage.server_tool_use_details.tool_calls_requested,
-                    toolCallsExecuted:
-                      usage.server_tool_use_details.tool_calls_executed,
-                    webSearchRequests:
-                      usage.server_tool_use_details.web_search_requests,
-                  },
-          }
-        : {}),
-    },
-  }));
-const IdentitySchema = z.object({
-  id: z.string().min(1).optional(),
-  model: z.string().min(1).optional(),
-});
-const ChunkSchema = IdentitySchema.extend({
-  usage: UsageSchema.nullish(),
-  service_tier: z.string().nullish(),
-  system_fingerprint: z.string().nullish(),
-  choices: z
-    .array(
-      z.object({
-        index: z.literal(0).nullish(),
-        finish_reason: z
-          .enum(['stop', 'length', 'content_filter', 'tool_calls', 'error'])
-          .nullish(),
-        native_finish_reason: z.string().nullish(),
-        delta: z
-          .strictObject({
-            role: z.literal('assistant').optional(),
-            content: z.string().nullish(),
-            refusal: z.string().nullish(),
-            // Empty image placeholders carry no generated media in this route.
-            images: z.array(z.never()).nullish(),
-            reasoning: z.string().nullish(),
-            reasoning_details: z.array(DetailSchema).nullish(),
-            annotations: z.array(AnnotationSchema).nullish(),
-            tool_calls: z
-              .array(
-                z.strictObject({
-                  index: z.int().nonnegative(),
-                  id: z.string().min(1).nullish(),
-                  type: z.literal('function').nullish(),
-                  function: z
-                    .strictObject({
-                      name: z.string().min(1).nullish(),
-                      arguments: z.string().nullish(),
-                    })
-                    .optional(),
-                }),
-              )
-              .nullish(),
-          })
-          .nullish(),
-        logprobs: z.null().optional(),
-      }),
-    )
-    .max(1),
-});
+/** The finish reasons a completed turn carries; `error` fails the turn. */
+const FINISH_REASONS = [
+  'stop',
+  'length',
+  'content_filter',
+  'tool_calls',
+] as const;
+
+/** An HTTP rejection body, read from the raw text the SDK kept. */
 const ErrorSchema = z.looseObject({
   code: z.union([z.string(), z.number()]).optional(),
   message: z.string(),
-  metadata: z
-    .looseObject({ file_annotations: z.array(FileAnnotationSchema).optional() })
-    .optional(),
+});
+
+/** One SDK reasoning detail as canonical evidence; an unknown one is malformed. */
+const canonicalDetail = (detail: ReasoningDetailUnion): Detail | undefined => {
+  const metadata = {
+    ...('format' in detail && detail.format !== undefined
+      ? { format: detail.format }
+      : {}),
+    ...('id' in detail && detail.id !== undefined ? { id: detail.id } : {}),
+    ...('index' in detail && detail.index !== undefined
+      ? { index: detail.index }
+      : {}),
+  };
+  switch (detail.type) {
+    case 'reasoning.text':
+      return {
+        ...metadata,
+        kind: 'text',
+        ...(detail.text !== undefined ? { text: detail.text } : {}),
+        ...(detail.signature !== undefined
+          ? { signature: detail.signature }
+          : {}),
+      };
+    case 'reasoning.summary':
+      return { ...metadata, kind: 'summary', summary: detail.summary };
+    case 'reasoning.encrypted':
+      return { ...metadata, kind: 'encrypted', data: detail.data };
+    case 'reasoning.server_tool_call':
+      return {
+        ...metadata,
+        kind: 'server-tool-call',
+        toolName: detail.toolName,
+        ...(detail.toolCallId !== undefined
+          ? { toolCallId: detail.toolCallId }
+          : {}),
+        arguments: detail.arguments,
+        result: detail.result,
+      };
+    default:
+      return undefined;
+  }
+};
+
+/** The canonical receipt of one SDK usage object. */
+const canonicalUsage = (
+  usage: ChatUsage,
+): NonNullable<TurnResult['usage']> => ({
+  ...chatUsageCounts({
+    prompt_tokens: usage.promptTokens,
+    completion_tokens: usage.completionTokens,
+    total_tokens: usage.totalTokens,
+    prompt_tokens_details: usage.promptTokensDetails && {
+      cached_tokens: usage.promptTokensDetails.cachedTokens,
+    },
+    completion_tokens_details: usage.completionTokensDetails && {
+      reasoning_tokens: usage.completionTokensDetails.reasoningTokens,
+    },
+  }),
+  providerUsage: {
+    kind: 'openrouter',
+    ...(usage.cost !== undefined ? { cost: usage.cost } : {}),
+    ...(usage.isByok !== undefined ? { isByok: usage.isByok } : {}),
+    ...(usage.costDetails !== undefined
+      ? {
+          costDetails: usage.costDetails && {
+            upstreamInferenceCost: usage.costDetails.upstreamInferenceCost,
+            upstreamInferencePromptCost:
+              usage.costDetails.upstreamInferencePromptCost,
+            upstreamInferenceCompletionsCost:
+              usage.costDetails.upstreamInferenceCompletionsCost,
+            serverToolCost: usage.costDetails.serverToolCost,
+          },
+        }
+      : {}),
+    ...(usage.promptTokensDetails !== undefined
+      ? {
+          inputDetails: usage.promptTokensDetails && {
+            cacheWriteTokens: usage.promptTokensDetails.cacheWriteTokens,
+            audioTokens: usage.promptTokensDetails.audioTokens,
+            videoTokens: usage.promptTokensDetails.videoTokens,
+          },
+        }
+      : {}),
+    ...(usage.completionTokensDetails !== undefined
+      ? {
+          outputDetails: usage.completionTokensDetails && {
+            audioTokens: usage.completionTokensDetails.audioTokens,
+            acceptedPredictionTokens:
+              usage.completionTokensDetails.acceptedPredictionTokens,
+            rejectedPredictionTokens:
+              usage.completionTokensDetails.rejectedPredictionTokens,
+          },
+        }
+      : {}),
+    ...(usage.serverToolUseDetails !== undefined
+      ? {
+          serverToolUseDetails: usage.serverToolUseDetails && {
+            toolCallsRequested: usage.serverToolUseDetails.toolCallsRequested,
+            toolCallsExecuted: usage.serverToolUseDetails.toolCallsExecuted,
+            webSearchRequests: usage.serverToolUseDetails.webSearchRequests,
+          },
+        }
+      : {}),
+  },
 });
 
 // Reused at preparation and execution so rehydration cannot bypass support checks.
@@ -340,7 +196,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       message:
         'The selected OpenRouter route does not support these resolved controls.',
     });
-  const messages: Record<string, unknown>[] = [];
+  const messages: ChatMessages[] = [];
   if (turn.system !== undefined)
     messages.push({ role: 'system', content: turn.system });
   let calls: Extract<Part, { kind: 'local-call' }>[] = [];
@@ -352,13 +208,17 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         'OpenRouter tool results require materialized text.',
       );
       for (const result of toolResults) {
-        messages.push({ role: 'tool', ...result });
+        messages.push({
+          role: 'tool',
+          toolCallId: result.tool_call_id,
+          content: result.content,
+        });
       }
       continue;
     }
     calls = [];
     if (message.role === 'user') {
-      const content: Record<string, unknown>[] = [];
+      const content: ChatContentItems[] = [];
       for (const part of message.content) {
         if (part.kind === 'text')
           content.push({ type: 'text', text: part.text });
@@ -374,7 +234,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         ) {
           content.push({
             type: 'image_url',
-            image_url: {
+            imageUrl: {
               url: `data:${part.mimeType};base64,${part.base64}`,
               ...(part.detail !== undefined ? { detail: part.detail } : {}),
             },
@@ -385,7 +245,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         ) {
           content.push({
             type: 'file',
-            file: { file_data: `data:${part.mimeType};base64,${part.base64}` },
+            file: { fileData: `data:${part.mimeType};base64,${part.base64}` },
           });
         } else if (part.kind === 'audio' && configuration.supportsAudioInput) {
           const formats: Record<string, string> = {
@@ -406,7 +266,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
             });
           content.push({
             type: 'input_audio',
-            input_audio: { data: part.base64, format },
+            inputAudio: { data: part.base64, format },
           });
         } else
           return yield* new ModelError({
@@ -421,15 +281,13 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
     let text: string | undefined;
     let refusal: string | undefined;
     let reasoning: Reasoning | undefined;
-    const annotations: Record<string, unknown>[] = [];
     for (const part of message.content) {
       if (
         part.kind === 'message' &&
         part.evidence === undefined &&
         text === undefined &&
         refusal === undefined &&
-        calls.length === 0 &&
-        annotations.length === 0
+        calls.length === 0
       ) {
         text = part.content
           .filter((child) => child.kind === 'text')
@@ -446,55 +304,12 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         reasoning === undefined &&
         text === undefined &&
         calls.length === 0 &&
-        annotations.length === 0 &&
         sameModelOrigin(message.origin, turn)
       ) {
         reasoning = part.evidence;
-      } else if (
-        part.kind === 'local-call' &&
-        part.evidence === undefined &&
-        annotations.length === 0
-      )
+      } else if (part.kind === 'local-call' && part.evidence === undefined)
         calls.push(part);
-      else if (
-        part.kind === 'file-annotation' &&
-        sameModelOrigin(message.origin, turn)
-      ) {
-        annotations.push({
-          type: 'file',
-          file: {
-            hash: part.hash,
-            ...(part.name !== undefined ? { name: part.name } : {}),
-            ...(part.content !== undefined
-              ? {
-                  content: part.content.map((item) =>
-                    item.kind === 'text'
-                      ? { type: 'text', text: item.text }
-                      : { type: 'image_url', image_url: { url: item.url } },
-                  ),
-                }
-              : {}),
-          },
-        });
-      } else if (
-        part.kind === 'url-citation' &&
-        sameModelOrigin(message.origin, turn)
-      ) {
-        annotations.push({
-          type: 'url_citation',
-          url_citation: {
-            url: part.url,
-            ...(part.title !== undefined ? { title: part.title } : {}),
-            ...(part.startIndex !== undefined
-              ? { start_index: part.startIndex }
-              : {}),
-            ...(part.endIndex !== undefined
-              ? { end_index: part.endIndex }
-              : {}),
-            ...(part.content !== undefined ? { content: part.content } : {}),
-          },
-        });
-      } else
+      else
         return yield* new ModelError({
           kind: 'unsupported',
           message:
@@ -508,31 +323,42 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       ...(reasoning?.plain !== undefined ? { reasoning: reasoning.plain } : {}),
       ...(reasoning?.details !== undefined
         ? {
-            reasoning_details:
-              reasoning.details === null
-                ? null
-                : reasoning.details.map((detail) => {
-                    const { kind, ...fields } = detail;
-                    if (detail.kind === 'server-tool-call') {
-                      const { kind: _, toolName, toolCallId, ...rest } = detail;
-                      return {
-                        ...rest,
-                        type: 'reasoning.server_tool_call',
-                        tool_name: toolName,
-                        ...(toolCallId !== undefined
-                          ? { tool_call_id: toolCallId }
-                          : {}),
-                      };
-                    }
-                    return { ...fields, type: `reasoning.${kind}` };
-                  }),
+            reasoningDetails: reasoning.details.map(
+              (detail): ReasoningDetailUnion => {
+                // The SDK brands a format it does not list; the wire is a string.
+                const format = detail.format as
+                  ReasoningFormat | null | undefined;
+                switch (detail.kind) {
+                  case 'text': {
+                    const { kind: _, ...fields } = detail;
+                    return { ...fields, format, type: 'reasoning.text' };
+                  }
+                  case 'summary': {
+                    const { kind: _, ...fields } = detail;
+                    return { ...fields, format, type: 'reasoning.summary' };
+                  }
+                  case 'encrypted': {
+                    const { kind: _, ...fields } = detail;
+                    return { ...fields, format, type: 'reasoning.encrypted' };
+                  }
+                  case 'server-tool-call': {
+                    const { kind: _, ...fields } = detail;
+                    return {
+                      ...fields,
+                      format,
+                      type: 'reasoning.server_tool_call',
+                    };
+                  }
+                }
+              },
+            ),
           }
         : {}),
       ...(calls.length > 0
         ? {
-            tool_calls: calls.map((call) => ({
+            toolCalls: calls.map((call) => ({
               id: call.providerCallId,
-              type: 'function',
+              type: 'function' as const,
               function: {
                 name: call.name,
                 arguments: call.argumentsText,
@@ -540,14 +366,13 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
             })),
           }
         : {}),
-      ...(annotations.length > 0 ? { annotations } : {}),
     });
   }
   return {
     model: turn.requestedModel,
     messages,
     stream: true,
-    max_completion_tokens: controls.maxOutputTokens,
+    maxCompletionTokens: controls.maxOutputTokens,
     ...(controls.temperature !== null
       ? { temperature: controls.temperature }
       : {}),
@@ -555,12 +380,12 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
       ? { reasoning: { effort: controls.effort } }
       : {}),
     ...(controls.stopSequences.length > 0
-      ? { stop: controls.stopSequences }
+      ? { stop: [...controls.stopSequences] }
       : {}),
     ...(turn.tools.length > 0
       ? {
           tools: turn.tools.map((tool) => ({
-            type: 'function',
+            type: 'function' as const,
             function: {
               name: tool.name,
               description: tool.description,
@@ -568,19 +393,23 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
               strict: false,
             },
           })),
-          tool_choice:
+          toolChoice:
             controls.toolChoice === 'auto'
-              ? 'auto'
+              ? ('auto' as const)
               : {
-                  type: 'function',
+                  type: 'function' as const,
                   function: { name: controls.toolChoice.name },
                 },
         }
       : {}),
-  };
+  } satisfies ChatRequest & { stream: true };
 });
 
-/** Direct OpenRouter HTTP/SSE; selected credentials and transport are explicit. */
+/**
+ * OpenRouter Chat through `@openrouter/sdk`; selected credentials and transport
+ * are explicit. The SDK never retries: the run's retry gate owns every retry,
+ * and the SDK's default backoff would hold a 5XX for up to an hour.
+ */
 export function openrouterChatModel(
   configuration: OpenRouterConfiguration,
   transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
@@ -597,8 +426,6 @@ export function openrouterChatModel(
     deployment: config.deployment,
     codecVersion: 1 as const,
   });
-  const endpoint = new URL(config.deployment.endpoint);
-  endpoint.pathname = `${endpoint.pathname.replace(/\/$/, '')}/chat/completions`;
   const http = transport.fetch ?? globalThis.fetch;
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.prepareTurn')(
     function* (request) {
@@ -670,12 +497,77 @@ export function openrouterChatModel(
           requestId,
           model: returnedModel ?? config.requestedModel,
         });
+      // The SDK's parse of one streamed event throws a ZodError; anything else
+      // a body read raises is the connection.
+      const streamFailure = (cause: unknown) =>
+        cause instanceof z.ZodError
+          ? new ModelError({
+              kind: 'malformed-output',
+              message:
+                'OpenRouter returned unsupported or malformed stream content.',
+              cause,
+            })
+          : transportFailure(cause);
       const transportFailure = (cause: unknown) =>
         new ModelError({
           kind: 'transport',
           message: 'The OpenRouter connection failed.',
           cause,
         });
+      /** One SDK request failure; any OpenRouterError is a reply, not ours. */
+      const requestFailure = Effect.fn('llm.openrouterRequestFailure')(
+        function* (error: unknown) {
+          if (!(error instanceof OpenRouterError))
+            return yield* error instanceof SDKValidationError
+              ? new ModelError({
+                  kind: 'invalid-request',
+                  message: 'OpenRouter refused to encode this request.',
+                  cause: error,
+                })
+              : transportFailure(
+                  error instanceof HTTPClientError ? error.cause : error,
+                );
+          const status = error.statusCode;
+          if (status < 400)
+            return yield* new ModelError({
+              kind: 'malformed-output',
+              message: 'OpenRouter returned an unexpected response.',
+              status,
+              cause: error,
+            });
+          // Status, request id and any retry-after delay come from the reply;
+          // the kind and message come from the raw body the SDK kept.
+          const rejection = sdkModelError(
+            error,
+            {
+              status,
+              headers: error.headers,
+              requestId: error.headers.get('x-request-id'),
+            },
+            `OpenRouter rejected the request (HTTP ${status}).`,
+          );
+          const raw = yield* parseJsonOrModelError(error.body, (cause) =>
+            enrichModelError(rejection, {
+              kind: 'provider-rejection',
+              message: `OpenRouter rejected the request (HTTP ${status}).`,
+              cause,
+            }),
+          );
+          const payload = hasErrorField(raw) ? raw.error : raw;
+          const parsed = ErrorSchema.safeParse(payload);
+          return yield* parsed.success
+            ? enrichModelError(rejection, {
+                kind: authOrRejectionKind(status, parsed.data.code),
+                message: parsed.data.message,
+                cause: payload,
+              })
+            : enrichModelError(rejection, {
+                kind: 'malformed-output',
+                message: 'OpenRouter returned a malformed error receipt.',
+                cause: payload,
+              });
+        },
+      );
       return Stream.unwrap(
         Effect.gen(function* () {
           if (
@@ -687,194 +579,120 @@ export function openrouterChatModel(
               message:
                 'The prepared turn belongs to another protocol or deployment.',
             });
-          const parameters = yield* requestBody(turn, config);
-          let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
+          const chatRequest = yield* requestBody(turn, config);
+          let reader: ReadableStreamDefaultReader<ChatStreamChunk> | undefined =
             undefined;
           const signal = yield* readerAbortSignal(() => reader);
-          const response = yield* Effect.tryPromise({
+          // One client per request: its fetcher reads this response's headers,
+          // and hands fetch the scope's signal itself. The SDK's `Request`
+          // only follows that signal through a controller the runtime holds
+          // weakly, so a collected clone would never see the abort.
+          const client = new OpenRouterCore({
+            apiKey: transport.apiKey,
+            serverURL: config.deployment.endpoint,
+            retryConfig: { strategy: 'none' },
+            httpClient: new HTTPClient({
+              fetcher: async (request, init) => {
+                const response = await http(request, { ...init, signal });
+                requestId = response.headers.get('x-request-id') ?? undefined;
+                responseId =
+                  response.headers.get('x-generation-id') ?? undefined;
+                return response;
+              },
+            }),
+          });
+          const result = yield* Effect.tryPromise({
             try: () =>
-              http(endpoint.toString(), {
-                method: 'POST',
-                signal,
-                headers: {
-                  Authorization: `Bearer ${transport.apiKey}`,
-                  'Content-Type': 'application/json',
-                  Accept: 'text/event-stream',
-                  'X-Title': 'TeXRA.ai',
-                },
-                body: JSON.stringify(parameters),
-              }),
+              chatSend(
+                client,
+                { chatRequest },
+                { signal, headers: { 'X-Title': 'TeXRA.ai' } },
+              ),
             catch: transportFailure,
           });
-          requestId = response.headers.get('x-request-id') ?? undefined;
-          responseId = response.headers.get('x-generation-id') ?? undefined;
-          if (response.body === null)
+          if (!result.ok) return yield* requestFailure(result.error);
+          if (!(result.value instanceof ReadableStream))
             return yield* new ModelError({
-              kind: response.ok ? 'malformed-output' : 'provider-rejection',
-              message: 'OpenRouter returned no response body.',
-              status: response.status,
+              kind: 'malformed-output',
+              message: 'OpenRouter answered a streamed request without SSE.',
             });
-          reader = response.body.getReader();
+          reader = result.value.getReader();
           const body = reader;
-          const failure = (payload: unknown, status?: number) => {
-            const parsedError = ErrorSchema.safeParse(payload);
-            if (!parsedError.success)
-              return new ModelError({
-                kind: 'malformed-output',
-                message: 'OpenRouter returned a malformed error receipt.',
-                cause: payload,
-                status,
-              });
-            const error = parsedError.data;
-            return new ModelError({
-              kind: authOrRejectionKind(status, error.code),
-              message: error.message,
-              status,
-              cause: payload,
-              ...(error.metadata?.file_annotations !== undefined
-                ? {
-                    providerEvidence: {
-                      kind: 'openrouter' as const,
-                      origin,
-                      fileAnnotations: error.metadata.file_annotations,
-                    },
-                  }
-                : {}),
-            });
-          };
-          // Reads and classification stay inside the acquired scope: primary failures
-          // and distinct cleanup defects are combined by Effect, not reconstructed.
-          const bytes = pullStream(() => body.read(), transportFailure);
-          if (!response.ok)
-            return Stream.fromEffect(
-              Effect.gen(function* () {
-                const text = yield* Stream.runFold(
-                  bytes.pipe(Stream.decodeText),
-                  () => '',
-                  (all, chunk) => all + chunk,
-                );
-                const raw = yield* parseJsonOrModelError(
-                  text,
-                  (cause) =>
-                    new ModelError({
-                      kind: 'provider-rejection',
-                      message: `OpenRouter rejected the request (HTTP ${response.status}).`,
-                      status: response.status,
-                      cause,
-                    }),
-                );
-                return yield* failure(
-                  hasErrorField(raw) ? raw.error : raw,
-                  response.status,
-                );
-              }).pipe(Effect.mapError(enrich)),
-            );
 
-          let observedIdentity = false;
           let fingerprint: string | null = null;
-          let finished:
-            | Exclude<
-                z.infer<typeof ChunkSchema>['choices'][number]['finish_reason'],
-                null | undefined
-              >
-            | undefined;
-          let nativeFinishReason: string | null | undefined;
+          let finished: (typeof FINISH_REASONS)[number] | undefined;
           let usage: TurnResult['usage'] = null;
           let serviceTier: string | null | undefined;
           let plain: string | null | undefined;
-          let details:
-            NonNullable<Reasoning['details']>[number][] | null | undefined;
-          let sentinel = false;
+          let details: Detail[] | undefined;
+          let observedIdentity = false;
           const assistant = chatDeltaAccumulator();
-          const annotations: Annotation[] = [];
-          const progress = sseEvents(
-            bytes,
-            'OpenRouter returned malformed SSE.',
-          ).pipe(
-            Stream.mapEffect((event) =>
+          const progress = pullStream(() => body.read(), streamFailure).pipe(
+            Stream.mapEffect((chunk) =>
               Effect.gen(function* () {
-                if (event.data === '[DONE]') {
-                  sentinel = true;
-                  return [];
-                }
-                const raw = yield* parseJsonOrModelError(
-                  event.data,
-                  (cause) =>
-                    new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter returned malformed stream JSON.',
-                      cause,
-                    }),
-                );
-                const identity = IdentitySchema.safeParse(raw);
-                if (identity.success) {
-                  if (
-                    (identity.data.id !== undefined &&
-                      responseId !== undefined &&
-                      identity.data.id !== responseId) ||
-                    (identity.data.model !== undefined &&
-                      returnedModel !== undefined &&
-                      identity.data.model !== returnedModel)
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter changed the response identity.',
-                    });
-                  responseId ??= identity.data.id;
-                  returnedModel ??= identity.data.model;
-                }
-                if (event.event === 'error' || hasErrorField(raw))
-                  return yield* failure(hasErrorField(raw) ? raw.error : raw);
-                const parsedChunk = ChunkSchema.safeParse(raw);
-                if (!parsedChunk.success)
+                if (
+                  (responseId !== undefined && chunk.id !== responseId) ||
+                  (returnedModel !== undefined && chunk.model !== returnedModel)
+                )
                   return yield* new ModelError({
                     kind: 'malformed-output',
-                    message:
-                      'OpenRouter returned unsupported or malformed stream content.',
-                    cause: parsedChunk.error,
+                    message: 'OpenRouter changed the response identity.',
                   });
-                const chunk = parsedChunk.data;
-                if (chunk.service_tier !== undefined) {
+                // An empty identity is no identity, as the canonical result spells it.
+                responseId ??= chunk.id === '' ? undefined : chunk.id;
+                returnedModel ??= chunk.model === '' ? undefined : chunk.model;
+                if (chunk.error !== undefined)
+                  return yield* new ModelError({
+                    kind: authOrRejectionKind(chunk.error.code),
+                    message: chunk.error.message,
+                    cause: chunk.error,
+                  });
+                if (chunk.choices.length > 1)
+                  return yield* new ModelError({
+                    kind: 'malformed-output',
+                    message: 'OpenRouter returned more than one choice.',
+                  });
+                if (chunk.serviceTier !== undefined) {
                   if (
                     serviceTier != null &&
-                    chunk.service_tier != null &&
-                    serviceTier !== chunk.service_tier
+                    chunk.serviceTier != null &&
+                    serviceTier !== chunk.serviceTier
                   )
                     return yield* new ModelError({
                       kind: 'malformed-output',
                       message: 'OpenRouter changed the reported service tier.',
                     });
-                  if (serviceTier === undefined || chunk.service_tier !== null)
-                    serviceTier = chunk.service_tier;
+                  if (serviceTier === undefined || chunk.serviceTier !== null)
+                    serviceTier = chunk.serviceTier;
                 }
-                if (chunk.system_fingerprint != null) {
+                if (chunk.systemFingerprint !== undefined) {
                   if (
                     fingerprint !== null &&
-                    fingerprint !== chunk.system_fingerprint
+                    fingerprint !== chunk.systemFingerprint
                   )
                     return yield* new ModelError({
                       kind: 'malformed-output',
                       message: 'OpenRouter changed the model fingerprint.',
                     });
-                  fingerprint = chunk.system_fingerprint;
+                  fingerprint = chunk.systemFingerprint;
                 }
-                if (chunk.usage != null) {
-                  if (usage !== null && !isDeepStrictEqual(usage, chunk.usage))
+                if (chunk.usage !== undefined) {
+                  const receipt = canonicalUsage(chunk.usage);
+                  if (usage !== null && !isDeepStrictEqual(usage, receipt))
                     return yield* new ModelError({
                       kind: 'malformed-output',
                       message:
                         'OpenRouter returned contradictory usage receipts.',
                     });
-                  usage = chunk.usage;
+                  usage = receipt;
                 }
                 const choice = chunk.choices[0];
-                if (choice?.finish_reason === 'error')
+                if (choice?.finishReason === 'error')
                   return yield* new ModelError({
                     kind: 'provider-rejection',
                     message: 'OpenRouter reported a failed generation.',
-                    cause: raw,
+                    cause: chunk,
                   });
-                const delta = choice?.delta;
                 const events: TurnEvent[] = [];
                 if (responseId !== undefined && !observedIdentity) {
                   observedIdentity = true;
@@ -885,14 +703,35 @@ export function openrouterChatModel(
                     returnedModel: returnedModel ?? null,
                   });
                 }
-                if (delta !== undefined && delta !== null) {
+                if (choice !== undefined) {
+                  const delta = choice.delta;
+                  if (
+                    choice.index !== 0 ||
+                    delta.audio !== undefined ||
+                    choice.logprobs != null
+                  )
+                    return yield* new ModelError({
+                      kind: 'malformed-output',
+                      message:
+                        'OpenRouter returned unsupported or malformed stream content.',
+                    });
+                  const received: Detail[] = [];
+                  for (const detail of delta.reasoningDetails ?? []) {
+                    const canonical = canonicalDetail(detail);
+                    if (canonical === undefined)
+                      return yield* new ModelError({
+                        kind: 'malformed-output',
+                        message:
+                          'OpenRouter returned an unknown or malformed reasoning detail.',
+                      });
+                    received.push(canonical);
+                  }
                   const hasContent =
                     (delta.content != null && delta.content !== '') ||
                     (delta.refusal != null && delta.refusal !== '') ||
                     (delta.reasoning != null && delta.reasoning !== '') ||
-                    (delta.reasoning_details?.length ?? 0) > 0 ||
-                    (delta.tool_calls?.length ?? 0) > 0 ||
-                    (delta.annotations?.length ?? 0) > 0;
+                    received.length > 0 ||
+                    (delta.toolCalls?.length ?? 0) > 0;
                   if (
                     hasContent &&
                     (!observedIdentity || finished !== undefined)
@@ -906,17 +745,13 @@ export function openrouterChatModel(
                     plain = (plain ?? '') + delta.reasoning;
                   else if (delta.reasoning === null && plain === undefined)
                     plain = null;
-                  if (Array.isArray(delta.reasoning_details)) {
+                  if (delta.reasoningDetails !== undefined) {
                     details ??= [];
-                    details.push(...delta.reasoning_details);
-                  } else if (
-                    delta.reasoning_details === null &&
-                    details === undefined
-                  )
-                    details = null;
+                    details.push(...received);
+                  }
                   // Display one representation; both originals remain in evidence.
-                  const visibleReasoning = delta.reasoning_details?.length
-                    ? delta.reasoning_details
+                  const visibleReasoning = received.length
+                    ? received
                         .map((detail) => {
                           if (detail.kind === 'text') return detail.text ?? '';
                           if (detail.kind === 'summary') return detail.summary;
@@ -931,58 +766,34 @@ export function openrouterChatModel(
                       refusal: delta.refusal,
                     }),
                   );
-                  for (const annotation of delta.annotations ?? []) {
-                    if (annotation.kind === 'file-annotation') {
-                      const previous = annotations.find(
-                        (item) =>
-                          item.kind === 'file-annotation' &&
-                          item.hash === annotation.hash,
-                      );
-                      if (previous !== undefined) {
-                        if (!isDeepStrictEqual(previous, annotation))
-                          return yield* new ModelError({
-                            kind: 'malformed-output',
-                            message:
-                              'OpenRouter changed a file annotation with the same hash.',
-                          });
-                        continue;
-                      }
-                    }
-                    annotations.push(annotation);
-                  }
-                  if ((delta.tool_calls?.length ?? 0) > 0)
+                  if ((delta.toolCalls?.length ?? 0) > 0)
                     events.push(...assistant.closePhase());
                   yield* assistant.absorbToolCalls(
-                    delta.tool_calls,
+                    delta.toolCalls?.map((call) => ({
+                      index: call.index,
+                      id: call.id,
+                      type: call.type === undefined ? undefined : 'function',
+                      function: call.function,
+                    })),
                     'OpenRouter changed a local tool-call identity.',
                   );
-                }
-                if (choice?.native_finish_reason !== undefined) {
-                  if (
-                    nativeFinishReason != null &&
-                    choice.native_finish_reason !== null &&
-                    nativeFinishReason !== choice.native_finish_reason
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter changed the native finish reason.',
-                    });
-                  if (
-                    nativeFinishReason === undefined ||
-                    choice.native_finish_reason !== null
-                  )
-                    nativeFinishReason = choice.native_finish_reason;
-                }
-                if (choice?.finish_reason != null) {
-                  if (
-                    finished !== undefined &&
-                    finished !== choice.finish_reason
-                  )
-                    return yield* new ModelError({
-                      kind: 'malformed-output',
-                      message: 'OpenRouter changed the finish reason.',
-                    });
-                  finished = choice.finish_reason;
+                  if (choice.finishReason !== null) {
+                    const reason = FINISH_REASONS.find(
+                      (known) => known === choice.finishReason,
+                    );
+                    if (reason === undefined)
+                      return yield* new ModelError({
+                        kind: 'malformed-output',
+                        message:
+                          'OpenRouter returned an unknown finish reason.',
+                      });
+                    if (finished !== undefined && finished !== reason)
+                      return yield* new ModelError({
+                        kind: 'malformed-output',
+                        message: 'OpenRouter changed the finish reason.',
+                      });
+                    finished = reason;
+                  }
                 }
                 return events;
               }),
@@ -991,15 +802,11 @@ export function openrouterChatModel(
           );
           const completion = Stream.fromEffect(
             Effect.gen(function* () {
-              if (
-                !sentinel ||
-                finished === undefined ||
-                responseId === undefined
-              )
+              if (finished === undefined || responseId === undefined)
                 return yield* new ModelError({
                   kind: 'malformed-output',
                   message:
-                    'OpenRouter ended without an identified terminal result and DONE marker.',
+                    'OpenRouter ended without an identified terminal result.',
                 });
               const toolCalls = assistant.toolCalls();
               if ((finished === 'tool_calls') !== toolCalls.length > 0)
@@ -1044,7 +851,6 @@ export function openrouterChatModel(
                   argumentsText: call.arguments,
                 });
               }
-              content.push(...annotations);
               if (serviceTier !== undefined)
                 usage = {
                   ...(usage ?? chatUsageCounts({})),
@@ -1066,14 +872,6 @@ export function openrouterChatModel(
                 modelFingerprint: fingerprint,
                 content,
                 finishReason,
-                ...(nativeFinishReason !== undefined
-                  ? {
-                      finishEvidence: {
-                        kind: 'openrouter',
-                        nativeFinishReason,
-                      },
-                    }
-                  : {}),
                 usage,
               });
               if (!result.success)

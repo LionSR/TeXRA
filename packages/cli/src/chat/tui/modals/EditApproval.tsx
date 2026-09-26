@@ -60,7 +60,7 @@ export function editApprovalDiffRowsBudget({
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
-  const title = `Apply edit to ${props.payload.data.path}?`;
+  const title = `Apply edit to ${props.payload.data.relativePath}?`;
   return (
     <ConfirmCard
       borderStyle="double"

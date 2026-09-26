@@ -1,18 +1,16 @@
-import { defineCommand } from 'citty';
+import type { RunId } from '@shared/schemas';
 
-import { CliExitCode } from '../runtime/exitCodes';
+import { CliUsageError } from '../runtime/cliContext';
 import { parseCliHistoryId } from '../runtime/history';
-import { writeTextStderr } from '../runtime/logSinks';
 import { runResumeCommand } from './resumeRun';
 
-import { contextFromArgs } from './_helpers/context';
-import { setExitCode } from './_helpers/exitCode';
+import { defineCliCommand } from './_helpers/defineCliCommand';
 import { AGENT_RUN_GLOBAL_ARGS } from './_helpers/globalArgs';
 
 // Resume is dual-mode, so it takes the full run flag set: a tool-use session
 // reopens the interactive chat, while a workflow run resumes headless like
 // `texra run`.
-export const resumeCommand = defineCommand({
+export const resumeCommand = defineCliCommand({
   meta: {
     name: 'resume',
     description: 'Continue (resume) a stored tool-use or workflow session',
@@ -25,14 +23,11 @@ export const resumeCommand = defineCommand({
       description: 'Run id from `texra history list`',
     },
   },
-  async run(ctx) {
-    const id = parseCliHistoryId(ctx.args.id);
-    if (!id) {
-      writeTextStderr(`Invalid run id: ${ctx.args.id}`);
-      setExitCode(CliExitCode.Usage);
-      return;
+  setup(ctx) {
+    if (!parseCliHistoryId(ctx.args.id)) {
+      throw new CliUsageError(`Invalid run id: ${ctx.args.id}`);
     }
-    const context = await contextFromArgs(ctx.args, ctx.rawArgs);
-    setExitCode(await runResumeCommand(context, id));
   },
+  // `setup` refused every id that does not parse.
+  run: (context, ctx) => runResumeCommand(context, ctx.args.id as RunId),
 });

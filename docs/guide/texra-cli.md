@@ -37,6 +37,14 @@ texra agents list
 texra config
 ```
 
+Run `texra` with no model connected and the chat still opens, with a
+**Connect a model** panel in front: sign in with a ChatGPT or Grok
+subscription, or add a provider API key. A message typed before you connect
+is sent as soon as you do. On your first run TeXRA then hands the chat to the
+setup assistant and opens `/agent`, where you pick an agent or a **team** (a
+preset such as Lean Project, led by its orchestrator); `/agent` stays
+available until your first message in any new chat.
+
 For a guided first run, use `texra setup`. It walks you through sign-in
 (TeXRA account, ChatGPT subscription, or an API key), checks your
 environment, shows the agent roster, and starts your first task:

@@ -222,7 +222,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // A run grant in force: the header's read-only chip.
+  // Two run grants on: the header's switches (the ⋯ menu's at 420px).
   'ext-auto-approve': () => {
     const view = fanOutView();
     view.policy.set(CHILD, {

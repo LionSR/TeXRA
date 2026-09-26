@@ -309,9 +309,11 @@ export function installCliProcessRuntime(
  * after the disposal settles, so a write racing the teardown still reaches
  * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
- * Registered by `initCliPlatform` as the last shutdown step and called
- * directly by the same root when a failed init must not leave the runtime
- * installed with nothing to dispose it.
+ * Registered by `initCliPlatform` as the last shutdown step, and run by the
+ * process entry (`bin/texra.ts`) for whatever runtime is still installed —
+ * which is how a failed init's runtime goes. Never from a fiber on the
+ * runtime being disposed: that disposal waits for the fiber asking for it,
+ * and the process exits with its top-level await unsettled.
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {

@@ -8,9 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
-  documents and research files are unchanged. History a different build
-  wrote is cleared the first time this build opens that workspace, and
-  TeXRA says so when it happens.
+  documents and research files are unchanged. History an older build wrote
+  is moved aside (`texra.db.format<N>`) rather than read, and TeXRA says so
+  when it happens; a store written by a newer TeXRA is never opened or
+  deleted by an older one.
 - **1.0 preview builds start from a clean slate** — a preview does not carry
   over session history or other application state from TeXRA 0.40 or earlier,
   and going back to 0.40 does not bring what the preview created. Previews
@@ -79,7 +80,38 @@ All notable changes to this project will be documented in this file.
   completed are reused once the lead reruns the rewritten script under the
   same name.
 
+- **OpenRouter models now run through the official OpenRouter SDK, with
+  fewer response details.** Requests over the OpenRouter route
+  (`openrouter-chat`) now go through `@openrouter/sdk`. Streaming text,
+  reasoning, tool calls, usage and cost are unchanged. The SDK does not carry
+  some details the previous client read, so:
+  - OpenRouter replies no longer include file annotations (the parsed-PDF
+    cache OpenRouter returns) or URL citations, and earlier annotations are
+    no longer sent back on the next turn, so OpenRouter may parse a PDF again.
+  - The provider's own finish reason (`native_finish_reason`) is no longer
+    recorded.
+  - A stream that is cut off after the model has finished but before the
+    closing `[DONE]` marker is accepted as complete, and a usage chunk that
+    never arrived leaves the turn without usage or cost.
+  - An error that arrives mid-stream keeps its message only when its code is
+    a number; a string code or unexpected error details fail the turn as
+    malformed output instead.
+  - Unknown fields in a streamed chunk are ignored rather than rejected. A
+    chunk that breaks the SDK's schema, such as a `null` where it expects an
+    absent field, fails the turn as malformed output.
+
+  Saved session history from an earlier build is cleared once, since the
+  stored shape of a model reply changed.
+
 ### Features
+
+- **A message you send after stopping a tool is answered first.** In 0.40.10,
+  stopping a run while a tool such as `bash` was running ended the turn there.
+  Now the stop is kept on record: the stopped call is reported to the model
+  as skipped (it may have started, and nothing was recorded), and the message
+  you send next arrives in the same request, so the model reads your new
+  instruction before deciding whether to run anything again. Resuming a
+  stopped run without a new message still finishes the stopped turn.
 
 - **`texra run` results record what the run ran with** — the JSON and NDJSON
   result carries `compositionHash`, the hash of the tool composition the run
@@ -157,6 +189,20 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   different account, or no browser opens, copy the link into another browser.
   A failed browser launch no longer ends the sign-in, and under WSL the CLI
   opens the Windows browser.
+
+- **Beamer slides are no longer cut short** — when a model left its last
+  output document unclosed, a frame overlay such as `\begin{frame}<beamer>`
+  was read as markup and the slides were truncated at that point. The
+  document now runs to the end of the output and overlays stay as LaTeX.
+- **No false "Missing output files detected" notice** — agents that declare
+  their output file, such as paper2slide and ocr, reported it missing after
+  every round even when the round wrote it.
+- **Polish without an instruction polishes** — the polish agent returned the
+  paper unchanged when no instruction was given; it now improves clarity,
+  flow and readability of the whole paper by default.
+- **Read-only path refusals show the full path** — the message an agent gets
+  when it tries to write inside a read-only folder no longer drops the
+  leading `/` of an absolute path.
 - **Turning telemetry off now stops all usage reporting** — rounds run on a
   ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
   out, on the grounds that they metered a plan cap. Nothing has enforced
@@ -352,6 +398,11 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   agents and keeps the remote ones already loaded. A run that names an agent
   the catalog has not seen yet rescans the local directories once before it
   reports the agent as missing.
+- **A plan's summary is its first line of prose, not a raw heading.** A plan
+  that opened with a markdown heading such as `### Objective` showed that
+  heading, hash marks included, as its one-line summary in the terminal's
+  plan panel and in the plan notice an orchestrator receives. A heading is
+  used only when the plan has no other text, without its marks.
 
 ### Extension (VS Code)
 
@@ -426,12 +477,15 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   card at a time (setup, then "No LaTeX files yet") and at most one warning
   above the composer; the "TeXRA account — Sign in" card is gone (sign in
   from Settings). A missing tool is named in one sentence that says what
-  TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
-  toggles are replaced by an "Auto-approving …" chip that appears only while
-  a grant from an approval card is on; click it to go back to asking. Open
+  TeXRA can't do without it. Open
   dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
   gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
+- **Restored: the auto-approve switches in the run header.** A live run's
+  header has switches for edits, commands and agent work again, so you can
+  turn auto-approval on mid-run before stepping away instead of waiting for
+  the next approval card. In the narrow sidebar they are checkable items at
+  the top of the run's ⋯ menu.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of
   the run's ⋯ menu, asks for confirmation, and is not offered while the run
@@ -537,12 +591,39 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
 
+#### Bug Fixes
+
+- **An `Esc` number chord no longer types its number** — pressing Esc, a short
+  pause, then `1`–`9` focused that session and also put the digit into the
+  chat draft, so the next prompt went out as, say, `3In ONE response…`.
+- **The edit approval card opens on the edit** — when the changed text sits on
+  a long line that wraps over several rows, the diff opened on the untouched
+  rows before the change, with the edited words scrolled out of view; it now
+  opens where the new text differs from the old. The card's title names the
+  file relative to the workspace instead of wrapping its absolute path over
+  several lines.
+
 ## [0.40.10] - 2026-09-06
 
 ### Shared (all surfaces)
 
 #### Bug Fixes
 
+- **Unwritable `--output` and `--output-dir` paths are usage errors** — a
+  path the CLI may not create or write (permission denied, operation not
+  permitted, read-only file system, a missing parent) is reported with the
+  path and exit code 2, before the model is called, instead of as a crash to
+  report. An existing target file you cannot write is caught up front too.
+- **A workflow that fails its LaTeX compile says so** — `texra run` names
+  the document that failed to compile and its log file on stderr instead of
+  ending on a bare "Error".
+- **Cleaner headless stderr** — run notices no longer carry a log
+  timestamp, an invalid value in `.texra/config.json` is reported once
+  instead of twice, and `texra doctor` lists config warnings only in its
+  Config row.
+- **No run description after the run ends** — stopping a run with Ctrl-C no
+  longer lets its generated description arrive after the final `run.end`
+  record in `--output-format ndjson`.
 - **The "use your own API key" retry works the same everywhere** — when a
   Kimi Code or GLM Coding Plan quota runs out and the matching provider key
   is already saved, every app now retries on that key by itself, including
@@ -617,6 +698,24 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 ### Shared (all surfaces)
 
 #### Features
+
+- **First run in the terminal opens the chat with a "Connect a model"
+  panel.** Before, a fresh install showed a three-option picker; choosing
+  "Skip for now" exited with a missing-API-key error and saved the skip, so
+  every later `texra` printed that error and quit. Now the chat always opens,
+  and when no model is connected the panel offers a ChatGPT or Grok
+  subscription, a provider API key (including Kimi Code and GLM), or device-code
+  sign-in for SSH. Esc leaves you in the chat with "No model connected · /login"
+  in the status bar; a message you type meanwhile is held and sent as soon as a
+  model is connected. On a first run the chat then goes to the setup assistant
+  and opens `/agent`.
+- **`/agent` can start a team.** Alongside single agents, now shown with their
+  descriptions, it lists the team presets (Lean Project, Physicist,
+  Mathematician, Computer Scientist, Software Engineer and your custom teams)
+  with any unavailable members. Picking one sets the team's lead as the root
+  agent with the team's roster, the same way the extension and desktop launch a
+  team. Before, a team could only be started with `texra multi-agent run`.
+- `/login` gains an **Add a provider API key** row.
 
 - **GPT-6 Astra is available** — OpenAI's most capable model joins the model
   list with a 1M-token context window, reasoning effort up to Max, and vision,

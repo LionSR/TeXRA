@@ -6,6 +6,7 @@ import {
   resolveCliAgentInCategory,
 } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
+import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
 import {
   formatCliNoAvailableModelsRecovery,
@@ -19,7 +20,14 @@ import {
 } from '@cli/chat/tui/state/cliState';
 import { chatTuiCanStartRootRun } from '@cli/chat/tui/state/sessionRunState';
 import { appendLocalAssistantTranscript } from '@cli/chat/tui/state/transcript';
-import { AgentCategory } from '@shared/schemas';
+import {
+  formatTeamLaunchBlockedMessage,
+  formatTeamUnavailableMessage,
+  formatUnknownTeamMessage,
+  resolveTeamLaunch,
+} from '@common/teams/TeamPlan';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
+import { AgentCategory, agentName as bareAgentName } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -78,6 +86,85 @@ export function applyInitialCliAgentSelection(
     appendLocalAssistantTranscript(`Root agent set to ${nextAgent}.`);
   });
 }
+
+/**
+ * `/agent` → a team: the same launch resolution the extension and desktop
+ * launchers use, so a team started here pins the same root agent and
+ * delegation scope as one started there. The picker row already names any
+ * unavailable members, so choosing it means continuing without them; the TUI
+ * offers no remote-catalog sign-in mid-pick (`/login` covers that).
+ */
+export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
+  function* (teamId: string, context: SlashCommandContext) {
+    const fixedTeamNotice =
+      'The agent is fixed for this chat session. Start a new chat to use a team.';
+    if (!chatTuiCanStartRootRun(context.session)) {
+      setTransientNotice(fixedTeamNotice);
+      return;
+    }
+    const workspaceState = context.runtimeSession.roots.workspaceState;
+    const resolution = yield* resolveTeamLaunch({
+      teamId,
+      ...(yield* createTeamCatalogPorts(workspaceState)),
+      providedChoice: 'continue',
+      choose: () => Effect.succeed('continue' as const),
+      signIn: () => Effect.succeed(false),
+    });
+    switch (resolution.status) {
+      case 'cancelled':
+        return;
+      case 'unknown-team':
+        setTransientNotice(formatUnknownTeamMessage(teamId));
+        return;
+      case 'blocked':
+        setTransientNotice(
+          formatTeamLaunchBlockedMessage(teamId, resolution.reason),
+        );
+        return;
+      case 'unavailable':
+        setTransientNotice(
+          formatTeamUnavailableMessage(teamId, resolution.unavailableNames),
+        );
+        return;
+      case 'ready':
+        break;
+      default:
+        return resolution satisfies never;
+    }
+    const { fields } = resolution;
+    const entry = yield* resolveChatToolUseAgent(context.stores, fields.agent);
+    if (entry instanceof CliUsageError) {
+      setTransientNotice(entry.message);
+      return;
+    }
+    // Validation yields; another input may have claimed the root run.
+    if (!chatTuiCanStartRootRun(context.session)) {
+      setTransientNotice(fixedTeamNotice);
+      return;
+    }
+    const teamName = yield* readCliMultiAgentPresetName(
+      workspaceState,
+      fields.cli.multiAgentPresetId,
+    );
+    patchSessionMeta({
+      agent: fields.agent,
+      agentSource: entry.source,
+      teamName,
+      cliMultiAgentPresetId: fields.cli.multiAgentPresetId,
+      delegationAgentScope: fields.delegationAgentScope,
+    });
+    appendLocalAssistantTranscript(
+      [
+        `Team set to ${teamName ?? teamId}; ${bareAgentName(fields.agent)} leads it.`,
+        resolution.missingNames.length > 0
+          ? `Unavailable members: ${resolution.missingNames.join(', ')}.`
+          : undefined,
+      ]
+        .filter((line) => line !== undefined)
+        .join(' '),
+    );
+  },
+);
 
 export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
   function* (model: string, context: SlashCommandContext) {

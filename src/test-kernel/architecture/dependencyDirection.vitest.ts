@@ -130,7 +130,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // ConfigProvider). `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
-  // here. Its four citty callers take the resolved context as a value.
+  // here. Its three citty callers take the resolved context as a value.
   'packages/cli/src/commands/_helpers/context.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the

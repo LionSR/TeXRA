@@ -42,6 +42,9 @@ catalogs:
     '@openai/codex-sdk':
       specifier: ^0.155.1
       version: 0.155.1
+    '@openrouter/sdk':
+      specifier: ^1.3.28
+      version: 1.3.28
     '@supabase/supabase-js':
       specifier: 2.117.0
       version: 2.117.0
@@ -529,6 +532,9 @@ importers:
       '@openai/codex-sdk':
         specifier: 'catalog:'
         version: 0.155.1
+      '@openrouter/sdk':
+        specifier: 'catalog:'
+        version: 1.3.28
       '@supabase/supabase-js':
         specifier: 'catalog:'
         version: 2.117.0(@opentelemetry/api@1.9.1)
@@ -825,6 +831,9 @@ importers:
       '@google/genai':
         specifier: 2.24.0
         version: 2.24.0(@modelcontextprotocol/sdk@1.30.0(supports-color@10.2.2)(zod@4.4.3))(supports-color@10.2.2)
+      '@openrouter/sdk':
+        specifier: 1.3.28
+        version: 1.3.28
       openai:
         specifier: 7.20.0
         version: 7.20.0(patch_hash=cfbfaa7a311d8ae96988e3e2e56de12fd1296b84a11b2a85c8408679a7b684e5)(undici@8.11.0)(ws@8.21.3)(zod@4.4.3)
@@ -1872,6 +1881,9 @@ packages:
     engines: {node: '>=16'}
     cpu: [x64]
     os: [win32]
+
+  '@openrouter/sdk@1.3.28':
+    resolution: {integrity: sha512-wfZTYHXKbpu0oRH8afkD/iGUqJmG5ZISS6WbMtcZeX3HlnBiGodaDBTRWo/ETqOfYPhS+9iPnRApSl0BzwZtbQ==}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -6829,6 +6841,10 @@ snapshots:
 
   '@openai/codex@0.155.1-win32-x64':
     optional: true
+
+  '@openrouter/sdk@1.3.28':
+    dependencies:
+      zod: 4.4.3
 
   '@opentelemetry/api@1.9.1':
     optional: true

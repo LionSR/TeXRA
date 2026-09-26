@@ -7,23 +7,17 @@ import type { SessionHandle } from '@agent/runtime';
 import type { GetModelSwitchDisabledReason } from '@cli/runtime/modelAccess';
 import { parseCliHistoryId } from '@cli/runtime/history';
 import type { CliModelAccessSelection } from '@cli/runtime/modelAccessRoute';
-import {
-  type CliLogoutTarget,
-  type LoginFormValue,
-  parseChatLoginSlashArgs,
+import type {
+  CliLogoutTarget,
+  LoginFormValue,
 } from '@cli/runtime/loginOptions';
-import type { ApiProvider } from '@model/apiProviders';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import { type RunId } from '@shared/schemas';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 
-import {
-  AccountAccessForm,
-  type AccountAccessFormValue,
-} from '../forms/AccountAccessForm';
-import { AgentListForm } from '../forms/AgentListForm';
+import { AgentListForm, type AgentPickerValue } from '../forms/AgentListForm';
 import {
   ApprovalPolicyForm,
   type ApprovalFormValue,
@@ -32,7 +26,6 @@ import { CliConfigForm } from '../forms/CliConfigForm';
 import { MemoryListForm } from '../forms/MemoryListForm';
 import { EnabledModelsForm } from '../forms/EnabledModelsForm';
 import { ModelListForm } from '../forms/ModelListForm';
-import { ProviderApiKeyForm } from '../forms/ProviderApiKeyForm';
 import { ResumeListForm } from '../forms/ResumeListForm';
 import { SkillsListForm, type SkillActivation } from '../forms/SkillsListForm';
 import {
@@ -50,19 +43,9 @@ import {
   applyInitialCliAgentSelection,
 } from './handlers/agentModelCommands';
 import {
-  applyCliModelAccessSelection,
-  applyCliProviderApiKey,
-  showCliAccountStatus,
-} from './handlers/modelAccessCommands';
-import {
   applyCliApprovalPolicySelection,
   setCliRunBypass,
 } from './handlers/approvalCommand';
-import {
-  loginFromChat,
-  loginStartMessage,
-  logoutFromChat,
-} from './handlers/loginCommands';
 import {
   type SlashCommandEffect,
   type SlashCommandOutput,
@@ -84,18 +67,13 @@ import {
   type SlashFormProps,
 } from './slashRegistry';
 import { openCliSlashCommandForm } from './slashForms';
+import {
+  type ApiKeySaveHandler,
+  type FormActionHandler,
+  modelAccessContribution,
+} from './modelAccessContribution';
 
 type SelectHandler<T> = (value: T) => SlashCommandEffect;
-/** Selection handler that reports progress while the form shows a busy frame. */
-type FormActionHandler<T> = (
-  value: T,
-  output: SlashCommandOutput,
-) => SlashCommandEffect;
-/** The key write as a program; the form that collects the key runs it. */
-type ApiKeySaveHandler = (
-  provider: ApiProvider,
-  key: string,
-) => Effect.Effect<string | void, Error>;
 
 /**
  * Build the built-in contributions from the surface's runtime options and
@@ -116,6 +94,11 @@ export function registerBuiltinSlashCommands(options: {
    *  on, threaded from the surface that registers the commands. */
   runtimeSession: SessionHandle;
   onAgentSelect?: SelectHandler<string>;
+  /** `/agent` → a team preset, by id. */
+  onTeamSelect?: SelectHandler<string>;
+  /** After a sign-in, sign-out, preference, or key save settles: the chat
+   *  re-checks whether a model can answer now. */
+  onAccountChanged?: () => Effect.Effect<void, never, ProcessServices>;
   canSelectAgent?: () => boolean;
   getApprovalPolicy?: () => TexraApprovalPolicy;
   /** Stays a plain callback: `/config`'s shared write path takes the same
@@ -142,20 +125,12 @@ export function registerBuiltinSlashCommands(options: {
   const onModelSelect: SelectHandler<string> =
     options.onModelSelect ??
     ((model) => Effect.sync(() => setCliSessionModelOverride(model)));
-  const onModelAccessSelect: FormActionHandler<CliModelAccessSelection> =
-    options.onModelAccessSelect ??
-    ((selection, output) =>
-      applyCliModelAccessSelection(stores, selection, undefined, output));
-  const onApiKeySave: ApiKeySaveHandler =
-    options.onApiKeySave ??
-    ((provider, key) => applyCliProviderApiKey(secrets, stores, provider, key));
-  const onLoginSelect: FormActionHandler<LoginFormValue> =
-    options.onLoginSelect ??
-    ((value, output) =>
-      loginFromChat(value, stores, runtime, undefined, output));
-  const onLogoutSelect: FormActionHandler<CliLogoutTarget> =
-    options.onLogoutSelect ??
-    ((value, output) => logoutFromChat(value, stores, secrets, output));
+  const onTeamSelect: SelectHandler<string> =
+    options.onTeamSelect ??
+    (() =>
+      Effect.sync(() =>
+        setTransientNotice('Teams can only be chosen in `texra chat`.'),
+      ));
   const canSelectAgent = options.canSelectAgent ?? (() => true);
   const canSelectModel = options.canSelectModel ?? (() => true);
 
@@ -184,16 +159,23 @@ export function registerBuiltinSlashCommands(options: {
   }
 
   function AgentListFormAdapter(props: SlashFormProps): React.JSX.Element {
-    const current = sessionMeta.get().agent;
+    const meta = sessionMeta.get();
     const selectable = canSelectAgent();
+    const onPick: SelectHandler<AgentPickerValue> = (value) =>
+      value.kind === 'agent'
+        ? onAgentSelect(value.agent)
+        : onTeamSelect(value.teamId);
     return (
       <AgentListForm
         runtime={runtime}
         stores={stores}
-        currentAgent={current}
+        currentAgent={meta.agent}
+        {...(meta.cliMultiAgentPresetId !== undefined
+          ? { currentTeamId: meta.cliMultiAgentPresetId }
+          : {})}
         availableRows={props.availableRows}
         selectable={selectable}
-        onSelect={bindSelection(props, onAgentSelect, {
+        onSelect={bindSelection(props, onPick, {
           // Picking the root agent and the root model is a single up-front
           // choice before the first message, so chain straight into the model
           // picker instead of closing — but only while still choosing the root
@@ -209,46 +191,6 @@ export function registerBuiltinSlashCommands(options: {
               : props.onDone,
         })}
         onClose={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function AccountAccessFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <AccountAccessForm
-        secrets={secrets}
-        stores={stores}
-        runtime={runtime}
-        availableRows={props.availableRows}
-        onSelect={bindSelection<AccountAccessFormValue>(
-          props,
-          (value, output) => {
-            switch (value.kind) {
-              case 'access':
-                return onModelAccessSelect(value.selection, output);
-              case 'login':
-                return onLoginSelect(value.target, output);
-              case 'logout':
-                return onLogoutSelect(value.target, output);
-            }
-          },
-          {
-            completion: 'busy',
-            busyTitle: (value) => {
-              switch (value.kind) {
-                case 'access':
-                  return 'Updating model access';
-                case 'login': {
-                  const args = parseChatLoginSlashArgs(value.target);
-                  return args ? loginStartMessage(args) : 'Signing in';
-                }
-                case 'logout':
-                  return 'Signing out';
-              }
-            },
-          },
-        )}
-        onCancel={() => props.onDone(undefined)}
       />
     );
   }
@@ -307,23 +249,6 @@ export function registerBuiltinSlashCommands(options: {
           },
           { completion: 'beforeAction' },
         )}
-        onCancel={() => props.onDone(undefined)}
-      />
-    );
-  }
-
-  function ProviderApiKeyFormAdapter(props: SlashFormProps): React.JSX.Element {
-    return (
-      <ProviderApiKeyForm
-        availableRows={props.availableRows}
-        runtime={runtime}
-        onSave={onApiKeySave}
-        onDone={(provider, modelNotice) => {
-          // The shared key controller posts the "key has been set" notice on
-          // every host; only the coding-plan tip is this surface's to write.
-          if (modelNotice) appendLocalAssistantTranscript(modelNotice);
-          props.onDone(provider);
-        }}
         onCancel={() => props.onDone(undefined)}
       />
     );
@@ -478,7 +403,7 @@ export function registerBuiltinSlashCommands(options: {
       commands: [
         {
           name: 'agent',
-          description: 'List or choose the root agent',
+          description: 'Choose an agent, or a team it leads',
           aliases: ['agents'],
           category: 'configuration',
           echo: 'ifPersists',
@@ -503,45 +428,17 @@ export function registerBuiltinSlashCommands(options: {
         },
       ],
     },
-    {
-      pluginId: 'model-access',
-      commands: [
-        {
-          name: 'key',
-          description: 'Add a provider API key with masked input',
-          aliases: ['keys'],
-          category: 'account',
-          echo: 'never',
-          // A remainder never reaches the form: it could be the key itself,
-          // so it is refused and dropped rather than pre-filled.
-          handler: (remainder) =>
-            Effect.sync(() => {
-              if (remainder) {
-                setTransientNotice(
-                  'For safety, `/key` does not accept a key as an argument. Enter it in the masked form.',
-                );
-              }
-              openCliSlashCommandForm('key', '');
-            }),
-          formComponent: ProviderApiKeyFormAdapter,
-          redactInput: true,
-        },
-        {
-          name: 'login',
-          description: 'Sign in or out, and choose subscriptions or API keys',
-          category: 'account',
-          // One form owns sign-in, sign-out, and subscription preferences, so
-          // the typed command is not an accurate transcript row; outcomes are
-          // written by the form's handlers.
-          echo: 'never',
-          handler: (remainder, context) =>
-            remainder.trim().toLowerCase() === 'status'
-              ? showCliAccountStatus(stores, secrets)
-              : loginFromChat(remainder, stores, runtime, context.cliContext),
-          formComponent: AccountAccessFormAdapter,
-        },
-      ],
-    },
+    modelAccessContribution({
+      secrets,
+      stores,
+      runtime,
+      bindSelection,
+      onModelAccessSelect: options.onModelAccessSelect,
+      onApiKeySave: options.onApiKeySave,
+      onLoginSelect: options.onLoginSelect,
+      onLogoutSelect: options.onLogoutSelect,
+      onAccountChanged: options.onAccountChanged,
+    }),
     {
       pluginId: 'approval',
       commands: [

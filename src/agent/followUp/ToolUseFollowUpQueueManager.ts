@@ -11,12 +11,7 @@ import {
   type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { DatabaseReadFailed, heldElsewhereBy } from '@shared/session/database';
 import {
   foldRunRows,
   freshRunRows,
@@ -148,12 +143,6 @@ interface FollowUpRowPort {
     runId: RunId,
   ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
 }
-
-/** The refusals that mean another live process holds the run. */
-const heldElsewhere = (error: unknown): boolean =>
-  error instanceof DatabaseNotOwner ||
-  (error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused);
 
 /**
  * Session-owned admission boundary indexed by run ID.
@@ -474,7 +463,7 @@ export class ToolUseFollowUpQueue {
       }
       if (Exit.isFailure(written)) {
         const error = Cause.squash(written.cause);
-        if (!heldElsewhere(error)) {
+        if (heldElsewhereBy(error) === null) {
           return yield* Effect.fail(
             error instanceof Error
               ? error

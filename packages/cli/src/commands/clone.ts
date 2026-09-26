@@ -108,9 +108,7 @@ function buildOverleafClonePorts(
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
         Effect.flatMap((canonical) => {
           canonicalWorkspacePath = canonical;
-          return gitClone(clone, canonical).pipe(
-            Effect.mapError((error) => new Error(error.message)),
-          );
+          return gitClone(clone, canonical);
         }),
       ),
     showCloneSucceeded: (label) =>
