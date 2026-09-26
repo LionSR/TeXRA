@@ -19,7 +19,7 @@
  *
  */
 
-import { Data, Effect } from 'effect';
+import { Data, DateTime, Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -138,7 +138,7 @@ export const loadChatExportInput = Effect.fn('loadChatExportInput')(function* (
     exportInput: {
       timestamp: run
         ? new Date(run.launchedAt).toISOString()
-        : new Date().toISOString(),
+        : DateTime.formatIso(yield* DateTime.now),
       description: run?.description ?? undefined,
       config: {
         agent: config.agent,
