@@ -80,71 +80,19 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
-import { validateInquiryTransition } from './inquiryTransition';
 import { localDatabasePath } from './localDatabasePath';
-import { assertStoreFormat, pragmaValue, retireStore } from './storeFormat';
+import {
+  applySchema,
+  assertStoreFormat,
+  pragmaValue,
+  retireStore,
+} from './storeFormat';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
-/**
- * Event history and bounded current application records.
- *
- * `commit` is a SQLite keyword, so the column is quoted at every site (an
- * unquoted `commit INTEGER` is a syntax error on every host floor). Every
- * query below aliases the snake-case columns onto the unquoted vocabulary.
- *
- * `event_sequence` is declared first because `event` references it, and the
- * dependency edge (an inquiry thread under the run that asked it, a workflow
- * checkpoint under the run that invoked it) is self-referential, so both
- * cascades exist the moment the schema does. One run owns one row here: one
- * sequence counter and one ownership claim (one run model, section 3.1). `STRICT` makes a wrong-typed value an error at
- * insert instead of a surprise at read: on persisted data, a silent coercion
- * is the same defect as a `.catch()` default.
- *
- * The three `event` indexes are the ones the C7 reads need: latest-of-type
- * per aggregate (the listing tier), one aggregate from a commit (the bounded
- * cross-aggregate resume read), and one type across aggregates in commit
- * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
- * both the density guarantee and the index a single aggregate's history reads
- * from its seq.
- */
-const SCHEMA = `
-CREATE TABLE IF NOT EXISTS input_history (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  at INTEGER NOT NULL,
-  value TEXT NOT NULL
-) STRICT;
-
-CREATE TABLE IF NOT EXISTS event_sequence (
-  aggregate_id TEXT NOT NULL PRIMARY KEY,
-  seq          INTEGER NOT NULL,
-  owner_id     TEXT,
-  parent_id    TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
-  closed       INTEGER NOT NULL DEFAULT 0
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS event_sequence_parent
-  ON event_sequence(parent_id);
-
-CREATE TABLE IF NOT EXISTS event (
-  "commit"     INTEGER PRIMARY KEY AUTOINCREMENT,
-  aggregate_id TEXT NOT NULL
-               REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
-  seq          INTEGER NOT NULL,
-  type         TEXT NOT NULL,
-  owner_id     TEXT NOT NULL,
-  at           INTEGER NOT NULL,
-  data         TEXT NOT NULL,
-  UNIQUE (aggregate_id, seq)
-) STRICT;
-
-CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
-CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
-CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
-`;
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
 /** Listing arms of the present vocabulary; pending requests and queued
@@ -361,7 +309,7 @@ export const databaseLayer = (
           AND e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
       const displayTypes = JSON.stringify(
-        [...DISPLAY_EVENT_TYPES].map((type) => `${type}.1`),
+        DISPLAY_EVENT_TYPES.map((type) => `${type}.1`),
       );
       // The latest listing row of each type on one open run: its creation,
       // status and tombstone beside its private records, never a transcript
@@ -1276,6 +1224,47 @@ function borrowsClaim(draft: SessionEventDraft): boolean {
   return draft.type === 'state.value.set';
 }
 /**
+ * Refuse an inquiry update its thread's latest row does not admit. Returns
+ * whether the update opens the thread (its first row, or a reopen of an
+ * answered one), which is when it needs an owned open parent.
+ */
+function validateInquiryTransition(
+  previous: SessionEvent | undefined,
+  draft: Extract<SessionEventDraft, { type: 'inquiryThreadUpdated' }>,
+): boolean {
+  if (previous === undefined) return true;
+  if (previous.type !== 'inquiryThreadUpdated') {
+    throw new Error(`Invalid inquiry history: ${draft.aggregateId}`);
+  }
+  const reopened = previous.status === 'answered' && draft.status === 'open';
+  if (draft.turnCount < previous.turnCount) {
+    throw new Error(
+      `Inquiry update must preserve turn order: ${draft.threadId}`,
+    );
+  }
+  if (reopened && draft.turnCount <= previous.turnCount) {
+    throw new Error(`Inquiry reopen must advance the turn: ${draft.threadId}`);
+  }
+  if (previous.parentRunId !== draft.parentRunId && !reopened) {
+    throw new Error(
+      `Only an answered inquiry can change parents: ${draft.aggregateId}`,
+    );
+  }
+  if (
+    previous.status === 'open' &&
+    draft.status === 'open' &&
+    previous.turnCount !== draft.turnCount
+  ) {
+    throw new Error(
+      `An open inquiry cannot start another turn: ${draft.aggregateId}`,
+    );
+  }
+  if (previous.status === 'dropped' && draft.status !== 'dropped') {
+    throw new Error(`A dropped inquiry cannot reopen: ${draft.aggregateId}`);
+  }
+  return reopened;
+}
+/**
  * Serialize the validated draft before opening the transaction. Draft parsing
  * removes caller-supplied envelope fields; the type and aggregate key have
  * their own C1 columns. Child creation adds the database-owned parent commit
@@ -1343,16 +1332,6 @@ const configure = Effect.fnUntraced(function* (
         );
   yield* applySchema(sql);
   return movedAside;
-});
-
-const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  // The official driver prepares one statement at a time. This fixed schema
-  // contains only DDL statements, with no semicolons inside SQL literals.
-  for (const statement of SCHEMA.split(';')
-    .map((part) => part.trim())
-    .filter(Boolean)) {
-    yield* sql.unsafe(statement, []);
-  }
 });
 
 const verifyPragma = Effect.fnUntraced(function* (
