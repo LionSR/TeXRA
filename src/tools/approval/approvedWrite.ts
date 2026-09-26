@@ -60,43 +60,35 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     ToolCall | FileSystem.FileSystem | WorkspaceFs
   > {
     yield* ToolCall;
-    const absolute = nodePath.isAbsolute(path);
-    const fs = absolute ? yield* FileSystem.FileSystem : yield* WorkspaceFs;
-    const file = absolute ? path : yield* (yield* WorkspaceFs).resolve(path);
+    const workspace = nodePath.isAbsolute(path)
+      ? undefined
+      : yield* WorkspaceFs;
+    const fs = workspace ?? (yield* FileSystem.FileSystem);
+    const file = workspace ? yield* workspace.resolve(path) : path;
     const written = yield* Effect.gen(function* () {
       const exists = yield* entryExists(fs, path);
-      let baseContent = '';
+      // All content is already LF-normalized at the FS read boundary,
+      // so comparisons work directly without extra normalization.
+      const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
+      if (
+        exists &&
+        (baseContent === finalContent || originalContent === finalContent)
+      ) {
+        return { appliedContent: baseContent, baseContent };
+      }
       let appliedContent = finalContent;
-      let shouldWrite = true;
-
-      if (exists) {
-        // All content is already LF-normalized at the FS read boundary,
-        // so comparisons work directly without extra normalization.
-        const currentContent = yield* readNormalizedFile(fs, path);
-        baseContent = currentContent;
-
-        if (
-          currentContent === finalContent ||
-          originalContent === finalContent
-        ) {
-          appliedContent = currentContent;
-          shouldWrite = false;
-        } else if (currentContent !== originalContent) {
-          const { content: patchedContent, results } = applyPatchToText(
-            originalContent,
-            finalContent,
-            currentContent,
-          );
-          if (!results.every(Boolean)) {
-            return yield* Effect.fail(new ApprovedEditConflictError(path));
-          }
-          appliedContent = patchedContent;
+      if (exists && baseContent !== originalContent) {
+        const { content, results } = applyPatchToText(
+          originalContent,
+          finalContent,
+          baseContent,
+        );
+        if (!results.every(Boolean)) {
+          return yield* Effect.fail(new ApprovedEditConflictError(path));
         }
+        appliedContent = content;
       }
-
-      if (shouldWrite) {
-        yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
-      }
+      yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent, baseContent };
     }).pipe(onFileLane(file));
     yield* recordToolFileRead(path);

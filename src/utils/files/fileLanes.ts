@@ -1,13 +1,10 @@
 /**
- * One process-wide exclusive lane per file, for a read-modify-write of it.
- *
- * A tool that edits a file reads it, changes the text and writes it whole,
- * with I/O (and, for an approved edit, a wait of minutes) in between, while
- * parallel runs (an orchestrator's subagents, other sessions) edit the same
- * files. Two such edits without a lane both read one version and the later
- * write drops the other's change. Keyed by resolved absolute path, so every
- * writer of one file meets on one lane whatever view it wrote through;
- * `withPerKeyLane` deletes a lane once idle.
+ * One process-wide exclusive lane per file, for a read-modify-write of it: an
+ * edit reads the file, changes the text and writes it whole, with I/O (for an
+ * approved edit, minutes of waiting) in between, while parallel runs edit the
+ * same files. Keyed by resolved absolute path so every writer of one file meets
+ * on one lane whatever view it wrote through; `withPerKeyLane` deletes a lane
+ * once idle.
  */
 import * as nodePath from 'node:path';
 

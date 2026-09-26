@@ -122,10 +122,9 @@ export interface StateStore {
 const stateKeyLanes = new Map<string, PerKeyLane>();
 
 /**
- * Run a read-modify-write of one state key on that key's lane, so two
- * overlapping edits (two quick settings toggles: the settings surfaces do not
- * serialize their messages) each read the other's committed value instead of
- * both reading the same one and the later update dropping the earlier edit.
+ * Run a read-modify-write of one state key on that key's lane, so overlapping
+ * edits (the settings surfaces do not serialize their messages) each read the
+ * other's committed value instead of the later write dropping the earlier.
  */
 export function withStateKeyLane(
   key: string,

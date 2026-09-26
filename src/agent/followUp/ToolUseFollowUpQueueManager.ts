@@ -383,10 +383,9 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Dispose the session-owned boundary: end every attached queue, release
-   * every adopted claim onto the session publisher, and report each run as
-   * released: a recoverable entry waits for a wake nobody can send once the
-   * session is gone, so a release observer (a poller holding the session)
-   * lets go here. Its unwind settles the releases; nothing rebuilds after.
+   * every adopted claim onto the session publisher, and report each run
+   * released so observers holding the session let go. The session's unwind
+   * settles the releases; nothing rebuilds after.
    */
   dispose(): void {
     if (this.disposed) return;

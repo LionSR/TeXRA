@@ -1,13 +1,10 @@
-import * as nodePath from 'node:path';
-
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { WorkspaceFs } from '@platform/rootedFs';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
@@ -19,19 +16,13 @@ import {
   type RequestRefusal,
   type RunId,
   type ToolEditPermission,
-  ToolError,
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { entryExists } from '@utils/files/fsEntryExists';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { applyPatchToText } from '@utils/text/diff';
 import {
   buildDiffHunks,
   reportDiffTimeout,
