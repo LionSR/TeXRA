@@ -13,6 +13,7 @@ import type {
   AggregateId,
   JsonValue,
   CommitOrdinal,
+  DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
@@ -199,6 +200,12 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** {@link readAll} narrowed to display rows in the store: a tail never
+     *  decodes a run's private records (ledger messages, snapshots, tool
+     *  results) only to filter them out. Same bounds as `readAll`. */
+    readonly readDisplay: (
+      fromCommit: CommitOrdinal,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed

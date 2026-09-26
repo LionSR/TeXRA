@@ -44,6 +44,8 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessProbe } from '@platform/defaults/nodeProcesses';
 import {
   AggregateIdSchema,
+  DISPLAY_EVENT_TYPES,
+  isDisplaySessionEvent,
   RunIdSchema,
   OwnerIdSchema,
   SessionEventDraftSchema,
@@ -78,6 +80,7 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { validateInquiryTransition } from './inquiryTransition';
 import { localDatabasePath } from './localDatabasePath';
 import { assertStoreFormat, pragmaValue, retireStore } from './storeFormat';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
@@ -350,6 +353,16 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
+      // A tail's rows, selected by type through `event_type_commit`: it
+      // never decodes a run's private rows (ledger messages, snapshots) only
+      // to drop them.
+      const display = `SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+          AND e."commit" > ? AND e."commit" <= ?
+        ORDER BY e."commit"`;
+      const displayTypes = JSON.stringify(
+        [...DISPLAY_EVENT_TYPES].map((type) => `${type}.1`),
+      );
       // The latest listing row of each type on one open run: its creation,
       // status and tombstone beside its private records, never a transcript
       // row. A closed (tombstoned) run reads as absent.
@@ -834,6 +847,18 @@ export const databaseLayer = (
               ]);
             }),
           ),
+        readDisplay: (fromCommit) =>
+          query(
+            Effect.gen(function* () {
+              const upTo = yield* currentCommit;
+              const rows = yield* decodedRows(display, [
+                displayTypes,
+                fromCommit,
+                upTo,
+              ]);
+              return rows.filter(isDisplaySessionEvent);
+            }),
+          ),
         readListing: () =>
           query(decodedRows(READ_LISTING, [JSON.stringify(LISTING_TYPES)])),
         readRunRecords: (id) =>
@@ -1233,47 +1258,6 @@ function prepareEventDraft(input: SessionEventDraft) {
  *  that carries it; a run's claim, by contrast, its sequence row keeps. */
 function borrowsClaim(draft: SessionEventDraft): boolean {
   return draft.type === 'state.value.set';
-}
-/**
- * Refuse an inquiry update its thread's latest row does not admit. Returns
- * whether the update opens the thread (its first row, or a reopen of an
- * answered one), which is when it needs an owned open parent.
- */
-function validateInquiryTransition(
-  previous: SessionEvent | undefined,
-  draft: Extract<SessionEventDraft, { type: 'inquiryThreadUpdated' }>,
-): boolean {
-  if (previous === undefined) return true;
-  if (previous.type !== 'inquiryThreadUpdated') {
-    throw new Error(`Invalid inquiry history: ${draft.aggregateId}`);
-  }
-  const reopened = previous.status === 'answered' && draft.status === 'open';
-  if (draft.turnCount < previous.turnCount) {
-    throw new Error(
-      `Inquiry update must preserve turn order: ${draft.threadId}`,
-    );
-  }
-  if (reopened && draft.turnCount <= previous.turnCount) {
-    throw new Error(`Inquiry reopen must advance the turn: ${draft.threadId}`);
-  }
-  if (previous.parentRunId !== draft.parentRunId && !reopened) {
-    throw new Error(
-      `Only an answered inquiry can change parents: ${draft.aggregateId}`,
-    );
-  }
-  if (
-    previous.status === 'open' &&
-    draft.status === 'open' &&
-    previous.turnCount !== draft.turnCount
-  ) {
-    throw new Error(
-      `An open inquiry cannot start another turn: ${draft.aggregateId}`,
-    );
-  }
-  if (previous.status === 'dropped' && draft.status !== 'dropped') {
-    throw new Error(`A dropped inquiry cannot reopen: ${draft.aggregateId}`);
-  }
-  return reopened;
 }
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing
