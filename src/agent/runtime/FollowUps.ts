@@ -274,15 +274,20 @@ export const followUpsLayer: Layer.Layer<
         state.outcome === 'cancelled' &&
         input.hasQueued() &&
         !syntheticPending
-          ? Effect.flatMap(input.take, (batch) =>
-              // A taken batch stays queued until consumed: declining it
-              // leaves it for the ordinary wait.
-              batch === null ||
-              batch.synthetic ||
-              !batch.followUps.some((f) => f.content.origin === 'user')
+          ? Effect.flatMap(input.take, (batch) => {
+              // `!syntheticPending`: no maintenance wake is queued, so this
+              // take is follow-ups, which stay queued until consumed, and a
+              // declined batch is left for the ordinary wait.
+              if (batch?.synthetic) {
+                return Effect.die(
+                  new Error('joinStopped took a wake none was pending.'),
+                );
+              }
+              return batch === null ||
+                !batch.followUps.some((f) => f.content.origin === 'user')
                 ? Effect.succeed(null)
-                : batchRows(batch),
-            )
+                : batchRows(batch);
+            })
           : Effect.succeed(null),
       release: (next) => {
         if (released || !lease) return;

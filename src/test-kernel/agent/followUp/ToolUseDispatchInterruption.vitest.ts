@@ -519,6 +519,8 @@ describe('tool dispatch interrupted mid-turn', () => {
       );
       yield* toolB.started;
       yield* Fiber.interrupt(fiber);
+      // The halt row the resume's join reads is the stopped fiber's exit.
+      yield* Fiber.await(fiber);
       yield* session.settlePublications();
       yield* session.followUps.submit(
         runId,
