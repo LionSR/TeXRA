@@ -109,6 +109,14 @@ one:
   `electron ^44.4.3`), and the VS Code extension host on its current Electron.
   The delivery plan already warns that the CLI floor does not establish
   Electron compatibility.
+- **Operating systems.** macOS, Windows and Linux. Every OS the desktop app
+  ships to (`packages/desktop/electron-builder.yml:58-80`). Windows is the one
+  most likely to read differently: SQLite locks through `LockFileEx`, not POSIX
+  advisory locks, NTFS commits cost more, and antivirus scanning of
+  `texra.db-wal` can hold a file lock the busy handler then waits on. Take at
+  least the N = 8 reading on each OS rather than inferring Windows from Linux,
+  in line with the CI note that Windows defects stay invisible on the Linux
+  shards (`.github/workflows/ci.yml:299-310`).
 
 **Proposed budget (unvalidated):** no host event-loop stall over **100 ms**
 attributable to the database under the N = 8 load. The number is a starting
@@ -344,6 +352,15 @@ needs to be undone to get there.
 - **Host runtime differences.** `node:sqlite` in a worker inside Electron's
   main process and inside the VS Code extension host is assumed, not verified.
   Stage 0 runs on all three hosts partly to verify it before Stage 2 is built.
+- **Operating-system differences.** The design itself is OS-neutral:
+  `worker_threads`, `node:sqlite`, WAL and the Effect retry behave the same
+  everywhere, and the per-OS code this layer already has stays on the host
+  thread unchanged. That code is the local-filesystem check before open
+  (`src/controllers/session/localDatabasePath.ts:77-93`) and the liveness probe
+  (`/proc`, `ps`, PowerShell; `src/platform/defaults/nodeProcesses.ts:178`).
+  On Windows the PowerShell probe is slow but asynchronous and already outside
+  every transaction, so neither stage makes it hold a lock. Stage 1's retry cap
+  must be set from the Windows reading, the slowest, not the Linux one.
 
 ## 9. Questions for the owner
 
