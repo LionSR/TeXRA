@@ -70,7 +70,7 @@ can be ratified.
      layer heavier than the code it removes. The `Model` interface takes only a
      Zod-guarded materialized `TurnRequest` and keeps every host concern in
      `BoundModel` — clean enough to publish, with two small leaks (§New.3).
-   - **Logger** is reached through a clean host-agnostic *producer* port
+   - **Logger** is reached through a clean host-agnostic _producer_ port
      (`Effect.log*` + `withLogChannel`), and the render→redact→truncate pipeline
      is single-owner. Steps 1–4 of the sync-facades program have landed; the one
      remaining leak is the sink-injection side (§New.2).
