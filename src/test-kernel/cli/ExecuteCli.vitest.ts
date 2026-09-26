@@ -159,15 +159,15 @@ function toolUseConfig() {
   };
 }
 
-/** A run program's options with the session, runtime and lifecycle the
- *  wrapper below supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
+/** A run program's options with the session, runtime and shutdown scope
+ *  the wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'shutdownScope'>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
-  // The commands thread `initCliPlatform`'s session, runtime and lifecycle
-  // in; here the process default this file installs stands in for the first
-  // two and the installed host's lifecycle for the third.
+  // The commands thread `initCliPlatform`'s session, runtime and shutdown
+  // scope in; here the process default this file installs stands in for the
+  // first two and the installed host's shutdown scope for the third.
   return {
     ...runtime,
     executeCliRequest: (
@@ -628,8 +628,7 @@ describe('executeCliRequest', () => {
   );
 
   // it.live for the shutdown choreography below: the run is forked in-fiber,
-  // but runShutdown drives the lifecycle host's real-clock phase deadline and
-  // its handler settles on the process runtime.
+  // but the command's shutdown step settles on the process runtime.
   it.live.each([
     { label: 'fresh', kind: 'fresh' },
     { label: 'resumed', kind: 'resume' },
@@ -770,9 +769,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  // The pre-checkpoint shutdown bound is the lifecycle host's per-phase
-  // join-with-deadline; its regression pin lives in LifecycleHost.vitest.ts.
-
   it.live('forwards a failed shutdown drain to the runtime release hook', () =>
     Effect.gen(function* () {
       const { platform, executeCliRequest } = yield* Effect.promise(
@@ -790,9 +786,12 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(leaseOptions).toBeDefined();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(Scope.close(platform.shutdownScope, Exit.void), {
-        startImmediately: true,
-      });
+      const shutdown = yield* Effect.forkChild(
+        Scope.close(platform.shutdownScope, Exit.void),
+        {
+          startImmediately: true,
+        },
+      );
 
       expect(
         yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
@@ -1143,9 +1142,12 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(Scope.close(platform.shutdownScope, Exit.void), {
-        startImmediately: true,
-      });
+      const shutdown = yield* Effect.forkChild(
+        Scope.close(platform.shutdownScope, Exit.void),
+        {
+          startImmediately: true,
+        },
+      );
       yield* settle;
       expect(mocks.emit).not.toHaveBeenCalled();
       mockCancelledOutcome();
@@ -1260,8 +1262,7 @@ describe('executeCliConfig', () => {
   });
 
   // it.live for the two shutdown tests below: the run is forked in-fiber, but
-  // runShutdown drives the lifecycle host's real-clock phase deadline and its
-  // handler settles on the process runtime.
+  // the command's shutdown step settles on the process runtime.
   it.live(
     'prints a complete resume command after interrupted tool-use recovery is available',
     () =>

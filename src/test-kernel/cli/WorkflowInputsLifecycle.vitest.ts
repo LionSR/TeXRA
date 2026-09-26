@@ -2,12 +2,11 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-import { Deferred, Effect, Fiber, ManagedRuntime } from 'effect';
+import { Deferred, Effect, Exit, Fiber, ManagedRuntime, Scope } from 'effect';
 import { it } from '@effect/vitest';
 import { beforeEach, describe, expect } from 'vitest';
 
 import { withExpandedRunInputs } from '@cli/runtime/workflowInputs';
-import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost, installFakeHost } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -34,8 +33,8 @@ describe('CLI workflow input lifecycle', () => {
     Effect.gen(function* () {
       const fakePlatform = yield* Effect.promise(installFakePlatform);
       const runtime = ManagedRuntime.make(nodePlatformLayer);
-      fakePlatform.lifecycle.onShutdown(
-        SHUTDOWN_PHASE.ON,
+      yield* Scope.addFinalizer(
+        fakePlatform.shutdownScope,
         runtime.disposeEffect,
       );
       const materialized = yield* Deferred.make<string>();
@@ -59,7 +58,7 @@ describe('CLI workflow input lifecycle', () => {
       expect(yield* Effect.promise(() => fs.readFile(inputPath, 'utf8'))).toBe(
         'body from stdin',
       );
-      yield* fakePlatform.lifecycle.runShutdown;
+      yield* Scope.close(fakePlatform.shutdownScope, Exit.void);
       expect(yield* Fiber.await(running)).toMatchObject({ _tag: 'Failure' });
       yield* Effect.promise(async () => {
         await expect(fs.stat(inputPath)).rejects.toThrow();
@@ -73,8 +72,8 @@ describe('CLI workflow input lifecycle', () => {
       Effect.gen(function* () {
         const fakePlatform = yield* Effect.promise(installFakePlatform);
         const runtime = ManagedRuntime.make(nodePlatformLayer);
-        fakePlatform.lifecycle.onShutdown(
-          SHUTDOWN_PHASE.ON,
+        yield* Scope.addFinalizer(
+          fakePlatform.shutdownScope,
           runtime.disposeEffect,
         );
         const reading = yield* Deferred.make<void>();
@@ -94,7 +93,9 @@ describe('CLI workflow input lifecycle', () => {
         );
         yield* Deferred.await(reading);
         const result = yield* Effect.raceFirst(
-          fakePlatform.lifecycle.runShutdown.pipe(Effect.as('shutdown')),
+          Scope.close(fakePlatform.shutdownScope, Exit.void).pipe(
+            Effect.as('shutdown'),
+          ),
           Effect.promise(() => sleep(100)).pipe(Effect.as('timeout')),
         );
         expect(result).toBe('shutdown');

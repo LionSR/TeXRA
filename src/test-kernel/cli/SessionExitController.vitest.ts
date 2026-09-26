@@ -5,7 +5,6 @@ import { createSessionExitController } from '@cli/chat/tui/sessionExitController
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { DisposableStore } from '@platform/disposable';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import type { RunId } from '@shared/schemas';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -57,7 +56,6 @@ describe('chat TUI session exit controller', () => {
         cleanup: vi.fn(),
       },
       session,
-      lifecycle: createLifecycleHost(),
       commandName: 'texra',
       cwd: '/tmp/project',
       disposables: new DisposableStore(),
