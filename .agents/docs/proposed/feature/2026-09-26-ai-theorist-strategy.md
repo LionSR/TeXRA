@@ -3,7 +3,7 @@ created: 2026-09-26
 status: proposed
 ---
 
-# TeXRA as the AI theorist: one theorist, one board, a tournament you can steer
+# TeXRA as the AI theorist: a Principal over projects, one theorist per project, a board and a tournament you can steer
 
 **Recommendation.** Stop growing an agent zoo and build around three things:
 
@@ -13,7 +13,9 @@ status: proposed
 
 These sit on top of the long-horizon, ground-truth and verification work that the July roadmap already ranked, plus two new first-class checks: **novelty** (prior work) and **digestion** (human-readable exposition).
 
-**Order of work: evaluation first, then consolidation, then the Board, then steering, then verification, then tournaments, then scale.** Without a theorist benchmark that reports cost, nothing after it can be judged, including the tournament's own design.
+**Above all projects sits a **Principal**: one agent rooted at the computer, not at a project. It lists, creates and opens projects, grants folders to them, and starts, watches and steers runs in each project's own session. That makes the hierarchy exactly three levels: Principal (computer) → theorist `lead` (project) → roles (branch). See §3.8.
+
+Order of work: evaluation first, then consolidation, then the Board, then steering, then verification, then tournaments, then scale.** Without a theorist benchmark that reports cost, nothing after it can be judged, including the tournament's own design.
 
 Baseline: `main` at `a65f817`. Builds on, and argues against in two places (§6), the archived [open-problem research roadmap](../../archived/feature/2026-07-05-open-problem-research-roadmap.md). That roadmap's principles still hold unless this note says otherwise.
 
@@ -165,6 +167,54 @@ The same shapes scale:
 
 Going from 4 agents to 400 means a remote executor behind the workflow interpreter's `agent` operation and a Board store that tolerates concurrent writers through the session's single publisher. Neither is needed now, and neither should be built before evaluation shows fan-out paying for itself (§4).
 
+### 3.8 The Principal: one agent at the computer root
+
+The researcher works on several projects at once: papers, problems, a Lean formalization, a talk. Today every agent is bound to a single project. Every tool resolves paths against its own session's roots (`src/tools/pathResolution.ts`). The `executions` tool reads only its own session. Children launched with `working_directory` still record into the parent's session. Nothing an agent can call lists projects, opens a folder, or reaches a run in another project.
+
+The runtime is already ready for more:
+- The session owner holds many sessions per process (`src/agent/runtime/sessionGraph.ts`).
+- The desktop keeps a persisted project registry in the global database (`packages/desktop/src/main/desktopProjects.ts`, `desktopProjectRecords.ts`).
+- The SDK's `Sessions.open(roots)` → `Session.start(...)` → `Run` is a programmatic API across projects (`packages/agent/src/effect/sessions.ts`).
+
+The Principal is the agent-facing surface over what already exists.
+
+**Where it lives.** A **home session**: a session whose workspace is the user's home directory and whose storage is the global storage root. It is the desktop's existing no-workspace fallback session, promoted to a real one. Each host enters it this way:
+- **Desktop:** a Home view above the project rail.
+- **CLI:** `texra` with no project (or `texra home`).
+- **VS Code:** stays single-project. Its one-folder rule in `extension.ts` stands. It can show "managed by Principal" status but does not host the Principal.
+
+The Principal runs on the same tool-use loop as every other agent. It differs only in its root, its tools and its prompt. It absorbs the `setup` agent's job (environment, keys, teams), which removes one more coordinator.
+
+**One tool, `projects`,** served through a new host-agnostic `ProjectRegistry` port in the process runtime. Desktop serves it from its existing registry; the CLI serves it from the same global-database records. Commands:
+
+| Command                           | Effect                                                                                                                                                         | Approval                           |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `list` / `status <project>`       | Projects with running runs, pending requests, spend and Board digest, read from each project's session view                                                     | none                               |
+| `create <path> [from]`            | New folder, initialized as a project: empty, template, git clone, Overleaf, arXiv source. Reuses the existing sample, Overleaf and arXiv flows, now reachable without VS Code commands | once per create                    |
+| `open` / `close` / `archive`      | Registry operations; `close` stops only that project's runs                                                                                                     | `close` with live runs             |
+| `grant <project> <folder> ro\|rw` | Attaches an outside folder (data, a shared bibliography, a sibling repo) to a project                                                                           | always; revocable; shown on the project |
+| `start <project> <agent> <task>`  | `Sessions.open(roots).start(...)`: the run lives, is approved and is recorded **in the target project's session**, with a link back to the Principal's run     | the target project's own rules     |
+| `steer` / `stop <run>`            | Queues a follow-up into that run, or interrupts it                                                                                                             | none                               |
+| `read <project> board\|memory`    | Reads the project's Board and memory; writes go through the project's own agents                                                                                | none                               |
+
+**Rules that keep it maintainable:**
+
+- **Work runs where it belongs.** A run the Principal starts is an ordinary run in that project's session: its ledger, its Board, its approvals, its single publisher. The Principal holds references, never copies. This replaces the `working_directory` workaround for cross-project work, which records into the wrong session.
+- **No new event channel.** The Principal reads other projects through the session view and SDK `Run.events`, as the desktop's cross-project attention badge already does (`packages/desktop/src/main/desktopAttention.ts`). Anything it authors is a `SessionEvent` in its own home session.
+- **Three levels, fixed.** Principal → project lead → roles. The Principal never talks to a project's workers directly; it steers the lead.
+
+**Safety at computer scope.** A computer-root agent is the most powerful thing TeXRA would ship, so its own reach is narrow:
+
+- **Filesystem:** the Principal's file tools may *read* under the home directory, except a built-in deny list: `~/.ssh`, keychains and credential stores, `~/.texra`'s databases, browser profiles. It *writes* only inside its home workspace. All other writes happen through `create` or through project agents inside their own roots.
+- **Granted folders:** these become a new external-root kind (`userFolder`, read-only or writable) alongside the host-registered kinds in `src/utils/files/externalRoots.ts`. They are persisted per project and checked by the existing `resolveToolPath` guard, so `restrictPathsToWorkingDirectory` keeps its meaning.
+- **Bash:** the Principal's `bash` is always approval-gated, whatever the run's approval policy.
+
+**What it adds for the researcher:**
+- **One place to ask "what's happening?"** A cross-project digest: which claims moved, which runs wait on you, spend against each budget.
+- **A portfolio budget.** The Principal splits one envelope across projects and is where the §3.6 auto-resume daemon lives.
+- **Cross-pollination.** When a lemma on one project's Board looks relevant to another, the Principal proposes it to that project's lead. This is the consolidation step from §3.6, applied between projects.
+- **Home memory.** Researcher-level memory: taste, notation preferences, recurring collaborators, and tournament votes aggregated across projects. It sits above per-project memory, which stays local.
+
 ## 4. Evaluation first: a theorist benchmark
 
 Nothing above can be tuned without a benchmark. Keep a private, versioned set that is re-run on every model or prompt change and reports **success × tokens × dollars × wall-clock time**, per Brown:
@@ -185,6 +235,8 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 | 1     | Consolidate agents into theorist + roles + skills; one name for presets; strip prover heuristics                      | ~1 wk  | Benchmark no worse; agent and prompt file count down about 5×          |
 | 2     | Research Board (schema, `board` tool, three renderers, continuation injection)                                        | 1–2 wk | A campaign survives restart from Board + objective alone               |
 | 3     | Steering: tool-boundary nudges; Board edits as structured follow-ups; digest                                           | ~1 wk  | Steering benchmark cases pass                                          |
+| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, cross-project digest; `setup` folds in | ~1 wk  | One digest shows every open project's runs, requests and spend         |
+| 3c    | Principal, write side: `create`, `start`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list | 1–2 wk | A run started from Home is recorded, approved and resumable in its own project |
 | 4     | Verification ladder: `VerifierReport`, novelty rung with Semantic Scholar/OpenAlex, digestion rung, provenance card    | 2 wk   | No `verified` claim without its evidence; novelty traps caught         |
 | 5     | Tournament script library with human matches and meta-review                                                          | ~1 wk  | Tournament beats single-shot on the benchmark at equal cost, or is cut |
 | 6     | Budgets, daemon, handoff (July Tracks 2–3)                                                                             | 2 wk   | 48 h unattended campaign with no human restart                         |
@@ -198,7 +250,8 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 
 ## 7. What not to build
 
-- A hardcoded `TournamentFlow`, a new "team" type, or another coordinator agent.
+- A hardcoded `TournamentFlow`, a new "team" type, or another coordinator agent. The Principal and the project `lead` are the only two coordinators, and the Principal replaces `setup`.
+- Cross-project runs recorded in the caller's session, or a global run log. Each run lives in its project.
 - Per-domain agents. Domains are skills.
 - Large fan-out before phase 5's evaluation justifies it. Brown himself can't yet measure coordination.
 - Anything that hides a claim's level or turns a failed check into a quiet default.
@@ -209,6 +262,8 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 2. Remote workflow agents (`devise`, `enhance`, `elevate`, `verifyFix`, …): retire them into theorist roles, or keep them as hosted skills?
 3. Tool-boundary nudges: default on, or opt-in per run?
 4. Benchmark contents: whose problems, and how are they kept out of training data?
+5. The Principal's read scope: the whole home directory with a deny list (proposed), or only folders the researcher has listed as "research roots"?
+6. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
 
 ## 9. Sources
 
