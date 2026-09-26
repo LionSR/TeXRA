@@ -36,9 +36,13 @@ export class DesktopAttentionPort extends Context.Service<
   DesktopAttentionPortShape
 >()('@texra/desktop/DesktopAttentionPort') {}
 
-// Held until clicked or closed: a notification the collector reclaims can no
-// longer deliver its click.
+// Held until clicked, closed or failed: a notification the collector
+// reclaims can no longer deliver its click. The OS does not promise a
+// `close` (notifications left in the macOS Notification Center never emit
+// one), so the set also keeps only the newest ones: an older notification
+// is not worth a process-lifetime reference.
 const liveNotifications = new Set<Notification>();
+const LIVE_NOTIFICATION_CAP = 32;
 
 /** The port over Electron: the app icon's badge and the OS notification
  *  centre, clicks leading back through `reveal`. */
@@ -63,7 +67,12 @@ export function electronAttentionPort(options: {
         options.reveal(key, runId);
       });
       notification.on('close', release);
+      notification.on('failed', release);
       liveNotifications.add(notification);
+      for (const oldest of liveNotifications) {
+        if (liveNotifications.size <= LIVE_NOTIFICATION_CAP) break;
+        liveNotifications.delete(oldest);
+      }
       notification.show();
     },
   };
