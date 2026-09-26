@@ -20,7 +20,6 @@ import {
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { CLI_OAUTH_PROVIDER_INPUTS } from '../runtime/oauthProviderDisplay';
 import {
-  formatCliManualAuthUrlMessage,
   getCliAuthProfile,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
@@ -172,15 +171,10 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   const loginResult = yield* withCliAuthError(
     signInCliSupabase(runtime, {
       provider,
-      openBrowser: !init.noBrowser,
+      noBrowser: init.noBrowser,
       selectAccount: init.selectAccount,
       loginHint: init.loginHint,
-      manualBrowserHint: 'texra login --no-browser',
-      onAuthUrl: (url) => {
-        if (init.noBrowser) {
-          cliProgressWriter(context)(formatCliManualAuthUrlMessage(url));
-        }
-      },
+      writeProgress: cliProgressWriter(context),
     }),
   );
   if (!loginResult.ok) return CliExitCode.ModelOrNetworkError;

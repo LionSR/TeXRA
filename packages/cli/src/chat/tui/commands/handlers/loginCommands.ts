@@ -21,7 +21,6 @@ import {
   type CliTexraLoginSlashArgs,
 } from '@cli/runtime/loginOptions';
 import {
-  formatCliManualAuthUrlMessage,
   signInCliSupabase,
   signInCliSupabaseDeviceCode,
   signOutCliSupabase,
@@ -87,8 +86,7 @@ const loginToSubscription = Effect.fn('loginToSubscription')(function* (
   output: SlashCommandOutput,
 ) {
   const account = yield* signInCliSubscription(providerId, args, {
-    writeProgress: (message) =>
-      output.writeProgress(message, { copyable: true }),
+    writeProgress: output.writeProgress,
   });
   yield* setCliSubscriptionPreference(stores, providerId, true);
   output.appendOutcome(
@@ -114,17 +112,10 @@ const loginToTexraAccount = Effect.fn('loginToTexraAccount')(function* (
       })
     : yield* signInCliSupabase(runtime, {
         provider: args.provider,
-        openBrowser: !args.noBrowser,
+        noBrowser: args.noBrowser,
         selectAccount: args.selectAccount,
         loginHint: args.loginHint,
-        manualBrowserHint: '/login --no-browser',
-        onAuthUrl: (url) => {
-          if (args.noBrowser) {
-            output.writeProgress(formatCliManualAuthUrlMessage(url), {
-              copyable: true,
-            });
-          }
-        },
+        writeProgress: output.writeProgress,
       });
   output.appendOutcome(RESEARCHER_ACCESS_AUTH.signedIn(session.account.label));
 });

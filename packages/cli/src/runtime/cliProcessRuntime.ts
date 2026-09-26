@@ -266,9 +266,11 @@ export function installCliProcessRuntime(
         signIn: () =>
           withProcessServices(
             runtime,
-            signInCliSupabase(runtime, { openBrowser: true }).pipe(
-              Effect.andThen(auth.authenticated),
-            ),
+            signInCliSupabase(runtime, {
+              noBrowser: false,
+              // No panel owns this sign-in, so the URL goes to stderr.
+              writeProgress: writeTextStderr,
+            }).pipe(Effect.andThen(auth.authenticated)),
           ).pipe(
             Effect.mapError(
               (cause) =>
