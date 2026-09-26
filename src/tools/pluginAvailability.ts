@@ -18,7 +18,6 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from '@tools/claudeAgentImport';
-import { hasClaudeCodeOauthToken } from '@tools/claudeAgentConfig';
 import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -266,7 +265,8 @@ export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks({
         ),
       ),
     );
-    const hasOauthToken = hasClaudeCodeOauthToken();
+    const hasOauthToken =
+      (yield* envVar('CLAUDE_CODE_OAUTH_TOKEN')) !== undefined;
     const authBits: string[] = [];
     if (keyOrigin === 'secret') {
       authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);

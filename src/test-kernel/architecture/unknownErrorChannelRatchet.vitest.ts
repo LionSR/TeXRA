@@ -1,5 +1,5 @@
 // Untyped Effect error channels (Effect facility adoption,
-// .agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md
+// .agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md
 // section 2, step 5). An `unknown` failure channel is the shape that forces
 // the next reader to re-derive a tag with `instanceof`. The shrink-only
 // baseline this began as reached zero, so the rule is now absolute: no
