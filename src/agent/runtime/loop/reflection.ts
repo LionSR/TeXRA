@@ -31,84 +31,41 @@
  * nothing can settle. A workflow that needs tools runs in the tool-use
  * family, and the reflection run's tool registry is empty by construction.
  */
-import { dirname } from 'node:path';
-import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
+import { Effect, FileSystem, SynchronizedRef } from 'effect';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
-import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
-  appendCompileFailureRoundContext,
-  formatCompileFailureRoundContext,
-} from '@agent/output/compileFailureRoundContext';
-import { LatexDiffManager } from '@agent/output/LatexDiffManager';
-import { traceFileLineage } from '@agent/output/lineageMapping';
-import { extractFilesFromXml } from '@agent/output/outputFileExtraction';
-import { recoverOutputFailure } from '@agent/output/outputOperations';
-import {
-  createOutputState,
-  ensureRoundData,
-  getOutputFilesByRound,
-  roundsFromPersisted,
-  roundsToPersisted,
-  setCompileFailures,
-  type OutputDependencies,
-} from '@agent/output/outputState';
-import { checkExpectedOutputs } from '@agent/output/outputValidation';
-import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
-import type { RoundFileMapping } from '@agent/output/types';
-import { XmlOutputManager } from '@agent/output/XmlOutputManager';
-import {
-  getSystemPromptWithRules,
-  PromptBuilder,
-} from '@agent/prompt/PromptBuilder';
-import { logUserMessage } from '@agent/trace';
-import { LatexMediaManager } from '@latex/LatexMediaManager';
-import { getTeXCountStats } from '@latex/texcount';
+  makeDocumentRounds,
+  type RoundServices,
+  type TurnFinish,
+} from '@agent/output/documentRounds';
+import { getSystemPromptWithRules } from '@agent/prompt/PromptBuilder';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { LanguageModel } from '@platform/languageModel';
-import {
-  WORKFLOW_RAW_OUTPUT_EXT,
-  workflowOutputPath,
-} from '@shared/constants/workflowOutput';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
   AgentCategory,
-  fileLocationDisplayPath,
   MESSAGE_TYPES,
-  isTerminalCompileRejection,
   OUTPUT_END_TAG,
   RUN_OUTCOME,
   SCRATCHPAD_TAG,
-  type AgentFileLocation,
-  type CompileResult,
-  type FileLocation,
   type RetryErrorInfo,
   type RoundOutput,
   type RunOutcome,
-  type RunStorageFileLocation,
   type RunUsageTotals,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
-import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { pathToLocationIn } from '@utils/files/fileLocation';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { turnText } from '../run/turnText';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
   familyState,
-  rowAggregate,
   snapshotRow,
   stepRow,
-  type ReflectionFlowState,
   type SnapshotPatch,
 } from './rows';
 import {
@@ -122,9 +79,6 @@ import {
 } from './runProgram';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { HttpClient } from 'effect/unstable/http';
-
-/** The services a round prepares, compiles and diffs on. */
-type RoundServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
 /** Length for the debug preview slices of a response. */
 const K_SLICE = 200;
@@ -146,28 +100,13 @@ interface ReflectionResult {
   readonly error?: RetryErrorInfo;
 }
 
-interface OutputExecResult {
-  summary: RoundSummary;
-  compileResult?: CompileResult;
-  compiledArtifacts: RunStorageFileLocation[];
-}
-
 type RoundExit = {
   readonly state: RunState;
   readonly kind: RunOutcome;
 };
 
 /** The finish reason of a completed turn; the editor arm reports none. */
-function finishReasonOf(
-  turn: NonNullable<RunState['lastTurn']>,
-):
-  | 'stop'
-  | 'length'
-  | 'content-filter'
-  | 'tool-calls'
-  | 'stop-sequence'
-  | 'refusal'
-  | 'context-window-exceeded' {
+function finishReasonOf(turn: NonNullable<RunState['lastTurn']>): TurnFinish {
   return turn.kind === 'http' ? turn.finishReason : 'stop';
 }
 
@@ -189,7 +128,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
   const invoker = yield* ModelInvoker;
-  const { runId, session, logger, config, prompt, fileService } = run;
+  const { runId, session, logger, prompt } = run;
   const setting = run.setting;
   if (setting.agentCategory !== AgentCategory.Workflow) {
     return yield* Effect.die(
@@ -198,160 +137,43 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   }
 
   // ------------------------------------------------------------ services
-  // The run's session roots, as data: the output pipeline's workspace,
-  // storage and setting reads take them from here, so the answer cannot
-  // depend on which fiber turn this program resumes in.
-  const { roots } = session;
-  const getRejectOnCompileFailure = () =>
-    readSettingFrom<boolean>(
-      roots,
-      WorkspaceStateKey.WORKFLOW_REJECT_ON_COMPILE_FAILURE,
-    );
-  const baseFiles: FileLocation[] = (
-    config.outputFiles.length > 0 ? config.outputFiles : config.inputFiles
-  ).map((file) => fileService.locateSource(file));
-  const outputState = createOutputState();
-  const xmlManager = new XmlOutputManager(
-    config,
-    logger,
-    fileService,
-    outputState,
-    roots.config,
-  );
-  const diffManager = new LatexDiffManager(
-    setting.isRewrite,
-    () => getOutputFilesByRound(outputState),
-    logger,
-    runId,
-    fileService,
-    roots,
-  );
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    run.userVarChannels,
-    roots.workspace,
-    logger,
-  );
-  const latexMediaManager = new LatexMediaManager(logger, roots, fileService);
-  const totalRounds = Math.max(
-    setting.rounds ?? 2,
-    userRequestTemplateCount(prompt.userRequest),
-  );
-  const outputLocationFor = (round: number): AgentFileLocation =>
-    fileService.createLocation(
-      workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
-    ) as AgentFileLocation;
-  const deps: OutputDependencies = {
-    config,
-    baseFiles,
-    logger,
-    fileService,
-    roots,
-  };
-  /** An output step whose failure costs that step, not the round: reported at
-   *  `warn` on the transcript, then the pipeline carries on. */
-  const recoverWarn = (label: string) =>
-    recoverOutputFailure({
-      logger,
-      level: 'warn' as const,
-      label,
-      messageType: MESSAGE_TYPES.DEFAULT,
-      recover: () => Effect.void,
-    });
+  // The documents plugin owns the round prompts, the output pipeline and the
+  // compile-rejection facts; this program owns the rounds and every row but
+  // `output.produced`.
+  const docs = yield* makeDocumentRounds(setting);
+  const { totalRounds } = docs;
 
-  // ---------------------------------------------------------------- state
-  let workspace = AgentWorkspaceState.create();
-  /** Where each base file's pre-run content lives, as `prepareRunWorkspace`
-   *  decided it: every round diffs against these, never the live file an
-   *  in-place round overwrote. */
-  let diffBaseFiles = baseFiles;
-  // The family state no row carries: the round budget and the compile
-  // rejection facts. The round is the folded `state.round`.
-  let flow: ReflectionFlowState = {
-    totalRounds,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-  };
-  /** The family state every snapshot of this run carries. */
-  const flowState = (): ReflectionFlowState => ({
-    ...flow,
-    workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-  });
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
       ...patch,
-      state: { family: 'reflection', state: flowState() },
+      state: { family: 'reflection', state: docs.flowState() },
     });
-  /** Disabling rejection is an explicit acceptance decision. */
-  const normalizeCompileRejectionPolicy = Effect.fn(function* () {
-    if (
-      (yield* getRejectOnCompileFailure()) ||
-      (!flow.unresolvedCompileRejection && !flow.compileFailureContext)
-    ) {
-      return;
-    }
-    delete flow.unresolvedCompileRejection;
-    delete flow.compileFailureContext;
-  });
-  const resolveOutcome = (state: RunState): RunOutcome =>
-    deriveRunOutcome({
-      failed:
-        state.lastError !== null ||
-        isTerminalCompileRejection(flow, state.round),
+  const resolveOutcome = Effect.fn(function* (state: RunState) {
+    const rejected = yield* docs.rejected(state.round);
+    return deriveRunOutcome({
+      failed: state.lastError !== null || rejected,
       cancelled: false,
     });
+  });
   /** The round loop's single continue/finalize decision. */
   const shouldContinueNextRound = (state: RunState): boolean =>
     state.lastError === null && state.round + 1 < totalRounds;
 
-  /**
-   * A committed response's text as the round writes it, and whether its
-   * output is extracted: text that stopped, was cut off by the output limit
-   * (`length`, extracted as far as it got), or closes the documents. The turn
-   * sends no stop sequence — the Google, OpenAI Chat and OpenAI Responses
-   * protocols refuse one — so the closing tag stays in the text.
-   */
+  /** A committed response's text as the round writes it. */
   const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
     Effect.map(
       session.responseTextProcessing.postProcessResponse(
         turnText(turn),
         session.roots.config,
       ),
-      (text) => {
-        const finish = finishReasonOf(turn);
-        const endTurn =
-          text !== '' &&
-          (finish === 'stop' ||
-            finish === 'length' ||
-            text.includes(OUTPUT_END_TAG));
-        return { finish, text, endTurn };
-      },
+      (text) => ({ finish: finishReasonOf(turn), text }),
     );
-
-  /** The files a round works on: inputs first, then the previous outputs. */
-  const filesForRound = (round: number): FileLocation[] => {
-    if (round === 0) {
-      return config.inputFiles.map((f) => fileService.createLocation(f));
-    }
-    const previous = outputState.rounds.get(round - 1);
-    if (previous?.outputs.length) {
-      return previous.outputs.map((o) => o.location);
-    }
-    return config.outputFiles.map((f) => fileService.createLocation(f));
-  };
 
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('reflection.open')(function* (
     opening: RunState,
   ): Effect.fn.Return<RunState, Error> {
-    // A workflow YAML may still declare `tools:`. This family advertises
-    // none (header), so the narrowing is stated rather than silent.
-    if (setting.tools.length > 0) {
-      const declared = setting.tools.map((tool) => tool.name).join(', ');
-      logger.warn(
-        `The workflow family advertises no tools under this release, so the tools resolved for this run are not offered to the model: ${declared}. Run the agent in the tool-use family if it needs them.`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
-    }
+    yield* docs.opening;
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       snapshotRow(runId, opening, {
@@ -361,7 +183,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: { family: 'reflection', state: flowState() },
+        state: { family: 'reflection', state: docs.flowState() },
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
@@ -372,142 +194,32 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const restore = Effect.fn('reflection.restore')(function* (
     state: RunState,
   ): Effect.fn.Return<void, Error> {
-    const persisted = familyState(state, 'reflection');
-    if (persisted === null) {
+    if (familyState(state, 'reflection') === null) {
       return yield* Effect.die(
         new Error(`Run ${runId} is not a reflection run; resume it as one.`),
       );
     }
-    // The configured total wins over the persisted one, so a YAML change
-    // (rounds: 2 -> 1) takes effect on resume; a resumed run retries the
-    // invocation its failure interrupted rather than failing again at once.
-    flow = { ...persisted, totalRounds };
-    workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
-    outputState.rounds = roundsFromPersisted(state.roundOutputs);
+    // A resumed run retries the invocation its failure interrupted rather
+    // than failing again at once.
+    docs.restore(state);
     logger.debug(
       `Resuming reflection run from round ${state.round}/${totalRounds}`,
     );
   });
 
   // ----------------------------------------------------------- the round
-  /** The round prompt, its media and TeX count, committed with `round.begin`. */
+  /** The round prompt, committed with `round.begin`. */
   const prepareRound = Effect.fn('reflection.prepareRound')(function* (
     initial: RunState,
     cell: RunCell,
   ): Effect.fn.Return<RunState, Error, RoundServices> {
     const round = initial.round;
-    const bound = yield* SynchronizedRef.get(run.model);
-    workspace = AgentWorkspaceState.create();
-    const files = filesForRound(round);
-    const content: InputPart[] = [];
-
-    if (config.toolConfig.attachTeXCount && files.length > 0) {
-      const counted = yield* Effect.exit(
-        getTeXCountStats(
-          roots.workspace,
-          roots,
-          files.map((f) => f.absolutePath),
-        ),
-      );
-      if (Exit.isFailure(counted)) {
-        if (Cause.hasInterrupts(counted.cause)) return yield* Effect.interrupt;
-        logger.debug('TeXCount skipped', { data: Cause.squash(counted.cause) });
-      } else if (counted.value) {
-        content.push({ kind: 'text', text: counted.value });
-      }
-    }
-
-    let requestText: string;
-    if (round === 0) {
-      const initialPrompts = yield* promptBuilder.buildInitialPrompts();
-      const prefix = initialPrompts.userPrefix.trim();
-      if (prefix) content.push({ kind: 'text', text: prefix });
-      requestText = initialPrompts.userRequest.trim();
-    } else {
-      const request = yield* promptBuilder.buildUserRequest(round);
-      requestText = appendCompileFailureRoundContext(
-        request,
-        flow.compileFailureContext,
-      ).trim();
-      delete flow.compileFailureContext;
-    }
-
-    // Media: figures and PDFs of the round's files, plus the configured media
-    // on the first round. Best effort, never silent: a skipped extraction
-    // says so in the transcript; the opening row logs whether or not the
-    // attachment succeeded.
-    let attachmentKinds: readonly InputPart['kind'][] = [];
-    if (bound.supportsVision && files.length > 0) {
-      const extracted = yield* Effect.exit(
-        round === 0
-          ? latexMediaManager.processInputFiles(
-              files,
-              workspace,
-              config.toolConfig,
-              config.mediaFiles.map((p) => fileService.createLocation(p)),
-            )
-          : fileService
-              .ensureMirroredInRoundDir(round)
-              .pipe(
-                Effect.andThen(
-                  latexMediaManager.processOutputFiles(
-                    files,
-                    workspace,
-                    config.toolConfig,
-                  ),
-                ),
-              ),
-      );
-      if (Exit.isFailure(extracted)) {
-        if (Cause.hasInterrupts(extracted.cause))
-          return yield* Effect.interrupt;
-        logger.debug('Media extraction skipped', {
-          data: Cause.squash(extracted.cause),
-        });
-      } else {
-        const media = yield* Effect.exit(
-          mediaInputParts(
-            [...workspace.media.files],
-            bound,
-            logger,
-            run.session.roots.config,
-          ),
-        );
-        if (Exit.isFailure(media)) {
-          if (Cause.hasInterrupts(media.cause)) return yield* Effect.interrupt;
-          logger.warn('Media attachment failed; continuing without it', {
-            data: Cause.squash(media.cause),
-          });
-        } else {
-          content.push(...media.value.parts);
-          attachmentKinds = media.value.parts.map((part) => part.kind);
-        }
-      }
-    }
-    if (round === 0 && run.initialUserMessageForTranscript) {
-      logUserMessage(
-        logger,
-        run.initialUserMessageForTranscript,
-        attachmentKinds.flatMap((kind) =>
-          kind === 'image' || kind === 'document' ? [kind] : [],
-        ),
-      );
-    }
-    if (requestText) content.push({ kind: 'text', text: requestText });
-    if (content.length === 0) {
-      return yield* Effect.fail(
-        new Error(`Round ${round} has no prompt to send.`),
-      );
-    }
-    logger.debug('Prepared round context', {
-      data: { round, parts: content.length },
-    });
-    const prepared = yield* cell.append([
+    const content = yield* docs.nextRound(round);
+    return yield* cell.append([
       appendRow(runId, [{ role: 'user', content }]),
       snapshot(initial, { phase: 'model.ready', round, continuationIndex: 0 }),
       stepRow(runId, initial, 'round.begin'),
     ]);
-    return prepared;
   });
 
   /**
@@ -626,213 +338,27 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     ]);
   });
 
-  /** The output pipeline over the round's raw output: extraction, lineage,
-   *  latexdiff, the compile check, and the round summary. */
-  const processOutput = Effect.fn('reflection.processOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
-    endTurn: boolean,
-  ): Effect.fn.Return<OutputExecResult, Error, RoundServices> {
-    let mapping: RoundFileMapping | undefined;
-    let compileRoundResult: CompileResult | undefined;
-    const compiledArtifacts: RunStorageFileLocation[] = [];
-    if (endTurn) {
-      logger.debug(`Processing output for round ${round}`);
-      yield* xmlManager
-        .ensureCorrectXmlStructure(outputLocation)
-        .pipe(recoverWarn('XML structure'));
-      yield* extractFilesFromXml(
-        outputState,
-        deps,
-        xmlManager,
-        outputLocation,
-        round,
-      ).pipe(recoverWarn('Output processing'));
-      if ((outputState.rounds.get(round)?.outputs.length ?? 0) > 0) {
-        mapping = traceFileLineage(outputState, diffBaseFiles, round);
-        compiledArtifacts.push(
-          ...(yield* diffManager.handleLatexdiffOfOutput(round, mapping)),
-        );
-        yield* Effect.gen(function* () {
-          const check = yield* runCompileCheck(
-            {
-              roots,
-              fileService,
-              outputState,
-              logger,
-              runId,
-            },
-            round,
-          );
-          compileRoundResult = check.compileResult;
-          compiledArtifacts.push(...check.artifacts);
-          const compileFailures = compileFailuresOf(check.compileResult);
-          setCompileFailures(outputState, round, compileFailures);
-        }).pipe(recoverWarn('Compile check'));
-      }
-    }
-    const summary = yield* summarizeRound(
-      outputState,
-      deps,
-      outputLocation,
-      round,
-      { mapping, isRewrite: setting.isRewrite, baseFiles: diffBaseFiles },
-    );
-    return {
-      summary,
-      compileResult: compileRoundResult,
-      compiledArtifacts,
-    };
-  });
-
-  /** The output pipeline failed: keep what the round reported, drop what it
-   *  produced, and summarize what can still be summarized. */
-  const fallbackOutput = Effect.fn('reflection.fallbackOutput')(function* (
-    round: number,
-    outputLocation: AgentFileLocation,
-    error: Error,
-  ): Effect.fn.Return<OutputExecResult, never, FileSystem.FileSystem> {
-    logger.warn(`Output processing failed: ${error.message}`, { data: error });
-    const summary = yield* summarizeRound(
-      outputState,
-      deps,
-      outputLocation,
-      round,
-      { isRewrite: setting.isRewrite },
-    ).pipe(
-      Effect.catch((summaryError) =>
-        Effect.sync((): RoundSummary => {
-          logger.warn(
-            `Output fallback summary failed; output files may be dropped: ${toErrorMessage(summaryError)}`,
-            { data: summaryError },
-          );
-          return { filesToOpen: [] };
-        }),
-      ),
-    );
-    const roundData = ensureRoundData(outputState, round);
-    roundData.rawOutput = null;
-    roundData.outputs = [];
-    roundData.compileFailures = [];
-    return {
-      summary,
-      compileResult: undefined,
-      compiledArtifacts: [],
-    };
-  });
-
-  /** Open produced files and apply the round's compile policy. */
-  const presentOutput = Effect.fn('reflection.presentOutput')(function* (
-    endTurn: boolean,
-    result: OutputExecResult,
-  ) {
-    const interactions = session.interactions;
-    const { summary } = result;
-    const compileFailures = compileFailuresOf(result.compileResult);
-    for (const location of summary.filesToOpen) {
-      yield* interactions.emit('requestOpenFile', {
-        location,
-        preserveFocus: true,
-      });
-    }
-    if (
-      endTurn &&
-      (yield* readSettingFrom<boolean>(
-        roots,
-        WorkspaceStateKey.WORKFLOW_AUTO_OPEN_PDF,
-      ))
-    ) {
-      // A failed compile opens its log; a clean round opens what it produced.
-      const locationsToOpen =
-        compileFailures.length > 0
-          ? compileFailures.map((failure) => failure.log)
-          : result.compiledArtifacts;
-      for (const location of locationsToOpen) {
-        yield* interactions.emit('requestOpenFile', {
-          location,
-          preserveFocus: true,
-        });
-      }
-    }
-    if (result.compileResult) {
-      const compileFailureContext = (yield* getRejectOnCompileFailure())
-        ? formatCompileFailureRoundContext(result.compileResult)
-        : undefined;
-      if (compileFailureContext) {
-        flow = {
-          ...flow,
-          compileFailureContext,
-          unresolvedCompileRejection: true,
-        };
-      } else {
-        delete flow.compileFailureContext;
-        delete flow.unresolvedCompileRejection;
-      }
-    }
-  });
-
   /**
    * The round's output, entered at `output.pending`, which was committed
    * before any file write; re-entry at that phase runs the pipeline again
-   * over the same raw output and the run-owned artifacts it already produced.
+   * over the same raw output. `output.pending` stays replayable until round
+   * end.
    */
   const produceOutput = Effect.fn('reflection.produceOutput')(function* (
     state: RunState,
     cell: RunCell,
   ): Effect.fn.Return<RunState, Error, RoundServices> {
-    const round = state.round;
-    const location = outputLocationFor(round);
     if (state.lastTurn === null) {
       return yield* Effect.die(new Error('Output needs the round response.'));
     }
     // The round's raw output is its last response's text, from the folded
     // turn; re-entry rewrites it whole from the same row.
-    const { text, endTurn } = yield* responseOf(state.lastTurn);
-    const fs = yield* FileSystem.FileSystem;
-    yield* fs.makeDirectory(dirname(location.absolutePath), {
-      recursive: true,
-    });
-    yield* fs.writeFileString(location.absolutePath, text);
-    const result = yield* processOutput(round, location, endTurn).pipe(
-      // The pipeline's own steps recover what they can; anything that still
-      // reaches here — a failed step or a defect in one — costs the round its
-      // outputs, not the run. Interruption is not an output failure and stays
-      // a cancelled run.
-      Effect.catchCause((cause) =>
-        Cause.hasInterrupts(cause)
-          ? Effect.failCause(cause)
-          : fallbackOutput(round, location, ensureError(Cause.squash(cause))),
-      ),
+    return yield* docs.afterTurn(
+      state.round,
+      yield* responseOf(state.lastTurn),
+      cell,
     );
-    if (endTurn) {
-      yield* Effect.gen(function* () {
-        const validation = yield* checkExpectedOutputs(
-          outputState,
-          deps,
-          location,
-          round,
-        );
-        if (validation.missing.length > 0) {
-          yield* session.interactions.emit('requestShowInstruction', {
-            key: 'missingOutputsInfo',
-            message: 'Missing output files detected',
-          });
-        }
-      }).pipe(recoverWarn('Validate expected outputs'));
-    }
-    // The row owns completed outputs. Commit it before fallible presentation
-    // and policy reads; output.pending stays replayable until round end.
-    const produced = yield* cell.append([
-      {
-        type: 'output.produced',
-        aggregateId: rowAggregate(runId),
-        rounds: roundsToPersisted(outputState),
-      },
-    ]);
-    yield* presentOutput(endTurn, result);
-    return produced;
   });
-
   /** One round inside its trace stage: prompt, response, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     cell: RunCell,
@@ -858,7 +384,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           const system = yield* getSystemPromptWithRules(
             prompt.systemPrompt,
             run.userVarChannels,
-            roots.workspace,
+            session.roots.workspace,
           );
           const outcome = yield* invoker.invoke(cell, {
             system,
@@ -908,29 +434,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
-      // Run-workspace preparation, before the first round: extraction reads
-      // the prepared snapshot, and a failure is a transcript warning, never
-      // an unhandled rejection.
-      diffBaseFiles = yield* fileService
-        .prepareRunWorkspace(baseFiles, {
-          linkFiles: collectRunSupportFiles(roots.workspace, config),
-        })
-        .pipe(
-          Effect.catch((error) =>
-            Effect.sync(() => {
-              logger.warn(
-                `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
-                { data: error, messageType: MESSAGE_TYPES.INTERNAL },
-              );
-              return baseFiles;
-            }),
-          ),
-        );
-      yield* normalizeCompileRejectionPolicy();
+      yield* docs.enter;
 
       /**
-       * Advance onto the next round: reset the per-round flow facts and
-       * workspace, then commit the `round.ready` snapshot.
+       * Advance onto the next round: reset the round's media workspace, then
+       * commit the `round.ready` snapshot.
        *
        * `closePrevious` says whether a round is actually being closed. Ending
        * one emits `round.end` against the folded state captured *before* the
@@ -944,7 +452,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         current: RunState,
         closePrevious: boolean,
       ): Effect.fn.Return<RunState, Error> {
-        workspace = AgentWorkspaceState.create();
+        docs.resetWorkspace();
         return yield* cell.append([
           ...(closePrevious ? [stepRow(runId, current, 'round.end')] : []),
           snapshot(current, {
@@ -959,8 +467,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
         current: RunState,
         roundEnded: boolean,
       ): Effect.fn.Return<LoopExit, Error, ChildProcessSpawner> {
-        yield* normalizeCompileRejectionPolicy();
-        const outcome = resolveOutcome(current);
+        const outcome = yield* resolveOutcome(current);
         const state = yield* cell.append([
           ...(roundEnded ? [stepRow(runId, current, 'round.end')] : []),
           snapshot(current, { phase: 'halted' }),
@@ -977,7 +484,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
           if (state.round + 1 >= totalRounds) {
             return {
               state,
-              outcome: resolveOutcome(state),
+              outcome: yield* resolveOutcome(state),
             } satisfies LoopExit;
           }
           state = yield* enterRound(state, false);
@@ -1002,7 +509,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   const result = (outcome: RunOutcome, at: RunState): ReflectionResult => ({
     outcome,
-    roundOutputs: roundsToPersisted(outputState),
+    roundOutputs: docs.outputs(),
     usage: at.usage,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { error: at.lastError }
@@ -1019,24 +526,3 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     Effect.catchCause(stoppedBy(logger, `Reflection run ${runId}`)),
   );
 });
-
-function collectRunSupportFiles(
-  workspaceRoot: string | undefined,
-  agentConfig: {
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly inputFiles: readonly string[];
-  },
-): FileLocation[] {
-  const extras = new Map<string, FileLocation>();
-  for (const value of [
-    ...agentConfig.contextFiles,
-    ...agentConfig.mediaFiles,
-    ...agentConfig.inputFiles,
-  ]) {
-    if (!value) continue;
-    const location = pathToLocationIn(workspaceRoot, value);
-    extras.set(fileLocationDisplayPath(location), location);
-  }
-  return [...extras.values()];
-}
