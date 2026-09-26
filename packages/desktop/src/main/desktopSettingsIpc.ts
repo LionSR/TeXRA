@@ -8,7 +8,10 @@ import {
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-import type { SettingsHostBindings } from '@controllers/settingsView/settingsHostBindings';
+import {
+  SETTINGS_LOG_CHANNEL,
+  type SettingsHostBindings,
+} from '@controllers/settingsView/settingsHostBindings';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { onAppSignal } from '@eventBus/AppSignals';
 import type { ExternalOpenFailed } from '@hosts/uiHosts';
@@ -103,7 +106,9 @@ export function createDesktopSettingsIpc(
           ),
         ),
         Effect.catchTag('NotificationFailed', (notice) =>
-          Effect.logError(notice.message).pipe(withLogChannel('SettingsView')),
+          Effect.logError(notice.message).pipe(
+            withLogChannel(SETTINGS_LOG_CHANNEL),
+          ),
         ),
       ),
     );
@@ -209,7 +214,7 @@ export function createDesktopSettingsIpc(
           .pipe(
             Effect.catchTag('NotificationFailed', (notice) =>
               Effect.logError(notice.message).pipe(
-                withLogChannel('SettingsView'),
+                withLogChannel(SETTINGS_LOG_CHANNEL),
               ),
             ),
           ),
