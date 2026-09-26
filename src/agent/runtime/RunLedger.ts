@@ -231,40 +231,28 @@ const candidates = (
     at: 0,
   }));
 
-type History = readonly z.output<typeof MessageSchema>[];
-
 /**
- * Histories accepted by `PreparedHistorySchema`. The fold appends by copying
- * the array and keeping each message object, and the schema's rules are
- * between neighbours (a calling assistant and its tool group), so a batch
- * over an accepted history re-checks only from one message before the first
- * changed one, never starting on a tool group. Re-parsing the whole history
- * (media base64 included) on every batch was quadratic over a run.
+ * `PreparedHistorySchema` over `history` from message `from` on. Its rules
+ * are between neighbours (a calling assistant and its tool group), so a
+ * suffix that starts on a message already checked, and never on a tool
+ * group, re-checks every pair past it; a refusal's detail is still the
+ * whole parse's, whose indices name the whole history.
  */
-const preparedHistories = new WeakSet<History>();
-
 const unprepared = (
   runId: RunId,
-  history: History,
-  previous?: History,
+  history: readonly z.output<typeof MessageSchema>[],
+  from = 0,
 ): RunLedgerRefused | null => {
-  let start = 0;
-  if (previous !== undefined && preparedHistories.has(previous)) {
-    const shared = Math.min(previous.length, history.length);
-    while (start < shared && previous[start] === history[start]) start += 1;
-    start = Math.max(0, start - 1);
-    if (start > 0 && history[start]?.role === 'tool') start -= 1;
-  }
-  if (PreparedHistorySchema.safeParse(history.slice(start)).success) {
-    preparedHistories.add(history);
+  let start = Math.max(0, from - 1);
+  if (start > 0 && history[start]?.role === 'tool') start -= 1;
+  if (PreparedHistorySchema.safeParse(history.slice(start)).success)
     return null;
-  }
-  // The detail names indices in the whole history, so it is the whole parse's.
-  const prepared = PreparedHistorySchema.safeParse(history);
   return new RunLedgerRefused({
     reason: 'unprepared-history',
     runId,
-    detail: prepared.error?.message ?? `history from message ${start}`,
+    detail:
+      PreparedHistorySchema.safeParse(history).error?.message ??
+      `history from message ${start}`,
   });
 };
 
@@ -451,11 +439,18 @@ export const runLedgerLayer: Layer.Layer<
         rows.some(isMessageBearing) &&
         candidate.success.messages.length > 0
       ) {
-        const refusal = unprepared(
-          run,
-          candidate.success.messages,
-          state?.messages,
-        );
+        // The fold only appends to the history `state` already holds
+        // (checked when this ledger accepted it), except that a compaction,
+        // always the batch's first message-bearing row, first cuts it to
+        // `keepPrefix`: only what follows the kept part is new. Checking the
+        // whole history on every batch was quadratic over a run.
+        const compaction = rows.find((row) => row.type === 'model.compaction');
+        const held = state?.messages.length ?? 0;
+        const kept =
+          compaction?.type === 'model.compaction'
+            ? Math.min(compaction.payload.keepPrefix, held)
+            : held;
+        const refusal = unprepared(run, candidate.success.messages, kept);
         if (refusal !== null) return yield* refusal;
       }
       const drafts: readonly SessionEventDraft[] = rows;
