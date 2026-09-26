@@ -23,7 +23,6 @@ import {
 
 import {
   createRecordingHost,
-  recordFollowUpsSent,
   seedActiveRun,
   seedTerminalRun,
 } from '../progressTestUtils';
@@ -90,21 +89,30 @@ describe('tool-use follow-up progress events', () => {
         const session = trackSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const sent = recordFollowUpsSent(session);
         const lease = session.followUps.claimLive(runId, 'flow')!;
 
         trackToolUseFlow({ session });
 
-        const result = yield* submitFollowUp(runId, 'please continue', {
-          session,
-        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        const result = yield* submitFollowUp(
+          runId,
+          { text: 'please continue', from: { kind: 'user' as const } },
+          {
+            session,
+          },
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
         expect(result).toEqual({ status: 'sent' });
         const input = session.followUps.attachInput(runId, lease)!;
         expect(yield* input.take).toMatchObject({
-          followUps: [{ content: { text: 'please continue', origin: 'user' } }],
+          followUps: [
+            {
+              content: {
+                text: 'please continue',
+                from: { kind: 'user' as const },
+              },
+            },
+          ],
         });
-        expect(sent.sent).toEqual([runId]);
         expect(run.events).toEqual([]);
       }),
   );
@@ -123,9 +131,13 @@ describe('tool-use follow-up progress events', () => {
         );
         trackToolUseFlow();
 
-        const result = yield* submitFollowUp(runId, 'late follow-up', {
-          session: testDefaultSession(),
-        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        const result = yield* submitFollowUp(
+          runId,
+          { text: 'late follow-up', from: { kind: 'user' as const } },
+          {
+            session: testDefaultSession(),
+          },
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
         // The run's own terminal row is the refusal: it finished.
         expect(result).toEqual({ status: 'failed', reason: 'finished' });
@@ -153,7 +165,7 @@ describe('tool-use follow-up progress events', () => {
 
         const result = yield* submitFollowUp(
           resumingRunId,
-          'queued while resuming',
+          { text: 'queued while resuming', from: { kind: 'user' as const } },
           {
             session: testDefaultSession(),
           },

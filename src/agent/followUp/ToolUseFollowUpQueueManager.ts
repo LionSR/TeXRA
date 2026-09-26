@@ -1,12 +1,9 @@
-import { randomUUID } from 'node:crypto';
-
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
-  type FollowUpContent,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -19,6 +16,7 @@ import {
 import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
+import { stampFollowUp, type FollowUpSenderInput } from './followUpSender';
 import { RunInput } from './RunInput';
 import type { FollowUpRowPort } from './followUpRowPort';
 
@@ -30,7 +28,7 @@ export interface FollowUpQueueInput {
   readonly displayText?: string;
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
-  readonly origin?: FollowUpContent['origin'];
+  readonly from: FollowUpSenderInput;
   /**
    * Stable logical identity of one delivery its producer may repeat: a
    * child-run result (#9531), an inquiry continuation re-delivered after a
@@ -102,7 +100,10 @@ type FollowUpSubmission =
   | { readonly kind: 'duplicate' }
   | { readonly kind: 'delivered_live' }
   | { readonly kind: 'queued'; readonly lease?: FollowUpRecoveryLease }
-  | { readonly kind: 'refused'; readonly reason?: 'owned_elsewhere' };
+  | {
+      readonly kind: 'refused';
+      readonly reason?: 'owned_elsewhere';
+    };
 
 interface FollowUpSubmitOptions {
   /**
@@ -148,7 +149,6 @@ export class ToolUseFollowUpQueue {
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
-  private readonly sentObservers = new Set<(runId: RunId) => void>();
   /** Leases nobody holds that keep an entry owned while the claim an
    *  admission took for it is released ({@link releaseAdoptedClaim}). */
   private readonly releasing = new WeakSet<FollowUpConsumerLease>();
@@ -165,24 +165,6 @@ export class ToolUseFollowUpQueue {
     return () => {
       this.releaseObservers.delete(observer);
     };
-  }
-
-  /**
-   * Observe input reaching a run's live consumer (a follow-up delivered
-   * live, a compaction request queued for the next model call). An
-   * occurrence, not state: it is what `executions wait` ends its wait on,
-   * and it lives in this process only, never on the session's event plane.
-   */
-  onSent(observer: (runId: RunId) => void): () => void {
-    if (this.disposed) return () => {};
-    this.sentObservers.add(observer);
-    return () => {
-      this.sentObservers.delete(observer);
-    };
-  }
-
-  notifySent(runId: RunId): void {
-    for (const observer of [...this.sentObservers]) observer(runId);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */
@@ -262,15 +244,6 @@ export class ToolUseFollowUpQueue {
     admission: 'live_owner' | 'recoverable',
     options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
-    const queued = followUps.map((followUp): QueuedFollowUp => ({
-      followUpId: followUp.deliveryId ?? randomUUID(),
-      content: {
-        text: followUp.text,
-        displayText: followUp.displayText,
-        mediaFiles: followUp.mediaFiles ? [...followUp.mediaFiles] : undefined,
-        origin: followUp.origin ?? 'user',
-      },
-    }));
     const replayable = new Set(
       followUps.flatMap((followUp) =>
         followUp.deliveryId === undefined ? [] : [followUp.deliveryId],
@@ -279,7 +252,17 @@ export class ToolUseFollowUpQueue {
     // A session that has closed takes no admission: its publisher is gone.
     if (this.disposed) return Effect.succeed({ kind: 'refused' });
     return this.port.exclusive((append) =>
-      this.admit(runId, queued, replayable, admission, append, options),
+      Effect.suspend(() => {
+        const queued = followUps.map((f) => stampFollowUp(runId, f, this.port));
+        return this.admit(
+          runId,
+          queued,
+          replayable,
+          admission,
+          append,
+          options,
+        );
+      }),
     );
   }
 

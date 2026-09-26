@@ -2151,7 +2151,7 @@ describe('the C1 event table and the C6 publisher', () => {
     const target = qualifyAggregateId('run', RUN);
     const followUp = {
       followUpId: 'left-queued',
-      content: { text: 'deliver me', origin: 'user' as const },
+      content: { text: 'deliver me', from: { kind: 'user' as const } },
     };
     return Effect.gen(function* () {
       yield* Database.pipe(

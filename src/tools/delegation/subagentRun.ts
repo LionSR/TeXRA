@@ -263,7 +263,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
       ...(isToolUse
         ? [
-            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
+            `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
           ]
         : []),
     ].join('\n'),

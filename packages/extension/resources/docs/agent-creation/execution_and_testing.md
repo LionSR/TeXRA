@@ -62,9 +62,9 @@ Use the `delegate_*` tools in the `tools:` list of `creator.yaml`.
    ```
 2. When the subagent hits WAITING (or finishes), read the output and decide
    whether the agent did what it was supposed to.
-3. If more iteration is needed, pass the returned `execution_id` back to
-   `delegate_agent` with a follow-up `instruction` — this resumes the same
-   session with full context.
+3. If more iteration is needed, send the subagent a follow-up with the
+   `executions` tool (`action: "send"` on `/executions/<run id>`) — this
+   resumes the same session with full context.
 
 ## When testing is not possible
 

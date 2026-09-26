@@ -836,7 +836,7 @@ function seedSubagentFollowupTranscript(): void {
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text: `<orchestrator-followup>${text}</orchestrator-followup>`,
+      text,
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -1146,7 +1146,7 @@ publish(
     type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     followUpId: `harness-follow-up-${index + 1}`,
-    content: { text, origin: 'user' as const },
+    content: { text, from: { kind: 'user' as const } },
   })),
 );
 const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();

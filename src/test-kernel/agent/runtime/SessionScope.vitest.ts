@@ -93,7 +93,11 @@ describe('session-owned transcripts and follow-up queues', () => {
 
       expect(a.followUps.hasLiveOwner(runId)).toBe(false);
       expect(
-        yield* a.followUps.submit(runId, { text: 'late' }, 'live_owner'),
+        yield* a.followUps.submit(
+          runId,
+          { from: { kind: 'user' as const }, text: 'late' },
+          'live_owner',
+        ),
       ).toEqual({ kind: 'refused' });
       expect(b.followUps.hasLiveOwner(runId)).toBe(true);
     }),
@@ -127,9 +131,13 @@ describe('sendFollowUp host-path session routing', () => {
         // A host-path caller (outside any run ALS, like the desktop IPC handler)
         // that passes its process session sees the live child and queues.
         expect(
-          yield* submitFollowUp(parentRun, 'continue', {
-            session: processSession,
-          }).pipe(
+          yield* submitFollowUp(
+            parentRun,
+            { text: 'continue', from: { kind: 'user' as const } },
+            {
+              session: processSession,
+            },
+          ).pipe(
             Effect.provideService(AgentResume, {
               tryResumeRun: () => Effect.succeed(false),
             }),
@@ -141,9 +149,13 @@ describe('sendFollowUp host-path session routing', () => {
         // and no checkpoint of its own, the classification it falls back to is
         // `finished`.
         expect(
-          yield* submitFollowUp(parentRun, 'continue', {
-            session: testDefaultSession(),
-          }).pipe(
+          yield* submitFollowUp(
+            parentRun,
+            { text: 'continue', from: { kind: 'user' as const } },
+            {
+              session: testDefaultSession(),
+            },
+          ).pipe(
             Effect.provideService(AgentResume, {
               tryResumeRun: () => Effect.succeed(false),
             }),

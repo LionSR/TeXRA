@@ -182,7 +182,6 @@ function callDelegateReview(call = parentRunContext()) {
     instruction: 'Check the proof.',
     memories: [],
     working_directory: null,
-    execution_id: null,
   }).pipe(
     Effect.provideService(AgentEngine, testEngine),
     Effect.provide(nativeToolTestLayer(call)),

@@ -105,6 +105,8 @@ export class RunTab extends LitElement {
   @property({ type: Boolean }) expandable = false;
   /** Finished since the user last had it on screen. */
   @property({ type: Boolean }) unseen = false;
+  /** Messages queued on the run that it has not read yet. */
+  @property({ type: Number }) unread = 0;
 
   private decorator = getAgentCategoryDecorator('toolUse');
 
@@ -195,6 +197,13 @@ export class RunTab extends LitElement {
               ${
                 showRollup
                   ? html`<span class="tab-rollup">${rollupLabel(run)}</span>`
+                  : nothing
+              }
+              ${
+                this.unread > 0
+                  ? html`<span class="tab-rollup tab-unread"
+                      >${formatResultCount(this.unread, 'unread message')}</span
+                    >`
                   : nothing
               }
               <span

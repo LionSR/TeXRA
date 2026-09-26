@@ -105,7 +105,7 @@ import type { PastedImageEntry } from './tui/input/draftAttachments';
 
 type InterruptedFollowUp = Pick<
   FollowUpQueueInput,
-  'text' | 'mediaFiles' | 'displayText'
+  'text' | 'mediaFiles' | 'displayText' | 'from'
 >;
 
 type InterruptedFollowUpAdmission =
@@ -918,7 +918,6 @@ export function createChatSessionController(
               restoreInterruptedRecovery(previous);
               return false;
             }
-            runtimeSession.followUps.notifySent(recovery.runId);
           }
         }
 
@@ -1201,6 +1200,7 @@ export function createChatSessionController(
         text: prepared.instruction,
         mediaFiles,
         displayText: prepared.displayInstruction,
+        from: { kind: 'user' },
       });
       if (interruptedAdmission.kind === 'accepted') {
         const resumed = yield* Deferred.await(interruptedAdmission.completion);
@@ -1304,7 +1304,6 @@ export function createChatSessionController(
               ),
             );
           if (outcome.kind === 'sent') {
-            runtimeSession.followUps.notifySent(followUpTarget);
             delivered = true;
             const presentation = presentFollowUpResult(
               outcome.value.status === 'sent'

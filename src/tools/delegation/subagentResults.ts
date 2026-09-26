@@ -241,22 +241,6 @@ export function formatSubagentError(
   });
 }
 
-// ============================================================================
-// Orchestrator follow-up framing
-// ============================================================================
-
-/**
- * Wrap an orchestrator's follow-up instruction in an XML tag so the subagent
- * knows this is a follow-up from its orchestrator (not a fresh user message).
- */
-export function formatFollowUpInstruction(instruction: string): string {
-  return [
-    '<orchestrator-followup>',
-    escapeText(instruction),
-    '</orchestrator-followup>',
-  ].join('\n');
-}
-
 /**
  * Build the structured result manifest for a finished subagent — the
  * machine-readable counterpart of {@link formatSubagentDelivery}'s XML.

@@ -62,7 +62,7 @@ import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
 const RUN_ID = 'cli-test-run' as RunId;
 const ROOT_RUN = 'root-run' as RunId;
-const CHILD_RUN = 'child-run' as RunId;
+const CHILD_RUN = 'c41dc41dc41d' as RunId;
 const SESSION_META = {
   agent: 'research',
   model: 'deepseekT',

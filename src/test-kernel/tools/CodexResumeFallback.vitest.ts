@@ -289,7 +289,7 @@ describe('codex tool - atomic resume fallback', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
         expect(mocks.submitFollowUp).toHaveBeenCalledWith(
           getLaunch().runId,
-          'also update the tests',
+          expect.objectContaining({ text: 'also update the tests' }),
           expect.objectContaining({ session: expect.anything() }),
         );
 

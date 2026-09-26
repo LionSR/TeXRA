@@ -394,6 +394,7 @@ function handle(
         req.runId,
         {
           text: req.text,
+          from: { kind: 'user' },
           ...(req.displayText == null ? {} : { displayText: req.displayText }),
           ...(req.mediaFiles == null ? {} : { mediaFiles: req.mediaFiles }),
         },

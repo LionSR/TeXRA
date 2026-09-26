@@ -300,7 +300,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         expect(submitFollowUpMock).toHaveBeenCalledWith(
           runId,
-          'new github event',
+          {
+            text: 'new github event',
+            from: { kind: 'notification', source: 'github' },
+          },
           { session, mode: 'live_notification' },
         );
       }),
@@ -341,7 +344,10 @@ describe('GitHub subscription app signals and follow-ups', () => {
 
         expect(submitFollowUpMock).toHaveBeenCalledWith(
           runId,
-          'new github event',
+          {
+            text: 'new github event',
+            from: { kind: 'notification', source: 'github' },
+          },
           { session: secondSession, mode: 'live_notification' },
         );
       }),

@@ -4,9 +4,7 @@ import {
   decodeXmlEntities,
   deliveryTagOf,
   hasIncompleteEmbeddedSubagentFollowup,
-  stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
-  summarizeFollowupMessage,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 
@@ -79,19 +77,7 @@ describe('deliveryTagOf', () => {
 });
 
 describe('summarizeSubagentFollowup', () => {
-  it('strips orchestrator follow-up wrappers', () => {
-    expect(
-      stripOrchestratorFollowup(
-        '<orchestrator-followup>\nPlease inspect the file.\n</orchestrator-followup>',
-      ),
-    ).toBe('Please inspect the file.');
-    expect(stripOrchestratorFollowup('ordinary user text')).toBe(
-      'ordinary user text',
-    );
-  });
-
   it('summarizes malformed non-string follow-up payloads without throwing', () => {
-    expect(summarizeFollowupMessage(undefined)).toBe('(empty follow-up)');
     expect(summarizeSubagentFollowup(undefined)).toBe('(empty follow-up)');
   });
 
@@ -360,19 +346,6 @@ describe('summarizeSubagentFollowup', () => {
     expect(summary).not.toContain('result line 13');
     expect(summary).toContain(
       '… 8 more lines; open the subagent transcript for the full response',
-    );
-  });
-
-  it('summarizes wrapped result follow-up messages for queued displays', () => {
-    const xml = [
-      '<orchestrator-followup>',
-      '<subagent-result id="abc" agent="reviewer" category="toolUse" status="completed">',
-      '<response>All good &lt;ok&gt;</response>',
-      '</subagent-result>',
-      '</orchestrator-followup>',
-    ].join('');
-    expect(summarizeFollowupMessage(xml)).toBe(
-      '✓ reviewer completed\nAll good <ok>',
     );
   });
 

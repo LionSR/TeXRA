@@ -152,10 +152,15 @@ export class RunSubscriptionRegistry<K extends string, Input> {
               Effect.annotateLogs({ data: { err } }),
               withLogChannel(this.opts.name),
             );
-          return submitFollowUp(runId, text, {
-            session: owner,
-            mode: 'live_notification',
-          }).pipe(
+          const from = { kind: 'notification', source: 'github' } as const;
+          return submitFollowUp(
+            runId,
+            { text, from },
+            {
+              session: owner,
+              mode: 'live_notification',
+            },
+          ).pipe(
             Effect.provideService(AgentResume, agentResume),
             Effect.asVoid,
             Effect.catch(reportDeliveryFailure),

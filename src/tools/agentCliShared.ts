@@ -20,6 +20,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { senderOf } from '@agent/followUp/followUpSender';
 import { AgentResume } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
@@ -94,7 +95,7 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       labels: AgentCliResumeLabels;
     },
   ): Effect.fn.Return<ToolResult, ToolError, AgentResume> {
-    const { id, prompt, callerRunId, labels } = params;
+    const { id, prompt, callerRunId, labels, session } = params;
     // Ownership is a live-handle fact: a detached or re-parented child must not
     // accept follow-ups from its former orchestrator. A missing handle falls
     // through to submitFollowUp's no-session outcome below.
@@ -105,9 +106,8 @@ const queueAgentCliFollowUp = Effect.fn('agentCliShared.queueAgentCliFollowUp')(
       labels,
     );
 
-    const result = yield* submitFollowUp(stored.runId, prompt, {
-      session: params.session,
-    });
+    const followUp = { text: prompt, from: senderOf(callerRunId) };
+    const result = yield* submitFollowUp(stored.runId, followUp, { session });
     if (result.status === 'failed') {
       return yield* Effect.fail(
         new ToolError(
@@ -531,8 +531,7 @@ export function buildAgentCliLaunch<TTurn>(
 
     const strategy: ChildRunStrategy<TTurn> = {
       stageLabel,
-      launch: (ports, signal) =>
-        runTurn([{ text: initialPrompt, origin: 'user' }], ports, signal),
+      launch: (ports, signal) => runProviderTurn(initialPrompt, ports, signal),
       runTurn,
       isTerminal: () => false,
       getUsage,
