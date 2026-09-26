@@ -102,7 +102,7 @@ export interface RoundTurns {
   >;
   /** A committed response of round `index`: the overflow retry's request
    *  (not done), or the round's output (done). `live` is false for a
-   *  response a resume replays: its notices were given when it arrived. */
+   *  response a resume replays. */
   readonly afterResponse: (
     state: RunState,
     cell: RunCell,
@@ -213,19 +213,11 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
         session.roots.config,
       );
       logger.debug(`Stop reason: ${finish}`);
-      // A replayed response's scratchpad and cut-off notice were given when
-      // it arrived. The replay restates the step it resumes at instead, so a
-      // resumed run shows its round rather than no position until the next
-      // round opens.
+      // A replay restates the step it resumes at, so a resumed run shows its
+      // round rather than no position until the next round opens.
       const at = live
         ? initial
         : yield* cell.append([stepRow(runId, initial, 'response.ready')]);
-      const scratchpad = live
-        ? extractScratchpad(text, SCRATCHPAD_TAG)
-        : undefined;
-      if (scratchpad) {
-        logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
-      }
       if (text) {
         logger.debug(`First ${K_SLICE} chars:\n${text.slice(0, K_SLICE)}`);
         logger.debug(`Last ${K_SLICE} chars:\n${text.slice(-K_SLICE)}`);
@@ -237,7 +229,15 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
         const retried = yield* overflowRetry(at, cell);
         if (retried !== null) return { state: retried, done: false };
       }
-      if (live && finish === 'length' && !closed) {
+      // The round's notices go out with its output, ahead of the row that
+      // commits it: once per round, however often a crash replays it.
+      const produced = at.roundOutputs.some((r) => r.round === index);
+      const announce = Effect.gen(function* () {
+        const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
+        if (scratchpad) {
+          logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
+        }
+        if (finish !== 'length' || closed) return;
         const message = `Round ${index + 1} hit the model's output limit, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
         logger.warn(message);
         // Actionable, so it is also an instruction: the host surface that
@@ -246,8 +246,13 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
           key: 'roundOutputLimit',
           message,
         });
-      }
-      const state = yield* docs.afterTurn(index, { text, finish }, cell);
+      });
+      const state = yield* docs.afterTurn(
+        index,
+        { text, finish },
+        cell,
+        produced ? Effect.void : announce,
+      );
       return { state, done: true };
     }),
   };

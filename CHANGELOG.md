@@ -92,8 +92,9 @@ All notable changes to this project will be documented in this file.
   same name.
 - **Workflow agents no longer continue a response cut off by the output
   limit** — a round whose response hits the model's max output tokens keeps
-  what the model wrote and processes it as that round's output, and the
-  transcript warns that it may be incomplete. Raise the model's max output
+  what the model wrote and processes it as that round's output, and warns
+  that it may be incomplete: in the transcript, in `texra run`'s text output,
+  and as a notice in the extension and desktop. Raise the model's max output
   tokens if a long document gets cut off. The extra helper-model call that
   joined continued pieces is gone with it.
 
@@ -214,18 +215,6 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
-
-- **A delegated workflow agent no longer stops the chat that launched it** —
-  when the assistant handed a document to a workflow agent (`polish`,
-  `correct`, … through `delegate_workflow` or a `delegate_multi_agents`
-  script), the chat stopped the moment that agent finished: its result never
-  reached the assistant, and the next message started a new session. The chat
-  now stays idle, receives the result, and continues in the same session.
-
-- **`texra run` shows when a round was cut off** — a round that hit the
-  model's output limit printed its warning only in the transcript and the
-  NDJSON stream. Text output now shows it too, with the advice to raise the
-  model's max output tokens.
 
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it
