@@ -24,7 +24,7 @@ import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
 // bare `vi.fn()` would hand the take fiber `undefined` to yield.
 const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
-  stopRecording: vi.fn(),
+  validateRecordingFile: vi.fn(),
   transcribeRecording: vi.fn(),
   recordingsDir: vi.fn(
     (roots: { storage: string }) => `${roots.storage}/recordings`,
@@ -85,7 +85,7 @@ it.effect(
     Effect.gen(function* () {
       const startup = yield* Deferred.make<string>();
       audio.startRecording.mockReturnValue(recorder(Deferred.await(startup)));
-      audio.stopRecording.mockImplementation((path: string) =>
+      audio.validateRecordingFile.mockImplementation((path: string) =>
         Effect.succeed(path),
       );
       audio.transcribeRecording.mockReturnValue(
@@ -252,12 +252,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       audio.startRecording.mockReset();
-      audio.stopRecording.mockReset();
+      audio.validateRecordingFile.mockReset();
       audio.transcribeRecording.mockReset();
       audio.startRecording.mockReturnValue(
         recorder(Effect.succeed('/papers/first/recordings/take.wav')),
       );
-      audio.stopRecording.mockImplementation((path: string) =>
+      audio.validateRecordingFile.mockImplementation((path: string) =>
         Effect.succeed(path),
       );
       const requests = new HostDraftRequests();
@@ -288,7 +288,7 @@ it.effect(
           'Missing API key for openai. Set a provider API key in settings.',
       });
       // Sox was terminated first: the failing read cannot leave it recording.
-      expect(audio.stopRecording).toHaveBeenCalledTimes(1);
+      expect(audio.validateRecordingFile).toHaveBeenCalledTimes(1);
       expect(audio.transcribeRecording).not.toHaveBeenCalled();
     }).pipe(Effect.provide(storesWithoutCredential)),
 );

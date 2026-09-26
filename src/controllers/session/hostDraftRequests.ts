@@ -19,7 +19,7 @@ import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
   recordingsDir,
   startRecording,
-  stopRecording,
+  validateRecordingFile,
   transcribeRecording,
 } from '@tools/media/audio';
 import {
@@ -232,7 +232,7 @@ export class HostDraftRequests {
           return recorder.path;
         }),
       );
-      const recordingPath = yield* stopRecording(capturedPath).pipe(
+      const recordingPath = yield* validateRecordingFile(capturedPath).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );
       // The transcription endpoint is an OpenAI SDK operation the llm
@@ -264,8 +264,8 @@ export class HostDraftRequests {
         return { kind: 'text', text } satisfies HostOutcome;
       });
       // A Cancel after Stop answers Start and interrupts the upload here.
-      // The waiter goes first so a cancel that already landed wins before
-      // postStop starts.
+      // raceFirst starts both arms, so postStop may begin before a cancel that
+      // already landed is observed; the cancel still wins and interrupts it.
       return yield* Effect.raceFirst(Deferred.await(take.result), postStop);
     });
     // A cancelled take already has its answer; `into` leaves it in place.

@@ -205,7 +205,7 @@ export function startRecording(
  * caller stops the microphone before resolving the transcription credential,
  * so a slow, denied or failing keychain read can never leave it running.
  */
-export function stopRecording(
+export function validateRecordingFile(
   recordingPath: string,
 ): Effect.Effect<string, AudioRecorderError, FileSystem.FileSystem> {
   return Effect.gen(function* () {
@@ -213,7 +213,7 @@ export function stopRecording(
     const size = yield* fs.stat(recordingPath).pipe(
       Effect.map((info) => Number(info.size)),
       Effect.catchIf(absentReason, () => Effect.succeed(null)),
-      recorderFailure('stopRecording'),
+      recorderFailure('validateRecordingFile'),
     );
     if (size === null) {
       return yield* new AudioRecorderError({
