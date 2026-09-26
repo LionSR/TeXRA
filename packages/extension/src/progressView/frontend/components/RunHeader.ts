@@ -481,13 +481,16 @@ export class RunHeader extends LitElement {
     return html`
       <wa-dropdown
         placement="bottom-end"
-        @wa-select=${({ detail: { item } }: WaSelectEvent) => {
+        @wa-select=${(event: WaSelectEvent) => {
+          const { item } = event.detail;
           if (item.localName !== 'wa-dropdown-item') return;
           const { value, checked, dataset } = item as WaDropdownItem;
           const bypass = APPROVAL_BYPASS_KINDS.find(
             (kind) => kind === dataset.bypass,
           );
           if (bypass) {
+            // A switch keeps the menu open, so a second one is one click away.
+            event.preventDefault();
             this.setGrant(run, bypass, checked);
             return;
           }
