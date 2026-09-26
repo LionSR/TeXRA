@@ -6,7 +6,10 @@ import { Effect, FileSystem } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - platform
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import {
+  JsonConfigProvider,
+  type ConfigStore,
+} from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import {
   TEXRA_CONFIG_FILE_NAME,
@@ -277,8 +280,27 @@ export function loadCliStartupConfig(
         yield* FileSystem.FileSystem,
         USER_MCP_CONFIG_PATH,
       );
+      // A value its catalog row rejects is reported once, in `warnings`
+      // below, and then reads as absent: every read passes over it to the
+      // next tier, as that warning says, instead of each reader warning about
+      // the same value again. Writes still land in the file itself.
+      const withoutInvalid = (store: JsonStore): ConfigStore => ({
+        get: <T>(key: string): T | undefined => {
+          const value = store.get<T>(key);
+          const entry = settingByKey(key);
+          return value !== undefined &&
+            entry &&
+            !entry.schema.safeParse(value).success
+            ? undefined
+            : value;
+        },
+        set: (key, value) => store.set(key, value),
+      });
       return {
-        config: new JsonConfigProvider(stores),
+        config: new JsonConfigProvider({
+          workspace: withoutInvalid(stores.workspace),
+          global: withoutInvalid(stores.global),
+        }),
         warnings: [
           ...configFileWarnings([
             {

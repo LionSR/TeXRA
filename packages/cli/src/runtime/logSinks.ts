@@ -272,11 +272,13 @@ export const prePlatformDiagnosticSink: HostLogSink = Object.freeze({
   },
 });
 
+/** Text mode: the presentation records a run shows the user, in the same
+ *  `LEVEL message` shape as the CLI's config warnings. The timestamp stays in
+ *  the NDJSON record; on stderr it only made the line read like a log dump
+ *  between the progress lines. */
 class StderrTextSink implements LogSink {
   write(record: LogRecord): void {
-    writeTextStderr(
-      `${record.ts} ${record.level.toUpperCase()} ${record.message}`,
-    );
+    writeTextStderr(`${record.level.toUpperCase()} ${record.message}`);
   }
 }
 

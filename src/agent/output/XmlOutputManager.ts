@@ -269,10 +269,11 @@ export class XmlOutputManager {
       // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
       // parser treats thinking/document bodies as opaque text); the header and
       // similarity tiers below read the raw response instead.
-      const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
-        SCRATCHPAD_TAG,
-        OUTPUT_DOCUMENT_TAG,
-      ]);
+      const cdataWrapped = addCdataToTagsMultiple(
+        rawOutputContent,
+        [SCRATCHPAD_TAG, OUTPUT_DOCUMENT_TAG],
+        { tag: OUTPUT_DOCUMENT_TAG, container: OUTPUT_DOCUMENTS_TAG },
+      );
 
       // A response the XML parser refuses is expected input, not a defect:
       // every later tier below exists to recover from exactly that, so the
