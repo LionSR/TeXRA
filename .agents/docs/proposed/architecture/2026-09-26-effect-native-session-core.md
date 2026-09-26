@@ -358,12 +358,20 @@ no `@tools` to `@agent` edges.
 | ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                                                         |
 | `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                                                                       |
-| `PLUGIN_LAYERS`          | process services (exists, empty)     | GitHub subscriptions, Lean (needs `HostPorts` in `R`, or stays core as ruled on 09-23), `InquiryRecords`, `SetupPlatform` |
+| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin                                                      |
+| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions, Lean (needs `HostPorts` in `R`, or stays core as ruled on 09-23), `InquiryRecords`, `SetupPlatform` |
 | `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)                                                   |
 | `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                                                           |
 | `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                                                        |
 | `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts`                                         |
 
+- **Process services get their own table.** `PLUGIN_LAYERS` is read only
+  while `Compositions.pin` builds a run's entry (`compositions.ts:158-207`),
+  and its resources close with the last pin. GitHub subscriptions, inquiries,
+  setup and Lean have consumers outside any run (settings, the session), so
+  they go in `PLUGIN_PROCESS_LAYERS`. The process composes that table once,
+  selected by its plugin set (`TexraProcessOptions.plugins`, move 4), and
+  there is no second instance per run.
 - **Drivers are contributions, not task kinds.** The Codex, Claude and
   workflow-script drivers already live in their plugins
   (`agentCliShared.ts:532`, `workflowScriptStrategy.ts:157`). Resolve a driver
@@ -449,8 +457,8 @@ in `src/ui`, because webview frontends cannot import `@tools`.
 
 1. A deterministic availability input to the composition key; LM tools through
    a pin. First.
-2. `PLUGIN_LAYERS` filled: GitHub (with the `Sessions` dependency edge),
-   Inquiry and Setup; the SDK passes its plugin set and `PACKAGE_SETUP` goes.
+2. `PLUGIN_PROCESS_LAYERS` filled: GitHub (with the `Sessions` dependency
+   edge), Inquiry and Setup; the SDK passes its plugin set and `PACKAGE_SETUP` goes.
 3. `PLUGIN_SESSION_LAYERS` for the Codex and Claude registries; the goal grant
    computed from rows, WeakMap deleted.
 4. `PLUGIN_DRIVERS`, resolved from the pinned composition.
@@ -607,9 +615,12 @@ export interface TexraProcessOptions {
 export const TexraProcess: {
   // PlatformConflict: a second graph refused while the module slots are
   // still process-global (the existing SDK already types it, sessions.ts:144-149).
-  layer(
-    o: TexraProcessOptions,
-  ): Layer.Layer<Sessions, DatabaseOpenFailed | PlatformConflict>;
+  layer(o: TexraProcessOptions): Layer.Layer<
+    Sessions,
+    // bootstrapHost seeds first-install state through StateStore
+    // (seedDisabledToolDefaults, hostBootstrap.ts:108)
+    DatabaseOpenFailed | PlatformConflict | StateReadFailed | StateWriteFailed
+  >;
 };
 ```
 
@@ -1158,7 +1169,11 @@ gains a `deferred` flag and `wake` appends `followup.released {followUpIds}`
 nor `child.turn` (`sessionEvent.ts:460-464`) records the mode, so after a
 crash a non-finalizing child turn and a finalizing result look alike. With
 the flag, hydration rebuilds the deferred set as "deferred and not released",
-and nothing reads `run.end` to guess. A native child uses it for its turn result before it
+and nothing reads `run.end` to guess. No crash window is left between the
+child's end and its release: `followup.released` is appended in the same
+publisher job as the child's `child.turn` `settled` row or its `run.end`,
+whichever settles the delivery. A child that crashes before that job leaves
+no terminal row either, so its resume performs the release. A native child uses it for its turn result before it
 finalizes and calls `wake` with the token its own delivery returned, so a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
@@ -1205,10 +1220,12 @@ The catalog is a fixed, ordered table of sources, not a service wrapped around
 today's module state:
 
 ```ts
-// ordered: a later source never shadows an earlier one silently
+// ordered by lookup priority: on a name clash the earlier source wins, as
+// LOOKUP_PRIORITY does today (agentRegistry.ts:50-55): the user's agent
+// shadows a bundled one, and bundled outranks remote
 const AGENT_SOURCES = [
-  bundledAgents, // BundledResources
   userAgents, // the custom directory, from AgentDirectories
+  bundledAgents, // BundledResources
   remoteAgents, // signed-in only; carries a RemoteStatus
   installedPluginAgents, // `plugin:<id>/<name>` from installed plugins (move 2)
 ] as const satisfies readonly AgentSource[];
@@ -1288,6 +1305,14 @@ export class CurrentValues extends Context.Service<
       key: string,
       change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
     ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>; // one BEGIN IMMEDIATE; a malformed row rolls back
+    // every live row of a family, latest write first (inquiry listing,
+    // inquiryRecords.ts:241-265, keeps the decision's revision order)
+    list<F extends Family>(
+      f: F,
+    ): Effect.Effect<
+      readonly { key: string; value: Value<F> }[],
+      DatabaseReadFailed
+    >;
     readonly movedAside: StoreMovedAside | null; // reported by every host
   }
 >()('@texra/session/CurrentValues') {}
@@ -1438,8 +1463,9 @@ the owner confirms them:
    deny it (TUI today)?
 5. Should "approve all delegated" also decide requests already pending, on
    every host?
-6. `beforeSessionsClose` as a named plugin hook, or a drain layer in the
-   process graph that asks plugin services for their drains?
+6. Confirm the plugin drain as a dependency edge: the GitHub plugin's process
+   layer requires `Sessions` and drains in its finalizer, with no
+   `beforeSessionsClose` hook and no drain layer.
 7. What do `yolo` and `never` do for plan, proposal, retry and question
    requests, on every host? Move 9 PR 2 applies the answer in core.
 8. May a follow-up typed into a stopped, resumable run be admitted and resume
@@ -1471,7 +1497,7 @@ Deletion earliest, least churn (the owner's review):
 5. Trace and transport lifecycle fixes (move 7 PRs 1–3, move 5 PR 1), and the
    model binding fixes (move 8 PRs 1–3).
 6. A deterministic composition input (move 2 PR 1), then the per-seam tables:
-   `PLUGIN_LAYERS`, `PLUGIN_SESSION_LAYERS`, `PLUGIN_DRIVERS`, plugin-owned arms
+   `PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`, `PLUGIN_DRIVERS`, plugin-owned arms
    with fold slices.
 7. Installed plugins as loaded plugins, the composition on the snapshot,
    presets and trust, then the `setup` tool. Needs owner decisions.
