@@ -92,8 +92,9 @@ All notable changes to this project will be documented in this file.
   same name.
 - **Workflow agents no longer continue a response cut off by the output
   limit** — a round whose response hits the model's max output tokens keeps
-  what the model wrote and processes it as that round's output, and the
-  transcript warns that it may be incomplete. Raise the model's max output
+  what the model wrote and processes it as that round's output, and warns
+  that it may be incomplete: in the transcript, in `texra run`'s text output,
+  and as a notice in the extension and desktop. Raise the model's max output
   tokens if a long document gets cut off. The extra helper-model call that
   joined continued pieces is gone with it.
 

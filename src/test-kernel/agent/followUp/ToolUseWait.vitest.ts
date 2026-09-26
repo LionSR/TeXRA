@@ -24,7 +24,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import {
@@ -350,7 +349,6 @@ function loopProgram(
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),

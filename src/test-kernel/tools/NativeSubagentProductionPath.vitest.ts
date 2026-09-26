@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
@@ -43,6 +43,8 @@ import { readChildTurnState } from '@agent/storage/runRecords';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
+import type { ITool } from '@agent/core/tools/ToolTypes';
+import { ToolCall } from '@agent/runtime/ToolCall';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import type { Message } from '@agent/runtime/loop/rows';
 import { executeAgent } from '@agent/runtime/executeAgent';
@@ -98,6 +100,7 @@ import {
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
+import { requireDelegationParent } from '@tools/delegation/proposalFlow';
 import { executeSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';
 
@@ -105,6 +108,7 @@ const PARENT_RUN_ID = 'a9531a9531a9' as RunId;
 const OUTER_RUN_ID = '0a95310a9531' as RunId;
 const PARENT_AGENT = 'parent_9531';
 const CHILD_AGENT = 'child_9531';
+const WORKFLOW_CHILD_AGENT = 'workflow_child_9531';
 const PARENT_MODEL = 'gpt54';
 const CHILD_MODEL = 'gpt55';
 
@@ -115,6 +119,8 @@ let resumedRuns: RunId[];
 let parentFiber: Fiber.Fiber<unknown, Error> | undefined;
 interface ScriptedTurn {
   readonly text: string;
+  /** A tool the turn calls, with no arguments, after its text. */
+  readonly call?: string;
 }
 
 /** The http arm of a binding: `identified` events carry no editor origin. */
@@ -157,18 +163,32 @@ function preparedTurn(origin: ModelOrigin): ResolvedTurn {
  * An answerless turn carries no content at all: the scripted transport ends
  * the turn without an assistant message rather than with an empty one.
  */
-function scriptedResult(origin: ModelOrigin, text: string): TurnResult {
+function scriptedResult(
+  origin: ModelOrigin,
+  { text, call }: ScriptedTurn,
+): TurnResult {
   return TurnResultSchema.parse({
     kind: 'http',
     providerResponseId: `resp-${origin.requestedModel}-${text.length}`,
     requestedOrigin: origin,
     returnedModel: null,
     modelFingerprint: null,
-    content:
-      text === ''
+    content: [
+      ...(text === ''
         ? []
-        : [{ kind: 'message', content: [{ kind: 'text', text }] }],
-    finishReason: 'stop',
+        : [{ kind: 'message', content: [{ kind: 'text', text }] }]),
+      ...(call === undefined
+        ? []
+        : [
+            {
+              kind: 'local-call',
+              providerCallId: `call-${call}`,
+              name: call,
+              argumentsText: '{}',
+            },
+          ]),
+    ],
+    finishReason: call === undefined ? 'stop' : 'tool-calls',
     usage: {
       inputTokens: 10,
       outputTokens: 5,
@@ -261,7 +281,7 @@ function scriptedBoundModel(
               requestedOrigin: origin,
               returnedModel: null,
             },
-            { kind: 'completed', result: scriptedResult(origin, turn.text) },
+            { kind: 'completed', result: scriptedResult(origin, turn) },
           ];
           return Stream.fromIterable(events);
         }),
@@ -326,11 +346,15 @@ function resumePersistedRun(
 async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
-  await Promise.all(
-    [PARENT_AGENT, CHILD_AGENT].map((name) =>
+  await Promise.all([
+    ...[PARENT_AGENT, CHILD_AGENT].map((name) =>
       writeFile(path.join(agentsDir, `${name}.yaml`), agentYaml(name)),
     ),
-  );
+    writeFile(
+      path.join(agentsDir, `${WORKFLOW_CHILD_AGENT}.yaml`),
+      workflowAgentYaml(WORKFLOW_CHILD_AGENT),
+    ),
+  ]);
   return {
     ...host,
     agentResume: { tryResumeRun: resumePersistedRun },
@@ -358,6 +382,25 @@ function agentYaml(name: string): string {
     // override that skipped prompt construction.
     'prompts:',
     `  systemPrompt: You are ${name}.`,
+    "  userRequest: '{{ INSTRUCTION }}'",
+    '',
+  ].join('\n');
+}
+
+/** A one-round workflow agent: its round rewrites the input documents. */
+function workflowAgentYaml(name: string): string {
+  return [
+    `name: ${name}`,
+    `description: Integration fixture ${name}.`,
+    'settings:',
+    '  agentCategory: workflow',
+    '  rounds: 1',
+    'prompts:',
+    `  systemPrompt: You are ${name}.`,
+    '  userPrefix: |',
+    '    <documents>',
+    '    {{ ALL_INPUTS }}',
+    '    </documents>',
     "  userRequest: '{{ INSTRUCTION }}'",
     '',
   ].join('\n');
@@ -1164,6 +1207,136 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const parsed = JSON.parse(resultView.output);
         expect(parsed.turnAttribution).toContain('interrupted');
         expect(parsed.output.response).toBe('Result A.');
+      }),
+    30_000,
+  );
+  /**
+   * A parent conversation that launches a workflow child from its own tool
+   * call. How it can fail:
+   * - the child's run takes the parent's follow-up input from the tool
+   *   call's context and ends it when the child settles, so the parked
+   *   parent's wait comes back empty and the parent halts cancelled;
+   * - the child's result then never reaches the parent as its next turn.
+   */
+  it.live(
+    'keeps the parent waiting for a workflow child it launched and delivers the result',
+    () =>
+      Effect.gen(function* () {
+        const observedRequests: ObservedRequest[] = [];
+        const parentTurns: ScriptedTurn[] = [
+          { text: 'Launching.', call: 'launch_workflow_child' },
+          { text: 'Parent launched the workflow child.' },
+          { text: 'Parent received the workflow result.' },
+        ];
+        const childTurns: ScriptedTurn[] = [
+          {
+            text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
+          },
+        ];
+        modelBindingMocks.bindModel.mockImplementation(
+          (input: { readonly config: BoundModel['config'] }) =>
+            Effect.succeed(
+              scriptedBoundModel(
+                input.config,
+                input.config.name === CHILD_MODEL ? childTurns : parentTurns,
+                observedRequests,
+              ),
+            ),
+        );
+        const workspace = session.roots.workspace!;
+        yield* Effect.promise(async () => {
+          await mkdir(workspace, { recursive: true });
+          await writeFile(path.join(workspace, 'notes.md'), 'Draft notes.\n');
+        });
+        // The delegation primitive `delegate_workflow` launches through, run
+        // on the parent's own tool call.
+        const launchWorkflowChild: ITool = {
+          definition: {
+            name: 'launch_workflow_child',
+            description: 'Launch the workflow child.',
+            parameters: {},
+          },
+          call: () =>
+            Effect.gen(function* () {
+              const parent = yield* requireDelegationParent(
+                'launch_workflow_child',
+                yield* ToolCall,
+              );
+              const launched = yield* executeSubagent(
+                parent,
+                {
+                  agent: WORKFLOW_CHILD_AGENT,
+                  agentSource: 'custom',
+                  agentCategory: AgentCategory.Workflow,
+                  model: CHILD_MODEL,
+                  instruction: 'Polish the notes.',
+                  inputFiles: ['notes.md'],
+                  memories: [],
+                },
+                PARENT_RUN_ID,
+              );
+              childId = childRunId(launched.output);
+              return launched;
+            }) as unknown as ReturnType<ITool['call']>,
+        };
+        const parentConfig = AgentConfigSchema.parse({
+          agent: PARENT_AGENT,
+          agentSource: 'custom',
+          agentCategory: AgentCategory.ToolUse,
+          model: PARENT_MODEL,
+          instruction: 'Polish the notes through the workflow child.',
+          workingDirectory: workspace,
+        });
+        yield* registerRun(session, PARENT_RUN_ID, parentConfig, {
+          identity: { kind: 'agent', agent: PARENT_AGENT },
+          parentRunId: OUTER_RUN_ID,
+        });
+        parentFiber = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            session.runs.launchRun(
+              PARENT_RUN_ID,
+              prepareAgentDefinition({ config: parentConfig, session }).pipe(
+                Effect.flatMap((definition) =>
+                  executeAgent(definition, PARENT_RUN_ID, {
+                    session,
+                    parentRunId: OUTER_RUN_ID,
+                    tools: [launchWorkflowChild],
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              await Effect.runPromise(
+                session.settlePublications(PARENT_RUN_ID),
+              );
+              const transcript = await Effect.runPromise(
+                readCompletedRunConversation(PARENT_RUN_ID, session),
+              );
+              expect(transcript.conversation).toContainEqual({
+                kind: 'assistant-text',
+                text: 'Parent received the workflow result.',
+              });
+              expect(session.runView(PARENT_RUN_ID)?.status).toBe(
+                RUN_PHASE.WAITING,
+              );
+            },
+            { timeout: 20_000 },
+          ),
+        );
+        const delivery = observedRequests.findLast(
+          ({ model }) => model === PARENT_MODEL,
+        );
+        expect(
+          delivery?.messages.at(-1) && messageText(delivery.messages.at(-1)!),
+        ).toContain('<subagent-result');
+        expect(session.followUps.hasLiveOwner(PARENT_RUN_ID)).toBe(true);
+        expect(parentTurns).toHaveLength(0);
       }),
     30_000,
   );

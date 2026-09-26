@@ -53,7 +53,6 @@ import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
 } from './SessionResumeRetrieval';
-import { followUpsLayer } from './FollowUps';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, withCompositionHash } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
@@ -96,11 +95,9 @@ type ToolUseLaunchVariant =
  * invoker, the session's ledger, and the session's rooted filesystems (built
  * from the roots of the session the run is on, fresh or resumed, so code
  * below the launch takes `WorkspaceFs` / `StorageFs` from context rather than
- * from the fiber's ambient roots). The follow-up lease is not here: only a
- * tool-use conversation consumes a queue and only its finalizer releases the
- * lease, so building `followUpsLayer` for a workflow run (whose rounds take
- * no input) would claim a live consumer nothing ever releases — later
- * submissions would report as delivered live to a run that has ended.
+ * from the fiber's ambient roots). The follow-up lease is not here: a
+ * conversation claims its own inside the loop (`claimFollowUps`), and a
+ * workflow run's rounds take no input.
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
@@ -134,8 +131,8 @@ function runLayerFor(
 /**
  * Run the tool-use loop for a single agent run, fresh or resumed.
  *
- * Owns all tool-use-specific wiring: progress counters, follow-up queuing, and
- * model-change side effects. A failed run arrives as a FAILED result carrying
+ * Owns all tool-use-specific wiring: progress counters and model-change side
+ * effects. A failed run arrives as a FAILED result carrying
  * its structured error, so there is nothing to unwrap here.
  * The callers (`executeAgent`, `resumeToolUseFromResumeData`) own lifecycle and
  * stream-status; this function owns only what is specific to the ToolUse
@@ -190,13 +187,7 @@ function launchToolUseRun(
   }).pipe(
     Effect.map(toResult),
     withCompositionHash,
-    Effect.provide(
-      // The follow-up lease is the tool-use loop's alone; its finalizer is
-      // what releases it.
-      followUpsLayer.pipe(
-        Layer.provideMerge(runLayerFor(ctx, shared, variant.onIdle)),
-      ),
-    ),
+    Effect.provide(runLayerFor(ctx, shared, variant.onIdle)),
   );
 }
 
