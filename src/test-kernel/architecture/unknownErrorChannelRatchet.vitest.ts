@@ -9,7 +9,10 @@
 // whose hosts each fail with their own surface's error takes `Error`, and a
 // foreign rejection (a Promise, a thrown value) becomes one at the boundary
 // with `ensureError` from `@utils/errors/errorMessage`, never `(e) => e`. A
-// combinator that absorbs any failure is generic in it instead.
+// combinator that absorbs any failure is generic in it instead. The thunk
+// forms `Effect.try(() => …)` / `Effect.tryPromise(() => …)` are the same
+// hole spelled differently: they fail with `UnknownError`, whose message is a
+// fixed "An error occurred in Effect.try" that hides the real one.
 
 // Node imports
 import { resolve } from 'node:path';
@@ -145,6 +148,40 @@ function identityCatches(file: string): number {
   return sites;
 }
 
+/** `Effect.try(fn)` / `Effect.tryPromise(fn)` sites in one file, as
+ *  `line: text`: the thunk forms, whose failure is `UnknownError`. */
+function thunkTries(file: string): string[] {
+  const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
+    setParentNodes: false,
+  });
+  const sites: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      ts.isIdentifier(node.expression.expression) &&
+      node.expression.expression.text === 'Effect' &&
+      ['try', 'tryPromise'].includes(node.expression.name.text)
+    ) {
+      const [first] = node.arguments;
+      if (
+        first !== undefined &&
+        (ts.isArrowFunction(first) ||
+          ts.isFunctionExpression(first) ||
+          ts.isIdentifier(first))
+      ) {
+        const { line } = sourceFile.getLineAndCharacterOfPosition(
+          node.getStart(sourceFile),
+        );
+        sites.push(`${file}:${line + 1}`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return sites;
+}
+
 describe('unknown Effect error-channel rule', () => {
   const roots = productionRoots();
 
@@ -180,6 +217,19 @@ describe('unknown Effect error-channel rule', () => {
         `${drifted.join('\n')}\n\n` +
         `Construct the failure instead: catch: ensureError, or the path's own ` +
         `tagged error. A count that fell: lower or delete the entry.`,
+    ).toEqual([]);
+  });
+
+  it('rejects the thunk forms of Effect.try and Effect.tryPromise', () => {
+    const sites = roots.flatMap((root) =>
+      productionFilesUnder(root).flatMap(thunkTries),
+    );
+    expect(
+      sites,
+      `Effect.try / Effect.tryPromise called with a bare function:\n` +
+        `${sites.map((site) => `  ${site}`).join('\n')}\n\n` +
+        `Pass { try, catch: ensureError } (or the path's own tagged error): ` +
+        `the thunk form fails with UnknownError, which hides the message.`,
     ).toEqual([]);
   });
 });
