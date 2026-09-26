@@ -36,7 +36,9 @@ import {
   AgentCategory,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
+  RUN_OUTCOME,
   SCRATCHPAD_TAG,
+  type CompileFailure,
   type RunOutcome,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
@@ -53,6 +55,27 @@ import type { RunCell } from './runProgram';
 
 /** Length for the debug preview slices of a round's text. */
 const K_SLICE = 200;
+
+/**
+ * The compile rejection a resumed run's rows show, read conservatively: no
+ * row tells a round that compiled clean from one whose check never ran (auto
+ * compile off, or the check errored), so a round's compile failures stand
+ * unless the loop's own completed halt found them resolved. The failures are
+ * the latest round's when it is the rejected one: the next round's prompt
+ * says why.
+ */
+function rejectionOf(
+  state: RunState,
+): { readonly failures: readonly CompileFailure[] } | null {
+  if (state.phase === 'halted' && state.outcome === RUN_OUTCOME.COMPLETED)
+    return null;
+  const failed = state.roundOutputs.findLast(
+    (round) => round.compileFailures.length > 0,
+  );
+  if (failed === undefined) return null;
+  const latest = failed === state.roundOutputs.at(-1);
+  return { failures: latest ? failed.compileFailures : [] };
+}
 
 /** What the tool-use loop asks of a round. */
 export interface RoundTurns {
@@ -149,7 +172,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
     totalRounds,
     enter: (state) =>
       Effect.suspend(() => {
-        docs.restore(state);
+        docs.restore(state, rejectionOf(state));
         return docs.enter;
       }),
     stage: (index) =>

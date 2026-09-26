@@ -35,6 +35,7 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
+import { combineFailureLogExcerpts } from './compileFailureRoundContext';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -47,7 +48,6 @@ interface CompileCheckContext {
   runId: RunId;
 }
 
-const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 interface CompileCheckResult {
@@ -514,13 +514,3 @@ const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
     } satisfies PerFileOutcome;
   },
 );
-
-function combineFailureLogExcerpts(excerpts: string[]): string {
-  const combined = excerpts.filter(Boolean).join('\n\n');
-  if (combined.length <= COMPILE_LOG_EXCERPT_CHAR_LIMIT) return combined;
-
-  return [
-    `[truncated to last ${COMPILE_LOG_EXCERPT_CHAR_LIMIT} characters]`,
-    combined.slice(-COMPILE_LOG_EXCERPT_CHAR_LIMIT),
-  ].join('\n');
-}

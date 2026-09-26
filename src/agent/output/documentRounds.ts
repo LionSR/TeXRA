@@ -14,12 +14,14 @@
 import { dirname } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, SynchronizedRef } from 'effect';
 
+import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
 import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
+  failureContextFromLogs,
   formatCompileFailureRoundContext,
 } from '@agent/output/compileFailureRoundContext';
 import { LatexDiffManager } from '@agent/output/LatexDiffManager';
@@ -62,6 +64,7 @@ import {
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
   type AgentFileLocation,
+  type CompileFailure,
   type CompileResult,
   type FileLocation,
   type RoundOutput,
@@ -92,8 +95,8 @@ interface OutputExecResult {
 
 /**
  * Build the plugin for one run of a workflow agent, from the run in context.
- * The caller calls `opening` on a fresh run or `restore` on a resumed one,
- * then `enter` on every entry, then `nextRound` / `afterTurn` per round.
+ * The caller calls `restore` on a resumed run, then `enter` on every entry,
+ * then `nextRound` / `afterTurn` per round.
  */
 export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
   setting: AgentWorkflowSetting,
@@ -162,6 +165,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
    *  decided it: every round diffs against these, never the live file an
    *  in-place round overwrote. */
   let diffBaseFiles = baseFiles;
+  let rejectedFailures: readonly CompileFailure[] = []; // round mode, resumed
   // The round budget and the compile-rejection facts no row carries.
   let flow: ReflectionFlowState = {
     totalRounds,
@@ -504,24 +508,23 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
 
   return {
     totalRounds,
-    /** Restore the outputs, and the rejection facts, of a resumed run. The
-     *  configured total wins over the persisted one, so a YAML change
-     *  (rounds: 2 -> 1) takes effect on resume. A reflection snapshot carries
-     *  the facts; round mode derives the rejection from the rows: a round
-     *  with compile failures rejects, one whose outputs have none clears. */
-    restore: (state: RunState): void => {
+    /** Restore a resumed run's outputs and rejection facts; the configured
+     *  total wins, so a YAML change (rounds: 2 -> 1) takes effect. Round mode
+     *  hands in the rejection its rows show, with the failures `enter` turns
+     *  into the next prompt's context. */
+    restore: (
+      state: RunState,
+      rejection: { readonly failures: readonly CompileFailure[] } | null,
+    ): void => {
       const persisted = familyState(state, 'reflection');
       if (persisted !== null) {
         flow = { ...persisted, totalRounds };
         workspace = AgentWorkspaceState.fromSnapshot(
           persisted.workspaceSnapshot,
         );
-      }
-      for (const round of persisted === null ? state.roundOutputs : []) {
-        if (round.compileFailures.length > 0)
-          flow.unresolvedCompileRejection = true;
-        else if (round.outputs.length > 0)
-          delete flow.unresolvedCompileRejection;
+      } else if (rejection !== null) {
+        flow.unresolvedCompileRejection = true;
+        rejectedFailures = rejection.failures;
       }
       outputState.rounds = roundsFromPersisted(state.roundOutputs);
     },
@@ -544,6 +547,10 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
             }),
           ),
         );
+      // The next prompt says why the latest round was rejected, from the
+      // logs its check wrote; a rerun of that round replaces it.
+      const context = yield* failureContextFromLogs(rejectedFailures, logger);
+      if (context !== undefined) flow.compileFailureContext = context;
       yield* normalizeCompileRejectionPolicy();
     }),
     nextRound,
@@ -570,18 +577,11 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
 
 function collectRunSupportFiles(
   workspaceRoot: string | undefined,
-  agentConfig: {
-    readonly contextFiles: readonly string[];
-    readonly mediaFiles: readonly string[];
-    readonly inputFiles: readonly string[];
-  },
+  agentConfig: Pick<AgentConfig, 'contextFiles' | 'mediaFiles' | 'inputFiles'>,
 ): FileLocation[] {
   const extras = new Map<string, FileLocation>();
-  for (const value of [
-    ...agentConfig.contextFiles,
-    ...agentConfig.mediaFiles,
-    ...agentConfig.inputFiles,
-  ]) {
+  const { contextFiles, mediaFiles, inputFiles } = agentConfig;
+  for (const value of [...contextFiles, ...mediaFiles, ...inputFiles]) {
     if (!value) continue;
     const location = pathToLocationIn(workspaceRoot, value);
     extras.set(fileLocationDisplayPath(location), location);

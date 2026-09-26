@@ -200,7 +200,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     }
     // A resumed run retries the invocation its failure interrupted rather
     // than failing again at once.
-    docs.restore(state);
+    docs.restore(state, null);
     logger.debug(
       `Resuming reflection run from round ${state.round}/${totalRounds}`,
     );
