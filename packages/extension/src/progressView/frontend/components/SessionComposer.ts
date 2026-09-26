@@ -132,12 +132,10 @@ export class SessionComposer extends LitElement {
         background: var(--composer-background, var(--wa-color-surface-raised));
         transition: border-color var(--transition-fast);
       }
+      /* The shared field focus (selectStyles.ts), at card radius. */
       .composer:focus-within {
-        border-color: color-mix(
-          in srgb,
-          var(--wa-color-focus) 42%,
-          var(--wa-color-surface-border)
-        );
+        border-color: var(--wa-color-focus);
+        box-shadow: var(--field-focus-halo);
       }
       /* Compact: one pill, the follow-up line and its trailing controls on
          one row; the textarea grows with its content up to a few lines. */

@@ -270,6 +270,16 @@
      which sits level with the macOS window buttons. */
   --wa-height-header: 46px;
 
+  /* Fields sit level with buttons (--height-button, 30px): a 22px select
+     beside a 30px button was the extension's sidebar density leaking into a
+     desktop window. */
+  --wa-height-control: 30px;
+  --wa-height-control-compact: 30px;
+  --wa-control-padding-inline: 10px;
+  --wa-form-control-border-radius: var(--wa-border-radius-m);
+  --wa-field-focus-halo: 0 0 0 3px
+    color-mix(in srgb, var(--desktop-color-focus) 20%, transparent);
+
   /* The semantic tokens (type ramp, control geometry, overlays, seams,
      motion) are not declared here: src/ui/styles/litStyles.ts defines them
      once for `:root` and `:host`, and the renderer adopts that sheet on its
