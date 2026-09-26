@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
-import { RunRoster } from '@agent/runtime/runRoster';
+import { RunRegistry } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
@@ -260,12 +260,16 @@ const structuredResult: RunEnd = {
 // claim, which the stub session answers. One registry stub for every stub
 // session, so sessions compare equal.
 const fenceRoster = () =>
-  new RunRoster(createSessionApprovals(), (runId) =>
-    mocks.acquireClaims(aggregateId('run', runId)),
-  );
+  new RunRegistry({
+    runView: () => undefined,
+    commit: () => Effect.void,
+    approvals: createSessionApprovals(),
+    finalizeRun: () => Effect.die('finalizeRun is not reached by the fence'),
+    acquireRunClaim: (runId) => mocks.acquireClaims(aggregateId('run', runId)),
+  });
 let lanes = fenceRoster();
 const runs = {
-  holdInactiveRun: (runId: RunId) => lanes.holdInactive(runId),
+  holdInactiveRun: (runId: RunId) => lanes.holdInactiveRun(runId),
 };
 // The roots the stub session resolves workflow files against; a case may
 // point them at a real temporary tree.
@@ -1671,7 +1675,7 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         const holding = yield* Deferred.make<void>();
         yield* Effect.forkScoped(
-          lanes.launch(
+          lanes.launchRun(
             resumed,
             Deferred.succeed(holding, undefined).pipe(
               Effect.andThen(Effect.never),

@@ -3,10 +3,12 @@ import '@test/support/sessionGraphTestSetup';
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   initializeDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime/sessionGraph';
+import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // An ephemeral session's graph builds synchronously, so the process default
@@ -36,4 +38,11 @@ export function testDefaultSession(): SessionHandle {
     );
   }
   return session;
+}
+
+/** End a tracked run's handle registration the way its lifecycle does at
+ *  its terminal, for a test that stands in for that lifecycle. */
+export function untrackRun(runs: RunRegistry, runId: RunId): void {
+  const handle = runs.getHandle(runId);
+  if (handle) runs.untrackIfCurrent(handle);
 }

@@ -325,7 +325,7 @@ export async function runChat(
   // the terminal title below derives its attention state from it on
   // install.
   const session = new TuiSession((runId) =>
-    runtimeSession.runs.getToolUseFlowContext(runId),
+    runtimeSession.runs.getHandle(runId)?.getToolUseFlow(),
   );
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a

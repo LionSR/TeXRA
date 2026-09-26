@@ -140,7 +140,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const followUps = yield* FollowUps;
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
-  const isChild = () => runs.getHandle(runId)?.isChild === true;
+  const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
   const continuation = continuationFor(run);
 
   // ---------------------------------------------------------------- state

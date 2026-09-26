@@ -25,7 +25,10 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  testDefaultSession,
+  untrackRun,
+} from '@test/support/defaultSessionTestSetup';
 import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 
 const mocks = vi.hoisted(() => ({
@@ -269,7 +272,7 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
     } finally {
       generation?.interruptUnsafe();
       if (runs && runs.getHandle(runId) === launchHandle) {
-        runs.untrack(runId);
+        if (runs) untrackRun(runs, runId);
       }
     }
   });
@@ -640,7 +643,7 @@ describe('executeCliRequest', () => {
           loadExecuteCliOnInstalledHost,
         );
         const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         mocks.releaseRunLeaseAfterArtifacts.mockImplementationOnce(
           async (session, runId) =>
             Effect.runPromise(session.settlePublications(runId)),
@@ -830,7 +833,7 @@ describe('executeCliRequest', () => {
                 Deferred.doneUnsafe(launch, Effect.void);
               });
             } finally {
-              runs?.untrack(runId);
+              if (runs) untrackRun(runs, runId);
             }
           },
         );
@@ -857,7 +860,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        vi.spyOn(testDefaultSession().runs, 'kill').mockReturnValue({
+        vi.spyOn(testDefaultSession().runs, 'stop').mockReturnValue({
           accepted: () => false,
           settlement: Effect.void,
         });
@@ -943,7 +946,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);
         let publicationCommitted: boolean | undefined;
@@ -997,7 +1000,7 @@ describe('executeCliRequest', () => {
         const { AgentError: RuntimeAgentError } = yield* Effect.promise(
           () => import('@common/errors'),
         );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         const outputFailure = new Error(
           'Workflow completed without generated outputs; nothing was copied to out.',
         );

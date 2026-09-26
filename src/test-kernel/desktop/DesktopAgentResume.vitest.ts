@@ -109,7 +109,7 @@ function failAfterLifecycle(
   runAgent.mockImplementation((_request, options) =>
     Effect.tryPromise({
       try: async () => {
-        await Effect.runPromise(options.onRun?.({} as never) ?? Effect.void);
+        await Effect.runPromise(options.onRun?.() ?? Effect.void);
         session.publish([failedRunEnd(category, message)]);
         throw new Error(message);
       },
@@ -293,9 +293,7 @@ describe('desktop process resume owner', () => {
         resumeToolUseFromResumeData.mockImplementation((_resume, options) =>
           Effect.tryPromise({
             try: async () => {
-              await Effect.runPromise(
-                options?.onRun?.({} as never) ?? Effect.void,
-              );
+              await Effect.runPromise(options?.onRun?.() ?? Effect.void);
               harness.session.publish([
                 failedRunEnd(
                   AgentCategory.ToolUse,
@@ -349,9 +347,7 @@ describe('desktop process resume owner', () => {
         runAgent.mockImplementation((_request, options) =>
           Effect.tryPromise({
             try: async () => {
-              await Effect.runPromise(
-                options.onRun?.({} as never) ?? Effect.void,
-              );
+              await Effect.runPromise(options.onRun?.() ?? Effect.void);
               options.session?.publish([completedRunEnd()]);
               throw new Error('final artifact flush failed');
             },

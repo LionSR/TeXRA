@@ -101,6 +101,7 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { untrackRun } from '@test/support/defaultSessionTestSetup';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -680,10 +681,13 @@ describe('Sessions owner', () => {
             unreadable: [],
           }),
         );
-        const stopAgentRun = vi.fn(() => Effect.void);
+        const stop = vi.fn(() => ({
+          accepted: () => true,
+          settlement: Effect.void,
+        }));
         const session = {
           view: view.ref,
-          runs: { stopAgentRun },
+          runs: { stop },
           roots: createFakeWorkspaceRoots({
             globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
           }),
@@ -705,7 +709,7 @@ describe('Sessions owner', () => {
         const request = { kind: 'run.stop', runId: RUN } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
-        expect(stopAgentRun).not.toHaveBeenCalled();
+        expect(stop).not.toHaveBeenCalled();
 
         yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
         yield* SubscriptionRef.update(view.ref, (v) => ({
@@ -718,7 +722,7 @@ describe('Sessions owner', () => {
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
         // A stop that leaves the child policy unset takes the session's
         // configured "Keep subagents running".
-        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
         });
       }).pipe(
@@ -1027,7 +1031,7 @@ describe('Sessions owner', () => {
         const settled = RunIdSchema.parse('aa0001');
         track(session, settled);
         // The run completes: its driver untracks it as it unwinds.
-        session.runs.untrack(settled);
+        untrackRun(session.runs, settled);
         // A native child between turns, detached from its stopped parent: its
         // activation is its only record, so the close must stop it itself, and
         // wait for the loop to release the activation after its last delivery.
@@ -1059,7 +1063,7 @@ describe('Sessions owner', () => {
       const runId = RunIdSchema.parse('aa0005');
       track(session, runId);
       const stopFailure = new Error('terminal write refused');
-      vi.spyOn(session.runs, 'kill').mockReturnValue({
+      vi.spyOn(session.runs, 'stop').mockReturnValue({
         accepted: () => true,
         settlement: Effect.fail(stopFailure),
       });
@@ -1071,7 +1075,7 @@ describe('Sessions owner', () => {
       ).toBe(stopFailure);
       expect(isLive(session)).toBe(true);
 
-      session.runs.untrack(runId);
+      untrackRun(session.runs, runId);
       yield* Effect.promise(() =>
         vi.waitFor(() => expect(isLive(session)).toBe(false)),
       );
@@ -1100,7 +1104,7 @@ describe('Sessions owner', () => {
           abandoned: [slow],
         });
         expect(isLive(session)).toBe(true);
-        session.runs.untrack(slow);
+        untrackRun(session.runs, slow);
         // The release runs detached on the session owner (RcMap.invalidate):
         // no settle covers it.
         yield* Effect.promise(() =>

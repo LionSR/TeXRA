@@ -13,7 +13,7 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive } from '@agent/runtime/runRegistry';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import type { AppState } from '@platform/interfaces';
@@ -315,7 +315,7 @@ function probeJournal<A>(
  *
  * `holdInactiveRun` answers this one. The run lane is the single in-process
  * authority for "a generation of this run is live here" — the one a resume's
- * own launch is refused on (`RunRoster.isLive`) — so a resume already under
+ * own launch is refused on (`RunRegistry.isLive`) — so a resume already under
  * way holds it and this hold is refused, and a resume that starts after it
  * finds the run held and refuses in its turn.
  *
@@ -328,7 +328,7 @@ function probeJournal<A>(
  * for as long as its replacement is live, and the attempt whose result the
  * parent journals — recovered, or launched by this call and returned once its
  * loop released both — stays fenced until that result is durable. A claim
- * release that fails is a defect (`RunRoster.holdInactive` releases through
+ * release that fails is a defect (`RunRegistry.holdInactiveRun` releases through
  * `Effect.orDie`): the claim would stay behind with nothing left to release it.
  * A claim acquisition that fails for any reason but a concurrent holder
  * surfaces as its own error, not as a refusal.
@@ -337,7 +337,7 @@ const fenceSupersededRun = (
   runId: RunId,
 ): Effect.Effect<void, Error, Runs | Scope.Scope> =>
   // One hold fences both: the in-process owner and the run's DB claim ride
-  // the same hold fiber's lifetime (`RunRoster.holdInactive`), so the two
+  // the same hold fiber's lifetime (`RunRegistry.holdInactiveRun`), so the two
   // can never disagree about whether this run is fenced.
   Effect.flatMap(Runs, (runs) => runs.holdInactiveRun(runId)).pipe(
     Effect.mapError((cause) => {

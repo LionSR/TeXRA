@@ -1,6 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
+import { untrackRun } from '@test/support/defaultSessionTestSetup';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
@@ -285,7 +286,7 @@ function agentRunTestLayer(init: LoopInit) {
       });
       init.session.runs.track(handle);
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => init.session.runs.untrack(handle.runId)),
+        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
       return {
         runId: init.runId,

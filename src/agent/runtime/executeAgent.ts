@@ -55,7 +55,7 @@ import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
 import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
-import type { RunHandle, AgentRunHandle } from './RunHandle';
+import type { RunHandle } from './RunHandle';
 
 const CHANNEL = 'executeAgent';
 
@@ -313,7 +313,7 @@ export interface SubagentRunOptions {
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
+  onRun?: () => Effect.Effect<void, Error>;
 }
 
 /** Options for executeAgent. */
@@ -428,7 +428,7 @@ export function executeAgent(
               // carried over from the provisional registration, minus a
               // detach committed while the launch prepared, and for a
               // fresh launch it is the caller's own parent.
-              const parentRunId = handle.deliveryTarget;
+              const parentRunId = handle.parent ?? undefined;
               // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
               yield* ensureRunDirUnder(runSession.roots.storage, runId);
               yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(

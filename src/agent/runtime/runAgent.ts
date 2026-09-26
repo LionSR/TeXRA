@@ -22,8 +22,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { RunLive } from './runRoster';
-import type { AgentRunHandle } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
@@ -116,19 +114,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
-  // Refuse duplicates before any snapshot is taken: either request kind can
-  // supply a run id, and a resume of a run this session already runs would
-  // queue behind the live generation, wake it without a handle of its own,
-  // and restore a prior terminal fact over the one that generation is about
-  // to write. The lane takes the same refusal ({@link RunRegistry.launchRun});
-  // this early read only spares the launch the snapshot it would take first.
-  const existingHandle = runSession.runs.getHandle(runId);
-  if (runSession.runs.isLive(runId) || existingHandle !== undefined)
-    return yield* Effect.fail(new RunLive({ runId }));
-
-  // The launch's fiber is the admission, so a stop by run id
-  // (`RunRegistry.interrupt`) reaches the launch wherever it has got to — no
-  // launch-scoped stop latch exists beside it.
+  // The launch's fiber is the admission, and the lane refuses a run that
+  // already has a live generation here in the same synchronous step as its
+  // claim ({@link RunRegistry.launchRun}), so a resume of a run this session
+  // already runs never queues behind it. A stop by run id
+  // (`RunRegistry.interrupt`) reaches the launch wherever it has got to.
   return yield* runSession.runs.launchRun(
     runId,
     Effect.gen(function* () {
@@ -213,10 +203,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
             : yield* persistedParentRunId(runSession, runId);
           if (resumedParentRunId !== undefined && liveParent === undefined)
             runSession.runs.detachChildren(resumedParentRunId, [runId]);
-          const onRun = (handle: AgentRunHandle): Effect.Effect<void, Error> =>
+          const onRun = (): Effect.Effect<void, Error> =>
             Effect.suspend(() => {
               lifecycleStarted = true;
-              return callerOnRun?.(handle) ?? Effect.void;
+              return callerOnRun?.() ?? Effect.void;
             });
           return liveParent !== undefined
             ? yield* executeAgent(definition, runId, {

@@ -49,7 +49,7 @@ import {
 import { classifyRun } from './runClassification';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
-import { RunLive } from './runRoster';
+import { RunLive } from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,

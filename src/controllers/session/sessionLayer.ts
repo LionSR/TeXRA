@@ -869,7 +869,7 @@ const closeSession = (root: string) =>
         ).pipe(Effect.andThen(Effect.failCause(cause))),
       ),
     );
-    const abandoned = runs.getActiveIds();
+    const abandoned = runs.activeIds();
     const release = didSettle
       ? sessions.invalidate(key)
       : Effect.logWarning(

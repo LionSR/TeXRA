@@ -330,14 +330,14 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.getActiveIds();
+  const candidateIds = ids?.length ? unique(ids) : runs.activeIds();
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidateIds.filter((id) => !shouldSkipWait(runs, id));
+  const pendingIds = candidateIds.filter((id) => !shouldSkipWait(context.session, id));
   if (pendingIds.length === 0) return;
 
   yield* awaitStatusChange(context, timeout, pendingIds, () =>
-    pendingIds.every((id) => shouldSkipWait(runs, id)),
+    pendingIds.every((id) => shouldSkipWait(context.session, id)),
   );
 });
 
@@ -483,7 +483,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     context.session.roots,
   );
   const success = yield* Effect.suspend(() => {
-    const stop = runs.kill(runId, {
+    const stop = runs.stop(runId, {
       detachActiveChildren,
     });
     // Asked after the settlement: a detaching stop interrupts the run

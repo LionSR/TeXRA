@@ -69,7 +69,10 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  testDefaultSession,
+  untrackRun,
+} from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';
@@ -374,7 +377,7 @@ describe('TUI request decisions', () => {
         session.setApprovalPolicy('yolo');
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
         yield* waitForNoApproval();
-        session.runs.untrack(runId);
+        untrackRun(session.runs, runId);
       }),
   );
 

@@ -219,8 +219,12 @@ export function launchSetupAssistant(
     // deliberately not gated — an explicit user action wins.
     if (
       session.runs
-        .getAgentHandles()
-        .some((handle) => agentName(handle.agentName) === SETUP_AGENT_NAME)
+        .activeIds()
+        .some(
+          (runId) =>
+            agentName(session.runs.getHandle(runId)?.agentName ?? '') ===
+            SETUP_AGENT_NAME,
+        )
     ) {
       void vscode.window.showInformationMessage(
         'The setup assistant is already running. Follow it in the TeXRA panel.',

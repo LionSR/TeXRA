@@ -20,7 +20,7 @@ import {
 } from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,

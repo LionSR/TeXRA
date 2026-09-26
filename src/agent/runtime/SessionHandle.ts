@@ -372,7 +372,7 @@ export class SessionHandle {
     // The view includes other processes' runs from the project database.
     // Publish only for runs this session owns; a future launch stamps its
     // initial snapshot from the current policy on `run.start`.
-    for (const runId of this.runs.getActiveIds()) {
+    for (const runId of this.runs.activeIds()) {
       this.publishApprovalPolicy(runId);
     }
   }
@@ -593,24 +593,7 @@ export class SessionHandle {
     );
   }
 
-  /**
-   * The awaited twin of {@link publishRunEvent}, for a caller whose own trace
-   * fact this is: the row takes its place in the publication order at this
-   * call like any other, and the refusal comes back typed, like
-   * {@link commit}'s, so the caller hears its own write fail instead of
-   * asking a drain that answers for every other fact the run has in flight.
-   */
-  commitRunEvent(
-    runId: RunId,
-    event: AgentEvent,
-  ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
-    return this.graph
-      .exclusive((append) => this.runEventPublication(runId, event, append))
-      .pipe(Effect.asVoid);
-  }
-
-  /** The row one run-scoped trace event commits, on whichever publisher path
-   *  the caller took. The draft is built when the publisher runs the job,
+  /** The row one run-scoped trace event commits. The draft is built when the publisher runs the job,
    *  after every chunk enqueued before it has reached the text source, so a
    *  `stream.end` with no final text of its own closes on the complete
    *  streamed text. */
@@ -1277,7 +1260,7 @@ export class SessionHandle {
 export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
   function* () {
     const pending = heldSessions().flatMap((session) =>
-      session.runs.getActiveIds().map((runId) => ({ session, runId })),
+      session.runs.activeIds().map((runId) => ({ session, runId })),
     );
     for (const { session, runId } of pending) {
       const settlement = Effect.gen(function* () {

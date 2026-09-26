@@ -292,7 +292,7 @@ export function createSessionExitController(
     // `interruptActive()` itself before `requestInputExit()`, outside this
     // predicate. On a COMPLETED root `chatTuiRunPending` is false, so this arm
     // skips the interrupt while `clean-exit` still runs one — and
-    // `stopAgentRun`'s child sweep fires even with no root handle. So Ctrl-C
+    // `RunRegistry.stop`'s child sweep fires even with no root handle. So Ctrl-C
     // on a finished turn still detaches background children where `/exit` does
     // not. Converging that means changing Ctrl-C, which is outside the `/exit`
     // ruling this comment implements.

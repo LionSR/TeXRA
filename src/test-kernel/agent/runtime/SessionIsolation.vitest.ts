@@ -230,7 +230,7 @@ describe('session isolation', () => {
       sessionB.runs.track(handle);
       admitInterruptibleRun(sessionB.runs, runId, interrupt);
 
-      const stop = sessionB.runs.kill(runId);
+      const stop = sessionB.runs.stop(runId);
       expect(stop.accepted()).toBe(true);
       yield* stop.settlement;
       expect(interrupt).toHaveBeenCalledOnce();

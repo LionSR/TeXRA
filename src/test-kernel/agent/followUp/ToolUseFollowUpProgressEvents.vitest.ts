@@ -11,7 +11,10 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  testDefaultSession,
+  untrackRun,
+} from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { fakeHostAgentResume } from '@test/support/setupPlatform';
@@ -50,7 +53,7 @@ describe('tool-use follow-up progress events', () => {
 
   afterEach(async () => {
     for (const { session, runId } of trackedRuns.splice(0)) {
-      session.runs.untrack(runId);
+      untrackRun(session.runs, runId);
     }
     for (const session of sessions) {
       await Effect.runPromise(session.dispose());

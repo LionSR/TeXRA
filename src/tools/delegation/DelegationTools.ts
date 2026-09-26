@@ -89,7 +89,7 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
       handle.agentName,
       normalizeProviderError(err),
     );
-    const targetRunId = handle.deliveryTarget;
+    const targetRunId = handle.parent ?? undefined;
     if (targetRunId === undefined) {
       yield* Effect.logWarning(
         `The wake-failure error for '${runId}' has no parent to deliver to (detached).`,
@@ -326,7 +326,7 @@ const resumeAgent = Effect.fn('DelegateAgentTool.resumeAgent')(function* (
   // nowhere, and a subagent of another orchestrator reports to that
   // orchestrator, not the caller. Fail fast instead of silently queueing
   // instructions whose results would never come back here.
-  if (!handle.isChild) {
+  if (handle.parent === null) {
     return yield* Effect.fail(
       new Error(
         `Run '${runId}' was detached from its orchestrator and now runs top-level. Its results can no longer be delivered back to this session. Start a new delegation instead.`,

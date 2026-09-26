@@ -89,7 +89,6 @@ export { getHelperModelName } from './helperModelName';
 export { createAgentResponseTextConnector } from './textConnection';
 
 // RunHandle
-export type { AgentRunHandle } from './RunHandle';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';

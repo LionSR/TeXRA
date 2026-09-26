@@ -213,24 +213,6 @@ describe('runAgent run ownership', () => {
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
-  it.effect(
-    'refuses a resume of a run this session already runs before any snapshot',
-    () =>
-      Effect.gen(function* () {
-        mocks.runActive.mockReturnValueOnce(true);
-        expect(
-          yield* Effect.flip(
-            launchRun(
-              { kind: 'resume', config: CONFIG, runId: RUN_ID },
-              { session: SESSION },
-            ),
-          ),
-        ).toMatchObject({ message: `Run is already running: ${RUN_ID}` });
-        expect(mocks.readRunEnd).not.toHaveBeenCalled();
-        expect(trackRun).not.toHaveBeenCalled();
-      }),
-  );
-
   it.effect.each(['fresh', 'resume'] as const)(
     'refuses a %s launch while the first is still in its lineage reads',
     (kind) =>

@@ -121,6 +121,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import { untrackRun } from '@test/support/defaultSessionTestSetup';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -413,10 +414,10 @@ function installOwnerSession(): {
         Effect.gen(function* (): Effect.fn.Return<Outcome> {
           if (req.kind === 'run.stop') {
             yield* session.runs
-              .stopAgentRun(req.runId, {
+              .stop(req.runId, {
                 detachActiveChildren: req.detachActiveChildren ?? undefined,
               })
-              // The handler words a refused stop as a request error; this
+              .settlement// The handler words a refused stop as a request error; this
               // stub has no such vocabulary, so a refusal is a defect here.
               .pipe(Effect.orDie);
           }
@@ -705,7 +706,7 @@ describe('createChatSessionController', () => {
             // stop lands there, untracks the root, and the run resolves
             // cancelled through its own result.
             admitInterruptibleRun(runs, runId, () => {
-              runs.untrack(runId);
+              untrackRun(runs, runId);
               rootRunResult.resolve({
                 category: 'toolUse',
                 runId,
@@ -743,9 +744,7 @@ describe('createChatSessionController', () => {
         // The local sever follows the committed `run.detach` now, so the
         // promotion lands with that batch rather than with the stop's admission.
         yield* Effect.promise(() =>
-          vi.waitFor(() =>
-            expect(runs.getHandle(childRun)?.isChild).toBe(false),
-          ),
+          vi.waitFor(() => expect(runs.getHandle(childRun)?.parent).toBeNull()),
         );
         expect(disposeAdapter).not.toHaveBeenCalled();
         expect(detachResultToast).toHaveBeenCalledOnce();
@@ -785,7 +784,7 @@ describe('createChatSessionController', () => {
         expect(yield* Fiber.join(approval)).toEqual({ action: 'approve' });
 
         // The host lives for the chat session, not for the runs it served.
-        runs.untrack(childRun);
+        untrackRun(runs, childRun);
         expect(disposeAdapter).not.toHaveBeenCalled();
 
         disposables.dispose();

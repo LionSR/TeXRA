@@ -267,7 +267,7 @@ export function executeCliToolUseConfig(
  */
 export function executeCliRequest(
   // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.kill`), which `runAgent` tracks
+  // the session's registry under it (`runs.stop`), which `runAgent` tracks
   // (or attaches to a parked predecessor) before the first resume lineage
   // read, so this kill has a target from that first await on.
   request: RunAgentRequest & { readonly runId: RunId },
@@ -454,7 +454,7 @@ export function executeCliRequest(
         // stop waits for the sever to interrupt.
         const stop =
           launchVerdict.kind !== 'published'
-            ? session.runs.kill(launchRunId, {
+            ? session.runs.stop(launchRunId, {
                 detachActiveChildren: false,
               })
             : undefined;

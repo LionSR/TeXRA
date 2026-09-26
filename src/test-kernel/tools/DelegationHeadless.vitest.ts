@@ -25,7 +25,10 @@ import {
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
+import {
+  testDefaultSession,
+  untrackRun,
+} from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -587,11 +590,11 @@ describe('headless delegation', () => {
 
   afterEach(async () => {
     const session = testDefaultSession();
-    for (const runId of session.runs.getActiveIds()) {
+    for (const runId of session.runs.activeIds()) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
-      session.runs.untrack(runId);
-      await Effect.runPromise(session.runs.kill(runId).settlement);
+      untrackRun(session.runs, runId);
+      await Effect.runPromise(session.runs.stop(runId).settlement);
     }
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
@@ -1123,7 +1126,7 @@ describe('headless delegation', () => {
           afterRun: (handle) => {
             capturedHandle = handle;
             return Effect.runPromise(
-              testDefaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
+              testDefaultSession().runs['detachActiveChildren'](PARENT_RUN_ID),
             );
           },
         });
@@ -1139,7 +1142,7 @@ describe('headless delegation', () => {
         expect(mocks.writeReport).toHaveBeenCalledWith(
           expect.stringContaining('The proof is correct.'),
         );
-        expect(capturedHandle?.deliveryTarget).toBeUndefined();
+        expect(capturedHandle?.parent).toBeNull();
         expect(
           yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),
         ).toEqual([]);

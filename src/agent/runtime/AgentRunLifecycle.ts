@@ -33,7 +33,7 @@ import {
 } from '@shared/state/onboardingState';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { RunHandle, type AgentRunHandle } from './RunHandle';
+import { RunHandle } from './RunHandle';
 import { Runs } from './runRegistry';
 import {
   buildTerminalFlowResult,
@@ -60,7 +60,7 @@ export interface RunFlowLifecycleOptions {
    * Neither a failure of this program nor a throw while building it may abort
    * the run, so the run forks it detached and logs whatever it ends on.
    */
-  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
+  onRun?: () => Effect.Effect<void, Error>;
 }
 
 interface FinalizeRunTerminalParams {
@@ -374,7 +374,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           const errorMsg = `Error executing agent ${agentIdentifier}: ${sdkMsg}`;
           // Root failures are logged here; a subagent's is delivered to its
           // orchestrator, so a second wrapper error would blame the parent.
-          if (kind !== 'abort' && !handle.isChild) {
+          if (kind !== 'abort' && handle.parent === null) {
             yield* logSdkError(ctx.logger, errorMsg, err, {
               operation: `execute ${agentIdentifier}`,
             });
@@ -415,7 +415,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
         : AGENT_ERROR_OUTCOME[kind];
       // A child's failure rides its result: the normalized error its
       // delivery to the parent reports.
-      const subagentResult: AgentFlowResult | undefined = handle.isChild
+      const subagentResult: AgentFlowResult | undefined = handle.parent
         ? {
             ...(carried ??
               buildTerminalFlowResult(
@@ -533,7 +533,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           // Start observation at the same time as invocation. The callback
           // may run as long as the run does, so its observer must not hold
           // up the flow.
-          yield* Effect.suspend(() => onRun(handle)).pipe(
+          yield* Effect.suspend(onRun).pipe(
             Effect.catchCause((cause) =>
               logLifecycleWarning('onRun callback failed', {
                 agentIdentifier,
