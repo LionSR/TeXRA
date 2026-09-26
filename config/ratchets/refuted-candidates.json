@@ -67,7 +67,7 @@
         {
           "file": "src/utils/core/index.ts",
           "symbol": "jitteredExponentialBackoffMs",
-          "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, jitterFraction = 0.2, ): number {…}"
+          "signature": "export function jitteredExponentialBackoffMs( baseMs: number, failures: number, maxMs: number, unitRandom: number, jitterFraction = 0.2, ): number {…}"
         }
       ]
     },

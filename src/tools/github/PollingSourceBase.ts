@@ -13,6 +13,7 @@ import {
   Effect,
   Exit,
   FiberSet,
+  Random,
   Result,
   Schedule,
   Scope,
@@ -746,6 +747,7 @@ export abstract class PollingSourceBase<
       this.config.backoffBaseMs,
       state.consecutiveFailures,
       this.config.backoffMaxMs,
+      yield* Random.next,
     );
     state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {
