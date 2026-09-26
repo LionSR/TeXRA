@@ -144,12 +144,13 @@ can be ratified.
      through it; production uses relative imports. A published package should not
      expose an internal continuation-anchoring digest as a subpath. Shed the
      export entry; have the tests import via a test-only path.
-   - `openaiChat.ts:525` and `anthropicMessages.ts:465` read
-     `process.env.{OPENAI,ANTHROPIC}_CUSTOM_HEADERS` inside otherwise-pure codec
-     factories — the only ambient-process reads in the package. Intentional
-     guardrails (preserve the behavior), but for a pure `Model` boundary the
-     check belongs at the host boundary (`modelBinding.ts`), a relocation, not a
-     deletion.
+   - Three sites read `process.env.{OPENAI,ANTHROPIC}_CUSTOM_HEADERS` inside
+     otherwise-pure codec factories — `openaiChat.ts:525`,
+     `anthropicMessages.ts:465`, and `openaiResponsesRequest.ts:348` (in
+     `responseAuthentication`). These are the only ambient-process reads in the
+     package. Intentional guardrails (preserve the behavior), but for a pure
+     `Model` boundary the check belongs at the host boundary (`modelBinding.ts`),
+     a relocation, not a deletion.
 
 ## Marginal cleanups (tech-debt-tier, not for this routine)
 
