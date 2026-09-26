@@ -610,20 +610,8 @@
     {
       "file": "src/tools/github/PRPollingSource.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "PRPollingSource"
-    },
-    {
-      "file": "src/tools/github/PRPollingSource.ts",
-      "category": "production-dead",
       "kind": "types",
       "name": "PRCurrentShaState"
-    },
-    {
-      "file": "src/tools/github/PRPollingSource.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "PRSubscriptionState"
     },
     {
       "file": "src/tools/github/githubSubscriptionTool.ts",
