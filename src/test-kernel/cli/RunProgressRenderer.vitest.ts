@@ -222,15 +222,16 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-/** The loop's round as `flow.step` states it. `RunView.flow` carries the
- *  coordinate alone: a planned total is the agent registry's fact. */
+/** A workflow run's round as `flow.step` states it: round `n` is turn
+ *  `n + 1`. `RunView.flow` carries the coordinate alone: a planned total is
+ *  the agent registry's fact. */
 async function handleRound(
   renderer: TestRunProgressRenderer,
   runId: string,
   round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    flow: { family: 'reflection', step: 'round.begin', round },
+    flow: { family: 'toolUse', step: 'turn.begin', turn: round + 1 },
   });
 }
 async function handleConversationProgress(
@@ -342,11 +343,12 @@ function publishRun(
       isRemote: false,
     },
     // The first step of the loop: what clears the activation's starting
-    // substate, so the live line reads the plain running phase.
+    // substate, so the live line reads the plain running phase. A workflow
+    // run's first turn is its first round.
     {
       type: 'flow.step',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'turn.begin' },
+      payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
     },
   ]);
   return Effect.promise(() => settle());
@@ -856,7 +858,7 @@ describe('CLI run progress renderer', () => {
 
       expect(
         output.split('\n').filter((line) => line.includes('Completed')),
-      ).toEqual(['[t0] · polish paper.tex · Completed · 0s']);
+      ).toEqual(['[r1] · polish paper.tex · Completed · 0s']);
     }),
   );
 
@@ -883,7 +885,7 @@ describe('CLI run progress renderer', () => {
         }),
       );
 
-      expect(output).toContain('\r\x1b[2K[t0] · polish paper.tex · 0s\n');
+      expect(output).toContain('\r\x1b[2K[r1] · polish paper.tex · 0s\n');
     }),
   );
 

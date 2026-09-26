@@ -33,7 +33,7 @@ import type {
   DatabaseReadFailed,
   DatabaseWriteFailed,
   SessionOpenError,
-  SessionStoreCleared,
+  SessionStoreMovedAside,
 } from '@shared/session/database';
 import type { SessionView } from '@shared/session/sessionView';
 import type { RunLedger } from '@shared/session/runLedger';
@@ -111,9 +111,9 @@ export interface SessionGraph {
   /** `view` as a level stream (PRD 7.2): ends as the fold does, with its
    *  defect when the fold died, so a reader waiting on a view never hangs. */
   readonly viewChanges: Stream.Stream<SessionView>;
-  /** The store this graph opened held another build's rows and was
-   *  cleared (`Database.cleared`): the one fact a host tells the user. */
-  readonly storeCleared: SessionStoreCleared | null;
+  /** The store this graph opened held an older build's rows and moved them
+   *  aside (`Database.movedAside`): the one fact a host tells the user. */
+  readonly storeMovedAside: SessionStoreMovedAside | null;
   /** The plane's tail as `view` has folded it (PRD 7.2): every row above
    *  `fromCommit`, released once the view holds the state that folded it,
    *  and local reconciliation has completed, for a reader that queries the

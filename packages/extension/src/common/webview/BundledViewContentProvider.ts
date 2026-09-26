@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 
 import { withLogChannel } from '@logger/effectLog';
 import { HOST_BRIDGE_API_KEY } from '@shared/hostBridgeTypes';
+import { escapeAttr } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -14,16 +15,6 @@ class WebviewTemplateMissingBody extends Data.TaggedError(
   override get message(): string {
     return `Webview template is missing a <body> tag: ${this.htmlPath}`;
   }
-}
-
-/**
- * Build HTML content for a webview by replacing placeholder tokens.
- */
-function escapeAttribute(value: string): string {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('"', '&quot;')
-    .replaceAll('<', '&lt;');
 }
 
 /**
@@ -60,7 +51,7 @@ const buildWebviewHtml = Effect.fnUntraced(function* (
     );
   }
   for (const [key, value] of Object.entries(attributes)) {
-    result = result.replaceAll(`\${${key}}`, escapeAttribute(value));
+    result = result.replaceAll(`\${${key}}`, escapeAttr(value));
   }
 
   const bodyTag = /<body\b[^>]*>/i;

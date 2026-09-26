@@ -64,14 +64,12 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  DedupedResource,
-  MAX_SEEN_IDS,
   type PollEventListener,
   PollHookRejected,
   PollingSourceBase,
   type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -87,11 +85,11 @@ import {
   type GhReviewComment,
 } from './prTypes';
 
-function createInitialState(pr: PRKey): PRSubscriptionState {
+function initialState(pr: PRKey, now: number): PRSubscriptionState {
   return {
     pr,
     slug: `${pr.owner}/${pr.repo}`,
-    ...createBasePollState(),
+    ...createBasePollState(now),
     initialized: false,
     issueComments: dedupeComments<GhIssueComment>(),
     reviewComments: dedupeComments<GhReviewComment>(),
@@ -227,7 +225,7 @@ export class PRPollingSource extends PollingSourceBase<
     onEvent: PollEventListener,
   ): Effect.Effect<Disposable, never, Secrets> {
     const key = prKeyToString(input);
-    return this.register(key, () => createInitialState(input), onEvent).pipe(
+    return this.register(key, (now) => initialState(input, now), onEvent).pipe(
       Effect.map((disposable) => {
         this.setListenerAnnotationLevel(key, onEvent, input);
         return {

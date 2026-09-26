@@ -8,7 +8,15 @@
  * the frames to the view the runtime holds.
  */
 import { it } from '@effect/vitest';
-import { Effect, Fiber, Layer, Queue, Stream, SubscriptionRef } from 'effect';
+import {
+  Effect,
+  Fiber,
+  Layer,
+  Logger,
+  Queue,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 import { TestClock } from 'effect/testing';
 import { describe, expect, vi } from 'vitest';
 
@@ -303,6 +311,34 @@ describe('session framer', () => {
       expect(actions()).toEqual(['selectNew', 'showSessions', 'submit']);
     }).pipe(Effect.provide(fakeProcessServices())),
   );
+  it.live('logs a replay read failure instead of stopping silently', () => {
+    const errors: unknown[] = [];
+    const capture = Logger.make((options) => {
+      if (options.logLevel === 'Error') errors.push(options.message);
+    });
+    return Effect.gen(function* () {
+      const session = createTestSession();
+      yield* Effect.addFinalizer(() => session.dispose());
+      vi.spyOn(session, 'inputs').mockReturnValue(
+        Stream.die(new Error('replay read failed')),
+      );
+      const bridge = yield* SessionBridge.make({
+        session,
+        onPortClosed: () => {},
+        handleHostRequest: () =>
+          Effect.die(new Error('No host request is expected.')),
+      });
+      const port = yield* bridge.attach({ id: PORT, send: () => {} });
+      yield* port.receive({ ...subscribe, session: session.roots.storage });
+      yield* Effect.promise(() =>
+        vi.waitFor(() => {
+          expect(String(errors.flat()[0])).toContain(
+            `Transcript frames for port ${PORT} stopped`,
+          );
+        }),
+      );
+    }).pipe(Effect.provide(fakeProcessServices()), Effect.withLogger(capture));
+  });
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
       const session = createTestSession();

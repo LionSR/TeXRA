@@ -58,16 +58,13 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp } from '@shared/session/sessionView';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -360,6 +357,13 @@ export function createChatSessionController(
     records: getRunRecords,
     ...init.agentRuns,
   };
+  // Said in the transcript the controller writes to, not on stderr before
+  // Ink mounts, where it would be left above the header.
+  if (runtimeSession.storeMovedAside) {
+    appendLocalAssistantTranscript(
+      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+    );
+  }
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
   const pendingSkillActivations = new Map<string, string>();
@@ -531,17 +535,10 @@ export function createChatSessionController(
     }
     // Another live process holds the run: it refused the claim, or took it
     // after its owner was proved dead.
-    if (
-      (error instanceof DatabaseWriteFailed &&
-        error.cause instanceof DatabaseClaimRefused) ||
-      (error instanceof DatabaseNotOwner &&
-        !error.closed &&
-        error.ownerId !== null)
-    ) {
-      session.runExitCode = CliExitCode.Usage;
-    } else {
-      session.runExitCode = CliExitCode.AgentError;
-    }
+    session.runExitCode =
+      heldElsewhereBy(error) !== null
+        ? CliExitCode.Usage
+        : CliExitCode.AgentError;
   };
 
   // One interaction host for the chat session's lifetime, as the extension
@@ -632,9 +629,10 @@ export function createChatSessionController(
       recoverRun(
         Effect.gen(function* () {
           yield* adoptRunConfig(config);
-          const registeredConfig = yield* Effect.try(() =>
-            AgentConfigSchema.parse(config),
-          );
+          const registeredConfig = yield* Effect.try({
+            try: () => AgentConfigSchema.parse(config),
+            catch: ensureError,
+          });
           const result = yield* agentRuns.launch(
             { kind: 'fresh', config: registeredConfig, runId },
             {

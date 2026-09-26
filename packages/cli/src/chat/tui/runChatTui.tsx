@@ -169,7 +169,11 @@ export async function runChat(
   // One startup program; an early exit is its `exitCode` arm.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform({
+        ...context,
+        quietLogs: true,
+        presentsStoreMovedAside: true,
+      });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);
       // Without a usable credential the chat still opens: the "Connect a

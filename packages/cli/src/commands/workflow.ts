@@ -3,12 +3,7 @@ import { Effect, FileSystem, Result } from 'effect';
 
 import { deriveResumability, getRunRecords } from '@agent/storage';
 import { type AgentConfigPayload, type SessionHandle } from '@agent/runtime';
-import {
-  AgentCategory,
-  isTerminalCompileRejection,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { AgentCategory, RUN_OUTCOME, type RunId } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 
 import {
@@ -19,12 +14,13 @@ import {
 import { CliExitCode } from '../runtime/exitCodes';
 import {
   advertisesInterruptedRun,
+  type CheckpointRefinement,
   formatInterruptedResumeHint,
-  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from '../runtime/interruptedResumeHint';
 import { writeErrorStderr } from '../runtime/logSinks';
+import { isTerminalWorkflowCheckpoint } from '../runtime/toolUseResumeData';
 import {
   buildHeadlessRunContext,
   selectCliRunModel,
@@ -324,21 +320,19 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
-    const canAdvertiseInterruptedRun = (
-      resumability: ResumableCheckpoint,
-    ): boolean => {
-      // Only a reflection run reaches here — this is the workflow command.
-      // The two facts the hint turns on sit in different halves of the
-      // snapshot: the model failure is runtime-owned (`runtime.lastError`,
-      // the single durable location, written with the waiting/deny
-      // snapshots), the compile rejection is family state.
-      const { snapshot } = resumability;
-      if (snapshot.family !== 'reflection') return false;
-      return (
-        snapshot.runtime.lastError == null &&
-        !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
-      );
-    };
+    // Not a run a model failure stopped (`runtime.lastError`), nor one that
+    // only replays a terminal compile rejection: the history rule, read from
+    // the rows, so no verdict held in memory can be missed by an interrupt.
+    const canAdvertiseInterruptedRun: CheckpointRefinement = (
+      { snapshot },
+      runId,
+    ) =>
+      snapshot.runtime.lastError != null
+        ? Effect.succeed(false)
+        : Effect.map(
+            isTerminalWorkflowCheckpoint(runId, snapshot, session),
+            (terminal) => !terminal,
+          );
     const writeResumeHint = (
       runId: RunId,
       waitForWrite = false,
@@ -359,10 +353,13 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         if (!run.ok || !run.outcomePersisted) return;
         const resumability = yield* deriveResumability(runId, session);
         if (
-          advertisesInterruptedRun(resumability, canAdvertiseInterruptedRun)
-        ) {
+          yield* advertisesInterruptedRun(
+            runId,
+            resumability,
+            canAdvertiseInterruptedRun,
+          )
+        )
           writeResumeHint(runId);
-        }
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
@@ -429,8 +426,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       return CliExitCode.AgentError;
     }
     if (!workflowResult) {
-      throw new Error(
-        'Workflow output was not finalized before lease release.',
+      return yield* Effect.die(
+        new Error('Workflow output was not finalized before lease release.'),
       );
     }
 

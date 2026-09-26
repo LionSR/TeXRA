@@ -1,6 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Cause, Data, Effect } from 'effect';
+import { Cause, Clock, Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
@@ -142,7 +142,7 @@ function queueLoad(
 > {
   return Effect.gen(function* () {
     if (loadEpoch !== epoch) return;
-    const startTime = Date.now();
+    const startTime = yield* Clock.currentTimeMillis;
 
     const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
@@ -200,7 +200,7 @@ function queueLoad(
     };
 
     yield* Effect.logInfo(
-      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
+      `Loaded ${cache.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
     ).pipe(withLogChannel(CHANNEL));
   });
 }

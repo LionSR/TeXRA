@@ -54,12 +54,11 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -181,7 +180,7 @@ export class RepoPollingSource extends PollingSourceBase<
     onEvent: PollEventListener,
   ): Effect.Effect<Disposable, never, Secrets> {
     const key = repoKeyToString(input);
-    return this.register(key, () => createInitialState(input), onEvent);
+    return this.register(key, (now) => createInitialState(input, now), onEvent);
   }
 
   protected formatErrorEvent(state: SubscriptionState, detail: string): string {
@@ -470,8 +469,7 @@ export class RepoPollingSource extends PollingSourceBase<
   );
 }
 
-function createInitialState(input: RepoSubscribeInput): SubscriptionState {
-  const now = Date.now();
+function createInitialState(input: RepoSubscribeInput, now: number) {
   const seed = new Date(now - SEED_WINDOW_MS).toISOString();
   return {
     owner: input.owner,
@@ -485,7 +483,7 @@ function createInitialState(input: RepoSubscribeInput): SubscriptionState {
     prStateByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prUpdatedAtByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
     prMergeableByNumber: new LRUCache({ max: MAX_PR_STATE_ENTRIES }),
-  };
+  } satisfies SubscriptionState;
 }
 
 function classifyPRState(pr: GhPullsListEntry): 'open' | 'closed' | 'merged' {

@@ -15,6 +15,7 @@ import {
   Effect,
   Exit,
   FiberSet,
+  Random,
   Result,
   Schedule,
   Scope,
@@ -59,9 +60,7 @@ export interface BasePollSubscriptionState {
  * Spread into a subscription state so the base shape stays canonical here
  * instead of copy-pasted across each poller.
  */
-export function createBasePollState(
-  now = Date.now(),
-): BasePollSubscriptionState {
+export function createBasePollState(now: number): BasePollSubscriptionState {
   return {
     listeners: new Set(),
     lastSuccessAt: now,
@@ -134,8 +133,6 @@ export const DEFAULT_POLLING_BACKOFF_CONFIG = Object.freeze({
   PollingSourceConfig,
   'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
 >);
-
-export { DedupedResource, dedupeComments, MAX_SEEN_IDS } from './pollingDedup';
 
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
@@ -242,21 +239,21 @@ export abstract class PollingSourceBase<
 
   /**
    * Subclass entry point. Looks up `key` in the map, creates initial state via
-   * `initState()` if absent (enforcing the max-concurrent cap), adds the
+   * `initState(now)` (the installed `Clock`'s reading) if absent (enforcing the max-concurrent cap), adds the
    * listener, and returns the Disposable that removes only this listener.
    *
    * The caller runs this Effect. Its short critical section commits the
    * binding and starts the source-owned poller together. A capacity refusal
    * remains the same plain Error defect the tool already reports, raised
-   * with `Effect.die` rather than a throw inside the suspend.
+   * with `Effect.die` rather than a throw inside the critical section.
    */
   protected register(
     key: K,
-    initState: () => S,
+    initState: (now: number) => S,
     onEvent: PollEventListener,
   ): Effect.Effect<Disposable, never, Secrets> {
     return Effect.uninterruptible(
-      Effect.suspend(() => {
+      Effect.flatMap(Clock.currentTimeMillis, (now) => {
         const lifetime = this.lifetime;
         if (lifetime === undefined) {
           return Effect.die(
@@ -273,7 +270,7 @@ export abstract class PollingSourceBase<
               ),
             );
           }
-          state = initState();
+          state = initState(now);
           this.subscriptions.set(key, state);
         }
         state.listeners.add(onEvent);
@@ -681,6 +678,7 @@ export abstract class PollingSourceBase<
       this.config.backoffBaseMs,
       state.consecutiveFailures,
       this.config.backoffMaxMs,
+      yield* Random.next,
     );
     state.skipPollUntilMs = now + actualDelayMs;
     if (now - state.lastSuccessAt >= this.config.maxFailureDurationMs) {

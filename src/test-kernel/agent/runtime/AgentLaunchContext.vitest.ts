@@ -388,7 +388,6 @@ describe('AgentLaunchContext', () => {
         const responseTextProcessing = {
           normalizeResponseText: (text: string) => text,
           postProcessResponse,
-          connectResponseText: () => Effect.succeed(' '),
         };
         const session = createTestSession({
           responseTextProcessing,

@@ -17,9 +17,12 @@
  * wait, an open attempt without a response invokes again under its gate, a
  * pending response dispatches what is unsettled, and a halted run that is
  * launched again waits for the input that resumes it.
+ *
+ * A workflow agent's run is this loop in round mode (`./rounds`): the same
+ * turn, run once per round by the round loop, with no tools and no input.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Effect, Exit, Scope, SynchronizedRef } from 'effect';
+import { Effect, Exit, Option, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
@@ -46,7 +49,6 @@ import { type RunState } from '@shared/session/runStateFold';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
-import { bindModel, releaseBindingUploads } from '../run/modelBinding';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
 import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
@@ -54,7 +56,6 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  familyState,
   rowAggregate,
   snapshotRow,
   stepRow,
@@ -72,7 +73,8 @@ import {
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import { continuationFor } from './continuationPolicy';
-import type { HttpClient } from 'effect/unstable/http';
+import { applyPendingModelSwitch } from './modelSwitch';
+import { roundLoop } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
@@ -116,6 +118,8 @@ interface ToolUseResult {
   readonly files: readonly string[];
   readonly usage: RunUsageTotals;
   readonly structured: JsonValue | undefined;
+  /** The documents a round-mode run produced, from its rows. */
+  readonly roundOutputs: RunState['roundOutputs'];
   readonly error?: RetryErrorInfo;
 }
 
@@ -129,7 +133,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   | ProcessServices
   | Runs
   | ModelInvoker
-  | FollowUps
   | WorkspaceFs
   | StorageFs
 > {
@@ -137,11 +140,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const ledger = yield* RunLedger;
   const runs = yield* Runs;
   const invoker = yield* ModelInvoker;
-  const followUps = yield* FollowUps;
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
-  const continuation = continuationFor(run);
+  const continuation = yield* continuationFor(run);
+  const rounds = continuation?.rounds ?? null;
+  // A conversation holds the run's input lease; rounds take no input.
+  const followUps = Option.getOrNull(yield* Effect.serviceOption(FollowUps));
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -169,9 +174,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, {
       ...patch,
-      state: { family: 'toolUse', state: flowState() },
+      state: flowState(),
     });
 
+  const instruct = (instruction: string | undefined): void => {
+    if (instruction !== undefined)
+      userChannels[USER_VAR_INSTRUCTION] = instruction;
+  };
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
     if (paths.length === 0) return;
@@ -191,7 +200,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       compactionRequested = true;
       // A parked loop wakes on a synthetic turn; the compaction runs before
       // that turn's request, and the message tells the model to do nothing.
-      if (!followUps.hasQueued()) {
+      if (followUps !== null && !followUps.hasQueued()) {
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
@@ -240,74 +249,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     start.attachment?.detach(flowContext);
   };
 
-  /** Record a host-admitted model switch: the compaction that drops the
-   *  continuation, the snapshot naming the new model, then the live swap. */
-  const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
-    function* (
-      state: RunState,
-      cell: RunCell,
-    ): Effect.fn.Return<
-      RunState,
-      Error,
-      LanguageModel | HttpClient.HttpClient
-    > {
-      const model = run.pendingModelSwitch.value;
-      run.pendingModelSwitch.value = null;
-      if (model === null) return state;
-      const current = yield* SynchronizedRef.get(run.model);
-      if (current.modelId === model) return state;
-      const nextConfig = MODEL_CONFIGS[model];
-      if (!nextConfig) {
-        return yield* Effect.fail(
-          new Error(`Model ${model} is not registered`),
-        );
-      }
-      const next = yield* bindModel({
-        config: nextConfig,
-        stores: run.stores,
-        compatibilityKey: current.compatibilityKey,
-        declinedRoutes: state.declinedRoutes,
-        agentCategory: run.config.agentCategory,
-        temperature: run.setting.temperature,
-      }).pipe(Scope.provide(run.scope));
-      userChannels[USER_VAR_MODEL] = next.modelId;
-      // The snapshot's model id is the run's one model fact. The record a
-      // listing or a resume reads and the display row both restate it in
-      // the same batch, so no reader sees one without the other.
-      const config = { ...run.config, model: next.modelId };
-      const switched = yield* cell.append([
-        {
-          type: 'model.compaction',
-          aggregateId: rowAggregate(runId),
-          payload: {
-            keepPrefix: state.messages.length,
-            messages: [],
-            cause: 'model-switch',
-            continuation: null,
-            continuationDropped:
-              state.continuation === null ? null : 'history-replaced',
-          },
-        },
-        {
-          type: 'run.record',
-          aggregateId: rowAggregate(runId),
-          record: config,
-        },
-        { type: 'run.config', aggregateId: rowAggregate(runId), config },
-        snapshot(state, {
-          phase: state.phase ?? 'model.ready',
-          runtime: {
-            modelId: next.modelId,
-            modelCompatibilityKey: next.compatibilityKey,
-          },
-        }),
-      ]);
-      yield* SynchronizedRef.set(run.model, next);
-      yield* releaseBindingUploads(current.model, current.modelId);
-      return switched;
-    },
-  );
-
   // -------------------------------------------------------------- opening
   const openFresh = Effect.fn('toolUse.open')(function* (
     opening: RunState,
@@ -316,6 +257,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const { bound, content } = yield* Effect.interruptible(
       Effect.gen(function* () {
         const bound = yield* SynchronizedRef.get(run.model);
+        // A round-mode run opens with no message: each round's opening
+        // carries its prompt.
+        if (rounds) return { bound, content: null };
         const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
         const promptVars = {
           ...run.userVarChannels,
@@ -374,14 +318,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
     );
     const opened = yield* ledger.appendBatch(runId, null, [
-      appendRow(runId, [{ role: 'user', content }]),
+      ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
         },
-        state: { family: 'toolUse', state: flowState() },
+        state: flowState(),
       }),
     ]);
     run.callbacks.onProgress?.({ kind: 'started' });
@@ -389,8 +333,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const restore = (state: RunState): void => {
-    const flow = familyState(state, 'toolUse');
-    if (flow === null) {
+    const flow = state.flow?.state;
+    if (flow === undefined) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
     if (flow.stateSlices) {
@@ -408,12 +352,23 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
+    /** Round mode: open the next round, closing the completed one. */
+    advance = false,
   ): Effect.fn.Return<
     TurnExit,
     Error,
     AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
     let state = yield* cell.current;
+    // A turn begins from a settled boundary; a resumed turn continues at
+    // whatever phase its rows left.
+    const begins =
+      advance ||
+      state.phase === 'initial' ||
+      state.phase === 'waiting' ||
+      state.phase === 'halted';
+    /** Round mode's round: the turn's own count less one. */
+    const index = begins ? state.turn : state.turn - 1;
     const turnContext: TurnContext = {
       workspace,
       get userInstruction() {
@@ -439,17 +394,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       outcome: 'completed',
     });
     const body = Effect.gen(function* () {
-      // A turn begins from a settled boundary; a resumed turn continues at
-      // whatever phase its rows left.
-      if (
-        state.phase === 'initial' ||
-        state.phase === 'waiting' ||
-        state.phase === 'halted'
-      ) {
+      if (begins) {
         response = '';
         workspace.assembly.lastResponse = '';
         workspace.assembly.accumulatedOutput = '';
+        const content = rounds ? yield* rounds.open(index) : null;
         state = yield* cell.append([
+          ...(advance ? [stepRow(runId, state, 'turn.end')] : []),
+          ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
           snapshot(state, { phase: 'model.ready', turn: state.turn + 1 }),
           stepRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
@@ -479,6 +431,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           | WorkspaceFs
           | StorageFs
         > {
+          if (rounds) return yield* rounds.afterResponse(at, cell, index);
           let next = at;
           const previous = next.messages.at(-2);
           if (
@@ -526,19 +479,28 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         },
       );
       // A committed response whose live post-processing never ran is replayed
-      // through the same policy, once, when this turn is entered. The rows
-      // say so: the response row moved the step and cleared the attempt, and
-      // nothing since has delivered tools or begun another round. Treating it
-      // as a finished turn instead would skip the blank-turn continuation and
-      // the one forced structured-output attempt, so a crash at that commit
-      // boundary could finalize a run with no structured output at all.
+      // through the same policy, once, when this turn is entered (the rows
+      // say so: its step, no open attempt). Treating it as finished would
+      // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
-        state = yield* applyPendingModelSwitch(state, cell);
+        state = yield* applyPendingModelSwitch(
+          state,
+          cell,
+          userChannels,
+          snapshot,
+        );
         if (state.pendingResponse !== null) {
-          const dispatched = yield* dispatchPendingResponse(cell, turnContext);
+          // A user's follow-up to a stopped response joins its delivery.
+          const joined = followUps && (yield* followUps.joinStopped(state));
+          const dispatched = yield* dispatchPendingResponse(
+            cell,
+            turnContext,
+            joined?.rows,
+          );
           state = dispatched.state;
-          if (dispatched.endTurn) return completeTurn(state);
+          instruct(joined?.delivered());
+          if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
         if (replayCommitted) {
@@ -570,18 +532,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (state.openAttempt === null) {
           const force = compactionRequested ? 'request' : null;
           compactionRequested = false;
-          state = yield* cell.adopt(
-            yield* compactIfNeeded(state, {
-              runId,
-              ledger,
-              logger,
-              bound,
-              stores: session.roots,
-              system: systemPrompt,
-              tools,
-              force,
-            }),
-          );
+          // Round mode compacts only on overflow: rounds build on each other.
+          if (rounds === null)
+            state = yield* cell.adopt(
+              yield* compactIfNeeded(state, {
+                runId,
+                ledger,
+                logger,
+                bound,
+                stores: session.roots,
+                system: systemPrompt,
+                tools,
+                force,
+              }),
+            );
           state = yield* cell.append([
             snapshot(state, { phase: 'model.ready', round: state.round + 1 }),
           ]);
@@ -592,11 +556,15 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             : undefined;
         forcedTool = null;
         const outcome = yield* invoker.invoke(cell, {
-          system: systemPrompt,
           tools,
           toolChoice,
-          round: state.round,
-          debugName: 'tooluse',
+          ...(rounds
+            ? yield* rounds.request(index)
+            : {
+                system: systemPrompt,
+                round: state.round,
+                debugName: 'tooluse',
+              }),
         });
         state = outcome.state;
         if (outcome.kind === 'cancelled') {
@@ -616,7 +584,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
     });
     return yield* stagedBy(
-      () => logger.openStage('Tool-use turn', { kind: 'session' }),
+      () =>
+        rounds?.stage(index) ??
+        logger.openStage('Tool-use turn', { kind: 'session' }),
       (exit: TurnExit) => exit.outcome,
     )(body).pipe(
       Effect.ensuring(Effect.sync(() => workspace.workPlan.clearOnUpdate())),
@@ -628,7 +598,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     // The follow-ups the rows still queue (input admitted while no consumer
     // held this run, or a batch a crash left unconsumed, C3) are the
     // publisher's, seeded where `loadRun`'s claim moved here.
-    const entry = yield* loadRun(runId, 'toolUse', start.resume);
+    const entry = yield* loadRun(runId, start.resume);
     const opened =
       entry._tag === 'fresh'
         ? yield* openFresh(entry.opening)
@@ -638,6 +608,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
+      if (followUps === null)
+        return yield* Effect.die(new Error(`Run ${runId} has no input lease.`));
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
@@ -652,9 +624,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step. Restore an already idle cursor
           // before acknowledging it; no new model turn is needed to park it.
-          if (restoring && !followUps.hasQueued()) {
+          if (restoring && !followUps.hasQueued())
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
-          }
+          restoring &&= followUps.hasQueued();
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
@@ -673,12 +645,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           // A queued follow-up outranks the policy's synthetic turn.
           let batch: FollowUpBatch | null =
-            next !== null && !followUps.hasQueued()
+            next !== null && 'turn' in next && !followUps.hasQueued()
               ? { synthetic: true, text: next.turn }
               : null;
           if (batch === null) {
-            // The host port stays attached: `/model` and `/compact` land on
-            // a parked run.
+            // The host port stays attached: `/model`, `/compact` land here.
             batch = yield* followUps.wait;
             if (batch === null) {
               // The queue was cancelled or disposed under the parked loop:
@@ -694,9 +665,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             batch,
           );
           state = yield* cell.adopt(consumed.state);
-          if (consumed.instruction !== undefined) {
-            userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
-          }
+          if (!consumed.turn) continue;
+          instruct(consumed.instruction);
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns
@@ -707,19 +677,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // The turn's trace rows publish fire-and-forget while the ledger
-        // appends on this fiber, so the parking row would commit ahead of
-        // them: the transcript boundary closes on `waiting`, and this turn's
-        // `stream.start`/`stream.end`/`response.finalized` are then dropped by
-        // the fold, leaving a parked run whose transcript holds no assistant
-        // answer. Settling this run's publications here is the order between
-        // the two paths, and the run id is what makes it a barrier: a
-        // session-wide settle reports session-scoped failures only, so a
-        // rolled-back transcript of this run would return successfully here and
-        // park the run over it. It observes rather than answers: the failure it
-        // throws ends the run through the loop's failure path, and the terminal
-        // row that path writes is the one that has to carry the
-        // `artifact-drain` marker, which it can only do while the drain that
-        // decides it still finds the lost fact.
+        // appends here, so the `waiting` row would commit ahead of them and
+        // the fold would drop this turn's stream rows, parking a run with no
+        // answer in its transcript. Settling this run's publications (by run
+        // id: a session-wide settle misses this run's rollback) orders the
+        // two paths. Its failure ends the run through the failure path, whose
+        // terminal row carries the `artifact-drain` marker while the drain
+        // that decides it still finds the lost fact.
         yield* session.settlePublications(runId, { consume: false });
         // The turn boundary: the snapshot precedes the steps in one batch, so
         // a viewer cut at either step sees the fields, and a stop between the
@@ -762,6 +726,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     files: workspace.interactions.toSnapshot().edits.map((e) => e.path),
     usage: at.usage,
     structured: run.structured.value,
+    roundOutputs: at.roundOutputs,
     ...(outcome === RUN_OUTCOME.FAILED && at.lastError !== null
       ? { error: at.lastError }
       : {}),
@@ -775,8 +740,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     () =>
       Effect.gen(function* () {
         yield* Effect.sync(attach);
-        return yield* Effect.acquireUseRelease(enter, loopBody, (cell, exit) =>
-          settleRun(cell, logger, followUps)(exit),
+        return yield* Effect.acquireUseRelease(
+          enter,
+          continuation?.rounds
+            ? roundLoop(continuation, continuation.rounds, runTurn, snapshot)
+            : loopBody,
+          (cell, exit) => settleRun(cell, logger, followUps)(exit),
         );
       }),
     () => Effect.sync(detach),

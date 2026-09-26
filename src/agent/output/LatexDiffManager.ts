@@ -93,7 +93,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (result.message.includes('document environment')) {
+    if (result.reason === 'missing-document-environment') {
       this.logger.debug(`Skipping ${operation}`, {
         data: result.message,
         messageType: MESSAGE_TYPES.INTERNAL,

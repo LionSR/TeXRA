@@ -288,9 +288,20 @@ export class SessionBridge {
   ): Effect.Effect<void> {
     return Effect.suspend(() => {
       const previous = entry.fiber;
+      // Nothing joins this fiber: a failed replay or tail read would stop the
+      // port's transcript with no trace, so its death is logged here.
       const frames = Stream.runForEach(
         frameSubscription(this.source, entry.port.id, this.host, subscribe),
         (frame) => Effect.sync(() => entry.port.send(frame)),
+      ).pipe(
+        Effect.tapCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : Effect.logError(
+                `Transcript frames for port ${entry.port.id} stopped; the port no longer updates`,
+                cause,
+              ).pipe(withLogChannel(CHANNEL)),
+        ),
       );
       return Effect.forkIn(
         previous

@@ -134,6 +134,49 @@ wa-dialog.desktop-prompt-overlay .desktop-prompt-subtitle {
 }
 
 /* =====================================================================
+   Settings popup (wa-dialog hosting <settings-app>)
+   --------------------------------------------------------------------- */
+
+wa-dialog.desktop-settings-overlay {
+  --width: min(1080px, calc(100vw - var(--wa-space-l) * 2));
+}
+
+wa-dialog.desktop-settings-overlay::part(body) {
+  padding: 0;
+  overflow: hidden;
+}
+
+wa-dialog.desktop-settings-overlay .desktop-settings-body {
+  display: flex;
+  flex-direction: column;
+  height: min(760px, calc(100vh - var(--wa-space-3xl) * 2));
+}
+
+wa-dialog.desktop-settings-overlay .desktop-settings-header {
+  flex: none;
+  padding: var(--wa-space-l) var(--wa-space-l) var(--wa-space-s);
+}
+
+wa-dialog.desktop-settings-overlay .desktop-settings-title {
+  margin: 0;
+  color: var(--wa-color-text-normal);
+  font-size: var(--font-size-h2);
+  font-weight: var(--wa-font-weight-semibold);
+  line-height: var(--line-height-heading);
+}
+
+.desktop-settings-content {
+  flex: 1;
+  min-height: 0;
+}
+
+.desktop-settings-content > settings-app {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* =====================================================================
    Logs pane (hosted by the Logs tab)
    --------------------------------------------------------------------- */
 

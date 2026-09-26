@@ -53,7 +53,6 @@ import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
-  familyState,
   rowAggregate,
   snapshotRow,
   type ToolUseFlowState,
@@ -211,7 +210,6 @@ const freshState = (): RunState => ({
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -227,7 +225,7 @@ const freshState = (): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
 });
 
 const INVOCATION = {
@@ -345,12 +343,9 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: options.stateSlices ?? null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: options.stateSlices ?? null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);
@@ -816,7 +811,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = familyState(folded!, 'toolUse')?.stateSlices;
+      const slices = folded!.flow?.state.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);

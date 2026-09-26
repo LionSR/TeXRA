@@ -16,7 +16,6 @@ import {
 } from 'effect';
 
 import {
-  createAgentResponseTextConnector,
   closeSession,
   openSessionEffect,
   type SessionHandle,
@@ -24,7 +23,6 @@ import {
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -93,11 +91,7 @@ interface DesktopProjectRegistryOptions {
    * another project changed until the next launch.
    */
   readonly globalConfigStore: ConfigStore;
-  /**
-   * The process secret store and global state the helper model behind the
-   * latex text-connector resolves against, threaded from the composition root
-   * that opened them.
-   */
+  /** The process stores; every project's roots share its global state. */
   readonly stores: ModelOptionStores;
 }
 
@@ -202,29 +196,20 @@ export const readRememberedDesktopProjects = Effect.fn(
 
 /**
  * Open one session over `roots`. Every fact this project's services answer
- * with comes from `roots` as data — the approval policy below, and the latex
- * text-join helper bound here against this project's roots, so a workspace
- * override in `.texra/config.json` is the same value a run in this session
- * would read.
+ * with comes from `roots` as data — the approval policy below — so a
+ * workspace override in `.texra/config.json` is the same value a run in this
+ * session would read.
  */
 function openProjectSession(
   root: string | undefined,
   roots: WorkspaceRoots,
-  secrets: PlatformSecrets,
 ): Effect.Effect<DesktopProject, Error, Scope.Scope> {
   return Effect.gen(function* () {
     const scope = yield* Scope.Scope;
     const session = yield* Effect.acquireRelease(
       openSessionEffect({
         roots,
-        responseTextProcessing: createTexraResponseTextProcessing(
-          // This project's own roots, plus the process secret store — not the
-          // process-level stores, which carry no workspace config layer and so
-          // answered every project with the global value (#12773). Taking
-          // `secrets` alone rather than a whole `ModelOptionStores` is what
-          // makes the wrong pair unrepresentable here.
-          createAgentResponseTextConnector({ ...roots, secrets }),
-        ),
+        responseTextProcessing: createTexraResponseTextProcessing(),
       }),
       // The one close every session takes: its runs stopped under the
       // shutdown deadline, the ones still live past it settled, its
@@ -260,11 +245,7 @@ export function openDesktopProjectRegistry(
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
-      openProjectSession(
-        undefined,
-        options.processRoots,
-        options.stores.secrets,
-      ).pipe(
+      openProjectSession(undefined, options.processRoots).pipe(
         Scope.provide(options.processScope),
         Effect.onError(() => Scope.close(options.processScope, Exit.void)),
       ),
@@ -335,7 +316,7 @@ export function openDesktopProjectRegistry(
             // Acquire the session and install its registry owner before
             // interruption can leave this operation.
             return yield* Effect.uninterruptible(
-              openProjectSession(root, roots, options.stores.secrets).pipe(
+              openProjectSession(root, roots).pipe(
                 Effect.tap((project) =>
                   Effect.gen(function* () {
                     const recent = yield* records.readRecent;

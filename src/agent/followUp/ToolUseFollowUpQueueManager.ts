@@ -8,15 +8,9 @@ import {
   aggregateId,
   type FollowUpContent,
   type RunId,
-  type SessionEvent,
   type SessionEventDraft,
 } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseReadFailed,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import {
   foldRunRows,
   freshRunRows,
@@ -26,6 +20,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunInput } from './RunInput';
+import type { FollowUpRowPort } from './followUpRowPort';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
 
@@ -120,40 +115,6 @@ interface FollowUpSubmitOptions {
    */
   readonly liveOffer?: 'immediate' | 'deferred';
 }
-
-/**
- * The session doors the admission boundary works through, wired by
- * `SessionHandle` over its graph: one serializer, no second append path.
- */
-interface FollowUpRowPort {
-  /** One job on the session's publisher: nothing else is written, and no
-   *  other job runs, while it does (`SessionGraph.exclusive`). */
-  readonly exclusive: <A, E>(
-    job: (append: Append) => Effect.Effect<A, E>,
-  ) => Effect.Effect<A, E>;
-  /** Enqueue a job on that publisher and return (`SessionGraph.detach`). */
-  readonly detach: (job: Effect.Effect<void>) => void;
-  /** The run's pending follow-ups (`SessionEvents.pendingFollowUps`). */
-  readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
-  /** Every committed row of the run's aggregate. */
-  readonly rows: (
-    runId: RunId,
-  ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  /**
-   * The run aggregate's claim, acquired the way a resume acquires it (prior
-   * owners proven dead first): returns the release of what this call took,
-   * a no-op when the process already held it.
-   */
-  readonly acquireClaim: (
-    runId: RunId,
-  ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
-}
-
-/** The refusals that mean another live process holds the run. */
-const heldElsewhere = (error: unknown): boolean =>
-  error instanceof DatabaseNotOwner ||
-  (error instanceof DatabaseWriteFailed &&
-    error.cause instanceof DatabaseClaimRefused);
 
 /**
  * Session-owned admission boundary indexed by run ID.
@@ -396,6 +357,30 @@ export class ToolUseFollowUpQueue {
     return true;
   }
 
+  /** Consume, with no turn, the run's pending deliveries from `childRunId`
+   *  (`turnDeliveryId`): the run already took the result another way (a wait
+   *  that returned it). One publisher job, so no admission interleaves. */
+  withdraw(
+    runId: RunId | undefined,
+    childRunId: RunId,
+  ): Effect.Effect<number, Error> {
+    if (runId === undefined || this.disposed) return Effect.succeed(0);
+    return this.port.exclusive((append) => {
+      const withdrawn = this.port
+        .pending(runId)
+        .filter(({ followUpId }) => followUpId.startsWith(`${childRunId}:`));
+      const rows = withdrawn.map(({ followUpId }): SessionEventDraft => ({
+        type: 'followup.consumed',
+        aggregateId: aggregateId('run', runId),
+        followUpId,
+      }));
+      return Effect.as(
+        rows.length > 0 ? append(rows) : Effect.void,
+        rows.length,
+      );
+    });
+  }
+
   /**
    * Dispose the session-owned boundary: end every attached queue, release
    * every adopted claim onto the session publisher, then drop the entry map
@@ -474,7 +459,7 @@ export class ToolUseFollowUpQueue {
       }
       if (Exit.isFailure(written)) {
         const error = Cause.squash(written.cause);
-        if (!heldElsewhere(error)) {
+        if (heldElsewhereBy(error) === null) {
           return yield* Effect.fail(
             error instanceof Error
               ? error

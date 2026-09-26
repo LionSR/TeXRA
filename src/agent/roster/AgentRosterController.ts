@@ -175,15 +175,7 @@ export class AgentRosterController<
         yield* this.allPresets(),
       );
       if (identifiers === undefined) return this.deps.getAgents(category);
-
-      const resolved = identifiers
-        .map((identifier) => this.deps.resolveAgent(category, identifier))
-        .filter((entry): entry is Entry => entry !== undefined);
-      return [
-        ...new Map(
-          resolved.map((entry) => [agentKeyOf(entry), entry]),
-        ).values(),
-      ];
+      return this.resolveIdentifiers(category, identifiers).entries;
     });
   }
 
@@ -210,9 +202,9 @@ export class AgentRosterController<
           presets,
         );
         if (identifiers === undefined) return [];
-        return identifiers
-          .filter((identifier) => !this.deps.resolveAgent(category, identifier))
-          .map(agentName);
+        return this.resolveIdentifiers(category, identifiers).missing.map(
+          agentName,
+        );
       });
       return {
         selection,
@@ -238,14 +230,35 @@ export class AgentRosterController<
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
       if (selection.kind === 'custom') return unique(identifiers);
-
-      return unique(
-        identifiers.map((identifier) => {
-          const entry = this.deps.resolveAgent(category, identifier);
-          return entry ? agentKeyOf(entry) : identifier;
-        }),
-      );
+      return this.resolveIdentifiers(category, identifiers).keys;
     });
+  }
+
+  /**
+   * The one walk from stored identifiers to catalog entries. `entries` are the
+   * resolved members deduplicated by key; `missing` the identifiers with no
+   * entry; `keys` each identifier's canonical key, or the identifier itself
+   * when it does not resolve, deduplicated in stored order.
+   */
+  private resolveIdentifiers(
+    category: AgentCategory,
+    identifiers: readonly string[],
+  ) {
+    const entries = new Map<string, Entry>();
+    const keys = new Set<string>();
+    const missing: string[] = [];
+    for (const identifier of identifiers) {
+      const entry = this.deps.resolveAgent(category, identifier);
+      if (entry) {
+        const key = agentKeyOf(entry);
+        entries.set(key, entry);
+        keys.add(key);
+      } else {
+        missing.push(identifier);
+        keys.add(identifier);
+      }
+    }
+    return { entries: [...entries.values()], missing, keys: [...keys] };
   }
 
   /** Team identity a selection resolves to, following inherit to the default. */

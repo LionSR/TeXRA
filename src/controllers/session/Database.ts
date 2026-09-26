@@ -76,14 +76,16 @@ import {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
-  type SessionStoreCleared,
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
+import { assertStoreFormat, pragmaValue, retireStore } from './storeFormat';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
+/** A row or draft that contradicts the store's own protocol: a defect. */
+const invariant = (message: string) => Effect.die(new Error(message));
 /**
  * Event history and bounded current application records.
  *
@@ -281,7 +283,7 @@ export const databaseLayer = (
         disableWAL: mode === 'ephemeral',
         busyTimeout: '5 seconds',
       }).pipe(mapDatabaseFailure(openFailed));
-      const cleared = yield* configure(sql, mode, path).pipe(
+      const movedAside = yield* configure(sql, mode, path, filename).pipe(
         mapDatabaseFailure(openFailed),
       );
       const level = yield* SubscriptionRef.make(0);
@@ -558,7 +560,7 @@ export const databaseLayer = (
       const refuseWriter = (id: AggregateId, absent: string) =>
         Effect.gen(function* () {
           const held = (yield* readState([id]))[0];
-          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          if (held === undefined) return yield* invariant(`${absent}: ${id}`);
           const { ownerId, closed } = held;
           return yield* new DatabaseNotOwner({
             aggregateId: id,
@@ -640,7 +642,7 @@ export const databaseLayer = (
                   parent.closed ||
                   parent.ownerId !== identity.ownerId
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Inquiry opening requires an owned open parent: ${draft.parentRunId}`,
                   );
                 }
@@ -663,7 +665,7 @@ export const databaseLayer = (
               target.kind === 'run' &&
               (seq === 1) !== (draft.type === 'run.start')
             ) {
-              throw new Error(
+              return yield* invariant(
                 `A run must begin with exactly one run.start: ${draft.aggregateId}`,
               );
             }
@@ -671,7 +673,7 @@ export const databaseLayer = (
               (draft.type === 'run.start' || draft.type === 'run.removed') &&
               target.kind !== 'run'
             ) {
-              throw new Error(
+              return yield* invariant(
                 `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
@@ -688,7 +690,7 @@ export const databaseLayer = (
                 parentState.closed ||
                 parentState.startCommit === null
               ) {
-                throw new Error(
+                return yield* invariant(
                   `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
@@ -721,11 +723,10 @@ export const databaseLayer = (
               at,
               committedPayload,
             ]))?.commit;
-            if (typeof commit !== 'number') {
-              throw new Error(
+            if (typeof commit !== 'number')
+              return yield* invariant(
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
-            }
             if (borrowsClaim(draft)) {
               yield* exec(release, [
                 JSON.stringify([draft.aggregateId]),
@@ -764,11 +765,10 @@ export const databaseLayer = (
                 draft.aggregateId,
                 identity.ownerId,
               ]);
-              if (unowned) {
-                throw new Error(
+              if (unowned)
+                return yield* invariant(
                   `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
                 );
-              }
               yield* exec(closeDependents, [draft.aggregateId]);
             }
             return {
@@ -822,7 +822,7 @@ export const databaseLayer = (
         );
       return {
         observedCommit,
-        cleared,
+        movedAside,
         level,
         currentCommit: query(currentCommit),
         readAll: (fromCommit, throughCommit) =>
@@ -845,7 +845,7 @@ export const databaseLayer = (
               if (row === undefined) return null;
               const event = decodeEvent(row);
               if (event.type !== 'flow.snapshot')
-                throw new Error('Invalid run snapshot row');
+                return yield* invariant('Invalid run snapshot row');
               return event;
             }),
           ),
@@ -898,7 +898,7 @@ export const databaseLayer = (
               const result = change(current);
               if (Result.isSuccess(result) && result.success !== null) {
                 if (result.success.threadId !== id)
-                  throw new Error(
+                  return yield* invariant(
                     'An inquiry transition cannot change its thread identity.',
                   );
                 const at = yield* Clock.currentTimeMillis;
@@ -1066,7 +1066,7 @@ export const databaseLayer = (
                     );
                   })
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion dependents changed before acquisition: ${id}`,
                   );
                 }
@@ -1087,13 +1087,12 @@ export const databaseLayer = (
                   tombstoneCommit,
                 ]);
                 if (!row)
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion record is no longer current: ${id}`,
                   );
                 const tombstone = decodeEvent(row);
-                if (tombstone.type !== 'run.removed') {
-                  throw new Error(`Expected a deletion record: ${id}`);
-                }
+                if (tombstone.type !== 'run.removed')
+                  return yield* invariant(`Expected a deletion record: ${id}`);
                 return {
                   tombstone,
                   owner: OwnerIdSchema.nullable().parse(row.claimOwner),
@@ -1122,7 +1121,7 @@ export const databaseLayer = (
                       tombstoneCommit,
                     ])).length !== 1
                   ) {
-                    throw new Error(
+                    return yield* invariant(
                       `Deletion claim changed before cleanup: ${id}`,
                     );
                   }
@@ -1137,11 +1136,10 @@ export const databaseLayer = (
                   );
                   yield* transact(
                     Effect.gen(function* () {
-                      if (yield* execOne(openDependent, [id])) {
-                        throw new Error(
+                      if (yield* execOne(openDependent, [id]))
+                        return yield* invariant(
                           `Deletion has an open dependent: ${id}`,
                         );
-                      }
                       if (
                         (yield* exec(collectClosed, [
                           id,
@@ -1149,7 +1147,7 @@ export const databaseLayer = (
                           tombstoneCommit,
                         ])).length !== 1
                       ) {
-                        throw new Error(
+                        return yield* invariant(
                           `Deletion claim or tombstone changed during cleanup: ${id}`,
                         );
                       }
@@ -1189,7 +1187,7 @@ export const databaseLayer = (
             });
             const at = yield* Clock.currentTimeMillis;
             // A write from a process whose build no longer matches the store's
-            // stamp (another build cleared and re-stamped it under this one)
+            // stamp (another build moved it aside and re-stamped it under this one)
             // fails here instead of appending rows of a vocabulary the store
             // no longer holds.
             return yield* transact(
@@ -1313,6 +1311,7 @@ const configure = Effect.fnUntraced(function* (
   sql: SqlClient.SqlClient,
   mode: 'persistent' | 'ephemeral',
   path: string,
+  filename: string,
 ) {
   yield* sql.unsafe('PRAGMA foreign_keys = ON', []);
   yield* sql.unsafe('PRAGMA synchronous = NORMAL', []);
@@ -1322,86 +1321,26 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot. One written
-  // under another version is unsupported (no legacy readers): its tables go
-  // here, before this build's schema touches them, and the stamp is read
-  // before the tables exist, so an unextendable layout is dropped rather than
-  // failing the open. resetStore owns the write lock and the stamp write.
-  const cleared =
+  // A store holds one vocabulary, stamped in SQLite's own slot. The stamp is
+  // read before this build's schema touches the tables, so a store of another
+  // format is refused or moved aside before anything is written to it.
+  const movedAside =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null
-      : yield* resetStore(sql, path);
-  yield* applySchema(sql);
-  if (cleared !== null) {
-    yield* Effect.logWarning(
-      `Session store ${path} held ${cleared.rows} rows of format ${cleared.storedFormat}; this build reads format ${SESSION_EVENT_FORMAT} and keeps no compatibility with earlier persisted data, so the store was cleared.`,
-    ).pipe(withLogChannel(CHANNEL));
-  }
-  return cleared;
-});
-
-/**
- * Clear a store stamped with another format, under the write lock and in
- * one transaction with the stamp: the stamp is re-read inside it, so of two
- * processes opening the same store only the first clears it, and the
- * second reads this build's stamp and keeps the tables. Returns what was
- * cleared, or null when the store held no rows (a new file) or was already
- * this build's by the time the lock was held.
- */
-const resetStore = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  path: string,
-) {
-  yield* sql.unsafe('BEGIN IMMEDIATE', []);
-  const cleared = yield* Effect.gen(function* () {
-    const stored = yield* pragmaValue(sql, 'user_version');
-    if (stored === SESSION_EVENT_FORMAT) return null;
-    const rows = yield* storedRows(sql);
-    yield* sql.unsafe('DROP TABLE IF EXISTS event', []);
-    yield* sql.unsafe('DROP TABLE IF EXISTS event_sequence', []);
-    yield* applySchema(sql);
-    yield* sql.unsafe(`PRAGMA user_version = ${SESSION_EVENT_FORMAT}`, []);
-    return rows > 0
-      ? ({
+      : yield* retireStore(
+          sql,
           path,
-          rows,
-          storedFormat: Number(stored),
-        } satisfies SessionStoreCleared)
-      : null;
-  }).pipe(Effect.onError(() => sql.unsafe('ROLLBACK', []).pipe(Effect.ignore)));
-  yield* sql.unsafe('COMMIT', []);
-  return cleared;
-});
-
-/** The event rows a store holds, or none when it has no event table yet. */
-const storedRows = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
-  const table = (yield* sql.unsafe<Record<string, unknown>>(
-    "SELECT count(*) AS present FROM sqlite_master WHERE type = 'table' AND name = 'event'",
-    [],
-  ))[0];
-  if (Number(table?.present ?? 0) === 0) return 0;
-  const counted = (yield* sql.unsafe<Record<string, unknown>>(
-    'SELECT count(*) AS rows FROM event',
-    [],
-  ))[0];
-  return Number(counted?.rows ?? 0);
-});
-
-/** Refuse a write once another build has re-stamped the store under this
- *  process; read inside the write transaction, so the check and the append
- *  see one stamp. */
-const assertStoreFormat = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  path: string,
-) {
-  const stored = yield* pragmaValue(sql, 'user_version');
-  if (stored !== SESSION_EVENT_FORMAT) {
-    return yield* Effect.fail(
-      new Error(
-        `Session store ${path} is stamped with event format ${String(stored)}; this process writes format ${SESSION_EVENT_FORMAT} and stops writing to it.`,
-      ),
-    );
-  }
+          filename,
+          Effect.all(
+            [
+              sql.unsafe('DROP TABLE IF EXISTS event', []),
+              sql.unsafe('DROP TABLE IF EXISTS event_sequence', []),
+            ],
+            { discard: true },
+          ),
+        );
+  yield* applySchema(sql);
+  return movedAside;
 });
 
 const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
@@ -1412,17 +1351,6 @@ const applySchema = Effect.fnUntraced(function* (sql: SqlClient.SqlClient) {
     .filter(Boolean)) {
     yield* sql.unsafe(statement, []);
   }
-});
-
-const pragmaValue = Effect.fnUntraced(function* (
-  sql: SqlClient.SqlClient,
-  pragma: string,
-) {
-  const row = (yield* sql.unsafe<Record<string, unknown>>(
-    `PRAGMA ${pragma}`,
-    [],
-  ))[0];
-  return row?.[pragma];
 });
 
 const verifyPragma = Effect.fnUntraced(function* (

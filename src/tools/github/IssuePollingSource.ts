@@ -30,12 +30,11 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
   type PollingLifetime,
 } from './PollingSourceBase';
+import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
@@ -70,11 +69,11 @@ interface SubscriptionState extends BasePollSubscriptionState {
   etags: { issue?: string; comments?: string };
 }
 
-function createInitialState(issue: IssueKey): SubscriptionState {
+function createInitialState(issue: IssueKey, now: number): SubscriptionState {
   return {
     issue,
     slug: `${issue.owner}/${issue.repo}`,
-    ...createBasePollState(),
+    ...createBasePollState(now),
     initialized: false,
     commentsSeeded: false,
     state: undefined,
@@ -104,7 +103,7 @@ export class IssuePollingSource extends PollingSourceBase<
     onEvent: PollEventListener,
   ): Effect.Effect<Disposable, never, Secrets> {
     const key = issueKeyToString(issue);
-    return this.register(key, () => createInitialState(issue), onEvent);
+    return this.register(key, (now) => createInitialState(issue, now), onEvent);
   }
 
   protected formatErrorEvent(state: SubscriptionState, detail: string): string {

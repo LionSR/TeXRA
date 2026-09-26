@@ -46,6 +46,7 @@ import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
+  emptyRunEndOutput,
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -58,6 +59,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -70,6 +72,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { CompositionKey, type PinnedComposition } from '@tools/compositions';
 import { releaseRunResources } from '@tools/approval';
@@ -464,7 +467,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       phase: null,
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
       lastError: null,
@@ -480,7 +482,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
-      overflowRecoveredAtRound: null,
+      overflowRecoveredAtTurn: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -490,12 +492,9 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         phase: 'model.ready',
         turn: 1,
         state: {
-          family: 'toolUse',
-          state: {
-            stateSlices: null,
-            offeredTools: [],
-            toolsetHash: '0'.repeat(64),
-          },
+          stateSlices: null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
         },
       }),
     ]);
@@ -806,6 +805,58 @@ describe('a parked root run', () => {
     }),
   );
 
+  it.effect('restores its park when a resume consumes only stale notices', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const first = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* first.park(0);
+      yield* Fiber.interrupt(first.fiber);
+
+      // Only an ended child's progress notice is queued: consuming it starts
+      // no turn, so the resume must still write the park it cleared.
+      const child = publishTestRunStart(session, generateRunId(), {
+        parent: runId,
+      });
+      session.publish([
+        {
+          type: 'run.end',
+          aggregateId: rowAggregate(child),
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: emptyRunEndOutput('toolUse'),
+        },
+      ]);
+      yield* enqueue(session, runId, [
+        {
+          text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+          origin: 'subagent_result',
+        },
+      ]);
+      const recorded = recordSessionEvents(session);
+
+      const resumed = yield* forkLoop({
+        runId,
+        session,
+        resume: true,
+        script: [textTurn('never reached'), textTurn('never reached')],
+      });
+      yield* resumed.park(1);
+      yield* Fiber.interrupt(resumed.fiber);
+
+      const steps = eventsOfType(
+        yield* Effect.promise(() => recorded.read()),
+        'flow.step',
+      ).map((event) => event.payload.step);
+      // The interrupt that ends the test writes its own halt last.
+      expect(steps.slice(0, -1)).toContain('waiting');
+      expect(resumed.requests).toHaveLength(0);
+    }),
+  );
+
   it.effect('parks a run a retry cancelled, rather than leaving it there', () =>
     Effect.gen(function* () {
       const session = quietSession();
@@ -847,7 +898,24 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
+        // A progress notice whose child has since ended is consumed, never
+        // delivered: the model and the transcript see only live items.
+        const child = publishTestRunStart(session, generateRunId(), {
+          parent: runId,
+        });
+        session.publish([
+          {
+            type: 'run.end',
+            aggregateId: rowAggregate(child),
+            outcome: RUN_OUTCOME.CANCELLED,
+            output: emptyRunEndOutput('toolUse'),
+          },
+        ]);
         yield* enqueue(session, runId, [
+          {
+            text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+            origin: 'subagent_result',
+          },
           {
             text: '<subagent-result>done</subagent-result>',
             origin: 'subagent_result',
@@ -886,6 +954,11 @@ describe('the batch a parked run consumes', () => {
         expect(info).toHaveBeenCalledWith('please revise the theorem', {
           messageType: MESSAGE_TYPES.USER_MESSAGE,
         });
+        expect(info).not.toHaveBeenCalledWith(
+          '⟳ coder · started',
+          expect.anything(),
+        );
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 

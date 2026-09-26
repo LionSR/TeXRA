@@ -619,6 +619,7 @@ class ArxivSourceProcessor {
 
       yield* this.placeSourceFiles(
         downloadedPath,
+        downloadDirFull,
         paperDirFull,
         progressCallback,
       );
@@ -627,8 +628,8 @@ class ArxivSourceProcessor {
 
   /**
    * Place the downloaded source into the paper directory: extract a tar/tgz
-   * archive in place, or decompress (gzip) and rename a single source file to
-   * main.tex. Removes the downloaded artifact on success.
+   * archive in staging and move its entries in, or decompress (gzip) and
+   * rename a single source file to main.tex; nothing existing is overwritten.
    */
   private readonly placeSourceFiles = Effect.fn(
     'arxivProcessor.placeSourceFiles',
@@ -637,6 +638,7 @@ class ArxivSourceProcessor {
     function* (
       this: ArxivSourceProcessor,
       downloadedPath: string,
+      downloadDirFull: string,
       paperDirFull: string,
       progressCallback: DownloadSourceOptions['progressCallback'],
     ) {
@@ -649,13 +651,18 @@ class ArxivSourceProcessor {
 
       if (isArchive) {
         progressCallback?.('Extracting source files...', 60);
-
+        // Staged fresh (a killed run's leftover never collides): no entry
+        // overwrites the workspace; Cancel cannot split the moves.
+        const extractedDir = yield* permanentFs(
+          fs.makeTempDirectory({ directory: downloadDirFull, prefix: 'x-' }),
+        );
+        const staged = (entry: string) => path.join(extractedDir, entry);
+        const placed = (entry: string) => path.join(paperDirFull, entry);
         const extractResult = yield* this.extractTarFile(
           downloadedPath,
-          paperDirFull,
+          extractedDir,
           { timeout: 30000 },
         );
-
         if (!extractResult.success) {
           return yield* Effect.fail(
             new ArxivSourcePermanentError({
@@ -663,11 +670,20 @@ class ArxivSourceProcessor {
             }),
           );
         }
-
-        progressCallback?.('Cleaning up...', 80);
-
-        // Remove the downloaded archive file
-        yield* permanentFs(fs.remove(downloadedPath, { force: true }));
+        const entries = yield* permanentFs(fs.readDirectory(extractedDir));
+        const collisions = yield* Effect.filter(entries, (entry) =>
+          permanentFs(entryExists(fs, placed(entry))),
+        );
+        if (collisions.length > 0) {
+          const message = `Target already exists: ${collisions.map(placed).join(', ')}`;
+          return yield* Effect.fail(new ArxivSourcePermanentError({ message }));
+        }
+        progressCallback?.('Placing source files...', 80);
+        yield* permanentFs(
+          Effect.forEach(entries, (e) => fs.rename(staged(e), placed(e)), {
+            discard: true,
+          }),
+        ).pipe(Effect.uninterruptible);
         return;
       }
 

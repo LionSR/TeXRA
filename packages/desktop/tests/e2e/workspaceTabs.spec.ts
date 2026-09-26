@@ -55,12 +55,16 @@ test.afterAll(async () => {
   if (workspacePath) cleanupDirectory(workspacePath);
 });
 
-/** Opens Settings, the one workbench surface the sidebar footer holds. */
+const SETTINGS_DIALOG = 'wa-dialog.desktop-settings-overlay';
+
+/** Opens the Settings popup from the sidebar footer. */
 async function openSettings(): Promise<void> {
-  await launched.page
+  const { page } = launched;
+  await page
     .locator('.shell-sidebar-footer .shell-sidebar-action')
     .filter({ hasText: 'Settings' })
     .click();
+  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', true);
 }
 
 /**
@@ -208,36 +212,31 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   await expect(page.locator('.shell-sidebar')).toBeVisible();
 });
 
-test('opens settings beside the permanent conversation', async () => {
+test('opens settings as a popup over the permanent conversation', async () => {
   const { page } = launched;
 
   await openSettings();
 
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
-  await expect(
-    page.locator('.shell-workbench[data-placement="right"]'),
-  ).toBeVisible();
   await expect(
     page.locator(
-      '.shell-workbench-surface settings-app[data-desktop-view="settings"]',
+      `${SETTINGS_DIALOG} settings-app[data-desktop-view="settings"]`,
     ),
   ).toBeVisible();
-  await expect(page.locator('.shell-conversation')).toBeVisible();
+  // Settings is not a workbench tab: nothing opens beside the conversation.
+  await expect(
+    page.locator('.shell-workbench-tab[data-kind="settings"]'),
+  ).toHaveCount(0);
 
-  // Hiding the workbench must leave the task canvas mounted and visible.
-  await page.locator(hideWorkbench('right')).click();
-  await expect(page.locator('.shell-frame')).toHaveAttribute(
-    'data-workbench-open',
-    'false',
-  );
-  await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
+  // Closing the popup leaves the task canvas mounted and visible.
+  await page.keyboard.press('Escape');
+  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', false);
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
 test('toggles and restores the bottom and side bars', async () => {
   const { page } = launched;
 
-  await openSettings();
+  await openTool('logs');
   const sideToggle = page.locator('#shellToggleSidePanel');
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
 
@@ -270,7 +269,7 @@ test('toggles and restores the bottom and side bars', async () => {
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toBeVisible();
   await sideToggle.click();
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
 });
 
@@ -297,7 +296,7 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
   await terminalTab.click({ button: 'right' });
   await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
   await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
 
   await openTool('terminal');
   const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
@@ -312,12 +311,12 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   const { app, page } = launched;
 
   await openSettings();
-  const workbenchSplit = page.locator('.shell-main-split');
-  await workbenchSplit.evaluate((element) => {
-    const split = element as HTMLElement & { positionInPixels: number };
-    split.positionInPixels = 440;
-    split.dispatchEvent(new CustomEvent('wa-reposition', { bubbles: true }));
-  });
+  // Narrow the popup so the settings view takes its compact layout.
+  await page
+    .locator(SETTINGS_DIALOG)
+    .evaluate((dialog) =>
+      (dialog as HTMLElement).style.setProperty('--width', '480px'),
+    );
   await expect
     .poll(async () => {
       const bounds = await page.locator('settings-app').boundingBox();
@@ -400,6 +399,8 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   );
 
   await recorder.evaluate((element) => (element as HTMLElement).blur());
+  await page.locator(`${SETTINGS_DIALOG} .desktop-settings-close`).click();
+  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', false);
   await page.keyboard.press(customShortcut);
   await expect(
     page.locator('wa-dialog.desktop-command-palette'),

@@ -817,9 +817,9 @@ export function buildStatusBarDisplay(
     }
   }
 
-  // One slot carries a reflection run's round (mirrors the SubagentList row's
+  // One slot carries a workflow run's round (mirrors the SubagentList row's
   // `flowLabel`). A chat's turn count is not something anyone acts on.
-  const position = flowPosition(run?.flow ?? undefined);
+  const position = flowPosition(run?.flow, run?.category);
   // Every direct and nested subagent the displayed run owns.
   const subagents = run?.rollup.total ?? 0;
   const flowText =

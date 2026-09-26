@@ -1,6 +1,6 @@
 ---
 created: 2026-09-24
-status: proposed
+status: implemented — PR 1 #13277 (goal mode as a plugin: #13287), PR 2 #13317, PR 3 #13327, PR 4 #13328, PR 5 #13336. Moved from proposed/ 2026-09-26.
 ---
 
 # One run program: workflow agents as round mode of the tool-use loop
@@ -21,8 +21,8 @@ TeXRA has two run programs over one ledger:
 | Reflection output pipeline | `src/agent/output/`                                          | 3,734       |
 
 A workflow agent (polish, correct, paper2slide, …) is a fixed number of
-rounds. Each round is one user turn, a model response that may be continued
-if the output limit cut it off, and then output processing: XML extraction,
+rounds. Each round is one user turn, one model response, and then output
+processing: XML extraction,
 lineage, latexdiff, a compile check and a round summary. The rounds already
 share one conversation, since `prepareRound` appends each round's prompt to
 the same message history (`reflection.ts:516`).
@@ -76,8 +76,8 @@ typecheck on current main (two TS2322 errors in `documentRounds.ts`).
   `:478`). The pipeline's re-entry is derived from folded state instead (see
   "Resume").
 - The per-cycle raw files (`raw/r<n>/output.c<i>.xml`) and the
-  `readRawOutput` concatenation. The round's text is folded from the
-  assistant messages, which are already rows.
+  `readRawOutput` concatenation, already gone with length continuation
+  (PR 2). The round's text is the folded response, which is already a row.
 - The `RESUME_BY_CATEGORY` family split in `SessionResumeRetrieval.ts:43`.
   Both categories resume the `toolUse` family.
 - A second copy of the run mechanics: model invoke, usage recording, stage
@@ -169,39 +169,29 @@ The documents plugin is `src/agent/output/documentRounds.ts`. It holds what
 media, compile-failure context), `processOutput`, `fallbackOutput`,
 `presentOutput` and `produceOutput`. It lives next to the pipeline it drives.
 
-### Length continuation and overflow recovery move into the loop
+### Length continuation is retired; overflow recovery moves into the loop
 
-Today only reflection continues a response cut off by `length`, and only
-reflection retries once after a forced compaction on `context-window-exceeded`
-(`reflection.ts:601-698`). The tool-use loop does neither. Both move into a
+**Owner ruling (2026-09-25): length continuation is retired, not moved into
+the tool-use loop.** Current models offer large output budgets, so a response
+cut off by the output limit is no longer continued with a "you got cut off,
+continue" prompt, in reflection or anywhere else. A cut-off round is processed
+as far as it got, and the transcript warns that it hit the output limit and
+that the user can raise max output tokens. PR 2 is that retirement: it deletes
+the continuation branch, its 10-cycle cap and 1.5M input-token stop, the
+output-token multiplier warning, the per-cycle raw files and the
+`connectResponseText` helper-model call. The prototype's continuation
+corrections (folded count, marker field, stop rules, cycle joining) no longer
+apply. `continuationIndex` stays in the schemas, written as 0, until PR 5's
+format bump removes it.
+
+What remains is overflow recovery. Today only reflection retries once after a
+forced compaction on `context-window-exceeded`, and since PR 2 it re-issues
+the round's request against the compacted history rather than asking the
+model to continue. The tool-use loop does not retry. The retry moves into a
 sibling module of the tool-use loop, `loop/continuation.ts`, because
 `toolUse.ts` is exactly at its 796-line budget (`file-size-baseline.json:68`).
-The idle seam of PR 1 lives in a sibling module for the same reason. From then on they apply to every
-agent, and a chat agent cut off mid-answer continues too. That is a
-behavior change for tool-use agents; see "Risks".
-
-Two corrections to the prototype:
-
-- **The continuation count is folded state (`continuationIndex`, per round
-  since #13157), not a loop-local counter.** A resumed run must not get a
-  fresh budget of 10.
-- **A continuation turn is marked by a row field, not recognized by its prompt
-  prefix.** The prototype's `roundTextOf` scans for `"Your response got cut
-off"`, and a user could type that.
-- **`continuationIndex` resets at `turn.begin`.** Tool-use never writes it
-  today, and the fold checks monotonicity within one `round` only
-  (`runRows.ts:155-164`).
-- **Reflection's stop rules are kept exactly** (`reflection.ts:636-698`): no
-  continuation once the text contains `</documents>`, none after a `length`
-  cut that left empty text, the 1.5M input-token stop, and the prompt text
-  "marked by </documents>". The prototype continued on any `length`, empty
-  text included, and dropped that phrase from the prompt **(review)**. On a
-  reasoning model whose budget went to reasoning, the empty case would loop
-  10 times.
-- **Cycles are joined with `connectResponseText`** (`reflection.ts:636-653`),
-  a helper-model call on every host (`textConnection.ts:52-90`). The
-  prototype concatenated raw text **(review)**. The call is skipped on cycle
-  0, whose result reflection throws away.
+The idle seam of PR 1 lives in a sibling module for the same reason. The owner
+has not ruled on whether it then applies to every agent.
 
 `overflowRecoveredAtRound` (`runStateFold.ts:192`) exists in the fold, but it
 is keyed on `state.round`, which tool-use bumps on every model call. Keyed
@@ -279,13 +269,10 @@ Everything `reflection.ts` does, and where it lands:
 | Input media on round 0, previous round's figures on round _n_ | plugin (**not in prototype**)                                    |
 | Compile-failure context in next round                         | plugin `nextRound`                                               |
 | Warn that declared `tools:` are not offered                   | plugin opening, with the toolset forced empty                    |
-| Length continuation, 10-cycle cap, 1.5M input-token stop      | `loop/continuation.ts`                                           |
-| `</documents>` and empty-text stop rules, prompt text         | `loop/continuation.ts` **(review)**                              |
-| `connectResponseText` between cycles                          | `loop/continuation.ts` **(review)**                              |
+| Warn when a round hits the output limit                       | plugin `afterTurn`                                               |
 | No threshold compaction                                       | round policy turns it off **(review)**                           |
 | Resume after a failed round retries the round                 | round policy resume path **(review)**                            |
 | Overflow retry once per round after forced compaction         | `loop/continuation.ts`, keyed on the turn (**not in prototype**) |
-| Output-token multiplier warning                               | `loop/continuation.ts`                                           |
 | Scratchpad extraction to transcript                           | plugin `afterTurn`                                               |
 | XML extraction, lineage, latexdiff, compile check, summary    | plugin `afterTurn` (moved as-is)                                 |
 | Fallback that drops a round's outputs on pipeline failure     | plugin `afterTurn`                                               |
@@ -303,14 +290,22 @@ Everything `reflection.ts` does, and where it lands:
 ## PR sequence
 
 Each PR is green and shippable alone. PRs 1 and 3 are behavior-preserving.
-PR 2 changes tool-use behavior deliberately; workflow-agent behavior changes
-only from PR 4, and PR 5 clears stored sessions.
+PR 2 changes workflow-agent behavior on a cut-off response deliberately;
+otherwise workflow-agent behavior changes only from PR 4, and PR 5 clears
+stored sessions.
 
 1. **Continuation-at-idle seam, goal mode as its first user**, in a sibling
    module of `toolUse.ts`. Behavior-preserving; about +20 lines.
-2. **Length continuation and overflow recovery in `loop/continuation.ts`**,
-   for tool-use agents. This includes the continuation marker field. It
-   changes tool-use behavior deliberately, and gets a CHANGELOG entry.
+2. **Retire length continuation.** Reflection no longer continues a response
+   cut off by the output limit: the round's text is processed as it is, with
+   a warning on the transcript. The continuation branch, its caps, the
+   per-cycle raw files and `connectResponseText` (port, both implementations
+   and the three host wirings) are deleted. The overflow retry stays and
+   re-issues the round's request against the compacted history instead of a
+   continuation prompt. `continuationIndex` stays, written as 0, until PR 5.
+   It changes workflow-agent behavior deliberately, and gets a CHANGELOG
+   entry. Moving the overflow retry into `loop/continuation.ts` waits on an
+   owner ruling.
 3. **The documents plugin extracted from `reflection.ts`.** Reflection calls it
    and still runs every workflow agent. `reflection.ts` shrinks by the output
    half. Behavior-preserving.
@@ -337,17 +332,15 @@ only from PR 4, and PR 5 clears stored sessions.
    two phases.
 
 PRs 1–3 are worth landing even if 4–5 stop: PR 1 is the plugin seam goal
-mode needs, PR 2 fixes cut-off chat answers, and PR 3 puts the documents
+mode needs, PR 2 removes a mechanism round mode would otherwise have to port,
+and PR 3 puts the documents
 pipeline behind a boundary.
 
 ## Risks
 
-- **Tool-use agents start continuing cut-off responses (PR 2).** Continuation
-  applies only to text-only responses with non-empty text. A response cut
-  mid-tool-call goes to dispatch as today. The continuation check runs before
-  the final-tool forcing and the blank-after-tool-result prompt, in the
-  prototype's order. A replayed `response.ready` with `length` appends the
-  continuation once.
+- **A cut-off round is no longer finished (PR 2).** A document longer than
+  the model's output budget now ends where the budget ran out, and the
+  transcript says so. Raising max output tokens is the remedy.
 - **Format bump (PR 5).** Unfinished workflow runs from before the bump cannot
   be resumed, the same cost as every bump. Batching limits it to one wipe.
 - **Round structure becomes less obvious to read.** In reflection the rounds
@@ -361,11 +354,8 @@ pipeline behind a boundary.
 - **A pre-existing silent result.** In reflection today, with a small max
   output (400 or 900 tokens) and a reasoning model, the run completes with
   zero outputs and no continuation. This is not caused by the proposal. It is
-  a separate bug, found while testing.
-- **Reflection's resume makes helper calls a fresh run does not.** A resume
-  made two `connectResponseText` helper calls that a fresh `texra run` did
-  not. This is unexplained, and PR 2 should find out why before porting the
-  connector.
+  a separate bug, found while testing. Since PR 2 that run warns that it hit
+  the output limit.
 
 ## Not in scope
 
@@ -390,4 +380,5 @@ pipeline behind a boundary.
 - Reflection-only bugs fixed the same day: #13150, #13157.
 - Goal continuation at idle: `toolUse.ts:678-686`.
 - Shared conversation across rounds: `reflection.ts:516-520`.
-- Overflow recovery and continuation: `reflection.ts:566-741`.
+- Overflow recovery and the retired continuation: `reflection.ts:566-741` at
+  `13a1a96330`.

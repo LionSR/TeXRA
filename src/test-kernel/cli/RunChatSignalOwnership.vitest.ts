@@ -80,7 +80,6 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => Effect.succeed(text),
-    connectResponseText: () => Effect.succeed(' '),
   }),
 }));
 
@@ -397,6 +396,7 @@ describe('runChat signal ownership wiring', () => {
       expect(mocks.initCliPlatform).toHaveBeenCalledWith({
         ...INTERACTIVE_CONTEXT,
         quietLogs: true,
+        presentsStoreMovedAside: true,
       });
       expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
         INTERACTIVE_CONTEXT.cwd,

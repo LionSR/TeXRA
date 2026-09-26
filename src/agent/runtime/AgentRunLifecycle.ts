@@ -56,11 +56,11 @@ export interface RunFlowLifecycleOptions {
   /** The launching run: the parent edge on the live handle. */
   parentRunId?: RunId;
   /**
-   * Fires once with the live per-run handle, right after it is tracked (F-2).
+   * Fires once with the run's id, right after its handle is tracked (F-2).
    * Neither a failure of this program nor a throw while building it may abort
    * the run, so the run forks it detached and logs whatever it ends on.
    */
-  onRun?: () => Effect.Effect<void, Error>;
+  onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
 interface FinalizeRunTerminalParams {
@@ -533,7 +533,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
           // Start observation at the same time as invocation. The callback
           // may run as long as the run does, so its observer must not hold
           // up the flow.
-          yield* Effect.suspend(onRun).pipe(
+          yield* Effect.suspend(() => onRun(handle.runId)).pipe(
             Effect.catchCause((cause) =>
               logLifecycleWarning('onRun callback failed', {
                 agentIdentifier,

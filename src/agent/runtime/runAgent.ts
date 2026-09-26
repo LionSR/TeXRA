@@ -2,9 +2,7 @@ import { Cause, Effect, Exit } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import { registerRun, getRunRecords } from '@agent/storage';
-import {
-  finalizeRun,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -205,10 +203,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
             : yield* persistedParentRunId(runSession, runId);
           if (resumedParentRunId !== undefined && liveParent === undefined)
             runSession.runs.detachChildren(resumedParentRunId, [runId]);
-          const onRun = (): Effect.Effect<void, Error> =>
+          const onRun = (id: RunId): Effect.Effect<void, Error> =>
             Effect.suspend(() => {
               lifecycleStarted = true;
-              return callerOnRun?.() ?? Effect.void;
+              return callerOnRun?.(id) ?? Effect.void;
             });
           return liveParent !== undefined
             ? yield* executeAgent(definition, runId, {

@@ -19,6 +19,7 @@ import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
+import { isObject } from '@utils/core';
 
 import { convertToolSchema } from './toolSchema';
 
@@ -67,9 +68,6 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
   'dependencies',
 ]);
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
-
 /**
  * A JSON Schema node with the `description` keyword dropped at every schema
  * position. It walks keywords, not keys: a property named `description` is a
@@ -78,13 +76,13 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  */
 function withoutSchemaDescriptions(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
-  if (!isPlainObject(node)) return node;
+  if (!isObject(node)) return node;
   const out: Record<string, unknown> = {};
   for (const [keyword, value] of Object.entries(node)) {
     if (keyword === 'description') continue;
     if (SUBSCHEMA_KEYWORDS.has(keyword)) {
       out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isPlainObject(value)) {
+    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isObject(value)) {
       out[keyword] = Object.fromEntries(
         Object.entries(value).map(([name, schema]) => [
           name,

@@ -65,7 +65,6 @@ import {
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
@@ -1473,8 +1472,9 @@ function createWindow(options: {
       return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
-      // Navigation destroys the document, including its request correlations
-      // and recording ownership. Replace its ports while retaining sessions.
+      // Navigation destroys the document's request correlations (an open prompt
+      // answers undefined) and recording ownership: new ports, same sessions.
+      promptController.dispose();
       for (const binding of projectBindings.values()) {
         binding.dispose();
       }
@@ -1699,7 +1699,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       );
       yield* Scope.addFinalizer(
         shutdownScope,
-        reported('stopping the active recording', killActiveRecording()),
+        reported('stopping the active recording', hostDraftRequests.shutdown),
       );
       yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
       yield* Scope.addFinalizer(

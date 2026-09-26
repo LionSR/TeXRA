@@ -424,6 +424,7 @@ function ChatGptProgressStep(props: {
       ? 'Requesting a ChatGPT device code...'
       : 'Preparing ChatGPT sign-in...',
   );
+  const [instructions, setInstructions] = useState<string>();
 
   useCancellableEffect(
     (isCancelled) =>
@@ -433,8 +434,9 @@ function ChatGptProgressStep(props: {
             'chatgpt',
             { device, noBrowser: false },
             {
-              writeProgress: (next) => {
-                if (!isCancelled()) setMessage(next);
+              writeProgress: (next, options) => {
+                if (!isCancelled())
+                  (options?.copyable ? setInstructions : setMessage)(next);
               },
             },
           );
@@ -463,9 +465,7 @@ function ChatGptProgressStep(props: {
       }
     >
       <Box marginTop={1} flexDirection="column">
-        {message.split('\n').map((line, index) => (
-          <Text key={`${index}:${line}`}>{line}</Text>
-        ))}
+        <Text>{[instructions, message].filter(Boolean).join('\n')}</Text>
       </Box>
     </BorderedPanel>
   );

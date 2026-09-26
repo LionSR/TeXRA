@@ -534,17 +534,3 @@ export function renderAnsiMarkdown(
 export function _resetAnsiMarkdownForTests(): void {
   processorCache.clear();
 }
-
-/** Test seam: returns cache hit/miss counters across cached processors. */
-export function _ansiMarkdownStatsForTests(): {
-  hits: number;
-  misses: number;
-} {
-  let hits = 0;
-  let misses = 0;
-  for (const processor of processorCache.values()) {
-    hits += processor.stats.hits();
-    misses += processor.stats.misses();
-  }
-  return { hits, misses };
-}

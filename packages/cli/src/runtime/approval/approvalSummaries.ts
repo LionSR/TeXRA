@@ -9,7 +9,6 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
-import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
@@ -193,12 +192,7 @@ export function buildAgentProposalApprovalContent(
 }
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
-  const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const offer = payload.credentialSwitch;
-  // Only a quota route the user can decline has a switch to name.
-  if (offer?.kind !== 'decline-route') return message;
-  const route = quotaFallbackRouteFor(offer.route);
-  return `${message}\nPress \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
+  return `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
 }
 
 export function formatBashApprovalSummary(payload: BashPermission): string {

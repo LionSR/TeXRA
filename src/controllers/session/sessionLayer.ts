@@ -480,7 +480,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             }),
           view: view.ref,
           viewChanges: view.changes,
-          storeCleared: eventLog.cleared,
+          storeMovedAside: eventLog.movedAside,
           // Release rows only once both the view fold and local reconciliation
           // have applied them. Readers can then query either state consistently.
           folded: (fromCommit) =>
@@ -877,13 +877,17 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
               }),
         });
         if (!finalization.ok) {
-          throw new Error(
-            `Failed to persist the CANCELLED outcome for run ${runId}`,
-            { cause: finalization.error },
+          return yield* Effect.die(
+            new Error(
+              `Failed to persist the CANCELLED outcome for run ${runId}`,
+              { cause: finalization.error },
+            ),
           );
         }
-        if (Exit.isFailure(open)) throw Cause.squash(open.cause);
-        if (closureFailure !== undefined) throw closureFailure;
+        if (Exit.isFailure(open))
+          return yield* Effect.die(Cause.squash(open.cause));
+        if (closureFailure !== undefined)
+          return yield* Effect.die(closureFailure);
       }),
     );
   }).pipe(

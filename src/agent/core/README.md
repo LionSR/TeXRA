@@ -15,8 +15,9 @@ What is **not** here, and where it lives instead:
 - The run snapshot and the run usage totals are schemas, not classes:
   `runFlowState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
   accumulator type in `core`.
-- The run programs are `@agent/runtime/loop/` (`toolUse.ts`, `reflection.ts`),
-  their per-run services `@agent/runtime/run/`, the model call
+- The run program is `@agent/runtime/loop/toolUse.ts` (workflow agents run
+  it in round mode, `loop/rounds.ts`), its per-run services
+  `@agent/runtime/run/`, the model call
   `@agent/runtime/ModelInvoker.ts`. `core` holds none of the loop.
 - The process's global state store is the `AppState` service from
   `@platform/interfaces` (`yield* AppState` in Effect code, or thread the store

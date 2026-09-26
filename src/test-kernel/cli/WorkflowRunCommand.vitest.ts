@@ -24,8 +24,8 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CheckpointRefinement } from '@cli/runtime/interruptedResumeHint';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   aggregateId,
   RUN_OUTCOME,
@@ -337,34 +337,23 @@ async function setupCancelledOutput(
   return outputSummary;
 }
 
-type ReflectionState = Extract<
-  FlowSnapshotPayload,
-  { family: 'reflection' }
->['state'];
-
-/** The reflection snapshot a round writes, minus the fields a case sets. */
-function reflectionSnapshot(
-  state: Partial<ReflectionState> = {},
+/** The snapshot a round writes, with the runtime fields a case sets. */
+function workflowSnapshot(
   runtime: Partial<FlowSnapshotPayload['runtime']> = {},
 ): FlowSnapshotPayload {
   return {
-    family: 'reflection',
+    family: 'toolUse',
     runtime: {
-      phase: 'initial',
+      phase: 'model.ready',
       round: 0,
-      turn: 0,
-      continuationIndex: 0,
+      turn: 1,
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
       declinedRoutes: [],
       ...runtime,
     },
-    state: {
-      totalRounds: 4,
-      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-      ...state,
-    },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   };
 }
 
@@ -397,18 +386,38 @@ const seedStartedRun = (session: SessionHandle, runId: string) =>
 /**
  * The checkpoint the recovery hint reads. The claim stays with the fixture
  * session: a run being finalized is one its process still holds, and the
- * metadata write below it commits against that same claim.
+ * metadata write below it commits against that same claim. A `terminal`
+ * checkpoint is a run whose loop halted FAILED on a compile rejection.
  */
-const seedResumableCheckpoint = (session: SessionHandle, runId: string) =>
+const seedResumableCheckpoint = (
+  session: SessionHandle,
+  runId: string,
+  terminal = false,
+) =>
   Effect.gen(function* () {
     yield* seedStartedRun(session, runId);
     yield* session.ledger.acquire(runId as RunId);
+    const aggregate = aggregateId('run', runId as RunId);
     yield* session.ledger.appendBatch(runId as RunId, null, [
       {
         type: 'flow.snapshot',
-        aggregateId: aggregateId('run', runId as RunId),
-        payload: reflectionSnapshot(),
+        aggregateId: aggregate,
+        payload: workflowSnapshot(terminal ? { phase: 'halted' } : {}),
       },
+      ...(terminal
+        ? [
+            {
+              type: 'flow.step' as const,
+              aggregateId: aggregate,
+              payload: {
+                family: 'toolUse' as const,
+                step: 'halted' as const,
+                turn: 1,
+                outcome: RUN_OUTCOME.FAILED,
+              },
+            },
+          ]
+        : []),
     ]);
   });
 
@@ -842,9 +851,7 @@ describe('CLI run command, workflow agents', () => {
               .openWorkflowOutput(run.result, [], () => true)
               .pipe(
                 Effect.as(run),
-                Effect.ensuring(
-                  session.commitRunEnd(runId).pipe(Effect.orDie),
-                ),
+                Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
               ),
         );
         expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
@@ -1400,19 +1407,22 @@ describe('CLI run command, workflow agents', () => {
         mockWorkflowRun(workflowRun('abc001'));
 
         yield* workflowProgram();
-        const canAdvertise =
+        const canAdvertise: CheckpointRefinement | undefined =
           mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot(
-              {},
-              {
-                lastError: { message: 'provider failed', userRetryable: true },
-              },
-            ),
-          }),
+          yield* canAdvertise!(
+            {
+              kind: 'checkpoint',
+              snapshot: workflowSnapshot({
+                lastError: {
+                  message: 'provider failed',
+                  userRetryable: true,
+                },
+              }),
+            },
+            'abc001' as RunId,
+          ),
         ).toBe(false);
       }),
   );
@@ -1422,28 +1432,26 @@ describe('CLI run command, workflow agents', () => {
     () =>
       Effect.gen(function* () {
         mockWorkflowRun(workflowRun('abc001'));
+        yield* seedResumableCheckpoint(currentSession(), 'abc001', true);
 
         yield* workflowProgram();
-        const canAdvertise =
+        const canAdvertise: CheckpointRefinement | undefined =
           mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot(
-              { totalRounds: 2, unresolvedCompileRejection: true },
-              { round: 1 },
-            ),
-          }),
+          yield* canAdvertise!(
+            {
+              kind: 'checkpoint',
+              snapshot: workflowSnapshot({ phase: 'halted' }),
+            },
+            'abc001' as RunId,
+          ),
         ).toBe(false);
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot({
-              totalRounds: 2,
-              unresolvedCompileRejection: true,
-            }),
-          }),
+          yield* canAdvertise!(
+            { kind: 'checkpoint', snapshot: workflowSnapshot() },
+            'abc001' as RunId,
+          ),
         ).toBe(true);
       }),
   );

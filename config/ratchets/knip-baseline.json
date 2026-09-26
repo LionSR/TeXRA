@@ -185,12 +185,6 @@
       "file": "packages/cli/src/chat/tui/render/ansiMarkdown.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "_ansiMarkdownStatsForTests"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/render/ansiMarkdown.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "_resetAnsiMarkdownForTests"
     },
     {
@@ -270,12 +264,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "runHeadlessAgent"
-    },
-    {
-      "file": "packages/cli/src/runtime/apiStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatPersonalApiKeysLine"
     },
     {
       "file": "packages/cli/src/runtime/cliContext.ts",
@@ -588,12 +576,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "summarizeSubagentFollowup"
-    },
-    {
-      "file": "src/shared/utils/dispatcher.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "assertSupported"
     },
     {
       "file": "src/tools/claudeAgent.ts",

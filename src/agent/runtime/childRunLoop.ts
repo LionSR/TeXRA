@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -352,7 +352,7 @@ function attemptTurn<TTurn, R, RTurn>(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
         // The turn summary (duration + token usage) on the child stream.
-        const wallTimeMs = Date.now() - startedAt;
+        const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loopLog(
           trace,
           'info',
@@ -1022,10 +1022,10 @@ export function startChildRunLoop<TTurn, R = never>(
             ),
           );
           let consumed: readonly QueuedFollowUp[] = [];
-          let turnStartedAt = Date.now();
+          let turnStart = yield* Clock.currentTimeMillis;
           const beginTurn = Effect.gen(function* () {
             turnIndex += 1;
-            turnStartedAt = Date.now();
+            turnStart = yield* Clock.currentTimeMillis;
             const turnKey = { key: attemptId, index: turnIndex };
             yield* emitTurnDiagnostic(trace, 'turn.accepted', {
               runId,
@@ -1042,7 +1042,7 @@ export function startChildRunLoop<TTurn, R = never>(
           ) =>
             Effect.gen(function* () {
               const turnKey = { key: attemptId, index: turnIndex };
-              const wallTimeMs = Date.now() - turnStartedAt;
+              const wallTimeMs = (yield* Clock.currentTimeMillis) - turnStart;
               const turnFailed = err != null || turnIsError;
 
               if (turn != null) {
@@ -1140,7 +1140,7 @@ export function startChildRunLoop<TTurn, R = never>(
               strategy.continuous ? () => launchNative : gateTurn(runner),
               loop,
               trace,
-              turnStartedAt,
+              turnStart,
             );
             if (attempt.kind === 'interrupted') break;
             const turn = attempt.kind === 'completed' ? attempt.turn : null;

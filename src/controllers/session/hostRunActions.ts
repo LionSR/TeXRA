@@ -1,5 +1,6 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import {
+  Cause,
   Data,
   Deferred,
   Effect,
@@ -21,6 +22,7 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
@@ -124,7 +126,7 @@ export interface HostRunActionPorts {
       /** This launch replaces a quota-exhausted retry the user answered
        *  with their own API key. */
       ownApiKeyFallback?: boolean;
-      onRun?: () => Effect.Effect<void>;
+      onRun?: (runId: RunId) => Effect.Effect<void>;
     },
   ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
@@ -501,16 +503,45 @@ export const createHostRunActions = (
           // waiter as the fiber's failure rather than a lost second resolver.
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
+            // A failure after start has no waiter: warn, and present it
+            // unless the run's terminal result already did. The tracker
+            // opens at start, inside the fiber whose exit disposes it.
+            let terminalResult:
+              ReturnType<typeof trackTerminalResultPresentation> | undefined;
             const requestFiber = yield* Effect.forkDetach(
               runAgentRequest(
                 { config: { ...config, model } },
                 {
                   ownApiKeyFallback: true,
-                  onRun: () =>
+                  onRun: (launchedRunId) =>
                     Effect.sync(() => {
+                      terminalResult = trackTerminalResultPresentation(
+                        session,
+                        (event) => event.runId === launchedRunId,
+                      );
                       Deferred.doneUnsafe(runStarted, Effect.void);
                     }),
                 },
+              ).pipe(
+                Effect.onExit((exit) => {
+                  const tracker = terminalResult;
+                  if (tracker === undefined) return Effect.void;
+                  return Effect.gen(function* () {
+                    if (Exit.isSuccess(exit)) return;
+                    if (Cause.hasInterruptsOnly(exit.cause)) return;
+                    const message = toErrorMessage(Cause.squash(exit.cause));
+                    yield* Effect.logWarning(
+                      `Own-key replacement of run ${runId} failed: ${message}`,
+                    );
+                    yield* tracker.reportUnhandled(() =>
+                      ports.showWarning(`Your own-key run failed: ${message}`),
+                    ) ?? Effect.void;
+                  }).pipe(
+                    Effect.ignore({ log: 'Warn' }),
+                    withLogChannel(CHANNEL),
+                    Effect.ensuring(Effect.sync(tracker.dispose)),
+                  );
+                }),
               ),
             );
             return yield* Effect.raceFirst(
