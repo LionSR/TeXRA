@@ -660,9 +660,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step. Restore an already idle cursor
           // before acknowledging it; no new model turn is needed to park it.
-          if (restoring && !followUps.hasQueued()) {
+          if (restoring && !followUps.hasQueued())
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
-          }
+          restoring = false;
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
