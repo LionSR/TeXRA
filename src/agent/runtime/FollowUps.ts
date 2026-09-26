@@ -269,6 +269,8 @@ export const followUpsLayer: Layer.Layer<
       wait: Effect.map(input.take, taken),
       joinStopped: (state) =>
         state.step === 'halted' &&
+        // Only a user stop joins: that halt carries no error fact to clear and
+        // no turn.ready row to write, which is why the join skips `consume`'s.
         state.outcome === 'cancelled' &&
         input.hasQueued() &&
         !syntheticPending
