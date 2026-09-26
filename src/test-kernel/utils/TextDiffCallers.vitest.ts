@@ -209,6 +209,22 @@ describe('shared text-diff caller fixtures', () => {
         );
         expect(duplicated).toBeDefined();
 
+        // An insertion among equal lines has no one position, so a
+        // concurrent change among them is a conflict, not a guess.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({ '/workspace/paper.tex': 'a\nX\na\n' }),
+        );
+        const ambiguous = yield* approvedWriteConflict(
+          'paper.tex',
+          'a\na\n',
+          'a\na\na\n',
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(ambiguous).toBeDefined();
+
         // So is a deletion, even of a file that was empty when proposed: the
         // approved content does not recreate it.
         yield* Effect.tryPromise(() => installFakePlatform({}));
