@@ -794,7 +794,7 @@ const FoldInputSchema = z.discriminatedUnion('_tag', [
 ]);
 export type FoldInput = z.infer<typeof FoldInputSchema>;
 
-const DISPLAY_EVENT_TYPES = new Set<string>(
+export const DISPLAY_EVENT_TYPES: ReadonlySet<string> = new Set<string>(
   DisplaySessionEventDraftSchema.options.map(
     (schema) => schema.shape.type.value,
   ),
