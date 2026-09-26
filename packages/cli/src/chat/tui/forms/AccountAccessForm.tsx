@@ -19,6 +19,7 @@ import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 import {
   CHATGPT_AUTH,
   DEVICE_CODE_DESCRIPTION,
@@ -31,7 +32,8 @@ import { useAsyncResource } from './_shared/useAsyncListForm';
 export type AccountAccessFormValue =
   | { readonly kind: 'access'; readonly selection: CliModelAccessSelection }
   | { readonly kind: 'login'; readonly target: LoginFormValue }
-  | { readonly kind: 'logout'; readonly target: CliLogoutTarget };
+  | { readonly kind: 'logout'; readonly target: CliLogoutTarget }
+  | { readonly kind: 'key' };
 
 interface AccountAccessFormProps {
   readonly availableRows?: number;
@@ -44,6 +46,9 @@ interface AccountAccessFormProps {
   /** The three setting slots the access overview reads its preferences from. */
   readonly stores: SettingsStores;
   readonly runtime: ProcessRuntime;
+  /** No model is connected yet: the form is the chat's "Connect a model"
+   *  panel rather than account management. */
+  readonly connecting?: boolean;
   readonly onSelect: (value: AccountAccessFormValue) => void;
   readonly onCancel: () => void;
 }
@@ -138,6 +143,7 @@ function buildAccountAccessFormItems(
           signInItem(entry.browser),
           signInItem(entry.device),
         ]),
+        API_KEY_ITEM,
       ];
     }
     return toggleItems;
@@ -175,8 +181,64 @@ function buildAccountAccessFormItems(
       description: 'Sign out of every signed-in account',
     });
   }
-  return [...toggleItems, ...accountItems];
+  return [...toggleItems, ...accountItems, API_KEY_ITEM];
 }
+
+/**
+ * The first-run panel: only what can connect a model, worded as what it does.
+ * Nothing is signed in yet (that is why the panel is open), so each
+ * subscription row is the same sign-in-and-prefer action its `/login` toggle
+ * runs; account management (TeXRA account, sign-out) stays in `/login`.
+ */
+const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
+  {
+    value: {
+      kind: 'access',
+      selection: {
+        kind: 'subscription-preference',
+        provider: 'chatgpt',
+        state: 'on',
+      },
+    },
+    label: ONBOARDING_CHOICE_CHATGPT.label,
+    description: ONBOARDING_CHOICE_CHATGPT.description,
+  },
+  {
+    value: {
+      kind: 'access',
+      selection: {
+        kind: 'subscription-preference',
+        provider: 'grok',
+        state: 'on',
+      },
+    },
+    label: 'Use Grok subscription',
+    description: 'Grok models through SuperGrok; no API key needed',
+  },
+  {
+    value: { kind: 'key' },
+    label: 'Add a provider API key',
+    description:
+      'Anthropic, OpenAI, Google, DeepSeek, Kimi Code, GLM, and more',
+  },
+  signInItem({
+    target: 'chatgpt --device',
+    label: CHATGPT_AUTH.deviceCodeLabel,
+    description: DEVICE_CODE_DESCRIPTION,
+  }),
+  signInItem({
+    target: 'grok --device',
+    label: GROK_AUTH.deviceCodeLabel,
+    description: DEVICE_CODE_DESCRIPTION,
+  }),
+];
+
+// Last, so the subscription rows keep their number hotkeys.
+const API_KEY_ITEM: SelectItem<AccountAccessFormValue> = {
+  value: { kind: 'key' },
+  label: 'Add a provider API key',
+  description: 'Anthropic, OpenAI, Google, DeepSeek, and more',
+};
 
 export function AccountAccessForm(
   props: AccountAccessFormProps,
@@ -187,11 +249,17 @@ export function AccountAccessForm(
   });
   const { data, error } = overview;
 
-  const items = buildAccountAccessFormItems(
-    data !== undefined
-      ? { kind: 'loaded', access: data.access }
-      : { kind: 'pending', state: error === undefined ? 'loading' : 'failed' },
-  );
+  const items =
+    props.connecting === true
+      ? CONNECT_ITEMS
+      : buildAccountAccessFormItems(
+          data !== undefined
+            ? { kind: 'loaded', access: data.access }
+            : {
+                kind: 'pending',
+                state: error === undefined ? 'loading' : 'failed',
+              },
+        );
   let detailLines: readonly string[] | undefined;
   if (data !== undefined) {
     // The rows already describe each preference and account; the detail block
@@ -206,25 +274,35 @@ export function AccountAccessForm(
 
   return (
     <ListForm
-      title="Account & access"
+      title={props.connecting === true ? 'Connect a model' : 'Account & access'}
       availableRows={props.availableRows}
       items={items}
       compactVisibleItems={items.length}
-      description={<Text dimColor>{CLI_ACCOUNT_ACCESS_DESCRIPTION}</Text>}
-      detail={
-        <Box marginTop={1} flexDirection="column">
-          {detailLines === undefined ? (
-            <LoadingIndicator label="loading account access..." />
-          ) : (
-            detailLines.map((line, index) => (
-              <Text key={`${index}:${line}`} dimColor>
-                {line}
-              </Text>
-            ))
-          )}
-        </Box>
+      description={
+        <Text dimColor>
+          {props.connecting === true
+            ? 'TeXRA needs a model to answer. Sign in to a subscription or add an API key.'
+            : CLI_ACCOUNT_ACCESS_DESCRIPTION}
+        </Text>
       }
-      detailRows={1 + (detailLines?.length ?? 1)}
+      detail={
+        props.connecting === true ? undefined : (
+          <Box marginTop={1} flexDirection="column">
+            {detailLines === undefined ? (
+              <LoadingIndicator label="loading account access..." />
+            ) : (
+              detailLines.map((line, index) => (
+                <Text key={`${index}:${line}`} dimColor>
+                  {line}
+                </Text>
+              ))
+            )}
+          </Box>
+        )
+      }
+      detailRows={
+        props.connecting === true ? 0 : 1 + (detailLines?.length ?? 1)
+      }
       selectMarginTop={1}
       action="select"
       onSelect={props.onSelect}

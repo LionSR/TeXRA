@@ -40,7 +40,7 @@ const mocks = vi.hoisted(() => ({
   installCliProcessRuntime: vi.fn(),
   installTerminalTitleUpdates: vi.fn(),
   loadInputHistory: vi.fn(),
-  maybeRunCliOnboarding: vi.fn(),
+  hasUsableSetupCredential: vi.fn(),
   onSkillSelect: undefined as
     | ((selection: { name: string; activationPrompt: string }) => void)
     | undefined,
@@ -96,8 +96,8 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
   disposeCliProcessRuntime: Effect.void,
 }));
 
-vi.mock('@cli/onboarding/runOnboarding', () => ({
-  maybeRunCliOnboarding: mocks.maybeRunCliOnboarding,
+vi.mock('@model/setupCredentialAccess', () => ({
+  hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
 vi.mock('@cli/runtime/chatDefaults', () => ({
@@ -288,12 +288,7 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
-    mocks.maybeRunCliOnboarding.mockReturnValue(
-      Effect.succeed({
-        configured: false,
-        declined: false,
-      }),
-    );
+    mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
       model: 'gpt-test',

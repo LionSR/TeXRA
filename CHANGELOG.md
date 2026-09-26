@@ -612,6 +612,24 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Features
 
+- **First run in the terminal opens the chat with a "Connect a model"
+  panel.** Before, a fresh install showed a three-option picker; choosing
+  "Skip for now" exited with a missing-API-key error and saved the skip, so
+  every later `texra` printed that error and quit. Now the chat always opens,
+  and when no model is connected the panel offers a ChatGPT or Grok
+  subscription, a provider API key (including Kimi Code and GLM), or device-code
+  sign-in for SSH. Esc leaves you in the chat with "No model connected · /login"
+  in the status bar; a message you type meanwhile is held and sent as soon as a
+  model is connected. On a first run the chat then goes to the setup assistant
+  and opens `/agent`.
+- **`/agent` can start a team.** Alongside single agents, now shown with their
+  descriptions, it lists the team presets (Lean Project, Physicist,
+  Mathematician, Computer Scientist, Software Engineer and your custom teams)
+  with any unavailable members. Picking one sets the team's lead as the root
+  agent with the team's roster, the same way the extension and desktop launch a
+  team. Before, a team could only be started with `texra multi-agent run`.
+- `/login` gains an **Add a provider API key** row.
+
 - **GPT-6 Astra is available** — OpenAI's most capable model joins the model
   list with a 1M-token context window, reasoning effort up to Max, and vision,
   and it works with Codex subscriptions on Pro, Enterprise, and Business

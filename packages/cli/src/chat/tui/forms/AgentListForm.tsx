@@ -1,19 +1,27 @@
-// `/agent` form. It lists visible tool-use agents and workflows. Before the
-// first message, tool-use agents can be chosen as the root chat agent.
+// `/agent` form. It lists visible tool-use agents, the team presets, and
+// workflows. Before the first message, an agent or a team can be chosen to
+// lead the chat.
 
 import { Box, Text } from 'ink';
 import { Effect } from 'effect';
 
-import { computeAgentOptionsData, type AgentRosterStores } from '@agent/index';
+import {
+  computeAgentOptionsData,
+  getCategoryAgent,
+  type AgentRosterStores,
+} from '@agent/index';
 import { moreRowsText } from '@cli/tui/overflowText';
 import { Select } from '@cli/tui/ui/Select';
 import {
   computeSelectWindowSize,
   isCompactFormRows,
 } from '@cli/tui/selectWindow';
+import type { SelectItem } from '@cli/tui/ui/Select';
+import { loadTeamOptions } from '@common/teams/TeamPlan';
+import { createTeamCatalogPorts } from '@controllers/mainView/teamCatalogPorts';
 import type { ProcessRuntime } from '@platform/processRuntime';
-import type { AgentOptionData } from '@shared/schemas';
-import { agentName } from '@shared/schemas';
+import type { AgentOptionData, TeamOptionData } from '@shared/schemas';
+import { AgentCategory, agentName } from '@shared/schemas';
 
 import {
   CompactPickerKeyHints,
@@ -30,15 +38,55 @@ interface AgentListFormProps {
    *  this form: the list shows that project's visible agents. */
   readonly stores: AgentRosterStores;
   readonly currentAgent: string;
+  /** The team leading this chat, when one was chosen. */
+  readonly currentTeamId?: string;
   readonly availableRows?: number;
   readonly selectable: boolean;
-  readonly onSelect?: (value: string) => void;
+  readonly onSelect?: (value: AgentPickerValue) => void;
   readonly onClose: () => void;
 }
+
+/** One `/agent` row: a single agent, or a team preset that brings its lead. */
+export type AgentPickerValue =
+  | { readonly kind: 'agent'; readonly agent: string }
+  | { readonly kind: 'team'; readonly teamId: string };
 
 interface AgentGroups {
   readonly toolUse: readonly AgentOptionData[];
   readonly workflow: readonly AgentOptionData[];
+  readonly teams: readonly TeamOptionData[];
+}
+
+function teamRowDescription(team: TeamOptionData): string {
+  if (team.disabled === true) return team.disabledReason ?? 'Unavailable';
+  const missing = team.unavailableMembers.length;
+  return missing > 0
+    ? `${missing} unavailable · ${team.description}`
+    : team.description;
+}
+
+function agentPickerItems(
+  groups: AgentGroups,
+): ReadonlyArray<SelectItem<AgentPickerValue>> {
+  return [
+    ...groups.toolUse.map((agent) => {
+      const description = getCategoryAgent(
+        AgentCategory.ToolUse,
+        agent.value,
+      )?.description;
+      return {
+        value: { kind: 'agent' as const, agent: agent.value },
+        label: agent.label,
+        ...(description ? { description } : {}),
+      };
+    }),
+    ...groups.teams.map((team) => ({
+      value: { kind: 'team' as const, teamId: team.value },
+      label: `Team · ${team.label}`,
+      description: teamRowDescription(team),
+      ...(team.disabled === true ? { disabled: true } : {}),
+    })),
+  ];
 }
 
 type AgentIdentity = Pick<AgentOptionData, 'label' | 'value'>;
@@ -148,35 +196,47 @@ export function agentSelectWindow({
 }
 
 export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
-  const picker = useAsyncPickerForm<AgentGroups, string>({
+  const picker = useAsyncPickerForm<AgentGroups, AgentPickerValue>({
     title: '/agent',
     loadingLabel: 'Loading agents...',
     load: () =>
-      Effect.map(
-        computeAgentOptionsData(props.stores),
-        ({ toolUse, workflow }) => ({ toolUse, workflow }),
-      ),
+      Effect.gen(function* () {
+        const { toolUse, workflow } = yield* computeAgentOptionsData(
+          props.stores,
+        );
+        const teams = yield* loadTeamOptions(
+          yield* createTeamCatalogPorts(props.stores.workspaceState),
+        );
+        return { toolUse, workflow, teams };
+      }),
     runtime: props.runtime,
     isEmpty: (groups) => groups.toolUse.length === 0,
     closeEmptyOnEnter: true,
-    items: (groups) =>
-      groups.toolUse.map((agent) => ({
-        value: agent.value,
-        label: agent.label,
-      })),
+    items: agentPickerItems,
     selectable: props.selectable,
     onSelect: (value) => props.onSelect?.(value),
     onClose: props.onClose,
   });
 
-  const agents: AgentGroups = picker.data ?? { toolUse: [], workflow: [] };
-  const primarySectionTitle = agentPickerPrimarySectionTitle(agents.toolUse);
+  const agents: AgentGroups = picker.data ?? {
+    toolUse: [],
+    workflow: [],
+    teams: [],
+  };
+  const primarySectionTitle = `${agentPickerPrimarySectionTitle(agents.toolUse)}${
+    agents.teams.length > 0 ? ', then teams' : ''
+  }`;
   const items = picker.items;
   // The current agent may be stored as a canonical key (`source:name`) or a
   // bare name; rows are keyed by canonical value, so match Select in that same
-  // identity space when rendering the ✓ on the active row.
+  // identity space when rendering the ✓ on the active row. A chosen team
+  // outranks its lead, which also appears as an agent row.
   const activeAgent = currentVisibleAgent(agents.toolUse, props.currentAgent);
-  const activeValue = activeAgent?.value ?? props.currentAgent;
+  const activeValue = items.find(({ value }) =>
+    props.currentTeamId !== undefined
+      ? value.kind === 'team' && value.teamId === props.currentTeamId
+      : value.kind === 'agent' && value.agent === activeAgent?.value,
+  )?.value;
   const currentAgentHint = hiddenCurrentAgentHint(
     agents.toolUse,
     props.currentAgent,
@@ -225,7 +285,7 @@ export function AgentListForm(props: AgentListFormProps): React.JSX.Element {
     <FormFrame title="/agent" showCloseHint={false}>
       <Text dimColor wrap="truncate-end">
         {props.selectable
-          ? 'Choose the root agent for this chat.'
+          ? 'Choose an agent, or a team it leads, for this chat.'
           : 'Viewing agents. Use texra chat --agent <name> to switch in a new chat.'}
       </Text>
       {currentAgentHintRow}
