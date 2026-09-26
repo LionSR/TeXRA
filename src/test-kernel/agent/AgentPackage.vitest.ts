@@ -179,7 +179,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
 });
 
 // Local imports - package API under test
-import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
@@ -193,7 +193,6 @@ import {
 import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = {
-  lifecycle: { onShutdown: vi.fn(), shutdownRan: false },
   globalState: { get: () => undefined, update: async () => undefined },
   roots: { storage: '/storage' },
   storage: { getGlobalStoragePath: () => '/global-storage' },
@@ -518,7 +517,7 @@ describe('agent package sessions', () => {
         // Each close spends its whole budget, as a close with a run still
         // live past it does.
         const spendBudget = () =>
-          Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS).pipe(
+          Effect.sleep(SESSION_CLOSE_DEADLINE_MS).pipe(
             Effect.as({ settled: false, abandoned: [] as string[] }),
           );
         mocks.closeSession
@@ -532,7 +531,7 @@ describe('agent package sessions', () => {
           }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
         );
 
-        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
 
         expect(released.pollUnsafe()).toBeDefined();
         expect(mocks.closeSession).toHaveBeenCalledTimes(2);

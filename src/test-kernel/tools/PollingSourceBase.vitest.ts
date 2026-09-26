@@ -1,10 +1,8 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
-import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 // Local imports - tools
@@ -13,8 +11,10 @@ import {
   DedupedResource,
   PollingSourceBase,
   createBasePollState,
+  makePollingLifetime,
   type BasePollSubscriptionState,
   type PollHookRejected,
+  type PollingLifetime,
 } from '@tools/github/PollingSourceBase';
 
 interface TestItem {
@@ -27,15 +27,18 @@ class TestPollingSource extends PollingSourceBase<
   string,
   BasePollSubscriptionState
 > {
-  constructor() {
-    super({
-      name: 'TestPollingSource',
-      pollIntervalMs: 10_000,
-      maxConcurrent: 1,
-      backoffBaseMs: 1_000,
-      backoffMaxMs: 10_000,
-      maxFailureDurationMs: 60_000,
-    });
+  constructor(lifetime: PollingLifetime) {
+    super(
+      {
+        name: 'TestPollingSource',
+        pollIntervalMs: 10_000,
+        maxConcurrent: 1,
+        backoffBaseMs: 1_000,
+        backoffMaxMs: 10_000,
+        maxFailureDurationMs: 60_000,
+      },
+      lifetime,
+    );
   }
 
   subscribeForTest(listener: (text: string) => Effect.Effect<void>) {
@@ -124,13 +127,18 @@ describe('DedupedResource', () => {
 describe('PollingSourceBase lifetime', () => {
   it.live('drains admitted delivery after the last listener unbinds', () =>
     Effect.gen(function* () {
-      const lifecycle = createLifecycleHost();
-      const source = new TestPollingSource();
+      // The owner's scope: closing it is the process shutdown the source's
+      // lifetime belongs to.
+      const owner = yield* Scope.make();
+      const lifetime = yield* makePollingLifetime.pipe(
+        Effect.provideService(Scope.Scope, owner),
+      );
+      const source = new TestPollingSource(lifetime);
       const started = yield* Deferred.make<void>();
       const release = yield* Deferred.make<void>();
       yield* Effect.addFinalizer(() =>
         Deferred.succeed(release, undefined).pipe(
-          Effect.andThen(lifecycle.runShutdown),
+          Effect.andThen(Scope.close(owner, Exit.void)),
         ),
       );
 
@@ -140,113 +148,19 @@ describe('PollingSourceBase lifetime', () => {
             Effect.andThen(Deferred.await(release)),
           ),
         )
-        .pipe(
-          Effect.provideService(Lifecycle, lifecycle),
-          Effect.provideService(Secrets, new FakeSecrets()),
-        );
+        .pipe(Effect.provideService(Secrets, new FakeSecrets()));
 
       yield* source.emitForTest('event');
       yield* Deferred.await(started);
       disposable.dispose();
       expect(source.activeKeys()).toEqual([]);
 
-      const shutdown = yield* Effect.forkChild(lifecycle.runShutdown);
+      const shutdown = yield* Effect.forkChild(Scope.close(owner, Exit.void));
       yield* Effect.yieldNow;
       expect(shutdown.pollUnsafe()).toBeUndefined();
 
       yield* Deferred.succeed(release, undefined);
       yield* Fiber.join(shutdown);
     }),
-  );
-
-  it.live(
-    'keeps replacement lifetimes independent during both shutdown phases',
-    () =>
-      Effect.forEach(
-        ['before', 'on'] as const,
-        (phase) =>
-          Effect.gen(function* () {
-            const oldLifecycle = createLifecycleHost();
-            const newLifecycle = createLifecycleHost();
-            const source = new TestPollingSource();
-            const emptied = Deferred.makeUnsafe<void>();
-            const beforeEntered = yield* Deferred.make<void>();
-            const beforeRelease = yield* Deferred.make<void>();
-            const oldStarted = yield* Deferred.make<void>();
-            const oldRelease = yield* Deferred.make<void>();
-            const newStarted = yield* Deferred.make<void>();
-            const newRelease = yield* Deferred.make<void>();
-            if (phase === 'before') {
-              oldLifecycle.onShutdown(
-                SHUTDOWN_PHASE.BEFORE,
-                Deferred.succeed(beforeEntered, undefined).pipe(
-                  Effect.andThen(Deferred.await(beforeRelease)),
-                ),
-              );
-            }
-            const keysChanged = source.onKeysChanged((keys) => {
-              if (keys.length === 0) Deferred.doneUnsafe(emptied, Effect.void);
-            });
-            yield* Effect.addFinalizer(() =>
-              Effect.all([
-                Deferred.succeed(beforeRelease, undefined),
-                Deferred.succeed(oldRelease, undefined),
-                Deferred.succeed(newRelease, undefined),
-                oldLifecycle.runShutdown,
-                newLifecycle.runShutdown,
-                Effect.sync(() => keysChanged.dispose()),
-              ]).pipe(Effect.asVoid),
-            );
-
-            yield* source
-              .subscribeForTest(() =>
-                Deferred.succeed(oldStarted, undefined).pipe(
-                  Effect.andThen(Deferred.await(oldRelease)),
-                ),
-              )
-              .pipe(
-                Effect.provideService(Lifecycle, oldLifecycle),
-                Effect.provideService(Secrets, new FakeSecrets()),
-              );
-            yield* source.emitForTest('old');
-            yield* Deferred.await(oldStarted);
-
-            const oldShutdown = yield* Effect.forkChild(
-              oldLifecycle.runShutdown,
-            );
-            if (phase === 'before') yield* Deferred.await(beforeEntered);
-            else yield* Deferred.await(emptied);
-            expect(oldShutdown.pollUnsafe()).toBeUndefined();
-
-            yield* source
-              .subscribeForTest(() =>
-                Deferred.succeed(newStarted, undefined).pipe(
-                  Effect.andThen(Deferred.await(newRelease)),
-                ),
-              )
-              .pipe(
-                Effect.provideService(Lifecycle, newLifecycle),
-                Effect.provideService(Secrets, new FakeSecrets()),
-              );
-            yield* source.emitForTest('new');
-            yield* Deferred.await(newStarted);
-
-            yield* Deferred.succeed(beforeRelease, undefined);
-            yield* Effect.yieldNow;
-            expect(oldShutdown.pollUnsafe()).toBeUndefined();
-            yield* Deferred.succeed(oldRelease, undefined);
-            yield* Fiber.join(oldShutdown);
-            expect(source.activeKeys()).toEqual(['key']);
-
-            const newShutdown = yield* Effect.forkChild(
-              newLifecycle.runShutdown,
-            );
-            yield* Effect.yieldNow;
-            expect(newShutdown.pollUnsafe()).toBeUndefined();
-            yield* Deferred.succeed(newRelease, undefined);
-            yield* Fiber.join(newShutdown);
-          }),
-        { discard: true },
-      ),
   );
 });

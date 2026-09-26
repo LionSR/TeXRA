@@ -326,6 +326,15 @@ export function teardownDefaultSession(): Effect.Effect<void> {
 }
 
 /**
+ * The budget one session close spends waiting for its runs to settle before
+ * it settles the ones still live itself ({@link closeSession}). A hung run
+ * must not wedge desktop quit, eat the extension's ~5s deactivate budget, or
+ * stall a CLI SIGTERM indefinitely. The closes of a process's sessions start
+ * together, so they settle under one deadline for the process, not one each.
+ */
+export const SESSION_CLOSE_DEADLINE_MS = 5_000;
+
+/**
  * Close the session of a storage root (PR #11893, agent SDK architecture
  * proposal, section 9): refuse new executions on it, interrupt the ones it
  * owns and wait for them to settle within the process's shutdown-phase

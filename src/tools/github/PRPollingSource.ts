@@ -13,7 +13,7 @@
 
 import { Cause, Clock, Effect } from 'effect';
 
-import type { Disposable, Lifecycle } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { shouldDropBotEvent } from './botFilter';
 import {
@@ -70,6 +70,7 @@ import {
   type PollEventListener,
   PollHookRejected,
   PollingSourceBase,
+  type PollingLifetime,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -201,13 +202,16 @@ export class PRPollingSource extends PollingSourceBase<
 > {
   private nextAnnotationDrainKey: string | undefined;
 
-  constructor() {
-    super({
-      name: 'PRPollingSource',
-      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
-      maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
-      ...DEFAULT_POLLING_BACKOFF_CONFIG,
-    });
+  constructor(lifetime?: PollingLifetime) {
+    super(
+      {
+        name: 'PRPollingSource',
+        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
+        maxConcurrent: MAX_CONCURRENT_PR_SUBSCRIPTIONS,
+        ...DEFAULT_POLLING_BACKOFF_CONFIG,
+      },
+      lifetime,
+    );
   }
 
   /** Reset the process-wide annotation budget between unit tests. */
@@ -221,7 +225,7 @@ export class PRPollingSource extends PollingSourceBase<
   subscribe(
     input: PRSubscribeInput,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = prKeyToString(input);
     return this.register(key, () => createInitialState(input), onEvent).pipe(
       Effect.map((disposable) => {
@@ -898,6 +902,3 @@ export class PRPollingSource extends PollingSourceBase<
     }
   });
 }
-
-/** Process-wide singleton. */
-export const SharedPRPollingSource = new PRPollingSource();

@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
@@ -181,7 +181,7 @@ async function loadExecuteCli() {
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -198,7 +198,7 @@ async function loadExecuteCli() {
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -215,7 +215,7 @@ async function loadExecuteCli() {
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -669,7 +669,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
@@ -752,7 +752,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
@@ -790,7 +790,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(leaseOptions).toBeDefined();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
+      const shutdown = yield* Effect.forkChild(Scope.close(platform.shutdownScope, Exit.void), {
         startImmediately: true,
       });
 
@@ -842,7 +842,7 @@ describe('executeCliRequest', () => {
         yield* Deferred.await(launch);
         yield* settle;
 
-        yield* platform.lifecycle.runShutdown;
+        yield* Scope.close(platform.shutdownScope, Exit.void);
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
           exitCode: CliExitCode.Interrupted,
@@ -873,7 +873,7 @@ describe('executeCliRequest', () => {
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         hangingRun.resolve(COMPLETED_RUN);
@@ -912,7 +912,7 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
@@ -969,7 +969,7 @@ describe('executeCliRequest', () => {
           Effect.void;
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
@@ -1049,7 +1049,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(outputResolutionFailed).toBe(true);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
@@ -1102,7 +1102,7 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
 
@@ -1143,7 +1143,7 @@ describe('executeCliRequest', () => {
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
       leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
+      const shutdown = yield* Effect.forkChild(Scope.close(platform.shutdownScope, Exit.void), {
         startImmediately: true,
       });
       yield* settle;
@@ -1208,7 +1208,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
@@ -1246,7 +1246,7 @@ describe('executeCliRequest', () => {
 
       yield* executeCliRequest(request, cliContext(), {});
       mocks.finalizeRun.mockClear();
-      yield* platform.lifecycle.runShutdown;
+      yield* Scope.close(platform.shutdownScope, Exit.void);
 
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
     }),
@@ -1300,7 +1300,7 @@ describe('executeCliConfig', () => {
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
@@ -1349,7 +1349,7 @@ describe('executeCliConfig', () => {
         yield* settle;
         expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);

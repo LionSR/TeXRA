@@ -22,13 +22,12 @@ import {
 } from '@eventBus/AppSignals';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
-import { AgentResume, Lifecycle } from '@platform/interfaces';
+import { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeHostAgentResume,
-  fakeHostLifecycle,
   fakeHostSecrets,
 } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -162,6 +161,10 @@ class RegistryTestSource {
     return [...this.keys];
   }
 
+  has(key: string): boolean {
+    return this.keys.has(key);
+  }
+
   keyListenerCount(): number {
     return this.keyListeners.size;
   }
@@ -262,7 +265,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
         .pipe(
           Effect.provideService(Secrets, fakeHostSecrets),
           Effect.provideService(AgentResume, fakeHostAgentResume),
-          Effect.provideService(Lifecycle, fakeHostLifecycle),
         );
       expect(source.keyListenerCount()).toBe(1);
 
@@ -292,7 +294,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -326,14 +327,12 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
         yield* registry
           .bind(runId, 'owner/repo', secondSession)
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         yield* Effect.promise(() =>
@@ -374,7 +373,6 @@ describe('GitHub subscription app signals and follow-ups', () => {
           .pipe(
             Effect.provideService(Secrets, fakeHostSecrets),
             Effect.provideService(AgentResume, fakeHostAgentResume),
-            Effect.provideService(Lifecycle, fakeHostLifecycle),
           );
 
         // emit() awaits the delivery program, so the recovery has run by the

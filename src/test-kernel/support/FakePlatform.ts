@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Scope } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -22,14 +22,12 @@ import {
   type ConfigProvider,
   type ConfigTarget,
   ConfigWriteFailed,
-  type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { getCoreSettingDefault } from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
@@ -436,10 +434,12 @@ export interface FakePlatformOptions {
   globalStoragePath?: string;
 }
 
-/** The two process ports a fake host serves as `Lifecycle` and
+/** A fake host's shutdown scope and the port it serves as
  *  `AgentDirectories`, held per host because hosts change per test. */
 export interface FakeProcessPorts {
-  readonly lifecycle: LifecycleHost;
+  /** The host's shutdown: a command that must act before its sessions close
+   *  registers in a child scope of this; closing it is the shutdown. */
+  readonly shutdownScope: Scope.Closeable;
   readonly agentDirectories: AgentDirectoriesPort;
 }
 
@@ -498,7 +498,7 @@ export function createFakePlatform(
 ): FakeProcessPorts {
   seedFakeRoot(options.files ?? {});
   return {
-    lifecycle: createLifecycleHost(),
+    shutdownScope: Scope.makeUnsafe(),
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     ...overrides,
   };

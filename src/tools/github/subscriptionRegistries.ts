@@ -12,17 +12,18 @@ import { Effect, Layer } from 'effect';
 
 import {
   issueKeyToString,
-  SharedIssuePollingSource,
+  IssuePollingSource,
   type IssueKey,
 } from './IssuePollingSource';
+import { makePollingLifetime } from './PollingSourceBase';
 import {
   prKeyToString,
-  SharedPRPollingSource,
+  PRPollingSource,
   type PRSubscribeInput,
 } from './PRPollingSource';
 import {
   repoKeyToString,
-  SharedRepoPollingSource,
+  RepoPollingSource,
   type RepoKey,
   type RepoSubscribeInput,
 } from './RepoPollingSource';
@@ -30,37 +31,43 @@ import { RunSubscriptionRegistry } from './RunSubscriptionRegistry';
 import { GitHubSubscriptions } from './subscriptionBindings';
 
 /**
- * The ownership tables of one process runtime. Building them here is what
- * makes a replacement runtime start empty, and releasing the layer disposes
- * them, so the old runtime's bindings and source listeners leave the
- * module-singleton polling sources with it.
+ * The GitHub subscriptions of one process runtime: the three polling sources,
+ * each polling inside a lifetime this layer's scope owns, and the ownership
+ * tables that bind runs to them. Releasing the layer unbinds every run and
+ * then closes the sources' lifetimes, draining the deliveries they admitted,
+ * so a replacement runtime starts with sources and bindings of its own.
  */
 export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
   Layer.effect(
     GitHubSubscriptions,
-    Effect.acquireRelease(
-      Effect.sync(() => ({
-        pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
-          name: 'PRRunSubscriptionRegistry',
-          source: SharedPRPollingSource,
-          keyOf: prKeyToString,
-        }),
-        repo: new RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>({
-          name: 'RepoRunSubscriptionRegistry',
-          source: SharedRepoPollingSource,
-          keyOf: repoKeyToString,
-        }),
-        issue: new RunSubscriptionRegistry<string, IssueKey>({
-          name: 'IssueRunSubscriptionRegistry',
-          source: SharedIssuePollingSource,
-          keyOf: issueKeyToString,
-        }),
-      })),
-      (registries) =>
-        Effect.sync(() => {
-          registries.pr.dispose();
-          registries.repo.dispose();
-          registries.issue.dispose();
-        }),
-    ),
+    Effect.gen(function* () {
+      const pr = new PRPollingSource(yield* makePollingLifetime);
+      const repo = new RepoPollingSource(yield* makePollingLifetime);
+      const issue = new IssuePollingSource(yield* makePollingLifetime);
+      return yield* Effect.acquireRelease(
+        Effect.sync(() => ({
+          pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
+            name: 'PRRunSubscriptionRegistry',
+            source: pr,
+            keyOf: prKeyToString,
+          }),
+          repo: new RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>({
+            name: 'RepoRunSubscriptionRegistry',
+            source: repo,
+            keyOf: repoKeyToString,
+          }),
+          issue: new RunSubscriptionRegistry<string, IssueKey>({
+            name: 'IssueRunSubscriptionRegistry',
+            source: issue,
+            keyOf: issueKeyToString,
+          }),
+        })),
+        (registries) =>
+          Effect.sync(() => {
+            registries.pr.dispose();
+            registries.repo.dispose();
+            registries.issue.dispose();
+          }),
+      );
+    }),
   );

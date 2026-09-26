@@ -4,17 +4,18 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports - platform
-import { Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 
 // Local imports - test support
 import { FakeSecrets } from '@test/support/FakePlatform';
-import { fakeHostLifecycle } from '@test/support/setupPlatform';
 
 // Local imports - tools
 import { DEFAULT_CHECK_ANNOTATION_LEVEL } from '@tools/github/checkAnnotationLevels';
 import { GitHubRateLimitError } from '@tools/github/githubClient';
-import type { PollHookRejected } from '@tools/github/PollingSourceBase';
+import {
+  makePollingLifetime,
+  type PollHookRejected,
+} from '@tools/github/PollingSourceBase';
 import {
   PRPollingSource,
   prKeyToString,
@@ -229,14 +230,12 @@ describe('PRPollingSource annotation drain', () => {
 
   it.effect('updates the annotation level for an existing listener', () =>
     Effect.gen(function* () {
-      const source = new PRPollingSource();
+      const source = new PRPollingSource(yield* makePollingLifetime);
       const pr = { owner: 'owner', repo: 'repo', pullNumber: 7 };
       const listener = vi.fn<(text: string) => Effect.Effect<void>>(
         () => Effect.void,
       );
-      const disposable = yield* source
-        .subscribe(pr, listener)
-        .pipe(Effect.provideService(Lifecycle, fakeHostLifecycle));
+      const disposable = yield* source.subscribe(pr, listener);
       const key = prKeyToString(pr);
       const state = drainAccess(source).getSubscriptionState(key);
       if (!state) throw new Error('Expected subscription state');

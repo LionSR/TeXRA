@@ -16,7 +16,7 @@
 
 import { Effect } from 'effect';
 
-import type { Disposable, Lifecycle } from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import {
   formatIssueClosed,
@@ -34,6 +34,7 @@ import {
   type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
+  type PollingLifetime,
 } from './PollingSourceBase';
 import {
   MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
@@ -82,20 +83,26 @@ function createInitialState(issue: IssueKey): SubscriptionState {
   };
 }
 
-class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
-  constructor() {
-    super({
-      name: 'IssuePollingSource',
-      pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
-      maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
-      ...DEFAULT_POLLING_BACKOFF_CONFIG,
-    });
+export class IssuePollingSource extends PollingSourceBase<
+  string,
+  SubscriptionState
+> {
+  constructor(lifetime?: PollingLifetime) {
+    super(
+      {
+        name: 'IssuePollingSource',
+        pollIntervalMs: GITHUB_POLL_INTERVAL_MS,
+        maxConcurrent: MAX_CONCURRENT_ISSUE_SUBSCRIPTIONS,
+        ...DEFAULT_POLLING_BACKOFF_CONFIG,
+      },
+      lifetime,
+    );
   }
 
   subscribe(
     issue: IssueKey,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     const key = issueKeyToString(issue);
     return this.register(key, () => createInitialState(issue), onEvent);
   }
@@ -208,5 +215,3 @@ class IssuePollingSource extends PollingSourceBase<string, SubscriptionState> {
     },
   );
 }
-
-export const SharedIssuePollingSource = new IssuePollingSource();

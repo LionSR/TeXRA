@@ -18,11 +18,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
-import {
-  AgentResume,
-  type Disposable,
-  type Lifecycle,
-} from '@platform/interfaces';
+import { AgentResume, type Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
 
@@ -37,9 +33,10 @@ interface PollingSourceLike<K extends string, Input> {
   subscribe(
     input: Input,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle>;
+  ): Effect.Effect<Disposable, never, Secrets>;
   updateSubscription?(input: Input, onEvent: PollEventListener): void;
   activeKeys(): readonly K[];
+  has(key: K): boolean;
   onKeysChanged(listener: (keys: readonly K[]) => void): Disposable;
 }
 
@@ -75,8 +72,11 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    */
   private readonly bindingCountBySession = new Map<SessionHandle, number>();
   private readonly keysListener: Disposable;
+  /** The polling source this registry binds runs to. */
+  readonly source: PollingSourceLike<K, Input>;
 
   constructor(private readonly opts: RunSubscriptionRegistryOptions<K, Input>) {
+    this.source = opts.source;
     // Source-key changes are internal bookkeeping. The registry emits the UI
     // signal only after its binding map has reached the corresponding state.
     this.keysListener = opts.source.onKeysChanged((keys) => {
@@ -88,8 +88,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
    * Release everything this registry holds on the polling source and the
    * sessions: the source-key listener, every session release hook, and every
    * binding's subscription. The owning runtime's layer runs it on disposal,
-   * so a replacement runtime inherits no listener on the module-singleton
-   * sources (#12933).
+   * before the sources' own lifetime closes.
    */
   dispose(): void {
     this.keysListener.dispose();
@@ -114,7 +113,7 @@ export class RunSubscriptionRegistry<K extends string, Input> {
     runId: RunId,
     input: Input,
     session: SessionHandle,
-  ): Effect.Effect<boolean, never, Secrets | AgentResume | Lifecycle> {
+  ): Effect.Effect<boolean, never, Secrets | AgentResume> {
     // The resume port is captured now: onEvent fires from the source-owned poll
     // loop, whose context has no AgentResume.
     return Effect.flatMap(AgentResume, (agentResume) =>

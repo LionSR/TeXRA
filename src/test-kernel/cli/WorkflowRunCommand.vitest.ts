@@ -1500,7 +1500,7 @@ describe('CLI run command, workflow agents', () => {
           {
             session: Effect.succeed(session),
             runtime: testRuntime(),
-            lifecycle: installedHost().platform.lifecycle,
+            shutdownScope: installedHost().platform.shutdownScope,
           },
         ).pipe(Effect.ensuring(closeSessionOf(session)));
 
@@ -1552,7 +1552,7 @@ describe('CLI run command, workflow agents', () => {
           {
             session: Effect.succeed(session),
             runtime: testRuntime(),
-            lifecycle: installedHost().platform.lifecycle,
+            shutdownScope: installedHost().platform.shutdownScope,
           },
         ).pipe(Effect.ensuring(closeSessionOf(session)));
         expect(exitCode).toBe(CliExitCode.Interrupted);

@@ -31,7 +31,6 @@ import {
   AgentDirectories,
   type AgentDirectoriesPort,
   type AgentResumePort,
-  type LifecycleHost,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -54,8 +53,6 @@ import type { Sessions } from './sessions.js';
  * embedder supplying its own names its workspace roots beside them.
  */
 export interface AgentPlatform {
-  /** The shutdown lifecycle this process's `Lifecycle` service serves. */
-  readonly lifecycle: LifecycleHost;
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
   /** Surfaces a tool-missing error to the embedder, served as
@@ -219,7 +216,6 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     languageModel: platform.languageModel,
     agentResume: platform.agentResume,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
-    lifecycle: platform.lifecycle,
     toolMissingReporter: platform.toolMissingHandler,
     setup: PACKAGE_SETUP,
   };

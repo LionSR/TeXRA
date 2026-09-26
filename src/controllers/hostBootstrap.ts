@@ -20,10 +20,10 @@
  *
  * What stays with the caller: the process runtime install, the
  * `WorkspaceRoots` (each host resolves its config stores differently, and the
- * CLI opens its process session over the roots before this runs), and
- * `registerRuntimeShutdownHandlers` — its hook record names host-owned
- * resources (the desktop's project registry, the extension's session), and the
- * shutdown *order* already has one owner in `@tools/agentCliSessionStores`.
+ * CLI opens its process session over the roots before this runs), and the
+ * host's shutdown: a scope whose finalizers close every session, then the
+ * host's own resources, then the runtime, each host registering the
+ * resources only it holds.
  */
 
 // Third-party imports

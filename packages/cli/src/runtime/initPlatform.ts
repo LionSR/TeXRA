@@ -3,6 +3,7 @@ import { Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
+  closeAllSessions,
   createAgentResponseTextConnector,
   initializeDefaultSession,
   teardownDefaultSession,
@@ -16,8 +17,6 @@ import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
-  Lifecycle,
-  type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
@@ -35,7 +34,6 @@ import {
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
@@ -66,6 +64,16 @@ let shutdownHandlers: DisposableStore | undefined;
 // another root opened the process session before this init ran (a test
 // harness's fake host), in which case the session is that one.
 let sessionOpen: Effect.Effect<SessionHandle, SessionOpenError> | undefined;
+// The process's shutdown scope, made by the first init: its close is the
+// CLI's shutdown, run once whichever exit path asks first (`shutdown`).
+let shutdownScope: Scope.Closeable | undefined;
+let shutdown: Effect.Effect<void> | undefined;
+
+/** The CLI's shutdown: every session closes, then the project scope, then
+ *  the process runtime. Nothing to do before a platform came up. */
+export const cliPlatformShutdown: Effect.Effect<void> = Effect.suspend(
+  () => shutdown ?? Effect.void,
+);
 
 type CliPlatformInitOptions = Pick<
   CliContext,
@@ -87,8 +95,9 @@ type CliPlatformInitOptions = Pick<
  * it hands them back instead of leaving each caller to look them up again.
  */
 export type CliPlatformServices = SettingsStores & {
-  /** The process runtime's `Lifecycle`: the host every exit path drains. */
-  readonly lifecycle: LifecycleHost;
+  /** The process's shutdown scope: a command that must act before the
+   *  sessions close registers there, in a child scope of its own. */
+  readonly shutdownScope: Scope.Scope;
   /**
    * The one Effect runtime of this process, built (or joined) by this root:
    * every entry point runs its programs on it and threads it to the modules
@@ -139,13 +148,11 @@ export type CliPlatformServices = SettingsStores & {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
-export async function runCliPlatformShutdownSequence(
-  lifecycle: LifecycleHost | undefined,
-): Promise<void> {
+export async function runCliPlatformShutdownSequence(): Promise<void> {
   await Effect.runPromise(
     Effect.gen(function* () {
       // Signal shutdown is best effort; output still gets one final flush.
-      yield* Effect.ignoreCause(lifecycle?.runShutdown ?? Effect.void);
+      yield* Effect.ignoreCause(cliPlatformShutdown);
       // A closed stderr pipe must not prevent signal-based termination.
       yield* Effect.ignoreCause(flushTextStderr());
       // A closed stdout pipe must not prevent signal-based termination.
@@ -154,9 +161,7 @@ export async function runCliPlatformShutdownSequence(
   );
 }
 
-export function installCliShutdownSignalHandlers(
-  lifecycle: LifecycleHost,
-): void {
+export function installCliShutdownSignalHandlers(): void {
   if (shutdownHandlers) return;
   const handlers = new DisposableStore();
   shutdownHandlers = handlers;
@@ -171,7 +176,7 @@ export function installCliShutdownSignalHandlers(
         process.once(signal, handler);
         return;
       }
-      await runCliPlatformShutdownSequence(lifecycle);
+      await runCliPlatformShutdownSequence();
       process.exit(exitCode);
     };
     process.once(signal, handler);
@@ -287,20 +292,17 @@ export function initCliPlatform(
     // re-raised, so the caller reports the cause rather than a half-built
     // platform. Keep the roots and lazy session private until the fallible
     // setup has succeeded: their ports have no reset operation.
-    const { globalState, lifecycle, roots } = yield* withProcessServices(
+    const { globalState, roots } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
         const globalState = yield* AppState;
-        // The process lifecycle is the value the runtime install built, so
-        // nothing here builds a second copy beside the runtime's.
-        const lifecycle = yield* Lifecycle;
         // The three setting slots this process answers a catalog row from:
         // the roots an earlier init built, or -- when another root opened the
         // process session before this init ran (a test harness's fake host)
         // -- the roots that session was opened over, which is where `session`
         // below already looks.
         const joined = installedRoots ?? tryDefaultSession()?.roots;
-        if (joined) return { globalState, lifecycle, roots: joined };
+        if (joined) return { globalState, roots: joined };
 
         const projectScope = yield* Scope.make();
         const closeProject = Scope.close(projectScope, Exit.void);
@@ -372,31 +374,28 @@ export function initCliPlatform(
             },
           });
 
-          // Kill agent-spawned OS children before the process dies, exactly as the
-          // extension and desktop hosts do. Background `bash` runs are spawned
-          // `detached` (their own process group, see execUtils) so they survive
-          // `texra` exiting and can never deliver their follow-up result — without
-          // this drain they are orphaned. The usage log is drained later still,
-          // by the runtime disposal these handlers end with.
-          registerRuntimeShutdownHandlers(lifecycle, {
-            // The session is opened lazily (`sessionOpen`); a process that never
-            // asked for one has nothing to flush.
-            flushArtifacts: Effect.suspend(() => {
-              const session = tryDefaultSession();
-              return session ? session.settlePublications() : Effect.void;
-            }),
-            releaseSessions: closeProject.pipe(
-              Effect.ensuring(flushNdjsonStdout()),
-            ),
-            disposeRuntime: disposeCliProcessRuntime,
-          });
+          // The shutdown is this scope's close, its finalizers run in the
+          // reverse of their registration: every session closes first (its
+          // runs stopped and settled — background `bash` children, spawned
+          // `detached` in their own process group, killed with them — and its
+          // artifacts flushed), then the project scope with a final NDJSON
+          // flush, and the runtime last, draining the usage log.
+          const scope = Scope.makeUnsafe();
+          yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
+          yield* Scope.addFinalizer(
+            scope,
+            closeProject.pipe(Effect.ensuring(flushNdjsonStdout())),
+          );
+          yield* Scope.addFinalizer(scope, closeAllSessions());
+          shutdownScope = scope;
+          shutdown = yield* Effect.cached(Scope.close(scope, Exit.void));
 
           installedRoots = roots;
           sessionOpen = openSession;
           if (context.installSignalHandlers !== false) {
-            installCliShutdownSignalHandlers(lifecycle);
+            installCliShutdownSignalHandlers();
           }
-          return { globalState, lifecycle, roots };
+          return { globalState, roots };
         }).pipe(
           Effect.onExit((exit) =>
             Exit.isFailure(exit) ? closeProject : Effect.void,
@@ -431,7 +430,9 @@ export function initCliPlatform(
                 ),
               );
         }),
-      lifecycle,
+      // A platform joined over another root's session (a test harness's fake
+      // host) has no CLI shutdown of its own to act before.
+      shutdownScope: shutdownScope ?? Scope.makeUnsafe(),
       roots,
     };
 

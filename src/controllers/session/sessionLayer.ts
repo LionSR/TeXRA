@@ -56,6 +56,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   initSessionOwner,
+  SESSION_CLOSE_DEADLINE_MS,
   type SessionGraph,
 } from '@agent/runtime/sessionGraph';
 import { SupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -72,16 +73,13 @@ import {
   AgentDirectories,
   AgentResume,
   AppState,
-  Lifecycle,
   ToolMissingReporter,
   type AgentResumePort,
-  type LifecycleHost,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
-import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   processOwnerId,
   type ProcessProbe,
@@ -909,7 +907,7 @@ const closeSession = (root: string) =>
       .awaitDrained()
       .pipe(
         Effect.interruptible,
-        Effect.timeoutOption(SHUTDOWN_PHASE_DEADLINE_MS),
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
       );
     const settled = Option.isSome(drained);
     const abandoned = settled ? [] : runs.activeIds();
@@ -957,12 +955,6 @@ interface ProcessRuntimeOptions {
    * without exposing that dependency in its readers.
    */
   readonly agentDirectories: Layer.Layer<AgentDirectories, never, AppState>;
-  /**
-   * The root's shutdown lifecycle, served as `Lifecycle`: the same host every
-   * entry drains on shutdown. A subscriber that must register a cleanup reads
-   * it from context rather than from the process platform.
-   */
-  readonly lifecycle: LifecycleHost;
   /**
    * The host's tool-missing reporter, served as `ToolMissingReporter`. Optional
    * because only the VS Code host has a UI for it; an absent reporter serves
@@ -1063,7 +1055,6 @@ export function installProcessRuntime({
   languageModel,
   agentResume,
   agentDirectories,
-  lifecycle,
   toolMissingReporter,
   setup,
   editorModel,
@@ -1091,7 +1082,6 @@ export function installProcessRuntime({
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
     agentDirectories,
-    Lifecycle.layer(lifecycle),
     toolMissingReporter === undefined
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),

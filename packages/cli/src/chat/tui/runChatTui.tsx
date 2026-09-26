@@ -538,7 +538,6 @@ export async function runChat(
   const exitController = createSessionExitController({
     ink,
     session,
-    lifecycle: services.lifecycle,
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,

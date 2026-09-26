@@ -21,7 +21,7 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { z } from 'zod';
-import { presentAgentFailure } from '@agent/runtime';
+import { closeAllSessions, presentAgentFailure } from '@agent/runtime';
 import { loadAgents, refresh } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import {
@@ -64,7 +64,6 @@ import {
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -1663,30 +1662,50 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       });
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
-      const { lifecycle, runtime, processScope, initialize } =
+      const { runtime, processScope, initialize } =
         yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
-      registerRuntimeShutdownHandlers(lifecycle, {
-        beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
-        afterAgentShutdown: [killActiveRecording()],
-        // Agent shutdown runs first so its final events enter the
-        // process-owned stores. Flush in BEFORE so persistence cannot be
-        // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: Effect.suspend(
-          () => projects?.flushArtifacts() ?? Effect.void,
-        ),
-        // The external-editor patch directories recorded by every window's
-        // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [
-          withProcessServices(runtime, removeExternalDiffPatchDirs),
-        ],
-        // Every project's session, most recently opened first, released
-        // before the runtime they run on goes (or, before the registry
-        // opened, the fallback project's scope it would own).
-        releaseSessions: Effect.suspend(
+      // The process's shutdown is this scope's close. Its finalizers run in
+      // the reverse of their registration: the resume owner stops taking
+      // resumes, every session closes (its runs stopped and settled, its
+      // artifacts flushed), the recording stops, the external-editor patch
+      // directories every window's diff host recorded are removed, every
+      // project is released (or, before the registry opened, the fallback
+      // project's scope), and the runtime goes last.
+      const shutdownScope = Scope.makeUnsafe();
+      const shutdown = yield* Effect.cached(
+        Scope.close(shutdownScope, Exit.void),
+      );
+      const reported = (what: string, step: Effect.Effect<void, Error>) =>
+        step.pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              console.error(`Shutdown: ${what} failed`, Cause.squash(cause)),
+            ),
+          ),
+        );
+      yield* Scope.addFinalizer(shutdownScope, disposeProcessRuntime(runtime));
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        Effect.suspend(
           () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
         ),
-        disposeRuntime: disposeProcessRuntime(runtime),
-      });
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported(
+          'removing the external-editor patch directories',
+          withProcessServices(runtime, removeExternalDiffPatchDirs),
+        ),
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported('stopping the active recording', killActiveRecording()),
+      );
+      yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        Effect.sync(() => processResumeOwner.disable()),
+      );
 
       // Until the initial window is fully wired, any startup failure (platform
       // init included) runs the shutdown an ordinary application exit does.
@@ -1740,7 +1759,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             installDesktopBeforeQuitWiring({
               app,
               getMainWindow: () => mainWindow,
-              lifecycle,
+              shutdown,
               continueAfterWindowClose: (continueQuit) => {
                 continueQuitAfterWindowClose = continueQuit;
               },
@@ -1813,7 +1832,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             );
           }
         }),
-      ).pipe(Effect.onError(() => lifecycle.runShutdown));
+      ).pipe(Effect.onError(() => shutdown));
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),

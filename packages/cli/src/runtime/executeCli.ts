@@ -1,4 +1,4 @@
-import { Cause, Deferred, Effect, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import {
   attachTerminalResultToast,
@@ -14,7 +14,6 @@ import { deriveResumability, finalizeRun } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -75,13 +74,13 @@ interface CliExecuteOptions {
   /** The process session the run executes under: `initCliPlatform`'s one
    *  memoized open, threaded from the command that holds its services. */
   readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  /** The process runtime, from the same services: the shutdown handler the
-   *  lifecycle host calls is Promise-shaped, so it runs its programs on
-   *  this. */
+  /** The process runtime, from the same services: the shutdown step below
+   *  runs on the process's shutdown fiber, so it runs its programs on this. */
   readonly runtime: ProcessRuntime;
-  /** The host's shutdown registry, from the same services: the run's
-   *  shutdown-status handler registers here. */
-  readonly lifecycle: LifecycleHost;
+  /** The process's shutdown scope, from the same services: the run's
+   *  shutdown-status step is a finalizer of a child scope of it, so it runs
+   *  before the sessions close. */
+  readonly shutdownScope: Scope.Scope;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -441,8 +440,24 @@ export function executeCliRequest(
         ? shutdownStatusFinalized
         : Effect.succeed(false),
     );
-    const disposeShutdownStatus = options.lifecycle.onShutdown(
-      SHUTDOWN_PHASE.BEFORE,
+    // A child of the process's shutdown scope, so a shutdown runs this step
+    // before it closes the sessions; closed with the step disarmed once the
+    // run has settled here, so a completed run leaves nothing behind.
+    const shutdownStatusScope = yield* Scope.fork(options.shutdownScope);
+    let shutdownStatusArmed = true;
+    yield* Scope.addFinalizer(
+      shutdownStatusScope,
+      Effect.suspend(() =>
+        shutdownStatusArmed ? shutdownStatus : Effect.void,
+      ).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logError("The run's shutdown step failed").pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+          ),
+        ),
+      ),
+    );
+    const shutdownStatus = Effect.suspend(() =>
       Effect.gen(function* () {
         shutdownRequested = true;
         // Paired with tryCommitWorkflowOutputPublication: keep this read of
@@ -490,7 +505,7 @@ export function executeCliRequest(
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
             // for runAgent to finish unwinding before the final drain releases
             // ownership, so no transcript or checkpoint writer can race the
-            // lease release. The lifecycle host's phase deadline bounds this
+            // lease release. The session close's deadline bounds this
             // wait by interrupting it. Once durable resumability and lease
             // availability have been established, however, keep shutdown alive
             // until the promised recovery notice has been flushed — that wait
@@ -609,7 +624,8 @@ export function executeCliRequest(
       }
     }
 
-    disposeShutdownStatus.dispose();
+    shutdownStatusArmed = false;
+    yield* Scope.close(shutdownStatusScope, Exit.void);
     const cleanupFailures: unknown[] = [];
     const finalization = yield* Effect.result(
       Effect.gen(function* () {

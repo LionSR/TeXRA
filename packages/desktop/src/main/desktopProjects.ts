@@ -127,15 +127,14 @@ export interface DesktopProjectRegistry {
   activate(root: string | undefined): Effect.Effect<void, Error>;
   /**
    * Close an open project: forget it for the next launch (it joins the
-   * recent list), stop its runs and wait for them to settle, dispose its
-   * session in its own scope, and show the most recently shown remaining
+   * recent list), close its session in its own scope (its runs stopped and
+   * settled under the shutdown deadline), and show the most recently shown remaining
    * project if it was the active one. The other projects' runs are untouched.
    */
   close(root: string): Effect.Effect<void, Error>;
   /** Empty File > Open Recent. */
   clearRecent(): Effect.Effect<void, Error>;
-  flushArtifacts(): Effect.Effect<void, Error>;
-  /** Dispose every session, the most recently opened first, then the
+  /** Close every session, the most recently opened first, then the
    *  no-workspace session. */
   dispose(): Effect.Effect<void>;
 }
@@ -404,27 +403,6 @@ export function openDesktopProjectRegistry(
         records
           .replaceRecent([])
           .pipe(Effect.andThen(syncRecent), Effect.mapError(ensureError)),
-      flushArtifacts: () =>
-        Effect.gen(function* () {
-          const failures: string[] = [];
-          for (const project of [fallback, ...current().projects]) {
-            yield* project.session.settlePublications().pipe(
-              Effect.catch((error) =>
-                Effect.sync(() => {
-                  failures.push(
-                    `${project.root ?? 'no workspace'}: ${toErrorMessage(error)}`,
-                  );
-                }),
-              ),
-            );
-          }
-          if (failures.length > 0)
-            return yield* Effect.fail(
-              new Error(
-                `Failed to flush desktop session artifacts: ${failures.join('; ')}`,
-              ),
-            );
-        }),
       dispose: () =>
         Effect.suspend(() =>
           current()

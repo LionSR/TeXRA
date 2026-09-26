@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 
 // Local imports - platform defaults
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
@@ -71,7 +70,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       tryResumeRun: () => Effect.succeed(false),
     },
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    lifecycle: createLifecycleHost(),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),
