@@ -27,7 +27,10 @@ import {
   attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchAutonomyOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
@@ -421,9 +424,10 @@ export function createExtensionHostRequests(
         session.roots.workspaceState,
         session.roots.storage,
       );
-      yield* runValidated(prepared).pipe(
-        Effect.mapError((cause) => hostFailure('runValidated', cause)),
-      );
+      yield* runValidated(
+        prepared,
+        launchAutonomyOptions(request, session.approvals),
+      ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
     });
   }
 

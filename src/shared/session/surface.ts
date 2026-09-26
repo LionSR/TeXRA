@@ -53,6 +53,8 @@ export const LaunchSurfaceSchema = UIFileFieldsSchema.merge(
   commit: z.string().prefault('HEAD'),
   instruction: z.string().prefault(''),
   baseFile: z.string().prefault(''),
+  /** Per-task autonomy, applied at launch by `launchAutonomyOptions`. */
+  autonomy: z.enum(['ask', 'autonomous']).prefault('ask'),
 });
 type LaunchSurface = z.infer<typeof LaunchSurfaceSchema>;
 

@@ -12,6 +12,12 @@ two halves:
 - **Capable.** Show the work: the diff, the derivation, the source. Do not
   decorate it. Offer a concrete next step (starter prompts, one primary
   action) instead of a blank box.
+- **Autonomous when asked.** Autonomy is chosen per task, in the composer:
+  _Ask me_ follows the approval policy; _Autonomous_ lets the task approve
+  its own edits, commands and subagent work. The run header shows that switch
+  for as long as the run lives, and the user can turn it off mid-run. Block
+  stays the hard floor. One dial, applied through one state (the run's
+  delegated-work bypass), not a second autonomy system.
 - **In the loop.** Nothing lands without the user seeing it. Starters fill
   the composer and never send. Approvals are a visible choice
   (Ask / Block / Auto-approve), not a buried setting. Every failure the user

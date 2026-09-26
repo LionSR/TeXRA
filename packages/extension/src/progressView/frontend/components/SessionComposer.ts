@@ -17,7 +17,6 @@ import { LitElement, css, html, nothing, type TemplateResult } from 'lit';
 import { customElement, property, query, state } from 'lit/decorators.js';
 import { classMap } from 'lit/directives/class-map.js';
 import { live } from 'lit/directives/live.js';
-import { repeat } from 'lit/directives/repeat.js';
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
 import '@awesome.me/webawesome/dist/components/dropdown/dropdown.js';
@@ -25,11 +24,7 @@ import '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
 import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/tooltip/tooltip.js';
 
-import {
-  isModelOptionAvailable,
-  type SessionType,
-  type RunId,
-} from '@shared/schemas';
+import { type SessionType, type RunId } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import {
@@ -48,27 +43,11 @@ import {
 } from '@shared/utils/clipboardImages';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
-import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { filterNotNullish } from '@utils/core';
 import { generatePastedImageName } from '@utils/files/pastedImageName';
 import './QueuedFollowUps';
-
-/** The agent menu's sections: the category an agent belongs to is the run
- *  type its launch takes. */
-const AGENT_SECTIONS: ReadonlyArray<readonly [SessionType, string]> = [
-  ['toolUse', 'Interactive'],
-  ['workflow', 'Document passes'],
-];
-
-interface ChipMenu {
-  readonly id: string;
-  readonly icon: TeXRAIconName;
-  readonly label: string;
-  readonly title: string;
-  readonly items: TemplateResult;
-  readonly onSelect: (value: string) => void;
-}
+import { launcherChipMenus, type ChipMenu } from './composerChipMenus';
 
 function selectedValue(event: Event): string {
   const item = (event as CustomEvent<{ item?: { value?: unknown } }>).detail
@@ -468,151 +447,11 @@ export class SessionComposer extends LitElement {
     const launch = this.surface?.launch;
     const host = this.host;
     if (!launch || !host) return [];
-    const team = host.teamOptions.find(
-      (option) => option.value === launch.selectedTeamId,
-    );
-    const agentLabel =
-      launch.launchTarget === 'team' && team
-        ? team.label
-        : (host.agentOptions[launch.sessionType]?.find(
-            (option) => option.value === launch.agent,
-          )?.label ?? launch.agent);
-    const model = host.modelOptions.find(
-      (option) => option.value === launch.model,
-    );
-    const menus: ChipMenu[] = [
-      {
-        id: 'composer-agent',
-        icon: 'robot',
-        label: agentLabel,
-        title: 'Agent',
-        items: html`
-          ${AGENT_SECTIONS.map(([category, heading]) => {
-            const agents = host.agentOptions[category] ?? [];
-            if (agents.length === 0) return nothing;
-            return html`<div class="menu-heading">${heading}</div>
-              ${repeat(
-                agents,
-                (option) => option.value,
-                (option) =>
-                  html`<wa-dropdown-item
-                    value=${`agent:${category}:${option.value}`}
-                    type="checkbox"
-                    ?checked=${
-                      launch.launchTarget === 'agent' &&
-                      launch.sessionType === category &&
-                      option.value === launch.agent
-                    }
-                    >${option.label}</wa-dropdown-item
-                  >`,
-              )}`;
-          })}
-          ${
-            host.teamOptions.length > 0
-              ? html`<div class="menu-heading">Teams</div>
-                  ${repeat(
-                    host.teamOptions,
-                    (option) => option.value,
-                    (option) =>
-                      html`<wa-dropdown-item
-                        value=${`team:${option.value}`}
-                        type="checkbox"
-                        ?checked=${
-                          launch.launchTarget === 'team' &&
-                          option.value === launch.selectedTeamId
-                        }
-                        >${option.label}</wa-dropdown-item
-                      >`,
-                  )}
-                  <wa-dropdown-item value="settings:teams"
-                    >Manage teams…</wa-dropdown-item
-                  >`
-              : nothing
-          }
-          <wa-dropdown-item value="settings:agents"
-            >Browse all agents…</wa-dropdown-item
-          >
-        `,
-        onSelect: (value) => {
-          const agent = /^agent:(toolUse|workflow):(.+)$/.exec(value);
-          if (agent) {
-            this.setLaunch({
-              sessionType: agent[1] as SessionType,
-              agent: agent[2],
-            });
-          } else if (value.startsWith('team:')) {
-            // A team runs its lead as an interactive session.
-            this.setLaunch({
-              launchTarget: 'team',
-              sessionType: 'toolUse',
-              selectedTeamId: value.slice(5),
-            });
-          } else if (value === 'settings:teams') {
-            this.openSettings('teams');
-          } else if (value === 'settings:agents') {
-            this.openSettings('agents', launch.sessionType);
-          }
-        },
-      },
-      {
-        id: 'composer-model',
-        icon: 'bolt',
-        label: model?.label ?? launch.model,
-        title: 'Model',
-        items: html`
-          ${repeat(
-            host.modelOptions,
-            (option) => option.value,
-            (option) =>
-              html`<wa-dropdown-item
-                value=${`model:${option.value}`}
-                type="checkbox"
-                ?checked=${option.value === launch.model}
-                ?disabled=${!isModelOptionAvailable(option)}
-                >${option.label}</wa-dropdown-item
-              >`,
-          )}
-          <wa-dropdown-item value="settings:models"
-            >Model settings…</wa-dropdown-item
-          >
-        `,
-        onSelect: (value) => {
-          if (value.startsWith('model:')) {
-            this.setLaunch({ model: value.slice(6) });
-          } else if (value === 'settings:models') {
-            this.openSettings('models');
-          }
-        },
-      },
-    ];
-    if (host.workspaceRoots.length >= 2) {
-      const root = host.workspaceRoots.find(
-        (option) => option.value === launch.workingDirectory,
-      );
-      menus.push({
-        id: 'composer-root',
-        icon: 'folder-open',
-        label: root?.label ?? host.workspaceRoots[0].label,
-        title: 'Working directory',
-        items: html`${repeat(
-          host.workspaceRoots,
-          (option) => option.value,
-          (option) =>
-            html`<wa-dropdown-item
-              value=${`root:${option.value}`}
-              type="checkbox"
-              ?checked=${option.value === launch.workingDirectory}
-              >${option.label}</wa-dropdown-item
-            >`,
-        )}`,
-        onSelect: (value) => {
-          if (value.startsWith('root:')) {
-            this.setLaunch({ workingDirectory: value.slice(5) });
-          }
-        },
-      });
-    }
-    return menus;
+    return launcherChipMenus(launch, host, {
+      setLaunch: (patch) => this.setLaunch(patch),
+      openSettings: (section, sessionType) =>
+        this.openSettings(section, sessionType),
+    });
   }
 
   private renderChip(menu: ChipMenu): TemplateResult {

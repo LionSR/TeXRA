@@ -89,6 +89,37 @@ The UI should be quiet and should never mislead the user. In priority order:
   passes keep their Input/Context section, which they need.
 - **Fixed: open terminals kept their palette when the theme changed.**
 
+## Third pass: autonomy and the loop as one dial
+
+Notion's AI design principles mapped onto TeXRA:
+
+- **Right tool at the right moment, from context.** Starter prompts on an
+  empty task. The getting-started card when a folder has no LaTeX yet.
+  Setup while the funnel is pending.
+- **Pre-built skills and plain prompts share one interface.** Starters fill
+  the same composer a typed prompt uses; follow-ups refine.
+- **Compare before replacing.** Edits arrive as diffs to accept or merge.
+
+Beyond Notion, TeXRA has to work **autonomously when asked**. The composer
+now has an Autonomy chip beside agent and model:
+
+- **Ask me** follows the approval policy.
+- **Autonomous** starts the run with its delegated-work bypass on: the state
+  the run header's "agent work" switch already owns. The header shows it
+  for the run's whole life, and the user can take it back mid-run.
+
+Block remains the floor. The bypass is written in `onRun`, before the run
+body; a regression test in `SessionResultEvent.vitest.ts` pins that order.
+
+Next in this line, in order:
+
+1. **Context-aware starters.** Starters that name the open `.tex` file,
+   plus a selection-first path ("Improve this passage", with a before/after
+   diff), the way Notion keys its menu on empty, content, or selection.
+2. **Saved prompts (favorites).** Save a composer prompt as a named
+   starter; it appears beside the built-in four and runs with one click.
+   Settings-backed, one list per project.
+
 ## Open work, in order
 
 Each item is independent and small enough for one PR.

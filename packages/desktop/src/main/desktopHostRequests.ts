@@ -13,7 +13,10 @@ import {
   classifyAgentError,
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchAutonomyOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
@@ -648,13 +651,10 @@ export function createDesktopHostRequests(
             session.roots.workspaceState,
             session.roots.storage,
           );
+          const autonomy = launchAutonomyOptions(request, session.approvals);
           yield* run
-            .runValidated(launch)
-            .pipe(
-              Effect.mapError((cause) =>
-                hostFailure('run.runValidated', cause),
-              ),
-            );
+            .runValidated(launch, autonomy)
+            .pipe(Effect.mapError((e) => hostFailure('run.runValidated', e)));
           return done;
         }
         case 'extractFigures':
