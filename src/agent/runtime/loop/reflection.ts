@@ -121,6 +121,7 @@ import {
   type RunCell,
 } from './runProgram';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import type { HttpClient } from 'effect/unstable/http';
 
 /** The services a round prepares, compiles and diffs on. */
 type RoundServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
@@ -181,6 +182,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   | FileSystem.FileSystem
   | WorkspaceFs
   | LanguageModel
+  | HttpClient.HttpClient
   | ChildProcessSpawner
   | Runs
 > {
@@ -834,7 +836,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** One round inside its trace stage: prompt, response, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     cell: RunCell,
-  ): Effect.fn.Return<RoundExit, Error, RoundServices | LanguageModel> {
+  ): Effect.fn.Return<
+    RoundExit,
+    Error,
+    RoundServices | LanguageModel | HttpClient.HttpClient
+  > {
     const round = (yield* cell.current).round;
     const body = Effect.gen(function* () {
       let state = yield* cell.current;
