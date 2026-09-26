@@ -634,16 +634,16 @@ export function executeCliRequest(
         cleanupFailures,
         'CLI run cleanup encountered multiple failures',
       );
-      if (primaryRunFailure) {
-        throw aggregateError(
-          [primaryRunFailure.error, cleanupFailure],
-          'CLI run failed and its final artifacts could not be persisted',
-        );
-      }
-      throw cleanupFailure;
+      return yield* Effect.die(
+        primaryRunFailure
+          ? aggregateError(
+              [primaryRunFailure.error, cleanupFailure],
+              'CLI run failed and its final artifacts could not be persisted',
+            )
+          : cleanupFailure,
+      );
     }
-    if (primaryRunFailure) throw primaryRunFailure.error;
-
+    if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
     if (!runResult.ok) {
       return {
         ok: false as const,

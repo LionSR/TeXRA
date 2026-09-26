@@ -84,6 +84,8 @@ import type { SqlError } from 'effect/unstable/sql/SqlError';
 /** The database file of a session root, beside the stores it replaces. */
 const SESSION_DATABASE_FILE = 'texra.db';
 const CHANNEL = 'sessionDatabase';
+/** A row or draft that contradicts the store's own protocol: a defect. */
+const invariant = (message: string) => Effect.die(new Error(message));
 /**
  * Event history and bounded current application records.
  *
@@ -558,7 +560,7 @@ export const databaseLayer = (
       const refuseWriter = (id: AggregateId, absent: string) =>
         Effect.gen(function* () {
           const held = (yield* readState([id]))[0];
-          if (held === undefined) throw new Error(`${absent}: ${id}`);
+          if (held === undefined) return yield* invariant(`${absent}: ${id}`);
           const { ownerId, closed } = held;
           return yield* new DatabaseNotOwner({
             aggregateId: id,
@@ -640,7 +642,7 @@ export const databaseLayer = (
                   parent.closed ||
                   parent.ownerId !== identity.ownerId
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Inquiry opening requires an owned open parent: ${draft.parentRunId}`,
                   );
                 }
@@ -663,7 +665,7 @@ export const databaseLayer = (
               target.kind === 'run' &&
               (seq === 1) !== (draft.type === 'run.start')
             ) {
-              throw new Error(
+              return yield* invariant(
                 `A run must begin with exactly one run.start: ${draft.aggregateId}`,
               );
             }
@@ -671,7 +673,7 @@ export const databaseLayer = (
               (draft.type === 'run.start' || draft.type === 'run.removed') &&
               target.kind !== 'run'
             ) {
-              throw new Error(
+              return yield* invariant(
                 `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
@@ -688,7 +690,7 @@ export const databaseLayer = (
                 parentState.closed ||
                 parentState.startCommit === null
               ) {
-                throw new Error(
+                return yield* invariant(
                   `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
@@ -721,11 +723,10 @@ export const databaseLayer = (
               at,
               committedPayload,
             ]))?.commit;
-            if (typeof commit !== 'number') {
-              throw new Error(
+            if (typeof commit !== 'number')
+              return yield* invariant(
                 `No commit assigned for aggregate ${draft.aggregateId}`,
               );
-            }
             if (borrowsClaim(draft)) {
               yield* exec(release, [
                 JSON.stringify([draft.aggregateId]),
@@ -764,11 +765,10 @@ export const databaseLayer = (
                 draft.aggregateId,
                 identity.ownerId,
               ]);
-              if (unowned) {
-                throw new Error(
+              if (unowned)
+                return yield* invariant(
                   `Deletion requires the dependent claim: ${unowned.aggregate_id}`,
                 );
-              }
               yield* exec(closeDependents, [draft.aggregateId]);
             }
             return {
@@ -845,7 +845,7 @@ export const databaseLayer = (
               if (row === undefined) return null;
               const event = decodeEvent(row);
               if (event.type !== 'flow.snapshot')
-                throw new Error('Invalid run snapshot row');
+                return yield* invariant('Invalid run snapshot row');
               return event;
             }),
           ),
@@ -898,7 +898,7 @@ export const databaseLayer = (
               const result = change(current);
               if (Result.isSuccess(result) && result.success !== null) {
                 if (result.success.threadId !== id)
-                  throw new Error(
+                  return yield* invariant(
                     'An inquiry transition cannot change its thread identity.',
                   );
                 const at = yield* Clock.currentTimeMillis;
@@ -1066,7 +1066,7 @@ export const databaseLayer = (
                     );
                   })
                 ) {
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion dependents changed before acquisition: ${id}`,
                   );
                 }
@@ -1087,13 +1087,12 @@ export const databaseLayer = (
                   tombstoneCommit,
                 ]);
                 if (!row)
-                  throw new Error(
+                  return yield* invariant(
                     `Deletion record is no longer current: ${id}`,
                   );
                 const tombstone = decodeEvent(row);
-                if (tombstone.type !== 'run.removed') {
-                  throw new Error(`Expected a deletion record: ${id}`);
-                }
+                if (tombstone.type !== 'run.removed')
+                  return yield* invariant(`Expected a deletion record: ${id}`);
                 return {
                   tombstone,
                   owner: OwnerIdSchema.nullable().parse(row.claimOwner),
@@ -1122,7 +1121,7 @@ export const databaseLayer = (
                       tombstoneCommit,
                     ])).length !== 1
                   ) {
-                    throw new Error(
+                    return yield* invariant(
                       `Deletion claim changed before cleanup: ${id}`,
                     );
                   }
@@ -1137,11 +1136,10 @@ export const databaseLayer = (
                   );
                   yield* transact(
                     Effect.gen(function* () {
-                      if (yield* execOne(openDependent, [id])) {
-                        throw new Error(
+                      if (yield* execOne(openDependent, [id]))
+                        return yield* invariant(
                           `Deletion has an open dependent: ${id}`,
                         );
-                      }
                       if (
                         (yield* exec(collectClosed, [
                           id,
@@ -1149,7 +1147,7 @@ export const databaseLayer = (
                           tombstoneCommit,
                         ])).length !== 1
                       ) {
-                        throw new Error(
+                        return yield* invariant(
                           `Deletion claim or tombstone changed during cleanup: ${id}`,
                         );
                       }
