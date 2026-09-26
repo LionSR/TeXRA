@@ -1,6 +1,6 @@
 ---
 created: 2026-09-24
-status: proposed
+status: implemented — PR 1 #13277 (goal mode as a plugin: #13287), PR 2 #13317, PR 3 #13327, PR 4 #13328, PR 5 #13336. Moved from proposed/ 2026-09-26.
 ---
 
 # One run program: workflow agents as round mode of the tool-use loop

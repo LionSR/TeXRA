@@ -13,7 +13,7 @@
  */
 import { Effect } from 'effect';
 import type { RunRecord } from '@agent/core/definition/RunRecord';
-import { readPersistedRunRecord } from '@agent/storage/runLifecycle';
+import { getRunRecords } from '@agent/storage/runRecords';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
@@ -75,7 +75,10 @@ export const assembleTrace = Effect.fn('assembleTrace')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<AssembleTraceResult, Error> {
   const [record, events] = yield* Effect.all(
-    [readPersistedRunRecord(runId, session), session.readRunEvents(runId)],
+    [
+      getRunRecords(session, runId).readRunRecord(),
+      session.readRunEvents(runId),
+    ],
     { concurrency: 2 },
   );
   if (!record) return { status: 'config_missing' };

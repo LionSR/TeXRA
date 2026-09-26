@@ -74,107 +74,111 @@ const TEX_EXTENSION_REGEX = /\.tex$/i;
  * @param outputFiles Output file paths
  * @param logger Optional logger for debug messages
  */
-export const replaceInputCommands = Effect.fn(
-  'reflection.replaceInputCommands',
-)(function* (
-  baseFiles: FileLocation[],
-  outputFiles: FileLocation[],
-  logger?: AgentTrace,
-): Effect.fn.Return<void, never, FileSystem.FileSystem> {
-  const fs = yield* FileSystem.FileSystem;
-  if (baseFiles.length === 0 || outputFiles.length === 0) {
-    logger?.debug('No files to process for input command replacement');
-    return;
-  }
-
-  const baseToOutputMap = createFileMapping(baseFiles, outputFiles, 'contains');
-
-  if (baseToOutputMap.size === 0) {
-    logger?.debug('No valid file mappings for input command replacement');
-    return;
-  }
-
-  logger?.debug(
-    `File mappings for input replacement: ${[...baseToOutputMap.entries()]
-      .map(
-        ([basePath, outputLoc]) =>
-          `${path.basename(basePath)} -> ${path.basename(fileLocationDisplayPath(outputLoc))}`,
-      )
-      .join(', ')}`,
-  );
-
-  // Build replacement lookup: generates all path suffix variants for flexible matching.
-  // First registration of a normalized path wins (longest suffix first).
-  const replacementLookup = new Map<string, string>();
-  const register = (baseVariant: string, outputVariant: string): void => {
-    const key = normalizeLatexPath(baseVariant);
-    if (key && !replacementLookup.has(key)) {
-      replacementLookup.set(key, normalizeLatexPath(outputVariant));
+export const replaceInputCommands = Effect.fn('documents.replaceInputCommands')(
+  function* (
+    baseFiles: FileLocation[],
+    outputFiles: FileLocation[],
+    logger?: AgentTrace,
+  ): Effect.fn.Return<void, never, FileSystem.FileSystem> {
+    const fs = yield* FileSystem.FileSystem;
+    if (baseFiles.length === 0 || outputFiles.length === 0) {
+      logger?.debug('No files to process for input command replacement');
+      return;
     }
-  };
 
-  for (const [baseFile, outputLoc] of baseToOutputMap) {
-    const outputFile = fileLocationDisplayPath(outputLoc);
-    const baseSegments = getPathSegments(baseFile);
-    const outputSegments = getPathSegments(outputFile);
-    const maxDepth = Math.min(baseSegments.length, outputSegments.length);
-
-    for (let depth = maxDepth; depth >= 1; depth--) {
-      const baseSuffix = baseSegments.slice(-depth).join('/');
-      const outputSuffix = outputSegments.slice(-depth).join('/');
-
-      register(baseSuffix, outputSuffix);
-
-      // Also register without .tex extension
-      if (
-        TEX_EXTENSION_REGEX.test(baseSuffix) &&
-        TEX_EXTENSION_REGEX.test(outputSuffix)
-      ) {
-        register(
-          baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
-          outputSuffix.replace(TEX_EXTENSION_REGEX, ''),
-        );
-      }
-    }
-  }
-
-  if (replacementLookup.size === 0) {
-    logger?.debug('No replacement entries derived from file mappings');
-    return;
-  }
-
-  for (const outputLocation of outputFiles) {
-    const outputPath = fileLocationDisplayPath(outputLocation);
-
-    yield* Effect.gen(function* () {
-      const content = normalizeLineEndings(
-        yield* fs.readFileString(outputLocation.absolutePath),
-      );
-      const newContent = content.replaceAll(
-        /\\input{([^}]+)}/g,
-        (match, rawPath) => {
-          const normalizedPath = normalizeLatexPath(rawPath);
-          const replacement = normalizedPath
-            ? replacementLookup.get(normalizedPath)
-            : undefined;
-          return replacement ? `\\input{${replacement}}` : match;
-        },
-      );
-
-      if (newContent !== content) {
-        yield* fs.writeFileString(outputLocation.absolutePath, newContent);
-        logger?.debug(`Updated input commands in ${outputPath}`);
-      }
-    }).pipe(
-      // One unreadable or unwritable output must not stop the rewrite of the
-      // rest; the file keeps its original `\input{}` targets and says so.
-      Effect.catch((err) =>
-        Effect.sync(() => {
-          logger?.warn(
-            `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
-          );
-        }),
-      ),
+    const baseToOutputMap = createFileMapping(
+      baseFiles,
+      outputFiles,
+      'contains',
     );
-  }
-});
+
+    if (baseToOutputMap.size === 0) {
+      logger?.debug('No valid file mappings for input command replacement');
+      return;
+    }
+
+    logger?.debug(
+      `File mappings for input replacement: ${[...baseToOutputMap.entries()]
+        .map(
+          ([basePath, outputLoc]) =>
+            `${path.basename(basePath)} -> ${path.basename(fileLocationDisplayPath(outputLoc))}`,
+        )
+        .join(', ')}`,
+    );
+
+    // Build replacement lookup: generates all path suffix variants for flexible matching.
+    // First registration of a normalized path wins (longest suffix first).
+    const replacementLookup = new Map<string, string>();
+    const register = (baseVariant: string, outputVariant: string): void => {
+      const key = normalizeLatexPath(baseVariant);
+      if (key && !replacementLookup.has(key)) {
+        replacementLookup.set(key, normalizeLatexPath(outputVariant));
+      }
+    };
+
+    for (const [baseFile, outputLoc] of baseToOutputMap) {
+      const outputFile = fileLocationDisplayPath(outputLoc);
+      const baseSegments = getPathSegments(baseFile);
+      const outputSegments = getPathSegments(outputFile);
+      const maxDepth = Math.min(baseSegments.length, outputSegments.length);
+
+      for (let depth = maxDepth; depth >= 1; depth--) {
+        const baseSuffix = baseSegments.slice(-depth).join('/');
+        const outputSuffix = outputSegments.slice(-depth).join('/');
+
+        register(baseSuffix, outputSuffix);
+
+        // Also register without .tex extension
+        if (
+          TEX_EXTENSION_REGEX.test(baseSuffix) &&
+          TEX_EXTENSION_REGEX.test(outputSuffix)
+        ) {
+          register(
+            baseSuffix.replace(TEX_EXTENSION_REGEX, ''),
+            outputSuffix.replace(TEX_EXTENSION_REGEX, ''),
+          );
+        }
+      }
+    }
+
+    if (replacementLookup.size === 0) {
+      logger?.debug('No replacement entries derived from file mappings');
+      return;
+    }
+
+    for (const outputLocation of outputFiles) {
+      const outputPath = fileLocationDisplayPath(outputLocation);
+
+      yield* Effect.gen(function* () {
+        const content = normalizeLineEndings(
+          yield* fs.readFileString(outputLocation.absolutePath),
+        );
+        const newContent = content.replaceAll(
+          /\\input{([^}]+)}/g,
+          (match, rawPath) => {
+            const normalizedPath = normalizeLatexPath(rawPath);
+            const replacement = normalizedPath
+              ? replacementLookup.get(normalizedPath)
+              : undefined;
+            return replacement ? `\\input{${replacement}}` : match;
+          },
+        );
+
+        if (newContent !== content) {
+          yield* fs.writeFileString(outputLocation.absolutePath, newContent);
+          logger?.debug(`Updated input commands in ${outputPath}`);
+        }
+      }).pipe(
+        // One unreadable or unwritable output must not stop the rewrite of the
+        // rest; the file keeps its original `\input{}` targets and says so.
+        Effect.catch((err) =>
+          Effect.sync(() => {
+            logger?.warn(
+              `Error processing input commands in ${outputPath}: ${toErrorMessage(err)}`,
+            );
+          }),
+        ),
+      );
+    }
+  },
+);

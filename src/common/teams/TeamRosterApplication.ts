@@ -4,6 +4,7 @@ import {
   type TeamAvailabilityChoice,
   type TeamCatalogPortFailed,
 } from '@common/teams/TeamAvailabilityPreflight';
+import { missingMemberNames } from '@common/teams/TeamPlan';
 import type {
   TeamRosterCatalog,
   TeamRosterResolution,
@@ -62,7 +63,7 @@ export function applyTeamRosterWithPreflight<R = never>(
 
     const preflight = yield* preflightTeamAvailability<ResolvedTeam, R>({
       initial,
-      unresolvedNames: (value) => value.resolution.unresolvedNames,
+      unresolvedNames: (value) => missingMemberNames(value.resolution),
       texraHostedNames: new Set(initial.preset.texraHostedAgents),
       canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
       providedChoice: deps.providedChoice,

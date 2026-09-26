@@ -54,11 +54,10 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  type DedupedResource,
   type PollEventListener,
   PollingSourceBase,
 } from './PollingSourceBase';
+import { dedupeComments, type DedupedResource } from './pollingDedup';
 import {
   MAX_CONCURRENT_REPO_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,

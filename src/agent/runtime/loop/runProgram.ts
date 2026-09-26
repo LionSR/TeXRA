@@ -1,11 +1,9 @@
 /**
- * The run programs' shared scaffolding: the one state cell every run writes
- * through, the entry both loops take, and the exit protocol every run
- * settles. One mechanism with two call sites (`toolUse.ts`,
- * `reflection.ts`); what the families do inside their loops stays in their
- * own files. There is no family parameter and no hook record: the shared
- * surface is values and total functions, and each loop writes its own
- * three-argument `Effect.acquireUseRelease` (the run-loop design,
+ * The run program's scaffolding: the one state cell every run writes
+ * through, the run's entry, and the exit protocol every run settles. What
+ * the loop does between them stays in `toolUse.ts`. There is no hook
+ * record: the surface is values and total functions, and the loop writes its
+ * own three-argument `Effect.acquireUseRelease` (the run-loop design,
  * .agents/docs/implemented/architecture/2026-09-21-effect-design-run-loop-programs.md).
  */
 
@@ -15,7 +13,6 @@ import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   RUN_OUTCOME,
   type NormalizedUsage,
-  type RunFamily,
   type RunId,
   type RunOutcome,
   type SessionEvent,
@@ -150,13 +147,10 @@ export type RunEntry =
  * The run's entry, as data. Takes the claim when resuming, loads the
  * aggregate, and raises both refusals once — a resume with nothing to resume,
  * and a fresh launch onto an aggregate that already holds ledger state
- * (#11313). The family check both families need lives here too: a run resumed
- * under the wrong family fails loudly instead of continuing against an empty
- * workspace. The caller branches on the tag.
+ * (#11313). The caller branches on the tag.
  */
 export const loadRun = (
   runId: RunId,
-  family: RunFamily,
   resume: boolean,
 ): Effect.Effect<RunEntry, Error, RunLedger | AgentRun> =>
   Effect.gen(function* () {
@@ -171,11 +165,6 @@ export const loadRun = (
           ),
         );
       }
-      if (loaded.family !== family) {
-        return yield* Effect.fail(
-          new Error(`Run ${runId} is not a ${family} run; resume it as one.`),
-        );
-      }
       return { _tag: 'restored', loaded } satisfies RunEntry;
     }
     if (loaded === null && resume) {
@@ -187,7 +176,7 @@ export const loadRun = (
       _tag: 'fresh',
       opening: {
         ...freshRunState(0),
-        family,
+        family: 'toolUse',
         modelId: bound.modelId,
         modelCompatibilityKey: bound.compatibilityKey,
         // The launch's own-API-key choice enters the ledger with the opening
@@ -221,7 +210,7 @@ const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease: the
- * halt row and, where a family holds one, the input lease. A refused halt
+ * halt row and, where the run holds one, the input lease. A refused halt
  * write warns; a database write failure reaches the caller. The lease hangs
  * off that write's own exit: a failed halt still frees it, as `recoverable`,
  * because no terminal row landed.
@@ -230,7 +219,7 @@ export const settleRun =
   (
     cell: RunCell,
     logger: AgentTrace,
-    /** The family's input lease, or null. Typed data, not a service lookup:
+    /** The run's input lease, or null. Typed data, not a service lookup:
      *  a missing FollowUps must not leak a lease with nothing saying so. */
     lease: FollowUps['Service'] | null,
   ) =>

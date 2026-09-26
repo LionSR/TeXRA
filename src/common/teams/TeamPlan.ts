@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Array as Arr, Effect, Result } from 'effect';
 import type { SignInFailed } from '@common/errors/signInFailed';
 import {
   AGENT_CATEGORIES,
@@ -29,7 +29,6 @@ import {
   launchableTeamPresets,
   type TeamPreset,
 } from './TeamPresets';
-import { resolvePresetAgents } from './TeamRoster';
 
 export interface TeamCatalogAgent {
   readonly name: string;
@@ -63,11 +62,12 @@ export function planTeamRun<T extends TeamCatalogAgent>(
   preset: TeamPreset,
   options: TeamRunOptions<T>,
 ): TeamRunPlan<T> {
-  const resolved = byCategory((category) =>
-    resolvePresetAgents(preset.agents[category], (name) =>
-      options.resolveAgent(category, name),
-    ),
-  );
+  const resolved = byCategory((category) => {
+    const [missing, found] = Arr.partition(preset.agents[category], (name) =>
+      Result.fromNullishOr(options.resolveAgent(category, name), () => name),
+    );
+    return { resolved: found, missing };
+  });
   const overrideQuery = options.agentOverride?.trim();
   const overrideAgent = overrideQuery
     ? options.resolveAgent(AgentCategory.ToolUse, overrideQuery)
@@ -78,9 +78,10 @@ export function planTeamRun<T extends TeamCatalogAgent>(
       presetOrder: preset.agents.toolUse,
       presetSource: preset.source,
     });
-  const toolUseAgents = rootAgent
-    ? includeAgent(resolved.toolUse.resolved, rootAgent)
-    : resolved.toolUse.resolved;
+  // A preset-chosen root is one of the resolved members; only an override
+  // root can sit outside the list, and it joins the delegation scope.
+  const toolUseKeys = resolved.toolUse.resolved.map(agentKeyOf);
+  const overrideKey = overrideAgent && agentKeyOf(overrideAgent);
 
   return {
     preset,
@@ -89,7 +90,10 @@ export function planTeamRun<T extends TeamCatalogAgent>(
       overrideQuery && !overrideAgent ? overrideQuery : undefined,
     agentKeys: {
       workflow: resolved.workflow.resolved.map(agentKeyOf),
-      toolUse: toolUseAgents.map(agentKeyOf),
+      toolUse:
+        overrideKey && !toolUseKeys.includes(overrideKey)
+          ? [...toolUseKeys, overrideKey]
+          : toolUseKeys,
     },
     missingAgents: byCategory((category) => resolved[category].missing),
   };
@@ -441,7 +445,9 @@ export function formatPartialTeamLaunchMessage(
 }
 
 /** Missing workflow and tool-use member names, in preset-declaration order. */
-function missingMemberNames(plan: TeamRunPlan): string[] {
+export function missingMemberNames(
+  plan: Pick<TeamRunPlan, 'missingAgents'>,
+): string[] {
   return AGENT_CATEGORIES.flatMap((category) => plan.missingAgents[category]);
 }
 
@@ -466,16 +472,6 @@ function selectTeamRootAgent<T extends TeamCatalogAgent>(
     if (preferredRoot) return preferredRoot;
   }
   return options.presetSource === 'built-in' ? undefined : delegatingAgents[0];
-}
-
-function includeAgent<T extends TeamCatalogAgent>(
-  agents: readonly T[],
-  rootAgent: T,
-): T[] {
-  const rootKey = agentKeyOf(rootAgent);
-  return agents.some((agent) => agentKeyOf(agent) === rootKey)
-    ? [...agents]
-    : [...agents, rootAgent];
 }
 
 /** Distinct member keys available to the run, excluding the root itself. */

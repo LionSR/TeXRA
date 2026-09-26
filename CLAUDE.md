@@ -214,13 +214,14 @@ Full patterns: AGENTS.md "Zod v4 Schema Patterns".
 ## Agent system
 
 Core lives in `src/agent/`: `core/` is the host-agnostic domain model (see
-`src/agent/core/README.md`); `runtime/loop/` holds the two run programs
-(`toolUse.ts`, `reflection.ts`), plain Effect loops over the run ledger, with
-`runtime/run/` the per-run services they take from context (`AgentRun`, model
-binding, pricing, media, tools) and `runtime/ModelInvoker.ts` the one service
-that calls the `packages/llm` `Model`. `core/tools/` holds `toolCallParsing`,
-the one helper both run programs use. `implementations/flows/reflection/output/` is the reflection
-output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
+`src/agent/core/README.md`); `runtime/loop/` holds the one run program
+(`toolUse.ts`), a plain Effect loop over the run ledger that workflow agents
+run in round mode (`rounds.ts`), with `runtime/run/` the per-run services it
+takes from context (`AgentRun`, model binding, pricing, media, tools) and
+`runtime/ModelInvoker.ts` the one service that calls the `packages/llm`
+`Model`. `core/tools/` holds `toolCallParsing`, which parses a response's
+tool calls. `output/` is the documents plugin a workflow round runs
+(`documentRounds.ts`) and its output pipeline; `implementations/agentCreator/` is _not_ a flow despite the
 filename: it is one linear async function (`runAgentCreator`) with a single
 production caller. Provider APIs are reached only through the `packages/llm`
 `Model` that `runtime/run/modelBinding.ts` binds; the helper paths

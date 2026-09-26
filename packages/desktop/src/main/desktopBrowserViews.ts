@@ -20,8 +20,6 @@ import {
   type WebContents,
 } from 'electron';
 
-import { tryParseUrl } from '@utils/core';
-
 interface DesktopBrowserViewsOptions {
   getWindow(): BaseWindow | undefined;
   /** Opens a URL outside the app (used for schemes we refuse to embed). */
@@ -52,7 +50,7 @@ export interface DesktopBrowserViews {
  * loaded into a view that renders inside TeXRA's own window.
  */
 function isEmbeddableUrl(rawUrl: string): boolean {
-  const parsed = tryParseUrl(rawUrl);
+  const parsed = URL.parse(rawUrl);
   return parsed?.protocol === 'https:' || parsed?.protocol === 'http:';
 }
 
@@ -62,7 +60,7 @@ function isEmbeddableUrl(rawUrl: string): boolean {
  * which governs which https hosts the app's own window may open externally.
  */
 function isHandOffableUrl(rawUrl: string): boolean {
-  return tryParseUrl(rawUrl)?.protocol === 'mailto:';
+  return URL.parse(rawUrl)?.protocol === 'mailto:';
 }
 
 export function createDesktopBrowserViews(

@@ -42,9 +42,9 @@ this directory flat.
 The exception this section has always named — "if a future refactor touches a
 whole group's internal call sites anyway, revisit turning that group into a
 real subdirectory" — is what produced the two subdirectories. The Effect-4
-cutover rewrote those call sites wholesale, so the run programs
-(`loop/toolUse`, `loop/reflection`, over `loop/rows` and `loop/toolUseDispatch`)
-and the per-run services they take from context (`run/AgentRun`,
+cutover rewrote those call sites wholesale, so the run program
+(`loop/toolUse`, with its round mode `loop/rounds`, over `loop/rows` and
+`loop/toolUseDispatch`) and the per-run services it takes from context (`run/AgentRun`,
 `run/modelBinding`, `run/pricing`, `run/turnText`, …) became real
 subdirectories rather than more top-level files. That same bar — a refactor
 already touching the whole group — governs any further one.
