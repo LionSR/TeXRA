@@ -25,7 +25,7 @@ Sources are in §9. Most 2026 claims were read only through secondary reporting 
 
 - **Long horizons matter more than fan-out.** In OpenAI's Navier–Stokes campaign (about 10k agents, 88 h, reported cost over \$10M), Noam Brown gives multi-agent "not even 10%" of the credit: "we have a very powerful model… we can get it to operate over very long horizons," and "we don't actually have good measurements" of coordination. Brown also treats parallel agents as a **latency** tool: more agents give a faster answer at worse efficiency, and they help most on decomposable work such as math. *Lesson:* make one agent survive for days before making many agents run for hours.
 - **Test-time compute is the control variable.** Brown argues results should be reported against tokens, dollars and wall-clock time. *Lesson:* budget is a first-class input and every evaluation reports cost.
-- **Hedge both directions.** The Navier–Stokes run gave separate agent groups the "prove regularity" and "prove blowup" variants. A consolidator (Codex) periodically merged intermediate results and cross-seeded the groups. *Lesson:* the default campaign shape is prove and disprove in parallel, with a periodic consolidation step.
+- **Hedge both directions.** The Navier–Stokes run gave separate agent groups the "prove regularity" and "prove blowup" variants. A consolidator (Codex) periodically merged intermediate results and cross-seeded the groups. *Lesson:* the harness must make such shapes cheap to express (parallel branches, a shared Board). Whether to use them is the agent's call.
 - **Rank pairwise, not with absolute scores.** Google's AI co-scientist uses Elo (new entries start at 1200), pairs similar ideas using a proximity graph, runs multi-turn debates only for top-ranked pairs, and evolves ideas **as new entries** rather than editing old ones. A meta-review turns recurring critiques into prompt feedback. Scientists steer by **adding their own hypotheses and reviews to the same tournament**. Elo tracked accuracy, and quality kept rising with compute without saturating.
 - **Discovery and verification are separate stages.** Lean formalization of the Navier–Stokes result took a further 17 h after discovery. AlphaProof adds test-time RL on generated problem variants. DeepMind's Aletheia (generator → verifier → reviser) is valued because it **admits failure**. The IMO-gold model declined Problem 6 rather than bluffing.
 - **Novelty is where claims go wrong most often.** OpenAI's "10 Erdős problems" (October 2025) were literature finds. DeepMind's Erdős sweep found many "open" problems were open "through obscurity rather than difficulty" and warned of "subconscious plagiarism." *Lesson:* a prior-work check is part of verification.
@@ -63,7 +63,7 @@ Replace the theorist-facing roster with **one `theorist` agent**. It takes a sma
 
 | Role       | Job                                                                                                                                  | Sees                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `lead`     | Owns the campaign and the Board: decomposes, allocates budget, runs consolidation                                                    | Everything                                              |
+| `lead`     | Owns the campaign and the Board; how it decomposes and spends is its call                                                            | Everything                                              |
 | `worker`   | Attacks one branch: derivation, computation, construction, literature                                                                | Its branch, the Board summary                           |
 | `skeptic`  | Finds a concrete gap (exact line, candidate counterexample) or signs off                                                             | The artifact and problem statement only — no reasoning trace |
 | `referee`  | Fresh-context check before any claim is promoted: verification ladder plus novelty                                                   | The deliverable and its evidence pointers only          |
@@ -81,7 +81,7 @@ Replace the theorist-facing roster with **one `theorist` agent**. It takes a sma
 A campaign has one Board, persisted with the session and rendered by all three hosts:
 
 - **Goal and budget:** the objective, plus a tokens, dollars and wall-clock envelope with live spend (the July roadmap's C3).
-- **Branches:** the decomposition, with prove and disprove variants paired by default. Each branch has a status (`active` / `paused` / `pruned` / `closed`) and a budget share.
+- **Branches:** the decomposition, whatever shape the lead chooses. Each branch has a status (`active` / `paused` / `pruned` / `closed`) and a budget share.
 - **Ideas:** tournament entries, each with an Elo rating, lineage (parents, if any), author (agent role or *researcher*), and match history.
 - **Claims:** statements with one of the levels `conjecture` / `supported` / `verified` / `refuted`. Each carries **evidence pointers** (`[lean: …]`, `[cas: …]`, `[run: …]`, `[cite: …]`, the July C7 convention), and a `novelty` field recording the prior-work check result and its citations.
 - **Open questions:** questions for the researcher, backed by `inquiry` requests, so they wake the run when answered.
@@ -155,14 +155,13 @@ From the July roadmap, in its order:
 - Context handoff: the lead ends its own context and continues from Board plus brief.
 - Budget telemetry in every continuation.
 
-These are what Brown's evidence says matters most. The prove/disprove split and periodic **consolidation** (the lead merges worker lemmas onto the Board and re-seeds branches) run on top without new machinery.
+These are what Brown's evidence says matters most. Patterns such as a prove/disprove split or periodic consolidation need no new machinery on top, and the harness does not prescribe them.
 
 ### 3.7 Scaling toward very large campaigns without re-architecting
 
 The same shapes scale:
 - The Board is a blackboard.
 - Workflow scripts are the scheduler.
-- Consolidation is the cross-pollination step.
 - The budget is the only bound.
 
 Going from 4 agents to 400 means a remote executor behind the workflow interpreter's `agent` operation and a Board store that tolerates concurrent writers through the session's single publisher. Neither is needed now, and neither should be built before evaluation shows fan-out paying for itself (§4).
@@ -209,11 +208,7 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 - **Granted folders:** these become a new external-root kind (`userFolder`, read-only or writable) alongside the host-registered kinds in `src/utils/files/externalRoots.ts`. They are persisted per project and checked by the existing `resolveToolPath` guard, so `restrictPathsToWorkingDirectory` keeps its meaning.
 - **Bash:** the Principal's `bash` is always approval-gated, whatever the run's approval policy.
 
-**What it adds for the researcher:**
-- **One place to ask "what's happening?"** The household ledger (§3.8.2) and its digest: which claims moved, which runs wait on you, spend against each budget.
-- **A portfolio budget.** The Principal splits one envelope across projects and is where the §3.6 auto-resume daemon lives.
-- **Cross-pollination.** When a lemma on one project's Board looks relevant to another, the Principal proposes it to that project's lead. This is the consolidation step from §3.6, applied between projects.
-- **Memory about the researcher** that persists across every project. See the next subsection.
+**No scripted behaviors.** The Principal gets capabilities (the `projects` tool, the ledger in §3.8.2, its own memory, one budget envelope across projects) and the safety rules above. What it does with them is the model's call: when to brief, when to rebalance budget, whether something in one project matters to another, what to escalate. The system prompt says *what the job is* (keep the researcher's work moving and informed) and *what the limits are*, never a list of routines. Principle 3 of the July roadmap ("general methods, not problem-specific strategies") applies here exactly as it does in a project. Any behavior worth having should emerge from a capable model with good visibility. If it doesn't, the fix is better visibility or a better model, not a hand-written routine.
 
 #### 3.8.1 The Principal's own memory
 
@@ -229,18 +224,13 @@ The Principal gets **its own memory with no new mechanism**: the same tool in th
 | **Project**   | that project's storage (as today) | that project's agents; the researcher       | that project's runs; the Principal read-only via `projects read` |
 | **Board**     | that project's session (§3.2)     | that project's lead and roles; the researcher | campaign state, not memory: what is true *now* in one campaign |
 
-**What goes in the Principal's memory.** It is a suggested layout, so the prompt describes it rather than a schema enforcing it:
-
-- `researcher/`: who the researcher is. Fields, taste (what counts as significant), notation and writing preferences, collaborators, standing constraints such as deadlines, venues and compute budget.
-- `projects/<name>.md`: one note per project. Why it exists, its priority, where it stands, what the researcher last decided. This is the Principal's own view, not a copy of the project's Board.
-- `lessons/`: what the Principal learns about running work. Which agent, model and budget suited which kind of task; which strategies died and why. This is the co-scientist meta-review applied at portfolio level.
-- `taste/`: preferences distilled from the researcher's tournament votes and prunes across projects (§3.3). This is the one place the researcher's taste accumulates as data.
+**What goes in the Principal's memory is the Principal's call.** There is no prescribed layout, directory scheme or distillation schedule. The tool and the scope are provided; the organization emerges.
 
 **How knowledge moves between scopes:**
 
-- **Up, from project to Principal.** When a project closes, or in the digest cycle, the Principal reads that project's memory and Board and *distills*. It writes its own note in its own words, with a pointer back, never a copy. Project memory stays the source of truth for the project.
+- **Up, from project to Principal.** The Principal can read any project's memory and Board. What it keeps in its own memory, and when, is its call. Project memory stays the source of truth for the project.
 - **Down, from Principal to project.** This happens only by explicit dispatch, never by a project reading upward. When a project needs something the Principal knows (the researcher's notation, a deadline, a lesson from another project), the Principal puts it in the `start` instruction or a `steer` to that project's lead. If it should persist, the lead records it in *project* memory in its own words. Project agents get no tool, path or prompt that points at home: global storage sits outside every project root, so `resolveToolPath` refuses it for file tools while `restrictPathsToWorkingDirectory` is on (the default), and role prompts do not mention the Principal's memory. `bash` is not path-guarded, so for bash this is discouragement, not enforcement. If that is not enough, the home storage directory joins the deny list for project runs' approval preview.
-- **Across.** Never directly. Project A's memory reaches project B only through the Principal, as a proposal to B's lead (the cross-pollination step). That keeps every write inside the scope that owns it.
+- **Across.** No direct channel. A project can't read or write another project's memory; anything that crosses goes through the Principal's own `steer`/`start`. This is a structural rule about who writes where, not a behavior: whether anything crosses is up to the Principal.
 
 **Rules:**
 - **Read-only, not re-authored.** Memory read from another scope is shown to the agent as data, never re-authored as instructions.
@@ -264,28 +254,23 @@ That knowledge must not depend on the Principal remembering to call `status` on 
 - **Across projects:**
   - Everything blocked on the researcher, oldest first.
   - Budget burn.
-  - Stalled runs: no progress row for a long time.
-  - Collisions: two projects working on the same lemma or the same outside folder.
 
 **How it is built, from pieces that exist:**
 - The ledger is a **fold over each project session's view**, the same view the desktop's cross-project attention badge already computes (`packages/desktop/src/main/desktopAttention.ts`), plus the registry. It is derived, never stored, so it cannot drift from the projects.
 - It uses **no new event channel.** The Principal's host subscribes through the SDK's session views; see "No new event channel" in §3.8.
 - **"Since last looked"** is the one piece of state the Principal owns: a per-project watermark in the home session, advanced when a ledger is delivered to a Principal turn.
 
-**Wake-ups.** The Principal does not poll. A small set of ledger transitions queue a follow-up into the Principal's home run:
-- A run finished or failed.
-- A request has waited longer than the researcher's threshold.
-- A budget crossed a set fraction.
-- A claim reached `verified` or `refuted`.
-- A run stalled.
+**Wake-ups.** The Principal does not poll. A change in the ledger queues a follow-up into the Principal's home run. The triggers are plain facts with no judgment inside them:
+- A run ended.
+- A request opened.
+- A claim changed level.
+- Spend crossed the researcher's envelope.
+
+The harness doesn't guess which changes matter. If waking on every change proves too noisy, the fix is to batch wake-ups, not to add heuristics.
 
 Each wake-up is an ordinary queued input, so it is durable, deduplicated by the watermark, and visible in the Principal's transcript.
 
-**What the Principal does with it:**
-- **Triage.** Answer what it can on its own authority (restart a stalled run, rebalance budget within the envelope). Escalate the rest to the researcher, batched.
-- **Brief.** The digest (§3.3) is the ledger in prose, with judgment on top: what matters today, what can wait.
-- **Dispatch.** `start` and `steer` to project leads, carrying whatever context the lead needs, and only that.
-- **Remember.** Update its `projects/` and `lessons/` notes from what the ledger showed.
+The ledger reports facts, not interpretations. It has no "stalled", "collision" or "important" flags; noticing those is the Principal's job.
 
 ## 4. Evaluation first: a theorist benchmark
 
