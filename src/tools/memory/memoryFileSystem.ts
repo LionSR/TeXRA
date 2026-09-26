@@ -20,6 +20,7 @@ import {
   type FileSystem,
   Option,
   type PlatformError,
+  Result,
   Semaphore,
   Stream,
 } from 'effect';
@@ -33,7 +34,10 @@ import {
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
 } from '@tools/memory/constants';
-import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
+import {
+  displayToStoragePath,
+  relativeToDisplayPath,
+} from '@tools/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,
@@ -47,6 +51,7 @@ import {
   splitContentLines,
 } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
@@ -100,6 +105,35 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
     );
   },
 );
+
+const memoryFileLanes = new Map<string, PerKeyLane>();
+
+/**
+ * Run a memory command on its file's lane, process-wide. Memory is storage
+ * that parallel runs (an orchestrator's subagents) edit at once, and each
+ * edit reads the file, changes it and rewrites it whole with I/O in between:
+ * without the lane two edits of one file both read the same version and the
+ * later write drops the other's change. A path that names no memory file
+ * takes no lane (the command refuses it); a lane is deleted once idle.
+ */
+export function onMemoryFileLane(displayPath: string | null | undefined) {
+  return <A, E, R>(
+    self: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R | StorageFs> => {
+    const storage =
+      displayPath == null
+        ? undefined
+        : Result.getOrUndefined(
+            Result.try(() => displayToStoragePath(displayPath)),
+          );
+    if (storage === undefined) return self;
+    return Effect.flatMap(StorageFs, (storageFs) =>
+      self.pipe(
+        withPerKeyLane(memoryFileLanes, `${storageFs.root}\u0000${storage}`),
+      ),
+    );
+  };
+}
 
 /** Write one memory file atomically, frontmatter first. */
 export const writeMemoryFile = Effect.fn('memoryFileSystem.writeMemoryFile')(
