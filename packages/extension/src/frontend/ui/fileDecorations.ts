@@ -1,4 +1,4 @@
-import { Effect, Stream, type Scope } from 'effect';
+import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
@@ -73,6 +73,14 @@ export function registerFileDecorations(
           }
           provider.markTouched(paths);
         }),
+      ).pipe(
+        // The listener ends with a failed read; it says so rather than
+        // leaving the badges quietly stale.
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            'TeXRA stopped badging output files: the session read failed',
+          ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+        ),
       ),
       { startImmediately: true },
     );
