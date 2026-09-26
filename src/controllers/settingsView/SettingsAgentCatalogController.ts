@@ -6,10 +6,7 @@ import type { AgentRosterController } from '@agent/roster/AgentRosterController'
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
-import {
-  resolveTeamRoster,
-  type TeamRosterCatalog,
-} from '@common/teams/TeamRoster';
+import type { TeamRosterCatalog } from '@common/teams/TeamRoster';
 import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -149,7 +146,10 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       return {
         ok: true as const,
         preset,
-        resolution: resolveTeamRoster(this.deps.roster, preset),
+        resolution: planTeamRun(preset, {
+          resolveAgent: (category, identifier) =>
+            this.deps.roster.resolveAgent(category, identifier),
+        }),
       };
     });
   }

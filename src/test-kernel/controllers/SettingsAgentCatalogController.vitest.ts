@@ -151,9 +151,14 @@ describe('SettingsAgentCatalogController', () => {
           icon: 'bookmark',
           source: 'custom',
         });
-        expect(resolved.resolution.unresolvedNames).toStrictEqual(['missing']);
-        assert.deepEqual(resolved.resolution.keys.workflow, ['remote:writer']);
-        assert.deepEqual(resolved.resolution.keys.toolUse, [
+        assert.deepEqual(resolved.resolution.missingAgents, {
+          workflow: [],
+          toolUse: ['missing'],
+        });
+        assert.deepEqual(resolved.resolution.agentKeys.workflow, [
+          'remote:writer',
+        ]);
+        assert.deepEqual(resolved.resolution.agentKeys.toolUse, [
           'builtInToolUse:review',
         ]);
 
