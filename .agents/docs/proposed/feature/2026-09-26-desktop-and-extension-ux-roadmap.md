@@ -66,6 +66,29 @@ The UI should be quiet and should never mislead the user. In priority order:
   - Send is labelled "Start task".
   - The empty Review tab explains itself.
 
+## Second pass: identity and cuts
+
+- **The desktop wears the TeXRA brand.** It had been achromatic, ChatGPT
+  style, with a black "T" square for a logo. It now uses the palette the
+  logo and texra.ai already use:
+  - warm paper surfaces;
+  - aubergine ink for text;
+  - the logo purple `#6f387a` as the single interaction accent, in both
+    themes.
+
+  It is a token change in `themeTokens.css`: every shared component reskins
+  from it. The sidebar shows the real `{T}` mark. Sidebar rows are no longer
+  semibold. The composer is the one bright card on the page.
+
+- **The VS Code extension stays native** to the editor theme. A brand accent
+  inside someone's editor theme is noise, not identity.
+- **Cut: the "Attachments" row for interactive tasks.** It was a second way
+  to attach beside the composer's paperclip, collapsed and rarely noticed.
+  The composer is now the one home: `<launch-attachments>` lists attached
+  files as removable chips under it and makes it a drop target. Document
+  passes keep their Input/Context section, which they need.
+- **Fixed: open terminals kept their palette when the theme changed.**
+
 ## Open work, in order
 
 Each item is independent and small enough for one PR.

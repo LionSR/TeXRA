@@ -23,58 +23,62 @@
      near-black #1e1e1e canvas, hairline #2b2b2b seams, and a muted #0e639c
      accent, with radii pinned to 2-3px.
 
-     The desktop now follows the quieter ChatGPT/Codex surface language:
-     neutral white/charcoal canvases, an opaque layered surface ladder, soft
-     seams, and black/white primary actions. Color is reserved for semantic
-     information instead of tinting the whole application chrome.
+     The achromatic ChatGPT/Codex language that replaced it read as a
+     wireframe: nothing on screen said TeXRA. The desktop now wears the
+     brand the logo and texra.ai already use: warm paper surfaces from the
+     logo's cream, aubergine ink for text, and the logo purple (#6f387a) as
+     the one interaction accent (primary actions, focus, selection). Status
+     colors stay semantic and separate from it.
 
      Every --wa-* token in the bridge below derives from these, so the whole
      shared Lit component set (wa-button, wa-input, wa-dialog, the progress
      view, the settings view) re-skins from this one block.
      ========================================================================== */
 
-  /* Canvas and text. These mirror ChatGPT's paper-white and charcoal modes
-     without turning the dark theme into a blue-black developer-tool skin. */
-  --desktop-color-background: light-dark(#ffffff, #212121);
-  --desktop-color-foreground: light-dark(#0d0d0d, #ececec);
-  --desktop-color-muted: light-dark(#5d5d5d, #b4b4b4);
+  /* Canvas and text: warm paper and aubergine ink in light, a plum-tinted
+     charcoal in dark, never a blue-black developer-tool skin. */
+  --desktop-color-background: light-dark(#fffefc, #1d1a20);
+  --desktop-color-foreground: light-dark(#221a26, #ede8ef);
+  --desktop-color-muted: light-dark(#6b6170, #b3aab8);
 
   /* Surface ladder. Opaque neutral steps keep nested panels legible without
      translucent blue layers compounding into unrelated colors. */
-  --desktop-color-sidebar: light-dark(#f9f9f9, #171717);
-  --desktop-color-sidebar-header: light-dark(#f4f4f4, #2f2f2f);
+  --desktop-color-sidebar: light-dark(#f7f3ec, #161318);
+  --desktop-color-sidebar-header: light-dark(#efe9df, #2a2530);
 
   /* Seams are intentionally quiet: enough contrast to explain containment,
      but never strong enough to make every region look like a card. */
-  --desktop-color-border: light-dark(#e5e5e5, rgb(255 255 255 / 10%));
-  --desktop-color-widget-border: light-dark(#d9d9d9, rgb(255 255 255 / 16%));
+  --desktop-color-border: light-dark(#e8e1d6, rgb(255 255 255 / 10%));
+  --desktop-color-widget-border: light-dark(#ddd4c7, rgb(255 255 255 / 16%));
   --desktop-edge-highlight: light-dark(
     none,
     inset 0 1px 0 rgb(255 255 255 / 4%)
   );
 
-  /* Inputs use the same restrained surface ladder as the composer. */
-  --desktop-color-input-background: light-dark(#ffffff, #2f2f2f);
-  --desktop-color-input-border: light-dark(#d9d9d9, rgb(255 255 255 / 16%));
-  --desktop-color-input-foreground: light-dark(#0d0d0d, #ececec);
+  /* Inputs, and the composer with them: on warm paper the composer is the
+     one bright card, the place the eye should land. */
+  --composer-background: var(--desktop-color-input-background);
+  --desktop-color-input-background: light-dark(#ffffff, #262229);
+  --desktop-color-input-border: light-dark(#ddd4c7, rgb(255 255 255 / 16%));
+  --desktop-color-input-foreground: light-dark(#221a26, #ede8ef);
   /* Placeholders sit at 4.5:1+ on the input surface: a placeholder is often a
      control's only visible label, so it must meet normal-text contrast. */
-  --desktop-color-placeholder: light-dark(#767676, #9a9a9a);
+  --desktop-color-placeholder: light-dark(#746a79, #a59ca9);
 
-  /* Primary actions are deliberately achromatic. Informational blue lives in
+  /* The brand purple is the one interaction accent. Informational blue lives in
      --desktop-color-info below and is not reused as application chrome. */
-  --desktop-color-accent: light-dark(#0d0d0d, #f4f4f4);
-  --desktop-color-accent-hover: light-dark(#2f2f2f, #ffffff);
-  --desktop-color-accent-subtle: light-dark(#ececec, #3a3a3a);
-  --desktop-color-focus: light-dark(#0d0d0d, #ffffff);
+  --desktop-color-accent: light-dark(#6f387a, #cfa6d8);
+  --desktop-color-accent-hover: light-dark(#582b61, #e0c3e6);
+  --desktop-color-accent-subtle: light-dark(#f1e8f3, #3a2f3f);
+  --desktop-color-focus: light-dark(#6f387a, #cfa6d8);
 
-  --desktop-color-button-secondary: light-dark(#f4f4f4, #2f2f2f);
-  --desktop-color-button-secondary-hover: light-dark(#e7e7e7, #424242);
-  --desktop-color-toolbar-active: light-dark(#ececec, #3a3a3a);
-  --desktop-color-toolbar-hover: light-dark(#f2f2f2, #2a2a2a);
-  --desktop-color-list-hover: light-dark(#f2f2f2, #2a2a2a);
-  --desktop-color-menu-background: light-dark(#ffffff, #2f2f2f);
-  --desktop-color-menu-border: light-dark(#e5e5e5, rgb(255 255 255 / 16%));
+  --desktop-color-button-secondary: light-dark(#f3eee6, #2a2530);
+  --desktop-color-button-secondary-hover: light-dark(#e9e2d7, #3a3340);
+  --desktop-color-toolbar-active: light-dark(#ece3ee, #3a2f3f);
+  --desktop-color-toolbar-hover: light-dark(#f0eae1, #262229);
+  --desktop-color-list-hover: light-dark(#f0eae1, #262229);
+  --desktop-color-menu-background: light-dark(#ffffff, #2a2530);
+  --desktop-color-menu-border: light-dark(#e8e1d6, rgb(255 255 255 / 16%));
 
   /* Neutral, restrained elevation. No colored glow: raised surfaces should
      feel close to the canvas, not like floating blue glass. */
@@ -113,8 +117,8 @@
 
   /* A nearly-flat neutral wash softens the first viewport without turning the
      application canvas into decorative artwork. */
-  --desktop-canvas-wash-light: linear-gradient(180deg, #fafafa, #ffffff 14rem);
-  --desktop-canvas-wash-dark: linear-gradient(180deg, #171717, #212121 14rem);
+  --desktop-canvas-wash-light: linear-gradient(180deg, #fbf8f3, #fffefc 14rem);
+  --desktop-canvas-wash-dark: linear-gradient(180deg, #161318, #1d1a20 14rem);
   /* Default until the host posts its theme (a body class then pins the pair).
      Follows the OS so the very first paint isn't a white flash on a dark
      desktop. */
@@ -186,7 +190,7 @@
 
   /* Brand variant — primary buttons, links, focus accents. */
   --wa-color-brand-fill-loud: var(--desktop-color-accent);
-  --wa-color-brand-on-loud: light-dark(#ffffff, #0d0d0d);
+  --wa-color-brand-on-loud: light-dark(#ffffff, #1d1a20);
   --wa-color-brand-border-loud: transparent;
   --wa-color-brand-fill-quiet: var(--desktop-color-accent-subtle);
   --wa-color-brand-border-quiet: color-mix(

@@ -129,7 +129,7 @@ export class SessionComposer extends LitElement {
         padding: var(--wa-space-2xs);
         border: var(--border-thin) solid var(--wa-color-surface-border);
         border-radius: var(--wa-border-radius-l);
-        background: var(--wa-color-surface-raised);
+        background: var(--composer-background, var(--wa-color-surface-raised));
         transition: border-color var(--transition-fast);
       }
       .composer:focus-within {

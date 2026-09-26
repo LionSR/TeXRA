@@ -201,7 +201,7 @@ export function shellSidebarTemplate(
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <header class="shell-sidebar-brand">
-        <div class="shell-sidebar-logo" aria-hidden="true">T</div>
+        <div class="shell-sidebar-logo" aria-hidden="true"></div>
         <span class="shell-sidebar-product">TeXRA</span>
       </header>
 

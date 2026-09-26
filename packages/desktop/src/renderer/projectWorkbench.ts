@@ -149,6 +149,7 @@ export function createProjectWorkbench(options: {
     setTheme(theme: Theme) {
       editorPane.setTheme(theme);
       reviewPane.setTheme(theme);
+      terminalPane.refreshTheme();
     },
     dispose() {
       disposed = true;
