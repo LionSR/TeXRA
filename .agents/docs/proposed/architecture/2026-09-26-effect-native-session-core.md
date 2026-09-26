@@ -1,4 +1,4 @@
-# Effect-native session core: seven moves after scope-owned lifetimes
+# Effect-native session core: moves after scope-owned lifetimes
 
 Status: proposed
 
@@ -19,6 +19,13 @@ refute its move against the code, the
 and `config/ratchets/refuted-candidates.json`. The claims marked _confirmed_
 were re-read in the code by the author of this note.
 
+A second survey then covered the areas the first did not reach: the model
+layer, tools and approvals, follow-ups and wakes, workflow scripts and the
+documents output, persistence and settings, agent definitions and accounts,
+and the host shells. Its defects are listed under
+[Defects from the second survey](#defects-from-the-second-survey) and its
+structural findings became moves 8 to 13.
+
 Relation to the owners in [INDEX.md](../../INDEX.md): this note owns no topic.
 Each move names the owning note it amends, and a move that lands updates that
 owner rather than this note.
@@ -34,11 +41,16 @@ repeats decisions the core should make.
 The first drafts of these moves were larger than the code supports. The
 adversarial checks refuted five of their claims (listed under
 [Withdrawn](#withdrawn)), and what remains below is the shape that survived.
-Measured net deletions are modest, roughly 2k production lines across the
+Measured net deletions are modest, roughly 2k production lines across moves 1 to 7 of the
 programme. The gain is ownership: one reader of state for runtime decisions,
 typed plugin services at the lifetimes that already exist, one launch
 surface, one process graph, one behaviour per user decision on every host,
 and a trace whose stages, streams and cards close with their scope.
+
+The second survey found the same five causes one ring further out: the model
+binding, the approval policy, a run's input queue, the agent catalog, the
+application state and the host windows each have more than one owner or an
+owner outside any scope. Moves 8 to 13 apply the same rule to them.
 
 ## Defects to fix first
 
@@ -53,20 +65,133 @@ These do not depend on any architectural decision. Each is one small PR.
 | Seven dead imports in `SessionHandle.ts`, one of them from #13340 _(confirmed)_             | `AgentTrace`, `finalizeRun`, `interruptedWorkflowCall`, `RUN_OUTCOME`, `RunOutcome`, `toErrorMessage`, `heldSessions` each appear only on their import line. `no-unused-vars` is off (`eslint.config.mjs:615`). The dead import hid that `heldSessions` and `SessionOwner.held` are test-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Delete them. Consider re-enabling unused-import detection.                                                                                                                                                                                                                                                   |
 | Webview requests stay pending after close                                                   | `sessionTransport.ts:91,143-150,211-224`: the pending map is not keyed by session and `close`/`dispose` never settle it. Callers guard, so the effect is a leaked closure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Scope-owned `Deferred`s per session, interrupted on close (move 5, PR 1).                                                                                                                                                                                                                                    |
 
+### Defects from the second survey
+
+Also independent of any decision. _Confirmed_ items were re-read in the code
+by the author of this note; the rest are traced by one audit and should get a
+reproduction before their fix PR.
+
+One security defect in this survey is reported to the owner separately and is
+not described here.
+
+Tools and approvals:
+
+- **An approved edit can overwrite newer changes** _(confirmed)_. When the file
+  changed while the approval waited and the three-way patch fails,
+  `writeApprovedContent` writes the approved text over the newer file, with no
+  log line and no word to the model (`src/tools/approval/toolEditApproval.ts:425-430`).
+  Fix: refuse with a conflict error and write nothing.
+- **Turning approve-all off clobbers other grants.**
+  `setDelegatedWorkBypasses(runId, false)` writes an explicit `false`, which
+  drops a bypass the user set, pins a child off its parent, and revokes a
+  goal's command grant that the goal still believes it holds
+  (`runApprovalQueue.ts:323-331`, `goalAutoApproval.ts:64`).
+- **A goal's command grant is lost on resume** while the goal stays active: the
+  goal row is durable, the grant lives only in a WeakMap
+  (`AgentLaunchContext.ts:383-389`).
+- **Four tools declare `requiresApproval` but have no call-time gate**
+  (`update_config`, `unset_api_key`, `invoke_command`,
+  `install_vscode_extension`). The flag only filters what is offered, and only
+  the CLI and the SDK set `approvalPromptsUnavailable`, so on the GUI hosts they
+  run without a prompt (`agentToolResolution.ts:289`; the comment at
+  `ToolTypes.ts:68` claims otherwise). The fix shape is move 9 PR 4; a
+  stopgap guard is small.
+
+Model layer:
+
+- **Runs on the OpenAI WebSocket transport fail at about 55 minutes.** The
+  socket invalidates itself at that age (`openaiResponsesWebSocket.ts:297,432`,
+  _confirmed_), and automatic retries re-read the same dead binding; only a
+  manual retry or a model switch rebinds (`ModelInvoker.ts:1152,1216,1239-1245`).
+- **Compaction's summary call is billed but never priced, logged or gated**
+  (`run/compaction.ts:259-295`).
+- **The per-round usage-log row carries the run's cumulative response time**
+  _(confirmed)_ (`UsageMonitor.ts:184-186`).
+- **A failed rebind on a manual retry is downgraded to a warning** while the
+  declined route is still committed, so the next attempt bills the route the
+  user declined (`ModelInvoker.ts:1053-1068`).
+- **Replaced model bindings live until the run ends**, WebSocket and ping
+  fiber included (`modelSwitch.ts:47-54`, `ModelInvoker.ts:909-910`).
+
+Follow-ups and waits:
+
+- **Poll subscriptions outlive their run and their session.** Bindings are
+  released only on a terminal release, and a failed delivery status is
+  discarded with `Effect.asVoid` (`RunSubscriptionRegistry.ts:154-164,250-262`,
+  `ToolUseFollowUp.ts:313-318`).
+- **`/compact` on a round-mode run is dropped silently** _(confirmed)_: the
+  registry answers `requested`, and the loop compacts only when
+  `rounds === null` (`toolUse.ts:533-536`).
+- **`executions wait` can miss the follow-up it waits for**: it subscribes to
+  an occurrence after several yields instead of reading the pending set
+  (`ExecutionsTool.ts:131-147`).
+- **A crash between a native child's `waiting` batch and its delivery can lose
+  the turn result** (inference; `toolUse.ts:694-715`, `childRunLoop.ts:603-608`).
+
+Workflow scripts and documents:
+
+- **Skip or retry on an interrupted `agent()` call reports success**: the
+  in-flight entry is removed only on normal settlement
+  (`runWorkflowScript.ts:630,658-660,750`).
+- **A failed media extraction is logged at `debug`**, hidden by default,
+  against the comment above it (`documentRounds.ts:247,261-266`).
+
+Agent definitions and accounts:
+
+- **The CLI ignores the custom agents directory** _(confirmed)_: it passes
+  `customDirectoryStore: { get: () => Effect.succeed(undefined) }`
+  (`cliProcessRuntime.ts:224`) while the extension stores the setting in the
+  shared global state.
+- **The built-in `creator` agent is broken off VS Code**: only the extension
+  registers the agent and doc directories as external roots, so on desktop, the
+  CLI and the SDK its path variables render as `''` (`frontend/setup.ts:33-90`,
+  `userVars.ts:283-292`).
+- **SDK embedders get no skills at all**, a second consequence of skipping
+  `bootstrapHost` (`runtimeSkills.ts:48-52`).
+- **A failed remote-agent fetch is recorded as success**, so it is never
+  retried and a failed refresh wipes the agents that had loaded
+  (`remoteAgentList.ts:87-94`, `agentRegistry.ts:189-200`).
+
+Persistence:
+
+- **Every format bump silently resets user settings.** It moves aside the
+  global database with the session vocabulary, re-runs
+  `seedDisabledToolDefaults`, tells users only about "session history" on the
+  extension and the CLI, and says nothing on desktop (`storeFormat.ts:51`,
+  `toolAvailability.ts:84-100`, `ui/copy/sessionStore.ts:10-15`).
+- **Moved-aside copies are never pruned**, one full copy per format per root
+  (`storeFormat.ts:54-88`).
+
+Hosts:
+
+- **The desktop renderer can boot to a blank window** _(confirmed)_: its
+  `localStorage` store calls `JSON.parse` unguarded at module load, before any
+  error handler exists (`renderer/main.ts:145-160`).
+- **`texra.refreshApiKeyStatus` is registered and never invoked**
+  (`extension.ts:850-854`).
+
 ## The programme
 
-| Move                                                                                     | Replaces                                                                                                                                     | Effort | Rulings to amend                                                                     |
-| ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------------------ |
-| [1. Session kernel](#move-1-a-session-kernel-beside-the-run-fold)                        | runtime decisions reading `SessionView`; the publisher's private maps; the cold whole-session lineage fold; eight hand-kept event-type lists | L      | one-run-model §3.8; the current-value decision's shared format stamp                 |
-| [2. Plugins as typed Layers](#move-2-plugins-are-typed-layers-at-the-existing-lifetimes) | plugin resources in `ProcessServices` and module WeakMaps; plugin schema arms in core modules; no SDK opt-out                                | L      | plugin note "no durable state", "prompt sections are core"; one-run-program line 366 |
-| [3. One launch surface](#move-3-one-launch-surface)                                      | three claim/terminal wrappers, three "run started" hooks, two workflow resume routes, `AgentEngine`                                          | M–L    | none (lands the proposed runtime design's `Runs.launch`)                             |
-| [4. Process Layer graph](#move-4-the-process-is-one-layer-graph)                         | `installProcessRuntime` + `bootstrapHost`, ~14 module slots, four shutdown chains, the SDK's join machinery                                  | L      | archived service-scope ledger D5; synchronous facades "one process is one host"      |
-| [5. Wire realignment](#move-5-realign-the-wire-to-the-ratified-protocol)                 | host detours for decisions, per-host copies, Promise webview transport                                                                       | M      | none (returns to PRD one-fold §8)                                                    |
-| [6. Session surface split](#move-6-split-the-session-handle-by-audience)                 | the 52-member `SessionHandle` bag, per-host session lookups for resume, the default-session machinery                                        | M–L    | none if names are kept (respects `SCOPE-held-sessions-as-effects`)                   |
-| [7. Effect-native trace and SDK](#move-7-effect-native-trace-and-sdk)                    | `TraceEmitter`, split stage ownership, the SDK trace tap, the platform record                                                                | L      | none (the SDK-is-Effect ruling already requires it)                                  |
+| Move                                                                                     | Replaces                                                                                                                                               | Effort | Rulings to amend                                                                     |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | ------------------------------------------------------------------------------------ |
+| [1. Session kernel](#move-1-a-session-kernel-beside-the-run-fold)                        | runtime decisions reading `SessionView`; the publisher's private maps; the cold whole-session lineage fold; eight hand-kept event-type lists           | L      | one-run-model §3.8; the current-value decision's shared format stamp                 |
+| [2. Plugins as typed Layers](#move-2-plugins-are-typed-layers-at-the-existing-lifetimes) | plugin resources in `ProcessServices` and module WeakMaps; plugin schema arms in core modules; no SDK opt-out                                          | L      | plugin note "no durable state", "prompt sections are core"; one-run-program line 366 |
+| [3. One launch surface](#move-3-one-launch-surface)                                      | three claim/terminal wrappers, three "run started" hooks, two workflow resume routes, `AgentEngine`                                                    | M–L    | none (lands the proposed runtime design's `Runs.launch`)                             |
+| [4. Process Layer graph](#move-4-the-process-is-one-layer-graph)                         | `installProcessRuntime` + `bootstrapHost`, ~14 module slots, four shutdown chains, the SDK's join machinery                                            | L      | archived service-scope ledger D5; synchronous facades "one process is one host"      |
+| [5. Wire realignment](#move-5-realign-the-wire-to-the-ratified-protocol)                 | host detours for decisions, per-host copies, Promise webview transport                                                                                 | M      | none (returns to PRD one-fold §8)                                                    |
+| [6. Session surface split](#move-6-split-the-session-handle-by-audience)                 | the 52-member `SessionHandle` bag, per-host session lookups for resume, the default-session machinery                                                  | M–L    | none if names are kept (respects `SCOPE-held-sessions-as-effects`)                   |
+| [7. Effect-native trace and SDK](#move-7-effect-native-trace-and-sdk)                    | `TraceEmitter`, split stage ownership, the SDK trace tap, the platform record                                                                          | L      | none (the SDK-is-Effect ruling already requires it)                                  |
+| [8. Model plane](#move-8-the-model-plane-is-a-layer)                                     | bindings retired only at run end, calls outside the invoker, a session-scoped retry gate, the global dispatcher, two error taxonomies                  | L      | the ModelCell ruling (its files are gone)                                            |
+| [9. Approval plane](#move-9-one-approval-authority-per-session)                          | the policy decided in core for two request kinds and in the CLI for the rest, seven bypass writers, grants without owners, MCP calls approved as shell | M–L    | the `defineTool` freeze amendment (guard kinds)                                      |
+| [10. Run input and wakes](#move-10-a-runs-input-belongs-to-its-run-entry)                | the 729-line follow-up queue as a second in-process owner, 31 manual lease hand-offs, host resume ports for wakes, resume's cancellation predicates    | L      | none                                                                                 |
+| [11. Agent catalog](#move-11-the-agent-catalog-is-a-process-service-that-runs-pin)       | module-slot catalog with 22 defensive loads, two loaders for one format, an extension-only watcher, live re-reads on resume                            | M–L    | the plugin note's agent-source line if definitions are pinned                        |
+| [12. Application state](#move-12-one-application-state-plane)                            | the unlanded current-value decision, three homes for one setting, resets on every format bump                                                          | L      | the current-value decision's shared stamp                                            |
+| [13. Hosts as scoped programs](#move-13-hosts-are-scoped-programs-that-react-to-facts)   | the 1,380-line desktop window closure with unawaited teardown, two static singletons, the CLI's root-run slot machine, output presentation inside runs | L      | the one-run-program parity table (presentation)                                      |
 
 Dependencies: 1 before the tag half of 6. 4 before 7's `TexraAgent.layer`. 3 is
 easier after 1 (lineage reads). 2, 5 and the first half of 7 are independent.
+8's transport half lands with 4. 10 needs 3. 11 and 12 sit in 4's graph. 13's
+CLI half needs 3; its desktop half is independent.
 
 ## Move 1: a session kernel beside the run fold
 
@@ -767,6 +892,368 @@ const program = Effect.gen(function* () {
 Estimated net: about −200 production lines plus four test fakes collapsed into
 one layer. PRs 1–3 fix real lifecycle bugs before any API change.
 
+## Move 8: the model plane is a Layer
+
+### Current state
+
+`bindModel` (`run/modelBinding.ts:987`) binds into the caller's scope; a switch
+or retry binds into `run.scope`, so every retired binding (a WebSocket with its
+30 s ping fiber, an editor model) lives until the run ends, against the ModelCell
+ruling's "disposes the distinct handler it retires". Two call paths skip
+`ModelInvoker`: compaction (`compaction.ts:208,261,279`) and the helper path
+(`helperModel.ts`, three callers), so neither is gated or priced, and helpers
+carry a third retry owner. `ModelRetryGate` is session-scoped while credential
+limits are account-wide. The package emits a typed `ModelError`, but the runtime
+reads three of its kinds and re-derives the rest from about 1.5k lines of cause
+heuristics (`src/common/errors/sdkError/`). The llm factories accept an
+injectable `fetch` that no production caller passes, so the global undici
+dispatcher is the only transport, and the WebSocket ignores the proxy.
+`LanguageModel` and `EditorModel` are two services for one editor bridge, with
+two conventions for "absent". The CI validation model lives in production
+routing and in a persisted enum.
+
+### Target
+
+```ts
+class ModelPlane extends Context.Service<
+  ModelPlane,
+  {
+    readonly bind: (
+      i: BindModelInput,
+    ) => Effect.Effect<BoundModel, BindFailed, Scope.Scope>;
+    readonly gate: ModelRetryGate; // process-scoped, keyed by wire route
+  }
+>()('@texra/model/ModelPlane') {}
+
+class RunModel extends Context.Service<
+  RunModel,
+  {
+    readonly current: Effect.Effect<BoundModel>;
+    readonly swap: (i: BindModelInput) => Effect.Effect<BoundModel, BindFailed>; // closes the retired scope
+    readonly auxiliary: (
+      req: TurnRequest,
+      purpose: 'compaction' | 'helper',
+    ) => Effect.Effect<
+      { turn: TurnResult; usage: NormalizedUsage | null },
+      ModelFailure
+    >;
+  }
+>()('@texra/agent/RunModel') {}
+```
+
+Each binding gets `Scope.fork(run.scope)` and a swap closes the old one. A
+transport failure on a WebSocket origin reacquires through `swap` before the
+next automatic attempt. `ModelTransport` (move 4) supplies `fetch` and a proxy
+agent to every factory, and `setGlobalDispatcher` goes. Classification reads
+`ModelError` first and keeps `sdkError` only for provider evidence the package
+cannot know. `EditorModel` merges into `LanguageModel`; the validation model
+becomes a CLI test Layer.
+
+### PRs
+
+1. The usage-row and manual-rebind defects.
+2. Per-binding scopes, with the ModelCell ruling rewritten in the same PR.
+3. WebSocket reacquisition through `swap`.
+4. The `auxiliary` path: compaction gated, priced and recorded (the usage field
+   rides an existing format bump).
+5. `ModelTransport`, with move 4 PR 6.
+6. The retry gate moves to process scope; helpers run under it.
+7. `EditorModel` merged; validation model as a Layer.
+8. Classify from `ModelError`.
+9. A Node-side provider table keyed by plugin id for binding quirks, price
+   tiers and detection (provider names appear in 14 to 23 files each).
+
+Estimated net: −300 to −800 lines, most of it from PR 8.
+
+### Rulings
+
+**Rewrite** the ModelCell ruling (#9547): the files it cites are deleted.
+**Keep** `EFF-ADOPT-retry-gate-schedule` and `EFF-ADOPT-jitter-helper-stays`:
+PR 6 moves the gate's lifetime, not its algorithm. **Argue** the process-scoped
+gate against the lifetimes ruling's "no process-global lookup": it is a service
+with a real process owner, the credential.
+
+## Move 9: one approval authority per session
+
+### Current state
+
+Core applies the approval policy to shell commands and file edits
+(`bashApproval.ts:81`, `toolEditApproval.ts:265`). Plan, proposal, retry and
+question requests are opened unconditionally and get the policy only in the CLI
+(`cli/runtime/approval/settleApprovals.ts:86-153`), so `yolo` and `never` mean
+different things on the GUI hosts; the authority ratchet allowlists the CLI as
+an evaluator. Bypasses are written from seven production sites across four
+layers, grants have no owners (hence the two grant defects above), and MCP,
+Codex, Claude and Wolfram calls are approved as `bash`. The policy is read at
+enqueue and the bypass at dispatch. `SessionApprovals` is a synchronous
+mutable island with a quadratic descendant walk.
+
+### Target
+
+```ts
+class Approvals extends Context.Service<
+  Approvals,
+  {
+    readonly state: SubscriptionRef.SubscriptionRef<ApprovalState>; // bypass by kind, parent edges, owned grants
+    readonly decide: (
+      runId: RunId,
+      payload: PermissionPayload,
+    ) => Effect.Effect<RequestDecision | 'present', never, ToolCall>; // every request kind
+    readonly grant: (
+      owner: GrantOwner,
+      runId: RunId,
+      kinds: readonly BypassKind[],
+    ) => Effect.Effect<void>; // revoke restores
+  }
+>()('@texra/session/Approvals') {}
+```
+
+`openRequest` calls `decide` first, so every host only presents. `ToolGuard`
+gains `confirm` and `external` kinds beside `bash`, `requiresApproval` goes
+back to filtering only what is offered, and a `toolCall` request kind replaces
+approving MCP calls as shell. `approval.policy` rows follow `state`. It lives
+in the existing session entry (no new lifetime) and keeps `withPerKeyLane`.
+
+### PRs
+
+1. The approval defects above, plus reading the policy inside the lane.
+2. The policy decided for every request kind at `openRequest`; delete the
+   CLI's evaluators and narrow the ratchet. Needs decision 7.
+3. Extend the ratchet to bypass writes; the host launch and the goal grant
+   through `grant`.
+4. Guard kinds and the `toolCall` request kind. Needs an owner ruling under
+   the `defineTool` freeze amendment.
+5. `ApprovalState` as a `SubscriptionRef`, with move 6's plane.
+6. `StagedEdits` as a scope per request, shared with move 5 PR 3.
+
+## Move 10: a run's input belongs to its run entry
+
+### Current state
+
+The rows decide a run's state; what the process holds decides only which
+fiber is running it. Beside `RunRegistry`'s entry, the follow-up queue
+(`ToolUseFollowUpQueueManager.ts`, 729 lines) keeps its own lease kinds
+(flow, child, recovery), an adopted claim, pending releases and observer sets:
+a second in-process owner of the same question, with 31 manual lease hand-offs
+across 6 files. Wakes go through the host `AgentResume` port, which the SDK
+and the non-chat CLI answer `false`, so an automatic wake there always fails.
+Resume is wholly uninterruptible, so cancellation is a hand-polled predicate
+at 33 sites in 10 files. The CLI keeps follow-ups typed after Ctrl-C in host
+memory and auto-resumes; the GUI refuses the same input.
+
+### Target
+
+```ts
+interface RunEntry {
+  // existing fields…
+  readonly inbox?: RunInbox; // exists iff the generation's fiber or activation does
+}
+class RunInbox extends Context.Service<
+  RunInbox,
+  {
+    readonly take: Effect.Effect<FollowUpBatch | null>;
+    readonly hasQueued: Effect.Effect<boolean>;
+    readonly consume: (s: RunState, b: FollowUpBatch) => Effect.Effect<ConsumedFollowUps, Error>;
+  }
+>()('@texra/session/RunInbox') {}
+
+// on Runs
+deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'live' | 'resume' }):
+  Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>;
+```
+
+`deliver` appends `followup.queued` through the publisher; a live entry is
+notified, and a resumable one is woken by `Runs.run({ _tag: 'Resume' })`
+forked into the session scope, with no host port. Resume becomes interruptible
+with `acquireRelease` on its recovery lease. The inbox is keyed on the fiber,
+not the claim (liveness note §2.5).
+
+### PRs
+
+1. The follow-up defects above, and the stale "wait node" wording.
+2. Re-offer an unsettled native-child turn on resume.
+3. Interruptible resume; delete the cancellation predicates (after move 3 PR 3).
+4. The inbox in the generation's scope; delete the flow and child lease kinds.
+5. `Runs.deliver` and core wakes; delete the recovery lease, the adopted
+   claim and the wake half of `AgentResume` (after move 3 PR 4).
+6. After decision 8: follow-ups to a stopped run admitted in core; delete the
+   CLI buffer.
+7. `onRelease` and `onSent` become scoped subscriptions over the kernel's
+   pending set (after move 1).
+
+Estimated: the manager drops to about 300 lines (inference).
+
+## Move 11: the agent catalog is a process service that runs pin
+
+### Current state
+
+The catalog is a set of module variables (`agentRegistry.ts:63-90`) with
+synchronous readers at 19 sites and 22 defensive `loadAgents` calls.
+Invalidation is ad hoc per host, and only the extension watches the agent
+directories, although the published docs promise live rescan
+(`custom-agents.md:244`). The scanner validates a partial schema and does its
+own inheritance, the launch loader re-reads and re-resolves the YAML, and a
+third parse serves the creator wizard, so an agent can appear in the dropdown
+and fail at launch. Resume re-reads the definition live while the composition
+is pinned. `AgentDirectories` is built three ways.
+
+### Target
+
+```ts
+type RemoteStatus = Data.TaggedEnum<{
+  NotLoaded: {};
+  SignedOut: {};
+  Loaded: { at: number };
+  Failed: { cause: unknown };
+}>;
+interface ResolvedAgent {
+  entry: AgentEntry;
+  setting: AgentSetting;
+  prompt: AgentPrompt;
+  digest: string;
+}
+class AgentCatalog extends Context.Service<
+  AgentCatalog,
+  {
+    readonly state: SubscriptionRef.SubscriptionRef<{
+      agents: ReadonlyMap<AgentKey, ResolvedAgent>;
+      issues: readonly AgentScanIssue[];
+      remote: RemoteStatus;
+    }>;
+    readonly refresh: (o: {
+      remote: 'keep' | 'fetch' | 'drop';
+    }) => Effect.Effect<void, AgentCatalogLoadError>;
+    readonly resolve: (
+      req: AgentLaunchRef,
+    ) => Effect.Effect<ResolvedAgent, AgentNotFound>;
+  }
+>()('@texra/agent/AgentCatalog') {}
+```
+
+A scoped layer in move 4's graph: an initial load, then a `DirectoryWatch` host
+port (VS Code watcher or `FileSystem.watch`) debounced into `refresh`. The
+scanner becomes the one validating loader. Runs record the resolved setting on
+the snapshot and resume from it. Post-auth invalidation stays per host, as
+ruled.
+
+### PRs
+
+1. The agent defects above.
+2. Remote status in the existing state, no API change.
+3. One validating loader; delete the launch loader's inheritance walk.
+4. `AgentCatalog` in the process graph; delete the 22 loads, the extension's
+   manager and the plugin-directory slot; watchers on every host.
+5. Pin the definition on the snapshot. Needs decision 10.
+6. Retire the creator wizard in favour of the cross-host `creator` agent.
+   Needs decision 11.
+
+## Move 12: one application-state plane
+
+### Current state
+
+The accepted current-value decision (2026-09-22) has landed no code: there
+are zero hits for `current_value`, the `state.value.set` arm and
+`borrowsClaim` remain, and eight format bumps since then did not carry it.
+Project app-state writes therefore still append to the session's own event
+table through `Database.appendAll`, outside the publisher
+(`appStateStore.ts:56-62`), and every session-vocabulary bump resets global
+settings (the defect above). One catalog row can have three homes: the ten
+`WORKTREE_SHARED_KEYS` go to the global database on the extension, the
+Electron profile database on desktop, and the project database on the CLI; the
+26 `globalState` rows split desktop from the other hosts. The global databases
+run a 250 ms poll nobody reads, and the desktop project lists write two rows
+non-atomically. There are 21 raw `get<T>` casts of persisted state.
+
+### Target
+
+```ts
+export class CurrentValues extends Context.Service<
+  CurrentValues,
+  {
+    get<F extends Family>(
+      f: F,
+      key: string,
+    ): Effect.Effect<Value<F> | undefined, DatabaseReadFailed>;
+    modify<F extends Family, A>(
+      f: F,
+      key: string,
+      change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
+    ): Effect.Effect<A, DatabaseWriteFailed>; // one BEGIN IMMEDIATE
+    readonly movedAside: StoreMovedAside | null; // reported by every host
+  }
+>()('@texra/session/CurrentValues') {}
+```
+
+The table carries its own stamp, separate from `SESSION_EVENT_FORMAT`.
+`SettingSlots` gains a `repoState` slot, so the catalog is the only router of a
+key on every host. One global root for `AppState`.
+
+### PRs
+
+1. Every host reports every moved-aside store and names settings; prune old
+   copies.
+2. One write for the desktop lists; no poll on the global databases.
+3. `CurrentValues` with its own stamp on the next forced bump; retire
+   `state.value.set` and `borrowsClaim` (lands the decision and move 1 PR 6).
+4. After decision 12: desktop `AppState` onto the global database, in the same
+   bump.
+5. The `repoState` slot replaces `WORKTREE_SHARED_KEYS`; the CLI goes through
+   it.
+6. Schema-checked reads for the raw casts.
+
+### Rulings
+
+**Amend** the current-value decision's shared-stamp sentence (as move 1 also
+needs). **Keep** `EFF-ADOPT-config-provider` (settings stay synchronous) and
+`RT-corrupt-record-tag` (values decode at the database boundary).
+**Ask** for the call the archived global-database note left to the owner (two
+global roots on desktop).
+
+## Move 13: hosts are scoped programs that react to facts
+
+### Current state
+
+Move 4 gives the process a graph, but nothing owns the lifetimes inside a
+host. The desktop's `createWindow` is one closure of about 1,380 lines
+(`desktop/main/index.ts:243-1621`); its teardown is a synchronous
+`DisposableStore` that forks `Scope.close` without awaiting it, and quit
+resumes while those closes may still run. Per-window work runs as root
+fibers no window owns (33 `runFork` calls in the package). The extension
+reaches `ProgressViewProvider` through a static singleton from five sites,
+one of which already holds the handle. The CLI chat keeps its own root-run
+slot machine with flag objects and five unsafe `Deferred`s, re-implementing
+what `Run` will own. Output presentation (opening files, the PDF, the
+"missing outputs" dialog) runs inside every documents run, children
+included, so a workflow-script fan-out can open files and dialogs on desktop
+for each child (inference). The host-neutral controllers still carry
+`mainView` and `progress` names.
+
+### Target
+
+- `openDesktopWindow(ports): Effect<void, E, Scope | ProcessServices>` and
+  `bindProject(project): Effect<ProjectBinding, never, Scope>`; quit awaits the
+  window scope.
+- The extension builds its view provider in the activation scope and hands it
+  to collaborators; both statics go.
+- The CLI chat's slot becomes `SubscriptionRef<Option<Run>>`; cancel is
+  `run.interrupt`.
+- Presentation reacts to facts: a scoped `attachPresentation(session)` reads
+  `output.produced` for root or focused runs and applies the host's policy;
+  the documents plugin only commits facts.
+
+### PRs
+
+1. The host defects above.
+2. Delete the two singletons.
+3. Desktop window and project binding as scopes; quit awaits them.
+4. Split `createWindow` along its seams (auth, project navigation, bindings,
+   settings attach, IPC routes) into scoped modules; lower the budget.
+5. Presentation from facts. Argue against the one-run-program parity table's
+   placement of presentation in `afterTurn`; root-run behaviour stays the same.
+6. Controller renames into `controllers/session`, `launch` and `catalog`, with
+   no shims (the VS Code ids stay).
+7. After move 3 PR 4: the CLI slot on `Run`.
+
 ## Withdrawn
 
 These were in the first draft and did not survive the checks:
@@ -776,8 +1263,9 @@ These were in the first draft and did not survive the checks:
   listing. The SSOT survey already rejects tying resume correctness to display
   policy.
 - **Every write is a command.** Claims, GC and the SQL write invariants stay
-  in SQL. Only session-event appends must go through the publisher, and
-  `removeRun` is the only one that does not.
+  in SQL. Only session-event appends must go through the publisher. Two paths
+  do not: `removeRun` (fixed in the defects) and project app-state rows through
+  `appendAll`, which the current-value table removes (move 12).
 - **Plugin-supplied run drivers and plugin-owned documents or child runs.**
   The plugin note rules "no task kinds" in v1; child runs and the documents
   category are structurally core.
@@ -804,14 +1292,31 @@ These were in the first draft and did not survive the checks:
    every host?
 6. `beforeSessionsClose` as a named plugin hook, or a drain layer in the
    process graph that asks plugin services for their drains?
+7. What do `yolo` and `never` do for plan, proposal, retry and question
+   requests, on every host? Move 9 PR 2 applies the answer in core.
+8. May a follow-up typed into a stopped, resumable run be admitted and resume
+   it on every host (the CLI does this today in host memory), or refused
+   everywhere?
+9. Guard kinds on the tool contract (move 9 PR 4) touch the frozen
+   `defineTool` contract: allowed?
+10. Does a run pin its agent definition the way it pins its composition, so
+    resume uses the recorded setting?
+11. Does the creator wizard give way to the cross-host `creator` agent?
+12. One global root for application state on desktop, instead of the Electron
+    profile database?
+13. Does output presentation move out of the run and into the hosts
+    (move 13 PR 5)?
 
 ## Suggested order
 
-1. The defect PRs (days).
-2. In parallel: move 7 PRs 1–3 (lifecycle bugs), move 6 PRs 1–3, move 5 PRs
-   1–2, move 3 PRs 1–3, move 2 PR 1.
-3. After decisions 1–3: moves 1, 2 and 4.
-4. Then move 3 PR 4, move 6 PRs 4–6, move 7 PRs 4–7, move 5 PRs 3–7.
+1. The security fix reported separately, then the defect PRs from both
+   surveys (days).
+2. In parallel: move 7 PRs 1–3 (lifecycle bugs), move 8 PRs 1–3, move 6 PRs
+   1–3, move 5 PRs 1–2, move 3 PRs 1–3, move 2 PR 1, move 12 PRs 1–2, move 13
+   PRs 1–4, move 11 PRs 1–3.
+3. After decisions 1–3 and 12: moves 1, 2, 4 and 12 PR 3 onward.
+4. Then move 3 PR 4, move 10, move 6 PRs 4–6, move 7 PRs 4–7, move 8 PRs 4–9,
+   move 9 (after decisions 7 and 9), move 11 PR 4 onward, move 5 PRs 3–7.
 5. Last: move 6 PR 7, once the kernel has absorbed the plane.
 
 ## What is open
