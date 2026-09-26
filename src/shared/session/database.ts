@@ -200,9 +200,8 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-    /** {@link readAll} narrowed to display rows in the store: a tail never
-     *  decodes a run's private records (ledger messages, snapshots, tool
-     *  results) only to filter them out. Same bounds as `readAll`. */
+    /** {@link readAll} filtered to display types in SQL: a tail never decodes
+     *  a run's private records only to drop them. */
     readonly readDisplay: (
       fromCommit: CommitOrdinal,
     ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;

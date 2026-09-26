@@ -89,7 +89,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  isDisplaySessionEvent,
   interruptedWorkflowCall,
   ownerIdentity,
   RUN_OUTCOME,
