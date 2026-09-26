@@ -5,7 +5,6 @@ import * as nodePath from 'node:path';
 import { z } from 'zod';
 import {
   Cause,
-  Data,
   Effect,
   Exit,
   Fiber,
@@ -69,6 +68,7 @@ import { childRunDescription, createChildRun } from './childRun';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
+import { WorkflowScriptReportMissing } from './workflowScriptRun';
 import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
@@ -204,11 +204,6 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
   }
 });
 
-/** A waited workflow run that settled without the report it owes its caller. */
-class WorkflowScriptReportMissing extends Data.TaggedError(
-  'WorkflowScriptReportMissing',
-)<{ readonly message: string }> {}
-
 function workflowScriptToolError(
   error: unknown,
   scriptPath: string,
@@ -274,11 +269,7 @@ function executeWorkflowScriptTool(
       // The schema's exactly-one refinement guarantees source here.
       script = input.script as string;
       const submissionId =
-        parent.toolCallId ??
-        deriveRunId({
-          parentRunId,
-          script,
-        });
+        parent.toolCallId ?? deriveRunId({ parentRunId, script });
       scriptPath = yield* persistWorkflowScript(script, submissionId, parent);
     }
 
