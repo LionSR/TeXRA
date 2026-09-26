@@ -45,7 +45,9 @@ can be ratified.
 
 ## The four asks, re-mapped to the current pin
 
-1. **Identify the areas.** Unchanged from the 2026-09-24 map and re-confirmed:
+1. **Identify the areas.** Re-confirmed against the 2026-09-24 map, and extended
+   where this pass found paths that map omitted (the Claude Code SDK route and
+   the settings-view consent turn, both below):
    - Agent core: `src/agent/core/` (`definition/`, `state/`, `tools/`); run
      programs `@agent/runtime/loop/{toolUse,reflection}.ts` over the run ledger;
      the run loop's model call is `@agent/runtime/ModelInvoker.ts` (with
@@ -164,10 +166,17 @@ can be ratified.
    `installProcessRuntime` but installs no sink, so an embedder of
    `@texra-ai/agent` gets whatever process-global sink happens to be set, cannot
    inject its own through `Sessions.layer`/`AgentPlatform`, and two embedders in
-   one process share one global. The fix is already designed (the
+   one process share one global. The designed step (the
    `diagnosticsLayer({ write, trusted, minimumLogLevel })` parameter beside the
-   existing `lean`/`usageLog`/`globalDatabase` layer params); it is human-owned
-   because it is the expensive step (it rewrites the kernel log-capture seam).
+   existing `lean`/`usageLog`/`globalDatabase` layer params) removes the global,
+   which fixes the cross-embedder **sharing**; it is human-owned because it is
+   the expensive step (it rewrites the kernel log-capture seam). It does not by
+   itself deliver embedder **injection** through the public boundary: that
+   parameter is on the internal `installProcessRuntime`, and
+   `packages/agent/src/effect/runtime.ts:236-249` still chooses the layer itself
+   while the public `AgentPlatform`/`Sessions.layer` take no diagnostics field —
+   so exposing injection is a further, not-yet-designed public-API step on top of
+   the sink→Layer conversion.
    Once it lands, `effectDiagnostics.ts` merges into the sink module — and the
    rewrite must preserve **both** its production callers: `sessionLayer.ts:1127`
    (the process runtime) and `packages/extension/src/extension.ts:498`, the
