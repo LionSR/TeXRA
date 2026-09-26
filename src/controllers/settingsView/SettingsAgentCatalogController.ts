@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import type { AgentRosterController } from '@agent/roster/AgentRosterController';
@@ -7,7 +7,7 @@ import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { TeamRosterCatalog } from '@common/teams/TeamRoster';
-import { type StateStore, withStateKeyLane } from '@platform/interfaces';
+import type { StateStore } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
@@ -61,17 +61,6 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           [],
         ),
       );
-    });
-  }
-
-  /** Returns raw records so catalog writes preserve unparsed data. */
-  private getCustomPresetRecords() {
-    return Effect.gen({ self: this }, function* () {
-      const raw = yield* this.deps.workspaceState.get<unknown>(
-        WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-        [],
-      );
-      return Array.isArray(raw) ? raw : [];
     });
   }
 
@@ -193,32 +182,32 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
       };
 
       return yield* this.deps.workspaceState
-        .update(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, [
-          ...(yield* this.getCustomPresetRecords()),
-          preset,
-        ])
+        .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+          Result.succeed([...presetRecords(stored), preset]),
+        )
         .pipe(Effect.as(preset));
-    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
+    });
   }
 
   deleteCustomPreset(presetId: string) {
     return Effect.gen({ self: this }, function* () {
-      const records = yield* this.getCustomPresetRecords();
-      const presets = parseAgentModePresets(records);
-      const target = presets.find((preset) => preset.id === presetId);
+      const target = yield* this.getCustomPreset(presetId);
       if (!target) return null;
 
       return yield* this.deps.roster
         .removeTeamPreset(presetId, () =>
-          this.deps.workspaceState.update(
-            WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-            records.filter(
-              (record) => !isObject(record) || record.id !== presetId,
-            ),
-          ),
+          this.deps.workspaceState
+            .modify(WorkspaceStateKey.CUSTOM_AGENT_PRESETS, (stored) =>
+              Result.succeed(
+                presetRecords(stored).filter(
+                  (record) => !isObject(record) || record.id !== presetId,
+                ),
+              ),
+            )
+            .pipe(Effect.asVoid),
         )
         .pipe(Effect.as(target));
-    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
+    });
   }
 
   /**
@@ -312,4 +301,10 @@ function builtInRootStandIn(
   ) && agentMatchesIdentifier(standIn, identifier)
     ? standIn
     : undefined;
+}
+
+/** The stored preset records as they are, unparsed, so a catalog write
+ *  preserves records this version cannot read. */
+function presetRecords(stored: unknown): unknown[] {
+  return Array.isArray(stored) ? stored : [];
 }

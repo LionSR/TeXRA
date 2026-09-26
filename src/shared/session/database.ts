@@ -12,6 +12,7 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   JsonValue,
+  PersistedJsonValue,
   CommitOrdinal,
   DisplaySessionEvent,
   RunId,
@@ -240,6 +241,17 @@ export class Database extends Context.Service<
     readonly readAppStateKey: (
       key: string,
     ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
+    /** Change one key from its latest value while the write transaction is
+     *  held; a refusal writes nothing. */
+    readonly updateAppStateKey: <E>(
+      key: string,
+      change: (
+        current: JsonValue | undefined,
+      ) => Result.Result<PersistedJsonValue, E>,
+    ) => Effect.Effect<
+      Result.Result<PersistedJsonValue, E>,
+      DatabaseWriteFailed
+    >;
     readonly readUpdateCheck: (
       host: UpdateCheckHost,
     ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
@@ -346,6 +358,7 @@ export class GlobalDatabase extends Context.Service<
     Context.Service.Shape<typeof Database>,
     | 'appendAll'
     | 'readAppStateKey'
+    | 'updateAppStateKey'
     | 'readInputHistory'
     | 'appendInputHistory'
     | 'readDesktopProjects'

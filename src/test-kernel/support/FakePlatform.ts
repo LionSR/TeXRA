@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Scope } from 'effect';
+import { Effect, Result, Scope } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -340,6 +340,19 @@ export class FakeStateStore implements StateStore {
       } else {
         this.values.set(key, value);
       }
+    });
+  }
+
+  modify<T, E>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E> {
+    return Effect.suspend(() => {
+      const result = change(this.values.get(key));
+      if (Result.isFailure(result)) return Effect.fail(result.failure);
+      if (result.success === undefined) this.values.delete(key);
+      else this.values.set(key, result.success);
+      return Effect.succeed(result.success);
     });
   }
 }

@@ -872,6 +872,26 @@ export const databaseLayer = (
             }),
           ),
         readAppStateKey: (key) => query(readAppStateKey(key)),
+        updateAppStateKey: (key, change) =>
+          transact(
+            Effect.gen(function* () {
+              const result = change(yield* readAppStateKey(key));
+              if (Result.isFailure(result)) return result;
+              const aggregateId = qualifyAggregateId('app-state', key);
+              const state = {
+                key: 'app-state',
+                value: result.success,
+              } as const;
+              const set = {
+                type: 'state.value.set',
+                aggregateId,
+                state,
+              } as const;
+              const at = yield* Clock.currentTimeMillis;
+              yield* appendPrepared([prepareEventDraft(set)], at);
+              return result;
+            }),
+          ),
         readUpdateCheck: (host) => query(readUpdateCheck(host)),
         recordUpdateCheck: (host, change) =>
           transact(

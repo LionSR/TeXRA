@@ -1,8 +1,8 @@
-import { Data, Effect } from 'effect';
+import { Data, Effect, Result } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
-import { StateWriteFailed, withStateKeyLane } from '@platform/interfaces';
+import { StateWriteFailed } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -469,23 +469,25 @@ const EMPTY_MODEL_SELECTION: ModelSelection = {
 };
 
 /**
- * An unreadable stored selection is reported and read as the empty delta —
- * the defaults — without being rewritten: the next picker toggle re-encodes a
- * valid delta from the list shown.
+ * An unreadable stored selection reads as the empty delta — the defaults —
+ * with its error for the caller to report, and is not rewritten: the next
+ * picker toggle re-encodes a valid delta from the list shown.
  */
-function readModelSelection(state: Pick<StateStore, 'get'>) {
-  return Effect.gen(function* () {
-    const stored = yield* state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
-    if (stored === undefined) return EMPTY_MODEL_SELECTION;
-    const parsed = ModelSelectionSchema.safeParse(stored);
-    if (parsed.success) return parsed.data;
-    yield* Effect.logWarning(
-      `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
-      z.prettifyError(parsed.error),
-    );
-    return EMPTY_MODEL_SELECTION;
-  });
+function selectionOf(stored: unknown) {
+  const parsed =
+    stored === undefined ? undefined : ModelSelectionSchema.safeParse(stored);
+  return parsed?.success === false
+    ? { selection: EMPTY_MODEL_SELECTION, invalid: parsed.error }
+    : { selection: parsed?.data ?? EMPTY_MODEL_SELECTION };
 }
+
+const reportInvalid = (invalid: z.ZodError | undefined) =>
+  invalid === undefined
+    ? Effect.void
+    : Effect.logWarning(
+        `Invalid stored ${GlobalStateKey.MODEL_SELECTION}; showing the default models.`,
+        z.prettifyError(invalid),
+      );
 
 /**
  * Retired models drop out here, so no startup pass sweeps persisted state.
@@ -517,7 +519,10 @@ function enabledOrDefaults(selection: ModelSelection): readonly string[] {
  */
 export function getEnabledModels(state: Pick<StateStore, 'get'>) {
   return Effect.gen(function* () {
-    return enabledOrDefaults(yield* readModelSelection(state));
+    const stored = yield* state.get<unknown>(GlobalStateKey.MODEL_SELECTION);
+    const { selection, invalid } = selectionOf(stored);
+    yield* reportInvalid(invalid);
+    return enabledOrDefaults(selection);
   });
 }
 
@@ -533,62 +538,57 @@ export function setModelEnabled(input: {
   readonly enabled: boolean;
   readonly state: StateStore;
 }) {
-  return Effect.gen(function* () {
-    const state = input.state;
-    if (input.enabled && isRetiredModel(input.model)) {
-      // The sibling refusal below is typed for the same reason: the guard runs
-      // when the method is called, and a throw here would escape the channel
-      // this signature declares.
-      const message = `Model "${input.model}" is retired and cannot be enabled.`;
-      return yield* Effect.fail(
-        new StateWriteFailed({
-          key: GlobalStateKey.MODEL_SELECTION,
-          message,
-          cause: new Error(message),
-        }),
+  // Refusals are typed failures, never throws, so a UI can surface them.
+  const refuse = (message: string) =>
+    new StateWriteFailed({
+      key: GlobalStateKey.MODEL_SELECTION,
+      message,
+      cause: new Error(message),
+    });
+  if (input.enabled && isRetiredModel(input.model)) {
+    return Effect.fail(
+      refuse(`Model "${input.model}" is retired and cannot be enabled.`),
+    );
+  }
+  let invalid: z.ZodError | undefined;
+  // Edit the list the picker shows — including the all-defaults fallback — and
+  // re-encode the delta from it, so a write never acts on a hidden state. An
+  // explicit enable is recorded in `enabledExtras` even for a default, so it
+  // survives the model later leaving the curated defaults. A helper model
+  // disabled here is not rewritten: `getHelperModelName` checks it at read.
+  return input.state
+    .modify(GlobalStateKey.MODEL_SELECTION, (stored) => {
+      const read = selectionOf(stored);
+      invalid = read.invalid;
+      const others = enabledOrDefaults(read.selection).filter(
+        (model) => model !== input.model,
       );
-    }
-
-    // Edit the list the picker shows — including the all-defaults fallback — and
-    // re-encode the delta from it, so a write never acts on a hidden state. An
-    // explicit enable is recorded in `enabledExtras` even for a default, so it
-    // survives the model later leaving the curated defaults.
-    const selection = yield* readModelSelection(state);
-    const current = enabledOrDefaults(selection);
-    const others = current.filter((model) => model !== input.model);
-    const toggled = input.enabled ? [...others, input.model] : others;
-    const next: ModelSelection = {
-      enabledExtras: [
-        ...new Set([
-          ...selection.enabledExtras.filter((model) => toggled.includes(model)),
-          ...(input.enabled ? [input.model] : []),
-        ]),
-      ],
-      disabledDefaults: DEFAULT_MODELS.filter(
-        (model) => !toggled.includes(model),
-      ),
-    };
-    const nextEnabled = enabledModelsOf(next);
-    if (nextEnabled.length === 0) {
-      // A refusal, not a defect: the caller is told in the channel its signature
-      // declares, so a UI that disables the last model can surface it instead of
-      // crashing the program that composed this.
-      const message =
-        'At least one model must stay enabled. Enable another model before disabling this one.';
-      return yield* Effect.fail(
-        new StateWriteFailed({
-          key: GlobalStateKey.MODEL_SELECTION,
-          message,
-          cause: new Error(message),
-        }),
-      );
-    }
-    // A helper model disabled here is not rewritten: the helper choice counts
-    // only while enabled, which `getHelperModelName` enforces at read.
-    return yield* state
-      .update(GlobalStateKey.MODEL_SELECTION, next)
-      .pipe(Effect.as(nextEnabled));
-  }).pipe(withStateKeyLane(GlobalStateKey.MODEL_SELECTION));
+      const toggled = input.enabled ? [...others, input.model] : others;
+      const next: ModelSelection = {
+        enabledExtras: [
+          ...new Set([
+            ...read.selection.enabledExtras.filter((model) =>
+              toggled.includes(model),
+            ),
+            ...(input.enabled ? [input.model] : []),
+          ]),
+        ],
+        disabledDefaults: DEFAULT_MODELS.filter(
+          (model) => !toggled.includes(model),
+        ),
+      };
+      return enabledModelsOf(next).length > 0
+        ? Result.succeed(next)
+        : Result.fail(
+            refuse(
+              'At least one model must stay enabled. Enable another model before disabling this one.',
+            ),
+          );
+    })
+    .pipe(
+      Effect.map(enabledModelsOf),
+      Effect.ensuring(Effect.suspend(() => reportInvalid(invalid))),
+    );
 }
 
 /**
