@@ -5,14 +5,11 @@ import { createReadStream } from 'node:fs';
 import * as path from 'node:path';
 
 import {
-  Cause,
   Data,
   Duration,
   Effect,
-  Exit,
   FileSystem,
   PlatformError,
-  Ref,
   Scope,
   Stream,
 } from 'effect';
@@ -86,21 +83,6 @@ const recorderFailure =
  */
 const SOX_SHUTDOWN_TIMEOUT_MS = 5000;
 
-/** A take in progress: sox lives exactly as long as `scope`. */
-interface ActiveRecording {
-  readonly scope: Scope.Closeable;
-  readonly handle: ChildProcessHandle;
-  readonly path: string;
-}
-
-/**
- * The one recorder of this process. Every entry point — a take's start and
- * stop, sox exiting on its own, and the host shutdown hook — claims or
- * releases the microphone through this cell, so the single-recorder invariant
- * holds across all of them.
- */
-const activeRecording = Ref.makeUnsafe<ActiveRecording | null>(null);
-
 /** Resolve the sox executable command from config or auto-detection. */
 const resolveSoxCommand = Effect.fnUntraced(function* (
   roots: WorkspaceRoots,
@@ -141,56 +123,21 @@ const resolveSoxCommand = Effect.fnUntraced(function* (
 });
 
 /**
- * Log how sox ended and release the recorder if this take still holds it.
- * Runs detached from whoever started the take: sox outlives the call, and
- * its own exit is what frees the microphone when no Stop ever arrives. A take
- * that Stop or the shutdown hook already released was ended on purpose; the
- * cell, not the exit signal, says which.
- */
-function watchRecorderExit(recording: ActiveRecording): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    const exit = yield* Effect.exit(recording.handle.exitCode);
-    const owned = (yield* Ref.get(activeRecording)) === recording;
-    if (Exit.isSuccess(exit) && exit.value === 0) {
-      yield* Effect.logInfo('Recording process completed successfully');
-    } else if (!owned) {
-      yield* Effect.logInfo('Recording stopped intentionally');
-    } else if (Exit.isSuccess(exit)) {
-      yield* Effect.logError(`Sox process exited with code ${exit.value}`);
-    } else {
-      yield* Effect.logError(
-        `Sox process error: ${getSdkErrorMessage(Cause.squash(exit.cause))}`,
-      );
-    }
-    yield* Ref.update(activeRecording, (current) =>
-      current === recording ? null : current,
-    );
-    yield* Scope.close(recording.scope, Exit.void);
-  }).pipe(withLogChannel(CHANNEL));
-}
-
-/**
- * Start recording audio from the microphone under `roots`' storage and answer
- * with the file the take is captured into. The recorder is claimed only once
- * every step that can fail has succeeded, so no failure path has state to undo.
+ * Start recording audio from the microphone under `roots`' storage: sox lives
+ * exactly as long as the caller's scope, whose close is the whole stop:
+ * SIGTERM so sox flushes the file, SIGKILL after SOX_SHUTDOWN_TIMEOUT_MS for
+ * a wedged sox, and a join on its exit, so the file is complete once the
+ * scope has closed. Answers with the file the take is captured into and the
+ * process handle, whose exit the caller watches.
  */
 export function startRecording(
   roots: WorkspaceRoots,
 ): Effect.Effect<
-  string,
+  { readonly path: string; readonly handle: ChildProcessHandle },
   AudioRecorderError,
-  FileSystem.FileSystem | ChildProcessSpawner
+  FileSystem.FileSystem | ChildProcessSpawner | Scope.Scope
 > {
   return Effect.gen(function* () {
-    if ((yield* Ref.get(activeRecording)) !== null) {
-      return yield* new AudioRecorderError({
-        message: 'Recording already in progress',
-      });
-    }
-
-    // Resolve sox and create the directory, then spawn the recorder. Nothing
-    // in either step has claimed the microphone yet, so a failure leaves no
-    // state to undo.
     const soxCommand = yield* resolveSoxCommand(roots);
     if (!soxCommand) {
       return yield* new AudioRecorderError({
@@ -223,7 +170,6 @@ export function startRecording(
       `Starting audio recording with sox: ${soxCommand.resolvedPath} ${soxArgs.join(' ')}`,
     ).pipe(withLogChannel(CHANNEL));
 
-    const scope = yield* Scope.make();
     const handle = yield* ChildProcess.make(
       soxCommand.command,
       [...soxCommand.args, ...soxArgs],
@@ -235,18 +181,10 @@ export function startRecording(
         detached: false,
         forceKillAfter: Duration.millis(SOX_SHUTDOWN_TIMEOUT_MS),
       },
-    ).pipe(
-      Scope.provide(scope),
-      recorderFailure('startRecording'),
-      Effect.onError((cause) => Scope.close(scope, Exit.failCause(cause))),
-    );
-    const started: ActiveRecording = { scope, handle, path: absPath };
-
-    yield* Ref.set(activeRecording, started);
-    yield* Effect.forkDetach(watchRecorderExit(started));
-    // sox's stderr, line by line, for as long as it runs; the take's scope
+    ).pipe(recorderFailure('startRecording'));
+    // sox's stderr, line by line, for as long as it runs; the caller's scope
     // ends it with the process.
-    yield* Effect.forkIn(
+    yield* Effect.forkScoped(
       handle.stderr.pipe(
         Stream.decodeText(),
         Stream.splitLines,
@@ -256,49 +194,23 @@ export function startRecording(
         ),
         withLogChannel(CHANNEL),
       ),
-      scope,
     );
-    return started.path;
-  });
-}
-
-/** Forcibly terminate the active recording process if one exists. */
-export function killActiveRecording(): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    const active = yield* Ref.getAndSet(activeRecording, null);
-    if (active) yield* Scope.close(active.scope, Exit.void);
+    return { path: absPath, handle };
   });
 }
 
 /**
- * Stop the current recording and hand back the file it captured.
- *
- * This is the termination step and it waits on nothing else: the recorder is
- * released and sox is stopped before the caller resolves the transcription
- * credential, so a slow, denied or failing keychain read can never leave the
- * microphone running. The captured file is validated here too, because "what
- * the take captured" is the answer this step owes its caller.
+ * Validate the file a stopped take captured. The recorder's scope has closed
+ * by the time this runs, so sox has exited and the file is complete; the
+ * caller stops the microphone before resolving the transcription credential,
+ * so a slow, denied or failing keychain read can never leave it running.
  */
-export function stopRecording(): Effect.Effect<
-  string,
-  AudioRecorderError,
-  FileSystem.FileSystem
-> {
+export function stopRecording(
+  recordingPath: string,
+): Effect.Effect<string, AudioRecorderError, FileSystem.FileSystem> {
   return Effect.gen(function* () {
-    const active = yield* Ref.getAndSet(activeRecording, null);
-    if (!active) {
-      return yield* new AudioRecorderError({
-        message: 'No active recording to stop',
-      });
-    }
-
-    // Closing the take's scope is the whole stop: SIGTERM so sox flushes the
-    // file, SIGKILL after SOX_SHUTDOWN_TIMEOUT_MS for a wedged sox, and a
-    // join on its exit, so the file is complete before it is read.
-    yield* Scope.close(active.scope, Exit.void);
-
     const fs = yield* FileSystem.FileSystem;
-    const size = yield* fs.stat(active.path).pipe(
+    const size = yield* fs.stat(recordingPath).pipe(
       Effect.map((info) => Number(info.size)),
       Effect.catchIf(absentReason, () => Effect.succeed(null)),
       recorderFailure('stopRecording'),
@@ -313,7 +225,7 @@ export function stopRecording(): Effect.Effect<
         message: 'Recording file is empty',
       });
     }
-    return active.path;
+    return recordingPath;
   });
 }
 
@@ -321,9 +233,9 @@ export function stopRecording(): Effect.Effect<
  * Transcribe a stopped recording with OpenAI. `credential` is the OpenAI
  * route the caller resolved, so it arrives as data rather than as a store
  * this function would have to read from. The recorder is already terminated
- * by the time this runs — it is {@link stopRecording} that owns the
- * microphone. Stale takes under the session's recordings directory are swept
- * by the host take fiber after a successful transcription.
+ * by the time this runs. Interrupting the call aborts the upload. Stale
+ * takes under the session's recordings directory are swept by the host take
+ * fiber after a successful transcription.
  */
 export function transcribeRecording(
   recordingPath: string,
@@ -333,16 +245,19 @@ export function transcribeRecording(
     // The transcription endpoint is an OpenAI SDK operation the llm package
     // does not model, so the client is built here — the one foreign call this
     // module wraps.
-    try: async () => {
+    try: async (signal) => {
       const client = new OpenAI({
         apiKey: credential.apiKey,
         baseURL: credential.endpoint,
       });
-      const result = await client.audio.transcriptions.create({
-        file: createReadStream(recordingPath),
-        model: 'gpt-4o-transcribe',
-        response_format: 'json',
-      });
+      const result = await client.audio.transcriptions.create(
+        {
+          file: createReadStream(recordingPath),
+          model: 'gpt-4o-transcribe',
+          response_format: 'json',
+        },
+        { signal },
+      );
       return result.text;
     },
     catch: ensureError,

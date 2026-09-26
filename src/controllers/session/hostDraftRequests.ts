@@ -1,8 +1,7 @@
 /** Shared draft operations and the process recorder's originating request. */
 import { Buffer } from 'node:buffer';
-import * as path from 'node:path';
 
-import { Deferred, Effect, FileSystem, Option } from 'effect';
+import { Deferred, Effect, Fiber, FileSystem } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
@@ -13,79 +12,25 @@ import { AppState } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { StorageFs } from '@platform/rootedFs';
 import { Secrets } from '@platform/secrets';
-import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import type { HostOutcome } from '@shared/session/sessionFrames';
 import {
-  killActiveRecording,
   recordingsDir,
   startRecording,
   stopRecording,
   transcribeRecording,
 } from '@tools/media/audio';
-import { THREE_DAYS_MS } from '@utils/config/constants';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   savePastedImageBuffer,
+  sweepStaleFiles,
   type PastedImageSaveFailed,
 } from '@utils/files/pastedImageUtils';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 const CHANNEL = 'HostDraftRequests';
-
-/**
- * Delete recordings older than three days under the session's recordings
- * directory. Never fails the transcription: every listing or unlink error is
- * warned with its cause, and one bad entry does not stop the rest of the sweep.
- */
-function cleanupOldRecordings(
-  roots: WorkspaceRoots,
-): Effect.Effect<void, never, FileSystem.FileSystem> {
-  return Effect.gen(function* () {
-    const directory = recordingsDir(roots);
-    const fs = yield* FileSystem.FileSystem;
-    const cutoff = Date.now() - THREE_DAYS_MS;
-    const names = yield* fs
-      .readDirectory(directory)
-      .pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
-        ),
-      );
-    yield* Effect.forEach(
-      names,
-      (name) => {
-        const filePath = path.join(directory, name);
-        return fs.stat(filePath).pipe(
-          Effect.flatMap((stats) => {
-            // The sweep it replaces filtered on the provider's type bits,
-            // where a symlink answers for its target and so counted as a file
-            // when it pointed at one. The follow above does the same job: a
-            // link to a file is swept by its target's age, a link to a
-            // directory is not swept at all.
-            if (stats.type !== 'File') return Effect.void;
-            const mtime = Option.match(stats.mtime, {
-              onNone: () => 0,
-              onSome: (modified) => modified.getTime(),
-            });
-            return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
-          }),
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Could not remove stale recording ${filePath}: ${toErrorMessage(error)}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        );
-      },
-      { concurrency: 'unbounded', discard: true },
-    );
-  });
-}
 
 type DraftRequest = Extract<
   HostRequest,
@@ -109,6 +54,8 @@ interface Take {
 /** One instance per host process, shared by its session request handlers. */
 export class HostDraftRequests {
   private take: Take | null = null;
+  /** The detached fiber of the latest take; {@link shutdown} interrupts it. */
+  private takeFiber: Fiber.Fiber<void> | null = null;
   private readonly listeners = new Set<(recording: Recording | null) => void>();
 
   /** Bind one session's requests, recorder level, and disposal together. */
@@ -199,6 +146,13 @@ export class HostDraftRequests {
     Deferred.doneUnsafe(take.settled, Effect.void);
   }
 
+  /** Host shutdown: answer the current take as cancelled and interrupt its
+   *  fiber, whose scope stops sox and joins its exit before this returns. */
+  readonly shutdown: Effect.Effect<void> = Effect.suspend(() => {
+    if (this.take) this.cancel(this.take.session);
+    return this.takeFiber ? Fiber.interrupt(this.takeFiber) : Effect.void;
+  });
+
   private readonly start = Effect.fn('HostDraftRequests.start')(function* (
     this: HostDraftRequests,
     session: SessionHandle,
@@ -225,7 +179,7 @@ export class HostDraftRequests {
     // Detached on purpose: the take belongs to this recorder, not to the
     // Start request. Start can be answered early (Cancel) while the take
     // still has to wait for the microphone and kill it; `release` ends it.
-    yield* Effect.forkDetach(this.runTake(take));
+    this.takeFiber = yield* Effect.forkDetach(this.runTake(take));
     return yield* Deferred.await(take.result);
   });
 
@@ -237,30 +191,48 @@ export class HostDraftRequests {
   ) {
     const takeProgram: Effect.Effect<
       HostOutcome,
-      Rejected,
+      Rejected | Cancelled,
       Secrets | FileSystem.FileSystem | ChildProcessSpawner
     > = Effect.gen(function* () {
       // Transcription binds its OpenAI credential against the process
       // secret store the host root provides.
       const secrets = yield* Secrets;
-      // The recorder writes under the take's own session storage, so its
-      // roots travel with the call instead of through a roots scope the
-      // detached take fiber would have to stay inside.
-      yield* startRecording(take.session.roots).pipe(
-        Effect.mapError((error) => new Rejected({ reason: error.message })),
+      // sox lives in this block's scope. Its close (SIGTERM, then a join on
+      // the exit) is the stop, so the microphone is off before anything
+      // below reads a credential. The recorder writes under the take's own
+      // session storage, so its roots travel with the call.
+      const capturedPath = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const recorder = yield* startRecording(take.session.roots).pipe(
+            Effect.mapError((error) => new Rejected({ reason: error.message })),
+          );
+          // sox exiting before Stop or Cancel ends the take, a clean exit
+          // included: the microphone is no longer recording.
+          yield* Effect.raceFirst(
+            Deferred.await(take.settled),
+            recorder.handle.exitCode.pipe(
+              Effect.mapError((error) => error.message),
+              Effect.flatMap((code) =>
+                Effect.fail(`sox exited with code ${code}`),
+              ),
+              Effect.mapError(
+                (reason) =>
+                  new Rejected({
+                    reason: `Recording stopped unexpectedly: ${reason}`,
+                  }),
+              ),
+              Effect.tapError((error) => Effect.logWarning(error.reason)),
+            ),
+          );
+          if (take.cancelled) {
+            return yield* new Rejected({
+              reason: 'The recording was cancelled.',
+            });
+          }
+          return recorder.path;
+        }),
       );
-      yield* Deferred.await(take.settled);
-      if (take.cancelled) {
-        yield* killActiveRecording();
-        return yield* new Rejected({
-          reason: 'The recording was cancelled.',
-        });
-      }
-      // The recorder is terminated before anything else is read: sox gets
-      // SIGTERM and the module's recording state resets here, so a slow,
-      // denied or failing credential read below cannot delay the kill or
-      // leave the microphone running when the take is rejected.
-      const recordingPath = yield* stopRecording().pipe(
+      const recordingPath = yield* stopRecording(capturedPath).pipe(
         Effect.mapError((error) => new Rejected({ reason: error.message })),
       );
       // The transcription endpoint is an OpenAI SDK operation the llm
@@ -271,24 +243,36 @@ export class HostDraftRequests {
       // roots travel with each call — so the endpoint read runs in the
       // calling frame, and the resolved credential reaches the
       // transcription as data.
-      const credential = yield* resolveRouteCredential(
-        take.session.roots,
-        MODEL_CONFIGS['gpt4o'],
-        { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
-        secrets,
-      ).pipe(
-        Effect.mapError((error) => new Rejected({ reason: error.message })),
-      );
-      const text = yield* transcribeRecording(recordingPath, credential).pipe(
-        Effect.mapError((error) => new Rejected({ reason: error.message })),
-      );
-      // The sweep is rooted by the take's storage root, as data, rather than
-      // by an ambient read of the calling fiber's roots.
-      yield* cleanupOldRecordings(take.session.roots);
-      return { kind: 'text', text };
+      const postStop = Effect.gen(function* () {
+        const credential = yield* resolveRouteCredential(
+          take.session.roots,
+          MODEL_CONFIGS['gpt4o'],
+          { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
+          secrets,
+        ).pipe(
+          Effect.mapError((error) => new Rejected({ reason: error.message })),
+        );
+        const text = yield* transcribeRecording(recordingPath, credential).pipe(
+          Effect.mapError((error) => new Rejected({ reason: error.message })),
+        );
+        // The sweep is rooted by the take's storage root, as data, rather
+        // than by an ambient read of the calling fiber's roots.
+        yield* sweepStaleFiles(
+          yield* FileSystem.FileSystem,
+          recordingsDir(take.session.roots),
+        );
+        return { kind: 'text', text } satisfies HostOutcome;
+      });
+      // A Cancel after Stop answers Start and interrupts the upload here.
+      // The waiter goes first so a cancel that already landed wins before
+      // postStop starts.
+      return yield* Effect.raceFirst(Deferred.await(take.result), postStop);
     });
     // A cancelled take already has its answer; `into` leaves it in place.
+    // The take's warnings (an unexpected sox exit, the stale-take sweep)
+    // stay on this channel.
     yield* takeProgram.pipe(
+      withLogChannel(CHANNEL),
       Deferred.into(take.result),
       Effect.ensuring(Effect.sync(() => this.release(take))),
     );

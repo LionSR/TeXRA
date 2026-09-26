@@ -26,13 +26,25 @@ const audio = vi.hoisted(() => ({
   startRecording: vi.fn(),
   stopRecording: vi.fn(),
   transcribeRecording: vi.fn(),
-  killActiveRecording: vi.fn(() => Effect.void),
   recordingsDir: vi.fn(
     (roots: { storage: string }) => `${roots.storage}/recordings`,
   ),
 }));
 
 vi.mock('@tools/media/audio', () => audio);
+
+/** A recorder double: the take's path once `startup` settles, a sox whose
+ *  exit is `exitCode`, and `onStop` run when the take's scope stops it. */
+const recorder = (
+  startup: Effect.Effect<string>,
+  exitCode: Effect.Effect<number> = Effect.never,
+  onStop: Effect.Effect<void> = Effect.void,
+) =>
+  Effect.gen(function* () {
+    const path = yield* startup;
+    yield* Effect.addFinalizer(() => onStop);
+    return { path, handle: { exitCode } };
+  });
 vi.mock('@agent/runtime/textEnhancement', () => ({
   polishTextWithAI: vi.fn(),
 }));
@@ -72,9 +84,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const startup = yield* Deferred.make<string>();
-      audio.startRecording.mockReturnValue(Deferred.await(startup));
-      audio.stopRecording.mockReturnValue(
-        Effect.succeed('/papers/first/recordings/take.wav'),
+      audio.startRecording.mockReturnValue(recorder(Deferred.await(startup)));
+      audio.stopRecording.mockImplementation((path: string) =>
+        Effect.succeed(path),
       );
       audio.transcribeRecording.mockReturnValue(
         Effect.succeed('A conserved quantity.'),
@@ -138,13 +150,14 @@ it.effect(
       expect(snapshot).toHaveBeenLastCalledWith(null);
 
       const killed = yield* Deferred.make<void>();
-      audio.killActiveRecording.mockImplementation(() =>
-        Effect.sync(() => {
-          Deferred.doneUnsafe(killed, Effect.void);
-        }),
-      );
       const nextStartup = yield* Deferred.make<string>();
-      audio.startRecording.mockReturnValueOnce(Deferred.await(nextStartup));
+      audio.startRecording.mockReturnValueOnce(
+        recorder(
+          Deferred.await(nextStartup),
+          Effect.never,
+          Deferred.succeed(killed, undefined),
+        ),
+      );
       const nextTake = yield* Effect.forkChild(
         requests.handle(
           first,
@@ -167,8 +180,68 @@ it.effect(
       expect(cancelled).toMatchObject({ _tag: 'Cancelled' });
       // The cancelled take's kill runs on the detached take fiber.
       yield* Deferred.await(killed);
-      expect(audio.killActiveRecording).toHaveBeenCalledTimes(1);
       expect(audio.transcribeRecording).toHaveBeenCalledTimes(1);
+      expect(snapshot).toHaveBeenLastCalledWith(null);
+
+      // A Cancel after Stop answers Start and interrupts the upload.
+      const uploadInterrupted = yield* Deferred.make<void>();
+      audio.startRecording.mockReturnValueOnce(
+        recorder(Effect.succeed('/papers/first/recordings/take.wav')),
+      );
+      audio.transcribeRecording.mockReturnValueOnce(
+        Effect.never.pipe(
+          Effect.onInterrupt(() =>
+            Deferred.succeed(uploadInterrupted, undefined),
+          ),
+        ),
+      );
+      const uploading = yield* Effect.forkChild(
+        requests.handle(
+          first,
+          { kind: 'record', action: { kind: 'start', target: 'launch' } },
+          'origin',
+        ),
+      );
+      yield* Effect.yieldNow;
+      yield* requests.handle(
+        first,
+        { kind: 'record', action: { kind: 'stop' } },
+        'origin',
+      );
+      while (audio.transcribeRecording.mock.calls.length < 2) {
+        yield* Effect.yieldNow;
+      }
+      requests.cancel(first, 'origin');
+      expect(yield* Effect.flip(Fiber.join(uploading))).toMatchObject({
+        _tag: 'Cancelled',
+      });
+      yield* Deferred.await(uploadInterrupted);
+      expect(snapshot).toHaveBeenLastCalledWith(null);
+
+      // Host shutdown answers Start and stops sox before it returns.
+      const micOn = yield* Deferred.make<void>();
+      const shutdownKilled = yield* Deferred.make<void>();
+      audio.startRecording.mockReturnValueOnce(
+        recorder(
+          Effect.succeed('/papers/first/recordings/take.wav'),
+          // The take watches sox's exit once the recorder is acquired.
+          Deferred.succeed(micOn, undefined).pipe(Effect.andThen(Effect.never)),
+          Deferred.succeed(shutdownKilled, undefined),
+        ),
+      );
+      const recording = yield* Effect.forkChild(
+        requests.handle(
+          first,
+          { kind: 'record', action: { kind: 'start', target: 'launch' } },
+          'origin',
+        ),
+      );
+      yield* Deferred.await(micOn);
+      yield* requests.shutdown;
+      expect(yield* Deferred.isDone(shutdownKilled)).toBe(true);
+      expect(yield* Effect.flip(Fiber.join(recording))).toMatchObject({
+        _tag: 'Cancelled',
+      });
       expect(snapshot).toHaveBeenLastCalledWith(null);
       unsubscribe();
     }).pipe(Effect.provide(processStores)),
@@ -182,10 +255,10 @@ it.effect(
       audio.stopRecording.mockReset();
       audio.transcribeRecording.mockReset();
       audio.startRecording.mockReturnValue(
-        Effect.succeed('/papers/first/recordings/take.wav'),
+        recorder(Effect.succeed('/papers/first/recordings/take.wav')),
       );
-      audio.stopRecording.mockReturnValue(
-        Effect.succeed('/papers/first/recordings/take.wav'),
+      audio.stopRecording.mockImplementation((path: string) =>
+        Effect.succeed(path),
       );
       const requests = new HostDraftRequests();
       const session = {
@@ -218,4 +291,37 @@ it.effect(
       expect(audio.stopRecording).toHaveBeenCalledTimes(1);
       expect(audio.transcribeRecording).not.toHaveBeenCalled();
     }).pipe(Effect.provide(storesWithoutCredential)),
+);
+
+it.effect('rejects Start with the reason sox exited before Stop', () =>
+  Effect.gen(function* () {
+    audio.startRecording.mockReturnValue(
+      recorder(
+        Effect.succeed('/papers/first/recordings/take.wav'),
+        Effect.succeed(1),
+      ),
+    );
+    const requests = new HostDraftRequests();
+    const snapshot = vi.fn();
+    requests.subscribe(snapshot);
+    const session = {
+      roots: { storage: '/papers/first', ...makeFakeSettingsStores().stores },
+    } as SessionHandle;
+
+    expect(
+      yield* Effect.flip(
+        requests.handle(
+          session,
+          { kind: 'record', action: { kind: 'start', target: 'launch' } },
+          'origin',
+        ),
+      ),
+    ).toMatchObject({
+      _tag: 'Rejected',
+      reason: 'Recording stopped unexpectedly: sox exited with code 1',
+    });
+    // The take fiber releases the recorder once it has answered Start.
+    yield* Effect.yieldNow;
+    expect(snapshot).toHaveBeenLastCalledWith(null);
+  }).pipe(Effect.provide(processStores)),
 );
