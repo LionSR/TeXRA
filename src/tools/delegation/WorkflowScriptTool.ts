@@ -1,17 +1,6 @@
-// Node imports
-import * as nodePath from 'node:path';
-
 // Third-party imports
 import { z } from 'zod';
-import {
-  Cause,
-  Data,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  SynchronizedRef,
-} from 'effect';
+import { Cause, Data, Effect, Exit, Fiber, SynchronizedRef } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -28,7 +17,6 @@ import {
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
 import type { ToolServices } from '@agent/runtime/ToolServices';
-import { WorkspaceFs } from '@platform/rootedFs';
 import type { ToolResult, WorkflowAgentProposal } from '@shared/schemas';
 import {
   AgentCategory,
@@ -49,16 +37,11 @@ import {
   formatWorkflowLaunchLead,
 } from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import {
-  assertWritable,
-  resolveToolPath,
-  type ToolPathCall,
-} from '@tools/pathResolution';
+import { resolveToolPath } from '@tools/pathResolution';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
-import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 import { childRunDescription, createChildRun } from './childRun';
 
@@ -69,6 +52,7 @@ import { childRunDescription, createChildRun } from './childRun';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
+import { fileSystemAt, persistWorkflowScript } from './workflowScriptDrafts';
 import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
@@ -134,75 +118,6 @@ const WorkflowScriptToolInputSchema = z
   });
 
 type WorkflowScriptToolInput = z.infer<typeof WorkflowScriptToolInputSchema>;
-
-const WORKFLOW_SCRIPT_DIRECTORY = '.texra/workflow-scripts';
-
-function workflowScriptDraftStem(id: string): string {
-  const slug = id
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[^a-z0-9._-]+/g, '-')
-    .replaceAll(/^[.-]+|[.-]+$/g, '')
-    .slice(0, 80);
-  return `draft-${slug || 'workflow'}`;
-}
-
-/**
- * The view of a resolved tool path's own filesystem: a workspace-relative
- * path (`fsPath` stays relative inside the session's folder) goes through the
- * session's confined `WorkspaceFs` view, and an absolute one — a path the
- * caller chose outside the workspace — through the process `FileSystem`.
- */
-const fileSystemAt = (
-  fsPath: string,
-): Effect.Effect<
-  FileSystem.FileSystem,
-  never,
-  FileSystem.FileSystem | WorkspaceFs
-> =>
-  Effect.gen(function* () {
-    if (nodePath.isAbsolute(fsPath)) {
-      return yield* FileSystem.FileSystem;
-    }
-    return yield* WorkspaceFs;
-  });
-
-const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
-  script: string,
-  submissionId: string,
-  call: ToolPathCall,
-) {
-  const directory = yield* resolveToolPath(call, WORKFLOW_SCRIPT_DIRECTORY);
-  assertWritable(directory, WORKFLOW_SCRIPT_DIRECTORY);
-  const directoryFs = yield* fileSystemAt(directory.fsPath);
-  yield* directoryFs
-    .makeDirectory(directory.fsPath, { recursive: true })
-    .pipe(Effect.mapError(ensureError));
-  const stem = workflowScriptDraftStem(submissionId);
-  for (let suffix = 0; ; suffix += 1) {
-    const filename = suffix === 0 ? `${stem}.mjs` : `${stem}-${suffix + 1}.mjs`;
-    const resolved = yield* resolveToolPath(
-      call,
-      `${WORKFLOW_SCRIPT_DIRECTORY}/${filename}`,
-    );
-    assertWritable(resolved, resolved.relative);
-    const fs = yield* fileSystemAt(resolved.fsPath);
-    const exists = yield* entryExists(fs, resolved.fsPath);
-    if (exists) {
-      const existing = yield* readNormalizedFile(fs, resolved.fsPath).pipe(
-        Effect.mapError(ensureError),
-      );
-      if (existing === script) {
-        return resolved.relative;
-      }
-      continue;
-    }
-    yield* fs
-      .writeFile(resolved.fsPath, Buffer.from(script, 'utf-8'))
-      .pipe(Effect.mapError(ensureError));
-    return resolved.relative;
-  }
-});
 
 /** A waited workflow run that settled without the report it owes its caller. */
 class WorkflowScriptReportMissing extends Data.TaggedError(

@@ -97,7 +97,7 @@
     "src/tools/claudeAgent.ts": 654,
     "src/tools/codex.ts": 574,
     "src/tools/delegation/workflowScriptAgentRunner.ts": 889,
-    "src/tools/delegation/WorkflowScriptTool.ts": 703,
+    "src/tools/delegation/WorkflowScriptTool.ts": 624,
     "src/tools/ExecutionsTool.ts": 943,
     "src/tools/github/githubSubscriptionTool.ts": 624,
     "src/tools/github/PollingSourceBase.ts": 781,

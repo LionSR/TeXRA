@@ -169,7 +169,8 @@ vi.mock('@tools/delegation/delegationAvailability', () => ({
   selectAvailableDelegationModel: mocks.selectAvailableDelegationModel,
 }));
 
-vi.mock('@tools/executions/runLiveness', () => ({
+vi.mock('@tools/executions/runLiveness', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/executions/runLiveness')>()),
   resolveRunLiveness: mocks.resolveRunLiveness,
 }));
 

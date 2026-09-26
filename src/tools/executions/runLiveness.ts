@@ -87,3 +87,15 @@ export const resolveRunLiveness = Effect.fn('resolveRunLiveness')(function* (
     }),
   );
 });
+
+/** Why a started child may not have its attempt number advanced. */
+export function runLivenessClause(liveness: RunLiveness): string {
+  switch (liveness.kind) {
+    case 'unsettled':
+      return liveness.reason;
+    case 'live':
+      return 'still running in this process';
+    case 'interrupted':
+      return 'interrupted';
+  }
+}

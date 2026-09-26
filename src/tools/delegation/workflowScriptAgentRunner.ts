@@ -29,7 +29,7 @@ import {
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   resolveRunLiveness,
-  type RunLiveness,
+  runLivenessClause,
 } from '@tools/executions/runLiveness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
@@ -247,18 +247,6 @@ function workflowCallRunId(call: {
     key: call.key,
     parentRunId: call.parentRunId,
   });
-}
-
-/** Why a started child may not have its attempt number advanced. */
-function livenessClause(liveness: RunLiveness): string {
-  switch (liveness.kind) {
-    case 'unsettled':
-      return liveness.reason;
-    case 'live':
-      return 'still running in this process';
-    case 'interrupted':
-      return 'interrupted';
-  }
 }
 
 /**
@@ -598,7 +586,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         if (liveness.kind !== 'interrupted') {
           return yield* Effect.fail(
             new WorkflowRunAbortError(
-              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
+              `Workflow child ${runId} recorded no outcome and is ${runLivenessClause(liveness)}; refusing to repeat it.`,
             ),
           );
         }

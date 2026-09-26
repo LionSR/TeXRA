@@ -9,6 +9,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import { loopLog } from '@agent/runtime/childRunLoopLog';
 import {
   FollowUpContinuationOwned,
   type RunInput,
@@ -24,7 +25,6 @@ import {
 } from '@agent/followUp/ToolUseFollowUp';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
-import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import {
   RUN_OUTCOME,
@@ -298,36 +298,8 @@ class ChildRunInterruptible {
   }
 }
 
-const CHANNEL = 'childRunLoop';
 const SLOT_CANCELLED =
   'Child run turn cancelled while awaiting a concurrency slot.';
-
-const EFFECT_LOG = {
-  debug: Effect.logDebug,
-  info: Effect.logInfo,
-  warn: Effect.logWarning,
-  error: Effect.logError,
-} as const;
-
-/**
- * Write one loop diagnostic. An agent-CLI child presents them on its own
- * trace; every other child has no loop-owned stream, so they go to the
- * process log under this module's channel.
- */
-function loopLog(
-  trace: AgentTrace | undefined,
-  level: keyof typeof EFFECT_LOG,
-  message: string,
-  data?: unknown,
-): Effect.Effect<void> {
-  if (trace) {
-    return Effect.sync(() =>
-      trace[level](message, data === undefined ? undefined : { data }),
-    );
-  }
-  const entry = EFFECT_LOG[level](message).pipe(withLogChannel(CHANNEL));
-  return data === undefined ? entry : Effect.annotateLogs(entry, { data });
-}
 
 /** Outcome of a single turn attempt, flattening the loop's inner try/catch. */
 type TurnAttempt<TTurn> =
