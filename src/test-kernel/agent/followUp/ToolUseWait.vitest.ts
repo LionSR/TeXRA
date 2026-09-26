@@ -46,6 +46,7 @@ import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
+  emptyRunEndOutput,
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -58,6 +59,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -69,6 +71,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { CompositionKey, type PinnedComposition } from '@tools/compositions';
 import { releaseRunResources } from '@tools/approval';
@@ -846,7 +849,24 @@ describe('the batch a parked run consumes', () => {
         const runId = startedRun(session);
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
+        // A progress notice whose child has since ended is consumed, never
+        // delivered: the model and the transcript see only live items.
+        const child = publishTestRunStart(session, generateRunId(), {
+          parent: runId,
+        });
+        session.publish([
+          {
+            type: 'run.end',
+            aggregateId: rowAggregate(child),
+            outcome: RUN_OUTCOME.CANCELLED,
+            output: emptyRunEndOutput('toolUse'),
+          },
+        ]);
         yield* enqueue(session, runId, [
+          {
+            text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+            origin: 'subagent_result',
+          },
           {
             text: '<subagent-result>done</subagent-result>',
             origin: 'subagent_result',
@@ -885,6 +905,11 @@ describe('the batch a parked run consumes', () => {
         expect(info).toHaveBeenCalledWith('please revise the theorem', {
           messageType: MESSAGE_TYPES.USER_MESSAGE,
         });
+        expect(info).not.toHaveBeenCalledWith(
+          '⟳ coder · started',
+          expect.anything(),
+        );
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 
