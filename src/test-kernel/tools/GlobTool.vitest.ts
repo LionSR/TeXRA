@@ -2,6 +2,7 @@ import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, FileSystem, PlatformError } from 'effect';
+import { Glob } from 'glob';
 
 import { describe, expect, vi } from 'vitest';
 import type { ToolServices } from '@agent/runtime/ToolServices';
@@ -140,6 +141,26 @@ describe('GlobTool match metadata', () => {
         }),
       );
     }),
+  );
+
+  it.live(
+    'rejects a pattern that leaves the search directory without walking',
+    () =>
+      Effect.gen(function* () {
+        yield* withGlobWorkspace(() =>
+          Effect.gen(function* () {
+            const walk = vi.spyOn(Glob.prototype, 'walk');
+
+            const result = yield* GlobTool.call({ pattern: '../*' });
+
+            expect(result.status).toBe('error');
+            expect(result.error).toContain(
+              'must stay under the search directory',
+            );
+            expect(walk).not.toHaveBeenCalled();
+          }),
+        );
+      }),
   );
 
   it.live(

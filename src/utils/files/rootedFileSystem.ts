@@ -19,7 +19,7 @@ import { platform } from 'node:process';
 
 // Third-party imports
 import { Effect, FileSystem, Path, PlatformError, Stream } from 'effect';
-import { Glob } from 'glob';
+import { Glob, type GlobOptions } from 'glob';
 
 // Local imports
 import { readDirectoryTyped, writeFileAtomic } from './fsDurability';
@@ -119,24 +119,20 @@ const NODE_GLOB_MATCHER_OPTIONS = {
   nocaseMagicOnly: true,
 } as const;
 
-type CompiledGlobSegment = Glob<
-  typeof NODE_GLOB_MATCHER_OPTIONS
->['patterns'][number];
+type CompiledGlobSegment = Glob<GlobOptions>['patterns'][number];
 
 /**
- * The first compiled alternative of `pattern` that can leave `root`, or
- * `undefined` when none can. The rule is the engine's own: compile the
- * pattern as the walker does — brace expansion, escapes, bracket classes,
- * extglobs and separators all resolved by minimatch — then reject an
- * alternative that is absolute, or that has a segment whose matcher accepts
+ * The first compiled alternative of a glob that can leave its `cwd`, or
+ * `undefined` when none can. The rule is the engine's own: take the
+ * alternatives minimatch compiled for the walker — brace expansion,
+ * escapes, bracket classes, extglobs and separators all resolved — and
+ * reject one that is absolute, or that has a segment whose matcher accepts
  * the literal `..`. Nothing is recognised by spelling, so `\.\./x`,
  * `[.][.]/x`, `{a,../b}` and `@(..|a)` all fall to the same check.
  */
-function globEscape(pattern: string, root: string): string | undefined {
-  const { patterns } = new Glob(pattern, {
-    ...NODE_GLOB_MATCHER_OPTIONS,
-    cwd: root,
-  });
+export function globEscape(
+  patterns: Glob<GlobOptions>['patterns'],
+): string | undefined {
   for (const alternative of patterns) {
     if (alternative.isAbsolute()) return alternative.globString();
     for (
@@ -258,7 +254,13 @@ export function rootedFileSystem(
       Effect.gen(function* () {
         const resolvedRoot = yield* inRoot('glob', options?.root);
         const escaping = yield* Effect.try({
-          try: () => globEscape(pattern, resolvedRoot),
+          try: () =>
+            globEscape(
+              new Glob(pattern, {
+                ...NODE_GLOB_MATCHER_OPTIONS,
+                cwd: resolvedRoot,
+              }).patterns,
+            ),
           catch: (cause) =>
             PlatformError.badArgument({
               module: MODULE,
