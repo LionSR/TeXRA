@@ -3,19 +3,15 @@ import { Cause, Effect, Exit } from 'effect';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
 import { ensureError } from '@utils/errors/errorMessage';
-import type { ExtensionContext, Webview } from 'vscode';
+import type { Webview } from 'vscode';
 
 /** Host transport and presentation available to settings command programs. */
 export interface SettingsHandlerContext {
   /** The log channel the handler programs write on (`withLogChannel`). */
   readonly channel: string;
-  readonly extensionContext: ExtensionContext;
   withActiveWebview<E, R>(
     fn: (webview: Webview) => Effect.Effect<void, E, R>,
   ): Effect.Effect<void, E, R>;
-  postMessageToActiveWebview(
-    message: SettingsViewOutboundMessage | null | undefined,
-  ): Effect.Effect<void, Error>;
 }
 
 /**

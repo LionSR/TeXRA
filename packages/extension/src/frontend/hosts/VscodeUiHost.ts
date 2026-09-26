@@ -131,7 +131,12 @@ class VscodeUiHost implements MessageHost, PromptHost {
       Effect.sync(() => new vscode.CancellationTokenSource()),
       (tokens) =>
         Effect.tryPromise({
-          try: () => vscode.window.showInputBox(options, tokens.token),
+          // A secret pasted from another window must not dismiss the box.
+          try: () =>
+            vscode.window.showInputBox(
+              { ...options, ignoreFocusOut: true },
+              tokens.token,
+            ),
           catch: (cause) =>
             new PromptFailed({
               reason: 'presentation-failed',
