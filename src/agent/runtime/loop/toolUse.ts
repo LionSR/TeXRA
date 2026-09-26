@@ -662,7 +662,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // before acknowledging it; no new model turn is needed to park it.
           if (restoring && !followUps.hasQueued())
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
-          restoring = false;
+          restoring &&= followUps.hasQueued();
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
