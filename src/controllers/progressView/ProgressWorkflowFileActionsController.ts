@@ -71,8 +71,7 @@ export class ProgressWorkflowFileActionsController {
   /**
    * Per-stream digest of each output file's content at compare time. A
    * digest, not the content: Accept only asks whether the file changed
-   * since, and a compared file nobody accepts would otherwise hold its whole
-   * text for the life of the window.
+   * since. Kept while the file is still an output of its run.
    */
   private readonly modelOutputBackups = new Map<RunId, Map<string, string>>();
 
@@ -259,6 +258,20 @@ export class ProgressWorkflowFileActionsController {
 
     return Effect.gen({ self: this }, function* () {
       const content = yield* this.deps.host.readFile(file);
+      // A digest lives while its file is still an output of its run: a
+      // removed run, or a round that no longer lists the file, takes its
+      // digests with it, so the map is bounded by outputs that exist.
+      for (const [stream, digests] of this.modelOutputBackups) {
+        const outputs = new Set(
+          Object.values(this.deps.state.getOutputFiles(stream))
+            .flat()
+            .map((info) => info.location.absolutePath),
+        );
+        for (const tracked of digests.keys()) {
+          if (!outputs.has(tracked)) digests.delete(tracked);
+        }
+        if (digests.size === 0) this.modelOutputBackups.delete(stream);
+      }
       const runBackups =
         this.modelOutputBackups.get(runId) ?? new Map<string, string>();
       runBackups.set(file, contentDigest(content));

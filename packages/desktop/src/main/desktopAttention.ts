@@ -22,14 +22,15 @@ interface DesktopAttentionPortShape {
   windowFocused(): boolean;
   /** The count on the app icon; 0 clears it. */
   setBadgeCount(count: number): void;
-  /** One OS notification; clicking it shows `runId` in the project `key`. */
+  /** Project `key`'s OS notification, replacing its last; clicking it shows
+   *  `runId` there. */
   notify(notification: {
     readonly title: string;
     readonly body: string;
     readonly key: string;
     readonly runId: RunId;
   }): void;
-  /** Close project `key`'s notifications: the user is looking at it. */
+  /** Close project `key`'s notification: the user is looking at it. */
   dismiss(key: string): void;
   /** Each time a window of the app gains focus. */
   readonly focused: Stream.Stream<void>;
@@ -40,11 +41,11 @@ export class DesktopAttentionPort extends Context.Service<
   DesktopAttentionPortShape
 >()('@texra/desktop/DesktopAttentionPort') {}
 
-// Each project's shown notifications, held so a click can still be delivered
-// (one the collector reclaims cannot deliver it) until it is clicked, closed
-// or failed, or the user looks at the project, which dismisses them: the OS
-// does not promise a `close`, so without that they were held forever.
-const liveNotifications = new Map<string, Set<Notification>>();
+// Each project's one live notification, held so its click can still be
+// delivered (one the collector reclaims cannot deliver it). A newer one for
+// the project replaces it, and looking at the project dismisses it: the OS
+// does not promise a `close`, so at most one per open project is ever held.
+const liveNotifications = new Map<string, Notification>();
 
 /** The port over Electron: the app icon's badge and the OS notification
  *  centre, clicks leading back through `reveal`. */
@@ -63,10 +64,8 @@ export function electronAttentionPort(options: {
     notify: ({ title, body, key, runId }) => {
       if (!Notification.isSupported()) return;
       const notification = new Notification({ title, body });
-      const shown = liveNotifications.get(key) ?? new Set<Notification>();
       const release = () => {
-        shown.delete(notification);
-        if (shown.size === 0 && liveNotifications.get(key) === shown)
+        if (liveNotifications.get(key) === notification)
           liveNotifications.delete(key);
       };
       notification.on('click', () => {
@@ -75,13 +74,15 @@ export function electronAttentionPort(options: {
       });
       notification.on('close', release);
       notification.on('failed', release);
-      liveNotifications.set(key, shown.add(notification));
+      const superseded = liveNotifications.get(key);
+      liveNotifications.set(key, notification);
+      superseded?.close();
       notification.show();
     },
     dismiss: (key) => {
       const shown = liveNotifications.get(key);
       liveNotifications.delete(key);
-      for (const notification of shown ?? []) notification.close();
+      shown?.close();
     },
     focused: Stream.callback<void>((queue) =>
       Effect.gen(function* () {
@@ -141,19 +142,28 @@ export const followDesktopAttention = Effect.gen(function* () {
       const seen = activeKey === project.key && port.windowFocused();
       if (seen) port.dismiss(project.key);
       if (previous !== undefined && !seen) {
-        const title = project.display.name;
-        const notify = (runId: RunId, body: string) =>
-          port.notify({ title, body, key: project.key, runId });
-        const asking = new Set<RunId>();
+        // One notification per update, replacing the project's last: its
+        // lines are every run this update asks about, its click the first.
+        const notices: { readonly runId: RunId; readonly line: string }[] = [];
         for (const { runId } of attentionOf(view, previous).arrived) {
           const run = view.runs.get(runId);
-          if (run === undefined || asking.has(runId)) continue;
-          asking.add(runId);
-          notify(runId, `${run.description ?? run.label} is waiting for you.`);
+          if (run === undefined || notices.some((n) => n.runId === runId))
+            continue;
+          const line = `${run.description ?? run.label} is waiting for you.`;
+          notices.push({ runId, line });
         }
         for (const run of view.runs.values()) {
-          const body = finishedLine(run, previous.runs.get(run.id));
-          if (body !== undefined) notify(run.id, body);
+          const line = finishedLine(run, previous.runs.get(run.id));
+          if (line !== undefined) notices.push({ runId: run.id, line });
+        }
+        const first = notices[0];
+        if (first !== undefined) {
+          port.notify({
+            title: project.display.name,
+            body: notices.map((notice) => notice.line).join('\n'),
+            key: project.key,
+            runId: first.runId,
+          });
         }
       }
       let waiting = 0;
