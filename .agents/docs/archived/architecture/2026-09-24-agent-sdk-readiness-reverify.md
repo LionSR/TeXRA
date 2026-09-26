@@ -5,9 +5,9 @@ Archived: 2026-09-26
 
 > Superseded by
 > [`../../proposed/architecture/2026-09-26-agent-sdk-readiness-reverify.md`](../../proposed/architecture/2026-09-26-agent-sdk-readiness-reverify.md),
-> which re-verifies at `f0811a0` (20 PRs past this note's `7326fb4` pin) and
-> records the third Tier-1 manifest drift. Kept as history; not authority for
-> current behaviour.
+> which re-verifies at `f0811a0` (189 commits past this note's `7326fb4` pin,
+> which is PR #13094; 65 of them touch the audited areas) and records the third
+> Tier-1 manifest drift. Kept as history; not authority for current behaviour.
 
 Origin: a scheduled "review and refactor for Agent SDK readiness" charter —
 identify the agent core, model handler, logger and surface areas; audit each

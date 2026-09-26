@@ -11,18 +11,17 @@ which is now archived.
 
 Pin: verified against branch `claude/eager-noether-q6bj0r` at `f0811a0`. The
 2026-09-24 pass's pin, `7326fb4`, is itself PR #13094 ("model providers are
-plugin contributions"), so it is the baseline, not part of the delta. `f0811a0`
-sits well past it (the exact commit count in `7326fb4..f0811a0` is
-checkout-dependent — the two are not in a single ancestor line — so no fixed
-number is asserted here; reproduce with `git log 7326fb4..f0811a0` against the
-canonical history). What matters is that every intervening commit in the audited
-areas (`src/agent`, `src/model`, `src/logger`, `packages/llm/src`,
-`packages/agent/src`) is a human-owned PR continuing the same program the
-standing note named — e.g. #12886/#13249 (retire `logUtils`, every producer logs
-through Effect or the sink), #13236 (the retry offer is decided once by the retry
-owner), #13293 (a prepared turn is parsed once), #13274 (typed run-lifecycle
-errors), #13271 (workflow scripts are generators over an Effect interpreter),
-each verified present in `7326fb4..f0811a0` and absent from `7326fb4`. Alignment
+plugin contributions"), so it is the baseline, not part of the delta. It is an
+ancestor of `f0811a0`, and the range is deterministic:
+`git rev-list --count 7326fb4..f0811a0` is 189 commits, of which 65 touch the
+audited areas (`src/agent`, `src/model`, `src/logger`, `packages/llm/src`,
+`packages/agent/src`). Every intervening commit in those areas is a human-owned
+PR continuing the same program the standing note named — e.g. #12886/#13249
+(retire `logUtils`, every producer logs through Effect or the sink), #13236 (the
+retry offer is decided once by the retry owner), #13293 (a prepared turn is
+parsed once), #13274 (typed run-lifecycle errors), #13271 (workflow scripts are
+generators over an Effect interpreter), each verified present in
+`7326fb4..f0811a0` and absent from `7326fb4`. Alignment
 has **improved**, entirely through review, not this routine.
 
 ## Verdict (unchanged)
@@ -143,12 +142,12 @@ can be ratified.
      `DatabaseReadFailed`), but `README.md:203` and `effect/errors.ts` still say
      "four." Reconcile the count and the "no more" comment.
 
-2. **The logger sync-facades program is at its last step.** Steps 1–4 of
-   `2026-09-21-effect-design-synchronous-facades.md` have landed —
-   `logUtils.ts`, `createLog`, `channelTrace.ts`, `withLogData`, and the
-   `debugMode` carrier (`isDebugModeEnabled`/`setDebugModeConfig`/
-   `DebugModeConfig`) are all gone from `src`/`packages`. Only §5, "the sink
-   becomes a Layer," remains: `src/logger/logSink.ts:165-186` still holds a
+2. **The logger sync-facades program is at its last step.** Steps 1–5 of
+   `2026-09-21-effect-design-synchronous-facades.md`'s six-step plan have landed —
+   `logUtils.ts` (deleted in step 5), `createLog`, `channelTrace.ts`,
+   `withLogData`, and the `debugMode` carrier (`isDebugModeEnabled`/
+   `setDebugModeConfig`/`DebugModeConfig`) are all gone from `src`/`packages`.
+   Only step 6 (design §5, "the sink becomes a Layer") remains: `src/logger/logSink.ts:165-186` still holds a
    mutable module global (`let sink = consoleLogSink`, `setLogSink`,
    `writeLogEntry`), set by five host callers. This is the one real
    SDK-relevant host leak: `packages/agent/src/effect/runtime.ts` composes
@@ -179,9 +178,15 @@ can be ratified.
      otherwise-pure codec factories — `openaiChat.ts:525`,
      `anthropicMessages.ts:465`, and `openaiResponsesRequest.ts:348` (in
      `responseAuthentication`). These are the only ambient-process reads in the
-     package. Intentional guardrails (preserve the behavior), but for a pure
-     `Model` boundary the check belongs at the host boundary (`modelBinding.ts`),
-     a relocation, not a deletion.
+     package. Intentional guardrails (preserve the behavior). For a pure `Model`
+     boundary the check ideally moves to the host boundary (`modelBinding.ts`) —
+     but that is a relocation, not a deletion, and only safe if the guard is
+     preserved for callers who construct the exported factories directly
+     (`packages/llm/test-live/` calls `openaiChatModel`/`openaiResponsesModel`/
+     `anthropicMessagesModel` without `modelBinding`). A naive move to
+     `modelBinding` alone would silently drop the guardrail for those direct
+     callers, so the check must be passed explicitly into every factory (or the
+     SDK configured to ignore the ambient variables) rather than simply lifted.
 
 ## Marginal cleanups (tech-debt-tier, not for this routine)
 
