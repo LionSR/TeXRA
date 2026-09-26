@@ -2,10 +2,7 @@ import { Cause, Effect, Exit } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 
 import { registerRun, getRunRecords } from '@agent/storage';
-import {
-  acquireResumedRunOwnership,
-  finalizeRun,
-} from '@agent/storage/runLifecycle';
+import { finalizeRun } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,8 +19,6 @@ import { ensureError } from '@utils/errors/errorMessage';
 import { prepareAgentDefinition } from './AgentLaunchContext';
 import { applyHelperModelPreference } from './helperModelPreference';
 import { executeAgent, type ExecuteAgentOptions } from './executeAgent';
-import { RunLive } from './runRoster';
-import type { AgentRunHandle } from './RunHandle';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentFlowResult } from './AgentFlowResult';
 
@@ -54,18 +49,18 @@ export interface RunAgentOptions extends Pick<
    */
   suppressErrorNotification?: boolean;
   /**
-   * Persist host-owned final state before the ordinary session drain. Return
-   * true when the hook already drained artifacts and disposed of ownership.
+   * Persist host-owned final state before the run's ending commits. Return
+   * true when the hook already committed that ending (`commitRunEnd`).
    * The owning session is passed explicitly so the hook does not depend on an
    * ambient run frame during Effect resumption. A failure of this program is
    * one more failure the launch reports; it is never read as a `false`
-   * answer, so the ordinary release still runs.
+   * answer, so the ordinary ending still commits.
    */
-  beforeLeaseRelease?: (
+  beforeRunEnd?: (
     session: SessionHandle,
   ) => Effect.Effect<boolean | void, Error>;
-  /** Fires once this run owns its run lease. */
-  onRunLeaseAcquired?: (runId: RunId) => void;
+  /** Fires once this launch holds the run's claim. */
+  onRunClaimed?: (runId: RunId) => void;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -107,8 +102,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
   options: RunAgentOptions,
 ): Effect.fn.Return<AgentFlowResult, Error, ProcessServices> {
   const {
-    beforeLeaseRelease,
-    onRunLeaseAcquired,
+    beforeRunEnd,
+    onRunClaimed,
     preferHelperModel,
     suppressErrorNotification,
     ...executeAgentOptions
@@ -116,19 +111,11 @@ export const runAgent = Effect.fn('runAgent')(function* (
   const runId = request.runId ?? generateRunId();
   const shouldRegister = request.kind === 'fresh';
   const runSession = executeAgentOptions.session;
-  // Refuse duplicates before any snapshot is taken: either request kind can
-  // supply a run id, and a resume of a run this session already runs would
-  // queue behind the live generation, wake it without a handle of its own,
-  // and restore a prior terminal fact over the one that generation is about
-  // to write. The lane takes the same refusal ({@link RunRegistry.launchRun});
-  // this early read only spares the launch the snapshot it would take first.
-  const existingHandle = runSession.runs.getHandle(runId);
-  if (runSession.runs.isLive(runId) || existingHandle !== undefined)
-    return yield* Effect.fail(new RunLive({ runId }));
-
-  // The launch's fiber is the admission, so a stop by run id
-  // (`RunRegistry.interrupt`) reaches the launch wherever it has got to — no
-  // launch-scoped stop latch exists beside it.
+  // The launch's fiber is the admission, and the lane refuses a run that
+  // already has a live generation here in the same synchronous step as its
+  // claim ({@link RunRegistry.launchRun}), so a resume of a run this session
+  // already runs never queues behind it. A stop by run id
+  // (`RunRegistry.interrupt`) reaches the launch wherever it has got to.
   return yield* runSession.runs.launchRun(
     runId,
     Effect.gen(function* () {
@@ -184,9 +171,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
           identity: { kind: 'agent', agent: config.agent },
           userFollowUpSupport,
         });
-      } else {
-        yield* acquireResumedRunOwnership(runSession, runId);
       }
+      // The run's claim, held by this launch for the run's whole life: a
+      // fresh run's birth claim, a resumed run's taken over after its prior
+      // owner is proved dead. Released when this launch's scope closes,
+      // after its ending has committed below.
+      yield* runSession.holdRunClaim(runId);
 
       let lifecycleStarted = false;
       const callerOnRun = executeAgentOptions.onRun;
@@ -200,7 +190,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
       let aggregated: Error | undefined;
       const run = yield* Effect.exit(
         Effect.gen(function* () {
-          onRunLeaseAcquired?.(runId);
+          onRunClaimed?.(runId);
           // Ownership is the fence for the edge as well: a detach another
           // host committed while this launch prepared has folded by now, and
           // a foreign row never reaches a handle this session tracks, so the
@@ -213,10 +203,10 @@ export const runAgent = Effect.fn('runAgent')(function* (
             : yield* persistedParentRunId(runSession, runId);
           if (resumedParentRunId !== undefined && liveParent === undefined)
             runSession.runs.detachChildren(resumedParentRunId, [runId]);
-          const onRun = (handle: AgentRunHandle): Effect.Effect<void, Error> =>
+          const onRun = (id: RunId): Effect.Effect<void, Error> =>
             Effect.suspend(() => {
               lifecycleStarted = true;
-              return callerOnRun?.(handle) ?? Effect.void;
+              return callerOnRun?.(id) ?? Effect.void;
             });
           return liveParent !== undefined
             ? yield* executeAgent(definition, runId, {
@@ -235,7 +225,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
         }).pipe(
           // The launch's terminal: a stop lands before it or after it, never
           // inside — the prior-outcome restore, the host's final artifacts
-          // and the lease release settle atomically, on every exit.
+          // and the run's ending commit atomically, on every exit, before
+          // the claim this launch holds is released.
           Effect.onExit((exit) =>
             Effect.uninterruptible(
               Effect.gen(function* () {
@@ -284,17 +275,17 @@ export const runAgent = Effect.fn('runAgent')(function* (
 
                 const artifacts = yield* Effect.exit(
                   Effect.suspend(
-                    () => beforeLeaseRelease?.(runSession) ?? Effect.void,
+                    () => beforeRunEnd?.(runSession) ?? Effect.void,
                   ),
                 );
                 if (Exit.isFailure(artifacts))
                   failures.push(Cause.squash(artifacts.cause));
                 if (Exit.isFailure(artifacts) || artifacts.value !== true) {
-                  const release = yield* Effect.exit(
-                    runSession.releaseRunLease(runId),
+                  const ended = yield* Effect.exit(
+                    runSession.commitRunEnd(runId),
                   );
-                  if (Exit.isFailure(release))
-                    failures.push(Cause.squash(release.cause));
+                  if (Exit.isFailure(ended))
+                    failures.push(Cause.squash(ended.cause));
                 }
                 if (failures.length > 0) {
                   aggregated = ensureError(
@@ -315,6 +306,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
       return yield* Effect.fail(
         aggregated ?? ensureError(Cause.squash(run.cause)),
       );
-    }),
+    }).pipe(Effect.scoped),
   );
 });

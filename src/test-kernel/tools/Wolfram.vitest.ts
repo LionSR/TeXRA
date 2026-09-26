@@ -10,6 +10,7 @@ import { it } from '@effect/vitest';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { RequestDecision, RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { WolframTool } from '@tools/wolfram/WolframTool';
@@ -33,7 +34,7 @@ function dispatchWolfram(runId: RunId, code: string) {
       Effect.sync(() =>
         sessionWithInteractions(createRecordingHost().interactions),
       ),
-      (session) => session.dispose(),
+      (session) => closeSessionOf(session),
     );
     publishTestRunStart(session, runId);
     yield* session.settlePublications();

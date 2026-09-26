@@ -13,6 +13,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -46,7 +47,7 @@ function onSessionRuns<A, E>(
   return effect.pipe(Effect.provideService(Runs, session.runs));
 }
 afterEach(async () => {
-  await Effect.runPromise(session.dispose());
+  await Effect.runPromise(closeSessionOf(session));
 });
 
 /**

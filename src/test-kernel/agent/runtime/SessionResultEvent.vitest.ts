@@ -14,6 +14,7 @@ import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRun
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeProcessServices,
   setupPlatform,
@@ -238,7 +239,7 @@ describe('terminal result event', () => {
         });
       } finally {
         detach();
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }
     }),
   );

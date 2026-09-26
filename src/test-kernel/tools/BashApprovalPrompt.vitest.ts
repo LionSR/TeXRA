@@ -13,6 +13,7 @@ import {
   TOOL_EDIT_APPROVAL_CONFIG_KEY,
   type BashPermission,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeHost, installedHost } from '@test/support/setupPlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import {
@@ -66,7 +67,7 @@ describe('requestBashApproval queueing', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const session = createTestSession();
-          yield* Effect.addFinalizer(() => session.dispose());
+          yield* Effect.addFinalizer(() => closeSessionOf(session));
           session.setApprovalPolicy('ask');
           const keys = [
             BASH_APPROVAL_CONFIG_KEY,
@@ -116,7 +117,7 @@ describe('requestBashApproval queueing', () => {
     Effect.scoped(
       Effect.gen(function* () {
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         const runId = generateRunId();
         let policyDenials = 0;
         session.setApprovalPolicy('never');
@@ -156,7 +157,7 @@ describe('requestBashApproval queueing', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const session = createTestSession();
-          yield* Effect.addFinalizer(() => session.dispose());
+          yield* Effect.addFinalizer(() => closeSessionOf(session));
           const runId = generateRunId();
           publishTestRunStart(session, runId);
           yield* session.settlePublications();

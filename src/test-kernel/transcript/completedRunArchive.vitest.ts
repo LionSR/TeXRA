@@ -209,7 +209,7 @@ describe('completedRunArchive facade', () => {
 
   // it.live: the release at the end of this test closes both sessions through
   // `closeSession`, whose settlement budget is
-  // `Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS)`. With no active runs that arm
+  // `Effect.sleep(SESSION_CLOSE_DEADLINE_MS)`. With no active runs that arm
   // is never awaited today, so the happy path would also pass on the test
   // clock. The live clock is kept for the regression case: under TestClock
   // nothing advances that sleep, so a session that stopped settling could

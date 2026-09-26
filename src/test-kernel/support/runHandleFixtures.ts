@@ -41,7 +41,8 @@ export function testRunRegistry(): RunRegistry {
     approvals: createSessionApprovals(),
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
-    acquireRunClaim: () => Effect.succeed(Effect.void),
+    holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
   });
 }
 

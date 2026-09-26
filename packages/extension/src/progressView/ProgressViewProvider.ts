@@ -58,7 +58,6 @@ import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
 import { withLogChannel } from '@logger/effectLog';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   StateStore,
   StateReadFailed,
@@ -443,9 +442,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public initialize() {
     return Effect.gen({ self: this }, function* () {
-      // `ON` phase, behind the run settlement activation registered earlier.
-      (yield* Lifecycle).onShutdown(
-        SHUTDOWN_PHASE.ON,
+      // A finalizer of the activation scope: it runs after every session has
+      // closed, which activation registers after this.
+      yield* Effect.addFinalizer(() =>
         withProcessServices(this.runtime, this.dispose()),
       );
       yield* this.snapshot.refresh;

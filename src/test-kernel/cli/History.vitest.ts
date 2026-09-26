@@ -137,6 +137,7 @@ import {
   readCliHistoryExportInput,
   readCliHistoryStandaloneTemplate,
 } from '@cli/runtime/history';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const config = AgentConfigSchema.parse({
@@ -773,7 +774,7 @@ describe('CLI history runtime', () => {
           });
           expect(mocks.listRuns).not.toHaveBeenCalled();
         }),
-      (session) => session.dispose(),
+      (session) => closeSessionOf(session),
     ),
   );
 

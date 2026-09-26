@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
   persistChildRunDelivery: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(
+  commitRunEndAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
 }));
@@ -84,6 +84,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createProcessSession,
@@ -306,7 +307,7 @@ const startLoop = (
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    const stop = session.runs.kill(runId);
+    const stop = session.runs.stop(runId);
     expect(stop.accepted()).toBe(true);
     yield* stop.settlement;
   });
@@ -318,8 +319,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'releaseRunLease').mockImplementation((runId) =>
-    Effect.promise(() => mocks.releaseRunLeaseAfterArtifacts(session, runId)),
+  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
+    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
   );
   mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
@@ -328,7 +329,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const runId of trackedRunIds) {
-    session.runs.untrack(runId);
+    untrackRun(session.runs, runId);
   }
   trackedRunIds.clear();
 });
@@ -345,7 +346,7 @@ describe('childRunLoop E2E fixtures', () => {
         const launch = vi.fn(() =>
           Effect.fail(new Error('Engine startup failed')),
         );
-        let stop: ReturnType<typeof session.runs.kill> | undefined;
+        let stop: ReturnType<typeof session.runs.stop> | undefined;
         // The stop lands inside loop setup, after the queue claim and before
         // the launch.
         const claimChildRun = session.followUps.claimChildRun.bind(
@@ -356,7 +357,7 @@ describe('childRunLoop E2E fixtures', () => {
           .mockImplementationOnce((id) => {
             const lease = claimChildRun(id);
             if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.kill(runId);
+              stop = session.runs.stop(runId);
             return lease;
           });
         const loop = yield* startLoop(runId, {
@@ -383,7 +384,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -542,13 +543,13 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
         // child activation.
         const stopping = yield* Effect.forkChild(
-          session.runs.stopAgentRun(PARENT_RUN_ID),
+          session.runs.stop(PARENT_RUN_ID).settlement,
           { startImmediately: true },
         );
         yield* rejectTurn(1, createAbortError());
@@ -564,7 +565,7 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -674,7 +675,7 @@ describe('childRunLoop E2E fixtures', () => {
             value: 'done',
           });
           yield* Deferred.await(formatStarted);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
           yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
@@ -683,7 +684,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(PARENT_RUN_ID);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
             value: 'done',
@@ -1144,7 +1145,7 @@ describe('childRunLoop E2E fixtures', () => {
         // the terminal it would interrupt is uninterruptible: the delivery
         // completes exactly once and the queue releases — there is no live
         // continuation the stop could tear down.
-        const stop = session.runs.kill(runId);
+        const stop = session.runs.stop(runId);
         expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
@@ -1298,7 +1299,7 @@ describe('childRunLoop E2E fixtures', () => {
         // for the test to run once the loop is done.
         const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
-          stopSettlements.push(session.runs.kill(runId).settlement);
+          stopSettlements.push(session.runs.stop(runId).settlement);
         });
 
         const loop = yield* startLoop(runId, strategy, {

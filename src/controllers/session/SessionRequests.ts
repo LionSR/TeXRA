@@ -30,7 +30,7 @@ import { Effect, SubscriptionRef, type Context } from 'effect';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import type {
   SessionApprovals,
@@ -356,7 +356,7 @@ function handle(
         const detachActiveChildren =
           req.detachActiveChildren ??
           (yield* detachSubagentsOnStop(session.roots));
-        yield* runs.stopAgentRun(req.runId, { detachActiveChildren });
+        yield* runs.stop(req.runId, { detachActiveChildren }).settlement;
       }).pipe(
         // The stop fails when the setting could not be read or the run's
         // terminal row was refused (a live foreign owner, a rolled-back

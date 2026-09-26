@@ -1,7 +1,9 @@
 /**
  * Shared subscription, polling, error and lifetime policy for GitHub sources.
- * A source owns its poll fibers and admitted deliveries until process shutdown;
- * callers run the Effect subscribe path, so this module needs no runner.
+ * A source's poll fibers and admitted deliveries live in the
+ * {@link PollingLifetime} its owner built in its own scope (the process
+ * runtime's GitHub subscriptions layer); callers run the Effect subscribe
+ * path, so this module needs no runner.
  */
 
 import {
@@ -22,12 +24,7 @@ import {
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 
-import {
-  SHUTDOWN_PHASE,
-  type Disposable,
-  type LifecycleHost,
-  Lifecycle,
-} from '@platform/interfaces';
+import type { Disposable } from '@platform/interfaces';
 import type { Secrets } from '@platform/secrets';
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -93,11 +90,35 @@ interface PollingSourceConfig {
   maxFailureDurationMs: number;
 }
 
-interface PollingLifetime {
-  pollScope: Scope.Closeable;
-  deliveryScope: Scope.Closeable;
-  deliveries: FiberSet.FiberSet<void>;
+/** Where a source's poll loop and admitted deliveries run. */
+export interface PollingLifetime {
+  readonly pollScope: Scope.Closeable;
+  readonly deliveries: FiberSet.FiberSet<void>;
 }
+
+/**
+ * A poller's lifetime in the caller's scope. When that scope closes, polling
+ * stops and the deliveries already admitted are drained before their own
+ * scope closes, so a follow-up a poll round produced still reaches its run.
+ */
+export const makePollingLifetime: Effect.Effect<
+  PollingLifetime,
+  never,
+  Scope.Scope
+> = Effect.gen(function* () {
+  const pollScope = yield* Scope.make();
+  const deliveryScope = yield* Scope.make();
+  const deliveries = yield* FiberSet.make<void>().pipe(
+    Effect.provideService(Scope.Scope, deliveryScope),
+  );
+  yield* Effect.addFinalizer(() =>
+    Scope.close(pollScope, Exit.void).pipe(
+      Effect.andThen(FiberSet.awaitEmpty(deliveries)),
+      Effect.ensuring(Scope.close(deliveryScope, Exit.void)),
+    ),
+  );
+  return { pollScope, deliveries };
+});
 
 type SuccessfulConditionalResponse<T> = Extract<
   ConditionalResponse<T>,
@@ -137,12 +158,14 @@ export abstract class PollingSourceBase<
   >();
   /** The stop request for the owned poll loop; absent while it is stopped. */
   private pollLoopStop: Deferred.Deferred<void> | undefined;
-  private lifetime: PollingLifetime | undefined;
-  private lifetimeInitializing: Deferred.Deferred<PollingLifetime> | undefined;
-  private shutdownRegistration: Disposable | undefined;
-  private shutdownLifecycle: LifecycleHost | undefined;
 
-  constructor(protected readonly config: PollingSourceConfig) {
+  constructor(
+    protected readonly config: PollingSourceConfig,
+    /** Where this source polls and delivers; absent on a source a test
+     *  drives through its hooks alone, whose deliveries belong to the
+     *  caller and which cannot be subscribed to. */
+    private readonly lifetime?: PollingLifetime,
+  ) {
     this.inLogChannel = withLogChannel(config.name);
   }
 
@@ -228,48 +251,42 @@ export abstract class PollingSourceBase<
     key: K,
     initState: (now: number) => S,
     onEvent: PollEventListener,
-  ): Effect.Effect<Disposable, never, Secrets | Lifecycle> {
+  ): Effect.Effect<Disposable, never, Secrets> {
     return Effect.uninterruptible(
-      Effect.flatMap(Lifecycle, (lifecycle) =>
-        Effect.flatMap(Clock.currentTimeMillis, (now) => {
-          if (lifecycle.shutdownRan) {
+      Effect.flatMap(Clock.currentTimeMillis, (now) => {
+        const lifetime = this.lifetime;
+        if (lifetime === undefined) {
+          return Effect.die(
+            new Error(`${this.config.name} has no polling lifetime`),
+          );
+        }
+        let state = this.subscriptions.get(key);
+        const created = !state;
+        if (!state) {
+          if (this.subscriptions.size >= this.config.maxConcurrent) {
             return Effect.die(
               new Error(
-                `Cannot subscribe to ${this.config.name} after shutdown`,
+                `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
               ),
             );
           }
-          // A replacement host starts with fresh subscriptions. Stop the old
-          // poller now, even if its shutdown is still in the BEFORE phase.
-          if (this.shutdownLifecycle?.shutdownRan) this.disposeAll();
-          let state = this.subscriptions.get(key);
-          const created = !state;
-          if (!state) {
-            if (this.subscriptions.size >= this.config.maxConcurrent) {
-              return Effect.die(
-                new Error(
-                  `Too many active ${this.config.name} subscriptions (max ${this.config.maxConcurrent}). Unsubscribe from one before adding another.`,
-                ),
-              );
-            }
-            state = initState(now);
-            this.subscriptions.set(key, state);
-          }
-          state.listeners.add(onEvent);
-          if (created) this.notifyKeysChanged();
-          const disposable: Disposable = {
-            dispose: () => this.removeListener(key, onEvent),
-          };
-          const logSubscribed = created
-            ? Effect.logInfo(`Subscribed to ${key}`).pipe(this.inLogChannel)
-            : Effect.void;
-          return this.logNotes().pipe(
-            Effect.andThen(logSubscribed),
-            Effect.andThen(this.ensurePolling(lifecycle)),
-            Effect.as(disposable),
-          );
-        }),
-      ),
+          state = initState(now);
+          this.subscriptions.set(key, state);
+        }
+        state.listeners.add(onEvent);
+        if (created) this.notifyKeysChanged();
+        const disposable: Disposable = {
+          dispose: () => this.removeListener(key, onEvent),
+        };
+        const logSubscribed = created
+          ? Effect.logInfo(`Subscribed to ${key}`).pipe(this.inLogChannel)
+          : Effect.void;
+        return this.logNotes().pipe(
+          Effect.andThen(logSubscribed),
+          Effect.andThen(this.ensurePolling(lifetime)),
+          Effect.as(disposable),
+        );
+      }),
     );
   }
 
@@ -434,11 +451,10 @@ export abstract class PollingSourceBase<
    * {@link unrefSleepClock} keeps an idle timer from holding the process open.
    */
   private ensurePolling(
-    lifecycle: LifecycleHost,
+    lifetime: PollingLifetime,
   ): Effect.Effect<void, never, Secrets> {
     return Effect.uninterruptible(
       Effect.gen({ self: this }, function* () {
-        const lifetime = yield* this.ensureLifetime(lifecycle);
         if (this.pollLoopStop) return;
         const stop = Deferred.makeUnsafe<void>();
         this.pollLoopStop = stop;
@@ -456,51 +472,6 @@ export abstract class PollingSourceBase<
         ).pipe(Effect.asVoid);
       }),
     );
-  }
-
-  /** One owner per lifecycle for poll rounds and admitted deliveries. */
-  private ensureLifetime(lifecycle: LifecycleHost) {
-    return Effect.suspend(() => {
-      // The old owner may still be draining while a replacement host starts.
-      // Keep its captured scopes for that drain, but give the new host its own.
-      if (this.shutdownLifecycle?.shutdownRan) this.lifetime = undefined;
-      if (this.lifetime) {
-        this.registerShutdownIfNeeded(lifecycle);
-        return Effect.succeed(this.lifetime);
-      }
-      if (this.lifetimeInitializing) {
-        return Deferred.await(this.lifetimeInitializing).pipe(
-          Effect.tap(() =>
-            Effect.sync(() => this.registerShutdownIfNeeded(lifecycle)),
-          ),
-        );
-      }
-
-      // Claim before scope allocation yields, so concurrent first subscribers
-      // share the owner whose shutdown hook will drain their deliveries.
-      const pending = Deferred.makeUnsafe<PollingLifetime>();
-      this.lifetimeInitializing = pending;
-      return Effect.gen({ self: this }, function* () {
-        const pollScope = yield* Scope.make();
-        const deliveryScope = yield* Scope.make();
-        const deliveries = yield* FiberSet.make<void>().pipe(
-          Effect.provideService(Scope.Scope, deliveryScope),
-        );
-        const lifetime = { pollScope, deliveryScope, deliveries };
-        this.lifetime = lifetime;
-        this.registerShutdownIfNeeded(lifecycle);
-        return lifetime;
-      }).pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            Deferred.doneUnsafe(pending, exit);
-            if (this.lifetimeInitializing === pending) {
-              this.lifetimeInitializing = undefined;
-            }
-          }),
-        ),
-      );
-    });
   }
 
   private readonly pollLoopProgram = Effect.fn('PollingSourceBase.pollLoop')(
@@ -544,44 +515,6 @@ export abstract class PollingSourceBase<
       );
     },
   );
-
-  /**
-   * One process shutdown hook stops polling before draining already-admitted
-   * deliveries. A later subscription may rebind a replacement lifecycle.
-   */
-  private registerShutdownIfNeeded(lifecycle: LifecycleHost): void {
-    if (this.shutdownLifecycle === lifecycle) return;
-    // A shutdown already in progress still needs its ON hook to close the old
-    // scopes and drain admitted deliveries after a replacement subscribes.
-    if (!this.shutdownLifecycle?.shutdownRan) this.clearShutdownRegistration();
-    const lifetime = this.lifetime!;
-    this.shutdownRegistration = lifecycle.onShutdown(
-      SHUTDOWN_PHASE.ON,
-      Effect.gen({ self: this }, function* () {
-        if (this.lifetime === lifetime) this.disposeAll();
-        yield* this.logNotes();
-        yield* Scope.close(lifetime.pollScope, Exit.void);
-        yield* FiberSet.awaitEmpty(lifetime.deliveries);
-      }).pipe(
-        Effect.ensuring(Scope.close(lifetime.deliveryScope, Exit.void)),
-        Effect.ensuring(
-          Effect.sync(() => {
-            if (this.lifetime === lifetime) {
-              this.lifetime = undefined;
-              this.clearShutdownRegistration();
-            }
-          }),
-        ),
-      ),
-    );
-    this.shutdownLifecycle = lifecycle;
-  }
-
-  private clearShutdownRegistration(): void {
-    this.shutdownRegistration?.dispose();
-    this.shutdownRegistration = undefined;
-    this.shutdownLifecycle = undefined;
-  }
 
   /**
    * Poll every subscription with at most `maxConcurrent` in flight, then run

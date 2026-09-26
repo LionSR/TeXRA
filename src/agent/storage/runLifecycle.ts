@@ -71,132 +71,96 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
-  let releaseClaims: Effect.Effect<void, Error> = Effect.void;
-  const registration = yield* Effect.exit(
-    Effect.gen(function* () {
-      const records = getRunRecords(session, runId);
-      const prior = yield* records.exists();
-      if (prior)
-        releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
-      if (options.parentRunId !== undefined) {
-        // A record read goes straight to the database; it never queues behind
-        // the publisher. A parent whose `run.start` is queued but uncommitted
-        // therefore reads as absent here, and the refusal below would be about
-        // a parent that is on its way in. This empty batch is the barrier: the
-        // publisher is the one order, whether a fact was published detached or
-        // awaited, so a job enqueued here runs after every publication queued
-        // before it — while answering for none of them, which a settle could
-        // not do without failing this child over some other fact its parent
-        // lost.
-        yield* session.commit([]);
-        // The database refuses a parent that is closed or has no `run.start`;
-        // this read only words the refusal before the transaction opens.
-        if (!(yield* getRunRecords(session, options.parentRunId).exists()))
-          return yield* Effect.fail(
-            new Error(`Parent run ${options.parentRunId} is unavailable.`),
-          );
-      }
-      const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
-      const target = aggregateId('run', runId);
-      const category = isAgentRunRecord(pinned)
-        ? pinned.agentCategory
-        : (options.category ?? AgentCategory.ToolUse);
-      // The launch stamped the resolved source on the record; the registry is
-      // not consulted again.
-      const isRemote =
-        isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
-      const events: SessionEventDraft[] = [];
-      if (!prior) {
-        // The worktree the fold spells is the run's working directory as a
-        // bare path chip: the fold never shells out, so `branch`/`dirty`
-        // stay absent.
-        const worktreeCwd = pinned.workingDirectory?.trim();
-        events.push({
-          type: 'run.start',
-          aggregateId: target,
-          identity: options.identity,
-          userFollowUpSupport:
-            options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-          category,
-          isRemote,
-          worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
-          parent:
-            options.parentRunId === undefined
-              ? null
-              : { id: options.parentRunId },
-          approvalPolicy: session.approvalPolicySnapshotFor(runId),
-          checkpointId: options.checkpointId,
-        });
-      }
-      events.push(
-        {
-          type: 'run.record',
-          aggregateId: target,
-          record: pinned,
-        },
-        {
-          type: 'run.activate',
-          aggregateId: target,
-          category,
-          ...(options.identity.kind === 'agent' &&
-          options.identity.tool === undefined
-            ? { isRemote }
-            : {}),
-        },
-      );
-      // Enforcement is the session's in-memory policy; the row is its
-      // projection. A re-registration writes no `run.start`, so the
-      // activation re-stamps the snapshot enforcement now holds.
-      if (prior)
-        events.push({
-          type: 'approval.policy',
-          aggregateId: target,
-          snapshot: session.approvalPolicySnapshotFor(runId),
-        });
-      if (options.description !== undefined)
-        events.push({
-          type: 'run.description',
-          aggregateId: target,
-          description: options.description,
-        });
-      yield* session.commitRegistration(events);
-    }),
-  );
-  if (Exit.isFailure(registration)) {
-    const cause = Cause.squash(registration.cause);
-    const claimRelease = yield* Effect.exit(releaseClaims);
-    const failures = [
-      cause,
-      ...(Exit.isFailure(claimRelease)
-        ? [Cause.squash(claimRelease.cause)]
-        : []),
-    ];
-    return yield* Effect.fail(
-      failures.length > 1
-        ? new AggregateError(
-            failures,
-            `Run registration and claim rollback failed for ${runId}`,
-          )
-        : ensureError(cause),
+  return yield* Effect.gen(function* () {
+    // A re-registration writes into a run that already has rows; the
+    // registration takes the run's claim over as it commits.
+    const prior = yield* getRunRecords(session, runId).exists();
+    if (options.parentRunId !== undefined) {
+      // A record read goes straight to the database; it never queues behind
+      // the publisher. A parent whose `run.start` is queued but uncommitted
+      // therefore reads as absent here, and the refusal below would be about
+      // a parent that is on its way in. This empty batch is the barrier: the
+      // publisher is the one order, whether a fact was published detached or
+      // awaited, so a job enqueued here runs after every publication queued
+      // before it — while answering for none of them, which a settle could
+      // not do without failing this child over some other fact its parent
+      // lost.
+      yield* session.commit([]);
+      // The database refuses a parent that is closed or has no `run.start`;
+      // this read only words the refusal before the transaction opens.
+      if (!(yield* getRunRecords(session, options.parentRunId).exists()))
+        return yield* Effect.fail(
+          new Error(`Parent run ${options.parentRunId} is unavailable.`),
+        );
+    }
+    const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
+    const target = aggregateId('run', runId);
+    const category = isAgentRunRecord(pinned)
+      ? pinned.agentCategory
+      : (options.category ?? AgentCategory.ToolUse);
+    // The launch stamped the resolved source on the record; the registry is
+    // not consulted again.
+    const isRemote =
+      isAgentRunRecord(pinned) && pinned.agentSource === 'remote';
+    const events: SessionEventDraft[] = [];
+    if (!prior) {
+      // The worktree the fold spells is the run's working directory as a
+      // bare path chip: the fold never shells out, so `branch`/`dirty`
+      // stay absent.
+      const worktreeCwd = pinned.workingDirectory?.trim();
+      events.push({
+        type: 'run.start',
+        aggregateId: target,
+        identity: options.identity,
+        userFollowUpSupport:
+          options.userFollowUpSupport ?? USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
+        category,
+        isRemote,
+        worktree: worktreeCwd ? { workingDirectory: worktreeCwd } : undefined,
+        parent:
+          options.parentRunId === undefined
+            ? null
+            : { id: options.parentRunId },
+        approvalPolicy: session.approvalPolicySnapshotFor(runId),
+        checkpointId: options.checkpointId,
+      });
+    }
+    events.push(
+      {
+        type: 'run.record',
+        aggregateId: target,
+        record: pinned,
+      },
+      {
+        type: 'run.activate',
+        aggregateId: target,
+        category,
+        ...(options.identity.kind === 'agent' &&
+        options.identity.tool === undefined
+          ? { isRemote }
+          : {}),
+      },
     );
-  }
-});
-
-/** Admit a resumed turn and return rollback for only this admission's resources. */
-export const acquireResumedRunOwnership = Effect.fn(
-  'acquireResumedRunOwnership',
-)(function* (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const release = yield* session.acquireClaims(aggregateId('run', runId));
-  return release.pipe(
-    Effect.mapError(
-      (error) =>
-        new Error(`Run admission rollback failed for ${runId}`, {
-          cause: error,
-        }),
-    ),
+    // Enforcement is the session's in-memory policy; the row is its
+    // projection. A re-registration writes no `run.start`, so the
+    // activation re-stamps the snapshot enforcement now holds.
+    if (prior)
+      events.push({
+        type: 'approval.policy',
+        aggregateId: target,
+        snapshot: session.approvalPolicySnapshotFor(runId),
+      });
+    if (options.description !== undefined)
+      events.push({
+        type: 'run.description',
+        aggregateId: target,
+        description: options.description,
+      });
+    yield* session.commitRegistration(events);
+  }).pipe(
+    // A registration that died wrote nothing, and the caller refuses the
+    // launch on it like any other refused registration.
+    Effect.catchDefect((defect) => Effect.fail(ensureError(defect))),
   );
 });
 

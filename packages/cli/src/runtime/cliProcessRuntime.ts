@@ -56,7 +56,6 @@ import {
   StateWriteFailed,
   type StateStore,
 } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   withProcessServices,
@@ -214,19 +213,11 @@ export function installCliProcessRuntime(
     const secrets = getCliSecrets(storageRoot);
     // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
-    // The process lifecycle and agent directories are process services the
-    // runtime serves, so both are built here, before the install, rather than
-    // in the platform init that may join an already-installed runtime. The
-    // built-in agent directories read straight out of the CLI package's
-    // `dist/resources`; the platform-less entries pass no resources root and
-    // load no agents.
-    const lifecycle = createLifecycleHost({
-      onError: (phase, error) => {
-        writeTextStderr(
-          `[error] [cli.lifecycle] Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-        );
-      },
-    });
+    // The agent directories are a process service the runtime serves, so
+    // they are built here, before the install, rather than in the platform
+    // init that may join an already-installed runtime. The built-in agent
+    // directories read straight out of the CLI package's `dist/resources`;
+    // the platform-less entries pass no resources root and load no agents.
     const agentDirectories = new AgentDirectoryService({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
@@ -253,7 +244,6 @@ export function installCliProcessRuntime(
       // mounted, whichever entry installed this runtime.
       agentResume: cliAgentResume,
       agentDirectories: AgentDirectories.layer(agentDirectories),
-      lifecycle,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real

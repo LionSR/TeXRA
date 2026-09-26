@@ -1,14 +1,12 @@
-import { Effect, Exit } from 'effect';
-import { installedProcessRuntime } from '@agent/runtime';
+import { Effect } from 'effect';
 import { setLogSink } from '@logger/logSink';
-import { Lifecycle } from '@platform/interfaces';
-import { withProcessServices } from '@platform/processRuntime';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import { runCli } from '../commands/root';
 import { formatCrashReportLine, readCliBugsUrl } from '../runtime/cliContext';
 import { disposeCliProcessRuntime } from '../runtime/cliProcessRuntime';
 import { CliExitCode } from '../runtime/exitCodes';
+import { cliPlatformShutdown } from '../runtime/initPlatform';
 import {
   cliErrorMessage,
   flushNdjsonStdout,
@@ -29,11 +27,9 @@ import {
 // sink for it, and `initCliPlatform` swaps in the platform's as before.
 setLogSink(prePlatformDiagnosticSink, { trusted: true });
 
-// The process entry: one run, with the process lifecycle's shutdown drain,
-// the process runtime's disposal and the final NDJSON flush as its
-// finalizers, in that order — the drain is a program now, so this entry is
-// where it is run. The lifecycle is the installed runtime's own `Lifecycle`,
-// read before the drain runs. A platform's shutdown disposes the runtime as
+// The process entry: one run, with the platform's shutdown, the process
+// runtime's disposal and the final NDJSON flush as its finalizers, in that
+// order. A platform's shutdown disposes the runtime as
 // its last step; a command that refused its arguments before bringing a
 // platform up registered no such step, and its runtime's global-root change
 // poll would hold the event loop open forever, so the entry disposes whatever
@@ -62,22 +58,7 @@ await Effect.runPromise(
       }),
     ),
     Effect.ensuring(
-      Effect.suspend(() => {
-        const runtime = installedProcessRuntime();
-        // A runtime whose layers failed to build (a global store it refused
-        // to open) started nothing to drain, and the catch above has already
-        // reported that failure; reading its `Lifecycle` would raise it a
-        // second time, past this entry, as an unhandled rejection.
-        return runtime
-          ? Effect.flatMap(Effect.exit(runtime.contextEffect), (built) =>
-              Exit.isSuccess(built)
-                ? withProcessServices(runtime, Effect.service(Lifecycle)).pipe(
-                    Effect.flatMap((lifecycle) => lifecycle.runShutdown),
-                  )
-                : Effect.void,
-            )
-          : Effect.void;
-      }).pipe(
+      cliPlatformShutdown.pipe(
         Effect.ensuring(disposeCliProcessRuntime),
         Effect.ensuring(flushNdjsonStdout()),
       ),

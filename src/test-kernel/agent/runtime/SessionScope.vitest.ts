@@ -6,6 +6,7 @@ import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -24,7 +25,9 @@ describe('session-owned transcripts and follow-up queues', () => {
         const launching = createTestSession();
         const sibling = createTestSession();
         yield* Effect.addFinalizer(() =>
-          launching.dispose().pipe(Effect.andThen(sibling.dispose())),
+          closeSessionOf(launching).pipe(
+            Effect.andThen(closeSessionOf(sibling)),
+          ),
         );
         const runId = generateRunId();
 
@@ -53,7 +56,7 @@ describe('session-owned transcripts and follow-up queues', () => {
   it.effect('commits partial streaming text when the run parks', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
@@ -82,7 +85,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       const a = createTestSession();
       const b = createTestSession();
       yield* Effect.addFinalizer(() =>
-        a.dispose().pipe(Effect.andThen(b.dispose())),
+        closeSessionOf(a).pipe(Effect.andThen(closeSessionOf(b))),
       );
       const runId = generateRunId();
 
@@ -111,7 +114,7 @@ describe('sendFollowUp host-path session routing', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             processSession.followUps.terminalize(parentRun),
-          ).pipe(Effect.andThen(processSession.dispose())),
+          ).pipe(Effect.andThen(closeSessionOf(processSession))),
         );
 
         // A child run is tracked in the explicit process session, as desktop

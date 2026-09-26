@@ -8,6 +8,7 @@ import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 // Local imports
 import { loadAgents } from '@agent/index';
 import {
+  closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
@@ -97,7 +98,6 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -110,7 +110,6 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -184,10 +183,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ),
   );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
-  // Built on every activate(): the drain trips an internal idempotency flag,
-  // so a lifecycle kept from an earlier activate() in the same process would
-  // silently swallow the handlers this one registers.
-  const lifecycle = createLifecycleHost();
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out.
@@ -241,7 +236,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
     agentDirectories: AgentDirectories.layer(agentDirectories),
-    lifecycle,
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
@@ -270,23 +264,20 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // The Output channel owns filtering, so emit every level.
     minimumLogLevel: 'Trace',
   });
+  // The activation scope's finalizers are this host's shutdown, run in the
+  // reverse of their registration: every session closes first (registered
+  // at the end of activation), then the host's own resources, then the
+  // project scope, and the runtime last of all. `disposeStatusListener` and
+  // `statusBarItem` are owned solely by `context.subscriptions` (see the push
+  // near the end of activation), matching the setup pill.
+  yield* Effect.addFinalizer(() => disposeProcessRuntime(runtime));
   const projectScope = yield* Scope.make();
-  // `disposeStatusListener` and `statusBarItem` are owned solely by
-  // `context.subscriptions` (see the push near the end of activation),
-  // matching the setup pill. Registering them here too would
-  // double-dispose. The session is initialized on the workspace path only;
-  // the credential-only path has none to flush or release.
-  registerRuntimeShutdownHandlers(lifecycle, {
-    flushArtifacts: Effect.suspend(
-      () => tryDefaultSession()?.settlePublications() ?? Effect.void,
-    ),
-    afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
-    releaseSessions: teardownDefaultSession().pipe(
+  yield* Effect.addFinalizer(() =>
+    teardownDefaultSession().pipe(
       Effect.ensuring(Scope.close(projectScope, Exit.void)),
     ),
-    disposeRuntime: disposeProcessRuntime(runtime),
-  });
-  yield* Effect.addFinalizer(() => lifecycle.runShutdown);
+  );
+  yield* Effect.addFinalizer(() => Effect.sync(() => disposeDiffRefresh()));
   return yield* withProcessServices(
     runtime,
     Effect.gen(function* () {
@@ -583,9 +574,14 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
   // the runtime it was handed instead of reading the global back.
+  // The activation scope carries the shutdown: the workspace activation
+  // registers its own finalizers there.
+  const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, languageModel, secrets, runtime, roots),
+    activateWorkspace(context, languageModel, secrets, runtime, roots).pipe(
+      Effect.provideService(Scope.Scope, activationScope),
+    ),
   );
   // Off the activation tick: extendEnvPath() runs synchronous glob probes.
   yield* withProcessServices(
@@ -691,6 +687,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     progressViewProvider.initialize(),
     Effect.logInfo('TeXRA extension activated'),
   ).pipe(withLogChannel(EXTENSION_CHANNEL));
+  // Registered last, so the first thing the activation scope's close runs:
+  // every session stops and settles its runs before the view and the host
+  // resources registered above tear down around them.
+  yield* Effect.addFinalizer(() => Effect.asVoid(closeAllSessions()));
 
   registerCommands(
     context,

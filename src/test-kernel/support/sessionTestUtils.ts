@@ -23,6 +23,7 @@ import {
   emptyTranscript,
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
@@ -76,7 +77,7 @@ export function createProcessSession(
     const predecessors = heldSessions().filter(
       (live) => live.roots.storage === roots.storage,
     );
-    yield* Effect.forEach(predecessors, (live) => live.dispose(), {
+    yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
       discard: true,
     });
     return yield* openSessionEffect({

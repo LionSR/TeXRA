@@ -61,6 +61,7 @@ import {
   openSessionEffect,
 } from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
@@ -80,7 +81,6 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
-import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -101,6 +101,7 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -680,10 +681,13 @@ describe('Sessions owner', () => {
             unreadable: [],
           }),
         );
-        const stopAgentRun = vi.fn(() => Effect.void);
+        const stop = vi.fn(() => ({
+          accepted: () => true,
+          settlement: Effect.void,
+        }));
         const session = {
           view: view.ref,
-          runs: { stopAgentRun },
+          runs: { stop },
           roots: createFakeWorkspaceRoots({
             globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
           }),
@@ -705,7 +709,7 @@ describe('Sessions owner', () => {
         const request = { kind: 'run.stop', runId: RUN } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
-        expect(stopAgentRun).not.toHaveBeenCalled();
+        expect(stop).not.toHaveBeenCalled();
 
         yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
         yield* SubscriptionRef.update(view.ref, (v) => ({
@@ -718,7 +722,7 @@ describe('Sessions owner', () => {
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
         // A stop that leaves the child policy unset takes the session's
         // configured "Keep subagents running".
-        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
         });
       }).pipe(
@@ -784,7 +788,7 @@ describe('Sessions owner', () => {
                   workspaceState: state,
                 },
               }),
-              (session) => session.dispose(),
+              (session) => closeSessionOf(session),
             );
             expect(
               opened.mock.calls.filter(
@@ -793,7 +797,7 @@ describe('Sessions owner', () => {
                   join(realpathSync.native(storage), 'texra.db'),
               ),
             ).toHaveLength(1);
-            yield* session.dispose();
+            yield* closeSessionOf(session);
             // Closing the graph releases its borrow, never the still-open project's state.
             yield* state.update('shared', 'after session');
             expect(yield* state.get('shared')).toBe('after session');
@@ -937,7 +941,7 @@ describe('Sessions owner', () => {
         } finally {
           detachResult();
           sweep.mockRestore();
-          yield* session.dispose();
+          yield* closeSessionOf(session);
         }
       }),
   );
@@ -983,7 +987,7 @@ describe('Sessions owner', () => {
           // does not fail a run whose remaining facts are whole.
           yield* session.settlePublications(RUN);
         } finally {
-          yield* session.dispose();
+          yield* closeSessionOf(session);
         }
       }),
   );
@@ -1027,7 +1031,7 @@ describe('Sessions owner', () => {
         const settled = RunIdSchema.parse('aa0001');
         track(session, settled);
         // The run completes: its driver untracks it as it unwinds.
-        session.runs.untrack(settled);
+        untrackRun(session.runs, settled);
         // A native child between turns, detached from its stopped parent: its
         // activation is its only record, so the close must stop it itself, and
         // wait for the loop to release the activation after its last delivery.
@@ -1052,40 +1056,40 @@ describe('Sessions owner', () => {
       }),
   );
 
-  it.live('close releases the session after a stop settlement defect', () =>
-    Effect.gen(function* () {
-      const root = '/workspace/owner/stop-defect';
-      const session = yield* open(root);
-      const runId = RunIdSchema.parse('aa0005');
-      track(session, runId);
-      const stopFailure = new Error('terminal write refused');
-      vi.spyOn(session.runs, 'kill').mockReturnValue({
-        accepted: () => true,
-        settlement: Effect.fail(stopFailure),
-      });
+  it.effect(
+    'close reports a failed stop, settles the run it reached no driver for, and releases the session',
+    () =>
+      Effect.gen(function* () {
+        const root = '/workspace/owner/stop-defect';
+        const session = yield* open(root);
+        const runId = RunIdSchema.parse('aa0005');
+        track(session, runId);
+        vi.spyOn(session.runs, 'stop').mockReturnValue({
+          accepted: () => false,
+          settlement: Effect.fail(new Error('terminal write refused')),
+        });
 
-      const closed = yield* Effect.exit(closeSession(root));
-      expect(Exit.isFailure(closed)).toBe(true);
-      expect(
-        Exit.isFailure(closed) ? Cause.squash(closed.cause) : undefined,
-      ).toBe(stopFailure);
-      expect(isLive(session)).toBe(true);
-
-      session.runs.untrack(runId);
-      yield* Effect.promise(() =>
-        vi.waitFor(() => expect(isLive(session)).toBe(false)),
-      );
-    }),
+        expect(yield* closeSession(root)).toEqual({
+          settled: true,
+          abandoned: [],
+        });
+        expect(isLive(session)).toBe(false);
+      }),
   );
 
   it.effect(
-    'close reports a run still live past the budget as abandoned, and releases the session at its settlement',
+    'close settles a run still live past the budget, reports it abandoned, and releases the session',
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/abandoned');
-        // A run that ignores its interrupt: no handler, no driver to unwind it.
+        // A run whose driver takes the stop and never unwinds.
         const slow = RunIdSchema.parse('aa0003');
-        track(session, slow);
+        session.runs.reserveChildActivation({
+          runId: slow,
+          parent: { current: null },
+          retainsTerminalParent: false,
+          interrupt: () => {},
+        });
         const closing = yield* Effect.forkChild(
           closeSession('/workspace/owner/abandoned'),
         );
@@ -1094,18 +1098,12 @@ describe('Sessions owner', () => {
         yield* Effect.promise(
           () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
         );
-        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
         expect(yield* Fiber.join(closing)).toEqual({
           settled: false,
           abandoned: [slow],
         });
-        expect(isLive(session)).toBe(true);
-        session.runs.untrack(slow);
-        // The release runs detached on the session owner (RcMap.invalidate):
-        // no settle covers it.
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(isLive(session)).toBe(false)),
-        );
+        expect(isLive(session)).toBe(false);
       }),
   );
 });

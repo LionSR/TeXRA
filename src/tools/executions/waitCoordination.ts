@@ -3,7 +3,7 @@
  * decides which executions are worth blocking on.
  */
 
-import type { RunRegistry } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 
@@ -18,13 +18,17 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
  *   retry/user action and should keep blocking.
  *
- * One getHandle + one getStatus per call — no redundant lookups.
+ * One handle lookup and one view read per call — no redundant lookups.
  */
-export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
-  const handle = runs.getHandle(runId);
+export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
+  const handle = session.runs.getHandle(runId);
   if (!handle) return true;
 
-  const { status } = runs.getStatus(handle);
+  // A tracked run whose activation has not folded yet is running: the
+  // handle exists because its process is live.
+  const viewed = session.runView(runId)?.status;
+  const status =
+    viewed === undefined || viewed === 'ready' ? RUN_PHASE.RUNNING : viewed;
   if (!isInFlightPhase(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
@@ -36,6 +40,6 @@ export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
-    handle.isChild
+    handle.parent !== null
   );
 }

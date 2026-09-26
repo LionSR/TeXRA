@@ -2,7 +2,7 @@
  * Live run handle and terminal settlement.
  *
  * A handle owns one run's identity, its parent edge, its live control
- * surfaces (the tool-use flow, the run lease), and its exactly-once
+ * surface (the tool-use flow), and its exactly-once
  * terminal settlement. A run's stop is its fiber's interruption
  * (`RunRegistry.interrupt`), never a call on this handle. Termination
  * policy lives with the owning registry.
@@ -10,20 +10,8 @@
 
 import type { AgentTrace } from '@agent/trace';
 import type { ToolUseFlowContext } from '@agent/runtime/loop/toolUse';
-import type {
-  AgentCategory,
-  RunId,
-  RunIdentity,
-  RunPhase,
-} from '@shared/schemas';
+import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
 import { runIdentityName } from '@shared/schemas';
-
-/** A tracked run's status line: the stream's phase, and how long it has
- *  been running while active. */
-export interface RunStatusInfo {
-  status: RunPhase;
-  elapsed: string | null;
-}
 
 /**
  * The run's immutable birth facts, the same values `run.start` publishes and
@@ -69,15 +57,7 @@ export type LiveToolUseFlowContext = Pick<
 export class RunHandle<
   Trace extends AgentTrace | undefined = AgentTrace | undefined,
 > {
-  /**
-   * Epoch ms when this handle generation was created. The value remains on a
-   * handle while it is parked at WAITING. Resume constructs and tracks a
-   * replacement handle, whose `startedAt` is stamped anew. This feeds the
-   * `executions` tool's `Started:` line.
-   * Durable run creation time is `RunView.launchedAt`.
-   */
-  readonly startedAt = Date.now();
-  /** @internal The roster shares this cell across one activation's handles. */
+  /** @internal The registry shares this cell across one activation's handles. */
   parentState: RunParent;
   private toolUseFlowContext?: LiveToolUseFlowContext;
 
@@ -123,21 +103,10 @@ export class RunHandle<
     return this.run.category;
   }
 
-  /** The launching run, or null for a root and for a detached child. */
+  /** The launching run this run's results route to, or null for a root and
+   *  for a child the registry has detached. */
   get parent(): RunId | null {
     return this.parentState.current;
-  }
-
-  get isChild(): boolean {
-    return this.parentState.current !== null;
-  }
-
-  /**
-   * The parent this run's results route to, or `undefined` once the run has
-   * none (a root run, or a child detached by the roster).
-   */
-  get deliveryTarget(): RunId | undefined {
-    return this.parentState.current ?? undefined;
   }
 
   /**
@@ -166,20 +135,3 @@ export class RunHandle<
     return this.toolUseFlowContext;
   }
 }
-
-/**
- * A launched run's handle as `onRun` hands it to the caller: every launch
- * constructs it over the run's own trace, so the trace is present by type.
- */
-export type AgentRunHandle = Pick<
-  RunHandle<AgentTrace>,
-  | 'runId'
-  | 'parent'
-  | 'isChild'
-  | 'identity'
-  | 'category'
-  | 'agentName'
-  | 'startedAt'
-  | 'trace'
-  | 'deliveryTarget'
->;

@@ -58,7 +58,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     });
     const child = yield* createChildRun(...args).pipe(
       Effect.provideService(Runs, session.runs),
-      Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
+      Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
     );
     // What the child loop does once its stop target is reserved.
     child.track();
@@ -71,7 +71,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
           .finalize(input)
           .pipe(
             Effect.provideService(Runs, session.runs),
-            Effect.ensuring(session.releaseRunLease(runId).pipe(Effect.orDie)),
+            Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
           ),
     };
   },

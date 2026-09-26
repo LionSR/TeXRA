@@ -25,6 +25,7 @@ import {
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { untrackRun } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { captureLogEntries } from '@test/support/logSinkCapture';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -223,7 +224,7 @@ describe('runFlowWithLifecycle', () => {
           yield* Deferred.await(parked.started);
           expect(storageMocks.finalizeRun).toHaveBeenCalledOnce();
 
-          const stop = testDefaultSession().runs.kill(runId);
+          const stop = testDefaultSession().runs.stop(runId);
 
           expect(stop.accepted()).toBe(false);
 
@@ -234,7 +235,7 @@ describe('runFlowWithLifecycle', () => {
           expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
           expect(testDefaultSession().runs.getHandle(runId)).toBeUndefined();
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );
@@ -359,7 +360,7 @@ describe('runFlowWithLifecycle', () => {
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() => testDefaultSession().runs.untrack(runId)),
+          Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
         );
         const stageEnd = vi.spyOn(ctx.parentStage, 'end');
 
@@ -520,7 +521,7 @@ describe('runFlowWithLifecycle', () => {
     Effect.gen(function* () {
       const { runId, ctx } = lifecycleFixture();
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => testDefaultSession().runs.untrack(runId)),
+        Effect.sync(() => untrackRun(testDefaultSession().runs, runId)),
       );
       const carriedResult = {
         outcome: RUN_OUTCOME.FAILED,
@@ -582,7 +583,7 @@ describe('runFlowWithLifecycle', () => {
           );
           expect(stageEnd).toHaveBeenCalledWith(RUN_OUTCOME.FAILED);
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );
@@ -624,7 +625,7 @@ describe('runFlowWithLifecycle', () => {
             }),
           );
         } finally {
-          testDefaultSession().runs.untrack(runId);
+          untrackRun(testDefaultSession().runs, runId);
         }
       }),
   );

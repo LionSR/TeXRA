@@ -89,6 +89,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
+  type AggregateId,
   RUN_OUTCOME,
   type RunId,
   AgentCategory,
@@ -140,12 +141,12 @@ const LANE_SESSION = {
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
-    // No parent is detaching this run, so its release waits on nothing.
-    throughDetach: () => Effect.void,
   },
-  acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseClaims: mocks.releaseClaims },
-  releaseClaims: SessionHandle.prototype.releaseClaims,
+  // The resume's hold on the run's claim: its release is what the suite
+  // observes, when the resume's scope closes.
+  acquireClaims: (id: AggregateId) =>
+    Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
+  holdRunClaim: SessionHandle.prototype.holdRunClaim,
   // The resumed run reads its parent edge off the session's cold fold, so the
   // lineage fixture is that read.
   readView: (...args: unknown[]) =>
@@ -155,7 +156,7 @@ const LANE_SESSION = {
     }),
   status: {},
   settlePublications,
-  releaseRunLease: SessionHandle.prototype.releaseRunLease,
+  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 function resumeToolUseFromResumeData(
@@ -265,7 +266,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         setting: { agentCategory: AgentCategory.Workflow },
         runId: resume.runId,
         session: {
-          releaseRunLease: vi.fn(async () => {}),
+          commitRunEnd: vi.fn(async () => {}),
         },
       } as unknown as AgentLaunchContext);
 

@@ -100,7 +100,7 @@ async function seedSnapshot(
       },
     ]),
   );
-  await Effect.runPromise(testDefaultSession().releaseRunLease(id));
+  await Effect.runPromise(testDefaultSession().commitRunEnd(id));
 }
 
 describe('CLI history status formatting', () => {
