@@ -318,7 +318,7 @@ describe('session framer', () => {
     });
     return Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       vi.spyOn(session, 'inputs').mockReturnValue(
         Stream.die(new Error('replay read failed')),
       );

@@ -708,11 +708,11 @@ function onceAborted<A, E>(
 
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
- * interruption records the terminal outcome and releases the run's claim
- * before propagating the original cause. Post-handoff work stays outside
+ * interruption records the terminal outcome, commits the run's ending and
+ * releases its claim before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
-export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
+export function runWithLaunchGuard<A, E, R>(
   session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
@@ -968,7 +968,12 @@ export function startChildRunLoop<TTurn, R = never>(
     let releaseClaim: Effect.Effect<void> = Effect.void;
     const run = Effect.gen(function* () {
       runStarted = true;
-      releaseClaim = yield* runSession.acquireClaims(aggregateId('run', runId));
+      releaseClaim = yield* runSession.acquireClaims(
+        aggregateId('run', runId),
+        {
+          ends: true,
+        },
+      );
       let turnIndex = 0;
       let result: TTurn | undefined;
       yield* Effect.scoped(

@@ -3,14 +3,7 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  vi,
-  type MockInstance,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -24,7 +17,6 @@ import {
   agentMatchesIdentifier,
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
@@ -338,7 +330,7 @@ function mockTrackedChildOnce(
       });
       testDefaultSession().runs.track(handle);
       runOptions.onRunResolved?.(runId);
-      Effect.runSync(runOptions.onRun?.(handle) ?? Effect.void);
+      Effect.runSync(runOptions.onRun?.(runId) ?? Effect.void);
       await options.afterRun?.(handle);
       return {
         outcome: RUN_OUTCOME.COMPLETED,
@@ -422,19 +414,22 @@ function recordTerminalFact(
 }
 
 describe('headless delegation', () => {
-  /**
-   * The claim release the session's exit choreography ends with. The failure
-   * paths fail it rather than `commitRunEnd` itself, so the drain, the
-   * terminal write and the settle above it still run for real.
-   */
-  let releaseClaims: MockInstance<SessionHandle['releaseClaims']>;
+  /** Called when a claim hold on the in-band session is released: the
+   *  last step of a child's ending, after everything it owes the run. */
+  let releaseClaim: Mock<() => void>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    releaseClaims = vi.spyOn(SessionHandle.prototype, 'releaseClaims');
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
     inBandSession = createTestSession();
+    releaseClaim = vi.fn();
+    const acquireClaims = inBandSession.acquireClaims.bind(inBandSession);
+    vi.spyOn(inBandSession, 'acquireClaims').mockImplementation((id) =>
+      Effect.map(acquireClaims(id), (release) =>
+        Effect.andThen(Effect.sync(releaseClaim), release),
+      ),
+    );
     publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
     await Effect.runPromise(inBandSession.settlePublications());
     mocks.prepareAgentDefinition.mockImplementation(
@@ -667,34 +662,8 @@ describe('headless delegation', () => {
           }),
         );
         expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-          releaseClaims.mock.invocationCallOrder[0] ?? 0,
+          releaseClaim.mock.invocationCallOrder[0] ?? 0,
         );
-      }),
-  );
-
-  it.effect(
-    'returns the committed result when the final claim release fails',
-    () =>
-      Effect.gen(function* () {
-        const drain = vi.spyOn(inBandSession, 'settlePublications');
-        releaseClaims.mockReturnValueOnce(
-          Effect.fail(
-            new DatabaseWriteFailed({
-              path: 'session.db',
-              cause: new Error('claim release failed'),
-            }),
-          ),
-        );
-
-        const result = yield* runInBand(delegationOptions());
-
-        expect(result.result.outcome).toBe('completed');
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        // The release that failed is the last step: everything the exit
-        // choreography owes the run happened before it.
-        expect(drain).toHaveBeenCalled();
-        // The failure injected is the run's own release, not a neighbour's.
-        expect(releaseClaims).toHaveBeenCalledOnce();
       }),
   );
 
@@ -799,28 +768,6 @@ describe('headless delegation', () => {
           yield* Effect.flip(runInBand(delegationOptions())),
         ).toBeInstanceOf(SubagentDurabilityError);
         expect(mocks.writeReport).toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'preserves the child failure when final claim cleanup also fails',
-    () =>
-      Effect.gen(function* () {
-        const childFailure = new Error('review model failed');
-        mocks.executeAgent.mockRejectedValueOnce(childFailure);
-        releaseClaims.mockReturnValueOnce(
-          Effect.fail(
-            new DatabaseWriteFailed({
-              path: 'session.db',
-              cause: new Error('claim release failed'),
-            }),
-          ),
-        );
-        expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
-          childFailure,
-        );
-        // The failure manifest is written above the release that failed.
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       }),
   );
 

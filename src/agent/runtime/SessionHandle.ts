@@ -472,11 +472,28 @@ export class SessionHandle {
     });
   }
 
-  /** Hold one run's claim for the caller's scope: the claim a run's driver
-   *  holds for the run's lifetime, and anything else that must append to the
-   *  run meanwhile. Holds nest; the claim is released when the last one's
-   *  scope closes. */
+  /** Hold one run's claim for the caller's scope as the run's driver: the
+   *  claim ends with the last hold, however it was found — a registration
+   *  leaves it standing for the driver to end. */
   holdRunClaim(
+    runId: RunId,
+  ): Effect.Effect<
+    void,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed,
+    Scope.Scope
+  > {
+    return Effect.asVoid(
+      Effect.acquireRelease(
+        this.acquireClaims(qualifyAggregateId('run', runId), { ends: true }),
+        (release) => release,
+      ),
+    );
+  }
+
+  /** Hold one run's claim for the caller's scope without ending it: the claim
+   *  goes back to how this hold found it, so a run's standing claim outlives
+   *  a detach batch or an inactive-run step over it. */
+  borrowRunClaim(
     runId: RunId,
   ): Effect.Effect<
     void,
@@ -496,11 +513,12 @@ export class SessionHandle {
    *  before a relaunch journals into it. */
   acquireClaims(
     id: AggregateId,
+    options: { readonly ends?: boolean } = {},
   ): Effect.Effect<
     Effect.Effect<void>,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
-    return this.graph.acquireClaims(id);
+    return this.graph.acquireClaims(id, options.ends === true);
   }
 
   /**
@@ -834,13 +852,14 @@ export class SessionHandle {
     return this.graph.publish(events);
   }
 
-  /** Registration owns birth claims as soon as append commits, before its
-   *  tail drains. Its refusal is typed like {@link commit}'s. */
+  /** Registration owns its runs' claims: a birth's as soon as its append
+   *  commits, before its tail drains, and a re-registration's taken over
+   *  before it appends. Its refusal is typed like {@link commit}'s. */
   commitRegistration(
     events: readonly SessionEventDraft[],
   ): Effect.Effect<
     readonly SessionEvent[],
-    DatabaseNotOwner | DatabaseWriteFailed
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
     return this.graph.publishRegistration(events);
   }

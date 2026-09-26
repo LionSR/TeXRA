@@ -61,10 +61,10 @@ interface QueueEntry {
    *  when that admission settles. */
   pendingRelease?: 'recoverable' | 'terminal';
   /**
-   * The run aggregate's database claim an admission took for a recovery
-   * owner that had not launched its run yet. The recovery lease owns its
-   * release: a consumer attaching to the lease adopts the claim (its own
-   * run lease ends it), and a lease that exits without one releases it.
+   * The hold on the run's claim an admission kept for a recovery owner that
+   * had not launched its run yet. The recovery lease owns its release: a
+   * consumer attaching to the lease gives it back once its own hold is the
+   * claim's, and a lease that exits without one releases it.
    */
   adoptedClaim?: Effect.Effect<void, Error>;
 }
@@ -292,8 +292,8 @@ export class ToolUseFollowUpQueue {
   /**
    * Attach to this lease, or to an enclosing child/recovery owner. Existing
    * input wins so every consumer of one generation reads one input.
-   * Attachment adopts the admission's claim; the caller must hold the run's
-   * DB lease.
+   * The caller holds the run's claim already, so the hold an admission kept
+   * for this owner is given back: a consumer's own hold is the claim's now.
    */
   attachInput(
     runId: RunId,
@@ -305,7 +305,9 @@ export class ToolUseFollowUpQueue {
       return undefined;
     }
     if (lease ? owner !== lease : owner.kind === 'flow') return undefined;
+    const adopted = entry.adoptedClaim;
     entry.adoptedClaim = undefined;
+    if (adopted) this.port.detach(this.releaseClaim(runId, adopted));
     entry.input ??= new RunInput(() =>
       this.port
         .pending(runId)

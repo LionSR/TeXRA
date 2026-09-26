@@ -377,8 +377,8 @@ export function executeCliRequest(
     };
     const shutdownStatusFinalized = yield* Effect.cached(
       Effect.gen(function* () {
-        // Both call sites run after runAgent has already published (or failed to
-        // publish) the lease, so the plain variable is the settled answer.
+        // Both call sites run after runAgent has taken (or failed to take)
+        // the run's claim, so the plain variable is the settled answer.
         const runId = ownedRunId;
         if (!runId) return false;
         const onFinalized = options.onInterruptedRunFinalized;
@@ -392,8 +392,8 @@ export function executeCliRequest(
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;
-          // The lease was released just above, so the checkpoint alone decides
-          // whether the recovery notice is usable.
+          // The run's ending committed just above, so the checkpoint alone
+          // decides whether the recovery notice is usable.
           if (onFinalized !== undefined) {
             const advertise = yield* advertisesInterruptedRun(
               runId,
@@ -504,11 +504,11 @@ export function executeCliRequest(
                 ).pipe(Effect.orElseSucceed(() => false)));
             }
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
-            // for runAgent to finish unwinding before the final drain releases
-            // ownership, so no transcript or checkpoint writer can race the
-            // lease release. This step's deadline bounds this wait by
-            // interrupting it. Once durable resumability and lease
-            // availability have been established, however, keep shutdown alive
+            // for runAgent to finish unwinding before the final drain commits
+            // the run's ending, so no transcript or checkpoint writer can race
+            // it. This step's deadline bounds this wait by interrupting it.
+            // Once durable resumability has been established, however, keep
+            // shutdown alive
             // until the promised recovery notice has been flushed — that wait
             // is uninterruptible precisely because it outranks the deadline.
             if (advertisesCheckpoint && options.onInterruptedRunFinalized) {
@@ -553,7 +553,7 @@ export function executeCliRequest(
                   tryCommitWorkflowOutputPublication,
                 ),
         modelCompatibilityKey: options.modelCompatibilityKey,
-        beforeLeaseRelease: () =>
+        beforeRunEnd: () =>
           Effect.gen(function* () {
             const handled = yield* finalizeShutdownStatus;
             if (
@@ -566,7 +566,7 @@ export function executeCliRequest(
             }
             return handled;
           }),
-        onRunLeaseAcquired: (runId) => {
+        onRunClaimed: (runId) => {
           ownedRunId = runId;
         },
         stopAfterCycle: options.stopAfterCycle,

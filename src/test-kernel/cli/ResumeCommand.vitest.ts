@@ -167,8 +167,9 @@ async function seedRunRecord(seed: {
     );
   }
   // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
-  // to be resumed is one nobody holds, so the seed gives the claim back.
-  await Effect.runPromise(session.releaseClaims(aggregateId('run', RUN_ID)));
+  // to be resumed is one nobody holds, so the seed gives the claim back: a
+  // hold taken and let go releases it.
+  await Effect.runPromise(Effect.scoped(session.holdRunClaim(RUN_ID)));
 }
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -354,14 +355,9 @@ describe('runResumeCommand', () => {
 
   it.effect('reports a live run instead of failing silently', () =>
     Effect.gen(function* () {
-      yield* seededSession.acquireClaims(aggregateId('run', RUN_ID));
-      // The claim is handed back whatever the resume probe does below: the
-      // scope close is the `finally` the async body used.
-      yield* Effect.addFinalizer(() =>
-        seededSession
-          .releaseClaims(aggregateId('run', RUN_ID))
-          .pipe(Effect.orDie),
-      );
+      // The case's hold on the run's claim, handed back whatever the resume
+      // probe does below: the test's scope close releases it.
+      yield* seededSession.holdRunClaim(RUN_ID);
 
       // The command's program runs on the runtime its boundary holds, which
       // the `run` helper stands in for.

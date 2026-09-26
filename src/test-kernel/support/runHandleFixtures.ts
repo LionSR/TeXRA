@@ -42,6 +42,7 @@ export function testRunRegistry(): RunRegistry {
     finalizeRun: (input) =>
       Effect.succeed({ ok: true, outcome: input.outcome }),
     holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
   });
 }
 

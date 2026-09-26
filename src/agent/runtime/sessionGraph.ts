@@ -25,6 +25,7 @@ import type {
   LocalRuntimeState,
   SessionCloseReport,
   SessionEvent,
+  SessionEventDraft,
   TranscriptSubscription,
 } from '@shared/schemas';
 import type {
@@ -54,7 +55,14 @@ export interface SessionGraph {
   /** Append one batch in publication order and return once the view has
    *  folded it: what a caller that reads the view next awaits. */
   readonly publish: SessionEventsShape['publish'];
-  readonly publishRegistration: SessionEventsShape['publish'];
+  /** `publish`, owning the claims of the runs it registers: a birth's as it
+   *  commits, a re-registration's taken over before it. */
+  readonly publishRegistration: (
+    events: readonly SessionEventDraft[],
+  ) => Effect.Effect<
+    readonly SessionEvent[],
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
+  >;
   /** A read of committed rows and the append that depends on it, as one
    *  job of the publisher, settled like `publish`. */
   readonly exclusive: SessionEventsShape['exclusive'];
@@ -68,12 +76,13 @@ export interface SessionGraph {
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
-  /** A hold on one aggregate's claim, answered with its release: taken for a
-   *  run's lifetime, and before a resume reads or mutates a run or a
-   *  relaunch appends to a workflow checkpoint. Holds are counted, so the
-   *  claim is released only when the last holder lets go. */
+  /** A hold on one aggregate's claim, answered with its release. Holds are
+   *  counted: the last one to go returns the claim to how the first found
+   *  it, or releases it when any hold `ends` it — a run's driver, a
+   *  workflow checkpoint's invocation. */
   readonly acquireClaims: (
     id: AggregateId,
+    ends: boolean,
   ) => Effect.Effect<
     Effect.Effect<void>,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed

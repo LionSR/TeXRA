@@ -115,6 +115,7 @@ function createRegistry(
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
     holdRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
+    borrowRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -148,6 +149,7 @@ function createRegistry(
     approvals: createSessionApprovals(),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
     ...options,
   });
   return { events, phases, registry };
@@ -1179,7 +1181,7 @@ it.effect('holds a run against launches without making it a stop target', () =>
     const claimed = yield* Deferred.make<void>();
     const released = vi.fn();
     const { registry: roster } = createRegistry({
-      holdRunClaim: () =>
+      borrowRunClaim: () =>
         Effect.acquireRelease(Deferred.await(claimed), () =>
           Effect.sync(released),
         ),

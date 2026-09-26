@@ -109,7 +109,9 @@ describe('run registration and finalization', () => {
     (alreadyOwned) =>
       Effect.gen(function* () {
         yield* register();
-        if (!alreadyOwned) yield* session.commitRunEnd(runId);
+        // Registration left the birth claim standing; a run nobody drives
+        // any more has given it back.
+        if (!alreadyOwned) yield* Effect.scoped(session.holdRunClaim(runId));
         const failure = new DatabaseReadFailed({
           path: 'session.db',
           cause: new Error('database admission rejected'),
@@ -129,7 +131,7 @@ describe('run registration and finalization', () => {
     () =>
       Effect.gen(function* () {
         yield* register();
-        yield* session.commitRunEnd(runId);
+        yield* Effect.scoped(session.holdRunClaim(runId));
         const failure = new Error('registration rejected');
         vi.spyOn(session, 'commitRegistration').mockReturnValueOnce(
           Effect.die(failure),

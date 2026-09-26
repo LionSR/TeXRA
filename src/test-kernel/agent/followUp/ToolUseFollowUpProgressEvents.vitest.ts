@@ -120,9 +120,7 @@ describe('tool-use follow-up progress events', () => {
         // A finished run's driver released its claim when its scope closed;
         // these rows stand in for that driver, so the claim they took goes
         // back here too: a hold taken and let go releases it.
-        yield* Effect.flatten(
-          testDefaultSession().acquireClaims(qualifyAggregateId('run', runId)),
-        );
+        yield* Effect.scoped(testDefaultSession().holdRunClaim(runId));
         trackToolUseFlow();
 
         const result = yield* submitFollowUp(runId, 'late follow-up', {

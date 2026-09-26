@@ -58,9 +58,9 @@ vi.mock('@tools/delegation/childRun', () => ({
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedRunLeaseLaunchGuard: (
+  runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,

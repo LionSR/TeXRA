@@ -844,15 +844,24 @@ describe('CLI run command, workflow agents', () => {
           },
         ]);
         // The executeCliConfig stub is an Effect port. Its run owns output
-        // finalization and releases the real claim before returning.
+        // finalization, and the driver it stands in for holds the real
+        // claim, released once the run's ending has committed.
         mocks.executeCliConfig.mockImplementationOnce(
           (_config, _context, options) =>
-            options
-              .openWorkflowOutput(run.result, [], () => true)
-              .pipe(
-                Effect.as(run),
-                Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
-              ),
+            Effect.scoped(
+              session
+                .holdRunClaim(runId)
+                .pipe(
+                  Effect.andThen(
+                    options.openWorkflowOutput(run.result, [], () => true),
+                  ),
+                  Effect.as(run),
+                  Effect.ensuring(
+                    session.commitRunEnd(runId).pipe(Effect.orDie),
+                  ),
+                  Effect.orDie,
+                ),
+            ),
         );
         expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
           0,

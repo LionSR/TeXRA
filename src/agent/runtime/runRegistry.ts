@@ -153,11 +153,16 @@ export interface RunRegistryInit {
   readonly finalizeRun: (
     input: FinalizeRunInput,
   ) => Effect.Effect<FinalizeRunResult, Error>;
-  /** Hold one run's claim for the caller's scope (`SessionHandle.holdRunClaim`).
-   *  A run aggregate takes an append from its claim holder alone, so a stop
-   *  that reached no live target holds the claim while it writes the run's
-   *  terminal row. */
+  /** Hold one run's claim for the caller's scope as its driver
+   *  (`SessionHandle.holdRunClaim`). A run aggregate takes an append from its
+   *  claim holder alone, so a stop that reached no live target drives the
+   *  run's ending under it, and the claim ends with it. */
   readonly holdRunClaim: (
+    runId: RunId,
+  ) => Effect.Effect<void, Error, Scope.Scope>;
+  /** Hold one run's claim for the caller's scope and give it back as found
+   *  (`SessionHandle.borrowRunClaim`): an inactive-run step, a detach batch. */
+  readonly borrowRunClaim: (
     runId: RunId,
   ) => Effect.Effect<void, Error, Scope.Scope>;
 }
@@ -547,7 +552,7 @@ export class RunRegistry {
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
               Effect.gen({ self: this }, function* () {
-                yield* this.init.holdRunClaim(runId);
+                yield* this.init.borrowRunClaim(runId);
                 yield* Deferred.succeed(ready, undefined);
                 yield* Latch.await(latch);
               }),
@@ -887,7 +892,7 @@ export class RunRegistry {
       return Effect.scoped(
         Effect.forEach(
           detachedChildRunIds,
-          (childRunId) => this.init.holdRunClaim(childRunId),
+          (childRunId) => this.init.borrowRunClaim(childRunId),
           { discard: true },
         ).pipe(
           Effect.andThen(

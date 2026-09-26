@@ -49,18 +49,18 @@ export interface RunAgentOptions extends Pick<
    */
   suppressErrorNotification?: boolean;
   /**
-   * Persist host-owned final state before the ordinary session drain. Return
-   * true when the hook already drained artifacts and disposed of ownership.
+   * Persist host-owned final state before the run's ending commits. Return
+   * true when the hook already committed that ending (`commitRunEnd`).
    * The owning session is passed explicitly so the hook does not depend on an
    * ambient run frame during Effect resumption. A failure of this program is
    * one more failure the launch reports; it is never read as a `false`
-   * answer, so the ordinary release still runs.
+   * answer, so the ordinary ending still commits.
    */
-  beforeLeaseRelease?: (
+  beforeRunEnd?: (
     session: SessionHandle,
   ) => Effect.Effect<boolean | void, Error>;
-  /** Fires once this run owns its run lease. */
-  onRunLeaseAcquired?: (runId: RunId) => void;
+  /** Fires once this launch holds the run's claim. */
+  onRunClaimed?: (runId: RunId) => void;
   /**
    * Opt-in set by the "fix LaTeX" VS Code actions (Fix-Compilation command, the
    * progress-view compile fixer): run the launched agent on the configured
@@ -102,8 +102,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
   options: RunAgentOptions,
 ): Effect.fn.Return<AgentFlowResult, Error, ProcessServices> {
   const {
-    beforeLeaseRelease,
-    onRunLeaseAcquired,
+    beforeRunEnd,
+    onRunClaimed,
     preferHelperModel,
     suppressErrorNotification,
     ...executeAgentOptions
@@ -190,7 +190,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
       let aggregated: Error | undefined;
       const run = yield* Effect.exit(
         Effect.gen(function* () {
-          onRunLeaseAcquired?.(runId);
+          onRunClaimed?.(runId);
           // Ownership is the fence for the edge as well: a detach another
           // host committed while this launch prepared has folded by now, and
           // a foreign row never reaches a handle this session tracks, so the
@@ -275,17 +275,17 @@ export const runAgent = Effect.fn('runAgent')(function* (
 
                 const artifacts = yield* Effect.exit(
                   Effect.suspend(
-                    () => beforeLeaseRelease?.(runSession) ?? Effect.void,
+                    () => beforeRunEnd?.(runSession) ?? Effect.void,
                   ),
                 );
                 if (Exit.isFailure(artifacts))
                   failures.push(Cause.squash(artifacts.cause));
                 if (Exit.isFailure(artifacts) || artifacts.value !== true) {
-                  const release = yield* Effect.exit(
+                  const ended = yield* Effect.exit(
                     runSession.commitRunEnd(runId),
                   );
-                  if (Exit.isFailure(release))
-                    failures.push(Cause.squash(release.cause));
+                  if (Exit.isFailure(ended))
+                    failures.push(Cause.squash(ended.cause));
                 }
                 if (failures.length > 0) {
                   aggregated = ensureError(

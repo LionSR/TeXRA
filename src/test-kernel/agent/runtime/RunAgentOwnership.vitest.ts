@@ -134,14 +134,15 @@ const SESSION = {
   // The launch's hold on the run's claim: the release it hands back also
   // reports to `mocks.releaseClaims`, which the release-order cases observe.
   acquireClaims: (id: AggregateId) =>
-    (
-      mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>
-    ).pipe(
+    (mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>).pipe(
       Effect.map((release) =>
-        release.pipe(Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id)))),
+        release.pipe(
+          Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id))),
+        ),
       ),
     ),
   holdRunClaim: SessionHandle.prototype.holdRunClaim,
+  borrowRunClaim: SessionHandle.prototype.borrowRunClaim,
   settlePublications,
   commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
@@ -182,6 +183,7 @@ function realRunRegistry(): RunRegistry {
     finalizeRun: ((input: { readonly outcome: string }) =>
       Effect.succeed({ ok: true, outcome: input.outcome })) as never,
     holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
   });
 }
 
@@ -534,7 +536,7 @@ describe('runAgent run ownership', () => {
 
       yield* launch({
         kind: 'fresh',
-        beforeLeaseRelease: () =>
+        beforeRunEnd: () =>
           Effect.sync(() => {
             order.push('artifacts');
           }),
@@ -567,7 +569,7 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
-    'does not drain artifacts again after the host disposed of ownership',
+    'does not drain artifacts again after the host committed the run end',
     () =>
       Effect.gen(function* () {
         const order: string[] = [];
@@ -577,7 +579,7 @@ describe('runAgent run ownership', () => {
         });
         yield* launch({
           kind: 'fresh',
-          beforeLeaseRelease: () =>
+          beforeRunEnd: () =>
             Effect.sync(() => {
               order.push('host-artifacts-and-release');
               return true;
@@ -631,7 +633,7 @@ describe('runAgent run ownership', () => {
         const failure = yield* Effect.flip(
           launch({
             kind: 'fresh',
-            beforeLeaseRelease: () => Effect.fail(artifactError),
+            beforeRunEnd: () => Effect.fail(artifactError),
           }),
         );
 

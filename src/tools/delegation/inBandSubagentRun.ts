@@ -155,7 +155,7 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  *
  * A loop failure after the turn settled does not rewrite the outcome when the
  * child's rows were already committed: the committed rows are the fact, and a
- * claim or lease-file release that threw afterwards leaves them whole. A
+ * claim release or ending that threw afterwards leaves them whole. A
  * failed artifact drain is the exception: it rolled back facts the run had
  * queued, so a required-result caller must not journal the call as answered.
  * It is read from either place it can be seen — the loop's own
@@ -211,8 +211,8 @@ const executeInBand = Effect.fn('executeInBand')(
         onTurnSettled: (settled) => {
           settledTurn = settled;
         },
-        // Built inside the loop's lease launch guard, like every
-        // attempt-scoped setup: a throw here releases the owned-run lease.
+        // Built inside the loop's launch guard, like every attempt-scoped
+        // setup: a throw here ends the run and releases its claim.
         buildLaunch: () =>
           Effect.succeed({
             strategy: createNativeSubagentStrategy({
@@ -334,7 +334,7 @@ const executeInBand = Effect.fn('executeInBand')(
       // fact). Two drains can lose it, and only one of them reaches here as an
       // error: the pre-terminal drain the run's own lifecycle ran is only
       // legible on the row it marked (a publication that fails once is settled
-      // and gone by the time the lease-release drain runs), while the release
+      // and gone by the time the ending's drain runs), while the ending's
       // drain fails this loop, alone or wrapped with its other cleanup
       // failures.
       if (
@@ -376,7 +376,7 @@ const executeInBand = Effect.fn('executeInBand')(
     });
 
     // A caller stop landing here interrupts the join, not the child: the
-    // child's rows were committed inside its own lease boundary and the
+    // child's rows were committed under its own claim and the
     // detached loop owns its terminal record.
     return completed;
   },

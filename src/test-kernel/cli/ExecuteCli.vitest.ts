@@ -224,10 +224,10 @@ async function loadExecuteCli() {
 }
 
 type LeaseOptions = {
-  beforeLeaseRelease?: () => Effect.Effect<boolean | void, Error>;
+  beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   session?: SessionHandle;
-  onRunLeaseAcquired?: (runId: RunId) => void;
+  onRunClaimed?: (runId: RunId) => void;
 };
 
 /**
@@ -354,7 +354,7 @@ async function stubExecuteCliDeps(): Promise<void> {
   );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onRunLeaseAcquired?.('exec-1' as RunId);
+    options.onRunClaimed?.('exec-1' as RunId);
     return COMPLETED_RUN;
   });
 }
@@ -660,14 +660,14 @@ describe('executeCliRequest', () => {
         // The stub resumes this fiber synchronously, so one macrotask lets the
         // rest of the stub (the tracked launch handle) run first.
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
           detachActiveChildren: false,
@@ -743,12 +743,12 @@ describe('executeCliRequest', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -779,7 +779,7 @@ describe('executeCliRequest', () => {
       const leaseOptions = yield* Deferred.await(published);
       yield* settle;
       expect(leaseOptions).toBeDefined();
-      leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+      leaseOptions.onRunClaimed?.('exec-1' as RunId);
       const shutdown = yield* Effect.forkChild(
         Scope.close(platform.shutdownScope, Exit.void),
         {
@@ -788,7 +788,7 @@ describe('executeCliRequest', () => {
       );
 
       expect(
-        yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
+        yield* Effect.flip(leaseOptions.beforeRunEnd?.() ?? Effect.void),
       ).toBe(drainError);
       hangingRun.resolve(COMPLETED_RUN);
       yield* Fiber.join(shutdown);
@@ -863,7 +863,7 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
 
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
@@ -908,7 +908,7 @@ describe('executeCliRequest', () => {
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
@@ -956,7 +956,7 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
@@ -1004,7 +1004,7 @@ describe('executeCliRequest', () => {
         });
         mocks.runAgent.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
-            options.onRunLeaseAcquired?.('exec-1' as RunId);
+            options.onRunClaimed?.('exec-1' as RunId);
             try {
               await testRuntime().runPromise(
                 options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -1093,15 +1093,13 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
 
-        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
-          false,
-        );
+        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(false);
         hangingRun.resolve(COMPLETED_RUN);
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
@@ -1135,7 +1133,7 @@ describe('executeCliRequest', () => {
       const leaseOptions = yield* Deferred.await(published);
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
-      leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+      leaseOptions.onRunClaimed?.('exec-1' as RunId);
       const shutdown = yield* Effect.forkChild(
         Scope.close(platform.shutdownScope, Exit.void),
         {
@@ -1202,7 +1200,7 @@ describe('executeCliRequest', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
@@ -1211,9 +1209,7 @@ describe('executeCliRequest', () => {
         // The drain runs under the lease, before the launch settles: this is
         // the instant at which its failure notice used to claim the run's own
         // presentation and suppress the message below.
-        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
-          true,
-        );
+        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(true);
         hangingRun.reject(
           new RuntimeAgentError('Error executing agent chat: boom'),
         );
@@ -1293,12 +1289,12 @@ describe('executeCliConfig', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -1342,12 +1338,12 @@ describe('executeCliConfig', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 

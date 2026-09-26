@@ -341,12 +341,15 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       /**
        * This process's holds on aggregate claims, counted: the first holder
        * of an aggregate proves any prior owner dead and takes its claim (or
-       * finds it already this process's, as a run's birth claim is), every
-       * later holder shares it, and the claim is released when the last
-       * holder's scope closes. So nested holders nest — a run holding its
-       * own claim for its lifetime, a parent's detach batch over that run,
-       * a deletion's hold — and none of them releases under another. The map
-       * closes with the session, releasing whatever is still held.
+       * finds it already this process's, as a registration leaves it), every
+       * later holder shares it, and the claim's disposition is decided when
+       * the last holder's scope closes. A holder returns the claim to how the
+       * first one found it, unless one of them ends it: a run's driver, or a
+       * checkpoint's invocation, owns the claim, and when the last hold goes
+       * after one of those, the claim is released. So nested holders nest —
+       * a parent's detach batch over a running child, a follow-up admission
+       * on a registered run — and none of them releases under another. The
+       * map closes with the session, deciding whatever is still held.
        */
       const claims = yield* RcMap.make({
         lookup: (id: AggregateId) =>
@@ -354,17 +357,20 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             eventLog.acquireClaims([id]).pipe(
               // A claim moving here seeds the publisher's pending follow-ups.
               Effect.tap((ids) => reads.hydrateFollowUps(id, ids.length > 0)),
+              Effect.map((ids) => ({ taken: ids.length > 0, ended: false })),
             ),
-            () =>
-              eventLog
-                .releaseClaims([id])
-                .pipe(
-                  Effect.catch(
-                    logFailure(
-                      `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
-                    ),
-                  ),
-                ),
+            (hold) =>
+              hold.taken || hold.ended
+                ? eventLog
+                    .releaseClaims([id])
+                    .pipe(
+                      Effect.catch(
+                        logFailure(
+                          `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
+                        ),
+                      ),
+                    )
+                : Effect.void,
           ),
       });
       const graph = (session: SessionHandle): SessionGraph => {
@@ -400,13 +406,14 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             }
             return pieces.reverse().join('');
           },
-          acquireClaims: (id) =>
+          acquireClaims: (id, ends) =>
             Effect.gen(function* () {
               const hold = yield* Scope.make();
-              yield* RcMap.get(claims, id).pipe(
+              const claim = yield* RcMap.get(claims, id).pipe(
                 Scope.provide(hold),
                 Effect.onError(() => Scope.close(hold, Exit.void)),
               );
+              if (ends) claim.ended = true;
               return Scope.close(hold, Exit.void);
             }),
           runRecords: (id) =>
@@ -459,10 +466,52 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
           ),
           publishRegistration: (events) =>
             Effect.gen(function* () {
-              const rows = yield* publish(events);
-              const born = rows.flatMap((row) =>
-                row.type === 'run.start' ? [row.aggregateId] : [],
+              // A registration owns its run's claim once it commits, as a
+              // birth does: a run with no `run.start` in the batch is a
+              // re-registration of rows already written, whose claim it
+              // takes over first (from a dead owner, or this process's own).
+              // The run's driver holds the claim from there on.
+              const reclaimed = [
+                ...new Set(
+                  events.flatMap((event) =>
+                    event.type === 'run.record' &&
+                    !events.some(
+                      (other) =>
+                        other.type === 'run.start' &&
+                        other.aggregateId === event.aggregateId,
+                    )
+                      ? [event.aggregateId]
+                      : [],
+                  ),
+                ),
+              ];
+              for (const id of reclaimed)
+                yield* eventLog
+                  .acquireClaims([id])
+                  .pipe(
+                    Effect.tap((ids) =>
+                      reads.hydrateFollowUps(id, ids.length > 0),
+                    ),
+                  );
+              const rows = yield* publish(events).pipe(
+                Effect.onError(() =>
+                  eventLog
+                    .releaseClaims(reclaimed)
+                    .pipe(
+                      Effect.catch(
+                        logFailure(
+                          'Registration claims were not released after its publication failed.',
+                        ),
+                      ),
+                    ),
+                ),
               );
+              const born = [
+                ...reclaimed,
+                ...rows.flatMap((row) =>
+                  row.type === 'run.start' ? [row.aggregateId] : [],
+                ),
+              ];
               return yield* settlePublication(rows).pipe(
                 Effect.onError(() =>
                   eventLog.releaseClaims(born).pipe(
@@ -509,6 +558,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             approvals,
             finalizeRun: (input) => finalizeRun(session, input),
             holdRunClaim: (runId) => session.holdRunClaim(runId),
+            borrowRunClaim: (runId) => session.borrowRunClaim(runId),
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.

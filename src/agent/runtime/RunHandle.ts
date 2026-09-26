@@ -2,7 +2,7 @@
  * Live run handle and terminal settlement.
  *
  * A handle owns one run's identity, its parent edge, its live control
- * surfaces (the tool-use flow, the run lease), and its exactly-once
+ * surface (the tool-use flow), and its exactly-once
  * terminal settlement. A run's stop is its fiber's interruption
  * (`RunRegistry.interrupt`), never a call on this handle. Termination
  * policy lives with the owning registry.

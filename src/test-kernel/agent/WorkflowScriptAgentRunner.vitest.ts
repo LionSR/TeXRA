@@ -265,7 +265,8 @@ const fenceRoster = () =>
     commit: () => Effect.void,
     approvals: createSessionApprovals(),
     finalizeRun: () => Effect.die('finalizeRun is not reached by the fence'),
-    holdRunClaim: (runId: RunId) =>
+    holdRunClaim: () => Effect.die('holdRunClaim is not reached by the fence'),
+    borrowRunClaim: (runId: RunId) =>
       Effect.asVoid(
         Effect.acquireRelease(
           mocks.acquireClaims(aggregateId('run', runId)),

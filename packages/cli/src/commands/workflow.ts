@@ -427,7 +427,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     }
     if (!workflowResult) {
       return yield* Effect.die(
-        new Error('Workflow output was not finalized before lease release.'),
+        new Error('Workflow output was not finalized before the run ended.'),
       );
     }
 
