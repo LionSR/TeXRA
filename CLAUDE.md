@@ -102,7 +102,15 @@ Things the tree won't tell you:
   contracts and UI-shared message types, which ~9k lines of rendering code is
   not. It is a VS Code-free zone and, like `src/shared/`, takes no
   `@agent/*` imports. Do not confuse it with `src/transcript/` (`@transcript`),
-  the run-transcript persistence layer.
+  the run-transcript persistence layer. **`src/shared/{litControllers,monaco,highlighting}/`
+  never made that move** — Lit reactive controllers, a Monaco bootstrap, and a
+  highlight.js wrapper, every consumer a webview frontend, not a wire-contract
+  reader. They stayed behind because moving them costs 235 import statements
+  plus 9 hardcoded literal paths in two `test-kernel` specs, not because the
+  code belongs with wire contracts. Treat them as the UI toolkit's territory:
+  don't duplicate a controller or a highlighter in `src/ui/` without checking
+  here first, and don't read their location as license to add more rendering
+  code under `src/shared/`.
 
 Two wiring points fail silently if you forget them: a new VS Code command must
 be registered through `packages/extension/src/commands.ts`, and a new setting
@@ -150,7 +158,8 @@ rather than an import.
 Substitutions and the push-UI-to-the-caller rule: AGENTS.md "Platform
 decoupling rules".
 
-Also: `src/shared/` is for wire contracts and UI-shared message types, and
+Also: `src/shared/` is for wire contracts and UI-shared message types (plus the
+stranded `litControllers/`, `monaco/`, `highlighting/` trio noted above), and
 `src/ui/` for the rendering toolkit over them — don't add new `@agent/*`
 imports to either; host-neutral orchestration goes in `src/controllers/`.
 
