@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Effect, FileSystem, type Scope } from 'effect';
+import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -46,6 +46,15 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
+
+/**
+ * A workflow subagent that ran but cannot resolve its agent() call: it ended
+ * with a non-completed outcome, or completed without the output files a
+ * workflow agent owes. The script sees it as that call's rejection.
+ */
+class WorkflowSubagentUnsuccessful extends Data.TaggedError(
+  'WorkflowSubagentUnsuccessful',
+)<{ readonly message: string }> {}
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -865,17 +874,18 @@ export function createWorkflowScriptAgentRunner(
         invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
-        throw new Error(
-          `Workflow subagent ended with ${result.outcome} outcome.`,
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message: `Workflow subagent ended with ${result.outcome} outcome.`,
+        });
       }
       if (
         result.output.category === 'workflow' &&
         result.output.outputs.length === 0
       ) {
-        throw new Error(
-          'Workflow subagent completed without producing any output files.',
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message:
+            'Workflow subagent completed without producing any output files.',
+        });
       }
       return result;
     },

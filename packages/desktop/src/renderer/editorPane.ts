@@ -314,8 +314,9 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     if (editor) return editor;
     if (editorLoad) return editorLoad;
 
-    editorLoad = loadMonaco()
-      .then((loadedMonaco) => {
+    editorLoad = (async () => {
+      try {
+        const loadedMonaco = await loadMonaco();
         if (disposed) return undefined;
         monaco = loadedMonaco;
         const editorFontSize = getDesktopChromeFontSize();
@@ -344,8 +345,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           cursorBlinking: 'smooth',
         });
         return editor;
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         callbacks.onError(error);
         render(
           html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
@@ -355,10 +355,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
           editorHost,
         );
         return undefined;
-      })
-      .finally(() => {
+      } finally {
         editorLoad = undefined;
-      });
+      }
+    })();
     return editorLoad;
   }
 
@@ -503,23 +503,23 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
     loadingDirectories.clear();
     directoryErrors.clear();
     renderTree();
-    const treeRefresh = callbacks
-      .listFiles('')
-      .then((listedFiles) => {
+    const treeRefresh = (async () => {
+      try {
+        const listedFiles = await callbacks.listFiles('');
         if (revision !== treeRevision) return;
         treeNodes = buildEditorDirectoryEntries(listedFiles);
         treeError = undefined;
-      })
-      .catch((error: unknown) => {
+      } catch (error) {
         if (revision !== treeRevision) return;
         callbacks.onError(error);
         treeError = 'Could not list workspace files.';
-      })
-      .finally(() => {
-        if (revision !== treeRevision) return;
-        treeLoading = false;
-        renderTree();
-      });
+      } finally {
+        if (revision === treeRevision) {
+          treeLoading = false;
+          renderTree();
+        }
+      }
+    })();
     const modelRefreshes = [...models].map(([path, model]) =>
       syncCleanModel(path, model).catch((error: unknown) =>
         callbacks.onError(error),
