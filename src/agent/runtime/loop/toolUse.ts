@@ -660,9 +660,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step. Restore an already idle cursor
           // before acknowledging it; no new model turn is needed to park it.
-          if (restoring && !followUps.hasQueued()) {
+          if (restoring && !followUps.hasQueued())
             state = yield* cell.append([stepRow(runId, state, 'waiting')]);
-          }
+          restoring &&= followUps.hasQueued();
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
@@ -685,8 +685,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
               ? { synthetic: true, text: next.turn }
               : null;
           if (batch === null) {
-            // The host port stays attached: `/model` and `/compact` land on
-            // a parked run.
+            // The host port stays attached: `/model`, `/compact` land here.
             batch = yield* followUps.wait;
             if (batch === null) {
               // The queue was cancelled or disposed under the parked loop:
@@ -702,6 +701,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             batch,
           );
           state = yield* cell.adopt(consumed.state);
+          if (!consumed.turn) continue;
           instruct(consumed.instruction);
         }
         restoring = false;
