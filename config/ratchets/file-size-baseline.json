@@ -35,7 +35,6 @@
     "packages/extension/src/progressView/frontend/components/SessionComposer.ts": 787,
     "packages/extension/src/progressView/frontend/components/TaskGroupList.ts": 590,
     "packages/extension/src/progressView/frontend/components/WorkflowRunBoard.ts": 723,
-    "packages/extension/src/progressView/frontend/ProgressApp.ts": 502,
     "packages/extension/src/progressView/frontend/sessionSurfaces.ts": 509,
     "packages/extension/src/progressView/ProgressViewProvider.ts": 824,
     "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts": 560,

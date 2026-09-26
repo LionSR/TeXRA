@@ -1017,10 +1017,27 @@ wa-dialog.desktop-onboarding {
    pane is a single full-width column. It previously reserved a tree column that
    nothing occupied, which squeezed Monaco into a narrow strip and left the rest
    of the pane blank. */
+.desktop-editor-notice wa-callout {
+  margin: var(--wa-space-2xs);
+}
+
+.desktop-editor-notice wa-callout::part(message) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+}
+
+.desktop-editor-notice-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
 .desktop-editor-pane {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  /* The notice row collapses to nothing while no file operation failed. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   height: 100%;

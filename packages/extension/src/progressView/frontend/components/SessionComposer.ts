@@ -308,6 +308,13 @@ export class SessionComposer extends LitElement {
     );
   }
 
+  /** Focus the field, caret after its text: a starter just filled it in. */
+  focusAtEnd(): void {
+    const end = this.textArea?.value.length ?? 0;
+    this.textArea?.focus();
+    this.textArea?.setSelectionRange(end, end);
+  }
+
   private setText(text: string, patch: Partial<Draft> = {}): void {
     const run = this.run;
     if (run) {
@@ -624,6 +631,7 @@ export class SessionComposer extends LitElement {
           size="s"
           type="button"
           with-caret
+          aria-label=${`${menu.title}: ${menu.label}`}
           >${waIcon(menu.icon, { slot: 'start' })}<span class="chip-label"
             >${menu.label}</span
           ></wa-button
@@ -676,7 +684,7 @@ export class SessionComposer extends LitElement {
     const canSend = run
       ? canSendFollowUp(run, this.draft, { terminalBacked: true })
       : hasText;
-    const sendLabel = compact ? 'Send follow-up' : 'Run';
+    const sendLabel = compact ? 'Send follow-up' : 'Start task';
 
     return html`
       ${run ? this.renderRouting(run) : nothing}

@@ -60,6 +60,7 @@ import './components/RunTabs';
 import './components/RunConversation';
 import './components/SessionBanners';
 import './components/SessionComposer';
+import './components/NewTaskHero';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
 import './components/FileSelectGroup';
@@ -356,6 +357,7 @@ export class ProgressApp extends LitElement {
           <wa-input
             size="s"
             placeholder="Filter sessions"
+            aria-label="Filter sessions"
             .value=${live(surface.search)}
             @input=${this.handleSearchInput}
           >
@@ -371,7 +373,7 @@ export class ProgressApp extends LitElement {
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */
-  private renderHero(host: HostSnapshot): TemplateResult {
+  private renderHero(host: HostSnapshot, surface: Surface): TemplateResult {
     if (host.onboarding === 'setup') {
       return html`<section class="hero" aria-labelledby="shell-hero-title">
         <div class="hero-mark" aria-hidden="true">${waIcon('rocket')}</div>
@@ -399,16 +401,10 @@ export class ProgressApp extends LitElement {
     if (host.banners.gettingStarted) {
       return html`<getting-started-banner></getting-started-banner>`;
     }
-    return html`<section class="hero" aria-labelledby="shell-hero-title">
-      <div class="hero-mark" aria-hidden="true">
-        ${waIcon('wand-magic-sparkles')}
-      </div>
-      <h1 id="shell-hero-title">What are you working on?</h1>
-      <p>
-        ${host.project.name}. Describe the outcome you want: a polish, a review,
-        a literature pass, a proof check.
-      </p>
-    </section>`;
+    return html`<new-task-hero
+      .projectName=${host.project.name}
+      .instruction=${surface.launch.instruction}
+    ></new-task-hero>`;
   }
 
   private renderEmptyState(
@@ -440,7 +436,7 @@ export class ProgressApp extends LitElement {
     return html`
       <div class="empty">
         <div class="hero-wrap">
-          ${this.renderHero(host)}
+          ${this.renderHero(host, surface)}
           <!-- A document pass cannot run without an input file, so picking
             one opens the file groups. -->
           <wa-details class="context" ?open=${documentPass}>

@@ -673,18 +673,17 @@ const CORE_SETTING_ROWS: Record<
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for file edits',
+    title: 'Require approval for file edits',
     description:
-      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
+      'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/toolEditApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for shell commands',
-    description:
-      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
+    title: 'Require approval for shell commands',
+    description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/bashApproval.ts'),
     surfaces: { settingsView: 'approval' },
@@ -745,7 +744,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
@@ -753,7 +752,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
       desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
     },
-    enumLabels: ['Never', 'Ask', 'Auto-approve'],
+    enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];

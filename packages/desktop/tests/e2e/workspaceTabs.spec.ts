@@ -383,7 +383,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   });
   const shortcuts = page.locator('shortcuts-tab');
   await expect(
-    shortcuts.getByText('Toggle Bottom Bar', { exact: true }),
+    shortcuts.getByText('Toggle Bottom Panel', { exact: true }),
   ).toBeVisible();
   await expect(
     shortcuts.getByText('Toggle Side Panel', { exact: true }),

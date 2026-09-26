@@ -390,7 +390,7 @@ function shellConversationTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar - approval pending';
+    sidebarToggleLabel = 'Show sidebar (approval pending)';
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
