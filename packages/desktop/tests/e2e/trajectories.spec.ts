@@ -29,6 +29,17 @@ test.beforeAll(async () => {
   await dismissOnboarding(launched.page);
 });
 
+// The Settings popup is modal; a journey that opened it must not leave it
+// over the next one's clicks.
+test.afterEach(async () => {
+  await launched.page.evaluate(() => {
+    const dialog = document.querySelector<HTMLElement & { open: boolean }>(
+      'wa-dialog.desktop-settings-overlay',
+    );
+    if (dialog) dialog.open = false;
+  });
+});
+
 test.afterAll(async () => {
   if (launched) await closeTexraApp(launched);
 });

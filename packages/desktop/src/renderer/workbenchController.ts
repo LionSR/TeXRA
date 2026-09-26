@@ -38,7 +38,6 @@ interface WorkbenchControllerDeps {
   pdfPane: ReturnType<typeof createPdfPane>;
   /** The Subagents tab's content, read from the active project's view. */
   subagentsTemplate(): TemplateResult | typeof nothing;
-  settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopShellState;
   updateShell(next: DesktopShellState): void;
@@ -67,7 +66,6 @@ export function createWorkbenchController({
   reviewPane,
   pdfPane,
   subagentsTemplate,
-  settingsView,
   logsPane,
   getState,
   updateShell,
@@ -217,10 +215,10 @@ export function createWorkbenchController({
 
   /**
    * Content for one tab. Every surface stays mounted once opened and is hidden when
-   * its tab is inactive, so Monaco models, terminal scrollback, and in-flight
-   * settings edits survive both tab switches and layout changes.
+   * its tab is inactive, so Monaco models and terminal scrollback survive both
+   * tab switches and layout changes.
    *
-   * The editor, terminal, settings, and logs surfaces are single shared instances,
+   * The editor, terminal, and logs surfaces are single shared instances,
    * so they render in whichever pane currently holds their tab — Lit moves the DOM
    * node rather than duplicating it.
    */
@@ -285,8 +283,6 @@ export function createWorkbenchController({
         ></div>`;
       case 'review':
         return workbenchSurfaceTemplate(reviewPane.element);
-      case 'settings':
-        return isActive() ? workbenchSurfaceTemplate(settingsView) : nothing;
       case 'logs':
         return isActive() ? workbenchSurfaceTemplate(logsPane) : nothing;
       case 'pdf':

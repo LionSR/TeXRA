@@ -83,13 +83,13 @@ describe('desktop shell state model', () => {
 
   it('focuses existing singleton and editor tabs without duplicating them', () => {
     let state = shellWith(
-      { kind: 'settings' },
+      { kind: 'browser' },
       { kind: 'editor', target: 'paper.tex' },
       { kind: 'logs' },
     );
 
     state = openWorkbenchTab(state, {
-      kind: 'settings',
+      kind: 'browser',
       title: 'Ignored replacement title',
     });
     state = openWorkbenchTab(state, {
@@ -99,14 +99,14 @@ describe('desktop shell state model', () => {
 
     expect(state.workbenchTabs).toHaveLength(3);
     expect(
-      state.workbenchTabs.filter((tab) => tab.kind === 'settings'),
+      state.workbenchTabs.filter((tab) => tab.kind === 'browser'),
     ).toHaveLength(1);
     expect(active(state)?.id).toBe('workbench:editor:paper.tex');
   });
 
   it('closes active tabs toward the left, then the right', () => {
     let state = shellWith(
-      { kind: 'settings' },
+      { kind: 'browser' },
       { kind: 'logs' },
       { kind: 'editor', target: 'paper.tex' },
     );
@@ -114,8 +114,8 @@ describe('desktop shell state model', () => {
     state = closeWorkbenchTab(state, 'workbench:editor:paper.tex');
     expect(active(state)?.kind).toBe('logs');
 
-    state = focusWorkbenchTab(state, 'workbench:settings');
-    state = closeWorkbenchTab(state, 'workbench:settings');
+    state = focusWorkbenchTab(state, 'workbench:browser');
+    state = closeWorkbenchTab(state, 'workbench:browser');
     expect(active(state)?.kind).toBe('logs');
 
     state = closeWorkbenchTab(state, 'workbench:logs');
@@ -123,7 +123,7 @@ describe('desktop shell state model', () => {
   });
 
   it('hides the workbench without discarding tabs and reopens the latest tab', () => {
-    const openState = shellWith({ kind: 'settings' }, { kind: 'logs' });
+    const openState = shellWith({ kind: 'browser' }, { kind: 'logs' });
     const closed = closeWorkbench(openState, 'right');
 
     expect(closed.workbenchTabs).toEqual(openState.workbenchTabs);

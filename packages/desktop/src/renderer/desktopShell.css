@@ -769,12 +769,6 @@ body[data-desktop-platform='darwin']
   overflow: auto;
 }
 
-.shell-workbench-surface > settings-app {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-}
-
 .shell-workbench-placeholder {
   display: grid;
   align-content: center;
