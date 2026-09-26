@@ -52,11 +52,14 @@ can be ratified.
      `helperModel.ts` and `run/compaction.ts` invoking the bound `Model`
      directly — deliberate exceptions, not a second handler, as the 2026-09-24
      note recorded).
-   - Model handler: chat/model-turn provider calls are reached only through the
-     `packages/llm` (`@texra-ai/llm`) `Model` bound by
-     `runtime/run/modelBinding.ts`. Tool-level exceptions outside the model
-     handler remain: audio transcription builds `OpenAI` directly in
-     `src/tools/media/audio.ts`, and the Codex tool uses `@openai/codex-sdk`.
+   - Model handler: run-loop chat/model-turn provider calls are reached only
+     through the `packages/llm` (`@texra-ai/llm`) `Model` bound by
+     `runtime/run/modelBinding.ts`. Exceptions outside that route remain and are
+     deliberate: audio transcription builds `OpenAI` directly in
+     `src/tools/media/audio.ts`, the Codex tool uses `@openai/codex-sdk`, and the
+     settings-view consent probe (`SettingsViewMessageHandler.ts:403-438`)
+     acquires a VS Code `Model` and runs its own `prepareTurn`/`generateTurn`
+     to confirm language-model access.
    - Logger: `src/logger/` (`effectLog.ts`, `logSink.ts`, `effectDiagnostics.ts`,
      `formatLogData.ts`, `redaction.ts`).
    - SDK surface: `packages/agent` (`@texra-ai/agent`) — `index.ts`, `node.ts`,
@@ -164,16 +167,21 @@ can be ratified.
    latter a failed-activation cleanup path that supplies diagnostics after the
    runtime holding its logger layer is gone.
 
-3. **Two small, real surface leaks in `packages/llm`.** These fall in the
-   territory of `2026-09-20-llm-package-hardening.md`, but that note's §0 records
-   its five planned changes as closed and mentions neither leak, so they are
-   **not** already owned there — they need filing (into that note or a fresh
-   tech-debt entry) rather than being deferred to it:
-   - `packages/llm/package.json` exports `"./prefix-fingerprint"` with **zero
-     production importers** — only two kernel tests reach `admittedFingerprint`
-     through it; production uses relative imports. A published package should not
-     expose an internal continuation-anchoring digest as a subpath. Shed the
-     export entry; have the tests import via a test-only path.
+3. **One small `packages/llm` cleanliness item, plus one framing correction.**
+   These fall in the territory of `2026-09-20-llm-package-hardening.md`, but that
+   note's §0 records its five planned changes as closed and mentions neither, so
+   they are **not** already owned there — they need filing (into that note or a
+   fresh tech-debt entry) rather than being deferred to it:
+   - **Not a published-surface leak** (correcting the audit's first framing):
+     `packages/llm/package.json` exports `"./prefix-fingerprint"`, reached only
+     by two kernel tests (`admittedFingerprint`); production uses relative
+     imports. But `@texra-ai/llm` is `"private": true` and unpublished, and its
+     README makes the `exports` map the enforced boundary every consumer —
+     tests included — must go through (no filesystem-alias bypass). So this is
+     not a leak and cannot simply be "shed to a test-only path" without either
+     recreating the contract or breaking that boundary rule. At most it is a
+     minor question of whether a purely test-only symbol deserves a package
+     subpath; low priority, and constrained by the exports-map rule.
    - Three sites read `process.env.{OPENAI,ANTHROPIC}_CUSTOM_HEADERS` inside
      otherwise-pure codec factories — `openaiChat.ts:525`,
      `anthropicMessages.ts:465`, and `openaiResponsesRequest.ts:348` (in
@@ -211,8 +219,12 @@ finalizer-before-release ordering (comments at `:531-535`, `:604-613`).
 
 - **Ratify the Tier-1 public manifest** — now gated on the re-enumeration in
   §New.1.
-- **Shrink the frozen lists** (`host-agent-import`, `effect-migration`) as the
-  manifest ratifies each edge; never widen.
+- **Shrink the `host-agent-import` frozen list** as the manifest ratifies each
+  edge (its `agent` row is the internal-coupling width a Tier-1 barrel must
+  re-export or seal); never widen. (`effect-migration` is not coupled to the
+  manifest — its only live row is the two permanent `new AbortController()`
+  foreign-adapter sites, which a ruling protects; it shrinks by code conversion,
+  not by ratifying exports, so it is out of scope for this deliverable.)
 - **Owner ruling on the two agent-creation systems** (`texra.createAgentWithAI`
   wizard vs. the `creator` tool-use agent), per
   `2026-09-23-ssot-ownership-survey.md` §2 — changes user-visible behaviour and
