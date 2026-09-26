@@ -23,7 +23,6 @@ import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { JsonStore, nodeFileServices } from '@platform/defaults/jsonStore';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
@@ -99,9 +98,6 @@ interface ElectronPlatformInitResult {
 export const initializeElectronPlatform = Effect.fn(
   'initializeElectronPlatform',
 )(function* (moduleDirname: string, agentResume: AgentResumePort) {
-  // The default handler's console.error is mirrored into the desktop app log,
-  // so shutdown-handler failures land at error severity like the other hosts.
-  const lifecycle = createLifecycleHost();
   const userDataPath = app.getPath('userData');
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
@@ -180,7 +176,6 @@ export const initializeElectronPlatform = Effect.fn(
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
     agentDirectories: agentDirectoriesLayer,
-    lifecycle,
     setup: setupAuth.platform,
     // Desktop model traffic goes to the same Supabase usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
@@ -241,5 +236,5 @@ export const initializeElectronPlatform = Effect.fn(
       setupAuth,
     };
   });
-  return { lifecycle, runtime, processScope, initialize };
+  return { runtime, processScope, initialize };
 });

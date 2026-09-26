@@ -40,7 +40,6 @@ const parentRunId = 'c11112' as RunId;
 const stoppedRunId = 'c11114' as RunId;
 const failedRunId = 'c11116' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
-const setupRetryRunId = 'c11120' as RunId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -58,7 +57,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     });
     const child = yield* createChildRun(...args).pipe(
       Effect.provideService(Runs, session.runs),
-      Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
+      Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
     );
     // What the child loop does once its stop target is reserved.
     child.track();
@@ -71,7 +70,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
           .finalize(input)
           .pipe(
             Effect.provideService(Runs, session.runs),
-            Effect.ensuring(session.releaseRunLease(runId).pipe(Effect.orDie)),
+            Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
           ),
     };
   },
@@ -253,82 +252,6 @@ describe('child run progress events', () => {
         }),
       ]);
     }),
-  );
-
-  it.effect(
-    'rolls back a failed rehydrated setup so the same run can retry',
-    () => {
-      const recorded = recordSessionEvents(testDefaultSession());
-      const attachTrace = vi
-        .spyOn(testDefaultSession(), 'attachRunTrace')
-        .mockImplementationOnce(() => {
-          throw new Error('run setup failed');
-        });
-      const options = {
-        run: {
-          kind: 'multiAgentWorkflow' as const,
-          workflowName: 'retry-setup',
-        },
-        userFollowUpSupport: 'unsupported' as const,
-        description: 'Retry a failed child run setup',
-        config,
-      };
-
-      return Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          createRegisteredChildRun(
-            testDefaultSession(),
-            setupRetryRunId,
-            parentRunId,
-            options,
-          ),
-        );
-        expect(error.message).toContain('run setup failed');
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.removed',
-          ).map((event) => event.aggregateId),
-        ).not.toContain(qualifyAggregateId('run', setupRetryRunId));
-        // Setup failed after the existence fact, so the started run ended
-        // with its terminal row instead of lingering as a ghost.
-        expect(
-          eventsOfType(yield* Effect.promise(() => recorded.read()), 'run.end'),
-        ).toContainEqual(
-          expect.objectContaining({
-            aggregateId: qualifyAggregateId('run', setupRetryRunId),
-            outcome: RUN_OUTCOME.FAILED,
-          }),
-        );
-
-        const retried = yield* createRegisteredChildRun(
-          testDefaultSession(),
-          setupRetryRunId,
-          parentRunId,
-          options,
-        );
-        expect(retried.childRunId).toBe(setupRetryRunId);
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.start',
-          ).filter(
-            (event) =>
-              event.aggregateId === qualifyAggregateId('run', setupRetryRunId),
-          ),
-        ).toHaveLength(1);
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.activate',
-          ).filter(
-            (event) =>
-              event.aggregateId === qualifyAggregateId('run', setupRetryRunId),
-          ),
-        ).toHaveLength(2);
-        yield* retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }).pipe(Effect.ensuring(Effect.sync(() => attachTrace.mockRestore())));
-    },
   );
 
   it.effect(

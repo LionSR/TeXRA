@@ -6,6 +6,7 @@ import {
   aggregateId as qualifyAggregateId,
   RunIdSchema,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import {
   createTestSession,
@@ -36,7 +37,7 @@ describe('the goal row is the goal', () => {
   it.effect('reads back per run and across runs, and clearing drops one', () =>
     Effect.gen(function* () {
       const session = createTestSession({ roots: paperRoots('read-back') });
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       publishTestRunStart(session, RUN_A);
       publishTestRunStart(session, RUN_B);
       yield* startGoal(session, RUN_A, 'objective a');
@@ -56,7 +57,7 @@ describe('the goal row is the goal', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession({ roots: paperRoots('restart') });
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, RUN_A);
         const first = yield* startGoal(session, RUN_A, 'objective one');
         yield* clearGoal(session, RUN_A);
@@ -75,7 +76,7 @@ describe('the goal row is the goal', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession({ roots: paperRoots('lifecycle') });
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, RUN_A);
         const started = yield* startGoal(session, RUN_A, 'prove the estimate');
 
@@ -94,7 +95,7 @@ describe('the goal row is the goal', () => {
   it.effect('refuses a second goal while one is in flight', () =>
     Effect.gen(function* () {
       const session = createTestSession({ roots: paperRoots('in-flight') });
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       publishTestRunStart(session, RUN_A);
       yield* startGoal(session, RUN_A, 'objective one');
       const error = yield* Effect.flip(
@@ -109,7 +110,7 @@ describe('the goal row is the goal', () => {
   it.effect('drops the goal with the run it belongs to', () =>
     Effect.gen(function* () {
       const session = createTestSession({ roots: paperRoots('removal') });
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       publishTestRunStart(session, RUN_A);
       yield* startGoal(session, RUN_A, 'objective a');
 

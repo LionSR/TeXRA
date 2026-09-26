@@ -31,7 +31,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
-  LifecycleHost,
   StateStore,
 } from '@platform/interfaces';
 import {
@@ -343,20 +342,6 @@ export const fakeHostAgentDirectories: AgentDirectoriesPort = {
     installedHost().platform.agentDirectories.builtInToolUse(),
 };
 
-/** The `Lifecycle` service of every test runtime, delegating per call for the
- *  same reason `fakeHostSecrets` does: hosts change per test, the runtime
- *  does not. */
-export const fakeHostLifecycle: LifecycleHost = {
-  onShutdown: (phase, handler) =>
-    installedHost().platform.lifecycle.onShutdown(phase, handler),
-  get runShutdown() {
-    return installedHost().platform.lifecycle.runShutdown;
-  },
-  get shutdownRan() {
-    return installedHost().platform.lifecycle.shutdownRan;
-  },
-};
-
 /** The process services a fake host provides to a program. */
 export type FakeProcessServices = ProcessServices;
 
@@ -402,7 +387,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AgentDirectories, AgentResume, AppState, Lifecycle },
+    { AgentDirectories, AgentResume, AppState },
     { LanguageModel },
     { SetupPlatform },
     { SupabaseAuth },
@@ -471,7 +456,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     LanguageModel.layer(fakeHostLanguageModel),
     AgentResume.layer(fakeHostAgentResume),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly

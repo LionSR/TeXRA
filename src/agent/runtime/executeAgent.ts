@@ -2,10 +2,13 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 
-import { logConversationProgress, type AgentTrace } from '@agent/trace';
+import {
+  logConversationProgress,
+  type AgentEvent,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
@@ -57,7 +60,7 @@ import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
 import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
-import type { RunHandle, AgentRunHandle } from './RunHandle';
+import type { RunHandle } from './RunHandle';
 
 const CHANNEL = 'executeAgent';
 
@@ -311,8 +314,8 @@ export interface SubagentRunOptions {
   onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
-  /** Fires once with the live per-run handle right after it is tracked (F-2). */
-  onRun?: (handle: AgentRunHandle) => Effect.Effect<void, Error>;
+  /** Fires once with the run's id right after its handle is tracked (F-2). */
+  onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
 /** Options for executeAgent. */
@@ -348,10 +351,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /**
    * Fires with the run id once its `run.start` is published, before the run
    * begins: the run exists for every fold, so a host may select it as its
-   * own surface state. The run's trace comes with it, before its first
-   * event, for a consumer that must hear every trace event.
+   * own surface state.
    */
-  onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
+  onRunResolved?: (runId: RunId) => void;
+  /** A sink of every event the run's trace emits, beside the session's
+   *  (`AgentLaunchContext.onTraceEvent`). */
+  onTraceEvent?: (event: AgentEvent) => void;
   /** Fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
@@ -387,6 +392,7 @@ export function executeAgent(
       runId,
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
+      onTraceEvent: options.onTraceEvent,
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
@@ -416,7 +422,7 @@ export function executeAgent(
         ),
       );
       // The backstop wait is `ensuring`, not a generator `finally`: the driver
-      // skips a `finally` after a failed `yield*`, releasing the lease early.
+      // skips a `finally` after a failed `yield*`, ending the run early.
       return yield* runFlowWithLifecycle(
         ctx,
         (handle) =>
@@ -426,7 +432,7 @@ export function executeAgent(
             // carried over from the provisional registration, minus a
             // detach committed while the launch prepared, and for a
             // fresh launch it is the caller's own parent.
-            const parentRunId = handle.deliveryTarget;
+            const parentRunId = handle.parent ?? undefined;
             // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
             yield* ensureRunDirUnder(runSession.roots.storage, runId);
             yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
@@ -614,16 +620,17 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
         // A recovered child's continuous driver holds the claim already; a
         // standalone resume takes it here.
         if (!options.turns) {
-          yield* Effect.acquireRelease(
-            acquireResumedRunOwnership(session, identity.runId),
-            () =>
-              session.releaseRunLease(identity.runId).pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    releaseFailure = error;
-                  }),
-                ),
+          yield* session.holdRunClaim(identity.runId);
+          // Registered after the hold, so it runs before the hold's release:
+          // the run's ending commits under the claim it is written with.
+          yield* Effect.addFinalizer(() =>
+            session.commitRunEnd(identity.runId).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  releaseFailure = error;
+                }),
               ),
+            ),
           );
         }
         const retrieved = yield* retrieveSessionResumeData(

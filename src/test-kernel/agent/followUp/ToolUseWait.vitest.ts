@@ -60,6 +60,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -288,7 +289,7 @@ function agentRunTestLayer(init: LoopInit) {
       });
       init.session.runs.track(handle);
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => init.session.runs.untrack(handle.runId)),
+        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
       return {
         runId: init.runId,

@@ -123,11 +123,8 @@ describe('default session lifecycle', () => {
       expect(defect).toBeInstanceOf(Error);
       expect((defect as Error).message).toContain('already been initialized');
 
-      const disposeSpy = vi.spyOn(first, 'dispose');
-
       yield* teardownDefaultSession();
 
-      expect(disposeSpy).toHaveBeenCalledOnce();
       expect(tryDefaultSession()).toBeUndefined();
 
       const second = yield* initializeDefaultSession({

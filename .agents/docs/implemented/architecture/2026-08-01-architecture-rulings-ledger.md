@@ -309,9 +309,13 @@ cancellation:
 
 - `src/tools/claudeAgent.ts` — the Claude Agent SDK takes a controller, not a
   signal.
-- `src/platform/defaults/lifecycleHost.ts` — the shutdown phase deadline,
+- ~~`src/platform/defaults/lifecycleHost.ts` — the shutdown phase deadline,
   which fires after the runtime's own fibers are gone, so there is no fiber
-  left to interrupt.
+  left to interrupt.~~ Retired 2026-09-26: shutdown became a scope's close
+  (`closeAllSessions` as its first finalizer, bounded by
+  `SESSION_CLOSE_DEADLINE_MS` through `Effect.timeoutOption`), the lifecycle
+  host was deleted with it, and the row fell to three files. The ruling
+  stands for the three.
 - `src/agent/runtime/childRunLoop.ts` — the one signal every child-run turn
   runs under, handed straight to `execa`'s `cancelSignal`, the Codex SDK and
   the Claude Agent SDK. The loop's stop must not interrupt its fiber: the

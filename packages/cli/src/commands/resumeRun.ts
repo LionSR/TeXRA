@@ -203,7 +203,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
               {
                 session: stores.session,
                 runtime: stores.runtime,
-                lifecycle: stores.lifecycle,
+                shutdownScope: stores.shutdownScope,
                 runId,
                 modelCompatibilityKey,
                 recoveryInputIsDurable,

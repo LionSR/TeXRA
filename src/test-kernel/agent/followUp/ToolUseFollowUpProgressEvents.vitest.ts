@@ -11,6 +11,7 @@ import {
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -50,10 +51,10 @@ describe('tool-use follow-up progress events', () => {
 
   afterEach(async () => {
     for (const { session, runId } of trackedRuns.splice(0)) {
-      session.runs.untrack(runId);
+      untrackRun(session.runs, runId);
     }
     for (const session of sessions) {
-      await Effect.runPromise(session.dispose());
+      await Effect.runPromise(closeSessionOf(session));
     }
     sessions.clear();
   });
@@ -116,11 +117,10 @@ describe('tool-use follow-up progress events', () => {
         yield* Effect.promise(() =>
           seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED),
         );
-        // A finished run's driver gave its claim back with its last drain; these
-        // rows stand in for that driver, so the claim goes back here too.
-        yield* testDefaultSession().releaseClaims(
-          qualifyAggregateId('run', runId),
-        );
+        // A finished run's driver released its claim when its scope closed;
+        // these rows stand in for that driver, so the claim they took goes
+        // back here too: a hold taken and let go releases it.
+        yield* Effect.scoped(testDefaultSession().holdRunClaim(runId));
         trackToolUseFlow();
 
         const result = yield* submitFollowUp(runId, 'late follow-up', {

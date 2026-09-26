@@ -11,7 +11,7 @@ import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
 
 // Local file imports
-import { recordTraceEvents, runFactsOfKey } from '../progressTestUtils';
+import { recordingTrace, runFactsOfKey } from '../progressTestUtils';
 import type {
   CommandExecutionItem,
   Thread,
@@ -63,8 +63,7 @@ function toolLogs(store: TestTrace): Record<string, unknown>[] {
 describe('codex progress events', () => {
   it.effect('publishes a todo_list item as run facts', () =>
     Effect.gen(function* () {
-      const { logger } = yield* Effect.promise(() => createLogger());
-      const recorded = recordTraceEvents(logger);
+      const { trace: logger, events } = recordingTrace();
       const thread = threadOf([
         {
           type: 'item.completed',
@@ -84,7 +83,7 @@ describe('codex progress events', () => {
 
       yield* runStreamedTurn(thread, 'Do the thing', logger);
 
-      expect(runFactsOfKey(recorded.events, 'todos')).toMatchObject([
+      expect(runFactsOfKey(events, 'todos')).toMatchObject([
         {
           todos: [
             {

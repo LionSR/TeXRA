@@ -142,7 +142,10 @@ async function settle(): Promise<void> {
 function attached(renderer: RunProgressRenderer): TestRunProgressRenderer {
   const runs = new Map<RunId, RunView>();
   const ref = Effect.runSync(SubscriptionRef.make<SessionView>(viewWith([])));
-  const detach = renderer.attach({ view: ref });
+  const detach = renderer.attach({
+    view: ref,
+    viewChanges: SubscriptionRef.changes(ref),
+  });
   const setMany = async (
     entries: ReadonlyArray<readonly [string, Partial<RunView>]>,
   ): Promise<void> => {

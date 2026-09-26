@@ -9,7 +9,11 @@ import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
 
-type ToolUseFlowOf = SessionHandle['runs']['getToolUseFlowContext'];
+type ToolUseFlowOf = (
+  runId: RunId,
+) => ReturnType<
+  NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['getToolUseFlow']
+>;
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that

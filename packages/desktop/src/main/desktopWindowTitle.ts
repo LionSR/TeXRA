@@ -4,7 +4,7 @@ import type { SessionHandle } from '@agent/runtime';
 import { formatSessionTitle, NATIVE_WINDOW_TITLE } from '@shared/sessionTitle';
 import { sessionActivity } from '@shared/session/sessionView';
 
-type DesktopTitleSession = Pick<SessionHandle, 'view'>;
+type DesktopTitleSession = Pick<SessionHandle, 'view' | 'viewChanges'>;
 
 type DesktopTitleWindow = Pick<
   BrowserWindow,
@@ -52,7 +52,7 @@ export function installDesktopWindowTitle(
       event.preventDefault();
     };
 
-    yield* Stream.runForEach(SubscriptionRef.changes(session.view), () =>
+    yield* Stream.runForEach(session.viewChanges, () =>
       Effect.sync(update),
     ).pipe(
       Effect.catchCause((cause) =>

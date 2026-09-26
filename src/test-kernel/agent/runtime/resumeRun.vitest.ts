@@ -10,6 +10,7 @@ import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import {
   createTestSession,
@@ -113,7 +114,7 @@ const sessions: ReturnType<typeof createTestSession>[] = [];
 
 afterEach(async () => {
   for (const session of sessions.splice(0)) {
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   }
 });
 

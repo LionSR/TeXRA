@@ -375,10 +375,7 @@ export function createChatSessionController(
   ): Effect.Effect<RunId | undefined> =>
     runId === undefined
       ? Effect.succeed(undefined)
-      : Stream.concat(
-          Stream.make(SubscriptionRef.getUnsafe(runtimeSession.view)),
-          SubscriptionRef.changes(runtimeSession.view),
-        ).pipe(
+      : runtimeSession.viewChanges.pipe(
           Stream.filter((view) => view.runs.has(runId)),
           Stream.runHead,
           Effect.map((head) => (Option.isSome(head) ? runId : undefined)),

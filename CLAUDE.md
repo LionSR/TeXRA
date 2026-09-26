@@ -154,7 +154,7 @@ stricter constraint layered on top of the VS Code-free rule, not a
 substitute for it.
 
 Reach process services from the Effect context the process runtime serves
-(`Lifecycle`, `AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
+(`AgentDirectories`, `AppState`, `Secrets`, `FileSystem`, …; the
 composition roots install it once through `installProcessRuntime`) and
 per-workspace ones from the `WorkspaceRoots` the caller holds. When agnostic
 code needs a host-only capability, add a typed port served by that runtime

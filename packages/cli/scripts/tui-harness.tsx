@@ -132,7 +132,10 @@ import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
-import { initCliPlatform } from '../src/runtime/initPlatform';
+import {
+  cliPlatformShutdown,
+  initCliPlatform,
+} from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
@@ -1176,8 +1179,9 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const trace = new TraceEmitter();
-  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const trace = new TraceEmitter((event) =>
+    session().publishRunEvent(childRunId, event),
+  );
   const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1228,7 +1232,7 @@ async function seedRunningWorkflow(): Promise<void> {
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
-    detachRunTrace();
+    trace.close();
   });
 }
 
@@ -1926,7 +1930,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
+    await Effect.runPromise(cliPlatformShutdown);
   } finally {
     process.exit(exitCode);
   }
