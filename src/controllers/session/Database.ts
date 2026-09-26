@@ -353,9 +353,7 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      // A tail's rows, selected by type through `event_type_commit`: it
-      // never decodes a run's private rows (ledger messages, snapshots) only
-      // to drop them.
+      // `readAll` narrowed by type, off `event_type_commit`.
       const display = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.type IN (SELECT value FROM json_each(?))
           AND e."commit" > ? AND e."commit" <= ?
@@ -850,11 +848,10 @@ export const databaseLayer = (
         readDisplay: (fromCommit) =>
           query(
             Effect.gen(function* () {
-              const upTo = yield* currentCommit;
               const rows = yield* decodedRows(display, [
                 displayTypes,
                 fromCommit,
-                upTo,
+                yield* currentCommit,
               ]);
               return rows.filter(isDisplaySessionEvent);
             }),

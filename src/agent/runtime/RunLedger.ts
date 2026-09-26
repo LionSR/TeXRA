@@ -439,11 +439,9 @@ export const runLedgerLayer: Layer.Layer<
         rows.some(isMessageBearing) &&
         candidate.success.messages.length > 0
       ) {
-        // The fold only appends to the history `state` already holds
-        // (checked when this ledger accepted it), except that a compaction,
-        // always the batch's first message-bearing row, first cuts it to
-        // `keepPrefix`: only what follows the kept part is new. Checking the
-        // whole history on every batch was quadratic over a run.
+        // Only what follows the already-checked `state` history is new, or,
+        // after a compaction (the batch's first message-bearing row), what
+        // follows its `keepPrefix`; re-checking it all is quadratic per run.
         const compaction = rows.find((row) => row.type === 'model.compaction');
         const held = state?.messages.length ?? 0;
         const kept =
