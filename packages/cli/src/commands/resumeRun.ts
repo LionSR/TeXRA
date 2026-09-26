@@ -24,7 +24,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
-import { resolveCliLaunchAgent } from '../runtime/agents';
+import { resolveCliResumeAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -160,12 +160,11 @@ export function runResumeCommand(context: CliContext, id: RunId) {
     // The launch pinned the resolved source on the record, so resume checks
     // that exact entry rather than re-resolving the bare name.
     const agent = yield* Effect.result(
-      resolveCliLaunchAgent(
+      resolveCliResumeAgent(
         stores,
         config.agentSource
           ? agentKey(config.agentSource, agentName(config.agent))
           : config.agent,
-        'workflowResume',
       ),
     );
     if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);

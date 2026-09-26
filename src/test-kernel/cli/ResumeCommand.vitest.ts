@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initCliPlatform: vi.fn(),
-  resolveCliLaunchAgent: vi.fn(),
+  resolveCliResumeAgent: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -45,7 +45,7 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/agents', () => ({
-  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+  resolveCliResumeAgent: mocks.resolveCliResumeAgent,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -199,7 +199,7 @@ describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await seedRunRecord({ config: TOOL_USE_CONFIG });
-    mocks.resolveCliLaunchAgent.mockReturnValue(
+    mocks.resolveCliResumeAgent.mockReturnValue(
       Effect.succeed({
         name: 'correct',
         category: AgentCategory.Workflow,
@@ -250,10 +250,9 @@ describe('runResumeCommand', () => {
         modelCompatibilityKey: 'Anthropic',
       }),
     );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliResumeAgent).toHaveBeenCalledWith(
       expect.anything(),
       'correct',
-      'workflowResume',
     );
   });
 

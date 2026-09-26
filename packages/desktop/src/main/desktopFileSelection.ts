@@ -47,10 +47,7 @@ export interface DesktopFileSelection {
    * files, workspace-relative where they are inside the paper, or null when
    * the dialog was cancelled.
    */
-  pickFiles(
-    fileType: ListableFileType,
-    currentFile?: string | null,
-  ): Promise<string[] | null>;
+  pickFiles(fileType: ListableFileType): Promise<string[] | null>;
   /**
    * Paths dropped onto the launcher: the regular files inside the paper
    * whose extension the target category admits, workspace-relative. The
@@ -93,16 +90,12 @@ export function createDesktopFileSelection(
   const { workspacePath } = options;
   return {
     fileOptions: () => workspaceFileOptions(workspacePath),
-    async pickFiles(fileType, currentFile) {
+    async pickFiles(fileType) {
       if (!workspacePath) return null;
       const listConfig = getFileListConfig(fileType);
-      const defaultPath =
-        currentFile == null
-          ? workspacePath
-          : resolve(workspacePath, currentFile);
       const selectedFiles = await options.showOpenFileDialog({
         title: DIALOG_TITLE_BY_FILE_TYPE[fileType],
-        defaultPath,
+        defaultPath: workspacePath,
         allowMultiple: true,
         filters: [
           {
