@@ -332,12 +332,12 @@ export function createWorkbenchController({
         state.workbenchTabs.findLast((entry) => entry.kind === candidate.kind);
       return candidate.id === owner?.id;
     });
-    const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
+    const placementLabel = placement === 'right' ? 'Side' : 'Bottom';
     return html`
       <aside
         class="shell-workbench"
         data-placement=${placement}
-        aria-label=${`${placementLabel} workbench`}
+        aria-label=${`${placementLabel} panel`}
       >
         ${workbenchTabsTemplate(
           workbenchTabsForPlacement(getState(), placement),

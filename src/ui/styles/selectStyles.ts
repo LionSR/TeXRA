@@ -57,6 +57,39 @@ export const compactFormControlStyles: CSSResult = css`
     padding-inline: var(--control-padding-inline);
     font-size: var(--font-size-sm);
   }
+
+  /* Web Awesome draws focus as an outline offset outside the border, which
+     reads as a second ring floating around every field. A field shows focus
+     once: its border takes the focus color and the halo hugs it. */
+  wa-input::part(base),
+  wa-select::part(combobox),
+  wa-textarea::part(base) {
+    border-radius: var(--field-radius);
+    outline: none;
+    transition:
+      border-color var(--transition-fast),
+      box-shadow var(--transition-fast);
+  }
+
+  wa-input:focus-within::part(base),
+  wa-select:focus-within::part(combobox),
+  wa-textarea:focus-within::part(base) {
+    border-color: var(--wa-color-focus);
+    box-shadow: var(--field-focus-halo);
+  }
+
+  wa-input:focus-visible,
+  wa-select:focus-visible,
+  wa-textarea:focus-visible {
+    outline: none;
+  }
+
+  /* The plain skin (controlStyles.ts) owns a whole band; the band is the
+     affordance, so its focus keeps the hairline and draws no halo. */
+  .input-plain:focus-within::part(base) {
+    border-bottom-color: var(--border-hairline);
+    box-shadow: none;
+  }
 `;
 
 export const selectStyles: CSSResult = css`
