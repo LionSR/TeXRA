@@ -39,10 +39,3 @@ export function testDefaultSession(): SessionHandle {
   }
   return session;
 }
-
-/** End a tracked run's handle registration the way its lifecycle does at
- *  its terminal, for a test that stands in for that lifecycle. */
-export function untrackRun(runs: RunRegistry, runId: RunId): void {
-  const handle = runs.getHandle(runId);
-  if (handle) runs.untrackIfCurrent(handle);
-}

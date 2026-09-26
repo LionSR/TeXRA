@@ -121,7 +121,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
-import { untrackRun } from '@test/support/defaultSessionTestSetup';
+import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -417,7 +417,7 @@ function installOwnerSession(): {
               .stop(req.runId, {
                 detachActiveChildren: req.detachActiveChildren ?? undefined,
               })
-              .settlement// The handler words a refused stop as a request error; this
+              .settlement // The handler words a refused stop as a request error; this
               // stub has no such vocabulary, so a refusal is a defect here.
               .pipe(Effect.orDie);
           }

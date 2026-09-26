@@ -9,6 +9,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 
 import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
@@ -23,7 +24,9 @@ describe('agent shutdown', () => {
       const firstSession = createTestSession();
       const secondSession = createTestSession();
       yield* Effect.addFinalizer(() =>
-        firstSession.dispose().pipe(Effect.andThen(secondSession.dispose())),
+        closeSessionOf(firstSession).pipe(
+          Effect.andThen(closeSessionOf(secondSession)),
+        ),
       );
       const compatibilitySession = testDefaultSession();
       const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
@@ -57,7 +60,7 @@ describe('agent shutdown', () => {
   it.effect('preserves the shared shutdown order around host hooks', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const order: string[] = [];
       vi.spyOn(session.runs, 'killBackgroundProcesses').mockImplementation(
         () => {
@@ -108,12 +111,14 @@ describe('agent shutdown', () => {
 
       yield* lifecycle.runShutdown;
 
+      // The session's close is the first ON step, and it is what kills its
+      // runs' background processes.
       expect(order).toEqual([
         'before-agent',
-        'agent-shutdown',
         'after-agent',
         'flush',
         'after-flush',
+        'agent-shutdown',
         'after-settle',
         'late-on',
         'release-sessions',

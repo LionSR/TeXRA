@@ -34,6 +34,7 @@ import {
   type SessionEventDraft,
   AgentCategory,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
@@ -479,7 +480,7 @@ describe('CLI run command, workflow agents', () => {
   });
 
   afterEach(async () => {
-    if (fixtureSession) await Effect.runPromise(fixtureSession.dispose());
+    if (fixtureSession) await Effect.runPromise(closeSessionOf(fixtureSession));
     fixtureSession = undefined;
   });
 
@@ -807,7 +808,7 @@ describe('CLI run command, workflow agents', () => {
         );
         const session = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (owned) => owned.dispose(),
+          (owned) => closeSessionOf(owned),
         );
         const runId = 'abc123abc123' as RunId;
         const run = workflowRun(runId);
@@ -1501,7 +1502,7 @@ describe('CLI run command, workflow agents', () => {
             runtime: testRuntime(),
             lifecycle: installedHost().platform.lifecycle,
           },
-        ).pipe(Effect.ensuring(session.dispose()));
+        ).pipe(Effect.ensuring(closeSessionOf(session)));
 
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
@@ -1553,7 +1554,7 @@ describe('CLI run command, workflow agents', () => {
             runtime: testRuntime(),
             lifecycle: installedHost().platform.lifecycle,
           },
-        ).pipe(Effect.ensuring(session.dispose()));
+        ).pipe(Effect.ensuring(closeSessionOf(session)));
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(cwdSpy).toHaveBeenCalledOnce();
         cwdSpy.mockRestore();

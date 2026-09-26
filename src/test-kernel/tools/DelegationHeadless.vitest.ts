@@ -25,10 +25,8 @@ import {
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
 import { DatabaseWriteFailed } from '@shared/session/database';
-import {
-  testDefaultSession,
-  untrackRun,
-} from '@test/support/defaultSessionTestSetup';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -236,7 +234,7 @@ function delegateWithProposalDecision(
       const session = createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
-        decider.stop().pipe(Effect.ensuring(session.dispose())),
+        decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
@@ -599,7 +597,7 @@ describe('headless delegation', () => {
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
     await Effect.runPromise(session.runs.awaitDrained());
-    await Effect.runPromise(inBandSession.dispose());
+    await Effect.runPromise(closeSessionOf(inBandSession));
   });
 
   it.effect('awaits child delegation during one-shot tool-use runs', () =>
@@ -1072,7 +1070,7 @@ describe('headless delegation', () => {
           const session = createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
-            decider.stop().pipe(Effect.ensuring(session.dispose())),
+            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
           );
           const result = yield* callDelegateReview(
             parentRunContext({ session, approvalPromptsUnavailable: true }),

@@ -1,7 +1,6 @@
 import '@test/support/defaultSessionTestSetup';
 
 // Third-party imports
-import { untrackRun } from '@test/support/defaultSessionTestSetup';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
@@ -59,6 +58,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {

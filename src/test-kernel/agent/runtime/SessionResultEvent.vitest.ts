@@ -12,6 +12,7 @@ import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeProcessServices,
   setupPlatform,
@@ -208,7 +209,7 @@ describe('terminal result event', () => {
         });
       } finally {
         detach();
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }
     }),
   );

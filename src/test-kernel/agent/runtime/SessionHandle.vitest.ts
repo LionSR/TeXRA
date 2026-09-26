@@ -7,6 +7,7 @@ import { describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { type RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
   createTestSession,
@@ -30,11 +31,11 @@ describe('SessionHandle', () => {
       Effect.gen(function* () {
         const a = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (session) => session.dispose(),
+          (session) => closeSessionOf(session),
         );
         const b = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (session) => session.dispose(),
+          (session) => closeSessionOf(session),
         );
         const isolated = generateRunId();
         const runB = generateRunId();
@@ -77,7 +78,7 @@ describe('SessionHandle', () => {
         expect(SubscriptionRef.getUnsafe(a.view).policy.get(runB)).toEqual(
           foreignPolicy,
         );
-        yield* a.dispose();
+        yield* closeSessionOf(a);
         expect(a.runs.getHandle(isolated)).toBeUndefined();
         expect(b.runs.getHandle(runB)).toBe(handleB);
       }),
@@ -93,7 +94,7 @@ describe('SessionHandle', () => {
           throw failure;
         });
       const runs = vi.spyOn(session.runs, 'dispose');
-      const exit = yield* Effect.exit(session.dispose());
+      const exit = yield* Effect.exit(closeSessionOf(session));
       expect(Exit.isFailure(exit)).toBe(true);
       // The teardown failure reaches the caller as a defect, not a typed fail.
       if (Exit.isFailure(exit))
@@ -119,7 +120,7 @@ describe('SessionHandle', () => {
           );
         }),
       );
-      yield* session.dispose();
+      yield* closeSessionOf(session);
       expect(attempted).toBe(true);
     }),
   );

@@ -12,6 +12,7 @@
  */
 
 import {
+  Cause,
   Context,
   Data,
   Deferred,
@@ -747,17 +748,35 @@ export class RunRegistry {
     };
   }
 
-  /** Stop every top-level run, cascading into its children: the sweep a
-   *  session close and a project close both run. A child with a handle is
-   *  stopped by its parent's cascade; a native child between turns has no
-   *  handle, and its stop interrupts the loop the registry retains for it. */
-  stopAll(): Effect.Effect<void, Error> {
-    const settlements = this.activeIds().flatMap((runId) =>
-      this.getHandle(runId)?.parent != null
+  /** Stop every run no other run here stops, cascading into its children:
+   *  the sweep a session close runs. A child whose parent this registry holds
+   *  is stopped by that parent's cascade; every other run — a root, or a
+   *  child whose parent is not here — is stopped itself. Answers the runs
+   *  left for the caller to settle: those no live target took the stop for,
+   *  since nothing here drives them, and those whose stop failed to record
+   *  what it owed storage (logged here). */
+  stopAll(): Effect.Effect<readonly RunId[]> {
+    const active = new Set(this.activeIds());
+    const stops = [...active].flatMap((runId) => {
+      const parent = this.getHandle(runId)?.parent ?? null;
+      return parent !== null && active.has(parent)
         ? []
-        : [this.stop(runId, { detachActiveChildren: false }).settlement],
-    );
-    return Effect.all(settlements, { concurrency: 'unbounded', discard: true });
+        : [{ runId, stop: this.stop(runId, { detachActiveChildren: false }) }];
+    });
+    return Effect.forEach(
+      stops,
+      ({ runId, stop }) =>
+        stop.settlement.pipe(
+          Effect.as(stop.accepted() ? [] : [runId]),
+          Effect.catchCause((cause) =>
+            Effect.logWarning(`The stop of run ${runId} failed`).pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+              Effect.as([runId]),
+            ),
+          ),
+        ),
+      { concurrency: 'unbounded' },
+    ).pipe(Effect.map((left) => left.flat()));
   }
 
   /** Kill the background OS process of every run whose child loop declared

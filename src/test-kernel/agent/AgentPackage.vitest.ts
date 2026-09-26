@@ -136,6 +136,10 @@ vi.mock('@agent/runtime', async () => {
     }
   }
   const sessions = new Map<string, FakeSession>();
+  const closeSession = (root: string) =>
+    Effect.sync(() => {
+      sessions.delete(root);
+    }).pipe(Effect.andThen(() => mocks.closeSession(root)));
   return {
     openSessionEffect: (init: ConstructorParameters<typeof FakeSession>[0]) =>
       Effect.sync(() => {
@@ -147,10 +151,13 @@ vi.mock('@agent/runtime', async () => {
         return session;
       }),
     listSessions: () => Effect.sync(() => [...sessions.values()]),
-    closeSession: (root: string) =>
-      Effect.sync(() => {
-        sessions.delete(root);
-      }).pipe(Effect.andThen(() => mocks.closeSession(root))),
+    closeSession,
+    closeAllSessions: () =>
+      Effect.suspend(() =>
+        Effect.forEach([...sessions.keys()], (root) => closeSession(root), {
+          concurrency: 'unbounded',
+        }),
+      ),
     runAgent: (input: unknown, options: RunAgentOptions) =>
       Effect.tryPromise({
         try: () => mocks.runValidatedAgent(input, options),

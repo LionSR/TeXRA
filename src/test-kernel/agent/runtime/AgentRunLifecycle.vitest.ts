@@ -25,12 +25,10 @@ import {
 import type { RunId, RunOutcome } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { SETUP_AGENT_NAME } from '@shared/constants/agents';
+import { untrackRun } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import {
-  testDefaultSession,
-  untrackRun,
-} from '@test/support/defaultSessionTestSetup';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {

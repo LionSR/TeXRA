@@ -18,6 +18,7 @@ import type { ToolEditPreview } from '@controllers/approval/ToolEditApprovalCont
 import type { DesktopToolEditApprovalUi } from '@desktop/main/desktopToolEditApproval';
 import type { DiffSource } from '@hosts/uiHosts';
 import type { RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -103,7 +104,7 @@ function createApprovalFixture(
       loadApprovalModules(options.workspacePath),
     );
     const session = createTestSession();
-    yield* Effect.addFinalizer(() => session.dispose());
+    yield* Effect.addFinalizer(() => closeSessionOf(session));
     const host = new modules.desktopModule.DesktopToolEditApprovalHost({
       runtime: testRuntime(),
       ui: {

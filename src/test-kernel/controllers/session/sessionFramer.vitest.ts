@@ -52,6 +52,7 @@ import type {
   Subscribe,
 } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createFakeWorkspaceRoots,
   FakeConfigProvider,
@@ -239,7 +240,7 @@ describe('session framer', () => {
       const session = createTestSession();
       // Registered first, so it runs last: the bridge's ports release their
       // transcript sets through the session before it goes.
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const bridge = yield* SessionBridge.make({
         session,
@@ -270,7 +271,7 @@ describe('session framer', () => {
   it.live('holds host actions until the port first subscribes', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const bridge = yield* SessionBridge.make({
         session,
         onPortClosed: () => {},
@@ -305,7 +306,7 @@ describe('session framer', () => {
   it.live('closes a superseded port before registering its replacement', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const setSubscriptions = vi.spyOn(session.subscriptions, 'set');
       const onPortClosed = vi.fn();
       const bridge = yield* SessionBridge.make({

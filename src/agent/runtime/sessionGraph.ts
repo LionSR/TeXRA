@@ -146,12 +146,6 @@ export interface SessionGraph {
   /** The session's current commit ordinal: where a reader attaching now
    *  starts its `all` read (PRD 10.3). */
   readonly now: () => CommitOrdinal;
-  /** Release the session from its owner: the owner unwinds the session (its
-   *  runs first, then the handle's owners) and frees the root's graph after
-   *  it. The unwind happens before this Effect's first yield; it settles
-   *  once the root's entry has unwound, on the caller's own fiber. A teardown
-   *  failure surfaces as a defect and still releases the entry. */
-  readonly close: () => Effect.Effect<void>;
 }
 
 /** The process's session owner, as `installProcessRuntime` installs it. */
@@ -320,13 +314,14 @@ export function initializeDefaultSession(
   });
 }
 
-/** Dispose the process-default session during host teardown; nothing to
- *  do when none is open. */
+/** Close the process-default session during host teardown, through the one
+ *  close every session takes ({@link closeSession}); nothing to do when none
+ *  is open. */
 export function teardownDefaultSession(): Effect.Effect<void> {
   return Effect.suspend(() => {
-    const session = tryDefaultSession();
+    const root = defaultSessionRoot;
     defaultSessionRoot = undefined;
-    return session?.dispose() ?? Effect.void;
+    return root === undefined ? Effect.void : Effect.asVoid(closeSession(root));
   });
 }
 
@@ -347,5 +342,21 @@ export function closeSession(root: string): Effect.Effect<SessionCloseReport> {
     owner
       ? owner.close(root)
       : Effect.succeed({ settled: true, abandoned: [] }),
+  );
+}
+
+/**
+ * Close every session the process's owner holds, all at once: each close
+ * spends the shutdown deadline from the moment it starts, so starting them
+ * together settles the process under one deadline rather than one per
+ * session. What a host's shutdown and the agent package's last release run.
+ */
+export function closeAllSessions(): Effect.Effect<
+  readonly SessionCloseReport[]
+> {
+  return Effect.flatMap(listSessions(), (sessions) =>
+    Effect.forEach(sessions, (session) => closeSession(session.roots.storage), {
+      concurrency: 'unbounded',
+    }),
   );
 }

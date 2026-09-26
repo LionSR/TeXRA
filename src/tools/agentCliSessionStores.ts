@@ -1,8 +1,7 @@
 import { Effect } from 'effect';
 
 import type { RunRegistry } from '@agent/runtime/runRegistry';
-import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
-import { heldSessions } from '@agent/runtime/sessionGraph';
+import { closeAllSessions } from '@agent/runtime/sessionGraph';
 import {
   SHUTDOWN_PHASE,
   type LifecycleHost,
@@ -14,9 +13,7 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 /**
  * Owns the two stores (`codexThreadsFor`, `claudeAgentSessionsFor`) that hold
  * each session's live agent-CLI registries, keyed by that session's `Runs`,
- * plus the host shutdown wiring that drains each held session's background
- * OS processes (agent-CLI and background bash children alike, through
- * `RunHandle.backgroundProcess`).
+ * plus the host shutdown order every composition root registers.
  */
 
 // Keyed by the session's runs (the childRunBudget WeakMap model): each
@@ -40,34 +37,16 @@ export const codexThreadsFor = sessionRegistries();
 /** The session's registry of live claude-agent sessions. */
 export const claudeAgentSessionsFor = sessionRegistries();
 
-/**
- * Register the host shutdown handler that stops agent work at teardown: kill
- * the background OS processes owned by live runtime sessions, which covers
- * every agent-CLI codex/claude child. Lives here because the hosts import it
- * once during platform startup and the core never depends on tool-layer
- * teardown wiring.
- */
-function registerAgentShutdownHandler(lifecycle: LifecycleHost): void {
-  lifecycle.onShutdown(
-    SHUTDOWN_PHASE.BEFORE,
-    Effect.sync(() => {
-      for (const session of heldSessions()) {
-        session.runs.killBackgroundProcesses();
-      }
-    }),
-  );
-}
-
 export interface RuntimeShutdownHooks {
-  /** BEFORE handlers that must run before agent processes are interrupted. */
+  /** BEFORE handlers that must run before artifact persistence. */
   readonly beforeAgentShutdown?: readonly ShutdownHandler[];
-  /** BEFORE handlers between agent interruption and artifact persistence. */
+  /** BEFORE handlers that run after {@link beforeAgentShutdown}. */
   readonly afterAgentShutdown?: readonly ShutdownHandler[];
   /** Persist the host's process/session artifacts. */
   readonly flushArtifacts: ShutdownHandler;
   /** BEFORE handlers that require artifact persistence to have finished. */
   readonly afterFlushArtifacts?: readonly ShutdownHandler[];
-  /** ON handlers that run after live runs have settled. */
+  /** ON handlers that run after every session has closed. */
   readonly afterRunSettlement?: readonly ShutdownHandler[];
   /**
    * Release the host's sessions and the project scopes that hold their
@@ -88,20 +67,14 @@ export interface RuntimeShutdownHooks {
  * Register the cross-host runtime shutdown order with named host hooks.
  *
  * The ordering is load-bearing, not stylistic: of the handlers registered
- * *here*, `settleLiveSessionRuns` must come first in the `ON` phase. A
- * quit has to leave a durable `CANCELLED` outcome and a released follow-up
- * lease before host teardown (`teardownDefaultSession()` /
- * `processResources.dispose()`) tears the session out from under it. Anything
- * that runs before settlement can leave a live run's outcome
- * un-persisted, which surfaces later as a run stuck in RUNNING with no owner.
- *
- * `afterRunSettlement` is the safe place to add work, precisely because
- * it is registered after settlement by construction. Do not reorder these two
- * calls to get a hook in earlier.
- *
- * This constrains only this registrar's own ordering. A host may register its
- * own `ON` handler before calling here (the extension does, for Lean server
- * cleanup), which is fine as long as it does not touch run state.
+ * *here*, closing every session (`closeAllSessions`) must come first in the
+ * `ON` phase. A session's close stops its runs, settles the ones still live
+ * past the deadline to a durable `CANCELLED` outcome, releases their leases
+ * and flushes its artifacts, and host teardown must not tear the session out
+ * from under that. Anything that runs before it can leave a live run's
+ * outcome un-persisted, which surfaces later as a run stuck in RUNNING with no
+ * owner. `afterRunSettlement` is the safe place to add work, precisely
+ * because it is registered after the close by construction.
  *
  * The process's release closes the order on all three hosts: the sessions,
  * then the runtime, in the `RELEASE` phase after every `ON` handler. It used
@@ -118,11 +91,10 @@ export function registerRuntimeShutdownHandlers(
   hooks: RuntimeShutdownHooks,
 ): void {
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.beforeAgentShutdown);
-  registerAgentShutdownHandler(lifecycle);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterAgentShutdown);
   lifecycle.onShutdown(SHUTDOWN_PHASE.BEFORE, hooks.flushArtifacts);
   registerHandlers(lifecycle, SHUTDOWN_PHASE.BEFORE, hooks.afterFlushArtifacts);
-  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, settleLiveSessionRuns);
+  lifecycle.onShutdown(SHUTDOWN_PHASE.ON, Effect.asVoid(closeAllSessions()));
   registerHandlers(lifecycle, SHUTDOWN_PHASE.ON, hooks.afterRunSettlement);
   lifecycle.onShutdown(SHUTDOWN_PHASE.RELEASE, hooks.releaseSessions);
   lifecycle.onShutdown(

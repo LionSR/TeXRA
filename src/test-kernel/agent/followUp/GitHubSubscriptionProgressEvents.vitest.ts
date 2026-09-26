@@ -25,6 +25,7 @@ import { setLogSink } from '@logger/logSink';
 import { AgentResume, Lifecycle } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import type { RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeHostAgentResume,
   fakeHostLifecycle,
@@ -254,7 +255,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
       const source = new RegistryTestSource();
       const session = createTestSession();
       const registry = createTestRegistry(source);
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
 
       yield* registry
         .bind('stream-a' as RunId, 'owner/repo', session)
@@ -284,7 +285,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const session = createTestSession();
         session.followUps.claimLive(runId, 'flow');
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
 
         yield* registry
           .bind(runId, 'owner/repo', session)
@@ -317,8 +318,8 @@ describe('GitHub subscription app signals and follow-ups', () => {
         const secondSession = createTestSession();
         secondSession.followUps.claimLive(runId, 'flow');
         const registry = createTestRegistry(source);
-        yield* Effect.addFinalizer(() => secondSession.dispose());
-        yield* Effect.addFinalizer(() => firstSession.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(secondSession));
+        yield* Effect.addFinalizer(() => closeSessionOf(firstSession));
 
         yield* registry
           .bind(runId, 'owner/repo', firstSession)
@@ -360,7 +361,7 @@ describe('GitHub subscription app signals and follow-ups', () => {
         submitFollowUpMock.mockReturnValueOnce(
           Effect.fail(new Error('delivery failed')),
         );
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             process.off('unhandledRejection', unhandledRejection),

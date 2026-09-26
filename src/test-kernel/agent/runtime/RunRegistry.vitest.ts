@@ -26,10 +26,8 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import {
-  testDefaultSession,
-  untrackRun,
-} from '@test/support/defaultSessionTestSetup';
+import { untrackRun } from '@test/support/sessionEnd';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   admitInterruptibleRun,

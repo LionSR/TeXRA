@@ -111,9 +111,12 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 // First-init dependencies: only exercised while no earlier init in the same
 // module instance installed its roots, so these stubs only drive the "first
 // init" tests below.
-vi.mock('@platform/defaults/lifecycleHost', async () => {
+vi.mock('@platform/defaults/lifecycleHost', async (importOriginal) => {
   const { Effect: effect } = await import('effect');
   return {
+    ...(await importOriginal<
+      typeof import('@platform/defaults/lifecycleHost')
+    >()),
     createLifecycleHost: () => ({
       onShutdown: (_phase: unknown, handler: Effect.Effect<void, unknown>) => {
         mocks.shutdownHandlers.push(handler);

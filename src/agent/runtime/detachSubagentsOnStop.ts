@@ -31,9 +31,8 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  *
  * Host quit is a separate axis this toggle does not govern, and detaching does
  * not opt a child out of it: `detachActiveChildren` detaches a child from its
- * parent without untracking its handle, so the shared exit drain
- * (`settleLiveSessionRuns`, #11355) still settles every tracked child on
- * the way out, on every host. The CLI additionally kills or interrupts them,
+ * parent without untracking its handle, so the session's close still
+ * stops or settles every tracked child on the way out, on every host. The CLI additionally kills or interrupts them,
  * because the process that owns them is the one going away.
  *
  * The platform must be initialized before a run can be stopped or killed.

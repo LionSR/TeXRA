@@ -13,6 +13,7 @@ import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -25,10 +26,7 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import {
-  testDefaultSession,
-  untrackRun,
-} from '@test/support/defaultSessionTestSetup';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { admitInterruptibleRun } from '@test/support/runHandleFixtures';
 
 const mocks = vi.hoisted(() => ({

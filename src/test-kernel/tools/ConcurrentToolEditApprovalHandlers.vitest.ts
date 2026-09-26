@@ -7,6 +7,7 @@ import { beforeEach, describe, expect } from 'vitest';
 
 // Local imports
 import { SessionHandle } from '@agent/runtime/SessionHandle';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -72,7 +73,9 @@ describe('Concurrent session tool edit approval handlers', () => {
         const sessionA = createTestSession();
         const sessionB = createTestSession();
         yield* Effect.addFinalizer(() =>
-          sessionA.dispose().pipe(Effect.andThen(sessionB.dispose())),
+          closeSessionOf(sessionA).pipe(
+            Effect.andThen(closeSessionOf(sessionB)),
+          ),
         );
         const windowA = yield* attachWindow(sessionA, 'from-a');
         const windowB = yield* attachWindow(sessionB, 'from-b');

@@ -26,6 +26,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
@@ -161,7 +162,7 @@ async function createResumeHarness(): Promise<{
     if (disposed) return;
     disposed = true;
     owner.disable();
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   };
   onTestFinished(dispose);
   return { owner, session, dispose };

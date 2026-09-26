@@ -17,6 +17,7 @@ import {
 
 import {
   createAgentResponseTextConnector,
+  closeSession,
   openSessionEffect,
   type SessionHandle,
 } from '@agent/runtime';
@@ -201,35 +202,6 @@ export const readRememberedDesktopProjects = Effect.fn(
 });
 
 /**
- * Stop every run the project still owns and wait for their drivers to settle
- * them (CANCELLED, flow record preserved for a later resume), so the session
- * is disposed with nothing executing under it: `RunRegistry.dispose`
- * clears its handles without interrupting them, and a run left driving after
- * that would continue with no presentation and no stop control. Only roots
- * are killed; the stop cascades into their children. Unbounded on purpose: a
- * tool that ignores its kill is the same problem the process exit drain has,
- * and the project stays open, stoppable and visible in the log, until it ends.
- */
-/**
- * Stopping a closing project's runs faulted. The stop is uninterruptible and
- * its failure leaves the project's owner with the host, so the close reports
- * this rather than dropping the project from the registry.
- */
-class ProjectRunsNotStopped extends Data.TaggedError('ProjectRunsNotStopped')<{
-  readonly root: string;
-  readonly message: string;
-  readonly cause: unknown;
-}> {}
-
-const stopProjectRuns = Effect.fn('desktopProjects.stopProjectRuns')(function* (
-  session: SessionHandle,
-) {
-  const { runs } = session;
-  yield* runs.stopAll();
-  yield* runs.awaitDrained();
-});
-
-/**
  * Open one session over `roots`. Every fact this project's services answer
  * with comes from `roots` as data — the approval policy below, and the latex
  * text-join helper bound here against this project's roots, so a workspace
@@ -255,7 +227,10 @@ function openProjectSession(
           createAgentResponseTextConnector({ ...roots, secrets }),
         ),
       }),
-      (session) => session.dispose(),
+      // The one close every session takes: its runs stopped under the
+      // shutdown deadline, the ones still live past it settled, its
+      // artifacts flushed, its entry released.
+      (session) => Effect.asVoid(closeSession(session.roots.storage)),
     );
     session.setApprovalPolicy(
       yield* readSettingFrom<TexraApprovalPolicy>(
@@ -390,20 +365,11 @@ export function openDesktopProjectRegistry(
         return Effect.gen(function* () {
           const project = byRoot(root);
           if (!project) return;
-          // Stop while the registry still owns the project. A failed stop or
-          // persistence operation leaves that owner available to the host.
+          // A failed persistence operation leaves the project with the host;
+          // the session's own close, run by the project's scope, stops its
+          // runs.
           yield* Effect.uninterruptible(
             Effect.gen(function* () {
-              yield* stopProjectRuns(project.session).pipe(
-                Effect.mapError(
-                  (cause) =>
-                    new ProjectRunsNotStopped({
-                      root,
-                      message: `The project's runs could not be stopped: ${toErrorMessage(cause)}`,
-                      cause,
-                    }),
-                ),
-              );
               yield* Effect.gen(function* () {
                 const wasActive = active() === project;
                 const remembered = yield* records.read;

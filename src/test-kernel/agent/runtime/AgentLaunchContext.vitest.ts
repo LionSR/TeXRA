@@ -37,6 +37,7 @@ import {
   AgentCategory,
   type RunId,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import {
   createTestSession,
@@ -122,7 +123,7 @@ describe('AgentLaunchContext', () => {
         // The banner claims the failure, so the launch catch adds no generic toast.
         const explicit = createRecordingHost();
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use(explicit.interactions);
 
         yield* launchWithMissingAgent(
@@ -165,7 +166,7 @@ describe('AgentLaunchContext', () => {
             (event) => event.event === 'requestShowError',
           ),
         ).toHaveLength(0);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -178,7 +179,7 @@ describe('AgentLaunchContext', () => {
         // pre-registration, so no `result` event exists to present it instead.
         const events: string[] = [];
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use({
           emit: (event) => {
             if (event === 'showAgentConfigBanner') {
@@ -218,7 +219,7 @@ describe('AgentLaunchContext', () => {
         expect(
           events.filter((event) => event === 'requestShowError'),
         ).toHaveLength(1);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -228,7 +229,7 @@ describe('AgentLaunchContext', () => {
       Effect.gen(function* () {
         const recording = createRecordingHost();
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         yield* session.interactions.use(recording.interactions);
 
         mocks.resolve.mockReturnValueOnce(
@@ -288,7 +289,9 @@ describe('AgentLaunchContext', () => {
           session.interactions,
         );
         yield* Effect.addFinalizer(() =>
-          Effect.sync(detachToast).pipe(Effect.andThen(session.dispose())),
+          Effect.sync(detachToast).pipe(
+            Effect.andThen(closeSessionOf(session)),
+          ),
         );
         publishTestRunStart(session, EXECUTION_ID);
         mocks.resolve.mockReturnValueOnce(
@@ -329,7 +332,7 @@ describe('AgentLaunchContext', () => {
     () =>
       Effect.gen(function* () {
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         const batches = vi.spyOn(session, 'commitRegistration');
         const recording = recordSessionEvents(session);
         mocks.resolve.mockReturnValueOnce(
@@ -390,7 +393,7 @@ describe('AgentLaunchContext', () => {
         const session = createTestSession({
           responseTextProcessing,
         });
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         publishTestRunStart(session, EXECUTION_ID);
         const terminalEvents = recordSessionEvents(session);
         const stage = noopTrace.openStage('Run');

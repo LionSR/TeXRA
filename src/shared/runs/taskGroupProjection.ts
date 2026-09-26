@@ -15,9 +15,9 @@ import {
  * The status a task group RENDERS as, given the outcome its run durably
  * settled on (`undefined` while anything can still move the run).
  *
- * A group is closed by the `GROUP_END` row its producer writes, and the host
- * exit drain closes whatever is still open in the same lease-fenced window
- * that writes the run's outcome (`settleLiveSessionRuns`). A group left
+ * A group is closed by the `GROUP_END` row its producer writes, and a session
+ * close settling a run past its budget closes whatever is still open in the
+ * same lease-fenced window that writes the run's outcome. A group left
  * `running` is a lie only once nothing can still close it, and a terminal
  * phase alone does not say that: a user stop publishes CANCELLED while the
  * flow is still unwinding in this process, with its stages' `GROUP_END` rows

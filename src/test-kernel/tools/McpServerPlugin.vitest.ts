@@ -24,6 +24,7 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -168,7 +169,7 @@ describe('MCP server plugins', () => {
           Effect.sync(() =>
             sessionWithInteractions(createRecordingHost().interactions),
           ),
-          (session) => session.dispose(),
+          (session) => closeSessionOf(session),
         );
         publishTestRunStart(session, runId);
         yield* session.settlePublications();

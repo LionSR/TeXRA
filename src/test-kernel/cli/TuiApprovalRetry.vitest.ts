@@ -68,11 +68,9 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import {
-  testDefaultSession,
-  untrackRun,
-} from '@test/support/defaultSessionTestSetup';
+import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installedHost } from '@test/support/setupPlatform';

@@ -24,6 +24,7 @@ export { SessionHandle } from './SessionHandle';
 // and close sessions through it (one session per workspace storage root),
 // and the process-default session that owner holds.
 export {
+  closeAllSessions,
   closeSession,
   initializeDefaultSession,
   installedProcessRuntime,

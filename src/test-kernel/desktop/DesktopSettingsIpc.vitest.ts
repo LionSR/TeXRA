@@ -27,6 +27,7 @@ import type { ModelOptionData } from '@shared/schemas';
 import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -98,7 +99,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   });
   // One root holds one session: released at test end, or the next fixture
   // over this root would get this test's session and its workspace state.
-  onTestFinished(() => Effect.runPromise(session.dispose()));
+  onTestFinished(() => Effect.runPromise(closeSessionOf(session)));
   // The IPC subscribes to the process app-signal bus, so a fixture whose
   // scope stayed open would keep reacting to later tests' emits.
   const scope = Scope.makeUnsafe();

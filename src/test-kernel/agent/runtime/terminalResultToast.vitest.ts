@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ResultEvent } from '@agent/trace';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -48,7 +49,7 @@ async function toastsFor(
   } finally {
     detachToast();
     detachHost();
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   }
   return emitted;
 }

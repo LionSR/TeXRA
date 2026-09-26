@@ -6,7 +6,6 @@ import { Effect } from 'effect';
 
 import { describe, expect, vi } from 'vitest';
 
-import { settleLiveSessionRuns } from '@agent/runtime/SessionHandle';
 import { runFlowWithLifecycle } from '@agent/runtime/AgentRunLifecycle';
 import { Runs } from '@agent/runtime/runRegistry';
 import {
@@ -17,6 +16,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
@@ -77,7 +77,7 @@ describe('session isolation', () => {
       const sessionA = createTestSession({ roots: paperA });
       const sessionB = createTestSession({ roots: paperB });
       yield* Effect.addFinalizer(() =>
-        sessionA.dispose().pipe(Effect.andThen(sessionB.dispose())),
+        closeSessionOf(sessionA).pipe(Effect.andThen(closeSessionOf(sessionB))),
       );
       // The notes are real files under the fake roots, so the fs calls stay
       // foreign promises bridged with Effect.promise.
@@ -113,14 +113,14 @@ describe('session isolation', () => {
             storagePath: fakePath('storage/a'),
           }),
         });
-        yield* Effect.addFinalizer(() => sessionA.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(sessionA));
         const sessionB = createTestSession({
           roots: createFakeWorkspaceRoots({
             workspacePath: fakePath('papers/b'),
             storagePath: fakePath('storage/b'),
           }),
         });
-        yield* Effect.addFinalizer(() => sessionB.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const live = [
           [sessionA, 'a0da01' as RunId],
           [sessionB, 'b0db01' as RunId],
@@ -151,7 +151,12 @@ describe('session isolation', () => {
         // Each session claims runs in its own root: paper B never holds
         // paper A's run.
         expect(yield* sessionB.ownsRun('a0da01' as RunId)).toBe(false);
-        yield* settleLiveSessionRuns;
+        yield* Effect.all(
+          [closeSessionOf(sessionA), closeSessionOf(sessionB)],
+          {
+            concurrency: 'unbounded',
+          },
+        );
         for (const [index, [, runId]] of live.entries()) {
           expect(closures[index]).toHaveBeenCalledWith(runId, {
             type: 'stage.end',
@@ -165,9 +170,6 @@ describe('session isolation', () => {
         expect(storageMocks.settledUnder.get('b0db01')).toBe(
           fakePath('storage/b'),
         );
-        for (const [session, runId] of live) {
-          expect(yield* session.ownsRun(runId)).toBe(false);
-        }
       }),
   );
 
@@ -189,7 +191,7 @@ describe('session isolation', () => {
           storagePath: fakePath('storage/contended'),
         });
         const session = createTestSession({ roots: project });
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         // Job 1: enqueued on the session's one publisher from the process
         // context, the shape the desktop has.
         publishTestRunStart(session, 'c0c001' as RunId);
@@ -220,7 +222,7 @@ describe('session isolation', () => {
   it.effect('a run stop lands in the run session only', () =>
     Effect.gen(function* () {
       const sessionB = createTestSession();
-      yield* Effect.addFinalizer(() => sessionB.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
       const runId = generateRunId();
       const interrupt = vi.fn();
       const handle = testRunHandle({
@@ -249,7 +251,7 @@ describe('session isolation', () => {
         );
         const runId = 'e15001' as RunId;
         const sessionB = createTestSession();
-        yield* Effect.addFinalizer(() => sessionB.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(sessionB));
         const ctx = createTestLaunchContext({
           runId,
           session: sessionB,

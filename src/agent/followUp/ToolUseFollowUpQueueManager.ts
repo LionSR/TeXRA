@@ -399,8 +399,8 @@ export class ToolUseFollowUpQueue {
   /**
    * Dispose the session-owned boundary: end every attached queue, release
    * every adopted claim onto the session publisher, then drop the entry map
-   * and release observers. The session's unwind settles those releases
-   * before the graph closes. Entry-creating paths refuse to rebuild
+   * and release observers. The session entry's last finalizer settles those
+   * releases before the graph closes. Entry-creating paths refuse to rebuild
    * afterwards, so a late detached producer cannot leak an entry nobody
    * will drain.
    */
