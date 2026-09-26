@@ -542,7 +542,9 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
   session-scoped `StagedEdits` read port. `policy.set` enabling approve-all
   also decides that run's pending delegated requests, in `SessionRequests`.
 - `HostRequest` shrinks from 37 to about 28 genuinely host-only arms, plus
-  `storeApiKey` and the desktop file I/O now on `desktop:*`.
+  `storeApiKey` and the desktop file I/O that travels on `desktop:*` today
+  (PRD 8.3 already names it a host request). After this move `desktop:*`
+  carries only process resources such as terminals and the browser.
 - `attachSessionHost(session, controller, extras): Effect<void, never, Scope>`
   builds the one `interactions.use()` record, drains `events.all` into the
   host controller and provides `StagedEdits`.
@@ -571,7 +573,8 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
 4. Own-key retry: one semantic. Needs an owner decision.
 5. The delegated cascade in `policy.set`. Needs an owner decision.
 6. Session commands.
-7. Desktop: file I/O on `host.request`, its own session channel.
+7. Desktop: file I/O moves off `desktop:*` onto `host.request`, and the
+   session protocol gets its own IPC channel.
 
 Estimated net: about −440 production lines.
 
@@ -700,13 +703,29 @@ Effect callers emit them.
 For the SDK, the 2026-09-21 ruling already makes the root an Effect surface
 with no Promise entry. The changes:
 
-- `run.events` reads `RunTrace.events`; the `onTraceEvent` tap, `tapping` and
-  its buffer go.
-- `start` returns `Effect<Run, LaunchError, Scope>`: the subscription is
-  taken at admission, and closing the scope interrupts a still-running run.
+- `run.events` is `RunTrace.events` ended by the run's exit: it fails with
+  the run's `RunFailure` when the run fails, as the SDK's stream does today
+  (`sessionPrograms.ts:263-265`), so it keeps the `Stream<AgentEvent,
+RunFailure>` contract of move 3's `Run`. `RunTrace.events` itself stays
+  infallible, because a trace has no verdict of its own. The `onTraceEvent`
+  tap and its `tapping` flag go.
+- The handoff stays bounded. The subscription is taken at admission, so a
+  reader that attaches late misses nothing, but until a reader attaches it
+  fills a buffer capped at `TRACE_HANDOVER_EVENTS` (512 today,
+  `sessionPrograms.ts:87`). Past the cap the trace detaches with the same
+  warning as today, and a run nobody reads retains nothing once it settles.
+  A caller that awaits only `run.result` therefore costs at most the cap.
+- `start` returns `Effect<Run, LaunchError, Scope>`. The scope bounds only
+  the caller's event subscription: closing it detaches that reader, and the
+  run keeps going. The run fiber belongs to the session scope, as in move 3,
+  and only `run.interrupt` or closing the session stops it.
 - Approvals as data: `session.requests: Stream<PendingRequest>`,
-  `session.decide(req, decision)`, and an `Approvals` layer (`denyAll`, the
-  default, or `handler(f)`). This closes Tier-1 manifest item §7.1.
+  `session.decide(req, decision)`, and an `Approvals` layer with exactly one
+  authority per session: `denyAll` (the default, today's behaviour),
+  `handler(f)`, or `manual`, which decides nothing on its own and leaves
+  every request to the embedder's `decide` calls. A manual consumer needs
+  `manual`: under `denyAll` its decisions would race the automatic denial.
+  This closes Tier-1 manifest item §7.1.
 - `TexraAgent.layer` and `NodePlatform.layer` replace the `AgentPlatform`
   record, closing manifest §7.4. Waits for move 4.
 
@@ -730,7 +749,7 @@ const program = Effect.gen(function* () {
     Effect.forkScoped,
   );
   return yield* run.result;
-}).pipe(Effect.scoped);
+}).pipe(Effect.scoped, Effect.provide(Approvals.manual)); // one authority: the loop above
 ```
 
 ### PRs
