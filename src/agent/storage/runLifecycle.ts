@@ -273,9 +273,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
   // The row's usage is the run's ledger totals, whichever path ends the run:
-  // `RunState.usage` folds from the priced `response` rows alone, so a run
-  // resumed in this process bills its earlier rounds even when it ends
-  // before a round here. Absent for a run with no ledger rows (an agent-CLI
+  // `RunState.usage` folds from the priced `response` rows and the subagent
+  // cost `tool.result` rows add, so a run resumed in this process bills its
+  // earlier rounds and children even when it ends before a round here. Absent for a run with no ledger rows (an agent-CLI
   // child, a launch that failed before its first batch). An unreadable
   // ledger is logged and leaves the row without usage: it must not also
   // cost the run its terminal fact.

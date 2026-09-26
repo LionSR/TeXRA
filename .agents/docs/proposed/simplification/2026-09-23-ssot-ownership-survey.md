@@ -192,10 +192,9 @@ compaction is interrupted only by a row's creation
 (`transcriptFold.ts:85`, `recordLogRow`). Since #13166, `runRows.ts` owns
 `output.produced`, so no shared row has a case arm in either fold.
 
-**Still open.** No open PR on 2026-09-25 covers any of these. The one
-related proposal, #13203 (one run program), moves reflection onto the
-tool-use loop; finding 1's fix sits in the shared `AgentRunLifecycle`
-finalizer and holds either way.
+**Findings, as found on `b4569d4ba`.** All seven landed by 2026-09-26 and
+were re-read on `main` at `707110506`; each item ends with where. The line
+anchors in the finding text are the `b4569d4ba` ones.
 
 1. **`run.end.usage` has a process-local authority.** The terminal finalizer
    reads `ctx.usageMonitor.lastTotals()` (`AgentRunLifecycle.ts:385`), set
@@ -207,7 +206,10 @@ finalizer and holds either way.
    (`nativeSubagentStrategy.ts:124`, and `workflowScriptAgentRunner.ts:872`,
    which reads a missing value as `0`). The durable source is reachable on
    that arm: `RunLedger.load` (`RunLedger.ts:336`) folds the run's rows.
-   Severity: bug (under-billing after resume).
+   Severity: bug (under-billing after resume). Landed in #13253:
+   `finalizeRun` (`runLifecycle.ts:270`), the one writer of `run.end`, reads
+   `RunState.usage` from `RunLedger.load` on every path, and the cache is
+   deleted.
 
 2. **Approval bypass after a resume.** Enforcement lives in the session's
    in-memory policy; rows are its per-run projection, published on `run.start`
@@ -216,7 +218,8 @@ finalizer and holds either way.
    enforcement starts from the host-seeded policy. Since #13146 the store is
    three-state (`ownBypass`, `undefined` defers to ancestors), so a
    re-snapshot must carry the run's own value. Severity: bug (view disagrees
-   with enforcement).
+   with enforcement). Landed in #13252: every resumed activation commits the
+   enforced snapshot in the batch of its `run.activate`.
 
 3. **Park-time closure folds the whole run cold.** `streamClosureFacts`
    (`SessionHandle.ts:640`) calls `readRunTranscript`, a full `readRunEvents`
@@ -227,7 +230,9 @@ finalizer and holds either way.
    per turn and so quadratic over a long chat. The publisher already sees
    every `stream.start`/`stream.end` (`SessionHandle.runEventPublication`),
    and an extra `stream.end` for a closed stream is a no-op in the fold.
-   Severity: cost.
+   Severity: cost. Landed in #13255 and #13270: the publisher keeps each
+   aggregate's open streams, stages and calls as it commits them
+   (`SessionEvents.ts:174`), and both the park and the host exit read that.
 
 4. **The phase-move rule is written four times.**
    `transcriptFold.boundaryPhase` (`:304`), `sessionFold`
@@ -235,13 +240,17 @@ finalizer and holds either way.
    `SessionHandle.receiveFoldedEvent` `phaseMoved` (`:1140`, which counts only
    `waiting` and `turn.begin` steps), and the chunk drop in
    `sessionLayer.ts:578-596`. One `runRows` predicate would serve all four.
-   Severity: duplication.
+   Severity: duplication. Landed in #13255: `phaseMoveOf` and
+   `closesRunWindow` (`runRows.ts:336`, `:356`) are the rule; `phaseMoved` is
+   gone.
 
 5. **Request and follow-up rows folded by hand.** `SessionHandle.decisionRow`
    (`:807`) toggles open/decided over raw rows, beside `applyRunRow`, which
    refuses a request opened twice. `ToolUseFollowUpQueueManager` (`:569-581`)
    re-reads follow-up rows for id membership; its outcome matches `runRows`,
-   only the code is a second copy. Severity: duplication.
+   only the code is a second copy. Severity: duplication. Landed in #13255
+   and #13279: both read `foldRunRows`, and pending follow-ups are the
+   publisher's.
 
 6. **The model has four holders.** `RunState.modelId` (snapshot), `run.record`
    (overwritten by a detached `session.publish` after the ledger batch,
@@ -249,12 +258,15 @@ finalizer and holds either way.
    `ctx.config.model`. Since #13143 `/model` reaches a parked run, widening
    the window. `packages/cli/src/runtime/history.ts:570` says the listing
    shows "the model the run started under", which the overwrite contradicts.
-   Severity: duplication, stale comment.
+   Severity: duplication, stale comment. Landed in #13258: a switch restates
+   the snapshot model with `run.record` and `run.config` in one batch, and
+   the `ctx.config.model` mirror is deleted.
 
 7. **Tool-call badge.** `conversationProgress.toolCallCount` resets on every
    `run.activate` (`sessionFold.ts:938`) and is republished only at turn end,
    so a resumed run reads 0 until its first turn completes. Derivable from
-   `tool.result` rows. Severity: display.
+   `tool.result` rows. Severity: display. Landed in #13258: the fold no
+   longer resets the count on `run.activate`.
 
 **Not recommended.** Merging `runStateFold` with the transcript reducer. The
 first is strict and `Result`-returning because resume depends on it; the
@@ -262,5 +274,4 @@ second is tolerant, debug-flag dependent and subscription-scoped. Joining them
 would tie resume correctness to display policy. Findings 4 and 5 get the
 sharing that matters through `runRows` helpers instead.
 
-**Order.** 1 first (small, billing). 2 and 6 build on #13146 and #13137, both
-landed. 3, 4, 5 and 7 are independent.
+Sections 1 and 2 are untouched by this pass and stay open.
