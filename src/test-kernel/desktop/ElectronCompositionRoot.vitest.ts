@@ -26,6 +26,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 import { normalizeFilePath } from '@utils/core';
 import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
 
@@ -283,20 +284,25 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
-  it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
-    const { resolveDesktopDataRoot } =
-      await import('@desktop/main/platform/paths');
-    const userDataPath = '/tmp/some-electron-user-data';
+  effectIt.effect(
+    'shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)',
+    () =>
+      Effect.gen(function* () {
+        const { resolveDesktopDataRoot } = yield* Effect.promise(
+          () => import('@desktop/main/platform/paths'),
+        );
+        const userDataPath = '/tmp/some-electron-user-data';
 
-    expect(resolveDesktopDataRoot(userDataPath, { env: {} })).toBe(
-      join(homedir(), '.texra'),
-    );
-    expect(
-      resolveDesktopDataRoot(userDataPath, {
-        env: { TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath },
+        expect(
+          yield* resolveDesktopDataRoot(userDataPath).pipe(withEnv({})),
+        ).toBe(join(homedir(), '.texra'));
+        expect(
+          yield* resolveDesktopDataRoot(userDataPath).pipe(
+            withEnv({ TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath }),
+          ),
+        ).toBe(userDataPath);
       }),
-    ).toBe(userDataPath);
-  });
+  );
 
   effectIt.effect(
     'finds resources in packaged and monorepo development layouts',

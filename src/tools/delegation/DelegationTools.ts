@@ -23,6 +23,7 @@ import {
   FOLLOW_UP_WAKE_FAILED_MESSAGE,
   submitFollowUp,
 } from '@agent/followUp/ToolUseFollowUp';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentResume } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
@@ -83,7 +84,11 @@ const deliverResumeWakeFailure = Effect.fn('deliverResumeWakeFailure')(
     yield* Effect.logWarning(
       `Failed to wake resumed subagent '${runId}': ${toErrorMessage(err)}`,
     ).pipe(withLogChannel(CHANNEL));
-    const msg = formatSubagentError(runId, handle.agentName, err);
+    const msg = formatSubagentError(
+      runId,
+      handle.agentName,
+      normalizeProviderError(err),
+    );
     const targetRunId = handle.deliveryTarget;
     if (targetRunId === undefined) {
       yield* Effect.logWarning(
@@ -123,7 +128,6 @@ function executeWorkflowAgentTool(
       input.agent,
       call.run.delegationAgentScope ?? undefined,
     );
-    const agentName = agent.name;
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
@@ -147,7 +151,7 @@ function executeWorkflowAgentTool(
     // into MediaExtractionNode → LatexMediaManager at runtime.
     const proposal = WorkflowAgentProposalSchema.parse({
       agentCategory: AgentCategory.Workflow,
-      agent: agentName,
+      agent: agent.name,
       agentSource: agent.source,
       model,
       instruction: input.instruction,
@@ -162,7 +166,7 @@ function executeWorkflowAgentTool(
       memories: input.memories,
     } satisfies WorkflowAgentProposal);
 
-    return yield* proposeAndExecute(call, proposal, agentName);
+    return yield* proposeAndExecute(call, proposal);
   });
 }
 
@@ -267,7 +271,6 @@ function executeDelegateAgentTool(
       input.agent!,
       call.run.delegationAgentScope ?? undefined,
     );
-    const agentName = agent.name;
 
     const model = yield* selectAvailableDelegationModel({
       requestedModel: input.model,
@@ -279,7 +282,7 @@ function executeDelegateAgentTool(
     // Construct tool-use proposal (no file fields)
     const proposal = ToolUseAgentProposalSchema.parse({
       agentCategory: AgentCategory.ToolUse,
-      agent: agentName,
+      agent: agent.name,
       agentSource: agent.source,
       model,
       instruction: withToolUseSubagentHandoffInstruction(
@@ -291,7 +294,7 @@ function executeDelegateAgentTool(
       workingDirectory: input.working_directory,
     } satisfies ToolUseAgentProposal);
 
-    return yield* proposeAndExecute(call, proposal, agentName);
+    return yield* proposeAndExecute(call, proposal);
   });
 }
 

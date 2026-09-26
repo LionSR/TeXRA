@@ -109,7 +109,7 @@ export const LEAN4_AVAILABILITY = prerequisitesChecks({
       const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
       // The setup port the probe already holds names the running product,
       // and only the VS Code build drives Lean through the extension.
-      const requiresExtension = setup.host === 'extension';
+      const requiresExtension = setup.host === 'vscode';
       return {
         extensionAvailable,
         lakeAvailable,

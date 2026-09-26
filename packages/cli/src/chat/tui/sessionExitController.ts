@@ -265,11 +265,14 @@ export function createSessionExitController(
       ctx.terminal.release();
       printResumeHintOnExit(resumeHint);
       // `runCliPlatformShutdownSequence` catches its own failures and never
-      // rejects, so there is no rejection arm to write here.
-      return ctx.runtime
-        .runPromise(persistSession)
-        .then(runPlatformShutdown)
-        .finally(() => process.exit(cause.exitCode));
+      // rejects, so there is no catch arm to write here.
+      try {
+        await ctx.runtime.runPromise(persistSession);
+        await runPlatformShutdown();
+      } finally {
+        process.exit(cause.exitCode);
+      }
+      return;
     }
 
     // A suspended (idle/WAITING) root session is resumable, so it is left

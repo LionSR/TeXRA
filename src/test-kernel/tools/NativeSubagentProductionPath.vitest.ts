@@ -275,6 +275,7 @@ function scriptedBoundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: config.contextWindow,
     supportsVision: false,
@@ -572,7 +573,6 @@ async function launchWaitingChild(options: {
         memories: [],
         workingDirectory: process.cwd(),
       },
-      CHILD_AGENT,
       PARENT_RUN_ID,
     ).pipe(Effect.provideService(Runs, session.runs)),
   );

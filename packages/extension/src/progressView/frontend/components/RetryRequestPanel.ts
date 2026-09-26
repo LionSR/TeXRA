@@ -10,12 +10,7 @@ import '@awesome.me/webawesome/dist/components/icon/icon.js';
 import '@awesome.me/webawesome/dist/components/details/details.js';
 
 // Local imports - shared schemas
-import {
-  getExhaustionReason,
-  isCredentialExhausted,
-  type ProviderErrorPartial,
-} from '@shared/schemas';
-import { isKimiCodeSubscriptionRetryBlocked } from '@shared/model/kimiCodeRetryGate';
+import type { ProviderErrorPartial } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { renderLabeledActionButton } from '@ui/wa/actionButtons';
@@ -109,21 +104,12 @@ export class RetryRequestPanel extends BaseRequestPanel<'retry'> {
   // ===========================================================================
 
   private copilotQuotaExhausted(): boolean {
-    return (
-      getExhaustionReason(this.permission.data.errorDetails) ===
-      'copilot-subscription'
-    );
+    return this.permission.data.credentialSwitch?.kind === 'copilot-fallback';
   }
 
+  /** The run decided the offer; the card only renders it. */
   private canUseOwnApiKey(): boolean {
-    const data = this.permission.data;
-    return (
-      isCredentialExhausted(data.errorDetails) &&
-      !isKimiCodeSubscriptionRetryBlocked(
-        data.model,
-        getExhaustionReason(data.errorDetails),
-      )
-    );
+    return this.permission.data.credentialSwitch != null;
   }
 
   private formatRetryDetails(

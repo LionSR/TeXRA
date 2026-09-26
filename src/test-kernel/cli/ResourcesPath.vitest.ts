@@ -2,9 +2,12 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { describe, expect, it } from 'vitest';
+import { it } from '@effect/vitest';
+import { Effect } from 'effect';
+import { describe, expect } from 'vitest';
 
 import { resolveCliResourcesPath } from '@cli/runtime/resourcesPath';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempRoots = useTempDirs();
@@ -22,34 +25,42 @@ function anchorUrl(filePath: string) {
 }
 
 describe('resolveCliResourcesPath', () => {
-  it('prefers resources next to the executing validation bundle', async () => {
-    const cliRoot = await makeCliPackage();
-    const validationResources = path.join(
-      cliRoot,
-      '.texra-validate-run',
-      'resources',
-    );
-    await Promise.all([
-      mkdir(path.join(cliRoot, 'dist', 'resources'), { recursive: true }),
-      mkdir(validationResources, { recursive: true }),
-    ]);
+  it.live('prefers resources next to the executing validation bundle', () =>
+    Effect.gen(function* () {
+      const cliRoot = yield* Effect.promise(makeCliPackage);
+      const validationResources = path.join(
+        cliRoot,
+        '.texra-validate-run',
+        'resources',
+      );
+      yield* Effect.promise(() =>
+        Promise.all([
+          mkdir(path.join(cliRoot, 'dist', 'resources'), { recursive: true }),
+          mkdir(validationResources, { recursive: true }),
+        ]),
+      );
 
-    expect(
-      resolveCliResourcesPath(
-        anchorUrl(path.join(cliRoot, '.texra-validate-run', 'bin', 'texra.js')),
-      ),
-    ).toBe(validationResources);
-  });
+      expect(
+        yield* resolveCliResourcesPath(
+          anchorUrl(
+            path.join(cliRoot, '.texra-validate-run', 'bin', 'texra.js'),
+          ),
+        ),
+      ).toBe(validationResources);
+    }).pipe(Effect.provide(nodeFileServices)),
+  );
 
-  it('keeps the production bundle on dist resources', async () => {
-    const cliRoot = await makeCliPackage();
-    const distResources = path.join(cliRoot, 'dist', 'resources');
-    await mkdir(distResources, { recursive: true });
+  it.live('keeps the production bundle on dist resources', () =>
+    Effect.gen(function* () {
+      const cliRoot = yield* Effect.promise(makeCliPackage);
+      const distResources = path.join(cliRoot, 'dist', 'resources');
+      yield* Effect.promise(() => mkdir(distResources, { recursive: true }));
 
-    expect(
-      resolveCliResourcesPath(
-        anchorUrl(path.join(cliRoot, 'dist', 'bin', 'texra.js')),
-      ),
-    ).toBe(distResources);
-  });
+      expect(
+        yield* resolveCliResourcesPath(
+          anchorUrl(path.join(cliRoot, 'dist', 'bin', 'texra.js')),
+        ),
+      ).toBe(distResources);
+    }).pipe(Effect.provide(nodeFileServices)),
+  );
 });

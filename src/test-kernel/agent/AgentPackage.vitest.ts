@@ -661,17 +661,21 @@ describe('agent package Node configuration', () => {
         workspaceDir: '/workspace',
       }).roots;
 
-      yield* config.update('texra.goal.enabled', true, 'global');
-      expect(config.get('goal.enabled')).toBe(true);
-      expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
+      yield* config.update('texra.agentOutputs.autoOpenFinal', true, 'global');
+      expect(config.get('agentOutputs.autoOpenFinal')).toBe(true);
+      expect(config.inspect('agentOutputs.autoOpenFinal')?.globalValue).toBe(
+        true,
+      );
 
-      yield* config.update('goal.enabled', undefined, 'global');
+      yield* config.update('agentOutputs.autoOpenFinal', undefined, 'global');
       // With no explicit value, resolution matches every host: the core-schema
-      // default (goal.enabled defaults to true) wins over the caller fallback.
-      expect(config.get('texra.goal.enabled', false)).toBe(true);
+      // default (true) wins over the caller fallback.
+      expect(config.get('texra.agentOutputs.autoOpenFinal', false)).toBe(true);
       // A key outside the core schema still falls back to the caller default.
       expect(config.get('custom.nonCoreKey', false)).toBe(false);
-      expect(config.inspect('texra.goal.enabled')?.globalValue).toBeUndefined();
+      expect(
+        config.inspect('texra.agentOutputs.autoOpenFinal')?.globalValue,
+      ).toBeUndefined();
     }),
   );
 });

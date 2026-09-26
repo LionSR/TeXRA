@@ -215,10 +215,6 @@ vi.mock('@agent/output/outputValidation', () => ({
   checkExpectedOutputs: vi.fn(() => Effect.succeed({ missing: [] })),
 }));
 
-vi.mock('@agent/output/snapshotResolution', () => ({
-  resolveBaseFilesForDiff: vi.fn(() => Effect.succeed([])),
-}));
-
 vi.mock('@agent/prompt/PromptBuilder', () => ({
   getSystemPromptWithRules: vi.fn(() => Effect.succeed('system')),
   PromptBuilder: class {
@@ -265,6 +261,7 @@ function testBoundModel(): BoundModel {
     compatibilityKey: 'DeepSeek',
     model: unusedModel,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'deepseek', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: 200_000,
     supportsVision: false,

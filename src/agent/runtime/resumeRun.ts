@@ -448,7 +448,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             ...launchOptions,
             runId,
             parentRunId,
-            agentName: resume.agentConfig.agent,
             startedAt: Date.now(),
             workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

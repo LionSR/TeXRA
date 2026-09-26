@@ -8,7 +8,7 @@ concern they carry:
 | ------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `definition/` | What an agent **is** (configure) | `AgentDataclass` (settings, prompts, `AgentDefinition`, `AgentCategory`), `AgentConfig` (launch/run configuration + payload), `AgentCycleOptions` (typed template-variable tokens), `agentDefinitionInheritance`, `RunRecord` |
 | `state/`      | Run-state snapshots              | `AgentWorkspaceState` (file, media and work-plan state) and `runRequests` (request validation)                                                                                                                                |
-| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ToolHost`, `ITool`, `IToolRegistry`, `MapToolRegistry`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by both run programs)               |
+| `tools/`      | Tool contracts and tool calls    | `ToolTypes` (`ITool`, `IToolRegistry`, `MapToolRegistry`), `toolAttachmentExtraction`, `toolCallParsing` (duplicate-call partitioning and tool-call error normalization, used by both run programs)                           |
 
 What is **not** here, and where it lives instead:
 

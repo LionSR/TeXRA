@@ -153,7 +153,7 @@ function resolveToolList(
     return resolveAgentTools({
       tools,
       logger: { warn: () => {} },
-      host: 'extension',
+      host: 'vscode',
       injectTools: false,
       stores,
       workspaceRoot: undefined,

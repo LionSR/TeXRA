@@ -21,11 +21,12 @@ import {
  * an in-memory hand-off, plus the run it belongs to and the attached-memory
  * misses the delivery reports. `error` is the flow's own provider/runtime
  * error, not yet classified; `runFlowWithLifecycle` classifies it into the
- * `run.end` row's error. Domain verdicts such as rejected workflow output end
- * FAILED without one, their diagnostics staying in the output.
- * `compositionHash` names the tool composition the run pinned; a host reports
- * it (the CLI's result line) and nothing persists it. A run stopped before
- * its loop returned carries none.
+ * `run.end` row's error, and the result it returns for a failed child carries
+ * the normalized error the child's delivery reports. Domain verdicts such as
+ * rejected workflow output end FAILED without one, their diagnostics staying
+ * in the output. `compositionHash` names the tool composition the run
+ * pinned; a host reports it (the CLI's result line) and nothing persists it.
+ * A run stopped before its loop returned carries none.
  */
 const AgentFlowResultSchema = RunEndSchema.omit({ error: true }).extend({
   runId: RunIdSchema,

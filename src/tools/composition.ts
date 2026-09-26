@@ -17,7 +17,7 @@ import { createHash } from 'node:crypto';
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
+import { SETTING_HOSTS, type SettingHost } from '@shared/state/stateSettings';
 import { findToolPlugin } from '@tools/plugins';
 import type { LoadedPlugin, ToolTable } from '@tools/toolTable';
 
@@ -40,7 +40,7 @@ const CompositionSchema = z.object({
     }),
   ),
   /** The product host; `null` when no composition root named one. */
-  host: z.enum(['cli', 'desktop', 'extension']).nullable(),
+  host: z.enum(SETTING_HOSTS).nullable(),
   /** Whether approval-gated tools are withheld (no interactive channel). */
   approvalPromptsUnavailable: z.boolean(),
   /** The agent's declared tools, in declaration order, without repeats. */
@@ -61,7 +61,7 @@ export function compositionFor(inputs: {
   readonly disabledIds: ReadonlySet<string>;
   readonly unavailableTools: ReadonlySet<string>;
   readonly loaded: readonly LoadedPlugin[];
-  readonly host: ToolHost | undefined;
+  readonly host: SettingHost | undefined;
   readonly approvalPromptsUnavailable: boolean;
   readonly tools: readonly string[];
   readonly injected: readonly string[];

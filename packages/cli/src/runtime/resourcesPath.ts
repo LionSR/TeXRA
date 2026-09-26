@@ -1,35 +1,49 @@
-import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-function findCliPackageDir(startDir: string): string {
-  let dir = startDir;
-  while (true) {
+import { Data, Effect, FileSystem } from 'effect';
+
+import { absentReason } from '@utils/files/fsEntryExists';
+
+/** No resources candidate exists beside this build of the CLI. */
+class CliResourcesNotFound extends Data.TaggedError('CliResourcesNotFound')<{
+  readonly message: string;
+}> {}
+
+/** Whether `target` exists; an absent path (ENOENT or ENOTDIR) reads as
+ *  `false`, and any other failure propagates. */
+const isPresent = (fs: FileSystem.FileSystem, target: string) =>
+  fs
+    .exists(target)
+    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
+
+export const resolveCliResourcesPath = Effect.fn(
+  'resourcesPath.resolveCliResourcesPath',
+)(function* (anchorUrl: string = import.meta.url) {
+  const fs = yield* FileSystem.FileSystem;
+  const currentDir = path.dirname(fileURLToPath(anchorUrl));
+  // The nearest `cli` ancestor holding a package.json, or the anchor's own
+  // directory when there is none.
+  let packageDir = currentDir;
+  for (let dir = currentDir; ; dir = path.dirname(dir)) {
     if (
       path.basename(dir) === 'cli' &&
-      existsSync(path.join(dir, 'package.json'))
+      (yield* isPresent(fs, path.join(dir, 'package.json')))
     ) {
-      return dir;
+      packageDir = dir;
+      break;
     }
-    const parent = path.dirname(dir);
-    if (parent === dir) return startDir;
-    dir = parent;
+    if (path.dirname(dir) === dir) break;
   }
-}
-
-export function resolveCliResourcesPath(anchorUrl = import.meta.url): string {
-  const currentDir = path.dirname(fileURLToPath(anchorUrl));
-  const packageDir = findCliPackageDir(currentDir);
   const candidates = [
     path.resolve(currentDir, '../resources'),
     path.resolve(packageDir, 'dist/resources'),
     path.resolve(packageDir, '../extension/resources'),
   ];
-  const found = candidates.find((candidate) => existsSync(candidate));
-  if (found === undefined) {
-    throw new Error(
-      `TeXRA CLI resources not found; looked in: ${candidates.join(', ')}`,
-    );
+  for (const candidate of candidates) {
+    if (yield* isPresent(fs, candidate)) return candidate;
   }
-  return found;
-}
+  return yield* new CliResourcesNotFound({
+    message: `TeXRA CLI resources not found; looked in: ${candidates.join(', ')}`,
+  });
+});

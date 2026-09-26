@@ -4,6 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -62,13 +63,24 @@ const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
             ),
       ),
     );
-  const backupFiles = names
-    .filter(
-      (name) =>
-        name.startsWith(`${fileBaseName}.tex.bak`) ||
-        name.startsWith(`${fileBaseName}.bak`),
-    )
-    .map((name) => path.join(fileDir, name));
+  // Files only, as glob's nodir did: a non-recursive remove of an empty
+  // directory would succeed (rmdir) and delete it.
+  const backupFiles = yield* Effect.filter(
+    names
+      .filter(
+        (name) =>
+          name.startsWith(`${fileBaseName}.tex.bak`) ||
+          name.startsWith(`${fileBaseName}.bak`),
+      )
+      .map((name) => path.join(fileDir, name)),
+    (candidate) =>
+      entryTypeIn(fs, candidate).pipe(
+        Effect.map((type) => type !== undefined && type !== 'Directory'),
+        // An entry that cannot be typed is still offered to the remove,
+        // which reports its own failure.
+        Effect.catch(() => Effect.succeed(true)),
+      ),
+  );
 
   for (const backupFile of backupFiles) {
     const removed = yield* fs.remove(backupFile, { force: true }).pipe(

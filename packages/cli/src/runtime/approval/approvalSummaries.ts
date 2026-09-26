@@ -9,6 +9,7 @@ import {
   type UserQuestionPermission,
 } from '@shared/schemas';
 import { getModelLabel } from '@shared/model/modelLabel';
+import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import {
   WORKFLOW_SCRIPT_PROPOSAL_COPY,
@@ -16,11 +17,7 @@ import {
 } from '@ui/copy/workflowScriptProposal';
 import { buildDiffHunks, formatHunkLines } from '@utils/text/unifiedDiff';
 
-import {
-  cliRetryActionHint,
-  cliRetryQuotaRoute,
-  type CliApprovalContent,
-} from './approvalPrompts';
+import { type CliApprovalContent } from './approvalPrompts';
 
 const TRUNCATED_DIFF_LINE_MARKER = ' … [line truncated]';
 const TOOL_EDIT_APPROVAL_DIFF_MAX_CHARS = 12_000;
@@ -197,8 +194,11 @@ export function buildAgentProposalApprovalContent(
 
 export function formatRetryRequestMessage(payload: RetryPermission): string {
   const message = `Retry requested (${payload.operation}): ${payload.errorMessage ?? 'unknown error'}`;
-  const hint = cliRetryActionHint(cliRetryQuotaRoute(payload));
-  return hint ? [message, hint].join('\n') : message;
+  const offer = payload.credentialSwitch;
+  // Only a quota route the user can decline has a switch to name.
+  if (offer?.kind !== 'decline-route') return message;
+  const route = quotaFallbackRouteFor(offer.route);
+  return `${message}\nPress \`k\` on the retry prompt to switch from your ${route.retrySourceName} to ${route.retryFallbackName}.`;
 }
 
 export function formatBashApprovalSummary(payload: BashPermission): string {

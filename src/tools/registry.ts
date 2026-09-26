@@ -2,8 +2,8 @@
 import { FileSystem, Layer } from 'effect';
 
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
@@ -132,12 +132,12 @@ const PLUGIN_TOOLS = {
   'memory-workflow': {
     memory: MemoryTool,
     todo_write: TodoWriteTool,
-    plan: PlanTool,
     delegate_workflow: WorkflowAgentTool,
     delegate_agent: DelegateAgentTool,
     executions: ExecutionsTool,
     accept_run_files: AcceptRunFilesTool,
   },
+  goal: { plan: PlanTool },
   texcount: { texcount: TexcountTool },
   wolfram: { wolfram: WolframTool },
   zotero: {
@@ -235,6 +235,9 @@ export const toolRegistryLayer = Layer.unwrap(
 );
 
 /** Whether a registered tool declares itself unavailable on a product host. */
-export function isToolUnavailableOnHost(name: string, host: ToolHost): boolean {
+export function isToolUnavailableOnHost(
+  name: string,
+  host: SettingHost,
+): boolean {
   return TOOL_TABLE.get(name)?.unavailableHosts?.includes(host) === true;
 }

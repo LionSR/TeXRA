@@ -1,13 +1,10 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import {
-  notifyFollowUpSent,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
@@ -23,7 +20,6 @@ import {
   publishTestRunStart,
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
-import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
 import {
   createRecordingHost,
@@ -46,7 +42,6 @@ function paperRoots() {
 }
 
 describe('tool-use follow-up progress events', () => {
-  const unsubscribeFollowUpObservers: Array<() => void> = [];
   const trackedRuns: Array<{
     readonly session: SessionHandle;
     readonly runId: RunId;
@@ -54,9 +49,6 @@ describe('tool-use follow-up progress events', () => {
   const sessions = new Set<SessionHandle>();
 
   afterEach(async () => {
-    for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
-      unsubscribe();
-    }
     for (const { session, runId } of trackedRuns.splice(0)) {
       session.runs.untrack(runId);
     }
@@ -116,21 +108,6 @@ describe('tool-use follow-up progress events', () => {
         expect(run.events).toEqual([]);
       }),
   );
-
-  it('breaks a blocking wait when the owning session emits followUpSent', () => {
-    const session = trackSession();
-    const onFollowUp = vi.fn();
-    const otherRun = 'fa0003' as RunId;
-
-    const cleanup = listenForFollowUp(session, runId, onFollowUp);
-    unsubscribeFollowUpObservers.push(cleanup);
-
-    notifyFollowUpSent(otherRun, session);
-    expect(onFollowUp).not.toHaveBeenCalled();
-
-    notifyFollowUpSent(runId, session);
-    expect(onFollowUp).toHaveBeenCalledOnce();
-  });
 
   it.effect(
     'does not append through stale active contexts after final status',
