@@ -5,7 +5,10 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { installedProcessRuntime } from '@agent/runtime';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import {
+  cliPlatformShutdown,
+  initCliPlatform,
+} from '@cli/runtime/initPlatform';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
@@ -67,10 +70,6 @@ const mocks = vi.hoisted(() => ({
   initializeNodeRuntimeSkills: vi.fn(),
   getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
-  // Collects the programs registered via the (mocked) lifecycle host's
-  // onShutdown so a test can run them and assert the agent shutdown drain
-  // was wired.
-  shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -111,22 +110,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 // First-init dependencies: only exercised while no earlier init in the same
 // module instance installed its roots, so these stubs only drive the "first
 // init" tests below.
-vi.mock('@platform/defaults/lifecycleHost', async (importOriginal) => {
-  const { Effect: effect } = await import('effect');
-  return {
-    ...(await importOriginal<
-      typeof import('@platform/defaults/lifecycleHost')
-    >()),
-    createLifecycleHost: () => ({
-      onShutdown: (_phase: unknown, handler: Effect.Effect<void, unknown>) => {
-        mocks.shutdownHandlers.push(handler);
-        return { dispose: vi.fn() };
-      },
-      runShutdown: effect.void,
-    }),
-  };
-});
-
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
@@ -190,7 +173,7 @@ function withFreshSignalCapture<E>(
 }
 
 /** Disposes whichever process runtime an earlier case installed, so the
- *  CLI init below builds its own runtime (and its own lifecycle/setup) instead
+ *  CLI init below builds its own runtime (and its own shutdown/setup) instead
  *  of joining the test kernel's session-graph runtime. */
 const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
   const runtime = installedProcessRuntime();
@@ -200,7 +183,6 @@ const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.shutdownHandlers.length = 0;
     mocks.cliGlobalState.get.mockReset();
     mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
       Effect.succeed(defaultValue),
@@ -281,10 +263,11 @@ describe('CLI platform init', () => {
       yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
       // Registration alone must not kill anything; the drain belongs to the
-      // CLI lifecycle host every exit path runs (bin/texra.ts's finally, the
-      // signal handlers, the TUI's exitNow).
+      // CLI shutdown every exit path runs (bin/texra.ts's finally, the
+      // signal handlers, the TUI's exitNow), and runs once however many ask.
       expect(drain).not.toHaveBeenCalled();
-      for (const handler of mocks.shutdownHandlers) yield* handler;
+      yield* cliPlatformShutdown;
+      yield* cliPlatformShutdown;
       expect(drain).toHaveBeenCalledOnce();
     }),
   );
