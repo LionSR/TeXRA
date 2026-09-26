@@ -20,6 +20,7 @@ import {
   type FileSystem,
   Option,
   type PlatformError,
+  Result,
   Semaphore,
   Stream,
 } from 'effect';
@@ -33,7 +34,10 @@ import {
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
 } from '@tools/memory/constants';
-import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
+import {
+  displayToStoragePath,
+  relativeToDisplayPath,
+} from '@tools/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,
@@ -41,6 +45,7 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
+import { onFileLane } from '@utils/files/fileLanes';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,
@@ -100,6 +105,30 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
     );
   },
 );
+
+/**
+ * Run a memory command on its file's lane (`onFileLane`): memory is storage
+ * parallel runs edit at once, and each edit rewrites the file whole. A path
+ * that names no memory file takes no lane; the command refuses it.
+ */
+export function onMemoryFileLane(displayPath: string | null | undefined) {
+  return <A, E, R>(
+    self: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R | StorageFs> => {
+    const storage =
+      displayPath == null
+        ? undefined
+        : Result.getOrUndefined(
+            Result.try(() => displayToStoragePath(displayPath)),
+          );
+    if (storage === undefined) return self;
+    return Effect.flatMap(StorageFs, ({ root }) =>
+      root === undefined
+        ? self
+        : self.pipe(onFileLane(path.join(root, storage))),
+    );
+  };
+}
 
 /** Write one memory file atomically, frontmatter first. */
 export const writeMemoryFile = Effect.fn('memoryFileSystem.writeMemoryFile')(

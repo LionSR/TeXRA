@@ -7,7 +7,7 @@ import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { planTeamRun } from '@common/teams/TeamPlan';
 import { findTeamPreset, type TeamPreset } from '@common/teams/TeamPresets';
 import type { TeamRosterCatalog } from '@common/teams/TeamRoster';
-import type { StateStore } from '@platform/interfaces';
+import { type StateStore, withStateKeyLane } from '@platform/interfaces';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   AGENT_CATEGORIES,
@@ -198,7 +198,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           preset,
         ])
         .pipe(Effect.as(preset));
-    });
+    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
   }
 
   deleteCustomPreset(presetId: string) {
@@ -218,7 +218,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           ),
         )
         .pipe(Effect.as(target));
-    });
+    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
   }
 
   /**

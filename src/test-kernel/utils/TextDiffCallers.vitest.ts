@@ -16,9 +16,12 @@ import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { buildSubagentResult } from '@tools/delegation/subagentResults';
 import {
+  approvedWriteConflict,
+  writeApprovedContent,
+} from '@tools/approval/approvedWrite';
+import {
   computeLineChangeSummary,
   firstChangedLine,
-  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { unifiedDiffText } from '@utils/text/unifiedDiff';
@@ -140,6 +143,29 @@ describe('shared text-diff caller fixtures', () => {
             readFile(fakePath('workspace/paper.tex'), 'utf-8'),
           ),
         ).toBe('alpha\nBETA\nomega\nlocal\n');
+
+        // A concurrent change to the approved hunk is a conflict, never an
+        // overwrite of that change with the approved content.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': 'rewritten\nby another\nwriter\n',
+          }),
+        );
+        const conflict = yield* approvedWriteConflict(
+          'paper.tex',
+          original,
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(conflict?.message).toContain('changed on disk');
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('rewritten\nby another\nwriter\n');
       }),
   );
 });

@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 // Local imports
 
-import type { StateStore } from '@platform/interfaces';
+import { type StateStore, withStateKeyLane } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
 // Time constants
@@ -42,11 +42,8 @@ export function setToolEnabled(
 ) {
   return Effect.gen(function* () {
     const set = yield* getDisabledToolIds(store);
-    if (enabled) {
-      set.delete(toolId);
-    } else {
-      set.add(toolId);
-    }
+    if (enabled) set.delete(toolId);
+    else set.add(toolId);
     return yield* store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
-  });
+  }).pipe(withStateKeyLane(GlobalStateKey.DISABLED_TOOLS));
 }

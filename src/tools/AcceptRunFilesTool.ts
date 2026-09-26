@@ -34,8 +34,8 @@ import { requireToolRun } from '@tools/core/toolRun';
 import {
   buildApprovalRejectedResult,
   requestToolEditApproval,
-  writeApprovedContent,
 } from '@tools/approval/toolEditApproval';
+import { approvedWriteConflict } from '@tools/approval/approvedWrite';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
 import { locateInWorkspace } from '@utils/files/workspaceFS';
 import { entryExists, absentReason } from '@utils/files/fsEntryExists';
@@ -331,11 +331,16 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
       continue;
     }
 
-    yield* writeApprovedContent(
+    // A conflict is this file's outcome; the rest are still offered.
+    const conflict = yield* approvedWriteConflict(
       entry.original,
       entry.originalContent,
       approval.appliedContent,
     );
+    if (conflict !== undefined) {
+      results.push(`conflict: ${entry.original}${mappingNote}`);
+      continue;
+    }
 
     const action = entry.destExists ? 'replaced' : 'created';
     const strippedNote =

@@ -89,7 +89,6 @@ import { RunLedger } from '@shared/session/runLedger';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  isDisplaySessionEvent,
   ownerIdentity,
   TOOL_CALL_STATUS,
   type CommitOrdinal,
@@ -466,10 +465,7 @@ const sessionHandleLayer = (
           // have applied them. Readers can then query either state consistently.
           folded: (fromCommit) =>
             tailFrom(
-              (from) =>
-                Stream.fromIterableEffect(eventLog.readAll(from)).pipe(
-                  Stream.filter(isDisplaySessionEvent),
-                ),
+              (from) => Stream.fromIterableEffect(eventLog.readDisplay(from)),
               {
                 get: Effect.sync(settledCursor),
                 changes: Stream.merge(

@@ -29,6 +29,8 @@ interface DesktopAttentionPortShape {
     readonly key: string;
     readonly runId: RunId;
   }): void;
+  /** Close project `key`'s notifications: the user is looking at it. */
+  dismiss(key: string): void;
 }
 
 export class DesktopAttentionPort extends Context.Service<
@@ -36,9 +38,11 @@ export class DesktopAttentionPort extends Context.Service<
   DesktopAttentionPortShape
 >()('@texra/desktop/DesktopAttentionPort') {}
 
-// Held until clicked or closed: a notification the collector reclaims can no
-// longer deliver its click.
-const liveNotifications = new Set<Notification>();
+// Each project's shown notifications, held so a click can still be delivered
+// (one the collector reclaims cannot deliver it) until it is clicked, closed
+// or failed, or the user looks at the project, which dismisses them: the OS
+// does not promise a `close`, so without that they were held forever.
+const liveNotifications = new Map<string, Set<Notification>>();
 
 /** The port over Electron: the app icon's badge and the OS notification
  *  centre, clicks leading back through `reveal`. */
@@ -57,14 +61,25 @@ export function electronAttentionPort(options: {
     notify: ({ title, body, key, runId }) => {
       if (!Notification.isSupported()) return;
       const notification = new Notification({ title, body });
-      const release = () => liveNotifications.delete(notification);
+      const shown = liveNotifications.get(key) ?? new Set<Notification>();
+      const release = () => {
+        shown.delete(notification);
+        if (shown.size === 0 && liveNotifications.get(key) === shown)
+          liveNotifications.delete(key);
+      };
       notification.on('click', () => {
         release();
         options.reveal(key, runId);
       });
       notification.on('close', release);
-      liveNotifications.add(notification);
+      notification.on('failed', release);
+      liveNotifications.set(key, shown.add(notification));
       notification.show();
+    },
+    dismiss: (key) => {
+      const shown = liveNotifications.get(key);
+      liveNotifications.delete(key);
+      for (const notification of shown ?? []) notification.close();
     },
   };
 }
@@ -101,14 +116,16 @@ export const followDesktopAttention = Effect.gen(function* () {
         projects.fallback().key,
         ...open.map(({ key }) => key),
       ]);
-      for (const key of latest.keys())
-        if (!openKeys.has(key)) latest.delete(key);
+      for (const key of latest.keys()) {
+        if (openKeys.has(key)) continue;
+        latest.delete(key);
+        port.dismiss(key);
+      }
       const previous = latest.get(project.key);
       latest.set(project.key, view);
-      if (
-        previous !== undefined &&
-        !(activeKey === project.key && port.windowFocused())
-      ) {
+      const seen = activeKey === project.key && port.windowFocused();
+      if (seen) port.dismiss(project.key);
+      if (previous !== undefined && !seen) {
         const title = project.display.name;
         const notify = (runId: RunId, body: string) =>
           port.notify({ title, body, key: project.key, runId });

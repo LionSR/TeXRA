@@ -231,18 +231,29 @@ const candidates = (
     at: 0,
   }));
 
+/**
+ * `PreparedHistorySchema` over `history` from message `from` on. Its rules
+ * are between neighbours (a calling assistant and its tool group), so a
+ * suffix that starts on a message already checked, and never on a tool
+ * group, re-checks every pair past it; a refusal's detail is still the
+ * whole parse's, whose indices name the whole history.
+ */
 const unprepared = (
   runId: RunId,
   history: readonly z.output<typeof MessageSchema>[],
+  from = 0,
 ): RunLedgerRefused | null => {
-  const prepared = PreparedHistorySchema.safeParse(history);
-  return prepared.success
-    ? null
-    : new RunLedgerRefused({
-        reason: 'unprepared-history',
-        runId,
-        detail: prepared.error.message,
-      });
+  let start = Math.max(0, from - 1);
+  if (start > 0 && history[start]?.role === 'tool') start -= 1;
+  if (PreparedHistorySchema.safeParse(history.slice(start)).success)
+    return null;
+  return new RunLedgerRefused({
+    reason: 'unprepared-history',
+    runId,
+    detail:
+      PreparedHistorySchema.safeParse(history).error?.message ??
+      `history from message ${start}`,
+  });
 };
 
 /** What a lost claim says, from the sequence row that refused the write. */
@@ -428,7 +439,16 @@ export const runLedgerLayer: Layer.Layer<
         rows.some(isMessageBearing) &&
         candidate.success.messages.length > 0
       ) {
-        const refusal = unprepared(run, candidate.success.messages);
+        // Only what follows the already-checked `state` history is new, or,
+        // after a compaction (the batch's first message-bearing row), what
+        // follows its `keepPrefix`; re-checking it all is quadratic per run.
+        const compaction = rows.find((row) => row.type === 'model.compaction');
+        const held = state?.messages.length ?? 0;
+        const kept =
+          compaction?.type === 'model.compaction'
+            ? Math.min(compaction.payload.keepPrefix, held)
+            : held;
+        const refusal = unprepared(run, candidate.success.messages, kept);
         if (refusal !== null) return yield* refusal;
       }
       const drafts: readonly SessionEventDraft[] = rows;

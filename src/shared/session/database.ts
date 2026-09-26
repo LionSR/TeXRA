@@ -13,6 +13,7 @@ import type {
   AggregateId,
   JsonValue,
   CommitOrdinal,
+  DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
@@ -199,6 +200,11 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** {@link readAll} filtered to display types in SQL: a tail never decodes
+     *  a run's private records only to drop them. */
+    readonly readDisplay: (
+      fromCommit: CommitOrdinal,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
