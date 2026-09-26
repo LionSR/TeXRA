@@ -50,7 +50,6 @@ import {
   isActivePhase,
   isTranscriptSettlementPhase,
 } from '@shared/runs/runStatus';
-import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
@@ -344,13 +343,6 @@ export async function runChat(
       session.runExitCode = CliExitCode.AgentError;
     },
   });
-  // Said here, in the transcript, rather than on stderr before Ink mounts,
-  // where it would be left above the header.
-  if (runtimeSession.storeMovedAside) {
-    appendLocalAssistantTranscript(
-      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
-    );
-  }
   // Cosmetic, but "texra-local" or a bare shell prompt in every tab makes a
   // multi-session workflow hard to navigate: show project and attention state.
   // The terminal outlives session subscriptions: only the exit controller

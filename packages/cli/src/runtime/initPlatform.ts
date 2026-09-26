@@ -78,7 +78,7 @@ type CliPlatformInitOptions = Pick<
 > & {
   readonly installSignalHandlers?: boolean;
   /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
-   *  in its transcript, since stderr written before Ink mounts is left
+   *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
    *  above its header. Otherwise the database's own warning says it, or,
    *  under a silenced log, this init prints it to stderr. */
   readonly presentsStoreMovedAside?: boolean;
@@ -287,11 +287,12 @@ export function initCliPlatform(
     // the first call builds them below.
     //
     // A step that fails after the runtime exists (a store that will not open, a
-    // seed that will not write) must not leave the runtime installed with
-    // nothing registered to dispose it: the failure disposes it and is
-    // re-raised, so the caller reports the cause rather than a half-built
-    // platform. Keep the roots and lazy session private until the fallible
-    // setup has succeeded: their ports have no reset operation.
+    // seed that will not write) registers nothing to dispose it; the failure
+    // is re-raised so the caller reports the cause, and the process entry
+    // (`bin/texra.ts`) disposes the still-installed runtime in its
+    // `Effect.ensuring`, never a fiber on that runtime. Keep the roots and
+    // lazy session private until the fallible setup has succeeded: their
+    // ports have no reset operation.
     const { globalState, lifecycle, roots } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
