@@ -253,6 +253,27 @@ export function createSessionApprovals(
   // `createRunApprovalBypass` owns its own `byRun` map — so a parent
   // with bash bypassed but edits gated still propagates exactly that split.
   const parentOf = new Map<RunId, RunId>();
+  // The inverse of `parentOf`, written only through `link`/`unlink` so the
+  // two never disagree. Every subagent and every CLI round adds an edge for
+  // the session's lifetime; without this index each descendant walk scanned
+  // all of them, making every `registerRunParent`/`setBypass` O(session
+  // runs) and a long orchestration quadratic.
+  const childrenOf = new Map<RunId, Set<RunId>>();
+  const unlink = (child: RunId): void => {
+    const parent = parentOf.get(child);
+    if (parent === undefined) return;
+    parentOf.delete(child);
+    const siblings = childrenOf.get(parent);
+    siblings?.delete(child);
+    if (siblings?.size === 0) childrenOf.delete(parent);
+  };
+  const link = (child: RunId, parent: RunId): void => {
+    unlink(child);
+    parentOf.set(child, parent);
+    const siblings = childrenOf.get(parent);
+    if (siblings) siblings.add(child);
+    else childrenOf.set(parent, new Set([child]));
+  };
   const resolveParent = (runId: RunId): RunId | undefined =>
     parentOf.get(runId);
   const resolveDescendants = (runId: RunId): readonly RunId[] => {
@@ -261,9 +282,8 @@ export function createSessionApprovals(
     const pending = [runId];
     const seen = new Set(pending);
     for (let index = 0; index < pending.length; index += 1) {
-      const parent = pending[index];
-      for (const [child, directParent] of parentOf) {
-        if (directParent !== parent || seen.has(child)) continue;
+      for (const child of childrenOf.get(pending[index]) ?? []) {
+        if (seen.has(child)) continue;
         seen.add(child);
         pending.push(child);
       }
@@ -303,7 +323,7 @@ export function createSessionApprovals(
       bypass,
       effectiveValue: bypass.isBypassed(runId),
     }));
-    parentOf.delete(runId);
+    unlink(runId);
     for (const { bypass, effectiveValue } of promoted) {
       bypass.setBypass(runId, effectiveValue, { silent: true });
     }
@@ -336,7 +356,7 @@ export function createSessionApprovals(
       const before = new Map(
         affected.map((runId) => [runId, bypassesFor(runId)]),
       );
-      parentOf.set(childRunId, parentRunId);
+      link(childRunId, parentRunId);
       for (const runId of affected) {
         const previous = before.get(runId);
         const current = bypassesFor(runId);
@@ -351,11 +371,9 @@ export function createSessionApprovals(
     },
     detachRunFromParent,
     forgetRunAncestry(runId) {
-      const directChildren = [...parentOf]
-        .filter(([, parent]) => parent === runId)
-        .map(([child]) => child);
+      const directChildren = [...(childrenOf.get(runId) ?? [])];
       for (const child of directChildren) detachRunFromParent(child);
-      parentOf.delete(runId);
+      unlink(runId);
       // Only after the children were promoted: clearing the parent's
       // explicit values first would resolve an inherited bypass to `false`
       // and silently revoke it.
@@ -364,6 +382,7 @@ export function createSessionApprovals(
     clearAll() {
       for (const bypass of bypasses) bypass.clearAll();
       parentOf.clear();
+      childrenOf.clear();
     },
   };
 }
