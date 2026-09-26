@@ -416,11 +416,13 @@ describe('completedRunArchive facade', () => {
           },
         ]);
 
-        const attachRunTrace = session.attachRunTrace.bind(session);
+        // The resumed run's trace writes its first event through the reopened
+        // writer; the second turn lands beside it.
+        const publishRunEvent = session.publishRunEvent.bind(session);
         const resumedWriter = vi
-          .spyOn(session, 'attachRunTrace')
-          .mockImplementationOnce((trace, requestedRunId) => {
-            const detach = attachRunTrace(trace, requestedRunId);
+          .spyOn(session, 'publishRunEvent')
+          .mockImplementationOnce((requestedRunId, event) => {
+            publishRunEvent(requestedRunId, event);
             session.publish([
               {
                 type: 'log',
@@ -435,7 +437,6 @@ describe('completedRunArchive facade', () => {
                 text: 'Second proof.',
               },
             ]);
-            return detach;
           });
 
         expect(
@@ -447,7 +448,7 @@ describe('completedRunArchive facade', () => {
           ),
         ).toBe(launchFailure);
 
-        expect(resumedWriter).toHaveBeenCalledWith(expect.anything(), runId);
+        expect(resumedWriter).toHaveBeenCalledWith(runId, expect.anything());
         const released = yield* Effect.result(
           getRunRecords(session, runId).writeReport('late write'),
         );

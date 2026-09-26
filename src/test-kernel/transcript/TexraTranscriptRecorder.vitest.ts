@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -8,16 +7,15 @@ import {
   TOOL_CALL_STATUS,
   type RunId,
 } from '@shared/schemas';
-import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { TranscriptRow } from '@ui/transcript';
 
-/** A fold attached to a fresh trace, plus its rows and groups. */
+/** A fold built into a fresh trace, plus its rows and groups. */
 function attachRecorder(runId: RunId = 'stream:test' as RunId) {
-  const trace = new TraceEmitter();
-  const recorder = attachTestTranscriptFold(trace, runId);
+  const recorder = createTestRunTrace(runId);
   const rows = recorder.rows;
   return {
-    trace,
+    trace: recorder.trace,
     settlePhase: recorder.settlePhase,
     rows,
     row: (id: string | undefined): TranscriptRow | undefined =>
@@ -32,7 +30,7 @@ function assistantRows(rows: readonly TranscriptRow[]) {
   return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
 }
 
-describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
+describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
   it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
     const { trace, group } = attachRecorder();
 
@@ -52,7 +50,7 @@ describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', ()
   });
 });
 
-describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
+describe('createTestRunTrace stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its closed group", () => {
     const { trace, group } = attachRecorder();
 
@@ -66,7 +64,7 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
   });
 });
 
-describe('attachTestTranscriptFold undecodable compaction payload', () => {
+describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
     const { trace, rows } = attachRecorder();
 
@@ -89,7 +87,7 @@ describe('attachTestTranscriptFold undecodable compaction payload', () => {
   });
 });
 
-describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
+describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
     const { trace, rows } = attachRecorder();
 
@@ -170,7 +168,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
   });
 });
 
-describe('attachTestTranscriptFold workflow task state', () => {
+describe('createTestRunTrace workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
     const { trace, settlePhase, row, rows } = attachRecorder(runId);

@@ -1,8 +1,7 @@
-import { Effect, Fiber, Stream } from 'effect';
+import { Effect, Stream } from 'effect';
 
 // Local imports - runtime events
 import type { SessionHandle } from '@agent/runtime';
-import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StatusBarUsageTracker } from './StatusBarUsageTracker';
 
 interface StatusBarSessionEventOptions {
@@ -15,12 +14,12 @@ interface StatusBarSessionEventOptions {
   >;
   onStatusChanged: () => void;
   onUsageChanged: () => void;
-  /** The host entry's process runtime, which the subscription fiber runs on. */
-  runtime: ProcessRuntime;
 }
 
 /**
- * Refreshes the extension status bar when the projection it paints moves.
+ * Refreshes the extension status bar when the projection it paints moves,
+ * for as long as the caller's fiber runs it (activation forks it into its
+ * scope).
  *
  * The one input is the session's view as a level stream
  * (`SessionHandle.viewChanges`, PRD 7.2): the fold's own state, so it carries
@@ -30,41 +29,35 @@ interface StatusBarSessionEventOptions {
  * mirrored here: each view is read back through the tracker, and a view that
  * leaves both projections where they were paints nothing.
  */
-export function subscribeStatusBarSessionEvents({
+export function refreshStatusBarOnViewChanges({
   session,
   tracker,
   onStatusChanged,
   onUsageChanged,
-  runtime,
-}: StatusBarSessionEventOptions): () => void {
+}: StatusBarSessionEventOptions): Effect.Effect<void> {
   // Unseeded on purpose: `viewChanges` replays the current view on subscribe,
   // and that first emission must paint both projections (a run already
   // RUNNING when the bar subscribes would otherwise read Idle until the count
   // next changes).
   let status: string | undefined;
   let usage: StatusBarUsageTracker['totalUsage'] | undefined;
-  const fiber = runtime.runFork(
-    Stream.runForEach(session.viewChanges, () =>
-      Effect.sync(() => {
-        const nextStatus = `${tracker.activity}/${tracker.activeRunCount}`;
-        if (nextStatus !== status) {
-          status = nextStatus;
-          onStatusChanged();
-        }
-        const nextUsage = tracker.totalUsage;
-        if (
-          usage === undefined ||
-          nextUsage.cost !== usage.cost ||
-          nextUsage.inputTokens !== usage.inputTokens ||
-          nextUsage.outputTokens !== usage.outputTokens
-        ) {
-          usage = nextUsage;
-          onUsageChanged();
-        }
-      }),
-    ),
+  return Stream.runForEach(session.viewChanges, () =>
+    Effect.sync(() => {
+      const nextStatus = `${tracker.activity}/${tracker.activeRunCount}`;
+      if (nextStatus !== status) {
+        status = nextStatus;
+        onStatusChanged();
+      }
+      const nextUsage = tracker.totalUsage;
+      if (
+        usage === undefined ||
+        nextUsage.cost !== usage.cost ||
+        nextUsage.inputTokens !== usage.inputTokens ||
+        nextUsage.outputTokens !== usage.outputTokens
+      ) {
+        usage = nextUsage;
+        onUsageChanged();
+      }
+    }),
   );
-  return () => {
-    runtime.runFork(Fiber.interrupt(fiber));
-  };
 }

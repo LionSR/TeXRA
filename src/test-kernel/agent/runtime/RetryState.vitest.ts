@@ -758,8 +758,7 @@ describe('ModelInvoker retry', () => {
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
-      const logger = new TraceEmitter();
-      logger.subscribe((event) => {
+      const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
           Deferred.doneUnsafe(backoffStarted, Effect.void);
         }

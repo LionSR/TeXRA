@@ -1,7 +1,6 @@
 import { ModelProvider } from 'llm-zoo';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import {
   AgentCategory,
@@ -13,7 +12,7 @@ import {
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // Local file imports
-import { recordTraceEvents, traceEventsOfType } from '../progressTestUtils';
+import { recordingTrace, traceEventsOfType } from '../progressTestUtils';
 import { testModelInfo } from '../runtime/launchContextTestUtils';
 
 // One restore after each test covers every vi.spyOn in this file.
@@ -55,9 +54,8 @@ function recordRound(state: RunUsage, usage: NormalizedUsage | null): void {
 type MonitorContext = ReturnType<typeof createMonitorWithEvents>;
 
 function createMonitorWithEvents() {
-  const logger = new TraceEmitter();
+  const { trace: logger, events } = recordingTrace();
   const runId = 'usage-monitor' as RunId;
-  const recorded = recordTraceEvents(logger);
   const log = vi.fn();
   const monitor = new UsageMonitor(
     {
@@ -73,7 +71,7 @@ function createMonitorWithEvents() {
     monitor,
     logger,
     log,
-    events: recorded.events,
+    events,
     dispose: () => {},
   };
 }

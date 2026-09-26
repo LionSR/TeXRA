@@ -1179,8 +1179,9 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const trace = new TraceEmitter();
-  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const trace = new TraceEmitter((event) =>
+    session().publishRunEvent(childRunId, event),
+  );
   const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
     {
@@ -1231,7 +1232,7 @@ async function seedRunningWorkflow(): Promise<void> {
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
-    detachRunTrace();
+    trace.close();
   });
 }
 

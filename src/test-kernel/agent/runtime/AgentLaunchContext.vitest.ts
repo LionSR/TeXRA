@@ -300,9 +300,9 @@ describe('AgentLaunchContext', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        vi.spyOn(session, 'attachRunTrace').mockImplementationOnce(() => {
-          throw new Error('trace failed');
-        });
+        mocks.buildVars.mockReturnValueOnce(
+          Effect.fail(new Error('user vars unavailable')),
+        );
 
         const exit = yield* Effect.exit(
           buildAgentLaunchContext({
@@ -318,7 +318,9 @@ describe('AgentLaunchContext', () => {
           }),
         );
         assert(Exit.isFailure(exit));
-        expect(String(Cause.squash(exit.cause))).toContain('trace failed');
+        expect(String(Cause.squash(exit.cause))).toContain(
+          'user vars unavailable',
+        );
         expect(
           recording.events.filter(
             (event) => event.event === 'requestShowError',
@@ -377,7 +379,7 @@ describe('AgentLaunchContext', () => {
   );
 
   it.effect(
-    'compensates a late launch-assembly failure before trace disposal',
+    'compensates a late launch-assembly failure before the trace closes',
     () =>
       Effect.gen(function* () {
         const order: string[] = [];
@@ -399,17 +401,24 @@ describe('AgentLaunchContext', () => {
         const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
           order.push('stage');
         });
-        const detachTrace = vi.fn(() => {
-          order.push('detach');
-          return terminalEvents.read();
-        });
+        const closeTrace = TraceEmitter.prototype.close;
+        let eventsAtClose: ReturnType<typeof terminalEvents.read> | undefined;
+        const close = vi
+          .spyOn(TraceEmitter.prototype, 'close')
+          .mockImplementation(function (this: TraceEmitter) {
+            order.push('close');
+            eventsAtClose ??= terminalEvents.read();
+            closeTrace.call(this);
+          });
         const openStage = vi
           .spyOn(TraceEmitter.prototype, 'openStage')
           .mockReturnValue(stage);
         yield* Effect.addFinalizer(() =>
-          Effect.sync(() => openStage.mockRestore()),
+          Effect.sync(() => {
+            openStage.mockRestore();
+            close.mockRestore();
+          }),
         );
-        vi.spyOn(session, 'attachRunTrace').mockReturnValueOnce(detachTrace);
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({ path: '/agents/chat.yaml' }),
         );
@@ -443,17 +452,15 @@ describe('AgentLaunchContext', () => {
         });
         expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
         expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
-        expect(detachTrace).toHaveBeenCalledOnce();
-        expect(
-          yield* Effect.promise(() => detachTrace.mock.results[0]!.value),
-        ).toContainEqual(
+        expect(close).toHaveBeenCalledOnce();
+        expect(yield* Effect.promise(() => eventsAtClose!)).toContainEqual(
           expect.objectContaining({
             type: 'run.end',
             outcome: RUN_OUTCOME.FAILED,
           }),
         );
-        // Terminal compensation is committed before the trace is detached.
-        expect(order).toEqual(['stage', 'detach']);
+        // Terminal compensation is committed before the trace is closed.
+        expect(order).toEqual(['stage', 'close']);
       }),
   );
 });

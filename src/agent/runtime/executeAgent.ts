@@ -2,7 +2,11 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 
-import { logConversationProgress, type AgentTrace } from '@agent/trace';
+import {
+  logConversationProgress,
+  type AgentEvent,
+  type AgentTrace,
+} from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { persistedParentRunId } from '@agent/storage/runRecords';
@@ -347,10 +351,12 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /**
    * Fires with the run id once its `run.start` is published, before the run
    * begins: the run exists for every fold, so a host may select it as its
-   * own surface state. The run's trace comes with it, before its first
-   * event, for a consumer that must hear every trace event.
+   * own surface state.
    */
-  onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
+  onRunResolved?: (runId: RunId) => void;
+  /** A sink of every event the run's trace emits, beside the session's
+   *  (`AgentLaunchContext.onTraceEvent`). */
+  onTraceEvent?: (event: AgentEvent) => void;
   /** Fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
   onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
@@ -386,6 +392,7 @@ export function executeAgent(
       runId,
       resumed: options.resumed,
       onRunResolved: options.onRunResolved,
+      onTraceEvent: options.onTraceEvent,
       session: options.session,
       modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,

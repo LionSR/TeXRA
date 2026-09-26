@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   endToolUseCard,
   startToolUseCard,
+  TraceEmitter,
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
@@ -34,14 +35,8 @@ function streamFacts(
 function withTrace(
   run: (events: AgentEvent[], logger: AgentTrace) => void,
 ): void {
-  const handle = createTestRunTrace('stream' as RunId);
   const events: AgentEvent[] = [];
-  handle.trace.subscribe((event) => events.push(event));
-  try {
-    run(events, handle.trace);
-  } finally {
-    handle.dispose();
-  }
+  run(events, new TraceEmitter((event) => events.push(event)));
 }
 
 describe('AgentTrace stream output', () => {

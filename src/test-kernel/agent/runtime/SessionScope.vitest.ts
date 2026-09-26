@@ -33,9 +33,10 @@ describe('session-owned transcripts and follow-up queues', () => {
 
         publishTestRunStart(launching, runId);
         yield* launching.settlePublications();
-        const trace = new TraceEmitter();
-        const detach = launching.attachRunTrace(trace, runId);
-        yield* Effect.addFinalizer(() => Effect.sync(detach));
+        const trace = new TraceEmitter((event) =>
+          launching.publishRunEvent(runId, event),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
         const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
@@ -60,9 +61,10 @@ describe('session-owned transcripts and follow-up queues', () => {
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      const trace = new TraceEmitter();
-      const detach = session.attachRunTrace(trace, runId);
-      yield* Effect.addFinalizer(() => Effect.sync(detach));
+      const trace = new TraceEmitter((event) =>
+        session.publishRunEvent(runId, event),
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
       const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
       yield* session.settlePublications();

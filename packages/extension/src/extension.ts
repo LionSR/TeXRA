@@ -40,10 +40,9 @@ import {
 } from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { fromHost } from '@controllers/session/hostCallFailure';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
-import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   initializeLatexSupport,
@@ -52,7 +51,7 @@ import {
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
+import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
@@ -267,9 +266,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // The activation scope's finalizers are this host's shutdown, run in the
   // reverse of their registration: every session closes first (registered
   // at the end of activation), then the host's own resources, then the
-  // project scope, and the runtime last of all. `disposeStatusListener` and
-  // `statusBarItem` are owned solely by `context.subscriptions` (see the push
-  // near the end of activation), matching the setup pill.
+  // project scope, and the runtime last of all. The status-bar refresh and
+  // the app-signal listeners are fibers of this scope, so they end before
+  // any of those; `statusBarItem` is owned solely by `context.subscriptions`
+  // (see the push near the end of activation), matching the setup pill.
   yield* Effect.addFinalizer(() => disposeProcessRuntime(runtime));
   const projectScope = yield* Scope.make();
   yield* Effect.addFinalizer(() =>
@@ -701,7 +701,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtimeSession,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
-  registerFileDecorations(context, runtime, runtimeSession);
+  yield* registerFileDecorations(context, runtimeSession);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -736,10 +736,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       runtime.runFork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
-  const gitHubAuthListener = subscribeAppSignal(
-    runtime,
-    'githubTokenInvalid',
-    ({ message }) => {
+  // Activation-lifetime listeners run in the activation scope, which ends
+  // them when the extension deactivates.
+  yield* Effect.forkScoped(
+    onAppSignal('githubTokenInvalid', ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
       void vscode.window
         .showErrorMessage(rejected, 'Open Git settings')
@@ -748,9 +748,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
             void vscode.commands.executeCommand('texra.showGitSettings');
           }
         });
-    },
+    }),
+    { startImmediately: true },
   );
-  context.subscriptions.push(gitHubAuthListener);
   yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
   yield* registerLanguageModelTools(context, runtime, runtimeSession);
   registerInlineComments(context);
@@ -819,33 +819,32 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     statusBarItem.show();
   };
 
-  const disposeStatusListener = subscribeStatusBarSessionEvents({
-    session: runtimeSession,
-    tracker: statusBarUsageTracker,
-    onStatusChanged: () => {
-      updateStatusBarTooltip();
-      updateStatusBarText();
-    },
-    // The snapshot store accumulates the per-round deltas; the tracker
-    // projects the running runs' totals from it on each refresh.
-    onUsageChanged: updateStatusBarTooltip,
-    runtime,
-  });
+  yield* Effect.forkScoped(
+    refreshStatusBarOnViewChanges({
+      session: runtimeSession,
+      tracker: statusBarUsageTracker,
+      onStatusChanged: () => {
+        updateStatusBarTooltip();
+        updateStatusBarText();
+      },
+      // The snapshot store accumulates the per-round deltas; the tracker
+      // projects the running runs' totals from it on each refresh.
+      onUsageChanged: updateStatusBarTooltip,
+    }),
+    { startImmediately: true },
+  );
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
   // Approval-policy setting updates emit on this signal; the subscription
   // here is what makes the refresh reachable, so a missed subscribe is a
   // missing behavior rather than a silent no-op.
-  const approvalPolicyTooltipRefresh = subscribeAppSignal(
-    runtime,
-    'approvalPolicyChanged',
-    updateStatusBarTooltip,
+  yield* Effect.forkScoped(
+    onAppSignal('approvalPolicyChanged', updateStatusBarTooltip),
+    { startImmediately: true },
   );
 
   context.subscriptions.push(
-    { dispose: disposeStatusListener },
-    approvalPolicyTooltipRefresh,
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.

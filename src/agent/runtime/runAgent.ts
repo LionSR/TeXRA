@@ -37,6 +37,7 @@ export interface RunAgentOptions extends Pick<
   | 'ownApiKeyFallback'
   | 'onRun'
   | 'onRunResolved'
+  | 'onTraceEvent'
   | 'onIdle'
   | 'openWorkflowOutput'
 > {

@@ -61,12 +61,6 @@ interface SubmitFollowUpOptions {
    * delivery has landed, so it always finds a live or recoverable queue.
    */
   readonly mode?: 'live_notification';
-  /**
-   * Fires once admission is decided, before any recovery resume runs. `true`
-   * means the input now belongs to the run (sent, queued, or already
-   * admitted); `false` means the caller still owns it and may re-offer it.
-   */
-  readonly onAdmitted?: (admitted: boolean) => void;
 }
 
 const FAILURE_MESSAGES: Record<FollowUpFailureReason, string> = {
@@ -303,47 +297,24 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
 ): Effect.fn.Return<SubmitFollowUpResult, Error, AgentResume> {
   const ownerSession = options.session;
   const item = typeof followUp === 'string' ? { text: followUp } : followUp;
-  // A host callback must not be able to strand the recovery lease below:
-  // its failure is the host's to log, never this boundary's to propagate.
-  const notifyAdmitted = (admitted: boolean) =>
-    Effect.try({
-      try: () => options.onAdmitted?.(admitted),
-      catch: ensureError,
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`onAdmitted callback failed for run ${runId}`).pipe(
-          Effect.annotateLogs({ data: { runId, error: String(error) } }),
-          withLogChannel(CHANNEL),
-        ),
-      ),
-    );
-  const dispatch = yield* admitFollowUp(
-    runId,
-    item,
-    options,
-    ownerSession,
-  ).pipe(Effect.tapError(() => notifyAdmitted(false)));
+  const dispatch = yield* admitFollowUp(runId, item, options, ownerSession);
   if ('resume' in dispatch) {
-    // Dispatch before announcing: the wake starts in the same step that
-    // admitted it, the order the promise it replaces had, so an interrupt
-    // between the two cannot leave the durable row behind a claimed lease
-    // with no host ever asked. Detached, so the wake settles that lease on
-    // its own whether or not this fiber stays to collect the answer.
+    // The wake starts in the same step that admitted it, so an interrupt
+    // cannot leave the durable row behind a claimed lease with no host ever
+    // asked. Detached, so the wake settles that lease on its own whether or
+    // not this fiber stays to collect the answer.
     const wake = yield* Effect.forkDetach(dispatch.resume, {
       startImmediately: true,
     });
-    yield* notifyAdmitted(true);
     const resumed = yield* Fiber.join(wake);
     if (resumed) return { status: 'queued' };
     return { status: 'queued', wake: 'failed' };
   }
   if (dispatch.status === 'no_session') {
-    yield* notifyAdmitted(false);
     return {
       status: 'failed',
       reason: yield* classifyRefusal(runId, ownerSession),
     };
   }
-  yield* notifyAdmitted(dispatch.status !== 'failed');
   return dispatch;
 });

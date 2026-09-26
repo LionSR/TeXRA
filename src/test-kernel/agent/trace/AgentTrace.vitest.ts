@@ -3,10 +3,8 @@ import { type AgentEvent, emitToolUseCard, TraceEmitter } from '@agent/trace';
 
 /** Collect every event a fresh trace emits while `act` runs. */
 function collectEvents(act: (trace: TraceEmitter) => void): AgentEvent[] {
-  const trace = new TraceEmitter();
   const events: AgentEvent[] = [];
-  trace.subscribe((event) => events.push(event));
-  act(trace);
+  act(new TraceEmitter((event) => events.push(event)));
   return events;
 }
 

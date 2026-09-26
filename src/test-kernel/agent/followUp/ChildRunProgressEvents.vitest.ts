@@ -10,6 +10,7 @@ import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import { Runs } from '@agent/runtime/runRegistry';
+import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
@@ -259,8 +260,9 @@ describe('child run progress events', () => {
     'rolls back a failed rehydrated setup so the same run can retry',
     () => {
       const recorded = recordSessionEvents(testDefaultSession());
-      const attachTrace = vi
-        .spyOn(testDefaultSession(), 'attachRunTrace')
+      // The first emit is setup's own `run.config`.
+      const failEmit = vi
+        .spyOn(TraceEmitter.prototype, 'emit')
         .mockImplementationOnce(() => {
           throw new Error('run setup failed');
         });
@@ -327,7 +329,7 @@ describe('child run progress events', () => {
           ),
         ).toHaveLength(2);
         yield* retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }).pipe(Effect.ensuring(Effect.sync(() => attachTrace.mockRestore())));
+      }).pipe(Effect.ensuring(Effect.sync(() => failEmit.mockRestore())));
     },
   );
 

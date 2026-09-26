@@ -1,7 +1,7 @@
 import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
-import type { AgentEvent, AgentTrace } from '@agent/trace';
+import { TraceEmitter, type AgentEvent } from '@agent/trace';
 import {
   SessionHostInteractions,
   type HostInteractions,
@@ -103,13 +103,14 @@ export function recordFollowUpsSent(
   return { sent };
 }
 
-/** Every event a run trace emits from this call on. */
-export function recordTraceEvents(trace: AgentTrace): {
+/** A fresh run trace that records every event it emits. */
+export function recordingTrace(): {
+  readonly trace: TraceEmitter;
   readonly events: AgentEvent[];
 } {
   const events: AgentEvent[] = [];
-  trace.subscribe((event) => events.push(event));
-  return { events };
+  const trace = new TraceEmitter((event) => events.push(event));
+  return { trace, events };
 }
 
 export function traceEventsOfType<T extends AgentEvent['type']>(

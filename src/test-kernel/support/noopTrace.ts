@@ -31,7 +31,6 @@ class NoopStreamHandle implements StreamHandle {
 
 export const noopTrace: AgentTrace = {
   emit: NOOP,
-  subscribe: () => NOOP,
 
   debug: NOOP,
   info: NOOP,

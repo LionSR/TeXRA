@@ -540,8 +540,10 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
                 ),
               {
                 get: Effect.sync(settledCursor),
+                // The fold's level stream, not its ref: a fold that died
+                // fails this tail's readers rather than stalling them.
                 changes: Stream.merge(
-                  SubscriptionRef.changes(view.ref),
+                  view.changes,
                   SubscriptionRef.changes(delivered),
                 ).pipe(Stream.map(settledCursor)),
               },

@@ -608,9 +608,8 @@ describe('tool-use dispatch', () => {
             return { status: 'executed', output: 'ok' };
           }),
         } as ITool;
-        const trace = new TraceEmitter();
         const events: AgentEvent[] = [];
-        trace.subscribe((event) => events.push(event));
+        const trace = new TraceEmitter((event) => events.push(event));
         const kit = yield* openDispatch({
           tools: { delegate },
           calls: [makeCall('c1', 'delegate', {})],

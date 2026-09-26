@@ -564,21 +564,10 @@ export class SessionHandle {
   }
 
   /**
-   * Bridge a run's trace into this session's event plane: every durable
-   * trace event becomes the fact of its arm on the stream's aggregate, and
-   * the recorder's status port hears every canonical `status` fact in
-   * transcript order. Returns a detach disposer the run bundles into its
-   * trace teardown.
-   */
-  attachRunTrace(trace: AgentTrace, runId: RunId): () => void {
-    return trace.subscribe((event) => this.publishRunEvent(runId, event));
-  }
-
-  /**
    * Publish one run-scoped trace event as its durable arm (`runEventDraft`);
-   * a trace event with no arm goes nowhere. Used by `attachRunTrace` (the
-   * live per-run trace subscription above) and by the few places that
-   * publish a trace fact for a run whose own trace is already gone.
+   * a trace event with no arm goes nowhere. It is every run trace's session
+   * sink (the trace is built with it), and the few places that publish a
+   * trace fact for a run whose own trace is already gone call it directly.
    */
   publishRunEvent(runId: RunId, event: AgentEvent): void {
     if (this.disposed) return;

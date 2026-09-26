@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
@@ -192,10 +192,12 @@ describe('output-file run fact frontend subscriptions', () => {
     const session = createTestSession();
     publishTestRunStart(session, runId);
     const context = fakeExtensionContext();
-    registerFileDecorations(
-      context as unknown as VSCode.ExtensionContext,
-      testRuntime(),
-      session,
+    const scope = Scope.makeUnsafe();
+    await Effect.runPromise(
+      registerFileDecorations(
+        context as unknown as VSCode.ExtensionContext,
+        session,
+      ).pipe(Scope.provide(scope)),
     );
     const provider = mocks.registeredProviders.at(-1) as {
       provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
@@ -219,6 +221,7 @@ describe('output-file run fact frontend subscriptions', () => {
       ).toMatchObject(texraBadge),
     );
 
+    await Effect.runPromise(Scope.close(scope, Exit.void));
     disposeContext(context);
     expect(
       provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
