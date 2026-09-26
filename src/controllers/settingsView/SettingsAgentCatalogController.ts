@@ -198,7 +198,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           preset,
         ])
         .pipe(Effect.as(preset));
-    }).pipe(this.customPresetsLane());
+    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
   }
 
   deleteCustomPreset(presetId: string) {
@@ -218,16 +218,7 @@ export class SettingsAgentCatalogController implements TeamRosterCatalog {
           ),
         )
         .pipe(Effect.as(target));
-    }).pipe(this.customPresetsLane());
-  }
-
-  /** Save and delete each rewrite the preset list they read: one lane, so
-   *  two overlapping edits cannot drop each other's preset. */
-  private customPresetsLane() {
-    return withStateKeyLane(
-      this.deps.workspaceState,
-      WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
-    );
+    }).pipe(withStateKeyLane(WorkspaceStateKey.CUSTOM_AGENT_PRESETS));
   }
 
   /**

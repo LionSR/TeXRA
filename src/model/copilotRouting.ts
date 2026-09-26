@@ -156,7 +156,7 @@ export function setCopilotRoutePreference(
       ? [...new Set([...current, model])]
       : current.filter((entry) => entry !== model);
     return yield* state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
-  }).pipe(withStateKeyLane(state, GlobalStateKey.COPILOT_ROUTE_MODELS));
+  }).pipe(withStateKeyLane(GlobalStateKey.COPILOT_ROUTE_MODELS));
 }
 
 /**

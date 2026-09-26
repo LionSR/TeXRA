@@ -45,13 +45,13 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
+import { onFileLane } from '@utils/files/fileLanes';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,
   splitContentLines,
 } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
@@ -106,15 +106,10 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
   },
 );
 
-const memoryFileLanes = new Map<string, PerKeyLane>();
-
 /**
- * Run a memory command on its file's lane, process-wide. Memory is storage
- * that parallel runs (an orchestrator's subagents) edit at once, and each
- * edit reads the file, changes it and rewrites it whole with I/O in between:
- * without the lane two edits of one file both read the same version and the
- * later write drops the other's change. A path that names no memory file
- * takes no lane (the command refuses it); a lane is deleted once idle.
+ * Run a memory command on its file's lane (`onFileLane`): memory is storage
+ * parallel runs edit at once, and each edit rewrites the file whole. A path
+ * that names no memory file takes no lane; the command refuses it.
  */
 export function onMemoryFileLane(displayPath: string | null | undefined) {
   return <A, E, R>(
@@ -127,10 +122,10 @@ export function onMemoryFileLane(displayPath: string | null | undefined) {
             Result.try(() => displayToStoragePath(displayPath)),
           );
     if (storage === undefined) return self;
-    return Effect.flatMap(StorageFs, (storageFs) =>
-      self.pipe(
-        withPerKeyLane(memoryFileLanes, `${storageFs.root}\u0000${storage}`),
-      ),
+    return Effect.flatMap(StorageFs, ({ root }) =>
+      root === undefined
+        ? self
+        : self.pipe(onFileLane(path.join(root, storage))),
     );
   };
 }

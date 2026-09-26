@@ -119,25 +119,18 @@ export interface StateStore {
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
 }
 
-const stateKeyLanes = new WeakMap<StateStore, Map<string, PerKeyLane>>();
+const stateKeyLanes = new Map<string, PerKeyLane>();
 
 /**
- * Run a read-modify-write of one key of `store` on that key's lane, so two
+ * Run a read-modify-write of one state key on that key's lane, so two
  * overlapping edits (two quick settings toggles: the settings surfaces do not
  * serialize their messages) each read the other's committed value instead of
  * both reading the same one and the later update dropping the earlier edit.
- * The lanes are per store object and delete themselves once idle.
  */
 export function withStateKeyLane(
-  store: StateStore,
   key: string,
 ): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
-  let lanes = stateKeyLanes.get(store);
-  if (!lanes) {
-    lanes = new Map();
-    stateKeyLanes.set(store, lanes);
-  }
-  return withPerKeyLane(lanes, key);
+  return withPerKeyLane(stateKeyLanes, key);
 }
 
 /**

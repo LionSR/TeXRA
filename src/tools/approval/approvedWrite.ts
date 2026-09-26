@@ -11,7 +11,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
+import { onFileLane } from '@utils/files/fileLanes';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { applyPatchToText } from '@utils/text/diff';
@@ -37,16 +37,6 @@ class ApprovedEditConflictError extends ToolError {
 }
 
 /**
- * One lane per resolved file, process-wide: the approval wait can take
- * minutes, and parallel runs (subagents of one orchestrator, other sessions)
- * approve edits to the same file. Without it two writers can both read the
- * same base and the last write drops the other's change. `withPerKeyLane`
- * deletes a lane once its last fiber settles, so the map holds only files
- * with a write in flight.
- */
-const approvedWriteLanes = new Map<string, PerKeyLane>();
-
-/**
  * Reconcile approved content with the current workspace file and mark the path
  * as read after the operation succeeds, so every approved-write caller keeps
  * the later-edit guard in sync.
@@ -54,9 +44,10 @@ const approvedWriteLanes = new Map<string, PerKeyLane>();
  * The path is written through its own view of the filesystem: a
  * workspace-relative path through the session's confined `WorkspaceFs` view,
  * an already-absolute one (an external root, a worktree) through the process
- * `FileSystem`. The read, the merge and the write hold that file's lane, and
- * a merge that fails is an {@link ApprovedEditConflictError} rather than a
- * write of the approved content over the concurrent change.
+ * `FileSystem`. The read, the merge and the write hold the file's lane
+ * (`onFileLane`), and a merge that fails is an
+ * {@link ApprovedEditConflictError} rather than a write of the approved
+ * content over the concurrent change.
  */
 export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   function* (
@@ -71,9 +62,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
     yield* ToolCall;
     const absolute = nodePath.isAbsolute(path);
     const fs = absolute ? yield* FileSystem.FileSystem : yield* WorkspaceFs;
-    const laneKey = absolute
-      ? nodePath.resolve(path)
-      : yield* (yield* WorkspaceFs).resolve(path);
+    const file = absolute ? path : yield* (yield* WorkspaceFs).resolve(path);
     const written = yield* Effect.gen(function* () {
       const exists = yield* entryExists(fs, path);
       let baseContent = '';
@@ -109,7 +98,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
         yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       }
       return { appliedContent, baseContent };
-    }).pipe(withPerKeyLane(approvedWriteLanes, laneKey));
+    }).pipe(onFileLane(file));
     yield* recordToolFileRead(path);
     return written;
   },
