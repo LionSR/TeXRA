@@ -30,6 +30,7 @@ export {
   installedProcessRuntime,
   listSessions,
   openSessionEffect,
+  SESSION_CLOSE_DEADLINE_MS,
   teardownDefaultSession,
   tryDefaultSession,
 } from './sessionGraph';

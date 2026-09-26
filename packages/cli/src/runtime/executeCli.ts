@@ -3,6 +3,7 @@ import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 import {
   attachTerminalResultToast,
   runAgent,
+  SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
   trackTerminalResultPresentation,
   validateRunRequest,
@@ -450,6 +451,10 @@ export function executeCliRequest(
       Effect.suspend(() =>
         shutdownStatusArmed ? shutdownStatus : Effect.void,
       ).pipe(
+        // The step's one deadline: the same budget a session close spends,
+        // so a run that never unwinds cannot hold SIGTERM open. Its
+        // uninterruptible wait for a promised recovery notice still finishes.
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
         Effect.catchCause((cause) =>
           Effect.logError("The run's shutdown step failed").pipe(
             Effect.annotateLogs({ data: Cause.squash(cause) }),
@@ -505,8 +510,8 @@ export function executeCliRequest(
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
             // for runAgent to finish unwinding before the final drain releases
             // ownership, so no transcript or checkpoint writer can race the
-            // lease release. The session close's deadline bounds this
-            // wait by interrupting it. Once durable resumability and lease
+            // lease release. This step's deadline bounds this wait by
+            // interrupting it. Once durable resumability and lease
             // availability have been established, however, keep shutdown alive
             // until the promised recovery notice has been flushed — that wait
             // is uninterruptible precisely because it outranks the deadline.
