@@ -212,12 +212,12 @@ const CONNECT_ITEMS: ReadonlyArray<SelectItem<AccountAccessFormValue>> = [
   },
   signInItem({
     target: 'chatgpt --device',
-    label: CHATGPT_AUTH.deviceCodeLabel,
+    label: SUBSCRIPTION_AUTH_COPY.chatgpt.deviceCodeLabel,
     description: DEVICE_CODE_DESCRIPTION,
   }),
   signInItem({
     target: 'grok --device',
-    label: GROK_AUTH.deviceCodeLabel,
+    label: SUBSCRIPTION_AUTH_COPY.grok.deviceCodeLabel,
     description: DEVICE_CODE_DESCRIPTION,
   }),
 ];
