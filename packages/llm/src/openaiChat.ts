@@ -39,7 +39,6 @@ import {
   ReasoningChunkSchema,
   TokenEstimateSchema,
   UsageSchema,
-  XaiChunkSchema,
   miniMaxDetection,
   miniMaxFailure,
   miniMaxUsage,
@@ -102,9 +101,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
         } else if (
           part.kind === 'image' &&
           supportsImageInput &&
-          (part.detail === undefined ||
-            (origin.protocol === 'xai-chat' &&
-              (part.detail === 'low' || part.detail === 'high'))) &&
+          part.detail === undefined &&
           imageMimeTypes.includes(part.mimeType.toLowerCase())
         ) {
           content.push({
@@ -220,7 +217,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
               }
             : {}),
           content:
-            origin.protocol === 'openai-chat' || origin.protocol === 'xai-chat'
+            origin.protocol === 'openai-chat'
               ? part.content.map((child) =>
                   child.kind === 'text'
                     ? { type: 'text', text: child.text }
@@ -242,8 +239,7 @@ const chatMessages = Effect.fn('llm.chatMessages')(function* (
       messages.push(assistant);
     }
     // Qwen ignores historical reasoning by default; its selected route never
-    // enables preserve_thinking. xAI replays a reported trace when available,
-    // as its first-party client does, without requiring an absent trace.
+    // enables preserve_thinking.
     if (reasoning !== undefined && origin.protocol !== 'dashscope-chat')
       assistant.reasoning_content = reasoning;
     if (minimaxReasoning?.plain !== undefined)
@@ -340,16 +336,12 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
         : {}),
     };
   }
-  if (turn.protocol === 'openai-chat' || turn.protocol === 'xai-chat') {
+  if (turn.protocol === 'openai-chat') {
     parameters.max_completion_tokens = turn.controls.maxOutputTokens;
     if (turn.tools.length > 0)
       parameters.parallel_tool_calls = turn.controls.parallelToolCalls;
-    if (config.protocol === 'openai-chat' || config.protocol === 'xai-chat') {
-      if (
-        config.protocol === 'openai-chat' &&
-        !config.supportsTemperature &&
-        turn.controls.temperature !== null
-      ) {
+    if (config.protocol === 'openai-chat') {
+      if (!config.supportsTemperature && turn.controls.temperature !== null) {
         return yield* new ModelError({
           kind: 'unsupported',
           message:
@@ -363,9 +355,7 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
           return yield* new ModelError({
             kind: 'unsupported',
             message:
-              config.protocol === 'xai-chat'
-                ? 'The selected xAI model does not support this reasoning effort.'
-                : 'The selected OpenAI Chat model does not support this reasoning effort.',
+              'The selected OpenAI Chat model does not support this reasoning effort.',
           });
         }
         parameters.reasoning_effort = turn.controls.effort;
@@ -385,7 +375,6 @@ const chatParameters = Effect.fn('llm.chatParameters')(function* (
   }
   if (
     config.protocol === 'openai-chat' ||
-    config.protocol === 'xai-chat' ||
     config.protocol === 'minimax-chat' ||
     config.protocol === 'dashscope-chat'
   ) {
@@ -507,7 +496,6 @@ export function openaiChatModel(
     config.protocol !== 'deepseek-chat' &&
     config.protocol !== 'kimi-chat' &&
     config.protocol !== 'glm-chat' &&
-    config.protocol !== 'xai-chat' &&
     config.protocol !== 'minimax-chat' &&
     config.protocol !== 'dashscope-chat'
   ) {
@@ -572,8 +560,7 @@ export function openaiChatModel(
           config.protocol === 'minimax-chat') &&
           (parsed.data.thinking !== undefined ||
             parsed.data.effort !== undefined)) ||
-        ((config.protocol === 'openai-chat' ||
-          config.protocol === 'xai-chat') &&
+        (config.protocol === 'openai-chat' &&
           parsed.data.thinking !== undefined)
       ) {
         return yield* new ModelError({
@@ -594,9 +581,8 @@ export function openaiChatModel(
       const maxOutputTokens =
         parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens;
       let controls: ChatTurn['controls'];
-      if (config.protocol === 'openai-chat' || config.protocol === 'xai-chat') {
+      if (config.protocol === 'openai-chat') {
         if (
-          config.protocol === 'openai-chat' &&
           !config.supportsTemperature &&
           parsed.data.temperature !== undefined
         ) {
@@ -610,15 +596,6 @@ export function openaiChatModel(
           parsed.data.effort === undefined
             ? config.defaults.effort
             : parsed.data.effort;
-        if (
-          config.protocol === 'xai-chat' &&
-          (effort === 'max' || effort === 'none' || effort === 'minimal')
-        ) {
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'xAI Chat does not support this reasoning effort.',
-          });
-        }
         controls = {
           temperature: parsed.data.temperature ?? config.defaults.temperature,
           maxOutputTokens,
@@ -748,7 +725,6 @@ export function openaiChatModel(
               turn.protocol !== 'deepseek-chat' &&
               turn.protocol !== 'kimi-chat' &&
               turn.protocol !== 'glm-chat' &&
-              turn.protocol !== 'xai-chat' &&
               turn.protocol !== 'minimax-chat' &&
               turn.protocol !== 'dashscope-chat') ||
             !sameModelOrigin(turn, origin)
@@ -783,12 +759,6 @@ export function openaiChatModel(
           let finishReason: TurnResult['finishReason'] | undefined;
           let usage: TurnResult['usage'] = null;
           let choiceUsage: TurnResult['usage'] = null;
-          let xaiReceipt:
-            | Extract<
-                NonNullable<NonNullable<TurnResult['usage']>['providerUsage']>,
-                { kind: 'xai' }
-              >
-            | undefined;
           let reasoning: string | undefined;
           let miniMaxDetails:
             NonNullable<MiniMaxReasoning['details']>[number][] | undefined;
@@ -859,8 +829,6 @@ export function openaiChatModel(
                 let decoded;
                 if (turn.protocol === 'minimax-chat')
                   decoded = MiniMaxChunkSchema.safeParse(raw);
-                else if (turn.protocol === 'xai-chat')
-                  decoded = XaiChunkSchema.safeParse(raw);
                 else if (turn.protocol === 'dashscope-chat')
                   decoded = DashscopeChunkSchema.safeParse(raw);
                 else if (turn.protocol === 'openai-chat')
@@ -875,7 +843,6 @@ export function openaiChatModel(
                   });
                 }
                 const chunk:
-                  | z.infer<typeof XaiChunkSchema>
                   | z.infer<typeof MiniMaxChunkSchema>
                   | z.infer<typeof ReasoningChunkSchema> = decoded.data;
                 if ('request_id' in chunk && chunk.request_id !== undefined) {
@@ -943,26 +910,6 @@ export function openaiChatModel(
                     chunk.usage as z.infer<typeof UsageSchema>,
                     turn.protocol,
                   );
-                }
-                if (turn.protocol === 'xai-chat') {
-                  // These are cumulative observations, not additive charges.
-                  // A reported zero stays zero; this evidence does not confirm a free request.
-                  const cost =
-                    chunk.usage && 'cost_in_usd_ticks' in chunk.usage
-                      ? chunk.usage.cost_in_usd_ticks
-                      : undefined;
-                  if (cost !== undefined || chunk.service_tier !== undefined) {
-                    xaiReceipt = {
-                      kind: 'xai',
-                      costInUsdTicks:
-                        cost ?? xaiReceipt?.costInUsdTicks ?? null,
-                      serviceTier:
-                        chunk.service_tier === 'default' ||
-                        chunk.service_tier === 'priority'
-                          ? chunk.service_tier
-                          : (xaiReceipt?.serviceTier ?? null),
-                    };
-                  }
                 }
                 const choice = chunk.choices[0];
                 if (!choice) return events;
@@ -1066,7 +1013,6 @@ export function openaiChatModel(
                 }
                 if (
                   turn.protocol !== 'openai-chat' &&
-                  turn.protocol !== 'xai-chat' &&
                   choice.delta.refusal != null
                 ) {
                   return yield* new ModelError({
@@ -1089,10 +1035,7 @@ export function openaiChatModel(
                 );
                 if (choice.delta.tool_calls?.length)
                   events.push(...assistant.closePhase());
-                if (
-                  choice.finish_reason != null &&
-                  choice.finish_reason !== 'end_turn'
-                ) {
+                if (choice.finish_reason != null) {
                   switch (choice.finish_reason) {
                     case 'content_filter':
                       finishReason = 'content-filter';
@@ -1118,7 +1061,6 @@ export function openaiChatModel(
                 returnedModel === undefined ||
                 finishReason === undefined ||
                 ((turn.protocol === 'kimi-chat' ||
-                  turn.protocol === 'xai-chat' ||
                   turn.protocol === 'minimax-chat') &&
                   !receivedSentinel)
               ) {
@@ -1249,13 +1191,7 @@ export function openaiChatModel(
                 ...(Object.keys(miniMaxEvidence).length > 0
                   ? { finishEvidence: { kind: 'minimax', ...miniMaxEvidence } }
                   : {}),
-                usage:
-                  xaiReceipt !== undefined
-                    ? {
-                        ...(usage ?? chatUsageCounts({})),
-                        providerUsage: xaiReceipt,
-                      }
-                    : (usage ?? choiceUsage),
+                usage: usage ?? choiceUsage,
               });
               if (!parsedResult.success) {
                 return yield* new ModelError({

@@ -44,9 +44,10 @@ const OutputItemSchema = z.discriminatedUnion('type', [
         z.strictObject({
           type: z.literal('output_text'),
           text: z.string(),
-          // Unsupported annotations/log probabilities cannot disappear in conversion.
+          // Unsupported annotations/log probabilities cannot disappear in
+          // conversion; xAI reports absent log probabilities as `null`.
           annotations: z.array(z.never()),
-          logprobs: z.array(z.never()).optional(),
+          logprobs: z.array(z.never()).nullish(),
         }),
         z.strictObject({ type: z.literal('refusal'), refusal: z.string() }),
       ]),
@@ -154,6 +155,9 @@ const UsageSchema = z.object({
   output_tokens_details: z
     .object({ reasoning_tokens: z.int().nonnegative().nullish() })
     .nullish(),
+  // xAI's settled cost; only its receipts carry the key, and its
+  // `output_tokens` exclude the reasoning tokens it bills on top.
+  cost_in_usd_ticks: z.int().nonnegative().nullish(),
 });
 export const ResponseSchema = z.object({
   id: z.string().min(1),
@@ -169,6 +173,7 @@ export const ResponseSchema = z.object({
   ]),
   output: z.array(OutputItemSchema),
   usage: UsageSchema.nullish(),
+  service_tier: z.string().nullish(),
   error: z.object({ code: z.string(), message: z.string() }).nullish(),
   incomplete_details: z
     .object({ reason: z.enum(['max_output_tokens', 'content_filter']) })
@@ -302,6 +307,19 @@ export const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
               response.usage.input_tokens_details?.cached_tokens ?? null,
             reasoningTokens:
               response.usage.output_tokens_details?.reasoning_tokens ?? null,
+            ...(response.usage.cost_in_usd_ticks !== undefined
+              ? {
+                  providerUsage: {
+                    kind: 'xai',
+                    costInUsdTicks: response.usage.cost_in_usd_ticks,
+                    serviceTier:
+                      response.service_tier === 'default' ||
+                      response.service_tier === 'priority'
+                        ? response.service_tier
+                        : null,
+                  },
+                }
+              : {}),
           }
         : null,
     });
@@ -483,7 +501,7 @@ export const DeltaEventSchema = EventSchema.extend({
   item_id: z.string().min(1),
   output_index: z.int().nonnegative(),
   delta: z.string(),
-  logprobs: z.array(z.never()).optional(),
+  logprobs: z.array(z.never()).nullish(),
 });
 
 /** One canonical foreground decoder for HTTP and WebSocket response events. */

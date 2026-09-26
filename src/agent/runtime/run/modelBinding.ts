@@ -179,7 +179,7 @@ const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
     OpenAI: 'openai-chat',
     GoogleInteractions: 'google-interactions',
     DeepSeek: 'deepseek-chat',
-    XAI: 'xai-chat',
+    XAI: 'openai-responses',
     Kimi: 'kimi-chat',
     DashScope: 'dashscope-chat',
     MiniMax: 'minimax-chat',
@@ -328,7 +328,7 @@ function responsesAuthentication(
     : { kind: 'api-key', apiKey: routeBearer(credential) };
 }
 
-/** The seven OpenAI-compatible chat protocols share one package factory. */
+/** The six OpenAI-compatible chat protocols share one package factory. */
 function chatModel(
   configuration: ChatConfiguration,
   credential: RouteCredential,
@@ -473,6 +473,40 @@ const PROTOCOL_DESCRIPTORS: {
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
         !isGpt5 || gpt5ReasoningSummary ? 'auto' : null;
+      if (config.provider === ModelProvider.XAI) {
+        // xAI stores responses for 30 days and chains on their ids; it has
+        // no background mode, socket or `max` effort, and it always returns
+        // detailed reasoning, so no summary is requested.
+        const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
+        return {
+          ...base,
+          protocol: 'openai-responses',
+          background: 'unsupported',
+          supportsInputTokenEstimation: false,
+          supportsTemperature,
+          supportsMaxOutputTokens: true,
+          supportsStorage: true,
+          supportsResponseChaining: true,
+          supportsDocumentInput: capabilities.supportsNativePdf,
+          webSocketStreamParameter: 'implicit',
+          allowedReasoningEfforts: supportedEfforts.filter(
+            (value) => value !== ReasoningEffort.MAX,
+          ),
+          instructions: { kind: 'optional' },
+          continuationInheritsInstructions: true,
+          defaults: {
+            maxOutputTokens: controls.maxOutputTokens,
+            temperature: controls.temperature,
+            store: true,
+            parallelToolCalls: controls.parallelToolCalls,
+            reasoning:
+              capabilities.supportsReasoningEffort && xaiEffort !== null
+                ? { effort: xaiEffort, mode: null, summary: null }
+                : null,
+            serviceTier: null,
+          },
+        };
+      }
       if (credential.route === 'chatgpt-subscription') {
         let codexEffort: RouteEffort | null = effort;
         if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
@@ -495,6 +529,7 @@ const PROTOCOL_DESCRIPTORS: {
             kind: 'required',
             fallback: CODEX_DEFAULT_INSTRUCTIONS,
           },
+          continuationInheritsInstructions: false,
           defaults: {
             maxOutputTokens: null,
             temperature: controls.temperature,
@@ -528,6 +563,7 @@ const PROTOCOL_DESCRIPTORS: {
           ? [...supportedEfforts]
           : ['low', 'medium', 'high'],
         instructions: { kind: 'optional' },
+        continuationInheritsInstructions: false,
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,
           temperature: controls.temperature,
@@ -663,26 +699,6 @@ const PROTOCOL_DESCRIPTORS: {
         clearThinking: false,
       },
     }),
-    construct: chatModel,
-    background: false,
-  },
-  'xai-chat': {
-    configure: ({ base, capabilities, controls, effort, supportedEfforts }) => {
-      const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
-      return {
-        ...base,
-        protocol: 'xai-chat',
-        supportsImageInput: capabilities.supportsVision,
-        supportedEfforts: supportedEfforts.filter(
-          (value): value is Exclude<RouteEffort, ReasoningEffort.MAX> =>
-            value !== ReasoningEffort.MAX,
-        ),
-        defaults: {
-          ...controls,
-          effort: capabilities.supportsReasoningEffort ? xaiEffort : null,
-        },
-      };
-    },
     construct: chatModel,
     background: false,
   },

@@ -68,7 +68,7 @@ Deno.test('classifies Grok usage under the grok subscription source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
     model: 'grok-5',
-    provider: 'xai-chat',
+    provider: 'openai-responses',
     usageRoute: 'xai-subscription',
   });
 

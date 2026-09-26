@@ -14,7 +14,7 @@
  * one request every codec admits is system text, messages and tools. A route
  * that needs more states it in its own configuration defaults.
  *
- * `vscode-lm` is the twelfth protocol and is absent by construction: it is
+ * `vscode-lm` is absent by construction: it is
  * acquired through the extension host's `vscode.lm` API
  * (`packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`), so a
  * live check of it needs an Extension Development Host, not this Vitest
@@ -162,7 +162,10 @@ function followUp(result: TurnResult, continuation: Continuation): TurnRequest {
 }
 
 interface LiveProtocol {
-  /** The protocol as `TurnProtocolSchema` names it; also the suite name. */
+  /**
+   * The protocol as `TurnProtocolSchema` names it, qualified by the vendor
+   * where two routes share one codec; also the suite name.
+   */
   readonly protocol: string;
   /** The environment variable holding this route's credential. */
   readonly apiKeyEnv: string;

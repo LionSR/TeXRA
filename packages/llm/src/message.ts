@@ -243,7 +243,7 @@ export const EVIDENCE_PROTOCOL = {
   'minimax-function-call': 'minimax-chat',
   google: 'google-interactions',
   anthropic: 'anthropic-messages',
-  xai: 'xai-chat',
+  xai: 'openai-responses',
   openrouter: 'openrouter-chat',
   minimax: 'minimax-chat',
   'google-interactions': 'google-interactions',
@@ -266,7 +266,6 @@ export function validateAssistantContent(
             'deepseek-chat',
             'kimi-chat',
             'glm-chat',
-            'xai-chat',
             'dashscope-chat',
           ].includes(origin.protocol)
         : origin.protocol !== EVIDENCE_PROTOCOL[evidence.kind])

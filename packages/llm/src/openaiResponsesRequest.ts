@@ -159,7 +159,13 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     const parameters: ResponseCreateParamsBase = {
       model: turn.requestedModel,
       ...wireInput,
-      ...(turn.system !== undefined ? { instructions: turn.system } : {}),
+      ...(turn.system !== undefined &&
+      !(
+        config.continuationInheritsInstructions &&
+        wireInput.previous_response_id !== undefined
+      )
+        ? { instructions: turn.system }
+        : {}),
       ...(turn.controls.maxOutputTokens !== null
         ? { max_output_tokens: turn.controls.maxOutputTokens }
         : {}),

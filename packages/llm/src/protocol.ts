@@ -35,7 +35,6 @@ export const TurnProtocolSchema = z.enum([
   'deepseek-chat',
   'kimi-chat',
   'glm-chat',
-  'xai-chat',
   'dashscope-chat',
   'minimax-chat',
   'openrouter-chat',

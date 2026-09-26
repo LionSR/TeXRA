@@ -48,7 +48,7 @@ file-size ratchet holds every one of them at or under its current count.
 | `message.ts`                  | the wire message and history schemas, the content parts, and the continuation prefixes                                                                    |
 | `errors.ts`                   | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                          |
 | `transport.ts`                | SSE decode, stream pull, tool-argument parsing, the abort-safe request helper                                                                             |
-| `openaiChat.ts`               | `openaiChatModel`: `openai-chat` and the direct `deepseek-chat`, `kimi-chat`, `glm-chat`, `xai-chat`, `dashscope-chat` and `minimax-chat` branches        |
+| `openaiChat.ts`               | `openaiChatModel`: `openai-chat` and the direct `deepseek-chat`, `kimi-chat`, `glm-chat`, `dashscope-chat` and `minimax-chat` branches                    |
 | `openaiChatChunks.ts`         | the OpenAI-compatible chunk vocabulary and the MiniMax-only decode helpers                                                                                |
 | `openaiResponses.ts`          | `openaiResponsesModel`, and the subpath's re-exports of the continuation and the WebSocket model                                                          |
 | `openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                             |

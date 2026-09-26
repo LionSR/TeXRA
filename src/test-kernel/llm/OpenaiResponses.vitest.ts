@@ -50,6 +50,7 @@ const CONFIG: OpenAIResponsesConfiguration = {
     'max',
   ],
   instructions: { kind: 'optional' },
+  continuationInheritsInstructions: false,
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',
   defaults: {
@@ -1617,6 +1618,85 @@ describe('native OpenAI Responses protocol', () => {
         for (const [url] of retrievals)
           expect(String(url)).toContain('reasoning.encrypted_content');
         expect(fetch).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  it.effect(
+    'reads an xAI receipt and chains without resending instructions',
+    () =>
+      Effect.gen(function* () {
+        const message = {
+          ...MESSAGE,
+          phase: undefined,
+          content: [
+            {
+              type: 'output_text',
+              text: 'Done.',
+              annotations: [],
+              logprobs: null,
+            },
+          ],
+        };
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () =>
+            response(
+              events(
+                [message],
+                snapshot([message], {
+                  service_tier: 'default',
+                  usage: {
+                    input_tokens: 32,
+                    output_tokens: 9,
+                    total_tokens: 151,
+                    input_tokens_details: { cached_tokens: 8 },
+                    output_tokens_details: { reasoning_tokens: 110 },
+                    cost_in_usd_ticks: 70,
+                  },
+                }),
+              ),
+            ),
+          );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          continuationInheritsInstructions: true,
+          defaults: { ...CONFIG.defaults, store: true },
+        });
+        const first = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+        });
+        assert(first.mode === 'foreground');
+        const result = yield* model.generateTurn(first);
+        assert(result.kind === 'http');
+        expect(result.usage?.providerUsage).toEqual({
+          kind: 'xai',
+          costInUsdTicks: 70,
+          serviceTier: 'default',
+        });
+        assert(result.continuation !== undefined);
+        const next = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+          continuation: result.continuation,
+          messages: [
+            ...first.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
+          ],
+        });
+        assert(next.mode === 'foreground');
+        yield* model.generateTurn(next);
+        const [opening, chained] = fetch.mock.calls.map(([, init]) =>
+          JSON.parse(String(init?.body)),
+        );
+        expect(opening).toMatchObject({ instructions: 'policy' });
+        expect(chained).toMatchObject({ previous_response_id: 'resp_1' });
+        expect(chained).not.toHaveProperty('instructions');
       }),
   );
 

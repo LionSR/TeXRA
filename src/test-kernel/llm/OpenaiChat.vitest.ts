@@ -88,13 +88,6 @@ const REASONING_CONFIGS = [
   },
 ] as const satisfies readonly ChatConfiguration[];
 
-const XAI_CONFIG = {
-  ...BASE_CONFIG,
-  protocol: 'xai-chat',
-  supportsImageInput: true,
-  supportedEfforts: ['low', 'medium', 'high', 'xhigh'],
-  defaults: { ...BASE_CONFIG.defaults, effort: 'high' },
-} as const satisfies ChatConfiguration;
 const QWEN_CONFIG = {
   ...BASE_CONFIG,
   protocol: 'dashscope-chat',
@@ -802,7 +795,7 @@ describe('native OpenAI Chat protocol', () => {
   );
 
   it.effect.each(
-    [REASONING_CONFIGS[1], XAI_CONFIG].flatMap((config) => [
+    [REASONING_CONFIGS[1]].flatMap((config) => [
       { config, present: true, fragmented: false },
       { config, present: true, fragmented: true },
       { config, present: false, fragmented: true },
@@ -982,37 +975,9 @@ describe('native OpenAI Chat protocol', () => {
       config: QWEN_CONFIG,
       delta: { reasoning_content: [] },
     },
-    {
-      name: 'xAI malformed reasoning',
-      config: XAI_CONFIG,
-      delta: { reasoning_content: {} },
-    },
-    {
-      name: 'xAI nonterminal end_turn',
-      config: XAI_CONFIG,
-      delta: { content: 'partial' },
-      finish: 'end_turn',
-    },
-    {
-      name: 'xAI missing final finish',
-      config: XAI_CONFIG,
-      delta: { content: 'partial' },
-      omitFinish: true,
-    },
-    {
-      name: 'xAI malformed cost',
-      config: XAI_CONFIG,
-      delta: { content: 'done' },
-      root: {
-        prompt_tokens: 1,
-        completion_tokens: 1,
-        total_tokens: 2,
-        cost_in_usd_ticks: '7',
-      },
-    },
   ])(
     'does not complete after $name',
-    ({ config, root, choice, delta, finish, kind, omitFinish }) =>
+    ({ config, root, choice, delta, finish, kind }) =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           response(
@@ -1035,7 +1000,7 @@ describe('native OpenAI Chat protocol', () => {
                   {
                     index: 0,
                     delta,
-                    ...(omitFinish ? {} : { finish_reason: finish ?? 'stop' }),
+                    finish_reason: finish ?? 'stop',
                     usage: choice,
                   },
                 ],
@@ -1077,13 +1042,6 @@ describe('native OpenAI Chat protocol', () => {
     {
       config: REASONING_CONFIGS[2],
       controls: { thinking: { mode: 'disabled' }, effort: null },
-    },
-    {
-      config: {
-        ...XAI_CONFIG,
-        supportedEfforts: ['low', 'medium', 'high'] as const,
-      },
-      controls: { effort: 'xhigh' },
     },
   ])(
     'revalidates rehydrated $config.protocol controls before transport',
@@ -1291,45 +1249,20 @@ describe('native OpenAI Chat protocol', () => {
       config: QWEN_CONFIG,
       request: { temperature: 2 },
     },
-    {
-      name: 'xAI authored thinking',
-      config: XAI_CONFIG,
-      request: { thinking: { mode: 'disabled' } },
-    },
-    {
-      name: 'xAI stop sequence',
-      config: XAI_CONFIG,
-      request: { stopSequences: ['stop'] },
-    },
-    {
-      name: 'xAI unsupported effort',
-      config: XAI_CONFIG,
-      request: { effort: 'max' },
-    },
-    ...[
-      { name: 'Qwen image', config: QWEN_CONFIG, mimeType: 'image/png' },
-      {
-        name: 'xAI unsupported image format',
-        config: XAI_CONFIG,
-        mimeType: 'image/svg+xml',
-      },
-      {
-        name: 'xAI image delimiter',
-        config: XAI_CONFIG,
-        mimeType: 'image/png;base64,SGVsbG8=#',
-      },
-    ].map(({ name, config, mimeType }) => ({
-      name,
-      config,
-      request: {
-        messages: [
-          {
-            role: 'user' as const,
-            content: [{ kind: 'image' as const, mimeType, base64: 'AA==' }],
-          },
-        ],
-      },
-    })),
+    ...[{ name: 'Qwen image', config: QWEN_CONFIG, mimeType: 'image/png' }].map(
+      ({ name, config, mimeType }) => ({
+        name,
+        config,
+        request: {
+          messages: [
+            {
+              role: 'user' as const,
+              content: [{ kind: 'image' as const, mimeType, base64: 'AA==' }],
+            },
+          ],
+        },
+      }),
+    ),
   ] as const satisfies readonly {
     name: string;
     config: ChatConfiguration;
@@ -1346,11 +1279,11 @@ describe('native OpenAI Chat protocol', () => {
     }),
   );
 
-  it.effect.each([XAI_CONFIG, QWEN_CONFIG])(
-    'preserves selected $protocol input, original reasoning and ordered tool follow-up',
-    (config) =>
+  it.effect(
+    'preserves selected dashscope-chat input, original reasoning and ordered tool follow-up',
+    () =>
       Effect.gen(function* () {
-        const isXai = config.protocol === 'xai-chat';
+        const config = QWEN_CONFIG;
         const receipt = {
           prompt_tokens: 32,
           completion_tokens: 9,
@@ -1368,20 +1301,9 @@ describe('native OpenAI Chat protocol', () => {
                     {
                       index: 0,
                       delta: { reasoning_content: '' },
-                      ...(isXai ? {} : { finish_reason: null }),
+                      finish_reason: null,
                     },
                   ],
-                  ...(isXai
-                    ? {
-                        usage: {
-                          ...receipt,
-                          completion_tokens: 1,
-                          total_tokens: 127,
-                          cost_in_usd_ticks: 0,
-                        },
-                        service_tier: 'default',
-                      }
-                    : {}),
                 }),
                 ...['  Examine ', 'x².\n'].map((text) =>
                   chunk({
@@ -1389,7 +1311,7 @@ describe('native OpenAI Chat protocol', () => {
                       {
                         index: 0,
                         delta: { reasoning_content: text },
-                        ...(isXai ? {} : { finish_reason: null }),
+                        finish_reason: null,
                       },
                     ],
                   }),
@@ -1403,29 +1325,14 @@ describe('native OpenAI Chat protocol', () => {
                         content: 'Checking.',
                         refusal: null,
                         tool_calls: null,
-                        ...(isXai ? {} : { function_call: null }),
+                        function_call: null,
                       },
                       finish_reason: null,
                     },
                   ],
                 }),
                 toolChunk([call(0), call(1)], 'tool_calls'),
-                chunk({
-                  choices: [],
-                  usage: {
-                    ...receipt,
-                    ...(isXai ? { cost_in_usd_ticks: 70 } : {}),
-                  },
-                }),
-                ...(isXai
-                  ? [
-                      chunk({
-                        choices: [],
-                        usage: { ...receipt, cost_in_usd_ticks: null },
-                        service_tier: null,
-                      }),
-                    ]
-                  : []),
+                chunk({ choices: [], usage: receipt }),
               ),
             ),
           )
@@ -1436,21 +1343,10 @@ describe('native OpenAI Chat protocol', () => {
                   choices: [
                     {
                       index: 0,
-                      delta: {
-                        reasoning_content: '',
-                        ...(isXai
-                          ? { refusal: 'Refused.' }
-                          : { content: 'Done.' }),
-                      },
+                      delta: { reasoning_content: '', content: 'Done.' },
                       finish_reason: 'stop',
                     },
                   ],
-                  ...(isXai
-                    ? {
-                        usage: { ...receipt, cost_in_usd_ticks: 0 },
-                        service_tier: 'default',
-                      }
-                    : {}),
                 }),
               ),
             ),
@@ -1464,7 +1360,7 @@ describe('native OpenAI Chat protocol', () => {
               { kind: 'text', text: 'second' },
             ],
           },
-          // Neither route requires reasoning on a prior ordinary assistant turn.
+          // The route does not require reasoning on a prior ordinary assistant turn.
           {
             role: 'assistant',
             origin: {
@@ -1487,16 +1383,6 @@ describe('native OpenAI Chat protocol', () => {
             role: 'user',
             content: [
               { kind: 'text', text: 'Image label' },
-              ...(isXai
-                ? [
-                    {
-                      kind: 'image' as const,
-                      mimeType: 'image/PNG',
-                      base64: '',
-                      detail: 'high' as const,
-                    },
-                  ]
-                : []),
               { kind: 'text', text: 'Question' },
             ],
           },
@@ -1506,9 +1392,7 @@ describe('native OpenAI Chat protocol', () => {
           tools: TOOLS,
           parallelToolCalls: false,
           toolChoice: { name: 'search' },
-          ...(isXai
-            ? { effort: 'xhigh' as const }
-            : { stopSequences: ['<end>'] }),
+          stopSequences: ['<end>'],
         });
         assert(prepared.mode === 'foreground');
         const events = yield* Stream.runCollect(
@@ -1544,15 +1428,6 @@ describe('native OpenAI Chat protocol', () => {
           totalTokens: 135,
           cachedInputTokens: 3,
           reasoningTokens: 94,
-          ...(isXai
-            ? {
-                providerUsage: {
-                  kind: 'xai',
-                  costInUsdTicks: 70,
-                  serviceTier: 'default',
-                },
-              }
-            : {}),
         });
         const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
         expect(body).toMatchObject({
@@ -1560,37 +1435,18 @@ describe('native OpenAI Chat protocol', () => {
           parallel_tool_calls: false,
           tool_choice: { type: 'function', function: { name: 'search' } },
           stream_options: { include_usage: true },
+          max_tokens: 100,
+          enable_thinking: false,
+          stop: ['<end>'],
         });
-        if (isXai) {
-          expect(body).toMatchObject({
-            max_completion_tokens: 100,
-            reasoning_effort: 'xhigh',
-          });
-          expect(body).not.toHaveProperty('max_tokens');
-          expect(body).not.toHaveProperty('stop');
-          expect(body.messages[2].content).toEqual([
-            { type: 'text', text: 'Image label' },
-            {
-              type: 'image_url',
-              image_url: { url: 'data:image/PNG;base64,', detail: 'high' },
-            },
-            { type: 'text', text: 'Question' },
-          ]);
-        } else {
-          expect(body).toMatchObject({
-            max_tokens: 100,
-            enable_thinking: false,
-            stop: ['<end>'],
-          });
-          expect(body).not.toHaveProperty('max_completion_tokens');
-          expect(body).not.toHaveProperty('reasoning_effort');
-          expect(body).not.toHaveProperty('thinking');
-          expect(body.messages).toEqual([
-            { role: 'user', content: 'First\nsecond' },
-            { role: 'assistant', content: 'Old\nreply' },
-            { role: 'user', content: 'Image label\nQuestion' },
-          ]);
-        }
+        expect(body).not.toHaveProperty('max_completion_tokens');
+        expect(body).not.toHaveProperty('reasoning_effort');
+        expect(body).not.toHaveProperty('thinking');
+        expect(body.messages).toEqual([
+          { role: 'user', content: 'First\nsecond' },
+          { role: 'assistant', content: 'Old\nreply' },
+          { role: 'user', content: 'Image label\nQuestion' },
+        ]);
         const followUp = yield* model.prepareTurn({
           tools: TOOLS,
           messages: [
@@ -1627,36 +1483,7 @@ describe('native OpenAI Chat protocol', () => {
           { role: 'tool', tool_call_id: 'call_0', content: 'a' },
           { role: 'tool', tool_call_id: 'call_1', content: 'Error: b' },
         ]);
-        if (isXai) {
-          expect(replay.at(-3).reasoning_content).toBe('  Examine x².\n');
-          expect(final.usage?.providerUsage).toEqual({
-            kind: 'xai',
-            costInUsdTicks: 0,
-            serviceTier: 'default',
-          });
-          expect(final.content.at(-1)).toEqual({
-            kind: 'message',
-            content: [{ kind: 'refusal', text: 'Refused.' }],
-          });
-          // xAI reports refusals but its request grammar has no refusal member.
-          const failure = yield* Effect.flip(
-            model.prepareTurn({
-              messages: [
-                {
-                  role: 'user',
-                  content: [{ kind: 'text', text: 'Previous question' }],
-                },
-                {
-                  role: 'assistant',
-                  origin: final.requestedOrigin,
-                  content: final.content,
-                },
-                { role: 'user', content: [{ kind: 'text', text: 'Continue' }] },
-              ],
-            }),
-          );
-          expect(failure.kind).toBe('unsupported');
-        } else expect(replay.at(-3)).not.toHaveProperty('reasoning_content');
+        expect(replay.at(-3)).not.toHaveProperty('reasoning_content');
         expect(final.content[0]).toEqual({
           kind: 'reasoning',
           summary: [],

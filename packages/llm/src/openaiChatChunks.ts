@@ -103,26 +103,6 @@ export const ReasoningChunkSchema = ChunkSchema.extend({
     .max(1),
 });
 
-export const XaiChunkSchema = ReasoningChunkSchema.extend({
-  // xAI's intermediate deltas may omit finish_reason; final completion may not.
-  choices: z
-    .array(
-      ReasoningChunkSchema.shape.choices.element.extend({
-        finish_reason: ChunkSchema.shape.choices.element.shape.finish_reason
-          .or(z.literal('end_turn'))
-          .optional(),
-      }),
-    )
-    .max(1),
-  usage: UsageSchema.extend({
-    cost_in_usd_ticks: z.int().nonnegative().nullish(),
-  }).nullish(),
-  service_tier: z.enum(['default', 'priority']).nullish(),
-  // No hosted search or generated-file request is made by this protocol slice.
-  citations: z.array(z.never()).nullish(),
-  output_files: z.array(z.never()).nullish(),
-});
-
 export const DashscopeChunkSchema = ReasoningChunkSchema.extend({
   choices: z
     .array(

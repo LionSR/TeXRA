@@ -149,6 +149,10 @@ developers.
 | :------- | :----------------- | :--- | :----- |
 | `grok47` | Reasoning + vision | $$$  | Medium |
 
+Direct xAI models (API key or Grok subscription) use xAI's Responses API. xAI
+keeps each response for 30 days, so a tool-use round sends only the new turn
+rather than the whole conversation.
+
 ## Choosing a model
 
 <ModelChoiceMatrix />

@@ -315,11 +315,17 @@ export function priceTurnUsage(
       // usage record — the editor model reports `usage: null` and this
       // function returns above — so no editor turn is silently billing
       // reasoning at zero; a future editor model that starts reporting usage
-      // needs its own arm rather than this flag.
+      // needs its own arm rather than this flag. A receipt whose total counts
+      // reasoning beside the output (xAI Responses without its cost field)
+      // bills it on top too.
       cost = standardCost(
         usage,
         rates,
-        bound.origin.protocol === 'openai-chat',
+        bound.origin.protocol === 'openai-chat' ||
+          (usage.reasoningTokens !== null &&
+            usage.reasoningTokens > 0 &&
+            usage.totalTokens ===
+              inputTokens + outputTokens + usage.reasoningTokens),
       );
       break;
   }

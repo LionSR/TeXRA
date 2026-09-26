@@ -205,11 +205,6 @@ const GlmControlsSchema = ChatReasoningControlsSchema.extend({
   temperature: z.number().min(0).max(1).nullable(),
   clearThinking: z.boolean(),
 });
-const XaiEffortSchema = EffortSchema.unwrap().exclude(['max']).nullable();
-const XaiControlsSchema = OpenAIControlsSchema.extend({
-  temperature: OpenAIControlsSchema.shape.temperature.nullable(),
-  effort: XaiEffortSchema,
-});
 const DashscopeControlsSchema = OpenAIControlsSchema.extend({
   temperature: z.number().min(0).lt(2),
   stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
@@ -351,16 +346,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     defaults: GlmControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
-    protocol: z.literal('xai-chat'),
-    supportsImageInput: z.boolean(),
-    supportedEfforts: z.array(XaiEffortSchema.unwrap()).readonly(),
-    defaults: XaiControlsSchema.omit({ toolChoice: true }).readonly(),
-  })
-    .superRefine((configuration, ctx) => {
-      validateEffortDefault(configuration, ctx);
-    })
-    .readonly(),
-  BindingSchema.extend({
     protocol: z.literal('dashscope-chat'),
     defaults: DashscopeControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
@@ -389,6 +374,12 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
         })
         .readonly(),
     ]),
+    /**
+     * A chained request carries no `instructions`: the route reuses the
+     * stored response's own and refuses both together (xAI). The prefix
+     * fingerprint already pins the system prompt a continuation covers.
+     */
+    continuationInheritsInstructions: z.boolean(),
     defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
@@ -456,7 +447,6 @@ export type ChatConfiguration = Extract<
       | 'deepseek-chat'
       | 'kimi-chat'
       | 'glm-chat'
-      | 'xai-chat'
       | 'dashscope-chat'
       | 'minimax-chat';
   }
@@ -539,10 +529,6 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
     PreparedInputSchema.extend({
       protocol: z.literal('glm-chat'),
       controls: GlmControlsSchema.readonly(),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('xai-chat'),
-      controls: XaiControlsSchema.readonly(),
     }).readonly(),
     PreparedInputSchema.extend({
       protocol: z.literal('dashscope-chat'),
