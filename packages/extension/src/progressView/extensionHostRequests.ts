@@ -287,7 +287,7 @@ export function createExtensionHostRequests(
       mergeFile: (baseFile, editedFile) =>
         runCommand('texra.merge', baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        runCommand('texra.latexdiff', baseFile, editedFile),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -602,18 +602,13 @@ export function createExtensionHostRequests(
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       action === 'latexdiffvc'
-        ? commandVerb('texra.latexdiffvc', undefined, baseFile, commit)
+        ? commandVerb('texra.latexdiffvc', baseFile, commit)
         : commandVerb(
             `texra.${action}`,
-            undefined,
             baseFile,
             commit,
             action === 'cleanLatexdiffvc',
           ),
-    mergeFiles: (baseFile, editedFile) =>
-      commandVerb('texra.merge', baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');

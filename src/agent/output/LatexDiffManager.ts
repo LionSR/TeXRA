@@ -4,6 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
+import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -227,10 +228,10 @@ export class LatexDiffManager {
               originalLocation: baseLocation,
               baseRound: null,
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffForRound(
+                this.latexdiffService.runDiff(
                   base,
                   revised,
-                  currRound,
+                  '_diff',
                   undefined,
                   { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),
@@ -264,11 +265,10 @@ export class LatexDiffManager {
               originalLocation,
               baseRound: currRound - 1,
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffBetweenRounds(
+                this.latexdiffService.runDiff(
                   base,
                   revised,
-                  currRound - 1,
-                  currRound,
+                  buildBetweenRoundDiffSuffix(currRound, currRound - 1),
                   undefined,
                   { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),

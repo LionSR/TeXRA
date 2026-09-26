@@ -166,10 +166,10 @@ describe('LaTeXdiffService shadow output', () => {
           () => import('@latex/latexdiff'),
         );
 
-        yield* new LaTeXdiffService('test', sessionRoots).runDiffForRound(
+        yield* new LaTeXdiffService('test', sessionRoots).runDiff(
           createExternalLocation(path.join(sourceDir, 'base.tex')),
           createExternalLocation(path.join(sourceDir, 'revised.tex')),
-          1,
+          '_diff',
           undefined,
           { cwd: sessionRoots.workspace, outputDirectory: shadowDir },
         );
@@ -231,24 +231,24 @@ describe('LaTeXdiffService shadow output', () => {
         lineage: { original: base, diffBase: null },
         diff: null,
       });
-      const [{ runLatexdiffFromMetadata }, { LaTeXdiffService }] =
-        yield* Effect.promise(() =>
-          Promise.all([
-            import('@latex/latexdiff/diffOperations'),
-            import('@latex/latexdiff'),
-          ]),
-        );
-      const result = yield* runLatexdiffFromMetadata({
-        rounds: {
-          1: [output(1, first)],
-          2: [output(2, second, './paper.tex')],
+      yield* testWorkspaceRoots().workspaceState.update(
+        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+        true,
+      );
+      const { runLatexdiffForRun } = yield* Effect.promise(
+        () => import('@latex/latexdiff/diffOperations'),
+      );
+      const result = yield* runLatexdiffForRun({
+        runId,
+        roots: testWorkspaceRoots(),
+        runDiscovery: {
+          readRunOutputs: () =>
+            Effect.succeed({
+              1: [output(1, first)],
+              2: [output(2, second, './paper.tex')],
+            }),
         },
-        workspaceRoot: testWorkspaceRoots().workspace,
-        generateBetweenRoundDiffs: true,
-        latexdiff: {
-          channel: 'test',
-          service: new LaTeXdiffService('test', testWorkspaceRoots()),
-        },
+        channel: 'test',
         progress: { report: vi.fn() },
       });
 

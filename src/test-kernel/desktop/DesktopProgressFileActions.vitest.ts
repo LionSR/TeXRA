@@ -1,12 +1,11 @@
 import * as path from 'node:path';
 import { Context, Effect } from 'effect';
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
 
 import { DesktopProgressFileActions } from '@desktop/main/desktopProgressFileActions';
-import type { LaTeXdiffResult } from '@latex/latexdiff';
 import type { DiffRunOutcome, DiffRunResult } from '@latex/latexdiff/types';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
@@ -15,31 +14,21 @@ import { Rejected } from '@shared/session/requestErrors';
 import { createStubDesktopAgentRunHost } from './desktopAgentRunTestHarness.ts';
 
 // The desktop adapter delegates the read + dispatch to the shared
-// host-neutral `runLatexdiffForRun`; mock it at that boundary so these
-// tests cover the desktop param-building + outcome-handling, not the core
-// (which `RunLatexdiff.vitest.ts` exercises in isolation). The module under
-// test is imported once; each test sets these mocks' behaviour, because
-// re-importing its graph per test is what timed the suite out under load.
+// host-neutral `runLatexdiffForRun`; mock it at that boundary so this suite
+// covers the desktop outcome handling, not the core.
 const latexdiff = vi.hoisted(() => ({
   runLatexdiffForRun: vi.fn(),
-  runDiff: vi.fn(),
 }));
 
-vi.mock('@latex/latexdiff/runLatexdiff', () => ({
+vi.mock('@latex/latexdiff/diffOperations', () => ({
   runLatexdiffForRun: latexdiff.runLatexdiffForRun,
 }));
 vi.mock('@latex/latexdiff', () => ({
-  LaTeXdiffService: class {
-    runDiff = latexdiff.runDiff;
-  },
+  LaTeXdiffService: class {},
 }));
 vi.mock('@utils/files/fileLocation', async (importActual) => ({
   ...(await importActual<typeof import('@utils/files/fileLocation')>()),
   createExternalLocation: (absolutePath: string) => ({
-    kind: 'external',
-    absolutePath,
-  }),
-  pathToLocationIn: (_root: string | undefined, absolutePath: string) => ({
     kind: 'external',
     absolutePath,
   }),
@@ -79,35 +68,13 @@ function expectOpenedDiff(
 
 const RUN_ID = 'exec-1' as RunId;
 
-async function loadFileActions(options: {
-  outcome?: DiffRunOutcome;
-  throws?: boolean;
-  interrupts?: boolean;
-  fallbackResult?: LaTeXdiffResult;
-}): Promise<{
+function loadFileActions(outcome: DiffRunOutcome): {
   actions: DesktopProgressFileActions;
   openBuildDisplay: ReturnType<typeof vi.fn>;
-  runLatexdiffForRun: ReturnType<typeof vi.fn>;
-  runDiff: ReturnType<typeof vi.fn>;
-}> {
-  const runLatexdiffForRun = latexdiff.runLatexdiffForRun.mockReset();
-  runLatexdiffForRun.mockImplementation(() => {
-    if (options.interrupts) return Effect.interrupt;
-    if (options.throws)
-      return Effect.fail(new Error('No workspace path found'));
-    return Effect.succeed(options.outcome ?? { results: [] });
-  });
-
-  const runDiff = latexdiff.runDiff.mockReset();
-  runDiff.mockImplementation((): Effect.Effect<LaTeXdiffResult> =>
-    Effect.succeed(
-      options.fallbackResult ?? {
-        success: true,
-        diffPath: absolutePath('workspace', 'main_diff.tex'),
-        message: 'diff written',
-      },
-    ),
-  );
+} {
+  latexdiff.runLatexdiffForRun
+    .mockReset()
+    .mockImplementation(() => Effect.succeed(outcome));
 
   const openBuildDisplay = vi.fn(() => Effect.void);
   const actions = new DesktopProgressFileActions(
@@ -133,71 +100,20 @@ async function loadFileActions(options: {
     },
   );
 
-  return {
-    actions,
-    openBuildDisplay,
-    runLatexdiffForRun,
-    runDiff,
-  };
-}
-
-/** The window's run: the actions are programs, and the bridge that calls them
- *  settles them on the window's runtime. */
-function run<A, E>(program: Effect.Effect<A, E>): Promise<A> {
-  return Effect.runPromise(program);
+  return { actions, openBuildDisplay };
 }
 
 describe('DesktopProgressFileActions latexdiff', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('falls back to single-file latexdiff when the shared core finds no operations', async () => {
-    const { actions, openBuildDisplay, runLatexdiffForRun, runDiff } =
-      await loadFileActions({
-        outcome: { results: [] },
-        fallbackResult: {
-          success: true,
-          diffPath: absolutePath('workspace', 'fallback_diff.tex'),
-          message: 'diff written',
-        },
-      });
-
-    await run(
-      actions.diffAcceptedFilePair(
-        absolutePath('workspace', 'base.tex'),
-        absolutePath('run', 'r1', 'main.tex'),
-        RUN_ID,
-      ),
-    );
-
-    expect(runLatexdiffForRun).toHaveBeenCalledOnce();
-    expect(runDiff).toHaveBeenCalledOnce();
-    expectOpenedDiff(
-      openBuildDisplay,
-      absolutePath('workspace', 'fallback_diff.tex'),
-    );
-  });
-
   it('opens every successful diff, not just the first', async () => {
-    const outcome: DiffRunOutcome = {
+    const { actions, openBuildDisplay } = loadFileActions({
       results: [
         successResult(absolutePath('run', 'r1', 'main.tex')),
         successResult(absolutePath('run', 'r2', 'main.tex')),
         failureResult('one failed'),
       ],
-    };
-    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
-      outcome,
     });
 
-    await run(
-      actions.diffAcceptedFilePair(
-        absolutePath('workspace', 'main.tex'),
-        absolutePath('run', 'r2', 'main.tex'),
-        RUN_ID,
-      ),
-    );
+    await Effect.runPromise(actions.diffStreamToolbarAction(RUN_ID));
 
     expectOpenedDiff(
       openBuildDisplay,
@@ -208,50 +124,5 @@ describe('DesktopProgressFileActions latexdiff', () => {
       absolutePath('run', 'r2', 'main_diff.tex'),
     );
     expect(openBuildDisplay).toHaveBeenCalledTimes(2);
-    expect(runDiff).not.toHaveBeenCalled();
-  });
-
-  it('falls back to single-file latexdiff when the shared core throws', async () => {
-    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
-      throws: true,
-      fallbackResult: {
-        success: true,
-        diffPath: absolutePath('workspace', 'fallback_diff.tex'),
-        message: 'diff written',
-      },
-    });
-
-    await run(
-      actions.diffAcceptedFilePair(
-        absolutePath('workspace', 'base.tex'),
-        absolutePath('run', 'r1', 'main.tex'),
-        RUN_ID,
-      ),
-    );
-
-    expect(runDiff).toHaveBeenCalledOnce();
-    expectOpenedDiff(
-      openBuildDisplay,
-      absolutePath('workspace', 'fallback_diff.tex'),
-    );
-  });
-
-  it('does not fall back when the shared core is interrupted', async () => {
-    const { actions, openBuildDisplay, runDiff } = await loadFileActions({
-      interrupts: true,
-    });
-
-    await expect(
-      run(
-        actions.diffAcceptedFilePair(
-          absolutePath('workspace', 'base.tex'),
-          absolutePath('run', 'r1', 'main.tex'),
-          RUN_ID,
-        ),
-      ),
-    ).rejects.toThrow('All fibers interrupted without error');
-
-    expect(runDiff).not.toHaveBeenCalled();
-    expect(openBuildDisplay).not.toHaveBeenCalled();
   });
 });
