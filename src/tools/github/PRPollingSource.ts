@@ -64,13 +64,11 @@ import {
   type BasePollSubscriptionState,
   createBasePollState,
   DEFAULT_POLLING_BACKOFF_CONFIG,
-  dedupeComments,
-  DedupedResource,
-  MAX_SEEN_IDS,
   type PollEventListener,
   PollHookRejected,
   PollingSourceBase,
 } from './PollingSourceBase';
+import { dedupeComments, DedupedResource, MAX_SEEN_IDS } from './pollingDedup';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
   GITHUB_POLL_INTERVAL_MS,
