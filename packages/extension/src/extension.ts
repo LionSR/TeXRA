@@ -8,7 +8,6 @@ import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 // Local imports
 import { loadAgents } from '@agent/index';
 import {
-  createAgentResponseTextConnector,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
@@ -616,9 +615,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   const runtimeSession = yield* initializeDefaultSession({
     roots,
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
-    ),
+    responseTextProcessing: createTexraResponseTextProcessing(),
   });
   if (runtimeSession.storeMovedAside) {
     void vscode.window.showWarningMessage(

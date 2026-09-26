@@ -79,6 +79,12 @@ All notable changes to this project will be documented in this file.
   old form stop with a message saying how to rewrite them; calls they already
   completed are reused once the lead reruns the rewritten script under the
   same name.
+- **Workflow agents no longer continue a response cut off by the output
+  limit** — a round whose response hits the model's max output tokens keeps
+  what the model wrote and processes it as that round's output, and the
+  transcript warns that it may be incomplete. Raise the model's max output
+  tokens if a long document gets cut off. The extra helper-model call that
+  joined continued pieces is gone with it.
 
 - **OpenRouter models now run through the official OpenRouter SDK, with
   fewer response details.** Requests over the OpenRouter route
@@ -193,6 +199,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   background now end with it; use `run_in_background` for work that should
   keep going.
 
+- **CLI sign-in always shows the sign-in URL** — `texra login`, `/login`, and
+  the account panel now print the sign-in link before opening a browser, and
+  keep it on screen while waiting. If the browser that opens is signed in to a
+  different account, or no browser opens, copy the link into another browser.
+  A failed browser launch no longer ends the sign-in, and under WSL the CLI
+  opens the Windows browser.
+
 - **Beamer slides are no longer cut short** — when a model left its last
   output document unclosed, a frame overlay such as `\begin{frame}<beamer>`
   was read as markup and the slides were truncated at that point. The
@@ -206,6 +219,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **Read-only path refusals show the full path** — the message an agent gets
   when it tries to write inside a read-only folder no longer drops the
   leading `/` of an absolute path.
+- **Waiting on a background run returns its result once.** When an agent
+  waited for a subagent or a multi-agent workflow to finish, the result
+  still arrived afterwards as a follow-up message, which started another
+  turn (for a workflow, the wait had already returned the same result). The
+  wait now returns the full result and no follow-up is sent. The workflow's
+  completion card also names the workspace file it edited instead of a path
+  inside run storage.
 - **Turning telemetry off now stops all usage reporting** — rounds run on a
   ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
   out, on the grounds that they metered a plan cap. Nothing has enforced

@@ -228,7 +228,8 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
       case 'wait':
         yield* waitForRuns(context, input.timeout, [runId]);
         return yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: true,
+          suppressAutoDeliveredSubagentReport:
+            !(yield* context.session.followUps.withdraw(context.runId, runId)),
         });
       case 'view':
         return yield* showSummary(context, runId, {
@@ -418,11 +419,9 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
   }
 
-  // A report the caller already received as a follow-up is elided. Only a
-  // handle this process still tracks proves the child-run loop delivered
-  // it, so a finished run keeps its report inline. Deliberately
-  // identity-agnostic: a background bash run (`process`, category
-  // toolUse) auto-delivers exactly like a delegated agent.
+  // A report the caller already received as a follow-up is elided; a wait
+  // withdraws one still queued and shows it here. Only a live handle proves
+  // the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.category === AgentCategory.ToolUse &&

@@ -346,8 +346,7 @@ const PROTOCOL_PRELUDE = `
   };
   const all = (items, options) => {
     if (!isArray(items)) throw new TypeError('all(items) expects an array of operations.');
-    const checked = [];
-    for (let i = 0; i < items.length; i++) checked.push(body(items[i], 'all() item ' + i));
+    const checked = items.map((item, i) => body(item, 'all() item ' + i));
     return operation('All', { items: freeze(checked), concurrency: options?.concurrency ?? null });
   };
   define('agent', (prompt, options) => operation('Agent', { prompt, options }));
@@ -357,9 +356,7 @@ const PROTOCOL_PRELUDE = `
     if (typeof fn !== 'function') {
       throw new TypeError('forEach(items, fn) expects a function that returns an operation.');
     }
-    const mapped = [];
-    for (let i = 0; i < items.length; i++) mapped.push(fn(items[i], i));
-    return all(mapped, options);
+    return all(items.map(fn), options);
   });
   define('attempt', (value) => operation('Attempt', { body: body(value, 'attempt()') }));
   define('retry', (value, options) =>
@@ -379,11 +376,8 @@ const PROTOCOL_PRELUDE = `
     switch (value[OP]) {
       case 'Agent':
         return { _tag: 'Agent', prompt: value.prompt, options: value.options };
-      case 'All': {
-        const items = [];
-        for (let i = 0; i < value.items.length; i++) items.push(wire(value.items[i]));
-        return { _tag: 'All', items, concurrency: value.concurrency };
-      }
+      case 'All':
+        return { _tag: 'All', items: value.items.map(wire), concurrency: value.concurrency };
       case 'Attempt':
         return { _tag: 'Attempt', body: wire(value.body) };
       case 'Retry':

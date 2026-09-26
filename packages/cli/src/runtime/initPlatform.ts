@@ -3,7 +3,6 @@ import { Effect, Exit, Scope } from 'effect';
 
 // Local imports
 import {
-  createAgentResponseTextConnector,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
@@ -335,19 +334,12 @@ export function initCliPlatform(
           // The one open of the process session, over the roots published below,
           // memoized so the first entry point that needs a session opens it and
           // every later one gets the same handle; an entry that needs none never
-          // opens one. The latex text connector asks a helper model how to join
-          // two strings; that model is resolved against the stores this root
-          // opened.
+          // opens one.
           const openSession = yield* Effect.cached(
             Effect.acquireRelease(
               initializeDefaultSession({
                 roots,
-                responseTextProcessing: createTexraResponseTextProcessing(
-                  createAgentResponseTextConnector({
-                    ...roots,
-                    secrets: cliSecrets,
-                  }),
-                ),
+                responseTextProcessing: createTexraResponseTextProcessing(),
               }),
               () => teardownDefaultSession(),
             ).pipe(

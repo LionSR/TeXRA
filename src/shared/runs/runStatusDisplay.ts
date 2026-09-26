@@ -1,4 +1,5 @@
 import {
+  AgentCategory,
   ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
@@ -176,9 +177,16 @@ interface FlowPosition {
  * round 0), while `turn` is already one-based — the tool-use loop commits
  * `state.turn + 1` from a zero start and the child loop counts its first turn
  * as 1 — so only `round` gains one when it renders.
+ *
+ * A workflow agent counts rounds whichever family its rows are in: in round
+ * mode (the `toolUse` family) each round is one turn, so its round index is
+ * the turn less one, and a run that has not opened its first turn has none.
+ * A caller that does not know the run's category passes `undefined` and
+ * reads the family's own coordinate.
  */
 export function flowPosition(
   flow: RunFlow | null | undefined,
+  category: AgentCategory | undefined,
 ): FlowPosition | undefined {
   if (flow == null) return undefined;
   if (flow.family === 'reflection') {
@@ -186,7 +194,11 @@ export function flowPosition(
       ? undefined
       : { kind: 'round', index: flow.round };
   }
-  return flow.turn == null ? undefined : { kind: 'turn', index: flow.turn };
+  if (flow.turn == null) return undefined;
+  if (category !== AgentCategory.Workflow) {
+    return { kind: 'turn', index: flow.turn };
+  }
+  return flow.turn > 0 ? { kind: 'round', index: flow.turn - 1 } : undefined;
 }
 
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for

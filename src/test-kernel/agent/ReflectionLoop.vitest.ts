@@ -11,17 +11,9 @@ import '@test/support/defaultSessionTestSetup';
 // Third-party imports
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 import { it } from '@effect/vitest';
-import {
-  Deferred,
-  Effect,
-  Exit,
-  Fiber,
-  FileSystem,
-  Layer,
-  SynchronizedRef,
-} from 'effect';
+import { Deferred, Effect, Exit, Fiber, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -94,13 +86,13 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 
 /**
  * The reflection loop over a real session ledger: the round loop, the
- * compile-rejection policy, continuation and resume are production code; the
+ * compile-rejection policy, the cut-off round and resume are production code; the
  * model is faked at the `ModelInvoker` seam and the round's output pipeline at
  * its module seams, so a scenario scripts turns and compile verdicts and the
  * loop decides what to do with them.
  *
  * These cases carry the round-limit, compile-repair, output-fact,
- * continuation and interrupt coverage that the retired flow engine's node
+ * cut-off and interrupt coverage that the retired flow engine's node
  * suites held: their subject was never the engine but the behaviour the loop
  * now owns, so one harness replaces four node fixtures.
  */
@@ -112,8 +104,6 @@ const scripted = vi.hoisted(() => ({
   compileResults: new Map<number, CompileResult | undefined>(),
   /** Whether the round summary lists its outputs as files to open. */
   openFiles: false,
-  /** A valid extracted document with the former raw-cycle filename. */
-  collidingDocument: false,
 }));
 
 vi.mock('@agent/output/compileCheck', async (importOriginal) => ({
@@ -140,27 +130,17 @@ vi.mock('@agent/output/outputFileExtraction', async (importOriginal) => {
         outputState: OutputState,
         _deps: unknown,
         _xml: unknown,
-        outputLocation: { absolutePath: string },
+        _outputLocation: unknown,
         round: number,
       ) =>
-        Effect.gen(function* () {
-          const source = scripted.collidingDocument
-            ? 'output.c0.xml'
-            : 'main.tex';
-          const absolutePath = scripted.collidingDocument
-            ? join(dirname(outputLocation.absolutePath), source)
-            : `/storage/executions/${scripted.runId}/r${round}/main.tex`;
-          if (scripted.collidingDocument) {
-            const fs = yield* FileSystem.FileSystem;
-            yield* fs.writeFileString(absolutePath, 'extracted document');
-          }
+        Effect.sync(() => {
           ensureRoundData(outputState, round).outputs = [
             {
-              source,
+              source: 'main.tex',
               round,
               location: locate(
-                absolutePath,
-                `r${round}/${source}`,
+                `/storage/executions/${scripted.runId}/r${round}/main.tex`,
+                `r${round}/main.tex`,
                 scripted.runId as RunId,
               ),
               lineage: null,
@@ -282,7 +262,6 @@ type ScriptedTurn =
   | { readonly failWith: RetryErrorInfo };
 
 const COMPLETE: ScriptedTurn = { finish: 'stop' };
-const CUT_OFF: ScriptedTurn = { finish: 'length' };
 
 function textTurn(text: string, finish: ScriptedFinish): TurnResult {
   return {
@@ -538,7 +517,6 @@ function startedRun(session: SessionHandle): RunId {
   scripted.runId = runId;
   scripted.compileResults.clear();
   scripted.openFiles = false;
-  scripted.collidingDocument = false;
   publishTestRunStart(session, runId);
   return runId;
 }
@@ -570,7 +548,6 @@ function roundStageOutcomes(
 }
 
 const REJECTED = 'previous workflow round was rejected';
-const CUT_OFF_PROMPT = 'Your response got cut off';
 
 /** The plain text of every user message the run recorded. */
 function userTexts(state: RunState): string[] {
@@ -984,31 +961,6 @@ describe('the output facts a reflection round publishes', () => {
     }),
   );
 
-  it.effect('keeps raw cycles separate from an output.c0.xml document', () =>
-    Effect.gen(function* () {
-      const session = yield* createProcessSession();
-      const runId = startedRun(session);
-      scripted.collidingDocument = true;
-
-      const { result, state } = yield* runLoop({ runId, session, rounds: 1 });
-      const canonical = canonicalOutputOf(session, runId, 0);
-      const roundDir = dirname(canonical);
-      const cycle = join(dirname(roundDir), 'raw', 'r0', 'output.c0.xml');
-      const extracted = join(roundDir, 'output.c0.xml');
-
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(state.roundOutputs[0]?.outputs[0]?.location.absolutePath).toBe(
-        extracted,
-      );
-      expect(yield* Effect.promise(() => readFile(cycle, 'utf8'))).toBe(
-        'round 0 output',
-      );
-      expect(yield* Effect.promise(() => readFile(extracted, 'utf8'))).toBe(
-        'extracted document',
-      );
-    }),
-  );
-
   it.effect('publishes the run-wide output map, restored rounds included', () =>
     Effect.gen(function* () {
       const session = yield* createProcessSession();
@@ -1081,82 +1033,34 @@ describe('the output facts a reflection round publishes', () => {
 });
 
 describe('a token-limited reflection response', () => {
-  it.effect(
-    'continues inside the same round instead of opening a new one',
-    () =>
-      Effect.gen(function* () {
-        const session = yield* createProcessSession();
-        const runId = startedRun(session);
-
-        const { result, requests, state } = yield* runLoop({
-          runId,
-          session,
-          rounds: 1,
-          turns: [CUT_OFF, COMPLETE],
-        });
-
-        expect(requests.map((request) => request.round)).toEqual([0, 0]);
-        expect(userTexts(state).at(-1)).toContain(CUT_OFF_PROMPT);
-        expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      }),
-  );
-
-  it.effect('stops continuing once the continuation limit is reached', () =>
+  it.effect('processes a cut-off response as the round output, loudly', () =>
     Effect.gen(function* () {
-      // Reflection owns the conversation limit: a model that never finishes
-      // gets a bounded number of continuations, then the round ends with what
-      // it has.
+      // A response cut off by the output limit is not continued: its text is
+      // the round's output, and the transcript says it may be incomplete.
       const session = yield* createProcessSession();
       const runId = startedRun(session);
+      const logger = new TraceEmitter();
+      const warn = vi.spyOn(logger, 'warn');
 
       const { result, requests, state } = yield* runLoop({
         runId,
         session,
         rounds: 1,
-        turns: Array.from({ length: 12 }, () => CUT_OFF),
+        logger,
+        turns: [{ finish: 'length', text: 'cut off' }],
       });
 
-      expect(requests).toHaveLength(12);
-      expect(requests.every((request) => request.round === 0)).toBe(true);
-      expect(
-        userTexts(state).filter((text) => text.includes(CUT_OFF_PROMPT)),
-      ).toHaveLength(11);
-      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-    }),
-  );
-
-  it.effect('joins a continued response through the session text policy', () =>
-    Effect.gen(function* () {
-      const connectResponseText = vi.fn(() => Effect.succeed('\n'));
-      const session = yield* createProcessSession({
-        responseTextProcessing: {
-          normalizeResponseText: (text: string) => text,
-          postProcessResponse: (text: string) => Effect.succeed(text),
-          connectResponseText,
-        },
-      });
-      const runId = startedRun(session);
-
-      const { state } = yield* runLoop({
-        runId,
-        session,
-        rounds: 1,
-        turns: [
-          { finish: 'length', text: 'left' },
-          { finish: 'stop', text: 'right' },
-        ],
-      });
-
-      const canonical = canonicalOutputOf(session, runId, state.round);
-      // Every cycle asks the policy how it joins onto what came before; the
-      // first has nothing before it, so its connector is never written.
-      expect(connectResponseText.mock.calls).toEqual([
-        ['', 'left'],
-        ['left', 'right'],
-      ]);
-      expect(yield* Effect.promise(() => readFile(canonical, 'utf-8'))).toBe(
-        'left\nright',
+      expect(requests).toHaveLength(1);
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining("hit the model's output limit"),
       );
+      expect(
+        yield* Effect.promise(() =>
+          readFile(canonicalOutputOf(session, runId, 0), 'utf-8'),
+        ),
+      ).toBe('cut off');
+      expect(state.roundOutputs[0]?.outputs).toHaveLength(1);
+      expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
     }),
   );
 
@@ -1167,8 +1071,8 @@ describe('a token-limited reflection response', () => {
     'stops instead of retrying a context-window overflow ($name)',
     ({ text }) =>
       Effect.gen(function* () {
-        // No compaction is available on the reflection path, so a retry
-        // would overflow again: the round ends, loudly, with what it has.
+        // The one-round history is too short to compact, so a retry would
+        // overflow again: the round ends, loudly, with what it has.
         const session = yield* createProcessSession();
         const runId = startedRun(session);
         const logger = new TraceEmitter();
@@ -1183,7 +1087,6 @@ describe('a token-limited reflection response', () => {
         });
 
         expect(requests).toHaveLength(1);
-        expect(userTexts(state).at(-1)).not.toContain(CUT_OFF_PROMPT);
         expect(warn).toHaveBeenCalledExactlyOnceWith(
           expect.stringContaining('context window exceeded'),
         );
@@ -1257,15 +1160,12 @@ describe('an interrupted reflection run', () => {
   /**
    * C15: a crash between the committed response row and the round's raw
    * output write. The response is paid for and durable, so resume reprocesses
-   * it. The reprocessed cycle writes its own path wholesale, keyed by the
-   * folded continuationIndex, so debris a crash left in the cycle file or in
-   * the canonical output is rewritten from the coordinate, never reconciled
-   * by length.
+   * it and writes the raw output wholesale from the folded response, so
+   * debris a crash left in it is rewritten, never reconciled by length.
    */
   it.effect.each([
-    { name: 'missing file', seed: null },
-    { name: 'canonical debris', seed: 'canonical' },
-    { name: 'cycle debris', seed: 'cycle' },
+    { name: 'missing file', seed: false },
+    { name: 'canonical debris', seed: true },
   ])(
     'rewrites a reprocessed response from its coordinate ($name)',
     ({ seed }) =>
@@ -1277,17 +1177,13 @@ describe('an interrupted reflection run', () => {
           0,
           'afterResponse',
         );
-        // The response row is committed; its cycle file is not yet written.
+        // The response row is committed; the raw output is not yet written.
         expect(halted.lastTurn).not.toBeNull();
         const canonical = canonicalOutputOf(session, runId, halted.round);
         yield* Effect.promise(async () => {
-          if (seed === null) return;
-          const target =
-            seed === 'canonical'
-              ? canonical
-              : join(dirname(dirname(canonical)), 'raw', 'r0', 'output.c0.xml');
-          await mkdir(dirname(target), { recursive: true });
-          await writeFile(target, 'stale bytes from the crash');
+          if (!seed) return;
+          await mkdir(dirname(canonical), { recursive: true });
+          await writeFile(canonical, 'stale bytes from the crash');
         });
 
         yield* runLoop({ runId, session, rounds: 1, resume: true });

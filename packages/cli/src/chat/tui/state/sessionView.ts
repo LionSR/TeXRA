@@ -168,7 +168,7 @@ export function ancestorPositionLabel(
   for (const ancestor of ancestors.toReversed()) {
     const run = runViewOf(view, ancestor.id);
     if (run === undefined) continue;
-    const position = flowPosition(run.flow);
+    const position = flowPosition(run.flow, run.category);
     const label =
       (position?.kind === 'round'
         ? formatFlowPositionLabel(position)

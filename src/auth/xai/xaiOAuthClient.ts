@@ -11,6 +11,7 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
 import {
   DeviceAuthorizationPending,
@@ -117,9 +118,10 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
 const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
   text: string,
 ) {
-  const raw = yield* Effect.try((): unknown => JSON.parse(text)).pipe(
-    Effect.orElseSucceed((): unknown => ({})),
-  );
+  const raw = yield* Effect.try({
+    try: (): unknown => JSON.parse(text),
+    catch: ensureError,
+  }).pipe(Effect.orElseSucceed((): unknown => ({})));
   const body: Record<string, unknown> = isObject(raw) ? raw : {};
   return body;
 });

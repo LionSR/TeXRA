@@ -30,8 +30,9 @@ import { MANIFEST } from '@tools/pluginManifest';
 export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
-  /** The registered tools this plugin provides; `@tools/registry` checks them. */
-  readonly toolNames: readonly [string, ...string[]];
+  /** The registered tools this plugin provides; `@tools/registry` checks
+   *  them. Empty only for a plugin that contributes a continuation policy. */
+  readonly toolNames: readonly [string, ...string[]] | readonly [];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard

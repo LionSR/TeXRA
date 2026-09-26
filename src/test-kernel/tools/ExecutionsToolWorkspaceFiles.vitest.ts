@@ -258,6 +258,71 @@ describe('ExecutionsTool', () => {
       ),
   );
 
+  // Regression: a wait that returned a finished child's result left the
+  // child's queued delivery pending, so the parent took the same result
+  // again as a follow-up and ran a second turn.
+  it.live(
+    'withdraws the queued delivery of a child whose result a wait returned',
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'waiting',
+            RUN_PHASE.WAITING,
+          );
+          mocks.readReport.mockResolvedValue(
+            '<subagent-result>full report</subagent-result>',
+          );
+          session.followUps.claimLive(parentRunId, 'flow');
+          const delivery = {
+            text: 'child result',
+            origin: 'subagent_result' as const,
+            deliveryId: `${childRunId}:turn:1:delivery`,
+          };
+          yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
+          expect(session.pendingFollowUps(parentRunId)).toHaveLength(1);
+
+          const waited = yield* ExecutionsTool.call({
+            path: `/executions/${childRunId}`,
+            action: 'wait',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session, runId: parentRunId, toolPolicy: {} },
+              }),
+            ),
+          );
+
+          expect(waited.output).toContain(
+            '<subagent-result>full report</subagent-result>',
+          );
+          expect(session.pendingFollowUps(parentRunId)).toEqual([]);
+          // The child loop's replayed wake finds the row consumed.
+          expect(
+            yield* session.followUps.submit(
+              parentRunId,
+              delivery,
+              'live_owner',
+            ),
+          ).toEqual({ kind: 'duplicate' });
+          expect(session.pendingFollowUps(parentRunId)).toEqual([]);
+        }),
+      ),
+  );
+
   // The blocking wait wakes on the fold's own phase move, read off the
   // session's view stream, well inside its deadline.
   it.live(

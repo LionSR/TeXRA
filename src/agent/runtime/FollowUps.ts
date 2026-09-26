@@ -35,7 +35,9 @@ import {
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
-import type { MediaAttachmentKind } from '@shared/schemas';
+import type { MediaAttachmentKind, RunId } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { subagentProgressRunId } from '@shared/subagentFollowup';
 import { RunLedger } from '@shared/session/runLedger';
 import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
@@ -56,11 +58,16 @@ import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSp
  *  instruction they carry. */
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
+  /** Whether the rows carry a message a turn answers. */
+  readonly turn: boolean;
   readonly delivered: () => string | undefined;
 }
 
 export interface ConsumedFollowUps {
   readonly state: RunState;
+  /** False when every item was a progress notice of an ended child: the
+   *  batch was consumed without a message, and no turn follows. */
+  readonly turn: boolean;
   /** The user instruction of the batch, when a user wrote one. */
   readonly instruction: string | undefined;
   readonly synthetic: boolean;
@@ -181,6 +188,20 @@ export const followUpsLayer: Layer.Layer<
       return { message: { role: 'user', content: parts }, kinds };
     });
 
+    /** A progress notice whose child run has ended: stale once its child is
+     *  terminal, so it is consumed without becoming a message. Results and
+     *  errors always deliver. */
+    const endedChildProgress = ({ content }: QueuedFollowUp): boolean => {
+      const child =
+        content.origin === 'subagent_result'
+          ? subagentProgressRunId(content.text)
+          : undefined;
+      return (
+        child !== undefined &&
+        isTerminalOutcomePhase(session.runView(child as RunId)?.status)
+      );
+    };
+
     const logFollowUps = (
       followUps: readonly QueuedFollowUp[],
       kinds: readonly MediaAttachmentKind[],
@@ -200,7 +221,9 @@ export const followUpsLayer: Layer.Layer<
       Error,
       FileSystem.FileSystem | ChildProcessSpawner
     > {
-      const followUps = batch.synthetic ? [] : batch.followUps;
+      const all = batch.synthetic ? [] : batch.followUps;
+      const followUps = all.filter((followUp) => !endedChildProgress(followUp));
+      const turn = batch.synthetic || followUps.length > 0;
       const built = yield* (
         batch.synthetic
           ? Effect.succeed({
@@ -214,14 +237,20 @@ export const followUpsLayer: Layer.Layer<
       ).pipe(
         Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps, []))),
       );
+      if (all.length > followUps.length) {
+        logger.debug(
+          `Consumed ${all.length - followUps.length} progress notice(s) of ended subagents without delivering them.`,
+        );
+      }
       return {
+        turn,
         rows: [
-          ...followUps.map((followUp) => ({
+          ...all.map((followUp) => ({
             type: 'followup.consumed' as const,
             aggregateId: rowAggregate(runId),
             followUpId: followUp.followUpId,
           })),
-          appendRow(runId, [built.message]),
+          ...(turn ? [appendRow(runId, [built.message])] : []),
         ],
         // The user's rows are durable; the transcript shows what was asked.
         delivered: () => {
@@ -248,12 +277,17 @@ export const followUpsLayer: Layer.Layer<
           // The input that recovers a failed run clears the error fact in
           // the same transaction, so a resume taken between this batch and
           // the next turn's snapshot does not read the run as still failed.
-          snapshotRow(runId, state, { runtime: { lastError: null } }),
-          stepRow(runId, state, 'turn.ready'),
+          ...(joined.turn
+            ? [
+                snapshotRow(runId, state, { runtime: { lastError: null } }),
+                stepRow(runId, state, 'turn.ready'),
+              ]
+            : []),
         ]),
       );
       return {
         state: committed,
+        turn: joined.turn,
         instruction: joined.delivered(),
         synthetic: batch.synthetic,
       };
