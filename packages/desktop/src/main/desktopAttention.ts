@@ -5,7 +5,7 @@
 // its run.
 
 import { app, Notification, type BrowserWindow } from 'electron';
-import { Context, Effect, Stream, SubscriptionRef } from 'effect';
+import { Context, Effect, Queue, Stream, SubscriptionRef } from 'effect';
 
 import type { RunId } from '@shared/schemas';
 import {
@@ -31,6 +31,8 @@ interface DesktopAttentionPortShape {
   }): void;
   /** Close project `key`'s notifications: the user is looking at it. */
   dismiss(key: string): void;
+  /** Each time a window of the app gains focus. */
+  readonly focused: Stream.Stream<void>;
 }
 
 export class DesktopAttentionPort extends Context.Service<
@@ -81,6 +83,19 @@ export function electronAttentionPort(options: {
       liveNotifications.delete(key);
       for (const notification of shown ?? []) notification.close();
     },
+    focused: Stream.callback<void>((queue) =>
+      Effect.gen(function* () {
+        const onFocus = () => {
+          Queue.offerUnsafe(queue, undefined);
+        };
+        app.on('browser-window-focus', onFocus);
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => {
+            app.off('browser-window-focus', onFocus);
+          }),
+        );
+      }),
+    ),
   };
 }
 
@@ -149,7 +164,16 @@ export const followDesktopAttention = Effect.gen(function* () {
         port.setBadgeCount(waiting);
       }
     });
-  yield* SubscriptionRef.changes(projects.state).pipe(
+  // Focus alone changes no view, yet it is when the user sees the active
+  // project: its notifications go then too.
+  const dismissActive = port.focused.pipe(
+    Stream.runForEach(() =>
+      Effect.sync(() =>
+        port.dismiss(SubscriptionRef.getUnsafe(projects.state).activeKey),
+      ),
+    ),
+  );
+  const follow = SubscriptionRef.changes(projects.state).pipe(
     Stream.switchMap(({ projects: open }) =>
       Stream.mergeAll(
         [projects.fallback(), ...open].map((project) =>
@@ -162,4 +186,5 @@ export const followDesktopAttention = Effect.gen(function* () {
     ),
     Stream.runForEach(([project, view]) => observe(project, view)),
   );
+  yield* Effect.all([follow, dismissActive], { concurrency: 'unbounded' });
 });
