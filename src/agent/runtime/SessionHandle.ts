@@ -1368,16 +1368,20 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
                   }),
             });
             if (!finalization.ok) {
-              throw new Error(
-                `Failed to persist the CANCELLED outcome for run ${runId}`,
-                { cause: finalization.error },
+              return yield* Effect.die(
+                new Error(
+                  `Failed to persist the CANCELLED outcome for run ${runId}`,
+                  { cause: finalization.error },
+                ),
               );
             }
             // A failed settle or a rolled-back closure must still pass
             // through the owner's release choreography after recording the
             // terminal outcome.
-            if (Exit.isFailure(open)) throw Cause.squash(open.cause);
-            if (closureFailure !== undefined) throw closureFailure;
+            if (Exit.isFailure(open))
+              return yield* Effect.die(Cause.squash(open.cause));
+            if (closureFailure !== undefined)
+              return yield* Effect.die(closureFailure);
           }),
         );
       });

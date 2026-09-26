@@ -470,11 +470,13 @@ function executeWorkflowScriptTool(
                 // one runs nowhere, so "already in progress" would send the
                 // model to wait on a run that never reports.
                 if (heldElsewhereBy(error) !== null) return alreadyRunning();
-                throw workflowScriptToolError(
-                  new ToolError(
-                    `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                return yield* Effect.fail(
+                  workflowScriptToolError(
+                    new ToolError(
+                      `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                    ),
+                    scriptPath,
                   ),
-                  scriptPath,
                 );
               }
 

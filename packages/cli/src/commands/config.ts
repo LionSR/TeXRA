@@ -13,6 +13,7 @@ import { unique } from '@utils/core';
 
 import {
   CliUsageError,
+  failUsage,
   readCliAmbientState,
   type CliContext,
 } from '../runtime/cliContext';
@@ -116,17 +117,17 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     customRequested,
   ].filter(Boolean).length;
   if (workspaceChoices > 1) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Choose one workspace roster: --inherit, --all, --team, or the custom --workflow/--tool-use lists.',
     );
   }
   if (input.defaultTeam && input.clearDefault) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Use either --default-team or --clear-default, not both.',
     );
   }
   if (input.defaultAgent && input.clearDefaultAgent) {
-    throw new CliUsageError(
+    return yield* failUsage(
       'Use either --default-agent or --clear-default-agent, not both.',
     );
   }
@@ -166,7 +167,7 @@ const configureAgentRoster = Effect.fn('configureAgentRoster')(function* (
     );
     if (!selected) {
       const names = available.map((agent) => agent.name).join(', ');
-      throw new CliUsageError(
+      return yield* failUsage(
         `Default chat agent "${input.defaultAgent}" is not in the effective workspace roster. Available agents: ${names || '(none)'}.`,
       );
     }
