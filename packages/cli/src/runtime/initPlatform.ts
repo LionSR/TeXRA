@@ -372,12 +372,12 @@ export function initCliPlatform(
             },
           });
 
-          // Kill agent-spawned OS children before the process dies, exactly as the
-          // extension and desktop hosts do. Background `bash` runs are spawned
-          // `detached` (their own process group, see execUtils) so they survive
-          // `texra` exiting and can never deliver their follow-up result — without
-          // this drain they are orphaned. The usage log is drained later still,
-          // by the runtime disposal these handlers end with.
+          // Stop agent-spawned OS children before the process exits, exactly as
+          // the extension and desktop hosts do. A background `bash` run is its
+          // own process group (see execUtils), which its lifeline kills only
+          // once `texra` is gone; this drain stops it first, through its release,
+          // so its run settles. The usage log is drained later still, by the
+          // runtime disposal these handlers end with.
           registerRuntimeShutdownHandlers(lifecycle, {
             // The session is opened lazily (`sessionOpen`); a process that never
             // asked for one has nothing to flush.

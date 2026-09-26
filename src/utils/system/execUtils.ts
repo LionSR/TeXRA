@@ -25,6 +25,11 @@ const CHANNEL = 'execUtils';
 const FORCE_KILL_AFTER = Duration.seconds(5);
 const DEFAULT_MAX_BUFFER = 100_000_000;
 const MAX_LOGGED_STDERR = 150;
+/** The sentinel prefixed to a POSIX shell's script, reading the lifeline on
+ *  fd 3. On its own line, so the shell's error messages quote only the
+ *  command. */
+const LIFELINE_SENTINEL =
+  '( (read x <&3; kill -s KILL 0) >/dev/null 2>&1 & ); exec 3<&-\n';
 
 function normalizeOutput(text: string | null | undefined): string {
   return text?.trim() ?? '';
@@ -201,14 +206,24 @@ function buildCommand(
       ? toWindowsCommand(argv0, args, { ...common, detached })
       : ChildProcess.make(argv0, args, { ...common, detached });
   }
-  // A shell that can be stopped runs as its own process group, so the stop
-  // reaches piped children and backgrounded jobs. Without a deadline or a
-  // signal it stays in ours, which avoids orphans on a hard host kill.
-  const stoppable = (options.timeout ?? 0) > 0 || options.signal !== undefined;
-  return ChildProcess.make(command, {
+  // cmd.exe has neither the sentinel's syntax nor POSIX process groups; the
+  // spawner's `taskkill /T` reaches the tree on a stop.
+  if (IS_WINDOWS) return ChildProcess.make(command, { ...common, shell: true });
+  // A POSIX shell runs as its own process group, so a stop reaches piped
+  // children and backgrounded jobs, and carries a lifeline: fd 3 is a pipe
+  // only this process holds the write end of. The sentinel below, forked into
+  // the group and out of the shell's job table (so a `wait` in the command
+  // does not wait on it), blocks reading it; when this process dies by any
+  // means, a SIGKILL or a crash included, the kernel closes the write end and
+  // the sentinel kills the whole group. The shell closes its own copy before
+  // the command runs, so nothing the command starts inherits it. A stop is
+  // still the scope's release (SIGTERM to the group, SIGKILL after five
+  // seconds), which ends the sentinel with the rest of the group.
+  return ChildProcess.make(`${LIFELINE_SENTINEL}${command}`, {
     ...common,
     shell: true,
-    detached: stoppable && !IS_WINDOWS,
+    detached: true,
+    additionalFds: { fd3: { type: 'input' } },
   });
 }
 
@@ -370,40 +385,20 @@ const awaitOutcome = Effect.fnUntraced(function* (
   return yield* Effect.raceFirst(bounded, aborted);
 });
 
-/**
- * Spawn the command in the caller's scope and read how it ended. A command
- * that ends by itself is unreferenced first, so the scope's release skips the
- * clean-exit group terminate.
- */
+/** Spawn the command in the caller's scope and read how it ended. */
 const runSpawned = Effect.fnUntraced(function* (
   command: string | string[],
   options: ExecuteCommandBaseOptions,
   env: Record<string, string | undefined>,
-  channel: string,
 ) {
   const captured: Captured = { stdout: '', stderr: '' };
-  const spawned = yield* buildCommand(command, options, env).pipe(
-    Effect.map((handle) => ({ _tag: 'Spawned', handle }) as const),
-    Effect.catch((error: PlatformError) =>
-      Effect.succeed({ _tag: 'SpawnFailed', error } as const),
-    ),
+  const outcome: Outcome = yield* buildCommand(command, options, env).pipe(
+    Effect.matchEffect({
+      onFailure: (error: PlatformError) =>
+        Effect.succeed<Outcome>({ _tag: 'SpawnFailed', error }),
+      onSuccess: (handle) => awaitOutcome(handle, captured, options),
+    }),
   );
-  const outcome: Outcome =
-    spawned._tag === 'SpawnFailed'
-      ? spawned
-      : yield* awaitOutcome(spawned.handle, captured, options);
-  if (
-    spawned._tag === 'Spawned' &&
-    (outcome._tag === 'Exited' || outcome._tag === 'Signalled')
-  ) {
-    yield* spawned.handle.unref.pipe(
-      Effect.catch((error: PlatformError) =>
-        Effect.logWarning(
-          `Could not unreference an exited command: ${error.reason._tag}`,
-        ).pipe(withLogChannel(channel)),
-      ),
-    );
-  }
   return {
     outcome,
     result: resultFromOutcome(outcome, captured, command, options),
@@ -421,11 +416,12 @@ const runSpawned = Effect.fnUntraced(function* (
  * The process lives exactly as long as this call's scope. A deadline, an
  * abort, an output-limit trip or an interrupted fiber closes that scope, and
  * that is the whole teardown: SIGTERM to the process (its group when it has
- * one), SIGKILL after five seconds, and a join on its exit. The array form
- * runs in our process group unless `killProcessTree` asks for its own; the
- * string form runs its shell in its own group whenever it can be stopped. A
- * command that ends by itself is unreferenced first, so a clean exit leaves
- * the jobs a detached shell backgrounded running, as a shell would.
+ * one), SIGKILL after five seconds, and a join on its exit. A command that
+ * ends by itself gets the same release, so jobs its shell backgrounded end
+ * with it. The array form runs in our process group unless
+ * `killProcessTree` asks for its own; on POSIX the string form runs its shell
+ * in its own group, on a lifeline that ends the group if this process dies
+ * without running the release.
  */
 export const executeCommand = Effect.fn('executeCommand')(function* (
   command: string | string[],
@@ -462,7 +458,7 @@ export const executeCommand = Effect.fn('executeCommand')(function* (
   }
 
   const { outcome, result } = yield* Effect.scoped(
-    runSpawned(command, options, env, channel),
+    runSpawned(command, options, env),
   );
   if (outcome._tag === 'SpawnFailed') {
     yield* logError(result.stderr);

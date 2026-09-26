@@ -43,9 +43,11 @@
  *   hooked SIGHUP, SIGINT and SIGTERM: a host that dies from an unhandled
  *   signal (the CLI on SIGHUP when its terminal closes, the extension host or
  *   Electron main on a bare SIGTERM) or from SIGKILL still leaves its
- *   group-leading children running. Handling those signals belongs to each
- *   host's signal owner (the CLI's in `initPlatform.ts`), which ends in a
- *   normal exit and so reaches this listener.
+ *   group-leading children running, except a POSIX shell `executeCommand`
+ *   starts, whose group dies with this process through its lifeline (see
+ *   execUtils). Handling those signals belongs to each host's signal owner
+ *   (the CLI's in `initPlatform.ts`), which ends in a normal exit and so
+ *   reaches this listener.
  *
  * The layer's release only removes the `exit` listener and never kills a
  * live child: `nodePlatformServices` is also provided per call (the CLI

@@ -174,6 +174,15 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A command the agent was running now ends when TeXRA is force-quit or
+  crashes** — a shell command kept running after the process that started it
+  was killed (a force-quit, an out-of-memory kill, or a crash), so it could
+  finish its work unwatched, and resuming the session could run it a second
+  time while the first copy was still going. On macOS and Linux each command
+  now carries a link to the TeXRA process that started it and stops the
+  moment that process is gone. Jobs a command leaves running in the
+  background now end with it; use `run_in_background` for work that should
+  keep going.
 - **Turning telemetry off now stops all usage reporting** — rounds run on a
   ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
   out, on the grounds that they metered a plan cap. Nothing has enforced
