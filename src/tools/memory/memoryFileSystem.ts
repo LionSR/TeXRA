@@ -45,7 +45,7 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { onFileLanes } from '@utils/files/fileLanes';
+import { onFileLane } from '@utils/files/fileLanes';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,
@@ -107,32 +107,20 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
 );
 
 /**
- * Run a memory command on the lanes of the files it touches (`onFileLanes`):
- * memory is storage parallel runs edit at once, and each edit rewrites a file
- * whole. A path that names no memory file takes no lane; the command
- * refuses it.
+ * Run a memory command on the memory tree's lane (`onFileLane`), one per
+ * storage root. Parallel runs edit memory at once, each edit rewrites a file
+ * whole, and delete and rename act on whole directories, so a per-file lane
+ * would let a directory move race a create beneath it; memory commands are
+ * small and rare, so one lane for the tree costs nothing that matters.
  */
-export function onMemoryFileLanes(
-  displayPaths: readonly (string | null | undefined)[],
-) {
-  return <A, E, R>(
-    self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R | StorageFs | FileSystem.FileSystem> =>
-    Effect.flatMap(StorageFs, ({ root }) =>
-      root === undefined
-        ? self
-        : self.pipe(
-            onFileLanes(
-              displayPaths.flatMap((display) => {
-                if (display == null) return [];
-                const storage = Result.try(() => displayToStoragePath(display));
-                return Result.isSuccess(storage)
-                  ? [path.join(root, storage.success)]
-                  : [];
-              }),
-            ),
-          ),
-    );
+export function onMemoryTreeLane<A, E, R>(
+  self: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R | StorageFs | FileSystem.FileSystem> {
+  return Effect.flatMap(StorageFs, ({ root }) =>
+    root === undefined
+      ? self
+      : self.pipe(onFileLane(path.join(root, WORKSPACE_STORAGE_LAYOUT.memory))),
+  );
 }
 
 /** Write one memory file atomically, frontmatter first. */

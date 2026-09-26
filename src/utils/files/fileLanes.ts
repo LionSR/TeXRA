@@ -34,22 +34,14 @@ function realPathOf(
     );
 }
 
-/** Run `self` holding the lane of every file in `files`, taken in one sorted
- *  order so two operations over overlapping files never wait on each other. */
-export function onFileLanes(files: readonly string[]) {
+/** Run `self` holding the lane of `file`. */
+export function onFileLane(file: string) {
   return <A, E, R>(
     self: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E, R | FileSystem.FileSystem> =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const keys = yield* Effect.forEach(files, (file) =>
-        realPathOf(fs, nodePath.resolve(file)),
-      );
-      return yield* [...new Set(keys)]
-        .sort()
-        .reduceRight<Effect.Effect<A, E, R>>(
-          (inner, key) => inner.pipe(withPerKeyLane(fileLanes, key)),
-          self,
-        );
-    });
+    Effect.flatMap(FileSystem.FileSystem, (fs) =>
+      Effect.flatMap(realPathOf(fs, nodePath.resolve(file)), (key) =>
+        self.pipe(withPerKeyLane(fileLanes, key)),
+      ),
+    );
 }
