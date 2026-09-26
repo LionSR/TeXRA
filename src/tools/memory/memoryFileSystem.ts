@@ -45,13 +45,13 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { onFileLane } from '@utils/files/fileLanes';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,
   splitContentLines,
 } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 const FRONTMATTER_SCAN_BYTES = 16 * 1024;
 const PREVIEW_SCAN_BYTES = 64 * 1024;
@@ -106,20 +106,24 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
   },
 );
 
+const memoryTreeLanes = new Map<string, PerKeyLane>();
+
 /**
- * Run a memory command on the memory tree's lane (`onFileLane`), one per
- * storage root. Parallel runs edit memory at once, each edit rewrites a file
- * whole, and delete and rename act on whole directories, so a per-file lane
- * would let a directory move race a create beneath it; memory commands are
- * small and rare, so one lane for the tree costs nothing that matters.
+ * Run a memory mutation on the memory tree's lane, one per storage root: the
+ * memory tool's commands and the settings view's pin and delete alike.
+ * Parallel runs edit memory at once, each edit rewrites a file whole, and
+ * delete and rename act on whole directories, so a per-file lane would let a
+ * directory move race a create beneath it; memory mutations are small and
+ * rare, so one lane for the tree costs nothing that matters. Every caller
+ * names the tree through the host's own storage root, so the root is the key.
  */
 export function onMemoryTreeLane<A, E, R>(
   self: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E, R | StorageFs | FileSystem.FileSystem> {
+): Effect.Effect<A, E, R | StorageFs> {
   return Effect.flatMap(StorageFs, ({ root }) =>
     root === undefined
       ? self
-      : self.pipe(onFileLane(path.join(root, WORKSPACE_STORAGE_LAYOUT.memory))),
+      : self.pipe(withPerKeyLane(memoryTreeLanes, root)),
   );
 }
 
