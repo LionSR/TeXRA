@@ -309,7 +309,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.toggleBottomBar',
     host: 'desktop',
-    title: 'Toggle Bottom Bar',
+    title: 'Toggle Bottom Panel',
     category: 'View',
     keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
   },
@@ -337,7 +337,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.showFirstRunWalkthrough',
     host: 'desktop',
-    title: 'Show Startup Team Chooser',
+    title: 'Choose Agent Team',
     category: 'Help',
   },
   {

@@ -115,6 +115,21 @@ export function createReviewPane(): ReviewPaneController {
   }
 
   function rerender(): void {
+    if (entries.size === 0) {
+      // Nothing to count, filter, or pick: one explanation, not a zeroed
+      // toolbar beside an empty file list.
+      render(
+        renderEmptyState({
+          icon: 'plus-minus',
+          title: 'No changes to review',
+          body: 'When an agent proposes edits to your files, the diffs appear here.',
+          headingTag: 'h3',
+          className: 'desktop-review-empty',
+        }),
+        element,
+      );
+      return;
+    }
     const visible = visibleEntries();
     const selected = selectedPath ? entries.get(selectedPath) : undefined;
     let additions = 0;
@@ -144,7 +159,7 @@ export function createReviewPane(): ReviewPaneController {
                 ? diffView
                 : renderEmptyState({
                     icon: 'plus-minus',
-                    title: 'No changes to review',
+                    title: 'Select a file to see its changes',
                     headingTag: 'h3',
                     className: 'desktop-review-empty',
                   })

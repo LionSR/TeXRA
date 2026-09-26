@@ -142,6 +142,7 @@ export class SessionDrawer extends LitElement {
           <wa-input
             size="s"
             placeholder="Filter sessions"
+            aria-label="Filter sessions"
             .value=${live(search)}
             @input=${this.handleSearchInput}
           >

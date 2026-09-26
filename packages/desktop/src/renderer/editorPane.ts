@@ -30,6 +30,7 @@ import { renderLoadingState } from '@ui/wa/loadingState';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import { getDesktopChromeFontSize } from './desktopTypography';
+import { createEditorFileNotice } from './editorFileNotice';
 import {
   buildEditorDirectoryEntries,
   type EditorFileEntry,
@@ -90,7 +91,11 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
   treeHost.className = 'desktop-editor-tree';
   const editorHost = document.createElement('div');
   editorHost.className = 'desktop-editor-surface';
-  element.append(editorHost);
+  const notice = createEditorFileNotice({
+    onError: callbacks.onError,
+    retrySave: (path) => void open(path).then(save),
+  });
+  element.append(notice.element, editorHost);
 
   let disposed = false;
   const closedPaths = new Set<string>();
@@ -346,14 +351,7 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         });
         return editor;
       } catch (error) {
-        callbacks.onError(error);
-        render(
-          html`<wa-callout class="desktop-editor-tree-empty" variant="danger">
-            ${waIcon('triangle-exclamation', { slot: 'icon' })} The editor
-            failed to load.
-          </wa-callout>`,
-          editorHost,
-        );
+        notice.report(undefined, 'load', error);
         return undefined;
       } finally {
         editorLoad = undefined;
@@ -488,9 +486,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
       if (!model || disposed || request !== latestOpenRequest) return;
       target.setModel(model);
       openPath = path;
+      notice.clear(path);
       renderTree();
     } catch (error) {
-      callbacks.onError(error);
+      if (!disposed) notice.report(path, 'open', error);
     }
   }
 
@@ -565,9 +564,10 @@ export function createEditorPane(callbacks: EditorPaneCallbacks): EditorPane {
         return;
       dirtyPaths.delete(path);
       callbacks.onDirtyChange(path, false);
+      notice.clear(path);
       renderTree();
     } catch (error) {
-      callbacks.onError(error);
+      if (!disposed) notice.report(path, 'save', error);
     } finally {
       const remainingWrites = (activeWrites.get(path) ?? 1) - 1;
       if (remainingWrites === 0) activeWrites.delete(path);

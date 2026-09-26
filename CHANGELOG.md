@@ -195,6 +195,16 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A command the agent was running now ends when TeXRA is force-quit or
+  crashes** — a shell command kept running after the process that started it
+  was killed (a force-quit, an out-of-memory kill, or a crash), so it could
+  finish its work unwatched, and resuming the session could run it a second
+  time while the first copy was still going. On macOS and Linux each command
+  now carries a link to the TeXRA process that started it and stops the
+  moment that process is gone. Jobs a command leaves running in the
+  background now end with it; use `run_in_background` for work that should
+  keep going.
+
 - **CLI sign-in always shows the sign-in URL** — `texra login`, `/login`, and
   the account panel now print the sign-in link before opening a browser, and
   keep it on screen while waiting. If the browser that opens is signed in to a

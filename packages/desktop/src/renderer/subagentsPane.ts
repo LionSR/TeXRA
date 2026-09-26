@@ -23,7 +23,7 @@ export function subagentsPaneTemplate(
     model.selected == null ? undefined : model.view.runs.get(model.selected);
   if (!selected) {
     return html`<div class="shell-subagents-empty">
-      Select a task to see the agents it dispatched.
+      Select a task to see its subagents.
     </div>`;
   }
   const rootId = selected.ancestors[0]?.id ?? selected.id;
@@ -49,7 +49,8 @@ export function subagentsPaneTemplate(
         .root=${rootId}
       ></run-tabs>
       <div class="shell-subagents-note">
-        Approvals stay in the child's request panel; this tab only navigates.
+        Select a subagent to open its conversation and answer its requests
+        there.
       </div>
     </div>
   `;

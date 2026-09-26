@@ -9,7 +9,10 @@ import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
 import { presentRunFailure, type SessionHandle } from '@agent/runtime';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
 import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
@@ -640,13 +643,10 @@ export function createDesktopHostRequests(
             session.roots.workspaceState,
             session.roots.storage,
           );
+          const approval = launchApprovalOptions(request, session.approvals);
           yield* run
-            .runValidated(launch)
-            .pipe(
-              Effect.mapError((cause) =>
-                hostFailure('run.runValidated', cause),
-              ),
-            );
+            .runValidated(launch, approval)
+            .pipe(Effect.mapError((e) => hostFailure('run.runValidated', e)));
           return done;
         }
         case 'extractFigures':

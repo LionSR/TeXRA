@@ -201,7 +201,7 @@ export function shellSidebarTemplate(
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <header class="shell-sidebar-brand">
-        <div class="shell-sidebar-logo" aria-hidden="true">T</div>
+        <div class="shell-sidebar-logo" aria-hidden="true"></div>
         <span class="shell-sidebar-product">TeXRA</span>
       </header>
 
@@ -284,7 +284,7 @@ export function subagentsButtonTemplate(
       class="shell-subagents-open btn-secondary"
       appearance="outlined"
       size="s"
-      title="Open the ${label} tab on this conversation's tree"
+      title="Show this task's subagents"
       @click=${onOpen}
     >
       ${waIcon(icon, { slot: 'start' })}
@@ -412,7 +412,7 @@ export function workbenchTabsTemplate(
     <div
       class="shell-workbench-tabs"
       role="tablist"
-      aria-label=${`${placement} workbench tabs`}
+      aria-label=${`${placement === 'right' ? 'Side' : 'Bottom'} panel tabs`}
       @keydown=${(event: KeyboardEvent) =>
         handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
@@ -542,8 +542,8 @@ export function workbenchTabsTemplate(
       ${renderIconActionButton({
         id: `${workbenchPanelDomId(placement, session)}-hide`,
         icon: hideDirection,
-        label: `Hide ${placement} panel`,
-        tooltip: `Hide ${placement} panel`,
+        label: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
+        tooltip: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
         className: 'shell-workbench-close icon-button focus-ring-inset',
         size: 'm',
         onClick: callbacks.onHide,
