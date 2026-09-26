@@ -14,7 +14,7 @@ import { recordToolFileRead } from '@tools/fileInteractions';
 import { onFileLane } from '@utils/files/fileLanes';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
-import { applyPatchToText } from '@utils/text/diff';
+import { mergeEditOnto } from '@utils/text/unifiedDiff';
 
 interface WriteApprovedContentResult {
   appliedContent: string;
@@ -24,7 +24,7 @@ interface WriteApprovedContentResult {
 /**
  * The approved edit no longer applies: the file changed on disk while the
  * edit waited for approval (another run, a subagent, the user's editor), and
- * the three-way merge of the approved change onto that version failed, or the
+ * the approved change overlaps a change made to that version, or the
  * file was deleted or created meanwhile. Nothing was written.
  */
 class ApprovedEditConflictError extends ToolError {
@@ -83,15 +83,11 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       if (original === finalContent) return unchanged;
       let appliedContent = finalContent;
       if (original !== null && baseContent !== original) {
-        const { content, results } = applyPatchToText(
-          original,
-          finalContent,
-          baseContent,
-        );
-        if (!results.every(Boolean)) {
+        const merged = mergeEditOnto(original, finalContent, baseContent);
+        if (merged === undefined) {
           return yield* Effect.fail(new ApprovedEditConflictError(path));
         }
-        appliedContent = content;
+        appliedContent = merged;
       }
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent, baseContent };

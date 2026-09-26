@@ -167,6 +167,29 @@ describe('shared text-diff caller fixtures', () => {
           ),
         ).toBe('rewritten\nby another\nwriter\n');
 
+        // A concurrent edit of the same line is a conflict even where the
+        // approved change could still be placed fuzzily around it.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': 'title\nmode=green\nend\n',
+          }),
+        );
+        const overlapping = yield* approvedWriteConflict(
+          'paper.tex',
+          'title\nmode=red\nend\n',
+          'title\nmode=blue\nend\n',
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(overlapping).toBeDefined();
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('title\nmode=green\nend\n');
+
         // So is a deletion, even of a file that was empty when proposed: the
         // approved content does not recreate it.
         yield* Effect.tryPromise(() => installFakePlatform({}));
