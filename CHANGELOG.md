@@ -443,12 +443,15 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   card at a time (setup, then "No LaTeX files yet") and at most one warning
   above the composer; the "TeXRA account — Sign in" card is gone (sign in
   from Settings). A missing tool is named in one sentence that says what
-  TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
-  toggles are replaced by an "Auto-approving …" chip that appears only while
-  a grant from an approval card is on; click it to go back to asking. Open
+  TeXRA can't do without it. Open
   dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
   gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
+- **Restored: the auto-approve switches in the run header.** A live run's
+  header has switches for edits, commands and agent work again, so you can
+  turn auto-approval on mid-run before stepping away instead of waiting for
+  the next approval card. In the narrow sidebar they are checkable items at
+  the top of the run's ⋯ menu.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of
   the run's ⋯ menu, asks for confirmation, and is not offered while the run
