@@ -10,9 +10,9 @@ import { defineConfig } from '@playwright/test';
  * Run via:
  *   pnpm --filter @texra/desktop test:e2e
  *
- * Baseline screenshots committed under tests/e2e/__screenshots__/ are diffed
- * against captures produced during the test run; failed comparisons land in
- * tests/e2e/test-results/ (gitignored).
+ * The committed baseline under tests/e2e/__screenshots__/ is a reference for
+ * reviewers, refreshed with TEXRA_UPDATE_E2E_SCREENSHOTS=1 and never diffed;
+ * each run's captures land in tests/e2e/test-results/ (gitignored).
  */
 export default defineConfig({
   testDir: './tests/e2e',

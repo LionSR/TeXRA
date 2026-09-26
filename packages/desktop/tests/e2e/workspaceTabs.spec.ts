@@ -68,6 +68,34 @@ async function openSettings(): Promise<void> {
 }
 
 /**
+ * Closes the Settings popup (its × or Escape) and waits for `wa-after-hide`:
+ * the dialog keeps `open === true` until its hide animation ends, so the
+ * event, registered before the close, is the completion signal.
+ */
+async function closeSettings(via: 'button' | 'escape'): Promise<void> {
+  const dialog = launched.page.locator(SETTINGS_DIALOG);
+  // Install the listener in its own awaited step so the close cannot fire
+  // before it is registered.
+  await dialog.evaluate((element) => {
+    const host = element as HTMLElement & { hidden$?: Promise<void> };
+    host.hidden$ = new Promise<void>((resolve) => {
+      const onHide = (event: Event) => {
+        if (event.target !== element) return;
+        element.removeEventListener('wa-after-hide', onHide);
+        resolve();
+      };
+      element.addEventListener('wa-after-hide', onHide);
+    });
+  });
+  if (via === 'escape') await launched.page.keyboard.press('Escape');
+  else await dialog.locator('.desktop-settings-close').click();
+  await dialog.evaluate(
+    (element) => (element as HTMLElement & { hidden$?: Promise<void> }).hidden$,
+  );
+  await expect(dialog).toHaveJSProperty('open', false);
+}
+
+/**
  * Opens a tool from a visible workbench's "+" menu. With no workbench
  * showing, the side-panel toggle opens one first (on Files).
  */
@@ -228,8 +256,7 @@ test('opens settings as a popup over the permanent conversation', async () => {
   ).toHaveCount(0);
 
   // Closing the popup leaves the task canvas mounted and visible.
-  await page.keyboard.press('Escape');
-  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', false);
+  await closeSettings('escape');
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
@@ -382,7 +409,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   });
   const shortcuts = page.locator('shortcuts-tab');
   await expect(
-    shortcuts.getByText('Toggle Bottom Bar', { exact: true }),
+    shortcuts.getByText('Toggle Bottom Panel', { exact: true }),
   ).toBeVisible();
   await expect(
     shortcuts.getByText('Toggle Side Panel', { exact: true }),
@@ -399,8 +426,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   );
 
   await recorder.evaluate((element) => (element as HTMLElement).blur());
-  await page.locator(`${SETTINGS_DIALOG} .desktop-settings-close`).click();
-  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', false);
+  await closeSettings('button');
   await page.keyboard.press(customShortcut);
   await expect(
     page.locator('wa-dialog.desktop-command-palette'),

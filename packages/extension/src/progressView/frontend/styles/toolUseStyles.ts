@@ -131,7 +131,7 @@ export const toolUseStyles = css`
    * wa-details' own summary click handler recognizes it as interactive and
    * skips its toggle; reset native button chrome to keep the prior
    * link-like appearance. */
-  :is(.proposal-restore-link, .spill-artifact-link) {
+  .proposal-restore-link {
     background: none;
     border: none;
     margin: 0;
@@ -148,12 +148,12 @@ export const toolUseStyles = css`
   }
 
   /* Radius only — the ring comes from focusRingStyles. */
-  :is(.proposal-restore-link, .spill-artifact-link):focus-visible {
+  .proposal-restore-link:focus-visible {
     border-radius: var(--border-radius-small);
   }
 
   /* Summary actions (in summary row and body) */
-  :is(.proposal-restore-link, .spill-artifact-link):hover {
+  .proposal-restore-link:hover {
     text-decoration: underline;
   }
 

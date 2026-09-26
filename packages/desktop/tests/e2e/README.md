@@ -1,8 +1,9 @@
 # Desktop e2e screenshot harness
 
-A small Playwright suite that launches the TeXRA Electron app and captures
-screenshots of the three primary shell routes. Used for visual sanity-checking
-during UI work.
+A small Playwright suite that launches the TeXRA Electron app, drives the
+shell (projects, workbench tabs, sessions, settings persistence), and captures
+the startup screen. Used for behavior checks and visual sanity-checking during
+UI work.
 
 ## Run
 
@@ -19,9 +20,10 @@ the default `npm test` flow.
 
 ## Baselines
 
-Baseline PNGs in `tests/e2e/__screenshots__/` are committed to the repo so
-reviewers have a fixed reference. Normal test runs never modify them. To
-refresh after a deliberate UI change:
+The baseline PNG in `tests/e2e/__screenshots__/` (`startup.png`) is committed
+so reviewers have a fixed reference of what a fresh profile sees. Nothing
+diffs against it; normal test runs never modify it. To refresh after a
+deliberate UI change:
 
 1. Run
    `TEXRA_UPDATE_E2E_SCREENSHOTS=1 pnpm --filter @texra/desktop test:e2e`.

@@ -327,6 +327,7 @@ export const buttonStyles: CSSResult = css`
     padding: 0;
     background: transparent;
     color: var(--color-text-link);
+    font-weight: var(--wa-font-weight-normal);
     /* Used inline in prose sentences, so underline at rest like a real link
        (hue alone is not a reliable 3:1 cue across host themes). */
     text-decoration: underline;
@@ -362,27 +363,25 @@ export const buttonStyles: CSSResult = css`
     margin-inline-start: auto;
   }
 
+  /* Send is the view's primary action, so it wears the one accent fill that
+     .btn-primary wears (the editor's button color in VS Code). */
   .action-icon-button.composer-primary-action::part(base) {
     border-radius: var(--wa-border-radius-circle);
-    background: var(--wa-color-text-normal);
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-brand-fill-loud);
+    color: var(--wa-color-brand-on-loud);
   }
 
   .action-icon-button.composer-primary-action::part(base):hover {
-    background: color-mix(
-      in srgb,
-      var(--wa-color-text-normal) 86%,
-      var(--wa-color-surface-default)
-    );
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-button-hover, var(--wa-color-brand-fill-loud));
+    color: var(--wa-color-brand-on-loud);
   }
 
   .action-icon-button.composer-primary-action[disabled]::part(base):is(
       :hover,
       :active
     ) {
-    background: var(--wa-color-text-normal);
-    color: var(--wa-color-surface-default);
+    background: var(--wa-color-brand-fill-loud);
+    color: var(--wa-color-brand-on-loud);
   }
 
   @media (prefers-reduced-motion: reduce) {

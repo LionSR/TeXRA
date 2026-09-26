@@ -37,15 +37,15 @@ const TEXRA_APPROVAL_UNPRESENTABLE_MESSAGE =
 const TEXRA_APPROVAL_POLICY_COPY = {
   ask: {
     label: 'Ask',
-    description: 'Ask before commands and edits.',
+    description: 'Ask before shell commands and file edits.',
   },
   never: {
-    label: 'Never',
-    description: 'Deny Bash commands and tool edits.',
+    label: 'Block',
+    description: 'Block shell commands and file edits.',
   },
   yolo: {
     label: 'Auto-approve',
-    description: 'Allow Bash commands and tool edits without approval.',
+    description: 'Allow shell commands and file edits without asking.',
   },
 } as const satisfies Record<
   TexraApprovalPolicy,

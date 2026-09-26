@@ -10,7 +10,9 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import {
@@ -139,6 +141,34 @@ describe('terminal result event', () => {
       yield* settle;
 
       expectSingleResult(results, ctx, { outcome: 'completed' });
+    }),
+  );
+
+  // The launch-time approval choice rides on onRun: it must be in force
+  // before the run's first step, or an approval could open ahead of it.
+  it.effect('an Auto-approve launch is bypassed before the run starts', () =>
+    Effect.gen(function* () {
+      const { ctx } = setupResultCase();
+      const { approvals } = ctx.session;
+      const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
+      let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
+      yield* runFlow(
+        ctx,
+        () =>
+          Effect.sync(() => {
+            atFirstStep = approvals.bypassesFor(ctx.runId);
+            return completedRun(ctx);
+          }),
+        launchApprovalOptions(
+          { kind: 'launch', launch, instruction: '' },
+          approvals,
+        ),
+      );
+      expect(atFirstStep).toEqual({
+        bash: true,
+        toolEdit: true,
+        superYolo: true,
+      });
     }),
   );
 

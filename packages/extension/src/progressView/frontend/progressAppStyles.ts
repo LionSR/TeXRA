@@ -5,6 +5,8 @@ import { css } from 'lit';
 import { visuallyHiddenStyles } from '@ui/styles';
 import { buttonStyles } from '@ui/styles/controlStyles';
 
+import { heroStyles } from './components/NewTaskHero';
+
 /**
  * Layout for the `<progress-app>` shell: the 38px header, the body, the
  * docked list of the wide editor tab, and the empty state. The docking is
@@ -216,49 +218,7 @@ export const progressAppStyles = css`
     padding: var(--wa-space-l) var(--wa-space-xs);
   }
 
-  .hero {
-    display: grid;
-    justify-items: center;
-    gap: var(--wa-space-2xs);
-    padding: 0 var(--wa-space-xs);
-    text-align: center;
-  }
-
-  .hero-mark {
-    display: grid;
-    place-items: center;
-    width: 42px;
-    height: 42px;
-    border-radius: var(--wa-border-radius-l);
-    border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
-    background: var(--wa-color-brand-fill-quiet);
-    color: var(--wa-color-brand-on-quiet);
-    font-size: 18px;
-  }
-
-  .hero h1 {
-    margin: var(--wa-space-3xs) 0 0;
-    font-size: var(--font-size-h2, 1.25em);
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.005em;
-    line-height: var(--line-height-heading, 1.25);
-  }
-
-  .hero p {
-    margin: 0;
-    max-width: 34ch;
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal, 1.5);
-    color: var(--color-text-secondary);
-  }
-
-  .hero-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--wa-space-2xs);
-    margin-top: var(--wa-space-2xs);
-  }
+  ${heroStyles}
 
   .context::part(base) {
     border-radius: var(--wa-border-radius-m);

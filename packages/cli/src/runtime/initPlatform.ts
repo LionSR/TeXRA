@@ -378,10 +378,13 @@ export function initCliPlatform(
 
           // The shutdown is this scope's close, its finalizers run in the
           // reverse of their registration: every session closes first (its
-          // runs stopped and settled — background `bash` children, spawned
-          // `detached` in their own process group, killed with them — and its
-          // artifacts flushed), then the project scope with a final NDJSON
-          // flush, and the runtime last, draining the usage log.
+          // runs stopped and settled, its artifacts flushed). That stops
+          // agent-spawned OS children before the process exits, as the
+          // extension and desktop hosts do: a background `bash` run is its own
+          // process group (see execUtils), which its lifeline kills only once
+          // `texra` is gone, and this close stops it first so its run settles.
+          // Then the project scope with a final NDJSON flush, and the runtime
+          // last, draining the usage log.
           const scope = Scope.makeUnsafe();
           yield* Scope.addFinalizer(scope, disposeCliProcessRuntime);
           yield* Scope.addFinalizer(

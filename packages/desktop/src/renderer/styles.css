@@ -247,13 +247,11 @@ wa-input.desktop-command-palette-input::part(base) {
   box-shadow: none;
 }
 
-wa-input.desktop-command-palette-input:hover::part(base) {
-  border-color: var(--border-hairline-strong);
-}
-
+/* The search owns the palette's header band (the .input-plain skin): the
+   band is the affordance, so focus draws no border or halo inside it. */
 wa-input.desktop-command-palette-input:focus-within::part(base) {
-  border-color: var(--wa-color-focus);
-  box-shadow: 0 0 0 1px var(--wa-color-focus);
+  border-color: transparent;
+  box-shadow: none;
 }
 
 wa-input.desktop-command-palette-input::part(input) {
@@ -1060,10 +1058,27 @@ wa-dialog.desktop-onboarding {
    pane is a single full-width column. It previously reserved a tree column that
    nothing occupied, which squeezed Monaco into a narrow strip and left the rest
    of the pane blank. */
+.desktop-editor-notice wa-callout {
+  margin: var(--wa-space-2xs);
+}
+
+.desktop-editor-notice wa-callout::part(message) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--wa-space-2xs);
+}
+
+.desktop-editor-notice-text {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
 .desktop-editor-pane {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  /* The notice row collapses to nothing while no file operation failed. */
+  grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
   height: 100%;

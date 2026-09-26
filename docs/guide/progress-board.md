@@ -137,7 +137,7 @@ header toolbar to put the run's output paths and compile failures on the
 clipboard, then start a tool-use chat from the **New** view and paste that text
 into the instruction box.
 
-When a run recorded a compile failure, **Run latexFixer** still appears under
+When a run recorded a compile failure, **Fix compile errors** still appears under
 **Generated Files** and starts a repair chat from those logs.
 
 ### Memory

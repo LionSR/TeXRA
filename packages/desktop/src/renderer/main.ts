@@ -38,6 +38,7 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
@@ -313,8 +314,7 @@ function toggleSidePanelVisibility(): void {
 // internal state across re-renders and tab switches.
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 {
-  // Empty-state placeholder when no workspace is open. The launcher cannot
-  // run anything without a workspace; show a minimal prompt instead.
+  // No project open: nothing can run yet, so say what TeXRA is and open one.
   noWorkspacePlaceholder.className = 'desktop-empty-workspace';
   render(
     html`
@@ -322,20 +322,23 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="shell-empty-icon icon-surface is-size-l">
           ${waIcon('folder-open')}
         </div>
-        <h1>Open a folder to start</h1>
-        <p>
-          TeXRA needs a workspace before it can find your files, run agents, and
-          place their output.
-        </p>
+        <h1>Open a project to start</h1>
+        <p>${TEXRA_TAGLINE}</p>
         <ul class="desktop-empty-workspace-capabilities">
-          <li>Pick the TeX, Markdown, or source files an agent should read.</li>
-          <li>Run a team of agents with the model you choose.</li>
-          <li>Follow progress, edit files, and review output in one window.</li>
+          <li>
+            It reads your paper or code and does the work: derivations, proofs,
+            literature, edits.
+          </li>
+          <li>
+            By default it asks before it acts: edits arrive as diffs you accept
+            or reject.
+          </li>
+          <li>You choose the model and the team; progress stays in view.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: 'Open Folder',
+            text: 'Open project folder',
             appearance: 'filled',
             variant: 'brand',
             className: 'btn-primary',
@@ -394,7 +397,7 @@ function shellConversationTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar - approval pending';
+    sidebarToggleLabel = 'Show sidebar (approval pending)';
   }
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({

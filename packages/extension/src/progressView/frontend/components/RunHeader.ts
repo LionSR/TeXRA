@@ -403,9 +403,7 @@ export class RunHeader extends LitElement {
         <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
           ${run.description || run.label}
         </h1>
-        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
-          >${run.label} · ${run.id}</wa-tooltip
-        >
+        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}
           role="img"
@@ -665,7 +663,7 @@ export class RunHeader extends LitElement {
               <span class="ancestor-label">${ancestor.label}</span>
             </button>
             <wa-tooltip for=${`ancestor-${index}`}
-              >Go to ${ancestor.label} · ${ancestor.id}</wa-tooltip
+              >Go to ${ancestor.label}</wa-tooltip
             >
           `,
         )}
