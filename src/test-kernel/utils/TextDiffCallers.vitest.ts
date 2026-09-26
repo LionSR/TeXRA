@@ -185,6 +185,27 @@ describe('shared text-diff caller fixtures', () => {
             Effect.tryPromise(() => readFile(fakePath('workspace/paper.tex'))),
           ),
         ).toMatchObject({ _tag: 'Failure' });
+
+        // And a file created meanwhile at a path that was absent is not
+        // merged into.
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({ '/workspace/paper.tex': 'theirs\n' }),
+        );
+        const created = yield* approvedWriteConflict(
+          'paper.tex',
+          null,
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(created).toBeDefined();
+        expect(
+          yield* Effect.tryPromise(() =>
+            readFile(fakePath('workspace/paper.tex'), 'utf-8'),
+          ),
+        ).toBe('theirs\n');
       }),
   );
 });
