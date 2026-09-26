@@ -622,14 +622,11 @@ describe('childRunLoop E2E fixtures', () => {
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
-          const userAdmission = vi.fn();
           expect(
             yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
               session,
-              onAdmitted: userAdmission,
             }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
-          expect(userAdmission).toHaveBeenCalledWith(false);
           expect(
             yield* realSubmitFollowUp(
               PARENT_RUN_ID,

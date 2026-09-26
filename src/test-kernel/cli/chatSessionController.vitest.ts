@@ -121,6 +121,7 @@ import {
 import { TEXRA_APPROVAL_POLICY_DEFAULT } from '@shared/approvalPolicy';
 import { DatabaseReadFailed } from '@shared/session/database';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionView } from '@shared/session/sessionView';
 import { untrackRun } from '@test/support/sessionEnd';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -391,6 +392,14 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     // the TUI renders.
     readView: () => Effect.succeed(currentView()),
     ...overrides,
+    // The fold's level stream, over whichever view ref the case installed.
+    ...(overrides.view === undefined
+      ? {}
+      : {
+          viewChanges: SubscriptionRef.changes(
+            overrides.view as SubscriptionRef.SubscriptionRef<SessionView>,
+          ),
+        }),
   });
 }
 

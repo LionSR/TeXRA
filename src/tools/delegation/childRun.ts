@@ -5,10 +5,6 @@ import { Cause, Effect, Exit } from 'effect';
 import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import {
-  finalizeRun,
-  RunOutcomeUnpersisted,
-} from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -21,7 +17,7 @@ import type {
   UserFollowUpSupport,
 } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildRunOptions {
   /** What owns this run — the launch site declares the truth once. */
@@ -107,85 +103,28 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     parentRunId,
     trace,
   );
-  let started = false;
-  const setup = yield* Effect.exit(
-    Effect.sync(() => {
-      // Registration already committed the launch and activation together.
-      started = true;
-      // The handle is tracked by the loop (`track`) once its stop target
-      // exists, so a stop never finds this handle with nothing to interrupt.
-      trace.emit({
-        type: 'run.config',
-        runId,
-        config: options.config,
-      });
-
-      return {
-        childRunId: runId,
+  // Registration already committed the launch and activation together. The
+  // handle is tracked by the loop (`track`) once its stop target exists, so
+  // a stop never finds this handle with nothing to interrupt.
+  trace.emit({
+    type: 'run.config',
+    runId,
+    config: options.config,
+  });
+  return {
+    childRunId: runId,
+    logger: trace,
+    track: () => runs.track(handle),
+    finalize: (finalizeOptions) =>
+      finalizeChildRun({
+        handle,
+        session,
         logger: trace,
-        track: () => runs.track(handle),
-        finalize: (finalizeOptions) =>
-          finalizeChildRun({
-            handle,
-            session,
-            logger: trace,
-            closeTrace: () => trace.close(),
-            options: finalizeOptions,
-          }),
-      } satisfies ChildRun;
-    }),
-  );
-  if (Exit.isFailure(setup)) {
-    const error = Cause.squash(setup.cause);
-    // Roll back every fallible setup step in reverse-ish order; a cleanup
-    // failure must neither mask the original error nor skip later steps. A
-    // run that already published its `run.start` exists for every fold,
-    // so it ends with its `run.end` row instead of lingering as a
-    // started-but-never-run ghost — written by the one terminal writer, whose
-    // commit is awaited, so no barrier stands behind it.
-    const failures: unknown[] = [error];
-    const cleanups: Effect.Effect<unknown, Error>[] = [
-      Effect.suspend(() =>
-        started
-          ? finalizeRun(session, {
-              runId,
-              outcome: RUN_OUTCOME.FAILED,
-              error: {
-                kind: classifyAgentError(error),
-                message: `Child run setup failed: ${toErrorMessage(error)}`,
-              },
-            }).pipe(
-              Effect.flatMap((finalization) =>
-                finalization.ok
-                  ? Effect.void
-                  : Effect.fail(
-                      new RunOutcomeUnpersisted({
-                        message: 'Failed to persist the child run failure',
-                        cause: finalization.error,
-                      }),
-                    ),
-              ),
-            )
-          : Effect.void,
-      ),
-      Effect.sync(() => {
-        runs.untrackIfCurrent(handle);
+        closeTrace: () => trace.close(),
+        options: finalizeOptions,
       }),
-      Effect.sync(() => trace.close()),
-    ];
-    for (const cleanup of cleanups) {
-      const cleaned = yield* Effect.exit(cleanup);
-      if (Exit.isFailure(cleaned)) failures.push(Cause.squash(cleaned.cause));
-    }
-    if (failures.length > 1) {
-      return yield* Effect.fail(
-        new AggregateError(failures, 'Child run setup and cleanup failed'),
-      );
-    }
-    return yield* Effect.fail(ensureError(error));
-  }
-  return setup.value;
-}, Effect.uninterruptible);
+  } satisfies ChildRun;
+});
 
 interface FinalizeChildRunArgs {
   handle: RunHandle;

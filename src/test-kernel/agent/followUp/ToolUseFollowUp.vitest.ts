@@ -333,24 +333,17 @@ describe('submitFollowUp', () => {
         const session = fakeSession({ kind: 'queue' });
         const resumed = createDeferred<boolean>();
         const started = yield* Deferred.make<void>();
-        const admitted = yield* Deferred.make<void>();
         const fiber = yield* Effect.forkChild(
-          submitFollowUp(runId, 'keep this input', {
-            session,
-            onAdmitted: () => {
-              Deferred.doneUnsafe(admitted, Effect.void);
-            },
-          }).pipe(
+          submitFollowUp(runId, 'keep this input', { session }).pipe(
             withResumePort(() => {
               Deferred.doneUnsafe(started, Effect.void);
               return Effect.promise(() => resumed.promise);
             }),
           ),
         );
-        // The host is asked before the submitter is told it was admitted, so
-        // the interrupt below lands on a wake already in flight.
+        // The host is asked in the step that admits the input, so the
+        // interrupt below lands on a wake already in flight.
         yield* Deferred.await(started);
-        yield* Deferred.await(admitted);
         yield* Fiber.interrupt(fiber);
         expect(Exit.hasInterrupts(yield* Fiber.await(fiber))).toBe(true);
         resumed.resolve(false);
