@@ -2,7 +2,7 @@
  * The extension's half of the settings view: the shared settings body
  * (`createSettingsViewBody`) over VS Code's editor, dialogs and webview, plus
  * the commands only VS Code answers (the TeXRA account commands, the Copilot
- * routes, the Tools and LaTeX pages).
+ * routes, installing extensions and writing VS Code's LaTeX settings).
  */
 import * as path from 'node:path';
 
@@ -11,15 +11,10 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 import { ModelError, completedTurn } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
-import { refresh as refreshAgentCatalog } from '@agent/index';
 import { AUTH_COMMANDS } from '@auth/constants';
 import { supabaseAuthenticated } from '@auth/SupabaseAuth';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-import {
-  buildToolDashboardItems,
-  planToolTerminalAction,
-} from '@controllers/settingsView/ToolDashboardData';
 import { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
@@ -55,28 +50,44 @@ import {
   revealProgressRun,
 } from '@progressView/progressNavigation';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
-import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type {
   SettingsMessageFor,
-  ToolDashboardItem,
+  SettingsViewOutboundMessage,
 } from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
-import { getLastCheckResults } from '@tools/toolAvailability';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
-import { setToolEnabled } from '@utils/config/constants';
 import { allSettledVoid } from '@utils/core/allSettledVoid';
 import { hasExtension } from '@utils/core/pathCore';
 import { ensureError } from '@utils/errors/errorMessage';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
-import { LatexSettingsHandlers } from './handlers/latexSettingsHandlers';
 import {
-  postToWebview,
-  type SettingsHandlerContext,
-} from './handlers/SettingsHandlerContext';
+  latexRecommendedStatus,
+  vscodeLatexSettingsHandlers,
+} from './handlers/latexSettingsHandlers';
 
 /** The webview shapes SettingsView dispatches for. */
 type SettingsWebview = vscode.WebviewView | vscode.WebviewPanel;
+
+/**
+ * The one foreign edge under this view's transport: VS Code's own
+ * `postMessage`, lifted once for every outbound settings message. A panel
+ * disposed mid-post rejects it, and that reaches the program as a failure
+ * instead of an unhandled rejection. The message is typed as the union the
+ * webview validates, not `unknown`, so a builder's Effect passed without
+ * `yield*` is a compile error rather than a serialized Effect it drops.
+ */
+function postToWebview(
+  webview: vscode.Webview,
+  message: SettingsViewOutboundMessage,
+): Effect.Effect<void, Error> {
+  return Effect.tryPromise({
+    try: async () => {
+      await webview.postMessage(message);
+    },
+    catch: ensureError,
+  });
+}
 
 /** Show `document` in an editor tab of its own. */
 const showDocument = (
@@ -102,7 +113,6 @@ export class SettingsViewMessageHandler {
     ProcessServices | StorageFs
   >;
   private readonly body: ReturnType<typeof createSettingsViewBody>;
-  private readonly latexHandlers: LatexSettingsHandlers;
 
   constructor(
     context: vscode.ExtensionContext,
@@ -115,11 +125,6 @@ export class SettingsViewMessageHandler {
       'refreshCatalogs' | 'refreshApiKeyStatus' | 'refreshOnboardingFunnel'
     >,
   ) {
-    const ctx: SettingsHandlerContext = {
-      channel: this.channel,
-      withActiveWebview: (fn) => this.withActiveWebview(fn),
-    };
-    this.latexHandlers = new LatexSettingsHandlers(ctx, runtime);
     this.body = createSettingsViewBody({
       host: 'vscode',
       session,
@@ -229,33 +234,13 @@ export class SettingsViewMessageHandler {
             emitAppSignal('approvalPolicyChanged', undefined),
           );
         },
-        postHostStartup: Effect.gen({ self: this }, function* () {
-          // The dashboard probes the network (Zotero and others), so it
-          // builds on a detached fiber rather than holding the first render.
-          // The view shows a spinner until data arrives, so a failed build
-          // still posts an empty dashboard to end it.
-          yield* Effect.forkDetach(
-            this.sendToolDashboardData().pipe(
-              Effect.catch((error) =>
-                Effect.logWarning(
-                  'The tool dashboard could not be built; showing it empty.',
-                ).pipe(
-                  Effect.annotateLogs({ data: error }),
-                  withLogChannel(this.channel),
-                  Effect.andThen(this.postToolDashboard([])),
-                ),
-              ),
-              Effect.ignore({
-                log: 'Warn',
-                message: 'The empty tool dashboard could not be posted either.',
-              }),
-            ),
-            { startImmediately: true },
-          );
-          yield* this.withActiveWebview((webview) =>
-            this.latexHandlers.sendLatexSettingsStatus(webview),
-          );
-        }),
+        runInTerminal: (name, command) =>
+          Effect.sync(() => {
+            const terminal = vscode.window.createTerminal({ name });
+            terminal.show();
+            terminal.sendText(command);
+          }),
+        latexRecommendedStatus,
         requiresOpenWorkspace: () => !session.roots.workspace,
       },
     });
@@ -270,9 +255,6 @@ export class SettingsViewMessageHandler {
             if (work) runtime.runFork(settle(work));
           }),
       ),
-      subscribeAppSignal(runtime, 'toolAvailabilityChanged', () => {
-        runtime.runFork(this.sendToolDashboardData({ skipChecks: true }));
-      }),
     );
   }
 
@@ -317,32 +299,7 @@ export class SettingsViewMessageHandler {
         this.handleRequestModelAccess(message.modelName, context),
       clearCopilotRoute: (message) =>
         this.handleClearCopilotRoute(message.modelName),
-      installToolExtension: (message) =>
-        this.latexHandlers.installExtension(message.extensionId),
-      toggleTool: (message) =>
-        setToolEnabled(message.toolId, message.enabled, this.globalState).pipe(
-          // A plugin's bundled agents follow its switch.
-          Effect.andThen(refreshAgentCatalog()),
-          Effect.andThen(this.sendToolDashboardData({ skipChecks: true })),
-        ),
-      runToolCommand: (data) => {
-        const action = planToolTerminalAction({
-          toolId: data.toolId,
-          commandKind: data.kind,
-        });
-        if (action.kind === 'none') {
-          return Effect.logDebug('No command for tool').pipe(
-            Effect.annotateLogs({ data: { ...data, reason: action.reason } }),
-            withLogChannel(this.channel),
-          );
-        }
-        return Effect.sync(() => {
-          const terminal = vscode.window.createTerminal({ name: action.name });
-          terminal.show();
-          terminal.sendText(action.command);
-        });
-      },
-      ...this.latexHandlers.handlers,
+      ...vscodeLatexSettingsHandlers(this.body),
     };
   }
 
@@ -504,35 +461,5 @@ export class SettingsViewMessageHandler {
       this.progressView.refreshCatalogs().pipe(Effect.asVoid),
       this.body.postModelSelection,
     ]);
-  }
-
-  // ============================================================
-  // Tools page
-  // ============================================================
-
-  private postToolDashboard(items: ToolDashboardItem[]) {
-    return this.withActiveWebview((webview) =>
-      postToWebview(webview, {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD,
-        items,
-      }),
-    );
-  }
-
-  private sendToolDashboardData(options?: { skipChecks?: boolean }) {
-    return Effect.gen({ self: this }, function* () {
-      const cachedResults = options?.skipChecks
-        ? (getLastCheckResults(this.session.roots.workspace) ?? undefined)
-        : undefined;
-      const items = yield* buildToolDashboardItems(
-        'vscode',
-        {
-          workspaceRoot: this.session.roots.workspace,
-          config: this.session.roots.config,
-        },
-        cachedResults,
-      );
-      yield* this.postToolDashboard(items);
-    });
   }
 }

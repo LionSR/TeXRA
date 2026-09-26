@@ -707,10 +707,10 @@ one the view you're touching already uses:
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
   (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
   active-webview tracking, the `HandlerRegistry` build, and the toast for an
-  unsupported command — and delegates tab-shaped groups to focused handler
-  classes in `settingsView/handlers/` behind `SettingsHandlerContext`
-  (`AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
-  `GitHubSubscriptionHandlers`, `SubscriptionHandlers`). There is no abstract
+  unsupported command — over the shared settings body
+  (`src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
+  modules; only the VS Code-specific LaTeX arms live in
+  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
