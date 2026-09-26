@@ -92,7 +92,7 @@ export const loadCliModelAccessOverview = Effect.fn(
 });
 
 /** Format a neutral personal-key inventory. */
-export function formatPersonalApiKeysLine(
+function formatPersonalApiKeysLine(
   personalKeyProviders: readonly string[],
   label: string = OWN_API_KEYS.inline,
 ): string | undefined {

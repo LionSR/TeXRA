@@ -9,8 +9,8 @@ import { Secrets } from '@platform/secrets';
 import { FakeSecrets } from '@test/support/FakePlatform';
 // Local imports - tools
 import { getNewestTimestamp } from '@tools/github/githubPaths';
+import { DedupedResource } from '@tools/github/pollingDedup';
 import {
-  DedupedResource,
   PollingSourceBase,
   createBasePollState,
   type BasePollSubscriptionState,
