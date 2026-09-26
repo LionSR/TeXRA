@@ -566,18 +566,6 @@
       "name": "STATE_SETTINGS"
     },
     {
-      "file": "src/shared/subagentFollowup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "stripOrchestratorFollowup"
-    },
-    {
-      "file": "src/shared/subagentFollowup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "summarizeSubagentFollowup"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",

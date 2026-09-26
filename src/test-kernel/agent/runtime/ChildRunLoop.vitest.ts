@@ -616,21 +616,30 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
-              session,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              { text: 'active parent', from: { kind: 'user' as const } },
+              {
+                session,
+              },
+            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
           expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
-              session,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              { text: 'restore me', from: { kind: 'user' as const } },
+              { session },
+            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
           expect(
             yield* realSubmitFollowUp(
               PARENT_RUN_ID,
-              { text: 'late child result', origin: 'subagent_result' },
+              {
+                text: 'late child result',
+                from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+              },
               { session },
             ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
@@ -644,9 +653,16 @@ describe('childRunLoop E2E fixtures', () => {
           });
           try {
             expect(
-              yield* realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
-                session,
-              }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+              yield* realSubmitFollowUp(
+                PARENT_RUN_ID,
+                {
+                  text: 'native child result',
+                  from: { kind: 'user' as const },
+                },
+                {
+                  session,
+                },
+              ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
             ).toEqual({ status: 'queued', wake: 'failed' });
           } finally {
             releaseNativeChild();
@@ -866,7 +882,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'keep going', origin: 'user' },
+            { text: 'keep going', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -926,7 +942,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -959,7 +975,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -1231,7 +1247,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'resume please', origin: 'user' },
+            { text: 'resume please', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -1455,7 +1471,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'go on', origin: 'user' },
+            { text: 'go on', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
