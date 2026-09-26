@@ -3,19 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 import { Data, Effect, FileSystem } from 'effect';
 
-import { absentReason } from '@utils/files/fsEntryExists';
+import { pathExists } from '@utils/files/fsDurability';
 
 /** No resources candidate exists beside this build of the CLI. */
 class CliResourcesNotFound extends Data.TaggedError('CliResourcesNotFound')<{
   readonly message: string;
 }> {}
-
-/** Whether `target` exists; an absent path (ENOENT or ENOTDIR) reads as
- *  `false`, and any other failure propagates. */
-const isPresent = (fs: FileSystem.FileSystem, target: string) =>
-  fs
-    .exists(target)
-    .pipe(Effect.catchIf(absentReason, () => Effect.succeed(false)));
 
 export const resolveCliResourcesPath = Effect.fn(
   'resourcesPath.resolveCliResourcesPath',
@@ -28,7 +21,7 @@ export const resolveCliResourcesPath = Effect.fn(
   for (let dir = currentDir; ; dir = path.dirname(dir)) {
     if (
       path.basename(dir) === 'cli' &&
-      (yield* isPresent(fs, path.join(dir, 'package.json')))
+      (yield* pathExists(fs, path.join(dir, 'package.json')))
     ) {
       packageDir = dir;
       break;
@@ -41,7 +34,7 @@ export const resolveCliResourcesPath = Effect.fn(
     path.resolve(packageDir, '../extension/resources'),
   ];
   for (const candidate of candidates) {
-    if (yield* isPresent(fs, candidate)) return candidate;
+    if (yield* pathExists(fs, candidate)) return candidate;
   }
   return yield* new CliResourcesNotFound({
     message: `TeXRA CLI resources not found; looked in: ${candidates.join(', ')}`,

@@ -19,12 +19,12 @@ import { LoadingIndicator } from '@cli/tui/ui/LoadingIndicator';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 import {
-  CHATGPT_AUTH,
   DEVICE_CODE_DESCRIPTION,
-  GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { ListForm } from './_shared/ListForm';
 import { useAsyncResource } from './_shared/useAsyncListForm';
@@ -69,34 +69,23 @@ interface ProviderSignInTransports {
 }
 
 const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
-  {
-    provider: 'chatgpt',
-    browser: {
-      target: 'chatgpt',
-      label: CHATGPT_AUTH.signInLabel,
-      description: CHATGPT_AUTH.signInDescription,
-    },
-    device: {
-      target: 'chatgpt --device',
-      label: CHATGPT_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    },
-    toggleCoversBrowserSignIn: true,
-  },
-  {
-    provider: 'grok',
-    browser: {
-      target: 'grok',
-      label: GROK_AUTH.signInLabel,
-      description: GROK_AUTH.signInDescription,
-    },
-    device: {
-      target: 'grok --device',
-      label: GROK_AUTH.deviceCodeLabel,
-      description: DEVICE_CODE_DESCRIPTION,
-    },
-    toggleCoversBrowserSignIn: true,
-  },
+  ...SUBSCRIPTION_AUTH_PROVIDERS.map((provider) => {
+    const copy = SUBSCRIPTION_AUTH_COPY[provider];
+    return {
+      provider,
+      browser: {
+        target: provider,
+        label: copy.signInLabel,
+        description: copy.signInDescription,
+      },
+      device: {
+        target: `${provider} --device` as const,
+        label: copy.deviceCodeLabel,
+        description: DEVICE_CODE_DESCRIPTION,
+      },
+      toggleCoversBrowserSignIn: true,
+    };
+  }),
   {
     provider: 'texra',
     browser: {

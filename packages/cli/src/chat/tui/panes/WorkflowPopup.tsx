@@ -19,7 +19,7 @@ import { KeyHints, type KeyHint } from '@cli/tui/ui/KeyHints';
 import { Select, type SelectItem } from '@cli/tui/ui/Select';
 import { COLOR_HINT } from '@cli/tui/ui/colors';
 import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
-import { textDisplayWidth } from '@cli/runtime/terminalText';
+import { safeTerminalText, textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas, model, and copy
 import {
@@ -70,7 +70,7 @@ const TAB_SEPARATOR = '    ';
 const TAB_SCROLL_MARK = '‹ ';
 
 function phaseTabText(phase: WorkflowPhaseModel): string {
-  return `${phase.opened ? WORKFLOW_PHASE_GLYPH.opened : WORKFLOW_PHASE_GLYPH.declared} ${phase.heading.phaseLabel} · ${formatWorkflowTally(phase.tally)}`;
+  return `${phase.opened ? WORKFLOW_PHASE_GLYPH.opened : WORKFLOW_PHASE_GLYPH.declared} ${safeTerminalText(phase.heading.phaseLabel)} · ${formatWorkflowTally(phase.tally)}`;
 }
 
 /** First tab to draw so the active one is on screen: walk the window start
@@ -500,7 +500,7 @@ export function WorkflowPopup({
         )}
         <Box height={1} overflowY="hidden">
           <Text dimColor wrap="truncate-end">
-            {selectedDetail}
+            {safeTerminalText(selectedDetail)}
           </Text>
         </Box>
       </Box>
