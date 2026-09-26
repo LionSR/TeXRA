@@ -13,7 +13,7 @@
 .desktop-review-toolbar {
   display: flex;
   min-width: 0;
-  min-height: var(--wa-height-control);
+  min-height: var(--height-control);
   align-items: center;
   gap: var(--wa-space-s);
   padding: var(--wa-space-2xs) var(--wa-space-s);
@@ -102,7 +102,7 @@
 }
 
 .desktop-review-directory::part(header) {
-  min-height: var(--wa-height-control-compact);
+  min-height: var(--height-control-compact);
   padding: 0;
   padding-inline-start: calc(var(--review-tree-depth, 0) * var(--wa-space-s));
   border-radius: var(--wa-border-radius-s);
@@ -147,7 +147,7 @@
 
 .desktop-review-file::part(base) {
   width: 100%;
-  min-height: var(--wa-height-control-compact);
+  min-height: var(--height-control-compact);
   justify-content: flex-start;
   border-radius: var(--wa-border-radius-s);
 }
