@@ -136,9 +136,9 @@ export function runPhaseOf(run: RunView | undefined): RunPhase | undefined {
 
 /**
  * The direct children in the RUNNING phase. The fold's `rollup.running`
- * counts in-flight runs (running or idle-waiting); the TUI's "active"
- * excludes a child parked between turns, so it reads each child's status
- * fact rather than the rollup.
+ * counts every descendant still working a turn, a child waiting on the user
+ * included; the TUI's "active" is direct children in the RUNNING phase, so
+ * it reads each child's status fact rather than the rollup.
  */
 export function runningChildCount(
   view: SessionView,
@@ -150,10 +150,14 @@ export function runningChildCount(
 }
 
 /**
- * The nearest ancestor's position, for a child's location: the loop's own
- * coordinate off `RunView.flow`, and the open phase for a workflow-script
- * ancestor, which drives no loop of its own — its child loop is terminal on
- * the first turn, so it never writes a `flow.step` and its `flow` stays null.
+ * The nearest ancestor's position, for a child's location: a reflection
+ * ancestor's round off `RunView.flow`, and the open phase for a
+ * workflow-script ancestor, which drives no loop of its own — its child loop
+ * is terminal on the first turn, so it never writes a `flow.step` and its
+ * `flow` stays null. A tool-use ancestor's turn is no position of the child:
+ * it keeps counting after the child started, and the child's row already
+ * shows its own turn, so the header and the status bar would name a third
+ * `tN` that disagrees with both.
  */
 export function ancestorPositionLabel(
   view: SessionView,
@@ -164,9 +168,11 @@ export function ancestorPositionLabel(
   for (const ancestor of ancestors.toReversed()) {
     const run = runViewOf(view, ancestor.id);
     if (run === undefined) continue;
+    const position = flowPosition(run.flow);
     const label =
-      formatFlowPositionLabel(flowPosition(run.flow)) ??
-      openWorkflowPhaseLabel(run);
+      (position?.kind === 'round'
+        ? formatFlowPositionLabel(position)
+        : undefined) ?? openWorkflowPhaseLabel(run);
     if (label !== undefined) return label;
   }
   return undefined;

@@ -2,7 +2,7 @@
 
 // Third-party imports
 import { Effect } from 'effect';
-import { useInput, useStdin, useWindowSize } from 'ink';
+import { useInput, useStdin, useWindowSize, type Key } from 'ink';
 import {
   Fragment,
   useCallback,
@@ -19,7 +19,6 @@ import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import {
   isCtrlInput,
   isEscapeInput,
-  isUnhandledControlInput,
   metaChordInput,
   rewriteKittyEnterInput,
 } from '@cli/tui/inputKeys';
@@ -33,6 +32,7 @@ import { SESSION_LIST } from '@ui/copy/nestedRuns';
 import {
   APPROVAL_FOREGROUND_MAX_ROWS,
   approvalVisibleForSelection,
+  chordTextInput,
   ESC_META_CHORD_INTERRUPT_DELAY_MS,
   FORM_FOREGROUND_MAX_ROWS,
   foregroundSurfaceKind,
@@ -447,6 +447,22 @@ export function App(props: AppProps): React.JSX.Element {
     | undefined
   >(undefined);
   const inputBarRef = useRef<InputBarHandle>(null);
+  // The key that just resolved a pending Esc chord. Ink hands every keypress
+  // to each `useInput` listener in subscription order, so the draft may see
+  // the key after this handler already cleared the pending chord; the key
+  // stays held until the dispatch ends.
+  const chordResolvedBy = useRef<string | undefined>(undefined);
+  // While an Esc chord is pending the draft types no printable key: this
+  // handler either takes it as a focus shortcut or hands it back through
+  // `appendInput`, so the key lands once, whichever listener runs first.
+  // Every other key (Enter, arrows, editing chords) stays the draft's.
+  const holdsKeystroke = useCallback(
+    (input: string, key: Key): boolean =>
+      chordTextInput(input, key) &&
+      (pendingEscapeInterrupt.current !== undefined ||
+        chordResolvedBy.current === input),
+    [],
+  );
 
   const clearPendingEscapeInterrupt = () => {
     const scheduled = pendingEscapeInterrupt.current;
@@ -539,19 +555,18 @@ export function App(props: AppProps): React.JSX.Element {
       const arrowInput =
         key.upArrow || key.downArrow || key.leftArrow || key.rightArrow;
       if (!key.ctrl && !key.tab && (input.length > 0 || arrowInput)) {
+        chordResolvedBy.current = input;
+        queueMicrotask(() => {
+          chordResolvedBy.current = undefined;
+        });
         if (appOwnsEscape() && handleMetaShortcut(input)) return;
         const inputWasDisabled = inputDisabled;
         const handled = handlePendingBareEscape(
           pendingEscape.runId,
           pendingEscape.parentRunId,
         );
-        const printableInput =
-          input.length > 0 &&
-          !key.meta &&
-          !key.return &&
-          metaChordInput(input, key) === undefined &&
-          [...input].every((character) => !isUnhandledControlInput(character));
-        if (handled && inputWasDisabled && printableInput) {
+        // The draft held the key back: it goes to whichever draft now shows.
+        if (chordTextInput(input, key) && (handled || !inputWasDisabled)) {
           inputBarRef.current?.appendInput(input);
         }
         return;
@@ -632,6 +647,7 @@ export function App(props: AppProps): React.JSX.Element {
               runtime={props.runtime}
               roots={props.session.roots}
               controlRef={inputBarRef}
+              holdsKeystroke={holdsKeystroke}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}
