@@ -394,8 +394,11 @@ no `@tools` to `@agent` edges.
   entries; it enters `Composition.loaded`, so one switch hides everything it
   contributes. Third parties never write TypeScript.
 - **The composition is recorded in the log.** The opening `flow.snapshot`
-  records the composition value (plugin set, loaded revisions, preset id), not
-  only `toolsetHash`, so behaviour can be attributed to a plugin revision.
+  records the composition value (plugin set, the loaded plugins' content
+  digests, preset id), not only `toolsetHash`, so behaviour can be attributed
+  to a plugin revision across restarts. The record is for attribution: a
+  resumed run still resolves its own composition, as ruled (ledger,
+  2026-09-23), so no per-process value has to survive a restart.
 - **Presets are stored compositions.** Today's switches become the preset
   `default`, an agent YAML may name a preset, and the session records the
   preset id. The plugin note already promised this.
@@ -404,8 +407,8 @@ no `@tools` to `@agent` edges.
   definition, or the commit or tree hash of an installed plugin): a changed
   digest is a new, untrusted revision. Today's MCP revision is an HMAC under a
   per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
-  unguessable and different after every restart, so it stays the composition's
-  revision and is not the trust key. This also answers the deferred project
+  unguessable and different after every restart, so it stays the in-process
+  resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
   `.texra/mcp.json` trust prompt.
 - **Self-improvement goes through data.** An approval-gated tool in the
   `setup` plugin installs, enables, trusts and saves presets. It takes effect
@@ -515,8 +518,11 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
   `executeAgent.ts:567-573` goes, and so does the `executeWorkflow` port on
   four hosts. The host's `openWorkflowOutput` stays a pre-terminal,
   verdict-bearing hook: the resume path takes it as a required argument for a
-  workflow run, and refuses a workflow resume without it once the run's
+  host-launched root workflow run, and refuses such a resume without it once
+  the run's
   category is loaded, so a finalization failure can never persist as success.
+  Child workflow runs resumed by a driver (`nativeSubagentStrategy`) take no
+  host hook; their presentation comes from durable facts (move 13).
 - **`runId` leaves `RunRequest`/`ValidatedRunRequest`**, so `runValidated` is
   fresh-only on every host and the desktop's hard-coded `fresh` is correct by
   construction (the desktop defect).
@@ -524,8 +530,11 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
   `resumeToolUse`'s own claim-and-terminal blocks become calls to it. The
   floor stays one writing function (`finalizeRun`) with two callers: the run's
   own terminal and the ownerless stop or close past budget.
-- **The resume launch context matches the fresh one** (`ensureRunDirUnder`,
-  description, progress reveal, the start hooks).
+- **The resume launch context matches the fresh one** where it should
+  (`ensureRunDirUnder`, the progress reveal, the start hooks). Description
+  generation stays fresh-only: it is a helper-model call that appends another
+  `run.description`, so repeating it on every resume would cost a model call
+  and could replace the user's label.
 - **The follow-up lease is not owned here.** #13348 moves it into
   `runToolUse`'s own scope; nothing in this move takes it back.
 - Drivers are move 2's `PLUGIN_DRIVERS`. The `Run` handle is move 7's.
@@ -535,7 +544,7 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
 1. Workflow resume through the tool-use path with the desktop fix; delete
    `executeWorkflow` and `runId` from `RunRequest`.
 2. Delete the dead fresh `onIdle` branch; fix the `withInactiveRunStep` doc.
-3. The resume launch context matches the fresh one.
+3. The resume launch context matches the fresh one, except the description.
 4. Terminals onto `runWithLaunchGuard`, rebased after #13348.
 
 Estimated net: about −250 production lines; test churn is about 48 `runAgent`
@@ -548,8 +557,11 @@ hits in 5 files.
 - Keep: the SDK calling `bootstrapHost` with an explicit `storageDir` and
   `modelTransport`; `AppSignals` with a finalizer; process `forkDetach` calls
   becoming `forkScoped`.
-- For "one graph per process", use an **owner-id nonce** rather than a latch:
-  the nonce makes the bad state impossible, and the format bump is free.
+- For "one graph per process", add an **owner-id nonce** so leases can tell
+  graphs apart (the format bump is free). The nonce alone does not isolate the
+  module slots `bootstrapHost` still writes (setting host, account probes,
+  skill and plugin directories, dispatcher), so a second graph is refused until
+  those are graph-owned; coexistence is allowed only then.
 - The Lean process layer needs `HostPorts` in `R`, or it stays core, as ruled
   on 09-23.
 - Measure the bare-run count before the CLI PR (`RT-install-cli-process-runtime`).
@@ -578,7 +590,7 @@ ambient defaults:
 ```ts
 export interface TexraProcessOptions {
   readonly agentsDir: string;
-  readonly workspaceDir?: string;
+  readonly projectDir?: string; // "project", per AGENTS.md terminology
   readonly storageDir: string; // required: no silent ~/.texra
   readonly mcpConfig?: string | false; // default: `mcp.json` under storageDir; false disables MCP
   readonly modelTransport?: 'bound' | 'process-global'; // default 'bound': the long-stream fetch, not global
@@ -604,6 +616,9 @@ export const TexraProcess: {
   `forkDetach` calls become `forkScoped` on the runtime's scope.
 - **The owner id gains a per-graph nonce**, so two graphs in one process are
   distinguishable by the lease; the durable-format change rides a free bump.
+  Until the module slots `bootstrapHost` writes are graph-owned, the SDK still
+  refuses a second graph, because two graphs with different roots would
+  overwrite each other's setting host, probes, skills and dispatcher.
 - **Stays process-global:** the fetch dispatcher for hosts
   (`'process-global'`), and a plain log writer before and after the runtime.
 - **Not scheduled:** the full `ProcessLayer` graph, the slot-by-slot
@@ -618,7 +633,8 @@ export const TexraProcess: {
    `processToolHost`.
 3. `AppSignals` as a service with a finalizer; process `forkDetach` becomes
    `forkScoped`.
-4. The owner-id nonce, on a format bump.
+4. The owner-id nonce, on a format bump; the second-graph guard stays until
+   the slots it protects are graph-owned.
 5. The CLI only after measuring its bare-run count
    (`RT-install-cli-process-runtime`).
 
@@ -976,7 +992,9 @@ class RunModel extends Context.Service<
 Each binding gets `Scope.fork(run.scope)` and a swap closes the old one. A
 transport failure on a WebSocket origin reacquires through `swap` before the
 next automatic attempt. `ModelTransport` (move 4) supplies `fetch` and a proxy
-agent to every factory, and `setGlobalDispatcher` goes. Classification reads
+agent to every factory. Once every host uses the bound transport,
+`setGlobalDispatcher` and the `'process-global'` option go together; until
+then `'process-global'` keeps installing the global dispatcher. Classification reads
 `ModelError` first and keeps `sdkError` only for provider evidence the package
 cannot know. `EditorModel` merges into `LanguageModel`; the validation model
 becomes a CLI test Layer.
@@ -988,7 +1006,8 @@ becomes a CLI test Layer.
 3. WebSocket reacquisition through `swap`.
 4. The `auxiliary` path: compaction gated, priced and recorded (the usage field
    rides an existing format bump).
-5. `ModelTransport`, with move 4 PR 6.
+5. `ModelTransport` for every host; then delete `setGlobalDispatcher` and the
+   `'process-global'` option in the same PR.
 6. The retry gate moves to process scope; helpers run under it.
 7. `EditorModel` merged; validation model as a Layer.
 8. Classify from `ModelError`.
@@ -1030,7 +1049,7 @@ class Approvals extends Context.Service<
     readonly decide: (
       runId: RunId,
       payload: PermissionPayload,
-    ) => Effect.Effect<RequestDecision | 'present', never, ToolCall>; // every request kind
+    ) => RequestDecision | 'present'; // pure: session and run state plus the payload, no ToolCall
     // Scoped: the grant lasts as long as its owner's scope (a host launch, a
     // plan approval), and closing the scope removes exactly this owner's grant.
     readonly grant: (
@@ -1065,7 +1084,7 @@ in the existing session entry (no new lifetime) and keeps `withPerKeyLane`.
    through `grant`.
 4. Guard kinds and the `toolCall` request kind. Needs an owner ruling under
    the `defineTool` freeze amendment.
-5. `ApprovalState` as a `SubscriptionRef`, with move 6's plane.
+5. `ApprovalState` as a `SubscriptionRef` in the existing session entry.
 6. Edited content in the `request.decide` payload (move 5's verdict), with
    each preview request's lifetime as a scope.
 
@@ -1102,15 +1121,15 @@ class RunInbox extends Context.Service<
 
 // on Runs
 deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'auto' | 'deferred' }):
-  Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>;
-wake(runId: RunId): Effect.Effect<void>; // the second phase of a deferred delivery
+  Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>; // Delivery carries a WakeToken when deferred
+wake(token: WakeToken): Effect.Effect<void>; // releases exactly that delivery's ids
 ```
 
 `deliver` appends `followup.queued` through the publisher. Under `'auto'`,
 `Runs` chooses the wake inside the run's lane, atomically with the append: a
-live entry is notified, and a resumable one is woken by
-`Runs.run({ _tag: 'Resume' })` forked into the session scope, with no host
-port. The caller never chooses, so a run that turns live or idle while the
+live entry is notified, and a resumable one is woken by the session-bound
+resume (move 6), which launches through the path move 3 selects
+(`runWithLaunchGuard`), forked into the session scope, with no host port. The caller never chooses, so a run that turns live or idle while the
 delivery is prepared cannot leave the row unwoken. `'deferred'` admits the row
 durably, wakes nobody, and stays invisible to consumption until `wake`: the
 run entry holds its delivery ids in a deferred set that `take` skips, as the
@@ -1118,11 +1137,14 @@ manager's `deferred` set does today (`ToolUseFollowUpQueueManager.ts:53-58,287`)
 so an unrelated resume of the parent cannot consume the child's row before the
 child finalizes. After a crash, hydration releases a deferred row whose
 producing child already has its `run.end`. A native child uses it for its turn result before it
-finalizes and calls `wake` afterwards, as `deliverTurn` and
+finalizes and calls `wake` with the token its own delivery returned, so a
+parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
 row survives a crash, and the parent never sees the child as still running
 when it wakes (#8093). Resume becomes interruptible
-with `acquireRelease` on its recovery lease. The inbox is keyed on the fiber,
+with `acquireRelease` on its recovery lease; when PR 5 deletes that lease, the
+same `acquireRelease` moves to the resume's run claim (`holdRunClaim`), so an
+interrupted resume still releases what it acquired. The inbox is keyed on the fiber,
 not the claim (liveness note §2.5).
 
 ### PRs
@@ -1131,12 +1153,13 @@ not the claim (liveness note §2.5).
 2. Re-offer an unsettled native-child turn on resume.
 3. Interruptible resume; delete the cancellation predicates (after move 3 PR 3).
 4. The inbox in the generation's scope; delete the flow and child lease kinds.
-5. `Runs.deliver` and core wakes; delete the recovery lease, the adopted
-   claim and the wake half of `AgentResume` (after move 3 PR 4).
+5. `Runs.deliver` and core wakes; move the resume's scoped release onto its
+   run claim, then delete the recovery lease, the adopted claim and the wake
+   half of `AgentResume` (after move 3 PR 4 and move 6 PR 3).
 6. After decision 8: follow-ups to a stopped run admitted in core; delete the
    CLI buffer.
-7. `onRelease` and `onSent` become scoped subscriptions over the kernel's
-   pending set (after move 1).
+7. `onRelease` and `onSent` become scoped subscriptions over the publisher's
+   pending follow-up state, which move 1 keeps.
 
 Estimated: the manager drops to about 300 lines (inference).
 
@@ -1304,8 +1327,12 @@ for each child (inference). The host-neutral controllers still carry
   cannot change a verdict: opening outputs and PDFs for children, and the
   "missing outputs" dialog. Finalization that can fail or change the outcome,
   such as `openWorkflowOutput` (`executeAgent.ts:234-243`), stays a
-  pre-terminal launch hook (move 3's `launch` on both arms) that runs before
-  `run.end` is committed.
+  pre-terminal hook (move 3) that runs before `run.end` is committed.
+  `output.produced` does not yet carry everything a host needs: the compiled
+  artifact locations used to open a PDF and the per-round set of files to open
+  exist only in the live pipeline. They are added to the fact first, on a
+  format bump, so a host opens the right PDF and does not reopen earlier
+  rounds' files.
 
 ### PRs
 
@@ -1314,7 +1341,8 @@ for each child (inference). The host-neutral controllers still carry
 3. Desktop window and project binding as scopes; quit awaits them.
 4. Split `createWindow` along its seams (auth, project navigation, bindings,
    settings attach, IPC routes) into scoped modules; lower the budget.
-5. Presentation from facts for side effects only; verdict-affecting
+5. Add the presentation targets to `output.produced` (format bump); then
+   presentation from facts for side effects only; verdict-affecting
    finalization stays pre-terminal. Argue against the one-run-program parity
    table's placement of presentation in `afterTurn`; root-run behaviour stays
    the same.
@@ -1358,7 +1386,7 @@ the owner confirms them:
 | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | 1. Plugins owning schema arms       | Yes, with tier and fold slice in the plugin module.                                                                        |
 | 2. Kernel-only runtime reads        | Not as a new service now; the single-run lineage read first. A future kernel lives inside `SessionEvents` with one writer. |
-| 3. D5 and "one process is one host" | Re-rule them, with an owner-id nonce rather than a latch.                                                                  |
+| 3. D5 and "one process is one host" | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                 |
 | 4. Own-key retry with no key        | Leave it pending on every host.                                                                                            |
 | 5. Approve-all                      | Also decide requests already pending, on every host, as recorded rows.                                                     |
 | 6. The plugin drain                 | Neither a hook nor a drain layer: a layer dependency on `Sessions`.                                                        |
