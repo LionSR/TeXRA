@@ -383,11 +383,10 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Dispose the session-owned boundary: end every attached queue, release
-   * every adopted claim onto the session publisher, then drop the entry map
-   * and release observers. The session's unwind settles those releases
-   * before the graph closes. Entry-creating paths refuse to rebuild
-   * afterwards, so a late detached producer cannot leak an entry nobody
-   * will drain.
+   * every adopted claim onto the session publisher, and report each run as
+   * released: a recoverable entry waits for a wake nobody can send once the
+   * session is gone, so a release observer (a poller holding the session)
+   * lets go here. Its unwind settles the releases; nothing rebuilds after.
    */
   dispose(): void {
     if (this.disposed) return;
@@ -395,6 +394,7 @@ export class ToolUseFollowUpQueue {
     for (const [runId, entry] of this.entries) {
       this.endInput(entry);
       this.releaseAdoptedClaim(runId, entry, () => {});
+      this.notifyReleaseObservers(runId);
     }
     this.entries.clear();
     this.terminalized.clear();

@@ -683,9 +683,14 @@ describe('ToolUseFollowUpQueue ownership', () => {
     Effect.gen(function* () {
       const { followUps } = recordedFollowUps();
       const liveId = generateRunId();
+      const released: RunId[] = [];
+      followUps.onRelease((runId) => released.push(runId));
       followUps.claimLive(liveId, 'flow');
       followUps.dispose();
 
+      // Disposal releases every held run, so per-run observers (subscription
+      // pollers holding this session) let go of it.
+      expect(released).toEqual([liveId]);
       expect(followUps.claimLive(liveId, 'flow')).toBeUndefined();
       expect(followUps.claimChildRun(generateRunId())).toBeUndefined();
       expect(followUps.claimRecovery(liveId, true)).toBeUndefined();
