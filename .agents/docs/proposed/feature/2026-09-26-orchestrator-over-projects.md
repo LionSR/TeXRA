@@ -100,6 +100,18 @@ The `setup` agent's job is environment, keys, config, teams and the first task. 
 - **Onboarding funnel.**
   - `AgentRunLifecycle.ts` excludes runs of the agent named `SETUP_AGENT_NAME` from "first real run completed".
   - Since the orchestrator also does real work, the exclusion keys on the setup run instead: the run started by `setupLaunch.ts`. `SETUP_AGENT_NAME` goes away.
+- **UI.** The orchestrator takes over every surface the setup agent had. The funnel itself (`needs-credential` → `setup` → `done`, derived in `src/controllers/onboarding/onboardingFunnel.ts`) is unchanged; it is a fact about the user, not a project, so it renders in one place, the orchestrator's home.
+  - **`needs-credential`.** `OnboardingWelcomeCard` (`packages/extension/src/progressView/frontend/components/OnboardingWelcomeCard.ts`) moves unchanged into the orchestrator home. On first launch the desktop selects the Orchestrator row, which stands alone in the rail over "Open a project folder".
+  - **`setup`.**
+    - The setup hero moves from every project's new-task state (`ProgressApp.ts` `renderHero`, `host.onboarding === 'setup'`) to the orchestrator home. Its copy changes from "Set up {project}" to "Set up TeXRA".
+    - Its button, "Start setup", runs `setupLaunch.ts`; "Skip setup" stays.
+    - `ONBOARDING_SETUP_HANDOFF` (`src/ui/copy/onboarding.ts`) now reads: the orchestrator checks your environment, registers your projects and agents, and starts your first task.
+    - On desktop (`placement === 'desktop'`), projects no longer show the setup hero. VS Code, which has no orchestrator row, keeps the hero in its window.
+  - **`done`.** The orchestrator home is the "All projects" overview.
+  - **Desktop startup team panel** (`packages/desktop/src/renderer/desktopOnboarding.ts`, its IPC in `packages/desktop/src/main/desktopOnboardingIpc.ts` and messages in `packages/desktop/src/shared/desktopOnboardingMessages.ts`): **deleted.**
+    - Its question, "What are you working on?", becomes something the orchestrator can ask with `ask_user_question` during setup, answered by `apply_team` on each project. That is the same `applyAgentModePreset` path the panel used.
+    - The Settings team picker is unchanged.
+  - **CLI.** First-run continuation (`packages/cli/src/onboarding/setupContinuation.ts`) hands off into the orchestrator's session (`texra orchestrator`) instead of a `setup` run in the current directory.
 - **What does not change:** the proposal card's `'setup'` action (`src/shared/schemas/request.ts`). It means "open this delegation for editing" and is unrelated to the setup agent.
 
 ## Later, separate proposals
