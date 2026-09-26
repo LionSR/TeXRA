@@ -3,377 +3,173 @@ created: 2026-09-26
 status: proposed
 ---
 
-# TeXRA as the AI theorist: a Principal over projects, one theorist per project, a board and a tournament you can steer
+# TeXRA as the AI theorist: a Principal over projects, one theorist per project
+
+Baseline: `main` at `a65f817`. Builds on the archived [open-problem research roadmap](../../archived/feature/2026-07-05-open-problem-research-roadmap.md) and keeps its principles. **The harness provides tools, facts, memory, budget and limits. What to do with them is the model's call.** Nothing here is a scripted routine: no triggers the harness fires on the agent's behalf, and no strategy written into a prompt.
+
+## 1. The shape
+
+- **Principal**
+  - One agent at the computer level, in a session with no workspace. It works with the researcher on strategy across projects, sees every project, and dispatches agents into them.
+  - It has its own memory.
+  - Proactivity and scheduling are **tools it calls**, never harness behavior.
+  - It replaces the `setup` agent.
+- **Theorist, one per project**
+  - One agent with a few prompt-level roles. Domains are skills, not teams.
+  - It replaces the overlapping research agents and the "team" presets.
+- **Everything else is a tool** over machinery that already exists: delegation, workflow scripts, `inquiry`, `ask_user_question`, `memory`, the Lean, Wolfram and arXiv tools, and the subscription-to-follow-up path.
+
+## 2. Why (the lessons that change the design)
+
+Sources are in §8. Most of the 2026 material was read only through secondary reporting.
+
+- **Long horizons matter more than fan-out.** Noam Brown credits multi-agent with "not even 10%" of OpenAI's Navier–Stokes run, and says coordination wasn't measured. So make runs survive and resume before making them wide.
+- **Humans steer by entering ideas and judgments into the same ranking** (Google's AI co-scientist Elo tournament). Research taste, which Brown calls the missing piece, stays with the researcher.
+- **Verification includes novelty and readability.** The OpenAI Erdős episode turned out to be literature finds. The Navier–Stokes proof was called "not written for humans."
+- **Cost is the control variable.** Brown argues results should be reported against tokens, dollars and time.
+
+## 3. What exists, what's missing
+
+| Need | Exists | Missing |
+| --- | --- | --- |
+| Many projects in one process | `src/agent/runtime/sessionGraph.ts` (session per root); desktop registry `packages/desktop/src/main/desktopProjects.ts`, persisted in `desktopProjectRecords.ts` (global DB); SDK `Sessions.open(roots)` → `Session.start(...)` in `packages/agent/src/effect/sessions.ts` | No agent-callable tool reaches any of it; every tool is bound to its own session's roots |
+| A session with no workspace | Desktop fallback session (no workspace); CLI is one project per process (`packages/cli/src/runtime/cliContext.ts`) | Neither runs agents as a home |
+| Wake a run from outside | `github_subscription` → `RunSubscriptionRegistry` → `submitFollowUp` (`src/agent/followUp/ToolUseFollowUp.ts`), delivered as a `live_notification` follow-up; `inquiry` answers wake a run even after restart | No timer source; no source watching another project |
+| Memory | `memory` tool, per project, under the session's storage root (`src/tools/memory/memoryFileSystem.ts`) | Nothing at the home level |
+| Delegation and fan-out | `delegate_agent` / `delegate_workflow` (`src/tools/delegation/`), `delegate_multi_agents` (`src/agent/workflowScript/`), proposal approval (`proposalFlow.ts`) | Children always record into the parent's session. `working_directory` changes only the cwd |
+| Human in the loop | `ask_user_question`, `inquiry`, approvals (`src/agent/runtime/runApprovalQueue.ts`), queued follow-ups (`src/agent/runtime/FollowUps.ts`) | Follow-ups are taken only at the turn boundary (`toolUse.ts` "The turn boundary"), not between tool calls |
+| Path safety | `resolveToolPath` (`src/tools/pathResolution.ts`), external roots (`src/utils/files/externalRoots.ts`) | No kind for a folder the user grants |
+| Agents | 19 tool-use agents, 5 Lean-plugin agents, 7 workflow agents and 11 remote workflow agents; 4 coordinators (`orchestrator`, `engineer`, `leanOrchestrator`, `assistant`); "team", "mode preset" and "multi-agent preset" for one concept (`src/shared/schemas/agentPresets.ts`, `src/common/teams/`) | One theorist; one coordinator per level |
+| Verification | Lean tools (`src/tools/lean/`), `wolfram`, compile check (`src/agent/output/compileCheck.ts`), arXiv, Crossref, web search | No verification report; no novelty check; no Semantic Scholar or OpenAlex |
+| Selection | Only the prompt line in `orchestrator.yaml` | A tournament is a workflow script nobody has written yet |
+
+## 4. The work
+
+### 4.1 Principal: one agent, tools, own memory
+
+**Home session.** Promote the desktop fallback session into a real session: workspace = user home, storage = global storage root. Give it a Home view on desktop and `texra home` on the CLI. VS Code keeps its one-folder rule (`packages/extension/src/extension.ts`).
+
+**Own memory, no new mechanism.** The existing `memory` tool, run in the home session, writes under the global storage root. How the Principal organizes it is its own call. Project runs never see it: it sits outside every project root, and no project prompt mentions it. Knowledge reaches a project only when the Principal puts it in a `dispatch` or `steer`. The Settings Memory tab gets a Principal/project scope switch.
+
+**Two new tools**, each with a single `command` field like `memory` and `github_subscription`:
+
+- **`projects`**, over a host-agnostic `ProjectRegistry` port served by the process runtime. Desktop serves it from `DesktopProjectRegistry`; the CLI serves it from the same global-DB records.
+  - `list`, `status <p>`: registry, plus each project's session view (runs, pending requests, spend). `status` also returns the Board.
+  - `read <p> memory|board|file`: read-only.
+  - `create`, `open`, `close`: registry operations. `create` reuses the sample, Overleaf and arXiv project flows without needing VS Code commands.
+  - `grant <p> <folder> ro|rw`: a new external-root kind, `userFolder`, checked by `resolveToolPath`.
+  - `dispatch <p> <agent> <task> [goal] [budget] [model]`: `Sessions.open(roots).start(...)`. The run lives, is approved and is recorded **in the target project's session**.
+  - `steer <run> <text>` / `stop <run>`: `submitFollowUp` / interrupt, on the target session.
+  - `watch <p|run>` / `unwatch`: a subscription whose source is the target session's view. Changes arrive as `live_notification` follow-ups, the same path `github_subscription` uses. What to watch is the Principal's call.
+- **`schedule`**: `at <time> <note>`, `in <duration> <note>`, `list`, `cancel`. A timer source over the same `RunSubscriptionRegistry` → `submitFollowUp` path. When it fires, the note arrives as a follow-up. There is no daemon; when to check in is the Principal's call.
+  - v1 has the subscriptions' lifetime: the run and the process.
+  - Surviving a restart is open question 1.
+
+**Proactive means it can speak first.** Messages the Principal posts from a `schedule` or `watch` wake-up show in Home. Raised to the OS through the desktop's existing attention path (`packages/desktop/src/main/desktopAttention.ts`), they become a notification. It reaches the researcher through `ask_user_question` and `inquiry`, which exist today. The researcher sets quiet hours and a rate cap; the host enforces them.
+
+**Strategy with the researcher.**
+- A Strategy note in the Principal's memory that the researcher can edit from the Memory tab.
+- Choices go through `ask_user_question` or `inquiry`.
+- For many candidate directions, the tournament script (§4.4), with the researcher's votes as matches.
+- No new surface beyond the Home chat.
+
+**Autonomy is one setting**, enforced where approvals already live (`runApprovalQueue.ts` policy):
+
+| Level | Without asking | Asks the researcher |
+| --- | --- | --- |
+| `advise` | read, `watch`, `schedule`, message | every `dispatch`, `steer`, `stop` |
+| `delegate` | the above, plus `steer`/`stop`/re-`dispatch` of approved goals | new goals, budget increases |
+| `autonomous` | the above, plus new `dispatch` within the portfolio budget | exceeding the budget |
+
+At every level, `create`, `grant` and the Principal's own `bash` always ask. The Principal's file tools read under home except a deny list (`~/.ssh`, credential stores, `~/.texra` databases, browser profiles).
+
+### 4.2 One theorist per project
+
+- **One `theorist.yaml`** with prompt-level roles:
+  - `lead`: owns the campaign.
+  - `worker`.
+  - `skeptic`: sees the artifact only, not the reasoning trace.
+  - `referee`: fresh context.
+  - `expositor`: key ideas, a talk outline, the LaTeX write-up, and a provenance card.
+- **Roles run through `delegate_agent`.** How the lead decomposes and spends is its call.
+- **Remove:**
+  - `orchestrator` becomes `lead`.
+  - `prover`, `research`, `numerics`, `review` and `search` fold into the theorist plus skills.
+  - `leanOrchestrator` becomes a Lean skill.
+  - The remote `devise`, `enhance`, `elevate` and `verifyFix` workflows: see open question 2.
+- **Keep:** the single-purpose writing agents (`correct`, `polish`, `paper2slide`, …) and the software team.
+- **Presets:** `AGENT_MODE_PRESETS` becomes theorist + skills + default budget, under one name. `apply_team` goes with `setup` into the Principal.
+
+**The Board.** The project's campaign state is a Markdown note in project memory, with the July roadmap's evidence pointers (`[lean: …]`, `[cas: …]`, `[cite: …]`) and a claim level on each claim (conjecture, supported, verified, refuted). It is written through the existing `memory` tool and needs no new schema. `projects status` and the desktop render it. It becomes typed rows only if rendering or the researcher's edits prove the Markdown insufficient.
+
+### 4.3 Steering and verification
+
+- **Nudges between tool calls.** Let a run take queued follow-ups at a tool-call boundary, not only at the turn boundary (`toolUse.ts`, `toolUseDispatch.ts`, `FollowUps.ts`). This is the one change to the loop in this note.
+- **`verify` tool.** It returns a report per check:
+  - Lean diagnostics plus a `sorry`/axiom audit.
+  - CAS identities at random points the harness draws.
+  - LaTeX compile.
+  - Novelty: prior-work search, with **Semantic Scholar and OpenAlex** added next to the arXiv and Crossref tools.
 
-**Recommendation.** Stop growing an agent zoo and build around three things:
+  Delegated results carry the report (`formatSubagentDelivery` in `src/tools/delegation/subagentResults.ts`). Whether and when to call it is the agent's call.
 
-1. **One Theorist agent.** It has a small set of roles, all defined in prompts. Domain knowledge comes from skills, not from separate agents or teams.
-2. **One Research Board.** This is a durable, host-rendered record of a campaign: ideas, claims, evidence, open questions, budget. The agent and the researcher edit the same object. It is the steering surface.
-3. **One idea tournament.** It ships as a workflow-script library over the existing `delegate_multi_agents` interpreter, not as a harness flow. It keeps Elo ratings on the Board, and the researcher's own ideas and votes are first-class entries and matches in it.
+### 4.4 Tournament as a workflow script
 
-These sit on top of the long-horizon, ground-truth and verification work that the July roadmap already ranked, plus two new first-class checks: **novelty** (prior work) and **digestion** (human-readable exposition).
+- **A shipped `tournament` script for `delegate_multi_agents`,** not a harness flow. It does blind pairwise judging, Elo from 1200, debate for the top pairs, and improvements as new entries. Researcher votes arrive through `ask_user_question` inside the script.
+- **Iterating the method means editing the script.**
+- **The same script serves** project-level ideas and the Principal's portfolio choices.
 
-**Above all projects sits a **Principal**: one agent rooted at the computer, not at a project. It lists, creates and opens projects, grants folders to them, and starts, watches and steers runs in each project's own session. That makes the hierarchy exactly three levels: Principal (computer) → theorist `lead` (project) → roles (branch). See §3.8.
+### 4.5 Benchmark
 
-Order of work: evaluation first, then consolidation, then the Board, then steering, then verification, then tournaments, then scale.** Without a theorist benchmark that reports cost, nothing after it can be judged, including the tournament's own design.
+- **A private, versioned set,** re-run on model or prompt changes and reported as success × tokens × dollars × time:
+  - CAS-checkable derivations.
+  - Lean lemmas.
+  - Problems with known answers, including "already in the literature" traps.
+  - Honesty cases, where a confident wrong answer scores below a miss.
+  - Steering cases.
+- **The benchmark decides** whether the tournament and wide dispatch earn their cost.
 
-Baseline: `main` at `a65f817`. Builds on, and argues against in two places (§6), the archived [open-problem research roadmap](../../archived/feature/2026-07-05-open-problem-research-roadmap.md). That roadmap's principles still hold unless this note says otherwise.
+## 5. Order
 
-## 1. What the frontier teaches (as of 2026-09)
+| # | Work | Main files | Done when |
+| --- | --- | --- | --- |
+| 0 | Benchmark (§4.5) | new `scripts/` harness | Baseline for today's `prover` / `orchestrator` |
+| 1 | Theorist consolidation, one preset name | `packages/extension/resources/tool_use_agents/`, `agentPresets.ts`, `src/common/teams/` | Benchmark no worse; far fewer agent files |
+| 2 | Home session, `projects` (`list`/`status`/`read`), Principal memory, `setup` folded in | `sessionGraph.ts`, `desktopProjects.ts`, new `src/tools/projects/`, `pluginManifest.ts`, `registry.ts` | Home shows every project; a project run cannot reach home storage |
+| 3 | `projects dispatch`/`steer`/`stop`/`watch`, `schedule`, autonomy levels | `packages/agent/src/effect/sessions.ts`, `RunSubscriptionRegistry` pattern, `submitFollowUp`, `runApprovalQueue.ts` | A run dispatched from Home is recorded and resumable in its project; a `schedule` wake-up arrives as a follow-up |
+| 4 | Tool-boundary nudges | `toolUse.ts`, `toolUseDispatch.ts`, `FollowUps.ts` | Steering benchmark cases pass |
+| 5 | `verify` + Semantic Scholar/OpenAlex; `grant` | `src/tools/lean/`, `src/tools/wolfram/`, `subagentResults.ts`, `externalRoots.ts`, `pathResolution.ts` | No `verified` claim without its evidence; novelty traps caught |
+| 6 | Tournament script | `src/agent/workflowScript/` | Beats single-shot at equal cost on the benchmark, or is dropped |
 
-Sources are in §9. Most 2026 claims were read only through secondary reporting and are still disputed. Treat the numbers as indicative, not established.
+## 6. Not building
 
-- **Long horizons matter more than fan-out.** In OpenAI's Navier–Stokes campaign (about 10k agents, 88 h, reported cost over \$10M), Noam Brown gives multi-agent "not even 10%" of the credit: "we have a very powerful model… we can get it to operate over very long horizons," and "we don't actually have good measurements" of coordination. Brown also treats parallel agents as a **latency** tool: more agents give a faster answer at worse efficiency, and they help most on decomposable work such as math. *Lesson:* make one agent survive for days before making many agents run for hours.
-- **Test-time compute is the control variable.** Brown argues results should be reported against tokens, dollars and wall-clock time. *Lesson:* budget is a first-class input and every evaluation reports cost.
-- **Hedge both directions.** The Navier–Stokes run gave separate agent groups the "prove regularity" and "prove blowup" variants. A consolidator (Codex) periodically merged intermediate results and cross-seeded the groups. *Lesson:* the harness must make such shapes cheap to express (parallel branches, a shared Board). Whether to use them is the agent's call.
-- **Rank pairwise, not with absolute scores.** Google's AI co-scientist uses Elo (new entries start at 1200), pairs similar ideas using a proximity graph, runs multi-turn debates only for top-ranked pairs, and evolves ideas **as new entries** rather than editing old ones. A meta-review turns recurring critiques into prompt feedback. Scientists steer by **adding their own hypotheses and reviews to the same tournament**. Elo tracked accuracy, and quality kept rising with compute without saturating.
-- **Discovery and verification are separate stages.** Lean formalization of the Navier–Stokes result took a further 17 h after discovery. AlphaProof adds test-time RL on generated problem variants. DeepMind's Aletheia (generator → verifier → reviser) is valued because it **admits failure**. The IMO-gold model declined Problem 6 rather than bluffing.
-- **Novelty is where claims go wrong most often.** OpenAI's "10 Erdős problems" (October 2025) were literature finds. DeepMind's Erdős sweep found many "open" problems were open "through obscurity rather than difficulty" and warned of "subconscious plagiarism." *Lesson:* a prior-work check is part of verification.
-- **Proof digestion.** The Navier–Stokes proof is machine-checked, but mathematicians called it "not written for humans." Tao's ICM essay: if the authors can't give an expert-level talk on a result, it shouldn't be published. Effort should move toward exposition, refereeing and canonicalization. *Lesson:* producing an exposition is a verification stage, and TeXRA's LaTeX pipeline is a real advantage here.
-- **Taste stays with the human, for now.** Brown names "research taste" (is this direction significant and original?) as the missing piece. Tao's blue-team/red-team framing and pAI/MSc's "humans on the loop" point the same way. *Lesson:* the UI should put **direction, significance and pruning** decisions in front of the researcher and leave breadth, checking and literature work to agents.
-- **Disclosure.** Aletheia's human–AI interaction cards and autonomy levels, and Tao's disclosure norm. *Lesson:* every result carries a provenance card saying who proposed what, which checker passed it, and which sources it drew on.
+- **No new flow type,** tournament flow, team type or daemon.
+- **No harness-fired routines.** Every wake-up is one the agent asked for through `watch` or `schedule`.
+- **No global run log.** Each run lives in its project's session.
+- **No second event channel.** Cross-project delivery is `submitFollowUp`.
 
-## 2. Where TeXRA stands
+## 7. Open questions
 
-**Strengths:**
-- A crash-safe run ledger with resume.
-- Goal mode for autonomous continuation (`src/agent/goal/maybeBuildGoalContinuation.ts`).
-- Asynchronous human questions that survive restarts (`src/tools/inquiry/ExternalInquiryTool.ts`).
-- Thorough approvals.
-- Memory (`src/tools/memory/`).
-- Tools for Lean 4, Wolfram, arXiv, Crossref, Zotero and web search.
-- A deterministic, journaled fan-out engine (`src/agent/workflowScript/`).
+1. `schedule` across restarts: is the in-memory subscription lifetime enough, or should a pending schedule persist? The candidate is the global-DB, wake-after-restart path that `inquiry` already uses.
+2. The remote workflow agents (`devise`, `enhance`, `elevate`, `verifyFix`, …): fold them into theorist roles, or keep them as hosted skills?
+3. The Principal's read scope: home minus a deny list, or only registered projects?
+4. The default autonomy level: `advise` or `delegate`?
 
-**The mess:**
+## 8. Sources
 
-- **Agents in four places.** There are 19 tool-use agents, 5 Lean-plugin agents, 7 workflow agents and 11 remote workflow agents (`prompts/agents/remote/workflow/`).
-- **Four coordinators:** `orchestrator`, `engineer`, `leanOrchestrator`, and `assistant`, which also delegates. Their prompts repeat each other.
-- **Theorist work split across overlapping agents:** `prover`, `research`, `numerics`, `review` and `search`, plus the remote `devise`, `enhance`, `elevate` and `verifyFix`.
-- **Skills that mirror agents:** `manuscript-review`, `mathematical-enhancer`, and others.
-- **"Teams" are fixed rosters under three names.** "Mode preset", "team" and "multi-agent preset" all mean the same thing (`src/shared/schemas/agentPresets.ts`, `src/common/teams/`). The physicist, mathematician and cs-ml teams are lists of agents, not ways of working together.
-- **No selection machinery at all.** No tournament, judge or best-of-N. The orchestrator prompt only says to "propose the same work to different agents and synthesize."
-- **The July roadmap is mostly unbuilt.** Budgets, notebook, `VerifierReport`, handoff and skeptic/referee do not exist. `prover.yaml` still carries the strategy heuristics that roadmap wanted removed.
-- **Steering only at turn boundaries.** Queued messages are consumed at turn boundaries (`src/agent/runtime/FollowUps.ts`, `toolUse.ts` "The turn boundary"). The researcher can stop a run or queue a message, but cannot redirect a long run in progress, prune a branch, or promote an idea.
+The proxy blocked most sites, so only arXiv pages were read directly.
 
-## 3. The target design
-
-### 3.1 One Theorist, a few roles, domains as skills
-
-Replace the theorist-facing roster with **one `theorist` agent**. It takes a small set of roles, each a prompt plus a toolset, never a separate product surface:
-
-| Role       | Job                                                                                                                                  | Sees                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
-| `lead`     | Owns the campaign and the Board; how it decomposes and spends is its call                                                            | Everything                                              |
-| `worker`   | Attacks one branch: derivation, computation, construction, literature                                                                | Its branch, the Board summary                           |
-| `skeptic`  | Finds a concrete gap (exact line, candidate counterexample) or signs off                                                             | The artifact and problem statement only — no reasoning trace |
-| `referee`  | Fresh-context check before any claim is promoted: verification ladder plus novelty                                                   | The deliverable and its evidence pointers only          |
-| `expositor`| Produces the digest: key ideas, an expert-talk outline, the LaTeX write-up, the provenance card                                      | The verified claims                                     |
-
-- **Domains** (mathematician, theoretical physicist, theoretical CS, ML theory, Lean) become **skills and tool bundles** the theorist loads, not teams. "Mode presets" collapse to "theorist + these skills + this default budget."
-- **Delete the duplicate coordinators.** `orchestrator` becomes the `lead` role. `leanOrchestrator` becomes a Lean skill. `engineer` stays only as a software team, outside the theorist product.
-- **Agents that survive** are single-purpose writing tools (`correct`, `polish`, `paper2slide`, …) and the software team. Everything research-shaped is the theorist.
-- **Prompts** keep principle 3 of the July roadmap: no problem-specific heuristics. Roles describe *what evidence to produce*, not *how to attack*.
-
-*Why this is maintainable.* Adding a capability becomes a skill or a tool; changing a strategy becomes a prompt or workflow-script edit. The number of places that need changing drops from about 40 agent files to 5 role prompts plus skills.
-
-### 3.2 The Research Board: the shared object the human steers
-
-A campaign has one Board, persisted with the session and rendered by all three hosts:
-
-- **Goal and budget:** the objective, plus a tokens, dollars and wall-clock envelope with live spend (the July roadmap's C3).
-- **Branches:** the decomposition, whatever shape the lead chooses. Each branch has a status (`active` / `paused` / `pruned` / `closed`) and a budget share.
-- **Ideas:** tournament entries, each with an Elo rating, lineage (parents, if any), author (agent role or *researcher*), and match history.
-- **Claims:** statements with one of the levels `conjecture` / `supported` / `verified` / `refuted`. Each carries **evidence pointers** (`[lean: …]`, `[cas: …]`, `[run: …]`, `[cite: …]`, the July C7 convention), and a `novelty` field recording the prior-work check result and its citations.
-- **Open questions:** questions for the researcher, backed by `inquiry` requests, so they wake the run when answered.
-- **Digest:** the expositor's latest summary. This is the "morning brief."
-
-The agent writes the Board through one tool (`board`: append idea or claim, update status, record match) and reads it in every continuation, replacing the July `{{notebook}}` variable. The researcher edits the same records from the UI. **Every researcher edit is an ordinary queued input to the run.** There is no second writer (see §3.3).
-
-### 3.3 Steering at three levels
-
-| Level        | Researcher does                                                                                                  | Mechanism                                                                                                                    |
-| ------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Nudge**    | Types "try the Fourier side" while a long turn runs                                                              | **New:** delivered at the next *tool-call* boundary, not the next turn boundary. The one real runtime change in this note.   |
-| **Redirect** | On the Board: prunes a branch, promotes or kills an idea, adds own idea, changes budget split, marks a claim wrong | Board edits become follow-up rows; the lead sees them as structured events ("researcher pruned B3: *reason*")               |
-| **Decide**   | Answers ballots: "pick 2 of these 5 directions", "is this lemma known?"                                         | Existing `inquiry` / `ask_user_question`; the tournament script can yield a **human match** as an operation                 |
-
-Plus two passive surfaces:
-
-- **Digest.** A scheduled or on-demand summary: what changed, which claims moved levels, what needs the researcher.
-- **Provenance card** on every exported result.
-
-**The researcher votes in the tournament.** A human pairwise judgment is a match with a higher K-factor than an agent's. A researcher's idea enters at 1200 like any other. This is how co-scientist makes steering native, and it gives the one piece of data an AI theorist most lacks: **the researcher's taste, recorded as preferences.** Later it can calibrate the judge prompts (the meta-review).
-
-### 3.4 The idea tournament as a workflow-script library
-
-The tournament ships as a **library of workflow scripts** run by `delegate_multi_agents`, not as a `TournamentFlow` in the harness. That respects the July roadmap's principle 2. It builds from the existing primitives:
-
-```
-generate(k, lenses)        → ideas on the Board at Elo 1200
-dedupe + proximity          → cluster ids (embedding or judge)
-round(pairs by proximity, favouring new and top-rated)
-  top tier:   multi-turn debate (skeptic vs advocate) → judge
-  lower tier: one-shot blind comparison → judge
-  human match: yield a ballot when the researcher opted in
-evolve(top m)              → NEW entries (combine, simplify, ground, diverge), never edits
-meta-review                → recurring critique patterns → notes appended to role prompts
-stop when budget spent or top-k stable for r rounds
-```
-
-Rules the scripts enforce, all taken from the literature:
-- Judges are **blind**: no model names, costs or reasoning traces.
-- **Verifier-passing entries strictly outrank failing ones.** Judges only break ties.
-- A refuted claim ends its idea's run; its obstruction is kept as a Board note.
-
-**The harness's only new job is to make the Board the tournament's store.** Elo, matches and lineage are then durable, rendered and editable by the researcher.
-
-Uses beyond research problems:
-- Choosing a proof strategy.
-- Choosing among paper framings.
-- Ranking referee-response options.
-- **Ranking proposals for TeXRA itself.** The July roadmap was produced this way, by hand.
-
-### 3.5 Verification ladder, with novelty and digestion as rungs
-
-Each rung produces an evidence pointer, and the referee reports which ones passed (the July roadmap's C17 `VerifierReport`, extended):
-
-1. **Self-check.** The worker's own adversarial pass.
-2. **Skeptic.** Artifact-only.
-3. **Computational.** CAS or numeric identities evaluated at **randomized points the harness draws**, plus small-case enumeration.
-4. **Novelty.** Search arXiv, Crossref and web for prior work, then a judge decides between "known", "folklore" and "new". Needs **Semantic Scholar / OpenAlex** tools (missing today) with citation provenance.
-5. **Formal.** Lean via the existing tools, run as a **separate stage after discovery**. It passes only with clean diagnostics and an axiom/`sorry` audit.
-6. **Digestion.** The expositor must produce a key-ideas summary and a talk outline that a fresh referee judges faithful to the proof.
-7. **Human.** The researcher marks the claim accepted.
-
-`verified` requires rungs 1–4 plus rung 5 **or** rung 7. The level is shown, never hidden. "Not solved; here is a precisely recorded obstruction" is a successful outcome and is displayed as one.
-
-### 3.6 Long horizons before wide fan-out
-
-From the July roadmap, in its order:
-- Goal budgets with pause-not-kill semantics.
-- An auto-resume daemon.
-- Context handoff: the lead ends its own context and continues from Board plus brief.
-- Budget telemetry in every continuation.
-
-These are what Brown's evidence says matters most. Patterns such as a prove/disprove split or periodic consolidation need no new machinery on top, and the harness does not prescribe them.
-
-### 3.7 Scaling toward very large campaigns without re-architecting
-
-The same shapes scale:
-- The Board is a blackboard.
-- Workflow scripts are the scheduler.
-- The budget is the only bound.
-
-Going from 4 agents to 400 means a remote executor behind the workflow interpreter's `agent` operation and a Board store that tolerates concurrent writers through the session's single publisher. Neither is needed now, and neither should be built before evaluation shows fan-out paying for itself (§4).
-
-### 3.8 The Principal: one agent at the computer root
-
-The researcher works on several projects at once: papers, problems, a Lean formalization, a talk. Today every agent is bound to a single project. Every tool resolves paths against its own session's roots (`src/tools/pathResolution.ts`). The `executions` tool reads only its own session. Children launched with `working_directory` still record into the parent's session. Nothing an agent can call lists projects, opens a folder, or reaches a run in another project.
-
-The runtime is already ready for more:
-- The session owner holds many sessions per process (`src/agent/runtime/sessionGraph.ts`).
-- The desktop keeps a persisted project registry in the global database (`packages/desktop/src/main/desktopProjects.ts`, `desktopProjectRecords.ts`).
-- The SDK's `Sessions.open(roots)` → `Session.start(...)` → `Run` is a programmatic API across projects (`packages/agent/src/effect/sessions.ts`).
-
-The Principal is the agent-facing surface over what already exists.
-
-**Where it lives.** A **home session**: a session whose workspace is the user's home directory and whose storage is the global storage root. It is the desktop's existing no-workspace fallback session, promoted to a real one. Each host enters it this way:
-- **Desktop:** a Home view above the project rail.
-- **CLI:** `texra` with no project (or `texra home`).
-- **VS Code:** stays single-project. Its one-folder rule in `extension.ts` stands. It can show "managed by Principal" status but does not host the Principal.
-
-The Principal runs on the same tool-use loop as every other agent. It differs only in its root, its tools and its prompt. It absorbs the `setup` agent's job (environment, keys, teams), which removes one more coordinator.
-
-**One tool, `projects`,** served through a new host-agnostic `ProjectRegistry` port in the process runtime. Desktop serves it from its existing registry; the CLI serves it from the same global-database records. Commands:
-
-| Command                           | Effect                                                                                                                                                         | Approval                           |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| `list` / `status <project>`       | Projects with running runs, pending requests, spend and Board digest, read from each project's session view                                                     | none                               |
-| `create <path> [from]`            | New folder, initialized as a project: empty, template, git clone, Overleaf, arXiv source. Reuses the existing sample, Overleaf and arXiv flows, now reachable without VS Code commands | once per create                    |
-| `open` / `close` / `archive`      | Registry operations; `close` stops only that project's runs                                                                                                     | `close` with live runs             |
-| `grant <project> <folder> ro\|rw` | Attaches an outside folder (data, a shared bibliography, a sibling repo) to a project                                                                           | always; revocable; shown on the project |
-| `dispatch <project> <agent> <task> [goal] [budget] [model]` | Sends any agent (theorist lead, writer, Lean, a custom agent) to any registered project, as a one-off task or a standing goal with its own budget share. Several can run at once across projects. `Sessions.open(roots).start(...)`: the run lives, is approved and is recorded **in the target project's session**, with a link back to the Principal's run (§3.8.3) | per the autonomy level (§3.8.3); inside the run, the project's own rules |
-| `steer` / `stop <run>`            | Queues a follow-up into that run, or interrupts it                                                                                                             | none                               |
-| `read <project> board\|memory`    | Reads the project's Board and memory; writes go through the project's own agents                                                                                | none                               |
-
-**Rules that keep it maintainable:**
-
-- **Work runs where it belongs.** A run the Principal starts is an ordinary run in that project's session: its ledger, its Board, its approvals, its single publisher. The Principal holds references, never copies. This replaces the `working_directory` workaround for cross-project work, which records into the wrong session.
-- **No new event channel.** The Principal reads other projects through the session view and SDK `Run.events`, as the desktop's cross-project attention badge already does (`packages/desktop/src/main/desktopAttention.ts`). Anything it authors is a `SessionEvent` in its own home session.
-- **Three levels, fixed.** Principal → the agents it dispatches into a project (usually a theorist lead) → their roles and subagents. The Principal steers the runs it dispatched. It doesn't reach into a run's own subagents; the dispatched agent owns those.
-
-**Safety at computer scope.** A computer-root agent is the most powerful thing TeXRA would ship, so its own reach is narrow:
-
-- **Filesystem:** the Principal's file tools may *read* under the home directory, except a built-in deny list: `~/.ssh`, keychains and credential stores, `~/.texra`'s databases, browser profiles. It *writes* only inside its home workspace. All other writes happen through `create` or through project agents inside their own roots.
-- **Granted folders:** these become a new external-root kind (`userFolder`, read-only or writable) alongside the host-registered kinds in `src/utils/files/externalRoots.ts`. They are persisted per project and checked by the existing `resolveToolPath` guard, so `restrictPathsToWorkingDirectory` keeps its meaning.
-- **Bash:** the Principal's `bash` is always approval-gated, whatever the run's approval policy.
-
-**No scripted behaviors.** The Principal gets capabilities (the `projects` tool, the ledger in §3.8.2, its own memory, one budget envelope across projects) and the safety rules above. What it does with them is the model's call: when to brief, when to rebalance budget, whether something in one project matters to another, what to escalate. The system prompt says *what the job is* (be the researcher's strategy partner across their projects, keep the work moving and the researcher informed, and take initiative within the granted autonomy) and *what the limits are*, never a list of routines. Principle 3 of the July roadmap ("general methods, not problem-specific strategies") applies here exactly as it does in a project. Any behavior worth having should emerge from a capable model with good visibility. If it doesn't, the fix is better visibility or a better model, not a hand-written routine.
-
-#### 3.8.1 The Principal's own memory
-
-Today memory is per project. The `memory` tool writes `/memories/*.md` under the session's storage root (`src/tools/memory/memoryFileSystem.ts` through `StorageFs`), which lands at `~/.texra/workspace-storage/<workspace>-<hash>/memories/` (`docs/guide/memory.md`).
-
-The Principal gets **its own memory with no new mechanism**: the same tool in the home session writes under the home session's storage root, the global one. Implementation has to confirm the fallback session's storage resolves there rather than to an anonymous workspace slot.
-
-**Three scopes, one tool:**
-
-| Scope         | Lives in                          | Written by                                  | Read by                                                        |
-| ------------- | --------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| **Principal** | home session storage (global)     | the Principal; the researcher in Settings   | the Principal only. Project runs never see it                  |
-| **Project**   | that project's storage (as today) | that project's agents; the researcher       | that project's runs; the Principal read-only via `projects read` |
-| **Board**     | that project's session (§3.2)     | that project's lead and roles; the researcher | campaign state, not memory: what is true *now* in one campaign |
-
-**What goes in the Principal's memory is the Principal's call.** There is no prescribed layout, directory scheme or distillation schedule. The tool and the scope are provided; the organization emerges.
-
-**How knowledge moves between scopes:**
-
-- **Up, from project to Principal.** The Principal can read any project's memory and Board. What it keeps in its own memory, and when, is its call. Project memory stays the source of truth for the project.
-- **Down, from Principal to project.** This happens only by explicit dispatch, never by a project reading upward. When a project needs something the Principal knows (the researcher's notation, a deadline, a lesson from another project), the Principal puts it in the `dispatch` instruction or a `steer` to that project's lead. If it should persist, the lead records it in *project* memory in its own words. Project agents get no tool, path or prompt that points at home: global storage sits outside every project root, so `resolveToolPath` refuses it for file tools while `restrictPathsToWorkingDirectory` is on (the default), and role prompts do not mention the Principal's memory. `bash` is not path-guarded, so for bash this is discouragement, not enforcement. If that is not enough, the home storage directory joins the deny list for project runs' approval preview.
-- **Across.** No direct channel. A project can't read or write another project's memory; anything that crosses goes through the Principal's own `steer`/`dispatch`. This is a structural rule about who writes where, not a behavior: whether anything crosses is up to the Principal.
-
-**Rules:**
-- **Read-only, not re-authored.** Memory read from another scope is shown to the agent as data, never re-authored as instructions.
-- **Same pin limit.** The Principal's pinned notes load at every Principal session start, with the same limit as today (10).
-- **No secrets.** The home session's deny list (§3.8) applies to what the Principal may copy into memory; keys and credentials never land there.
-- **Researcher sees and edits everything.** The Settings Memory tab gains a scope switcher (Principal / this project), so the researcher can read, edit, unpin or delete anything the Principal remembers about them.
-
-#### 3.8.2 The holistic view: the household ledger
-
-The Principal's job is that of a 大内总管, the palace's chief steward. It knows at all times what is happening in every project, surfaces what needs the researcher, and dispatches work. The researcher decides. Information flows **up** to the Principal continuously. It flows **down** only as the Principal's explicit dispatches. Projects never look up and never look sideways.
-
-That knowledge must not depend on the Principal remembering to call `status` on every project. The Principal gets a **household ledger**: a derived, always-current view across the registry, injected compactly into every Principal turn.
-
-- **Per project:**
-  - Priority and deadline, from the Principal's `projects/` note.
-  - Live runs, with their phase and how long they've run.
-  - Requests waiting on the researcher, with their age.
-  - Spend against budget.
-  - Board changes since the Principal last looked: claims that moved level, ideas promoted or killed, new open questions.
-  - The last researcher decision.
-- **Across projects:**
-  - Everything blocked on the researcher, oldest first.
-  - Budget burn.
-
-**How it is built, from pieces that exist:**
-- The ledger is a **fold over each project session's view**, the same view the desktop's cross-project attention badge already computes (`packages/desktop/src/main/desktopAttention.ts`), plus the registry. It is derived, never stored, so it cannot drift from the projects.
-- It uses **no new event channel.** The Principal's host subscribes through the SDK's session views; see "No new event channel" in §3.8.
-- **"Since last looked"** is the one piece of state the Principal owns: a per-project watermark in the home session, advanced when a ledger is delivered to a Principal turn.
-
-**Wake-ups.** The Principal does not poll. A change in the ledger queues a follow-up into the Principal's home run. The triggers are plain facts with no judgment inside them:
-- A run ended.
-- A request opened.
-- A claim changed level.
-- Spend crossed the researcher's envelope.
-
-The harness doesn't guess which changes matter. If waking on every change proves too noisy, the fix is to batch wake-ups, not to add heuristics.
-
-Each wake-up is an ordinary queued input, so it is durable, deduplicated by the watermark, and visible in the Principal's transcript.
-
-The ledger reports facts, not interpretations. It has no "stalled", "collision" or "important" flags; noticing those is the Principal's job.
-
-#### 3.8.3 Strategy partner, initiative, dispatch
-
-The Principal is not a passive switchboard. It is the one agent the researcher plans *with*: which problems to pursue, in what order, with how much compute, and when to drop something. Each of the three needs below is met by a capability, not a script.
-
-**Working on strategy with the researcher.**
-- **The Strategy note.** A portfolio-level record in the home session. It holds the researcher's aims, the bets currently on (which projects, why, what would change the plan), what was decided and when, and open strategic questions.
-  - It is the §3.2 Board one level up: the Principal and the researcher both edit it.
-  - Every edit the researcher makes reaches the Principal as a queued input, as Board edits do.
-  - The Principal reads it every turn, next to the ledger.
-- **Structured decisions.** For a strategic choice the Principal can put options in front of the researcher with `ask_user_question` or an `inquiry`. For many candidate directions it can run the §3.4 tournament at portfolio level, with the researcher's votes as matches.
-- **Conversation.** The Home chat is where strategy gets discussed. Nothing constrains its form; the note is where conclusions land.
-
-**Initiative.** Proactivity needs two capabilities the Principal lacks today. Both come with researcher-set limits and no prescribed triggers:
-- **Its own clock.** A `schedule` capability lets the Principal set its next wake-up ("check back at 09:00", "in 3 hours"). It works like the §3.8.2 wake-ups and is stored as a durable queued input in the home session. The desktop main process or `texra daemon` delivers it, which is the same host piece as the §3.6 auto-resume daemon. When to check in is the Principal's call.
-- **Reaching the researcher first.** The Principal can open a conversation without being asked: a message in Home, an OS notification through the desktop's existing attention path, or an `inquiry` that waits for an answer. The researcher sets quiet hours and a maximum notification rate; the host enforces them.
-
-**Dispatch and the autonomy level.**
-- **Dispatch covers any agent, project and model.** The Principal can dispatch any agent the target project has to any registered project, with a budget share taken from the portfolio envelope. It can run several dispatches concurrently, then steer, stop or re-dispatch based on what the ledger shows.
-- **What it may do without asking** is one researcher setting, not behavior coded in the harness. The approval runtime enforces it:
-
-| Level       | Principal may, without asking                                                 | Needs the researcher                          |
-| ----------- | ----------------------------------------------------------------------------- | --------------------------------------------- |
-| `advise`    | Read, brief, propose                                                          | Every dispatch, steer and budget move         |
-| `delegate`  | Continue approved work: re-dispatch, steer and stop within existing goals and budgets | New goals, new projects, budget increases, `grant` |
-| `autonomous`| Dispatch new goals inside the portfolio envelope                              | Exceeding the envelope, `create`, `grant`, `close` with live runs |
-
-**What doesn't change at any level:**
-- The safety rules in §3.8.
-- Each project's own approval rules for edits and `bash` inside a dispatched run.
-- The researcher can override anything the Principal set in motion from the ledger view.
-
-## 4. Evaluation first: a theorist benchmark
-
-Nothing above can be tuned without a benchmark. Keep a private, versioned set that is re-run on every model or prompt change and reports **success × tokens × dollars × wall-clock time**, per Brown:
-
-- **Derivations** in physics and TCS with checkable closed forms (CAS-verified).
-- **Lemma formalization** tasks with known Lean proofs.
-- **Problems with known answers:** resolved Erdős-style problems, post-cutoff arXiv results, and "is this known?" novelty cases, including traps where the answer *is* in the literature.
-- **Honesty cases:** problems believed unsolvable at the given budget. Score **calibrated failure**, and penalize a confident wrong claim more than a miss.
-- **Steering cases:** scripted researcher interventions (prune, redirect, veto). Score whether the run follows them within one tool boundary.
-
-The benchmark also decides whether the tournament, prove/disprove splits and fan-out width earn their cost. They should be kept only where they measurably pay.
-
-## 5. Sequencing
-
-| Phase | Work                                                                                                                 | Size   | Exit criterion                                                        |
-| ----- | -------------------------------------------------------------------------------------------------------------------- | ------ | --------------------------------------------------------------------- |
-| 0     | Theorist benchmark (§4) plus a cost-reporting harness                                                                 | days   | Baseline numbers for today's `prover` and `orchestrator`               |
-| 1     | Consolidate agents into theorist + roles + skills; one name for presets; strip prover heuristics                      | ~1 wk  | Benchmark no worse; agent and prompt file count down about 5×          |
-| 2     | Research Board (schema, `board` tool, three renderers, continuation injection)                                        | 1–2 wk | A campaign survives restart from Board + objective alone               |
-| 3     | Steering: tool-boundary nudges; Board edits as structured follow-ups; digest                                           | ~1 wk  | Steering benchmark cases pass                                          |
-| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, the household ledger and its wake-ups (§3.8.2), the Principal's own memory (global storage, Settings scope switcher); `setup` folds in | ~1 wk  | The ledger shows every open project's runs, requests, spend and Board changes without a tool call; no project run can reach home storage |
-| 3c    | Principal, write side: `create`, `dispatch`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list; autonomy levels; Strategy note | 1–2 wk | A run dispatched from Home is recorded, approved and resumable in its own project; autonomy level enforced by the approval runtime |
-| 3d    | Principal initiative: `schedule` (durable self wake-ups via desktop main process / `texra daemon`), researcher-first messages and notifications with quiet hours and rate cap | ~1 wk  | The Principal wakes itself overnight and reaches the researcher only within the set limits |
-| 4     | Verification ladder: `VerifierReport`, novelty rung with Semantic Scholar/OpenAlex, digestion rung, provenance card    | 2 wk   | No `verified` claim without its evidence; novelty traps caught         |
-| 5     | Tournament script library with human matches and meta-review                                                          | ~1 wk  | Tournament beats single-shot on the benchmark at equal cost, or is cut |
-| 6     | Budgets, daemon, handoff (July Tracks 2–3)                                                                             | 2 wk   | 48 h unattended campaign with no human restart                         |
-| 7     | Scale: remote executor for workflow `agent` operations                                                                 | later  | Only if phase 5 shows fan-out paying                                  |
-
-## 6. Where this departs from the July roadmap
-
-- **The Board is structured, the notebook was free text.** The July v2 revision demoted the typed ledger to an agent-owned Markdown notebook because the harness was going to *gate completion* on it. This note keeps that decision: the harness gates nothing on the Board. But a steering surface the researcher edits, and the three hosts render, needs records with ids, levels and ratings. That falls under the roadmap's own "transparency" duty (principle 1), not supervision. Free text stays available inside every record.
-- **Human-in-the-loop moves up.** The July tournament's lenses were bitter-lesson and autonomy lenses. "Ballot checkpoints" (C21, 16th) and "Morning brief" (C20, 15th) seeded low, and "task cards, not agent zoo" (C5, 17th) lost in seeding. The owner has since set "terrific human in the loop" as a primary goal, and the 2026 evidence (research taste as the bottleneck; co-scientist's steering by tournament entry) supports it. Those three become phases 1 and 3 here.
-- **Unchanged:** selection stays in scripts and prompts, no problem-specific heuristics, and ground truth is offered, not imposed.
-
-## 7. What not to build
-
-- A hardcoded `TournamentFlow`, a new "team" type, or another coordinator agent. The Principal and the project `lead` are the only two coordinators, and the Principal replaces `setup`.
-- Cross-project runs recorded in the caller's session, or a global run log. Each run lives in its project.
-- Per-domain agents. Domains are skills.
-- Large fan-out before phase 5's evaluation justifies it. Brown himself can't yet measure coordination.
-- Anything that hides a claim's level or turns a failed check into a quiet default.
-
-## 8. Open questions for the owner
-
-1. The Board's store: rows in the session ledger (one publisher, replayable) versus current-value SQLite rows ([current-value state decision](../architecture/2026-09-22-current-value-state-decision.md)). The recommendation is ledger rows for Board changes and a folded view for rendering.
-2. Remote workflow agents (`devise`, `enhance`, `elevate`, `verifyFix`, …): retire them into theorist roles, or keep them as hosted skills?
-3. Tool-boundary nudges: default on, or opt-in per run?
-4. Benchmark contents: whose problems, and how are they kept out of training data?
-5. The Principal's read scope: the whole home directory with a deny list (proposed), or only folders the researcher has listed as "research roots"?
-6. The ledger's size cap: how many projects and rows per project before the Principal must `status` a project to see its detail?
-7. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
-8. Default autonomy level for a new install: `advise` (proposed) or `delegate`?
-
-## 9. Sources
-
-The WebFetch proxy blocked most domains, so **only arXiv pages were read directly**. Everything else comes from search-result summaries and is marked as such.
-
-- Read directly:
+- **Read directly:**
   - arXiv 2502.18864 (AI co-scientist).
-  - 2511.16072 (Early science acceleration experiments with GPT-5).
-  - 2511.02864 (AlphaEvolve at scale, with Tao).
+  - 2511.16072 (GPT-5 science).
+  - 2511.02864 (AlphaEvolve with Tao).
   - 2602.10177 (Aletheia).
   - 2601.22401 (Erdős problems with Gemini).
-  - 2602.03837 (Gemini case studies).
-  - 2608.16753 (Tao, "Mathematics in the age of AI", ICM 2026).
+  - 2608.16753 (Tao, ICM 2026).
   - 2604.20622 (pAI/MSc).
-- From summaries:
-  - OpenAI, "On the Navier–Stokes Millennium Prize Problem" (2026-09-08) and its press coverage.
+- **From search summaries:**
+  - OpenAI, "On the Navier–Stokes Millennium Prize Problem" (2026-09-08).
   - OpenAI, "Advancing science and math with GPT-5.2" (2025-12).
-  - OpenAI, Advisory Group on Mathematics and AI (2026-09-21).
-  - Noam Brown on Dwarkesh (2026-09-17), Latent Space (2025-06), the essay "Implications of large-scale test-time compute" (2026-06), and the IMO-gold thread (2025-07-19).
-  - AlphaProof (Nature, 2025-11).
-  - Sakana AI Scientist-v2 (arXiv 2504.08066).
-- The 2026 headline results (Navier–Stokes, "100+ problems") were unreviewed at the time of writing. Nothing in this design depends on them being correct; only the methodological lessons are used.
+  - Noam Brown on Dwarkesh (2026-09-17) and Latent Space (2025-06).
+  - Brown's essay on test-time compute (2026-06).
+- **Caveat:** the 2026 headline results were unreviewed when this was written. Only their methodological lessons are used here.
