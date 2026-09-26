@@ -2,7 +2,7 @@ import { Data, Effect } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig, type ReasoningEffort } from 'llm-zoo';
 import { z } from 'zod';
 
-import { StateWriteFailed } from '@platform/interfaces';
+import { StateWriteFailed, withStateKeyLane } from '@platform/interfaces';
 import type { StateStore } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -588,7 +588,7 @@ export function setModelEnabled(input: {
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
       .pipe(Effect.as(nextEnabled));
-  });
+  }).pipe(withStateKeyLane(input.state, GlobalStateKey.MODEL_SELECTION));
 }
 
 /**

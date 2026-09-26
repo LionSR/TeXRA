@@ -15,7 +15,7 @@ import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 import type { ApiProvider } from '@model/apiProviders';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
 import { zeroCostAccessOverrides } from '@model/subscriptionAccessOverrides';
-import type { StateStore } from '@platform/interfaces';
+import { type StateStore, withStateKeyLane } from '@platform/interfaces';
 import {
   LanguageModel,
   type LanguageModelAccessState,
@@ -156,7 +156,7 @@ export function setCopilotRoutePreference(
       ? [...new Set([...current, model])]
       : current.filter((entry) => entry !== model);
     return yield* state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
-  });
+  }).pipe(withStateKeyLane(state, GlobalStateKey.COPILOT_ROUTE_MODELS));
 }
 
 /**

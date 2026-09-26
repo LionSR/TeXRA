@@ -4,6 +4,7 @@
  */
 import { Context, Data, Effect, FileSystem, Layer } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
 import type { GlobalStorageFs } from './rootedFs';
 
@@ -110,11 +111,33 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 /**
  * Application state read from its authority when the Effect executes.
  * Updates finish after commit. Separate reads and updates are not an atomic
- * read-modify-write operation; defaults apply only to absent keys.
+ * read-modify-write operation — run one under {@link withStateKeyLane};
+ * defaults apply only to absent keys.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
+}
+
+const stateKeyLanes = new WeakMap<StateStore, Map<string, PerKeyLane>>();
+
+/**
+ * Run a read-modify-write of one key of `store` on that key's lane, so two
+ * overlapping edits (two quick settings toggles: the settings surfaces do not
+ * serialize their messages) each read the other's committed value instead of
+ * both reading the same one and the later update dropping the earlier edit.
+ * The lanes are per store object and delete themselves once idle.
+ */
+export function withStateKeyLane(
+  store: StateStore,
+  key: string,
+): <A, E, R>(self: Effect.Effect<A, E, R>) => Effect.Effect<A, E, R> {
+  let lanes = stateKeyLanes.get(store);
+  if (!lanes) {
+    lanes = new Map();
+    stateKeyLanes.set(store, lanes);
+  }
+  return withPerKeyLane(lanes, key);
 }
 
 /**
