@@ -74,20 +74,24 @@ async function openSettings(): Promise<void> {
  */
 async function closeSettings(via: 'button' | 'escape'): Promise<void> {
   const dialog = launched.page.locator(SETTINGS_DIALOG);
-  const hidden = dialog.evaluate(
-    (element) =>
-      new Promise<void>((resolve) => {
-        const onHide = (event: Event) => {
-          if (event.target !== element) return;
-          element.removeEventListener('wa-after-hide', onHide);
-          resolve();
-        };
-        element.addEventListener('wa-after-hide', onHide);
-      }),
-  );
+  // Install the listener in its own awaited step so the close cannot fire
+  // before it is registered.
+  await dialog.evaluate((element) => {
+    const host = element as HTMLElement & { hidden$?: Promise<void> };
+    host.hidden$ = new Promise<void>((resolve) => {
+      const onHide = (event: Event) => {
+        if (event.target !== element) return;
+        element.removeEventListener('wa-after-hide', onHide);
+        resolve();
+      };
+      element.addEventListener('wa-after-hide', onHide);
+    });
+  });
   if (via === 'escape') await launched.page.keyboard.press('Escape');
   else await dialog.locator('.desktop-settings-close').click();
-  await hidden;
+  await dialog.evaluate(
+    (element) => (element as HTMLElement & { hidden$?: Promise<void> }).hidden$,
+  );
   await expect(dialog).toHaveJSProperty('open', false);
 }
 
