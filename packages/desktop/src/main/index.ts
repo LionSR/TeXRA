@@ -66,7 +66,6 @@ import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import {
@@ -1474,8 +1473,9 @@ function createWindow(options: {
       return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
-      // Navigation destroys the document, including its request correlations
-      // and recording ownership. Replace its ports while retaining sessions.
+      // Navigation destroys the document's request correlations (an open prompt
+      // answers undefined) and recording ownership: new ports, same sessions.
+      promptController.dispose();
       for (const binding of projectBindings.values()) {
         binding.dispose();
       }
@@ -1667,7 +1667,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
         yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
       registerRuntimeShutdownHandlers(lifecycle, {
         beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
-        afterAgentShutdown: [killActiveRecording()],
+        afterAgentShutdown: [hostDraftRequests.shutdown],
         // Agent shutdown runs first so its final events enter the
         // process-owned stores. Flush in BEFORE so persistence cannot be
         // delayed by a later ON-phase language-service disposal.
