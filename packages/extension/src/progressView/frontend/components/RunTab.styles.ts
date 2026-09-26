@@ -150,11 +150,13 @@ export const runTabStyles = css`
 
   /* Reveal the metadata line on hover, focus, or selection. The agent name
      renders as inline text on this line, alongside the worktree chip,
-     timestamp, and model, when the title is the AI session one-liner. */
+     timestamp, and model, when the title is the AI session one-liner. A
+     host whose list is one line per row (the desktop rail) sets
+     --run-tab-meta-display: none; the row's tooltip carries the same facts. */
   .tab-container:hover .tab-meta,
   .tab-container:focus-within .tab-meta,
   .tab-container.is-active .tab-meta {
-    display: flex;
+    display: var(--run-tab-meta-display, flex);
   }
 
   .tab-meta .remote-agent,

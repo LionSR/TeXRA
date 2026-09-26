@@ -162,6 +162,9 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   has one row with a status dot (waiting on you, running, or finished while
   you were elsewhere), a `+` that starts a task in that project, and a `×`
   that closes it; tasks are listed under their project and nowhere else.
+  Every sidebar row is one line: a task's agent, branch, age and model are
+  in its hover tooltip, and a project's status is its dot, whose tooltip
+  says it in words.
   The conversation header
   is one row: the task, its stop control and `⋯`. Files, Terminal, Browser
   and Logs open as tabs from the workbench's `+`. A run that needs you or finishes in a project
