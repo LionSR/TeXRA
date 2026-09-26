@@ -2,7 +2,7 @@
 import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
-import { Deferred, Effect, FileSystem, Option } from 'effect';
+import { Clock, Deferred, Effect, FileSystem, Option } from 'effect';
 import { MODEL_CONFIGS } from 'llm-zoo';
 
 import { resolveRouteCredential } from '@agent/runtime/modelRoutes';
@@ -47,7 +47,7 @@ function cleanupOldRecordings(
   return Effect.gen(function* () {
     const directory = recordingsDir(roots);
     const fs = yield* FileSystem.FileSystem;
-    const cutoff = Date.now() - THREE_DAYS_MS;
+    const cutoff = (yield* Clock.currentTimeMillis) - THREE_DAYS_MS;
     const names = yield* fs
       .readDirectory(directory)
       .pipe(

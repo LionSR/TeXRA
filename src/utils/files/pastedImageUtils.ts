@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, Option } from 'effect';
+import { Clock, Data, Effect, Option } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -54,7 +54,7 @@ function pastedImageFileName(fileName: string): string {
 const cleanupOldPastedImages = Effect.fn('pastedImage.cleanupOld')(
   function* () {
     const storageFs = yield* StorageFs;
-    const cutoff = Date.now() - THREE_DAYS_MS;
+    const cutoff = (yield* Clock.currentTimeMillis) - THREE_DAYS_MS;
     const names = yield* storageFs
       .readDirectory(PASTED_DIR)
       .pipe(
