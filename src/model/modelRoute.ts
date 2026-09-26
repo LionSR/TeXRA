@@ -24,13 +24,9 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import {
-  isCodexSignedIn,
-  isPreferCodexSubscription,
-} from '@model/codex/codexSubscription';
-import {
-  isPreferXaiSubscription,
-  isXaiSignedIn,
-} from '@model/xai/xaiSubscription';
+  isPreferSubscription,
+  isSubscriptionSignedIn,
+} from '@model/subscriptionAccess';
 import { StateReadFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
@@ -311,12 +307,11 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
   const subscriptionOn = (
     route: DeclinableUsageRoute,
     preference: string,
-    isPrefer: (stores: SettingsStores) => boolean,
-    isSignedIn: () => Effect.Effect<boolean>,
+    provider: Parameters<typeof isPreferSubscription>[0],
   ) =>
     allowed(route)
       ? Effect.try({
-          try: () => isPrefer(stores),
+          try: () => isPreferSubscription(provider, stores),
           catch: (cause) =>
             new StateReadFailed({
               key: preference,
@@ -324,7 +319,9 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
               cause,
             }),
         }).pipe(
-          Effect.flatMap((on) => (on ? isSignedIn() : Effect.succeed(false))),
+          Effect.flatMap((on) =>
+            on ? isSubscriptionSignedIn(provider) : Effect.succeed(false),
+          ),
         )
       : Effect.succeed(false);
   const [
@@ -341,18 +338,8 @@ export const readRouteFacts = Effect.fn('readRouteFacts')(function* (
       getPreferKimiCode(stores),
       getGLMCodingPlan(stores),
       getProviderEndpoint(stores, ModelProvider.GLM),
-      subscriptionOn(
-        'chatgpt-subscription',
-        'ChatGPT subscription',
-        isPreferCodexSubscription,
-        isCodexSignedIn,
-      ),
-      subscriptionOn(
-        'xai-subscription',
-        'Grok subscription',
-        isPreferXaiSubscription,
-        isXaiSignedIn,
-      ),
+      subscriptionOn('chatgpt-subscription', 'ChatGPT subscription', 'chatgpt'),
+      subscriptionOn('xai-subscription', 'Grok subscription', 'grok'),
       hasUsableApiKey(stores.secrets, 'kimiCode').pipe(
         Effect.catchTag('SecretsFailed', (failure) =>
           Effect.logWarning(

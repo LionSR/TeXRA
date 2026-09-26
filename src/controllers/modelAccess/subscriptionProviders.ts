@@ -31,17 +31,14 @@ import {
 } from '@auth/xai';
 import type { AuthPortError } from '@auth/authProgram';
 import { codexAccountLabel } from '@auth/codex/codexSessionTypes';
+import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import type { SubscriptionSessionStatus } from '@auth/oauth/SubscriptionOAuthCoordinator';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexSubscription';
-import {
-  isPreferXaiSubscription,
-  setPreferXaiSubscription,
-} from '@model/xai/xaiSubscription';
+  isPreferSubscription,
+  setPreferSubscription,
+} from '@model/subscriptionAccess';
 import type { ConfigWriteFailed } from '@platform/interfaces';
 import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -57,14 +54,6 @@ const CHANNEL = 'subscriptionProviders';
  */
 export type SubscriptionProviderId =
   (typeof SUBSCRIPTION_AUTH_PROVIDERS)[number];
-
-/** The device-code prompt a host renders while polling for approval. */
-export interface SubscriptionDeviceCodePrompt {
-  readonly userCode: string;
-  readonly verificationUrl: string;
-  /** Prefilled verification URL when the provider supplies one (xAI). */
-  readonly verificationUrlComplete?: string;
-}
 
 /**
  * The only host-specific half of a subscription sign-in: how this host shows
@@ -154,17 +143,11 @@ interface SubscriptionSessionFields {
   readonly accountId?: string;
 }
 
-/** A row's descriptor and preference fields pass through to the provider
- *  unchanged; the rest bind its transports to the shared flow. */
+/** A row's descriptor fields pass through to the provider unchanged; the
+ *  rest bind its transports to the shared flow. */
 interface SubscriptionProviderBindings<Coordinator, Session> extends Pick<
   SubscriptionProvider,
-  | 'id'
-  | 'displayName'
-  | 'sessionName'
-  | 'copyTarget'
-  | 'modelFamily'
-  | 'isPreferSubscription'
-  | 'setPreferSubscription'
+  'id' | 'displayName' | 'sessionName' | 'copyTarget' | 'modelFamily'
 > {
   readonly coordinator: (secrets: PlatformSecrets) => Coordinator & {
     signOut(): Effect.Effect<void, AuthPortError>;
@@ -252,6 +235,10 @@ function defineSubscriptionProvider<
 
   return Object.freeze({
     ...descriptor,
+    isPreferSubscription: (stores: SettingsStores) =>
+      isPreferSubscription(descriptor.id, stores),
+    setPreferSubscription: (stores: SettingsStores, enabled: boolean) =>
+      setPreferSubscription(descriptor.id, stores, enabled),
     signIn,
     signOut: (secrets: PlatformSecrets) => bindCoordinator(secrets).signOut(),
     getStatus: (secrets: PlatformSecrets) =>
@@ -267,7 +254,7 @@ function defineSubscriptionProvider<
  * user's ChatGPT Plus/Pro/Team subscription instead of an OpenAI API key.
  *
  * Each binding calls through rather than capturing the imported function, so
- * a host suite that swaps `@auth/codex` or `@model/codex/codexSubscription`
+ * a host suite that swaps `@auth/codex` or `@model/subscriptionAccess`
  * still intercepts the row — the catalog is built once at module load.
  */
 const CHATGPT_PROVIDER = defineSubscriptionProvider({
@@ -281,9 +268,6 @@ const CHATGPT_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => codexLoginWithDeviceCode(options),
   loginWithLoopback: (options) => codexLoginWithLoopback(options),
   accountLabel: (account) => codexAccountLabel(account),
-  isPreferSubscription: (stores) => isPreferCodexSubscription(stores),
-  setPreferSubscription: (stores, enabled) =>
-    setPreferCodexSubscription(stores, enabled),
 });
 
 /**
@@ -301,9 +285,6 @@ const GROK_PROVIDER = defineSubscriptionProvider({
   loginWithDeviceCode: (options) => xaiLoginWithDeviceCode(options),
   loginWithLoopback: (options) => xaiLoginWithLoopback(options),
   accountLabel: (account) => xaiAccountLabel(account),
-  isPreferSubscription: (stores) => isPreferXaiSubscription(stores),
-  setPreferSubscription: (stores, enabled) =>
-    setPreferXaiSubscription(stores, enabled),
 });
 
 /** Canonical catalog of OAuth subscription providers, shared by every host. */

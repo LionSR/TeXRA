@@ -1,10 +1,10 @@
 import { Effect, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
+import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import {
   subscriptionProvider,
-  type SubscriptionDeviceCodePrompt,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';

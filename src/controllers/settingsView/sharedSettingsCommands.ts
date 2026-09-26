@@ -390,14 +390,10 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       updateStateSetting(message.key, message.value),
 
     // ── Subscriptions ──
-    signInChatGpt: () => signInSubscription('chatgpt'),
-    signOutChatGpt: () => signOutSubscription('chatgpt'),
-    setChatGptPreferSubscription: (message) =>
-      setPreferSubscription('chatgpt', message.enabled),
-    signInGrok: () => signInSubscription('grok'),
-    signOutGrok: () => signOutSubscription('grok'),
-    setGrokPreferSubscription: (message) =>
-      setPreferSubscription('grok', message.enabled),
+    signInSubscription: (message) => signInSubscription(message.provider),
+    signOutSubscription: (message) => signOutSubscription(message.provider),
+    setSubscriptionPreference: (message) =>
+      setPreferSubscription(message.provider, message.enabled),
     getSubscriptionUsage: (message) => postUsage(message.forceRefresh ?? false),
 
     ...memoryPage.handlers,

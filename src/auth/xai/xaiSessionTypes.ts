@@ -1,16 +1,9 @@
 /**
  * Schemas + types for the xAI (Grok) OAuth token bundle.
- * Error kinds match the shared subscription OAuth vocabulary.
  */
 import { z } from 'zod';
 
-import { GROK_AUTH } from '@ui/copy/accountAuth';
-
 import { XAI_DEFAULT_EXPIRES_IN_SEC } from './xaiConstants';
-import {
-  SubscriptionOAuthError,
-  type SubscriptionOAuthErrorKind,
-} from '../oauth/subscriptionOAuthError';
 import { SubscriptionSessionBaseSchema } from '../oauth/subscriptionSessionSchema';
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
@@ -29,7 +22,6 @@ export const XaiTokenResponseSchema = z.object({
   token_type: z.string().nullish(),
   scope: z.string().nullish(),
 });
-export type XaiTokenResponse = z.infer<typeof XaiTokenResponseSchema>;
 
 /** The persisted OAuth session bundle. */
 export const XaiSessionSchema = SubscriptionSessionBaseSchema.extend({
@@ -52,23 +44,3 @@ export const XaiDeviceCodeSchema = z.object({
   expires_in: z.coerce.number().positive().nullish().catch(undefined),
   interval: z.coerce.number().positive().nullish().catch(undefined),
 });
-
-export class XaiAuthError extends SubscriptionOAuthError {
-  constructor(
-    message: string,
-    kind: SubscriptionOAuthErrorKind,
-    status?: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, kind, status, options);
-    this.name = 'XaiAuthError';
-  }
-}
-
-export function formatXaiAuthUnavailableMessage(error: XaiAuthError): string {
-  const turnOff = `turn off "${GROK_AUTH.preferLabel}".`;
-  const action = error.needsReauth
-    ? `${GROK_AUTH.signInLabel} again, or ${turnOff}`
-    : `Try again in a moment, or ${turnOff}`;
-  return `${GROK_AUTH.subscriptionLabel} unavailable: ${error.message} ${action}`;
-}

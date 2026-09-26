@@ -3,7 +3,7 @@
  *
  * ChatGPT (Codex) and Grok (xAI) render the identical section — a "prefer this
  * subscription" switch plus a sign-in/sign-out account row — so the copy, the
- * three commands, and the account-label function are a descriptor
+ * provider id the commands carry, and the account-label function are a descriptor
  * ({@link SubscriptionSectionProvider}) and the markup is written once.
  */
 
@@ -59,11 +59,8 @@ export interface SubscriptionSectionProvider {
   /** Account-row help while signed out. */
   readonly connectDescription: string;
   readonly signInText: string;
-  readonly commands: {
-    readonly setPreferSubscription: string;
-    readonly signIn: string;
-    readonly signOut: string;
-  };
+  /** The provider the section's sign-in, sign-out and preference commands address. */
+  readonly providerId: SubscriptionAuthStatus['provider'];
   /** Human-readable account name for the signed-in row. */
   readonly accountLabel: (auth: SubscriptionAuthStatus | null) => string;
   /** Optional advanced input-budget control for this subscription route. */
@@ -94,7 +91,10 @@ export class SubscriptionSection extends LitElement {
 
   private readonly handlePreferSubscriptionChange = (event: Event): void => {
     const enabled = (event.target as WaSwitch).checked;
-    postMessage(this.provider.commands.setPreferSubscription, { enabled });
+    postMessage(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE, {
+      provider: this.provider.providerId,
+      enabled,
+    });
   };
 
   override render(): TemplateResult {
@@ -158,14 +158,26 @@ export class SubscriptionSection extends LitElement {
                       label: `Sign out of ${provider.title}`,
                       kind: 'secondary',
                       appearance: 'outlined',
-                      onClick: () => postMessage(provider.commands.signOut),
+                      onClick: () =>
+                        postMessage(
+                          SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION,
+                          {
+                            provider: provider.providerId,
+                          },
+                        ),
                     })
                   : renderLabeledActionButton({
                       icon: 'right-to-bracket',
                       text: provider.signInText,
                       kind: 'primary',
                       appearance: 'filled',
-                      onClick: () => postMessage(provider.commands.signIn),
+                      onClick: () =>
+                        postMessage(
+                          SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION,
+                          {
+                            provider: provider.providerId,
+                          },
+                        ),
                     })
               }
             </div>
@@ -217,12 +229,7 @@ export const CHATGPT_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     connectDescription:
       'Connect the ChatGPT account that owns your subscription.',
     signInText: CHATGPT_AUTH.signInLabel,
-    commands: Object.freeze({
-      setPreferSubscription:
-        SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-      signIn: SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-      signOut: SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-    }),
+    providerId: 'chatgpt',
     accountLabel: codexAccountLabel,
   });
 
@@ -244,12 +251,7 @@ export const GROK_SUBSCRIPTION_SECTION: SubscriptionSectionProvider =
     connectDescription:
       'Connect the xAI account that owns your SuperGrok plan.',
     signInText: GROK_AUTH.signInLabel,
-    commands: Object.freeze({
-      setPreferSubscription:
-        SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,
-      signIn: SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK,
-      signOut: SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK,
-    }),
+    providerId: 'grok',
     accountLabel: xaiAccountLabel,
   });
 

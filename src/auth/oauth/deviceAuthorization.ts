@@ -18,6 +18,16 @@ import { Clock, Data, Duration, Effect, Ref, Schedule } from 'effect';
 
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+/** The device-code prompt a host renders while polling for approval. */
+export interface SubscriptionDeviceCodePrompt {
+  /** The one-time code the user types at the verification URL. */
+  readonly userCode: string;
+  /** Where the user enters the code. */
+  readonly verificationUrl: string;
+  /** Prefilled verification URL when the provider supplies one (xAI). */
+  readonly verificationUrlComplete?: string;
+}
+
 /** The user has not approved yet; `slowDown` asks for a longer interval. */
 export class DeviceAuthorizationPending extends Data.TaggedError(
   'DeviceAuthorizationPending',

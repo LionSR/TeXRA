@@ -1,19 +1,9 @@
 /**
- * Host-neutral coordinator for the xAI (Grok) OAuth session.
- *
- * Thin policy over {@link SubscriptionOAuthCoordinator} — only authorize URL,
- * claims, and JWT-exp refresh differ from ChatGPT/Codex.
+ * The xAI (Grok) OAuth policy for the shared `SubscriptionOAuthCoordinator`: only
+ * the authorize URL, claims, and JWT-exp refresh differ from ChatGPT/Codex,
+ * so the shared coordinator runs it as is.
  */
-import { Effect } from 'effect';
-
-import { providerAuthError } from '../oauth/providerAuthBridge';
-import {
-  SubscriptionOAuthCoordinator,
-  type SubscriptionOAuthClient,
-  type SubscriptionOAuthPolicy,
-  type SubscriptionSessionStatus,
-  type SubscriptionSessionStorage,
-} from '../oauth/SubscriptionOAuthCoordinator';
+import { SubscriptionOAuthError } from '../oauth/subscriptionOAuthError';
 import {
   XAI_AUTHORIZE_URL,
   XAI_CLIENT_ID,
@@ -21,26 +11,24 @@ import {
   XAI_REFERRER,
   XAI_SCOPE,
   XAI_TOKEN_REFRESH_BUFFER_MS,
+  XAI_TOKEN_URL,
   xaiRedirectUri,
 } from './xaiConstants';
 import { decodeXaiJwtClaims } from './xaiJwt';
-import { exchangeAuthorizationCode, refreshTokens } from './xaiOAuthClient';
 import {
-  XaiAuthError,
   XaiSessionSchema,
+  XaiTokenResponseSchema,
   type XaiSession,
 } from './xaiSessionTypes';
+import type { SubscriptionOAuthPolicy } from '../oauth/SubscriptionOAuthCoordinator';
 
-export type XaiSessionStatus = SubscriptionSessionStatus;
-
-export interface XaiSessionCoordinatorInit {
-  storage: SubscriptionSessionStorage;
-  client?: SubscriptionOAuthClient;
-  now?: () => number;
-}
-
-const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
+export const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   sessionSchema: XaiSessionSchema,
+  tokenEndpoint: {
+    tokenUrl: XAI_TOKEN_URL,
+    clientId: XAI_CLIENT_ID,
+    tokenResponseSchema: XaiTokenResponseSchema,
+  },
   refreshBufferMs: XAI_TOKEN_REFRESH_BUFFER_MS,
   notSignedInMessage: 'Not signed in with Grok. Run sign-in first.',
   sessionChangedMessage: 'Grok session changed while refreshing. Try again.',
@@ -70,7 +58,7 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
   buildSession(tokens, nowMs, previous) {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     if (!refreshToken) {
-      throw new XaiAuthError(
+      throw new SubscriptionOAuthError(
         'OAuth response did not include a refresh token.',
         'config',
       );
@@ -93,29 +81,3 @@ const XAI_POLICY: SubscriptionOAuthPolicy<XaiSession> = {
     };
   },
 };
-
-export class XaiSessionCoordinator extends SubscriptionOAuthCoordinator<XaiSession> {
-  constructor(init: XaiSessionCoordinatorInit) {
-    const client = init.client ?? {
-      exchangeAuthorizationCode: (params: {
-        code: string;
-        verifier: string;
-        redirectUri: string;
-      }) =>
-        exchangeAuthorizationCode(params).pipe(
-          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
-        ),
-      refreshTokens: (refreshToken: string) =>
-        refreshTokens(refreshToken).pipe(
-          Effect.mapError((error) => providerAuthError(error, XaiAuthError)),
-        ),
-    };
-    super({
-      storage: init.storage,
-      policy: XAI_POLICY,
-      client,
-      now: init.now,
-      errorType: XaiAuthError,
-    });
-  }
-}
