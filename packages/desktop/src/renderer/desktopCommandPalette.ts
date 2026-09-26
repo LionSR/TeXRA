@@ -15,6 +15,7 @@ import type { DesktopShortcutEntry } from '@shared/commands/shortcutPreferences'
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { groupBy, isThenable } from '@utils/core';
+import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import {
   dispatchDesktopCommand,
   getDesktopCommandMenuEntries,
@@ -370,5 +371,9 @@ function toPaletteEntry(
 }
 
 function slugify(value: string): string {
-  return value.toLowerCase().replaceAll(/[^a-z0-9]+/g, '-');
+  return sanitizePathSegment(value, {
+    invalidCharPattern: /[^a-z0-9]+/g,
+    replacement: '-',
+    lowercase: true,
+  });
 }

@@ -646,7 +646,7 @@ export class RunHeader extends LitElement {
    *  run. Laid out nearest-first in the DOM (see the styles). */
   private renderAncestors(run: RunView): TemplateResult | typeof nothing {
     if (run.ancestors.length === 0) return nothing;
-    const nearestFirst = [...run.ancestors].reverse();
+    const nearestFirst = run.ancestors.toReversed();
     return html`
       <nav class="ancestors" aria-label="Parent sessions">
         ${repeat(
