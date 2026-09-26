@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect, FileSystem, Option } from 'effect';
+import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -56,7 +56,7 @@ export const sweepStaleFiles = Effect.fn('sweepStaleFiles')(function* (
   fs: FileSystem.FileSystem,
   directory: string,
 ) {
-  const cutoff = Date.now() - THREE_DAYS_MS;
+  const cutoff = (yield* Clock.currentTimeMillis) - THREE_DAYS_MS;
   const names = yield* fs
     .readDirectory(directory)
     .pipe(

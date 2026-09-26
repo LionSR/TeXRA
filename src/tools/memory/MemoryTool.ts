@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, type FileSystem, Option, Stream } from 'effect';
+import { DateTime, Effect, type FileSystem, Option, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -251,19 +251,23 @@ const run = Effect.fn('MemoryTool.run')(function* (
 });
 
 /** Write a memory file with fresh attribution frontmatter, preserving pinned status from existing file. */
-const writeAttributed = Effect.fn('MemoryTool.writeAttributed')(
-  (
-    resolvedPath: string,
-    content: string,
-    invocation: MemoryInvocation,
-    existingMeta?: MemoryFileMeta | null,
-  ) =>
-    writeMemoryFile(
-      resolvedPath,
-      content,
-      createMeta(invocation.agentName, invocation.runId, existingMeta),
+const writeAttributed = Effect.fn('MemoryTool.writeAttributed')(function* (
+  resolvedPath: string,
+  content: string,
+  invocation: MemoryInvocation,
+  existingMeta?: MemoryFileMeta | null,
+) {
+  return yield* writeMemoryFile(
+    resolvedPath,
+    content,
+    createMeta(
+      invocation.agentName,
+      invocation.runId,
+      DateTime.formatIso(yield* DateTime.now),
+      existingMeta,
     ),
-);
+  );
+});
 
 /** Return early result if the file hasn't been viewed yet. */
 function requireViewBeforeModify(
