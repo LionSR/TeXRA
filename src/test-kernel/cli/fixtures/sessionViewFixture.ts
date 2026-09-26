@@ -181,10 +181,13 @@ export function viewWith(
       if (!child) continue;
       const nested = rollupOf(child);
       rollup.total += 1 + nested.total;
+      const idle =
+        child.status === RUN_PHASE.WAITING && child.group === 'running';
       rollup.running +=
-        (isInFlightPhase(child.status) ? 1 : 0) + nested.running;
+        (isInFlightPhase(child.status) && !idle ? 1 : 0) + nested.running;
       rollup.finished +=
-        (isTerminalOutcomePhase(child.status) ? 1 : 0) + nested.finished;
+        (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
+        nested.finished;
     }
     return rollup;
   };

@@ -447,6 +447,20 @@ export function App(props: AppProps): React.JSX.Element {
     | undefined
   >(undefined);
   const inputBarRef = useRef<InputBarHandle>(null);
+  // The key that just resolved a pending Esc chord. Ink hands every keypress
+  // to each `useInput` listener in subscription order, so the draft may see
+  // the key after this handler already cleared the pending chord; the key
+  // stays held until the dispatch ends.
+  const chordResolvedBy = useRef<string | undefined>(undefined);
+  // While an Esc chord is pending the draft types nothing: this handler
+  // either takes the key as a focus shortcut or hands it back through
+  // `appendInput`, so the key lands once, whichever listener runs first.
+  const holdsKeystroke = useCallback(
+    (input: string): boolean =>
+      pendingEscapeInterrupt.current !== undefined ||
+      chordResolvedBy.current === input,
+    [],
+  );
 
   const clearPendingEscapeInterrupt = () => {
     const scheduled = pendingEscapeInterrupt.current;
@@ -539,6 +553,10 @@ export function App(props: AppProps): React.JSX.Element {
       const arrowInput =
         key.upArrow || key.downArrow || key.leftArrow || key.rightArrow;
       if (!key.ctrl && !key.tab && (input.length > 0 || arrowInput)) {
+        chordResolvedBy.current = input;
+        queueMicrotask(() => {
+          chordResolvedBy.current = undefined;
+        });
         if (appOwnsEscape() && handleMetaShortcut(input)) return;
         const inputWasDisabled = inputDisabled;
         const handled = handlePendingBareEscape(
@@ -551,7 +569,8 @@ export function App(props: AppProps): React.JSX.Element {
           !key.return &&
           metaChordInput(input, key) === undefined &&
           [...input].every((character) => !isUnhandledControlInput(character));
-        if (handled && inputWasDisabled && printableInput) {
+        // The draft held the key back: it goes to whichever draft now shows.
+        if (printableInput && (handled || !inputWasDisabled)) {
           inputBarRef.current?.appendInput(input);
         }
         return;
@@ -632,6 +651,7 @@ export function App(props: AppProps): React.JSX.Element {
               runtime={props.runtime}
               roots={props.session.roots}
               controlRef={inputBarRef}
+              holdsKeystroke={holdsKeystroke}
               onSubmit={props.onSubmit}
               collapseWhenDisabled={!inputBarVisible}
               disabledMessage={inputDisabledMessage}

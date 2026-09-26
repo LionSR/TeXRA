@@ -81,6 +81,10 @@ interface InputBarProps {
   readonly keyboardActive?: boolean;
   /** Root-owned handle for draft-aware keyboard policy. */
   readonly controlRef?: React.Ref<InputBarHandle>;
+  /** Whether the root holds this key for itself (an `Esc 1..9` chord is
+   *  pending): the draft drops it, and the root either spends it or hands it
+   *  back through `appendInput`. */
+  readonly holdsKeystroke?: (input: string) => boolean;
 }
 
 export interface InputBarHandle {
@@ -115,7 +119,7 @@ const INPUT_BAR_MAX_CONTENT_ROWS = 5;
 const INPUT_BAR_DECORATION_COLUMNS = 6;
 
 export function InputBar(props: InputBarProps): React.JSX.Element {
-  const { disabled, history, onSubmit, roots, runtime } = props;
+  const { disabled, history, holdsKeystroke, onSubmit, roots, runtime } = props;
   const keyboardActive = props.keyboardActive ?? true;
   const [value, setValueState] = useState('');
   const reverseSearchOpen = useSignal(reverseSearchOpenSignal);
@@ -187,6 +191,10 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     (input: string, value: string, cursor: number) =>
       value === '/' && cursor === 1 && CSI_SEQUENCE_TAIL_RE.test(input),
     [],
+  );
+  const dropHeldKeystroke = useCallback(
+    (input: string) => input.length > 0 && holdsKeystroke?.(input) === true,
+    [holdsKeystroke],
   );
   const replaceDraft = useCallback(
     (next: string) => {
@@ -502,7 +510,7 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
                 showPalette ? replaceSlashTriggerInput : undefined
               }
               shouldDropInputChunk={
-                showPalette ? dropSlashPaletteControlTail : undefined
+                showPalette ? dropSlashPaletteControlTail : dropHeldKeystroke
               }
               // Esc clears the slash, closing the palette; typing reopens it.
               escapeEdit={showPalette ? clearDraftEdit : undefined}

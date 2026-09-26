@@ -377,6 +377,11 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   agents and keeps the remote ones already loaded. A run that names an agent
   the catalog has not seen yet rescans the local directories once before it
   reports the agent as missing.
+- **A plan's summary is its first line of prose, not a raw heading.** A plan
+  that opened with a markdown heading such as `### Objective` showed that
+  heading, hash marks included, as its one-line summary in the terminal's
+  plan panel and in the plan notice an orchestrator receives. A heading is
+  used only when the plan has no other text, without its marks.
 
 ### Extension (VS Code)
 
@@ -564,6 +569,18 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   `--input` is no longer a required flag, because a tool-use run may take none.
   A name carried by both categories is refused rather than resolved to one of
   them: the error names both candidates and their source-qualified spellings.
+
+#### Bug Fixes
+
+- **An `Esc` number chord no longer types its number** — pressing Esc, a short
+  pause, then `1`–`9` focused that session and also put the digit into the
+  chat draft, so the next prompt went out as, say, `3In ONE response…`.
+- **The edit approval card opens on the edit** — when the changed text sits on
+  a long line that wraps over several rows, the diff opened on the untouched
+  rows before the change, with the edited words scrolled out of view; it now
+  opens where the new text differs from the old. The card's title names the
+  file relative to the workspace instead of wrapping its absolute path over
+  several lines.
 
 ## [0.40.10] - 2026-09-06
 

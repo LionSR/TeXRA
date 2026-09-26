@@ -42,12 +42,14 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runLedger';
+import { displayToolName } from '@shared/tools/toolDisplayName';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId, getBasename, groupBy } from '@utils/core';
-import { isNonEmptyString } from '@utils/text/stringUtils';
+import { collapseWhitespace, isNonEmptyString } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -634,6 +636,9 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? intent.approvalRequestId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
+    const preview = collapseWhitespace(
+      deriveToolInputPreview(fact.toolName, parseCallArguments(call, logger)),
+    );
     const request = {
       requestId,
       allowBypass: false,
@@ -641,7 +646,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       questions: [
         {
           question,
-          header: 'Tool',
+          header: 'Tool outcome',
           options: [
             { label: rerunOption, description: 'Execute the call once more.' },
             {
@@ -651,7 +656,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ],
         },
       ],
-      context: call.argumentsText,
+      // The call as its transcript row names it, not its raw arguments.
+      context: `${displayToolName(fact.toolName)}${preview ? `: ${preview}` : ''}`,
     };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
