@@ -625,7 +625,7 @@ export const databaseLayer = (
             }
           }
         });
-      const appendPrepared = (
+      const appendRows = (
         prepared: readonly ReturnType<typeof prepareEventDraft>[],
         at: number,
       ) =>
@@ -791,6 +791,13 @@ export const databaseLayer = (
             };
           }),
         );
+      // Every append checks the store's stamp first: a build that no longer
+      // matches it (another re-stamped it) fails instead of writing rows.
+      const appendPrepared = (
+        prepared: readonly ReturnType<typeof prepareEventDraft>[],
+        at: number,
+      ) =>
+        Effect.andThen(assertStoreFormat(sql, path), appendRows(prepared, at));
       /** One row's stored value, refused when the row is not that family's:
        *  the schema ties each family to its aggregate kind. */
       const storedValue = <K extends StoredValue['key']>(
@@ -1228,15 +1235,9 @@ export const databaseLayer = (
               catch: writeFailed,
             });
             const at = yield* Clock.currentTimeMillis;
-            // A write from a process whose build no longer matches the store's
-            // stamp (another build moved it aside and re-stamped it under this one)
-            // fails here instead of appending rows of a vocabulary the store
-            // no longer holds.
-            return yield* transact(
-              assertStoreFormat(sql, path).pipe(
-                Effect.andThen(appendPrepared(prepared, at)),
-              ),
-            ).pipe(typedRefusal);
+            return yield* transact(appendPrepared(prepared, at)).pipe(
+              typedRefusal,
+            );
           }),
       };
     }),
