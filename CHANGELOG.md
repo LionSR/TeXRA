@@ -104,6 +104,14 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **A message you send after stopping a tool is answered first.** In 0.40.10,
+  stopping a run while a tool such as `bash` was running ended the turn there.
+  Now the stop is kept on record: the stopped call is reported to the model
+  as skipped (it may have started, and nothing was recorded), and the message
+  you send next arrives in the same request, so the model reads your new
+  instruction before deciding whether to run anything again. Resuming a
+  stopped run without a new message still finishes the stopped turn.
+
 - **`texra run` results record what the run ran with** — the JSON and NDJSON
   result carries `compositionHash`, the hash of the tool composition the run
   pinned, and `plugins`, the enabled plugins installed when it started or
