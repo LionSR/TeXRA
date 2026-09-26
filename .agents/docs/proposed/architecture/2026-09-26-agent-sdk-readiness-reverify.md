@@ -49,9 +49,15 @@ can be ratified.
 1. **Identify the areas.** Unchanged from the 2026-09-24 map and re-confirmed:
    - Agent core: `src/agent/core/` (`definition/`, `state/`, `tools/`); run
      programs `@agent/runtime/loop/{toolUse,reflection}.ts` over the run ledger;
-     the one model call is `@agent/runtime/ModelInvoker.ts`.
-   - Model handler: provider APIs reached only through the `packages/llm`
-     (`@texra-ai/llm`) `Model` bound by `runtime/run/modelBinding.ts`.
+     the run loop's model call is `@agent/runtime/ModelInvoker.ts` (with
+     `helperModel.ts` and `run/compaction.ts` invoking the bound `Model`
+     directly — deliberate exceptions, not a second handler, as the 2026-09-24
+     note recorded).
+   - Model handler: chat/model-turn provider calls are reached only through the
+     `packages/llm` (`@texra-ai/llm`) `Model` bound by
+     `runtime/run/modelBinding.ts`. Tool-level exceptions outside the model
+     handler remain: audio transcription builds `OpenAI` directly in
+     `src/tools/media/audio.ts`, and the Codex tool uses `@openai/codex-sdk`.
    - Logger: `src/logger/` (`effectLog.ts`, `logSink.ts`, `effectDiagnostics.ts`,
      `formatLogData.ts`, `redaction.ts`).
    - SDK surface: `packages/agent` (`@texra-ai/agent`) — `index.ts`, `node.ts`,
@@ -88,10 +94,15 @@ can be ratified.
    the frozen-list shrink AGENTS.md names. The SDK already speaks pure Effect
    end-to-end; the Promise boundary is deliberately gone, not missing.
 
-4. **Design subagent boundaries.** Already first-class, re-confirmed: the only
-   real model-driven boundaries are (a) native subagents via `executeAgent` with
-   an owned `RunId` minted by `subagentRun.ts`, and (b) the workflow-script run
-   plus its `agent()` grandchildren. The other candidates a charter tends to
+4. **Design subagent boundaries.** Already first-class, re-confirmed. The
+   model-driven run boundaries are: (a) native subagents via `executeAgent` with
+   an owned `RunId` minted by `subagentRun.ts`; (b) the workflow-script run plus
+   its `agent()` grandchildren; and (c) the agent-CLI children (the `claude_code`
+   and `codex` tools, `src/tools/{claudeAgent,codex,agentCliShared}.ts`), which
+   mint their own run IDs and run through `startDetachedChildRunLoop` with
+   provider-specific `ChildRunStrategy` implementations — a distinct family
+   outside `executeAgent`, not workflow grandchildren. The other candidates a
+   charter tends to
    name — reflection output extraction (`loop/reflection.ts` `processOutput`),
    `compileCheck`, `LatexDiffManager`, `runAgentCreator` — are deterministic
    sub-run library stages (or, for the creator, a helper-model wizard below the
@@ -107,14 +118,23 @@ can be ratified.
    as a root export and does **not** list `ToolGuard` or `SettingHost`. The live
    `packages/agent/src/index.ts:68-73` exports `ITool`, `IToolRegistry`,
    `ToolGuard`, and `SettingHost`, and no longer exports `ToolHost`. The manifest
-   header already records two prior drifts; this is a third. Ratifying the draft
-   as-is would pin the wrong names, so a re-enumeration is a prerequisite for the
-   ratification step, not a substitute for it. Shed/leak candidates the
+   header already records two prior drifts; this is a third. (The §3.1 header
+   count "34 (10 values, 24 types)" also moves under the same swap, so the
+   re-enumeration should correct the tallies, not just the names.) Ratifying the
+   draft as-is would pin the wrong names, so a re-enumeration is a prerequisite
+   for the ratification step, not a substitute for it. Shed/leak candidates the
    re-enumeration should weigh (all invisible to the dead-export ratchet, which
    exempts the public barrel):
-   - Registry types `IToolRegistry`, `ToolGuard` and the value `MapToolRegistry`
-     are reachable from no public signature — a tool enters only through
-     `StartInput.tools?: readonly ITool[]` and `defineTool`→`DefinedTool`.
+   - The registry surface should be weighed export-by-export, not swept: a tool
+     enters only through `StartInput.tools?: readonly ITool[]` and
+     `defineTool`→`DefinedTool`, so no public signature takes an
+     `IToolRegistry`, and `MapToolRegistry` is registry plumbing an embedder
+     using the documented path never constructs. But `ToolGuard` is **not**
+     unreachable — `ITool.guard` and `DefinedTool.guard` are both typed
+     `ToolGuard`, so it rides the documented tool path and must stay;
+     `IToolRegistry` is likewise named by the exported `MapToolRegistry`
+     declaration. So the shed question is really `MapToolRegistry` (and, only if
+     it goes, `IToolRegistry`), not `ToolGuard`.
    - `SettingHost` reaches the surface via `DefinedTool.unavailableHosts` /
      `ITool.unavailableHosts` — TeXRA's internal host enum leaking into the
      public tool-definition contract an embedder has no notion of.
@@ -139,11 +159,17 @@ can be ratified.
    `diagnosticsLayer({ write, trusted, minimumLogLevel })` parameter beside the
    existing `lean`/`usageLog`/`globalDatabase` layer params); it is human-owned
    because it is the expensive step (it rewrites the kernel log-capture seam).
-   Once it lands, `effectDiagnostics.ts` (one production caller) merges into the
-   sink module.
+   Once it lands, `effectDiagnostics.ts` merges into the sink module — and the
+   rewrite must preserve **both** its production callers: `sessionLayer.ts:1127`
+   (the process runtime) and `packages/extension/src/extension.ts:498`, the
+   latter a failed-activation cleanup path that supplies diagnostics after the
+   runtime holding its logger layer is gone.
 
-3. **Two small, real surface leaks in `packages/llm`** (territory of
-   `2026-09-20-llm-package-hardening.md`):
+3. **Two small, real surface leaks in `packages/llm`.** These fall in the
+   territory of `2026-09-20-llm-package-hardening.md`, but that note's §0 records
+   its five planned changes as closed and mentions neither leak, so they are
+   **not** already owned there — they need filing (into that note or a fresh
+   tech-debt entry) rather than being deferred to it:
    - `packages/llm/package.json` exports `"./prefix-fingerprint"` with **zero
      production importers** — only two kernel tests reach `admittedFingerprint`
      through it; production uses relative imports. A published package should not
@@ -191,7 +217,9 @@ finalizer-before-release ordering (comments at `:531-535`, `:604-613`).
 
 No refactor to land autonomously from this charter. The single new,
 concrete action for an owner is to **re-enumerate the Tier-1 manifest against
-`index.ts` before ratifying it** (§New.1); the logger sink→Layer step (§New.2)
-and the `packages/llm` leaks (§New.3) are already owned by their respective
-proposals and should ride those. Re-running this audit as a routine will again
-add no signal until the manifest is re-enumerated and moves.
+`index.ts` before ratifying it** (§New.1). The logger sink→Layer step (§New.2) is
+owned by `2026-09-21-effect-design-synchronous-facades.md` §5 and should ride it;
+the `packages/llm` leaks (§New.3) are in the hardening note's territory but not
+yet recorded there (that note is closed), so they need filing before they have
+an owner. Re-running this audit as a routine will again add no signal until the
+manifest is re-enumerated and moves.
