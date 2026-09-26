@@ -1,6 +1,7 @@
 import { Data, Effect } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { cliEnvValue } from './cliContext';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** The OS browser launcher could not open the URL. The message never
@@ -22,7 +23,7 @@ function resolveBrowserLaunch(
   // Windows one: interop runs the same launcher `win32` uses.
   if (
     platform === 'linux' &&
-    (process.env.WSL_DISTRO_NAME || process.env.WSL_INTEROP)
+    (cliEnvValue('WSL_DISTRO_NAME') || cliEnvValue('WSL_INTEROP'))
   ) {
     return {
       command: 'rundll32.exe',
