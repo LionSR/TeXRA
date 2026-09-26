@@ -11,65 +11,47 @@ import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { SHUTDOWN_PHASE } from '@platform/interfaces';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-  registerRuntimeShutdownHandlers,
-} from '@tools/agentCliSessionStores';
+import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 
 describe('agent shutdown', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it.effect(
-    'drains every live session once and interrupts its agent-CLI sessions',
-    () =>
-      Effect.gen(function* () {
-        const firstSession = createTestSession();
-        const secondSession = createTestSession();
-        yield* Effect.addFinalizer(() =>
-          firstSession.dispose().pipe(Effect.andThen(secondSession.dispose())),
-        );
-        const compatibilitySession = testDefaultSession();
-        const firstDrain = vi.spyOn(
-          firstSession.runs,
-          'killBackgroundProcesses',
-        );
-        const secondDrain = vi.spyOn(
-          secondSession.runs,
-          'killBackgroundProcesses',
-        );
-        const compatibilityDrain = vi.spyOn(
-          compatibilitySession.runs,
-          'killBackgroundProcesses',
-        );
-        // Session-keyed registries: only sessions whose registry exists are swept.
-        const interruptCodex = vi
-          .spyOn(codexThreadsFor(firstSession.runs), 'interruptAll')
-          .mockImplementation(() => {});
-        const interruptClaude = vi
-          .spyOn(claudeAgentSessionsFor(secondSession.runs), 'interruptAll')
-          .mockImplementation(() => {});
+  it.effect("drains every live session's background processes once", () =>
+    Effect.gen(function* () {
+      const firstSession = createTestSession();
+      const secondSession = createTestSession();
+      yield* Effect.addFinalizer(() =>
+        firstSession.dispose().pipe(Effect.andThen(secondSession.dispose())),
+      );
+      const compatibilitySession = testDefaultSession();
+      const firstDrain = vi.spyOn(firstSession.runs, 'killBackgroundProcesses');
+      const secondDrain = vi.spyOn(
+        secondSession.runs,
+        'killBackgroundProcesses',
+      );
+      const compatibilityDrain = vi.spyOn(
+        compatibilitySession.runs,
+        'killBackgroundProcesses',
+      );
 
-        const lifecycle = createLifecycleHost();
-        registerRuntimeShutdownHandlers(lifecycle, {
-          flushArtifacts: Effect.void,
-          releaseSessions: Effect.void,
-          disposeRuntime: Effect.void,
-        });
+      const lifecycle = createLifecycleHost();
+      registerRuntimeShutdownHandlers(lifecycle, {
+        flushArtifacts: Effect.void,
+        releaseSessions: Effect.void,
+        disposeRuntime: Effect.void,
+      });
 
-        yield* Effect.all([lifecycle.runShutdown, lifecycle.runShutdown], {
-          concurrency: 'unbounded',
-        });
-        yield* lifecycle.runShutdown;
+      yield* Effect.all([lifecycle.runShutdown, lifecycle.runShutdown], {
+        concurrency: 'unbounded',
+      });
+      yield* lifecycle.runShutdown;
 
-        expect(firstDrain).toHaveBeenCalledOnce();
-        expect(secondDrain).toHaveBeenCalledOnce();
-        expect(compatibilityDrain).toHaveBeenCalledOnce();
-        expect(interruptCodex).toHaveBeenCalledOnce();
-        expect(interruptClaude).toHaveBeenCalledOnce();
-      }),
+      expect(firstDrain).toHaveBeenCalledOnce();
+      expect(secondDrain).toHaveBeenCalledOnce();
+      expect(compatibilityDrain).toHaveBeenCalledOnce();
+    }),
   );
 
   it.effect('preserves the shared shutdown order around host hooks', () =>

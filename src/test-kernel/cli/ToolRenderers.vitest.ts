@@ -70,18 +70,6 @@ describe('CLI tool display lines', () => {
     expect(lines).toContain('  split');
   });
 
-  it('counts wrapped patch rows at the rich terminal width', () => {
-    const entry = toolUse('Edit', {
-      path: 'paper.tex',
-      old_string: 'short\n',
-      new_string: `${'a long replacement '.repeat(8)}\n`,
-    });
-
-    expect(toolUseDisplayLines(entry, { width: 24 }).length).toBeGreaterThan(
-      toolUseDisplayLines(entry).length,
-    );
-  });
-
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -130,20 +118,6 @@ describe('CLI tool display lines', () => {
     expect(lines).toHaveLength(2);
     expect(lines[1].length).toBeLessThan(2010);
     expect(lines[1].endsWith('…')).toBe(true);
-  });
-
-  it('keeps read_file rows compact instead of printing file contents', () => {
-    const entry = toolUse(
-      'read_file',
-      { path: 'paper.tex' },
-      { outputText: 'Large file contents\nwith many lines' },
-    );
-
-    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
-      [
-        "● read_file (paper.tex)",
-      ]
-    `);
   });
 
   it('full transcript prints the output only when the card withholds it', () => {

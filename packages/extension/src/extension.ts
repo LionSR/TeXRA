@@ -227,7 +227,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // Usage logging is a runtime service, not an authentication-provider
   // capability: it runs even when Supabase sign-in is not configured, as it
   // does on desktop and CLI, and the service itself decides which records can
-  // be sent and preserves plan-accounting records for hosted routes.
+  // be sent.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version

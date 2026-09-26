@@ -14,46 +14,38 @@ import { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 /**
  * Owns the two stores (`codexThreadsFor`, `claudeAgentSessionsFor`) that hold
  * each session's live agent-CLI registries, keyed by that session's `Runs`,
- * plus the host shutdown wiring that interrupts them at teardown — kept
- * together because the shutdown handlers close over the same `WeakMap`s the
- * accessors read.
+ * plus the host shutdown wiring that drains each held session's background
+ * OS processes (agent-CLI and background bash children alike, through
+ * `RunHandle.backgroundProcess`).
  */
 
 // Keyed by the session's runs (the childRunBudget WeakMap model): each
-// session owns its own codex/claude registry, so per-session teardown
-// interrupts exactly its own agent-CLI children and a registry dies with its
+// session owns its own codex/claude registry, and a registry dies with its
 // session instead of living as a process singleton.
-function sessionRegistries() {
+function sessionRegistries(): (runs: RunRegistry) => AgentCliSessionRegistry {
   const registries = new WeakMap<RunRegistry, AgentCliSessionRegistry>();
-  return {
-    registries,
-    for: (runs: RunRegistry): AgentCliSessionRegistry => {
-      let registry = registries.get(runs);
-      if (!registry) {
-        registry = new AgentCliSessionRegistry(runs);
-        registries.set(runs, registry);
-      }
-      return registry;
-    },
+  return (runs) => {
+    let registry = registries.get(runs);
+    if (!registry) {
+      registry = new AgentCliSessionRegistry(runs);
+      registries.set(runs, registry);
+    }
+    return registry;
   };
 }
 
-const codexThreads = sessionRegistries();
-const claudeAgentSessions = sessionRegistries();
-
 /** The session's registry of live codex threads. */
-export const codexThreadsFor = codexThreads.for;
+export const codexThreadsFor = sessionRegistries();
 
 /** The session's registry of live claude-agent sessions. */
-export const claudeAgentSessionsFor = claudeAgentSessions.for;
+export const claudeAgentSessionsFor = sessionRegistries();
 
 /**
- * Register the host shutdown handler that stops agent work at teardown: kill the
- * background OS processes owned by live runtime sessions and interrupt any
- * agent-CLI codex/claude sessions those sessions still track. Lives here —
- * next to the registries it interrupts — because the hosts import it once
- * during platform startup and the core never depends on tool-layer teardown
- * wiring.
+ * Register the host shutdown handler that stops agent work at teardown: kill
+ * the background OS processes owned by live runtime sessions, which covers
+ * every agent-CLI codex/claude child. Lives here because the hosts import it
+ * once during platform startup and the core never depends on tool-layer
+ * teardown wiring.
  */
 function registerAgentShutdownHandler(lifecycle: LifecycleHost): void {
   lifecycle.onShutdown(
@@ -61,8 +53,6 @@ function registerAgentShutdownHandler(lifecycle: LifecycleHost): void {
     Effect.sync(() => {
       for (const session of heldSessions()) {
         session.runs.killBackgroundProcesses();
-        codexThreads.registries.get(session.runs)?.interruptAll();
-        claudeAgentSessions.registries.get(session.runs)?.interruptAll();
       }
     }),
   );

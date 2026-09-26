@@ -6,7 +6,7 @@
  * accessors in `runRecords.ts`.
  */
 
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Data, Effect, Exit } from 'effect';
 
 import {
   isAgentRunRecord,
@@ -230,6 +230,15 @@ export interface FinalizeRunInput {
    */
   readonly report?: (error: Error) => void;
 }
+
+/**
+ * A caller's terminal outcome that `finalizeRun` could not commit
+ * (`FinalizeRunResult` with `ok: false`), for a caller whose own failure that
+ * is; `cause` is the result's `error`.
+ */
+export class RunOutcomeUnpersisted extends Data.TaggedError(
+  'RunOutcomeUnpersisted',
+)<{ readonly message: string; readonly cause: unknown }> {}
 
 export type FinalizeRunResult =
   | {

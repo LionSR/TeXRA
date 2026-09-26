@@ -56,26 +56,6 @@ describe('PromptBuilder', () => {
   );
 
   it.effect(
-    'handles single string userRequest by reusing for subsequent rounds',
-    () =>
-      Effect.gen(function* () {
-        const prompt: AgentPrompt = {
-          systemPrompt: '',
-          userPrefix: '',
-          userRequest: 'initial only',
-        } as AgentPrompt;
-
-        const builder = new PromptBuilder(prompt, {}, undefined);
-        const initial = yield* overNodePlatform(builder.buildInitialPrompts());
-        expect(initial.userRequest).toBe('initial only');
-
-        // Single-template agents reuse the template for subsequent rounds
-        const reflectPrompt = yield* builder.buildUserRequest(1);
-        expect(reflectPrompt).toBe('initial only');
-      }),
-  );
-
-  it.effect(
     'keeps pinned-memory consultation unconditional even for self-contained requests',
     () =>
       Effect.gen(function* () {

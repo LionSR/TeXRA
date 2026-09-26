@@ -35,7 +35,10 @@ import { StateReadFailed } from '@platform/interfaces';
 import type { PlatformSecrets } from '@platform/secrets';
 import {
   CHATGPT_CODEX_CONTEXT_WINDOW_SETTING,
+  getExhaustionReason,
+  type CredentialSwitch,
   type DeclinableUsageRoute,
+  type ProviderError,
 } from '@shared/schemas';
 import {
   isKimiCodeExclusiveModel,
@@ -203,6 +206,92 @@ export function decideModelRoute(
     usageRoute: onCodingPlan ? 'glm-coding-plan-subscription' : 'api-key',
   };
 }
+
+/** The routes whose quota the retry owner falls back from without asking. */
+const CODING_PLAN_ROUTES: readonly DeclinableUsageRoute[] = [
+  'kimi-code-subscription',
+  'glm-coding-plan-subscription',
+];
+
+/**
+ * The move onto the user's own credential a failed attempt offers, decided
+ * once by the retry owner (`ModelInvoker`) from the recorded failure and the
+ * failed binding's route, and carried on the retry request so no host
+ * re-derives it.
+ *
+ * - A subscription or coding-plan route falls back to the route the model
+ *   takes with every preference off. When that is the same kind of route
+ *   (a Kimi Code-exclusive model, which only the coding endpoint serves),
+ *   there is nothing to move to.
+ * - A key whose upstream account ran out of credit needs a changed key for
+ *   the same provider (the Kimi Code key of a Kimi Code-exclusive model).
+ * - The Copilot route moves to a replacement run on the direct model.
+ *
+ * A coding-plan fallback is automatic when its key is already stored and
+ * the run has not declined that route before: switching re-uses a key the
+ * user gave, so it needs no one present (a headless run, a delegated child).
+ * The subscriptions (ChatGPT, Grok) stay explicit, because moving them onto
+ * a key starts spending API credit.
+ */
+export const routeCredentialSwitch = Effect.fn('routeCredentialSwitch')(
+  function* (
+    failed: { readonly config: ModelConfig; readonly route: ModelRoute },
+    recorded: Pick<ProviderError, 'classification'>,
+    declinedRoutes: readonly DeclinableUsageRoute[],
+    secrets: PlatformSecrets,
+  ): Effect.fn.Return<CredentialSwitch | null> {
+    const reason = getExhaustionReason(recorded);
+    if (reason === undefined) return null;
+    const { route } = failed;
+    let declined: DeclinableUsageRoute;
+    switch (route.kind) {
+      case 'copilot':
+        return reason === 'copilot-subscription'
+          ? { kind: 'copilot-fallback' }
+          : null;
+      case 'openrouter':
+        return reason === 'upstream-credit'
+          ? { kind: 'new-key', provider: 'openRouter' }
+          : null;
+      case 'chatgpt-subscription':
+      case 'xai-subscription':
+        declined = route.kind;
+        break;
+      case 'api-key':
+        // The key the route bound is itself the broken credential, whatever
+        // plan it pays through.
+        if (reason === 'upstream-credit') {
+          return { kind: 'new-key', provider: route.provider };
+        }
+        if (route.usageRoute === 'api-key') return null;
+        declined = route.usageRoute;
+        break;
+      default:
+        return null;
+    }
+    const fallback = decideModelRoute(failed.config, OWN_KEY_ROUTE_FACTS);
+    if (fallback.kind !== 'api-key' || fallback.usageRoute !== 'api-key') {
+      return null;
+    }
+    const automatic =
+      CODING_PLAN_ROUTES.includes(declined) &&
+      !declinedRoutes.includes(declined) &&
+      (yield* hasUsableApiKey(secrets, fallback.provider).pipe(
+        Effect.catchTag('SecretsFailed', (failure) =>
+          Effect.logWarning(
+            `Could not read the ${fallback.provider} API key; the quota fallback waits for a decision.`,
+            failure.cause,
+          ).pipe(Effect.as(false)),
+        ),
+      ));
+    return {
+      kind: 'decline-route',
+      route: declined,
+      provider: fallback.provider,
+      automatic,
+    };
+  },
+);
 
 /**
  * Read the host half of the route facts. `declinedRoutes` are the routes the

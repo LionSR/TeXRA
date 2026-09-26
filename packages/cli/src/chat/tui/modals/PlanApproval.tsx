@@ -35,7 +35,7 @@ const PLAN_APPROVAL_GOAL_ACTION = {
   action: 'run as goal',
 } as const;
 
-export function isCompactPlanApprovalRows(
+function isCompactPlanApprovalRows(
   availableRows: number | undefined,
   goalEnabled = false,
 ): boolean {
@@ -65,7 +65,7 @@ export function planApprovalGoalNoticeLine(
   );
 }
 
-export function planApprovalCompactBodyRowsBudget({
+function planApprovalCompactBodyRowsBudget({
   availableRows,
   columns,
   goalEnabled,

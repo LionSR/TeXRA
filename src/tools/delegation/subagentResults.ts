@@ -12,7 +12,6 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import {
   runStorageFilePath,
@@ -20,6 +19,7 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
   type ResultMeta,
+  type RetryErrorInfo,
   type RunEndOutput,
   type RunId,
   type RunOutcome,
@@ -210,19 +210,18 @@ export function formatSubagentDelivery(
 }
 
 /**
- * Format an error as a delivery message.
+ * Format a child's normalized failure as a delivery message.
  */
 export function formatSubagentError(
   runId: string,
   agentName: string,
-  err: unknown,
+  formatted: Pick<RetryErrorInfo, 'message' | 'userRetryable'>,
   options?: {
     wallTimeMs?: number;
     workingDirectory?: string;
     memoryMisses?: readonly AttachedMemoryMiss[];
   },
 ): string {
-  const formatted = normalizeProviderError(err);
   return formatDelivery({
     tag: DELIVERY_TAG.subagentError,
     runId,

@@ -14,9 +14,10 @@
  *   event with no limit, so a child that ignores SIGTERM without a
  *   `forceKillAfter`, or sleeps uninterruptibly, would hold Stop, a shutdown
  *   phase and runtime disposal forever. Each spawn runs in a child scope the
- *   supervisor closes on a detached fiber and awaits under a budget: a
- *   timeout straight on the close would never fire, because a race waits for
- *   its loser to finish interrupting and a scope close is uninterruptible.
+ *   supervisor closes on a detached fiber and awaits under a budget. Only
+ *   the wait is bounded, never the close: a timeout straight on the close
+ *   would interrupt the upstream finalizer mid-teardown (its wait for the
+ *   exit event), abandoning the child instead of reaping it.
  *   Past the budget a still-running child gets one SIGKILL and a warning
  *   naming its pid; the detached close keeps running and reaps a late exit.
  *   `handle.kill` gets the same budget, so a kill with no `forceKillAfter`
@@ -192,7 +193,10 @@ const supervisedSpawner = Layer.effect(
   Effect.gen(function* () {
     const inner = yield* ChildProcessSpawner;
     // Live children and whether each leads its process group; plain state so
-    // the synchronous `exit` listener can read it.
+    // the synchronous `exit` listener can read it. Unlike stopWaiting, the
+    // sweep cannot ask the handle whether Node already reaped a child (that
+    // answer is an Effect), so a pid whose exit watcher has not yet run
+    // `forget` is signalled even if the OS reused it in that window.
     const live = new Map<number, { readonly group: boolean }>();
     const killLive = () => {
       for (const [pid, { group }] of live) {

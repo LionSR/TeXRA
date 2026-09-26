@@ -90,7 +90,6 @@ interface ApprovalMeta {
 export const executeSubagent = Effect.fn('executeSubagent')(function* (
   parent: DelegationParent,
   configPayload: AgentConfigPayload,
-  agentName: string,
   parentRunId: RunId,
   options?: { approvalMeta?: ApprovalMeta },
 ) {
@@ -112,6 +111,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
+  const agentName = configPayload.agent;
 
   const inheritChildRunApprovals = (resolvedRunId: RunId): void => {
     // Live inherited bypass values: each approval follows the parent's
@@ -140,7 +140,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     const deliveryExit = yield* Effect.exit(
       executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
-        agentName,
         parentRunId,
         session: parentSession,
         approvalPromptsUnavailable:
@@ -206,7 +205,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       const strategyParams = {
         definition,
         runId,
-        agentName,
         parentRunId,
         session: parentSession,
         startedAt,

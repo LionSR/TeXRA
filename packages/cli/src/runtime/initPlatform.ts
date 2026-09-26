@@ -164,7 +164,7 @@ export function installCliShutdownSignalHandlers(
   const install = (signal: CliShutdownSignal, exitCode: number) => {
     const handler = async () => {
       // A foreground child (a pager, an installer) owns Ctrl-C while it
-      // runs; `runForegroundCommand` re-raises the interrupt if the child
+      // runs; `runForegroundCommand` interrupts its command if the child
       // died of it. Re-arm so the next SIGINT reaches this handler again.
       if (signal === 'SIGINT' && terminalForegroundHeld()) {
         deferInterrupt();

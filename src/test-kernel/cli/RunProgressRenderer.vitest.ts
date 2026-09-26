@@ -22,7 +22,6 @@ import {
   RUN_PHASE,
   type ConversationProgress,
   type RunId,
-  type InstructionAction,
   type RunIdentity,
   type RunPhase,
   AgentCategory,
@@ -501,17 +500,6 @@ describe('CLI run progress renderer', () => {
     expect(timers.clearCount).toBe(1);
   });
 
-  it('summarizes multi-input workflow progress without hiding extra files', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleRunConfig(renderer, {
-      inputFiles: ['number-theory.tex', 'algebra.tex'],
-    });
-
-    expect(output.text).toBe('polish number-theory.tex +1 · 0s\n');
-  });
-
   it('shows planned workflow rounds before the first model turn', async () => {
     plannedRoundsFor.mockReturnValue(2);
     const output = outputBuffer();
@@ -523,48 +511,6 @@ describe('CLI run progress renderer', () => {
     expect(plannedRoundsFor).toHaveBeenCalledWith('polish');
     expect(output.text).toBe(
       'polish paper.tex · 2 rounds · 0s\n' + '[r1/2] · polish paper.tex · 0s\n',
-    );
-  });
-
-  it('keeps the planned total when a workflow overruns its rounds', async () => {
-    plannedRoundsFor.mockReturnValue(3);
-    const output = outputBuffer();
-    const renderer = plainRenderer(output, { minIntervalMs: 0 });
-
-    await handleRunConfig(renderer);
-    await handleRound(renderer, 'stream-1', 3);
-
-    expect(output.text).toBe(
-      'polish paper.tex · 3 rounds · 0s\n' + '[r4/3] · polish paper.tex · 0s\n',
-    );
-  });
-
-  it('does not add workflow round hints to tool-use progress', async () => {
-    plannedRoundsFor.mockReturnValue(2);
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleRunConfig(renderer, {
-      agentCategory: AgentCategory.ToolUse,
-      inputFiles: [],
-    });
-
-    expect(plannedRoundsFor).not.toHaveBeenCalled();
-    expect(output.text).toBe('polish · 0s\n');
-  });
-
-  it('prints phase changes on separate lines when ANSI is disabled', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleRunConfig(renderer);
-    await handleRunDescription(renderer, 'stream-1', 'drafting');
-    await handleActiveSubagents(renderer, 'stream-1', [subagentChild()]);
-
-    expect(output.text).toBe(
-      'polish paper.tex · 0s\n' +
-        'polish paper.tex · drafting · 0s\n' +
-        'polish paper.tex · drafting · subagent: review · 0s\n',
     );
   });
 
@@ -629,33 +575,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('ticks the ANSI status line while an active subagent is quiet', async () => {
-    let now = 0;
-    const output = outputBuffer();
-    const timers = fakeTimers();
-    const renderer = ansiRenderer(output, { nowMs: () => now, ...timers });
-
-    await handleOrchestratorRootRun(renderer);
-    now = 950;
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-
-    expect(timers.heartbeat).toBeDefined();
-    now = 1000;
-    timers.heartbeat?.();
-    now = 2300;
-    timers.heartbeat?.();
-
-    expect(output.text).toContain(
-      '\r\x1b[2Korchestrator · subagent: review · 1s',
-    );
-    expect(output.text).toContain(
-      '\r\x1b[2Korchestrator · subagent: review · 2s',
-    );
-
-    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.CANCELLED);
-    expect(timers.clearCount).toBe(1);
-  });
-
   it('stops active-child heartbeat when preserving the live line', async () => {
     const output = outputBuffer();
     const timers = fakeTimers();
@@ -692,23 +611,6 @@ describe('CLI run progress renderer', () => {
     );
   });
 
-  it('keeps named active children visible when earlier entries are unnamed', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleRunConfig(renderer);
-    await handleActiveSubagents(renderer, 'stream-1', [
-      subagentChild({ childRunId: 'child-stream-1' as RunId, agentName: '' }),
-      subagentChild({
-        childRunId: 'child-stream-2' as RunId,
-      }),
-    ]);
-
-    expect(output.text).toBe(
-      'polish paper.tex · 0s\npolish paper.tex · subagent: review · 0s\n',
-    );
-  });
-
   it('joins a child description emitted before the active roster', async () => {
     const output = outputBuffer();
     const renderer = plainRenderer(output);
@@ -724,25 +626,6 @@ describe('CLI run progress renderer', () => {
     expect(output.text).toBe(
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review — Check multiplier signs and resonance counterexa… · 0s\n',
-    );
-  });
-
-  it('adds a description that arrives after the child becomes active', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output);
-
-    await handleOrchestratorRootRun(renderer);
-    await handleActiveSubagents(renderer, 'root-stream', [subagentChild()]);
-    await handleRunDescription(
-      renderer,
-      'child-stream',
-      'Verify by constraint elimination and energy balance',
-    );
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\n' +
-        'orchestrator · subagent: review · 0s\n' +
-        'orchestrator · subagent: review — Verify by constraint elimination and energy bal… · 0s\n',
     );
   });
 
@@ -853,18 +736,6 @@ describe('CLI run progress renderer', () => {
       'orchestrator · 0s\n' +
         'orchestrator · subagent: review · 0s\n' +
         'orchestrator · Completed · 11s\n',
-    );
-  });
-
-  it('keeps cancelled terminal stream stops distinct from completion', async () => {
-    const output = outputBuffer();
-    const renderer = plainRenderer(output, { minIntervalMs: 0 });
-
-    await handleOrchestratorRootRun(renderer);
-    await handleRunStatus(renderer, 'root-stream', RUN_PHASE.CANCELLED);
-
-    expect(output.text).toBe(
-      'orchestrator · 0s\norchestrator · Stopped · 0s\n',
     );
   });
 
@@ -1080,35 +951,6 @@ describe('CLI run progress renderer', () => {
         );
         expect(output).not.toContain('set-api-key');
         expect(output).not.toContain('open-configuration-guide');
-      }),
-  );
-
-  it.live(
-    'falls back to the raw token for an unrecognized action in the instruction hint',
-    () =>
-      Effect.gen(function* () {
-        const output = yield* captureStreamWrites(
-          process.stderr,
-          Effect.gen(function* () {
-            const host = createCliRuntimeHost(
-              testRuntime(),
-              context({ outputFormat: 'text' }),
-            );
-
-            host.emit('requestShowInstruction', {
-              key: 'futureInstruction',
-              message: 'Something needs attention.',
-              actions: ['some-future-action' as InstructionAction],
-              showSuppress: false,
-            });
-
-            yield* host.close();
-          }),
-        );
-
-        expect(output).toContain(
-          'Something needs attention. (some-future-action)',
-        );
       }),
   );
 

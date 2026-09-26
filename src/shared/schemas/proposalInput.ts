@@ -2,7 +2,7 @@
  * Reconstruct a canonical {@link AgentProposal} from the raw delegation/proposal
  * tool input captured in a progress-view log entry.
  *
- * The progress view's "Setup" link replays a past delegation into the main view.
+ * The progress view's "Copy to new task" link replays a past delegation into the main view.
  * To do that it must rebuild the typed proposal from the raw tool-call input that
  * was logged. This parser owns that reconstruction.
  *
@@ -86,7 +86,7 @@ function parseOrWarn<T>(
   if (result.success) return result.data;
   console.warn(
     `[proposalInput] Could not reconstruct a proposal for delegation tool ` +
-      `"${toolName}"; the "Restore setup" link will be unavailable for this ` +
+      `"${toolName}"; the "Copy to new task" link will be unavailable for this ` +
       `logged call: ${result.error.message}`,
   );
   return null;

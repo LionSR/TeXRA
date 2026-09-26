@@ -25,6 +25,12 @@ All notable changes to this project will be documented in this file.
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
   and the delegation roster an agent can see is still listed in the
   descriptions of its delegation tools.
+- **Goal mode is a Tools plugin, and its switch replaces the
+  `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
+  dashboard, or with `texra tools disable goal` / `texra tools enable goal`.
+  Off, no agent is offered the `plan` tool and runs open no goal turns. The
+  old setting is no longer read, so if you had set it to `false`, Goal Mode is
+  on again (its default) until you switch the plugin off.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.
@@ -61,6 +67,17 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
+- **Multi-agent workflow scripts are written in a new form** — a lead's
+  script now writes `yield* agent(...)` and `yield* all([...])` instead of
+  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
+  and `timeout()` around any call. A failed call no longer comes back as an
+  empty result: inside `all()` it stops the other tasks and fails the step,
+  unless the script wraps each task in `attempt()` to keep the ones that
+  succeeded. A retried step reuses the calls it already finished instead of
+  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
+  old form stop with a message saying how to rewrite them; calls they already
+  completed are reused once the lead reruns the rewritten script under the
+  same name.
 
 - **OpenRouter models now run through the official OpenRouter SDK, with
   fewer response details.** Requests over the OpenRouter route
@@ -149,6 +166,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **Turning telemetry off now stops all usage reporting** — rounds run on a
+  ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
+  out, on the grounds that they metered a plan cap. Nothing has enforced
+  that cap since the relay was removed, so the setting, `TEXRA_NO_TELEMETRY`,
+  and `DO_NOT_TRACK` now cover every round, and `texra doctor` no longer says
+  subscription rounds are still recorded.
 
 - **Tool availability rechecks after a change made during a check.** If a
   credential or setting changed just as a tool-availability check started,
@@ -362,7 +386,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
   and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
   now **Sign In to TeXRA Account (Remote Agents)**, since model access never
-  needed it. The panel's title bar shows only the Settings gear; it no longer
+  needed it. The panel's title bar no longer
   swaps in workspace-wide Indent and Clean buttons over a conversation.
   **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
   now lists the folders and asks before deleting them, then says what it
@@ -401,6 +425,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Changes
 
+- **Settings has a gear in the TeXRA panel header**, next to New task, in
+  every state and in the editor tab; the hover-only gear in the view's title
+  bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
+  session row says "2 background tasks · 1 running" and "Needs approval" instead of
+  bare number badges, and the run header's chip reads "3 tool calls"
+  rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop
   and one ⋯ menu instead of two stacked headers. A new project shows one
   card at a time (setup, then "No LaTeX files yet") and at most one warning
@@ -409,8 +439,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
   toggles are replaced by an "Auto-approving …" chip that appears only while
   a grant from an approval card is on; click it to go back to asking. Open
-  dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
-  file menu have them). The desktop app no longer draws a second header,
+  dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
+  gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of
@@ -422,6 +452,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   instruction), plus **Resume** when the session was interrupted. Workflow
   runs get the same line. Edit as new task left the ⋯ menu. The run board
   calls steps it has not reached "Not started" instead of "Declared".
+- **Run and diff buttons say what they do.** A delegated agent's row reads
+  "Subagent: lint" with **Copy to new task** (was "Delegate agent" and
+  "Restore setup"); the multi-agent proposal names its model in the first
+  line; and the LaTeXDiffs buttons are **Diff vs. edited**, **Diff vs.
+  commit**, **Move to Diffs folder** (was "Pack") and **Delete diff files**,
+  with refresh icons on the two refresh buttons.
 
 #### Bug Fixes
 
@@ -517,6 +553,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Bug Fixes
 
+- **The "use your own API key" retry works the same everywhere** — when a
+  Kimi Code or GLM Coding Plan quota runs out and the matching provider key
+  is already saved, every app now retries on that key by itself, including
+  runs with nobody watching and subagents, and says so in the run. Before,
+  only the terminal app did this. When the key is not saved yet, pressing
+  `k` in the terminal app now asks for it instead of telling you to use
+  `/key` first, and a key whose account ran out of credit can be replaced
+  from the terminal app's retry prompt too.
 - **Google image uploads fail visibly** — a missing or failed Gemini
   attachment now stops the request instead of sending it without the file.
 - **Finished and crashed runs are no longer treated as still running** — TeXRA

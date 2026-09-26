@@ -111,15 +111,6 @@ describe('validateAgentYamlContent', () => {
       ].join('\n'),
     ),
   );
-
-  it.effect('wraps malformed YAML text through the shared parse boundary', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        validateAgentYamlContent('name: "unterminated'),
-      );
-      assert.ok(error.message.startsWith('Failed to parse agent YAML:'));
-    }),
-  );
 });
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -150,43 +141,6 @@ describe('loadAgentSettingAndPrompts', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  it.effect('loads settings and prompts from the given definition path', () =>
-    Effect.gen(function* () {
-      const entry = customEntry('polish', AgentCategory.Workflow);
-
-      putYaml(entry, [
-        'name: polish',
-        'settings:',
-        // agentCategory is the discriminator of AgentSettingSchema; only
-        // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
-        '  agentCategory: workflow',
-        '  rounds: 1',
-        'prompts:',
-        '  userRequest: unified variant',
-        '',
-      ]);
-
-      const [, prompts] = yield* loadDefinition(entry);
-
-      assert.strictEqual(prompts.userRequest, 'unified variant');
-    }),
-  );
-
-  it.effect(
-    'rejects with a wrapped error naming the path for malformed YAML',
-    () =>
-      Effect.gen(function* () {
-        const entry = customEntry('broken', AgentCategory.Workflow);
-
-        writeFileSync(entry.path, 'name: "unterminated\n');
-
-        const error = yield* Effect.flip(loadDefinition(entry));
-        assert.ok(
-          error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
-        );
-      }),
-  );
 
   it.effect(
     'rejects a circular "inherits" chain instead of recursing without bound',

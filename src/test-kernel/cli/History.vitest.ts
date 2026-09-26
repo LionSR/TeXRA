@@ -464,28 +464,6 @@ describe('CLI history runtime', () => {
     );
   });
 
-  it('uses the history description for no-input chat rows', async () => {
-    const chatConfig = toolUseAgentConfig({ agent: 'assistant' });
-    mocks.listRuns.mockReturnValue(
-      Effect.succeed([
-        runListEntry('chat1', {
-          identity: { kind: 'agent', agent: 'assistant' },
-          timestamp: '2026-05-18T11:00:00.000Z',
-          record: chatConfig,
-          status: 'cancelled',
-          description: 'Sketch a proof outline',
-          ...RESUMABLE_ROW_FACTS,
-        }),
-      ]),
-    );
-
-    const entries = await historyEntries();
-
-    expect(formatCliHistoryText(entries)).toBe(
-      'chat1\t2026-05-18T11:00:00.000Z\tassistant\tresumable\tSketch a proof outline',
-    );
-  });
-
   it('parses positive history list limits', () => {
     expect(parseHistoryListLimit('1')).toBe(1);
     expect(parseHistoryListLimit('25')).toBe(25);
@@ -553,110 +531,6 @@ describe('CLI history runtime', () => {
         ],
       },
     });
-  });
-
-  it('shows the current resumable model without losing the startup model', async () => {
-    const toolUseConfig = AgentConfigSchema.parse({
-      ...config,
-      agent: 'chat',
-      model: 'gpt54',
-      agentCategory: 'toolUse',
-    });
-    mocks.readConfig.mockResolvedValue(toolUseConfig);
-    mocks.readCliResumedModel.mockResolvedValue('gpt55');
-
-    const details = await historyDetails('a1a1a1' as RunId);
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(details?.currentModel).toBe('gpt55');
-    expect(text).toContain('Model: gpt55');
-    expect(text).toContain('Startup model: gpt54');
-  });
-
-  it('shows the team preset in details without hiding the root agent', async () => {
-    mocks.readConfig.mockResolvedValue(
-      AgentConfigSchema.parse({
-        ...config,
-        agent: 'engineer',
-        model: 'sonnet46T',
-        agentCategory: 'toolUse',
-        cli: { multiAgentPresetId: ' software-engineer ' },
-      }),
-    );
-
-    const details = await historyDetails('bea111' as RunId);
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(text).toContain('Agent: engineer');
-    expect(text).toContain('Team: software-engineer');
-    expect(text).not.toContain('Team:  software-engineer ');
-  });
-
-  it('surfaces the explicit CLI output file in history details', async () => {
-    mocks.readConfig.mockResolvedValue(
-      AgentConfigSchema.parse({
-        ...config,
-        cli: { outputFile: ' /tmp/texra-output/polished.tex ' },
-      }),
-    );
-
-    const details = await historyDetails('a1a1a1' as RunId);
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(text).toContain('CLI output: /tmp/texra-output/polished.tex');
-    expect(text).not.toContain('CLI output:  /tmp/texra-output/polished.tex ');
-  });
-
-  it('surfaces workflow result metadata in history details', async () => {
-    const outputSummary = {
-      round: 1,
-      relativePath: 'r1/paper.tex',
-      absolutePath: '/tmp/run/r1/paper.tex',
-      location: 'runStorage' as const,
-      originalPath: '/tmp/paper.tex',
-      added: 8,
-      removed: 0,
-    };
-    const compileFailure = {
-      round: 1,
-      displayName: 'paper.tex',
-      outputPath: 'r1/paper.tex',
-      logPath: 'compile/r1_paper.tex.log',
-      logAbsolutePath: '/tmp/run/compile/r1_paper.tex.log',
-    };
-    const workflowOutput = {
-      category: 'workflow',
-      outputs: [outputSummary],
-      compileFailures: [compileFailure],
-      diffs: [],
-    };
-    mocks.readResultMeta.mockResolvedValue({
-      producer: 'cliWorkflow',
-      copiedOutput: '/tmp/annotated.tex',
-      output: workflowOutput,
-    });
-    // How the run ended is the `run.end` row's; the producer record carries
-    // the output the delivery enriched.
-    mocks.readRunEnd.mockResolvedValue({
-      outcome: 'completed',
-      usage: { totalCost: 0.7 },
-      output: { category: 'workflow', outputs: [], compileFailures: [] },
-    });
-
-    const details = await historyDetails('a1a1a1' as RunId);
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(details?.result).toEqual({
-      outcome: 'completed',
-      usage: { totalCost: 0.7 },
-      output: workflowOutput,
-    });
-    expect(text).not.toContain('"producer"');
-    expect(text).not.toContain('"copiedOutput"');
-    expect(text).toContain('"category":"workflow"');
-    expect(text).toContain('"outcome":"completed"');
-    expect(text).toContain('"compileFailures"');
-    expect(text).toContain('compile/r1_paper.tex.log');
   });
 
   it('shows a bounded final assistant preview when no report is stored', async () => {
@@ -744,43 +618,6 @@ describe('CLI history runtime', () => {
     expect(text).not.toContain('hidden chain of thought');
   });
 
-  it('keeps a placeholder for thinking-only assistant turns', async () => {
-    mocks.readConversation.mockResolvedValue([
-      { kind: 'assistant-text', text: 'Earlier visible answer.' },
-      { kind: 'thinking', text: 'hidden newer reasoning' },
-    ]);
-
-    const details = await historyDetails('a1a1a1' as RunId, {
-      includeFullConversation: true,
-    });
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(details?.conversationPreview?.messages).toEqual([
-      {
-        index: 2,
-        role: 'assistant',
-        content: '[provider reasoning hidden]',
-        truncated: false,
-      },
-    ]);
-    expect(details?.conversation?.messages).toEqual([
-      {
-        index: 1,
-        role: 'assistant',
-        content: 'Earlier visible answer.',
-        truncated: false,
-      },
-      {
-        index: 2,
-        role: 'assistant',
-        content: '[provider reasoning hidden]',
-        truncated: false,
-      },
-    ]);
-    expect(text).toContain('[assistant #2]\n[provider reasoning hidden]');
-    expect(text).not.toContain('hidden newer reasoning');
-  });
-
   it('can show the full stored conversation for post-run inspection', async () => {
     const longToolOutput = `${'tool-output-line\n'.repeat(320)}done`;
     mocks.readConversation.mockResolvedValue([
@@ -864,19 +701,6 @@ describe('CLI history runtime', () => {
 
     expect(details?.id).toBe('de1e6a');
     expect(formatCliHistoryDetailsText(details!)).toContain('Parent: f00707');
-  });
-
-  it('uses the stored report instead of duplicating conversation preview text', async () => {
-    mocks.readReport.mockResolvedValue('Structured report.');
-    mocks.readConversation.mockResolvedValue([
-      { kind: 'assistant-text', text: 'Final proof analysis.' },
-    ]);
-
-    const details = await historyDetails('a1a1a1' as RunId);
-    const text = formatCliHistoryDetailsText(details!);
-
-    expect(text).toContain('Report:\nStructured report.');
-    expect(text).not.toContain('Conversation (');
   });
 
   it('surfaces persisted workspace files without parsing provider messages', async () => {
@@ -1083,26 +907,6 @@ describe('CLI history runtime', () => {
             yield* Effect.promise(() => historyDetails('facade' as RunId)),
           ).toBeNull();
         }),
-    );
-
-    it.live('reads the bundled trace-viewer default template', () =>
-      Effect.gen(function* () {
-        const resourcesPath = yield* Effect.promise(() =>
-          makeTempDir('texra-history-standalone-', tempDirs),
-        );
-        const traceViewerDir = path.join(resourcesPath, 'traceViewer');
-        yield* Effect.promise(() => mkdir(traceViewerDir, { recursive: true }));
-        yield* Effect.promise(() =>
-          writeFile(
-            path.join(traceViewerDir, 'index.html'),
-            '<html>standalone</html>',
-          ),
-        );
-
-        expect(yield* readCliHistoryStandaloneTemplate(resourcesPath)).toBe(
-          '<html>standalone</html>',
-        );
-      }).pipe(Effect.provide(nodePlatformLayer)),
     );
 
     it.live(

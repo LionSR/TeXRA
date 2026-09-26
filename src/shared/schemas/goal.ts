@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
 
-export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
-
 /**
  * A goal is a live pursuit: it exists only while the autonomous loop is running
  * (`active`) or waiting for the user (`paused`). Finishing or abandoning one

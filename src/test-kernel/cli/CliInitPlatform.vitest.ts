@@ -9,14 +9,8 @@ import { initCliPlatform } from '@cli/runtime/initPlatform';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
-import { withProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-} from '@tools/agentCliSessionStores';
-import { SetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -278,55 +272,18 @@ describe('CLI platform init', () => {
       yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
-      const interruptCodex = vi
-        .spyOn(codexThreadsFor(session.runs), 'interruptAll')
+      const drain = vi
+        .spyOn(session.runs, 'killBackgroundProcesses')
         .mockImplementation(() => {});
-      const interruptClaude = vi
-        .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
-        .mockImplementation(() => {});
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          interruptCodex.mockRestore();
-          interruptClaude.mockRestore();
-        }),
-      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
-      // Registration alone must not interrupt anything; the drain belongs to
-      // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
-      // the signal handlers, the TUI's exitNow).
-      expect(interruptCodex).not.toHaveBeenCalled();
+      // Registration alone must not kill anything; the drain belongs to the
+      // CLI lifecycle host every exit path runs (bin/texra.ts's finally, the
+      // signal handlers, the TUI's exitNow).
+      expect(drain).not.toHaveBeenCalled();
       for (const handler of mocks.shutdownHandlers) yield* handler;
-      expect(interruptCodex).toHaveBeenCalledOnce();
-      expect(interruptClaude).toHaveBeenCalledOnce();
+      expect(drain).toHaveBeenCalledOnce();
     }),
-  );
-
-  it.effect(
-    'wires setup sign-in to the existing CLI login implementation',
-    () =>
-      Effect.gen(function* () {
-        mocks.authenticated = true;
-        mocks.signInCliSupabase.mockReturnValue(
-          Effect.succeed({ account: { label: 'User' } }),
-        );
-
-        // The runtime this root installed, as it hands it back: the root's own
-        // local, not a process-wide read. Disposing the kernel's runtime first
-        // makes this init the one that installs the CLI runtime.
-        yield* disposeInstalledRuntime;
-        const { runtime } = yield* initCliPlatform(cliContext());
-
-        const setup = yield* withProcessServices(
-          runtime,
-          Effect.service(SetupPlatform),
-        );
-        expect(setup.host).toBe('cli');
-        expect(yield* withProcessServices(runtime, setup.signIn())).toBe(true);
-        expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-        expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
-          openBrowser: true,
-        });
-      }),
   );
 });
 

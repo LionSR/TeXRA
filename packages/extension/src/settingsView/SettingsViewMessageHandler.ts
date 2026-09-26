@@ -917,7 +917,7 @@ export class SettingsViewMessageHandler {
         ? (getLastCheckResults(this.session.roots.workspace) ?? undefined)
         : undefined;
       const items = yield* buildToolDashboardItems(
-        'extension',
+        'vscode',
         {
           workspaceRoot: this.session.roots.workspace,
           config: this.session.roots.config,

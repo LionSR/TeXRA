@@ -1,44 +1,54 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  isCompactPlanApprovalRows,
   isPlanApprovalGoalActionVisible,
-  planApprovalCompactBodyRowsBudget,
+  PlanApproval,
   planApprovalGoalNoticeLine,
 } from '@cli/chat/tui/modals/PlanApproval';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
+import type { RunId } from '@shared/schemas';
+import {
+  loadInk,
+  renderOutputAtTerminalSize,
+} from '@test/support/inkTestHarness.ts';
 
-function compactBudget(
-  availableRows: number,
-  columns: number,
-  goalEnabled: boolean,
-): number | undefined {
-  return planApprovalCompactBodyRowsBudget({
-    availableRows,
-    columns,
-    goalEnabled,
-  });
+async function renderPlanApproval(availableRows: number): Promise<string> {
+  const { ink, React } = await loadInk();
+  return renderOutputAtTerminalSize(
+    ink,
+    React.createElement(PlanApproval, {
+      autoApproveAll: false,
+      availableRows,
+      onDecide: () => undefined,
+      payload: {
+        requestId: 'plan-1',
+        runId: 'run-1' as RunId,
+        plan: { objective: 'Verify the derivation.' },
+        goalEnabled: true,
+      },
+    }),
+    60,
+    { until: (output) => output.includes('Approve plan?') },
+  );
 }
 
 describe('CLI plan approval layout', () => {
-  it('switches to compact rendering before the bordered card clips plan text', () => {
-    expect(isCompactPlanApprovalRows(7)).toBe(true);
-    expect(isCompactPlanApprovalRows(8)).toBe(false);
-    expect(isCompactPlanApprovalRows(9, true)).toBe(true);
-    expect(isCompactPlanApprovalRows(10, true)).toBe(false);
-  });
+  it('goes compact before the bordered card clips, and drops run-as-goal without body room', async () => {
+    // Goal approval adds two notice rows to the compact threshold (7 + 2).
+    const bordered = await renderPlanApproval(10);
+    expect(bordered).toContain('╔');
+    expect(bordered).toContain('run as goal');
 
-  it.each([
-    { availableRows: 9, columns: 60, goalEnabled: true, expected: 7 },
-    { availableRows: 9, columns: 100, goalEnabled: true, expected: 8 },
-    { availableRows: 2, columns: 60, goalEnabled: true, expected: 0 },
-    { availableRows: 2, columns: 60, goalEnabled: false, expected: 1 },
-  ])(
-    'reserves compact rows when goal approval hints stack below the title ($availableRows rows, $columns cols, goal=$goalEnabled)',
-    ({ availableRows, columns, goalEnabled, expected }) => {
-      expect(compactBudget(availableRows, columns, goalEnabled)).toBe(expected);
-    },
-  );
+    const compact = await renderPlanApproval(9);
+    expect(compact).not.toContain('╔');
+    expect(compact).toContain('run as goal');
+
+    // Two chrome rows at 60 columns leave one body row: too few for the
+    // goal notice plus a plan row, so the action is withheld.
+    const cramped = await renderPlanApproval(3);
+    expect(cramped).not.toContain('╔');
+    expect(cramped).not.toContain('run as goal');
+  });
 
   it.each([
     { visibleBodyRows: 0, expected: false },

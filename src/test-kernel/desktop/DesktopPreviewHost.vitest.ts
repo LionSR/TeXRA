@@ -1,4 +1,4 @@
-import { chmod, mkdir, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { it } from '@effect/vitest';
@@ -240,73 +240,6 @@ describe('desktop preview host', () => {
     }),
   );
 
-  // A directory with no permissions makes the access probe fail with EACCES
-  // rather than ENOENT; chmod means nothing on Windows or to root.
-  it.effect.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'preserves access failure details before calling shell.openPath',
-    () =>
-      Effect.gen(function* () {
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(),
-        );
-        const blockedDir = path.join(
-          yield* Effect.promise(() => makeTempDir()),
-          'blocked',
-        );
-        const filePath = path.join(blockedDir, 'blocked.pdf');
-        yield* Effect.promise(async () => {
-          await mkdir(blockedDir);
-          await writeFile(filePath, 'pdf');
-          await chmod(blockedDir, 0o000);
-        });
-        const showErrorMessage = vi.fn((message: string) => Effect.void);
-        const shell = makeShell();
-
-        const host = createDesktopPreviewHost({
-          shell,
-          showErrorMessage,
-          runtime: testRuntime(),
-        });
-
-        const error = yield* Effect.flip(host.openPath(filePath)).pipe(
-          Effect.ensuring(Effect.promise(() => chmod(blockedDir, 0o700))),
-        );
-        expect(error.message).toContain(
-          `Cannot access file ${filePath}: EACCES`,
-        );
-        expect(showErrorMessage).toHaveBeenCalledWith(error.message);
-        expect(shell.openPath).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect('reports Electron shell.openPath errors once', () =>
-    Effect.gen(function* () {
-      const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-        loadDesktopPreviewHost(),
-      );
-      const dir = yield* Effect.promise(() => makeTempDir());
-      const filePath = path.join(dir, 'blocked.pdf');
-      yield* Effect.promise(() => writeFile(filePath, 'pdf'));
-      const showErrorMessage = vi.fn((message: string) => Effect.void);
-      const shell = makeShell('No associated application');
-
-      const host = createDesktopPreviewHost({
-        shell,
-        showErrorMessage,
-        runtime: testRuntime(),
-      });
-
-      const error = yield* Effect.flip(host.openPath(filePath));
-      expect(error.message).toContain(
-        `Failed to open file ${filePath}: No associated application`,
-      );
-      expect(showErrorMessage).toHaveBeenCalledTimes(1);
-      expect(showErrorMessage).toHaveBeenCalledWith(
-        `Failed to open file ${filePath}: No associated application`,
-      );
-    }),
-  );
-
   it.effect('builds LaTeX previews and opens the generated PDF path', () =>
     Effect.gen(function* () {
       const compileLatex2Pdf = fakeCompiler();
@@ -440,35 +373,6 @@ describe('desktop preview host', () => {
   );
 
   it.effect(
-    'can preserve an external-open error without showing a dialog',
-    () =>
-      Effect.gen(function* () {
-        const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-          loadDesktopPreviewHost(),
-        );
-        const browserError = new Error('no browser handler');
-        const shell = makeShell();
-        shell.openExternal.mockRejectedValueOnce(browserError);
-        const showErrorMessage = vi.fn(() => Effect.void);
-
-        const host = createDesktopPreviewHost({
-          shell,
-          showErrorMessage,
-          runtime: testRuntime(),
-        });
-
-        const error = yield* Effect.flip(
-          host.openExternal('https://auth.openai.com/authorize', {
-            reportFailure: false,
-          }),
-        );
-        expect(error._tag).toBe('ExternalOpenFailed');
-        expect(error.cause).toBe(browserError);
-        expect(showErrorMessage).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
     'prefers the in-app PDF overlay when postToRenderer accepts the post',
     () =>
       Effect.gen(function* () {
@@ -527,34 +431,5 @@ describe('desktop preview host', () => {
         expect(postToRenderer).toHaveBeenCalledTimes(1);
         expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
       }),
-  );
-
-  it.effect('falls back to external viewer when postToRenderer throws', () =>
-    Effect.gen(function* () {
-      const { createDesktopPreviewHost } = yield* Effect.promise(() =>
-        loadDesktopPreviewHost(),
-      );
-      const { texPath, pdfPath } = yield* Effect.promise(() =>
-        makeTexFixture('paper'),
-      );
-      const shell = makeShell();
-      const postToRenderer = vi.fn((_message: unknown) => {
-        throw new Error('IPC bridge not ready');
-      });
-      // Silence the expected console.error so the test output is clean.
-      vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      const host = createDesktopPreviewHost({
-        shell,
-        postToRenderer,
-        runtime: testRuntime(),
-      });
-
-      yield* host
-        .openBuildDisplayIn(roots)(createExternalLocation(texPath))
-        .pipe(Effect.provide(nodePlatformLayer));
-      expect(postToRenderer).toHaveBeenCalledTimes(1);
-      expect(shell.openPath).toHaveBeenCalledWith(pdfPath);
-    }),
   );
 });

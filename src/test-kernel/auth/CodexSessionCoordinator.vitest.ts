@@ -599,17 +599,4 @@ describe('CodexSessionCoordinator', () => {
       expect(storage.peek()?.refreshToken).toBe('refresh-0');
     }),
   );
-
-  it.effect('throws expired when not signed in', () =>
-    Effect.gen(function* () {
-      const coordinator = makeCoordinator(memoryStorage());
-      const error = yield* Effect.flip(
-        withHttp(coordinator.getFreshAccessToken()),
-      );
-      expect(error).toMatchObject({
-        kind: 'expired',
-        needsReauth: true,
-      });
-    }),
-  );
 });

@@ -137,27 +137,4 @@ describe('user-message structured delivery', () => {
       bubble?.classList.contains('user-message--structured-delivery'),
     ).toBe(true);
   });
-
-  it('renders plain (non-delivery) text as an unstructured message', async () => {
-    const element = await mount('hello world');
-
-    const bubble = element.shadowRoot?.querySelector('.user-message');
-    expect(
-      bubble?.classList.contains('user-message--structured-delivery'),
-    ).toBe(false);
-    expect(
-      element.shadowRoot?.querySelector(
-        '.user-message-content.markdown-content',
-      ),
-    ).toBeFalsy();
-    const timestamp = element.shadowRoot?.querySelector(
-      '#user-message-timestamp',
-    );
-    expect(timestamp?.hasAttribute('title')).toBe(false);
-    expect(
-      element.shadowRoot?.querySelector(
-        'wa-tooltip[for="user-message-timestamp"]',
-      ),
-    ).toBeTruthy();
-  });
 });

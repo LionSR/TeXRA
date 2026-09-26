@@ -2,6 +2,9 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Terminal } from '@xterm/xterm';
 
+// Local imports
+import { resolveXtermTheme } from '@ui/wa/xtermTheme';
+
 // Local imports - test utilities
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
@@ -82,5 +85,28 @@ describe('terminal-output text updates', () => {
 
     expect(resetCount).toBe(1);
     expect(writes).toEqual(['alpha\nbeta\n', 'beta\n']);
+  });
+});
+
+describe('resolveXtermTheme', () => {
+  it('names each unresolved terminal token in a console warning', () => {
+    // A host that maps the terminal pair to variables it never injects
+    // resolves them to ''; the warning keeps that broken mapping visible
+    // instead of silently keeping the surface palette.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const target = document.createElement('div');
+    target.style.setProperty('--wa-color-terminal-background', '#111111');
+    document.body.append(target);
+
+    const { theme } = resolveXtermTheme(target);
+
+    expect(theme.background).toBe('#111111');
+    expect(theme.foreground).toBe('#cccccc');
+    expect(warn).toHaveBeenCalledOnce();
+    expect(warn.mock.calls[0]?.[0]).toContain('--wa-color-terminal-foreground');
+    expect(warn.mock.calls[0]?.[0]).not.toContain(
+      '--wa-color-terminal-background',
+    );
+    warn.mockRestore();
   });
 });

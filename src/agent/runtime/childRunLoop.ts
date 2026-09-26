@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -9,7 +9,10 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
+import {
+  FollowUpContinuationOwned,
+  type RunInput,
+} from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
@@ -38,7 +41,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { foldRunState } from '@shared/session/runStateFold';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
@@ -119,8 +122,9 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly stageLabel: string;
 
   /**
-   * This child's turns drive a live OS process: shutdown drain reaches it
-   * through `RunHandle.backgroundProcess` (#8155) without disturbing agent
+   * This child's turns drive a live OS process (a background bash command,
+   * an agent-CLI provider): shutdown drain reaches it through
+   * `RunHandle.backgroundProcess` (#8155) without disturbing native agent
    * children left running for restart recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
@@ -171,9 +175,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /** The error message to log for a non-throwing failure, if it has one. */
   turnErrorMessage?(turn: TTurn): string | undefined;
-
-  /** After loop setup, before the initial turn starts. */
-  onLoopStart?(session: SessionHandle): void;
 
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
@@ -837,22 +838,21 @@ export function startChildRunLoop<TTurn, R = never>(
 
     let input!: RunInput;
 
-    const created = yield* RunInput.make;
     // Fresh children already own their DB claim. Recovery retains its pending
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
-      Effect.sync(() => {
+      Effect.gen(function* () {
         // A stop sees the handle only from here, with its target reserved.
         childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
         if (!queueLease) {
-          throw new Error(
-            `Follow-up continuation already has an owner for child ${runId}.`,
-          );
+          return yield* new FollowUpContinuationOwned({
+            message: `Follow-up continuation already has an owner for child ${runId}.`,
+          });
         }
         if (!params.queueLease)
-          input = runSession.followUps.attachInput(runId, created, queueLease)!;
+          input = runSession.followUps.attachInput(runId, queueLease)!;
       }),
     );
     if (Exit.isFailure(claimed)) {
@@ -861,41 +861,16 @@ export function startChildRunLoop<TTurn, R = never>(
       );
     }
     const setup = yield* Effect.exit(
-      Effect.gen(function* () {
-        // An agent-CLI child has no flow to fold: its loop seeds the queue
-        // from the run's rows itself, so follow-ups a crash left queued (or a
-        // turn it never settled) reach the relaunched loop. A native child's
-        // resumed flow seeds the same queue from its own load.
-        const folded = !strategy.continuous
-          ? foldRunState(
-              null,
-              yield* runSession.readAggregate(aggregateId('run', runId)),
-            )
-          : null;
-        yield* Effect.sync(() => {
-          strategy.onLoopStart?.(runSession);
-          if (folded !== null) {
-            if (Result.isFailure(folded)) {
-              throw new Error(
-                `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
-                { cause: folded.failure },
-              );
-            }
-            input.seed(
-              folded.success?.followUps ?? [],
-              folded.success?.followUpIds,
-            );
+      Effect.sync(() => {
+        if (strategy.ownsBackgroundProcess === true) {
+          // The one handle slot shutdown drain reads (#8155): kill the
+          // leaked OS process without touching the loop that reports it.
+          const handle = runs.getHandle(runId);
+          if (handle) {
+            handle.backgroundProcess = { kill: () => loop.interrupt() };
           }
-          if (strategy.ownsBackgroundProcess === true) {
-            // The one handle slot shutdown drain reads (#8155): kill the
-            // leaked OS process without touching the loop that reports it.
-            const handle = runs.getHandle(runId);
-            if (handle) {
-              handle.backgroundProcess = { kill: () => loop.interrupt() };
-            }
-          }
-          sessionStage = trace?.openStage(strategy.stageLabel);
-        });
+        }
+        sessionStage = trace?.openStage(strategy.stageLabel);
       }),
     );
     if (Exit.isFailure(setup)) {
@@ -996,11 +971,7 @@ export function startChildRunLoop<TTurn, R = never>(
               return yield* Effect.fail(
                 new Error(`Child recovery ownership was lost for ${runId}.`),
               );
-            input = runSession.followUps.attachInput(
-              runId,
-              created,
-              queueLease,
-            )!;
+            input = runSession.followUps.attachInput(runId, queueLease)!;
           }
           const runNotice = (notice: Effect.Effect<void, Error>) =>
             notice.pipe(

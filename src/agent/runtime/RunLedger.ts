@@ -270,7 +270,7 @@ export const runLedgerLayer: Layer.Layer<
     // every other database failure passes through unconverted (F3).
     const acquire = Effect.fn('RunLedger.acquire')(function* (run: RunId) {
       const aggregate = qualifyAggregateId('run', run);
-      yield* log.acquireClaims([aggregate]).pipe(
+      const taken = yield* log.acquireClaims([aggregate]).pipe(
         Effect.catchTag('DatabaseNotOwner', (failure) =>
           Effect.fail(
             new RunLedgerRefused({
@@ -298,7 +298,11 @@ export const runLedgerLayer: Layer.Layer<
       // as cancelled, so the surfaces still offering them settle instead of
       // outliving the process that asked. Rows that do not fold are `load`'s
       // refusal, one call below every caller.
-      const folded = foldRunState(null, yield* log.readAggregate(aggregate, 1));
+      const rows = yield* log.readAggregate(aggregate, 1);
+      // The same read seeds the publisher's pending follow-ups: what an
+      // earlier owner left queued is delivered by this one.
+      yield* events.hydrateFollowUps(aggregate, taken.length > 0, rows);
+      const folded = foldRunState(null, rows);
       if (Result.isFailure(folded) || folded.success === null) return;
       const unbound = unboundRequests(folded.success);
       if (unbound.length === 0) return;
