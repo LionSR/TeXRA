@@ -49,11 +49,12 @@ vi.mock('@cli/runtime/cliProcessRuntime', async (importOriginal) => {
 });
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
-  getCliSecrets: () => ({
-    get: mocks.getSecret,
-    delete: mocks.deleteSecret,
-    set: mocks.setSecret,
-  }),
+  CliSecrets: class {
+    get = mocks.getSecret;
+    delete = mocks.deleteSecret;
+    set = mocks.setSecret;
+  },
+  cliSecretsPath: (storageRoot: string) => storageRoot,
 }));
 
 vi.mock('@cli/runtime/cliContext', async (importOriginal) => ({

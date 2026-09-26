@@ -19,7 +19,7 @@ import {
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
-import type { PlatformSecrets } from '@platform/secrets';
+import { Secrets, type PlatformSecrets } from '@platform/secrets';
 import { DisposableStore } from '@platform/disposable';
 import {
   withProcessServices,
@@ -41,7 +41,6 @@ import {
   disposeCliProcessRuntime,
   installCliProcessRuntime,
 } from './cliProcessRuntime';
-import { getCliSecrets } from './cliSecrets';
 import {
   flushNdjsonStdout,
   flushTextStderr,
@@ -319,7 +318,6 @@ export function initCliPlatform(
           const workspaceState = yield* openProjectStateStore(storage).pipe(
             Scope.provide(projectScope),
           );
-          const cliSecrets = getCliSecrets(context.storageRoot);
           // One process, one project: the process roots are the `--cwd` workspace,
           // over the config provider the startup read already opened — the project
           // `.texra/config.json` layered over the user-level
@@ -367,9 +365,7 @@ export function initCliPlatform(
           // first-install tool seed) must fail while they are still private,
           // as the seed did when this body owned it.
           yield* bootstrapHost({
-            host: 'cli',
             roots,
-            secrets: cliSecrets,
             skills: {
               resourcesPath: context.resourcesPath,
               skillSourceOptions: context.skillSourceOptions,
@@ -410,9 +406,12 @@ export function initCliPlatform(
     );
 
     // The stores this root opened, handed back rather than read off a
-    // process-wide singleton: the secret store is the same stateless view over
-    // this process's storage root the composition block installed, and the
-    // application state is the store that install opened before it.
+    // process-wide singleton: the secret store and the application state are
+    // the ones the process runtime serves.
+    const secrets = yield* withProcessServices(
+      runtime,
+      Effect.service(Secrets),
+    );
     const cliServices: CliPlatformServices = {
       runtime,
       config: roots.config,
@@ -422,7 +421,7 @@ export function initCliPlatform(
       // installed, names one root without touching the filesystem again.
       globalStorage: resolveGlobalStoragePath(context.storageRoot),
       globalState,
-      secrets: getCliSecrets(context.storageRoot),
+      secrets,
       session:
         sessionOpen ??
         Effect.suspend(() => {

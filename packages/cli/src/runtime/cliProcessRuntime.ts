@@ -68,7 +68,7 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
-import { getCliSecrets } from './cliSecrets';
+import { CliSecrets, cliSecretsPath } from './cliSecrets';
 import { setCliLogRuntime, writeTextStderr } from './logSinks';
 import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
@@ -210,7 +210,7 @@ export function installCliProcessRuntime(
     // and which runs no records operation — must not create it at all.
     const globalStoragePath = resolveGlobalStoragePath(storageRoot);
     const version = await readCliVersion();
-    const secrets = getCliSecrets(storageRoot);
+    const secrets = new CliSecrets(cliSecretsPath(storageRoot));
     // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
     // The agent directories are a process service the runtime serves, so
