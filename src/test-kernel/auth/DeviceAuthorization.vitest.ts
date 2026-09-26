@@ -5,6 +5,7 @@ import { describe, expect } from 'vitest';
 
 import {
   DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
   pollDeviceAuthorization,
 } from '@auth/oauth/deviceAuthorization';
 
@@ -93,6 +94,51 @@ describe('pollDeviceAuthorization', () => {
       });
       expect(yield* attempts).toBe(1);
     }),
+  );
+
+  it.effect(
+    'fails with the carried error when transients exhaust the budget or outlive the code',
+    () =>
+      Effect.gen(function* () {
+        const blip = new Error('proxy refused the connection');
+        const transient = new DeviceAuthorizationTransient({ error: blip });
+        // A pending resets the count, so only the last three are consecutive.
+        const { poll, attempts } = queuedPoll([
+          transient,
+          'pending',
+          transient,
+          transient,
+          transient,
+        ]);
+        const fiber = yield* Effect.forkChild(
+          pollDeviceAuthorization({
+            poll,
+            intervalMs: 1000,
+            expiresInMs: 60_000,
+          }),
+        );
+
+        yield* TestClock.adjust('5 seconds');
+
+        expect(failureOf(yield* Fiber.await(fiber))).toBe(blip);
+        expect(yield* attempts).toBe(5);
+
+        // One transient, then the code expires during the wait: the carried
+        // error, not a timeout.
+        const expiring = queuedPoll([transient]);
+        const expiringFiber = yield* Effect.forkChild(
+          pollDeviceAuthorization({
+            poll: expiring.poll,
+            intervalMs: 1000,
+            expiresInMs: 1500,
+          }),
+        );
+
+        yield* TestClock.adjust('2 seconds');
+
+        expect(failureOf(yield* Fiber.await(expiringFiber))).toBe(blip);
+        expect(yield* expiring.attempts).toBe(1);
+      }),
   );
 
   it.effect('never starts a poll past the deadline', () =>
