@@ -399,18 +399,23 @@ export function roundTo(value: number, decimals: number): number {
  * capped at `maxMs`, then randomized by `+/-jitterFraction` and capped again
  * so jitter can never push the result past `maxMs`. Shared by every retry/
  * backoff loop in the codebase so the jitter formula only exists once.
+ *
+ * `unitRandom` is the caller's uniform draw in [0, 1) — `yield* Random.next`
+ * in the Effect callers — so a test fixes the jitter through Effect's
+ * `Random` reference instead of stubbing the global `Math.random`.
  */
 export function jitteredExponentialBackoffMs(
   baseMs: number,
   failures: number,
   maxMs: number,
+  unitRandom: number,
   jitterFraction = 0.2,
 ): number {
   const exponential = Math.min(
     maxMs,
     Math.max(0, baseMs) * 2 ** Math.max(0, failures - 1),
   );
-  const jitter = 1 - jitterFraction + Math.random() * 2 * jitterFraction;
+  const jitter = 1 - jitterFraction + unitRandom * 2 * jitterFraction;
   return Math.min(maxMs, Math.round(exponential * jitter));
 }
 

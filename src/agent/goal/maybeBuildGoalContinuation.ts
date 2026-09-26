@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 
 import { goalElapsedMs, type RunId } from '@shared/schemas';
 import { goalOf, type GoalReader } from '@tools/goal';
@@ -33,7 +33,9 @@ export const maybeBuildGoalContinuation = Effect.fn('goal.continuation')(
 
     return yield* renderPrompt(GOAL_CONTINUATION_TEMPLATE, {
       objective: goal.objective,
-      timeUsed: formatCompactDuration(goalElapsedMs(goal)),
+      timeUsed: formatCompactDuration(
+        goalElapsedMs(goal, yield* Clock.currentTimeMillis),
+      ),
     });
   },
 );

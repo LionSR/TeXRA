@@ -1,14 +1,21 @@
 import type { ApprovalBypassKind } from '@shared/approvalBypassKind';
 
 /**
- * The run-scoped grant each approval kind's Approve ▾ menu offers, one noun
- * per kind: edits, commands, agent work. The run toolbar names the same grant
- * with the same noun.
+ * What each run-scoped grant approves, one noun per approval kind: edits,
+ * commands, agent work. The approval cards' Approve ▾ menu and the run
+ * header's auto-approve switches name the same grant with the same noun.
  */
+export const RUN_GRANT_NOUN = Object.freeze({
+  toolEdit: 'edits',
+  bash: 'commands',
+  superYolo: 'agent work',
+} as const satisfies Record<ApprovalBypassKind, string>);
+
+/** The approval card's run-grant item, e.g. "Approve all edits in this run". */
 export const RUN_GRANT_LABEL = Object.freeze({
-  toolEdit: 'Approve all edits in this run',
-  bash: 'Approve all commands in this run',
-  superYolo: 'Approve all agent work in this run',
+  toolEdit: `Approve all ${RUN_GRANT_NOUN.toolEdit} in this run`,
+  bash: `Approve all ${RUN_GRANT_NOUN.bash} in this run`,
+  superYolo: `Approve all ${RUN_GRANT_NOUN.superYolo} in this run`,
 } as const satisfies Record<ApprovalBypassKind, string>);
 
 /** Host-specific user copy for the delegated-work approval grant. */

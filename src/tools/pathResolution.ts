@@ -180,7 +180,8 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
       relative,
       absolute: resolution.absolutePath,
       fsPath: resolution.absolutePath,
-      display: toPosixPath(relative),
+      // Already forward-slashed; `toPosixPath` would drop the leading `/`.
+      display: relative,
       ...(resolution.match ? { external: externalInfo(resolution.match) } : {}),
     };
   });

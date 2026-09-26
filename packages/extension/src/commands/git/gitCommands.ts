@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import type { SessionHandle } from '@agent/runtime';
 import { registerCommandEntries } from '@commands/_shared/registerCommands';
 import { showLoggedMessage } from '@frontend/ui/errorHandlingUtils';
+import { withVSCodeProgress } from '@frontend/ui/progress';
 import {
   cloneOverleafProject as runOverleafClone,
   gitClone,
@@ -230,29 +231,12 @@ function buildOverleafClonePorts(
       ).pipe(Effect.asVoid),
 
     runClone: (clone, workspacePath) =>
-      // The notification shows for exactly as long as the clone runs: its
-      // task is a promise the release settles on every exit, and the acquire
-      // that opens it cannot be interrupted before the release is installed.
-      Effect.acquireUseRelease(
-        Effect.sync(() => {
-          let resolve!: () => void;
-          const promise = new Promise<void>((settle) => {
-            resolve = settle;
-          });
-          void vscode.window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
-            },
-            () => promise,
-          );
-          return resolve;
-        }),
-        () =>
-          gitClone(clone, workspacePath).pipe(
-            Effect.mapError((error) => new Error(error.message)),
-          ),
-        (resolve) => Effect.sync(resolve),
+      withVSCodeProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Cloning ${remote.isOverleaf ? 'Overleaf' : 'ShareLaTeX'}…`,
+        },
+        () => gitClone(clone, workspacePath),
       ),
     showCloneSucceeded: (label) =>
       Effect.sync(() => {

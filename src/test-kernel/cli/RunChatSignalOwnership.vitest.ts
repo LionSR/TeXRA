@@ -397,6 +397,7 @@ describe('runChat signal ownership wiring', () => {
       expect(mocks.initCliPlatform).toHaveBeenCalledWith({
         ...INTERACTIVE_CONTEXT,
         quietLogs: true,
+        presentsStoreMovedAside: true,
       });
       expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
         INTERACTIVE_CONTEXT.cwd,

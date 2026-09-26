@@ -120,6 +120,28 @@ describe('CLI diff display', () => {
     expect(initialLines.some((line) => line.kind === 'added')).toBe(true);
   });
 
+  it('opens a long wrapped replacement on the rows the edit changed', () => {
+    const sentence = (verb: string) =>
+      `Quantum channels are central. ${'The channel is a model of noise. '.repeat(3)}In this work we ${verb} a new bound on its capacity, an open problem.`;
+    const { hunks } = buildDiffHunks(
+      ['\\section{Introduction}', sentence('derives')].join('\n'),
+      ['\\section{Introduction}', sentence('derive')].join('\n'),
+    );
+    const maxDisplayLines = 6;
+    const initialLines = scrollBoundedDiffDisplayLines(
+      hunks,
+      maxDisplayLines,
+      initialDiffScrollOffset(hunks, 40, maxDisplayLines),
+      40,
+    );
+
+    expect(
+      initialLines.some(
+        (line) => line.kind === 'added' && line.text.includes('we derive a'),
+      ),
+    ).toBe(true);
+  });
+
   it('does not skip a standalone deletion to a later hunk addition', () => {
     const { hunks } = buildDiffHunks(
       [

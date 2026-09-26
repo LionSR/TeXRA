@@ -41,6 +41,17 @@ function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
 }
 
+/** Report a failed resume step: a usage refusal names itself, any other
+ *  failure reads as a session that could not load. */
+function resumeFailureExit(id: RunId, error: unknown): number {
+  if (error instanceof CliUsageError) {
+    writeTextStderr(error.message);
+    return CliExitCode.Usage;
+  }
+  writeTextStderr(loadFailureMessage(id, error));
+  return CliExitCode.AgentError;
+}
+
 /** Every recorded input and context file is still there: an absent path
  *  (ENOENT or ENOTDIR) means "not durable"; any other failure fails the
  *  resume instead of reading as absent. */
@@ -157,15 +168,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
         'workflowResume',
       ),
     );
-    if (Result.isFailure(agent)) {
-      const error = agent.failure;
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
+    if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 
     let exitCode: number = CliExitCode.Usage;
     const resumed = yield* Effect.result(
@@ -213,14 +216,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
       if ('started' in resumed.success) return exitCode;
       writeTextStderr(describeFollowUpFailure(resumed.success.failed));
       return CliExitCode.Usage;
-    } else {
-      const error = resumed.failure;
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
     }
+    return resumeFailureExit(id, resumed.failure);
   });
 }

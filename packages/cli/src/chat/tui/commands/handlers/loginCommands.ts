@@ -34,10 +34,9 @@ import type {
 } from '@platform/processRuntime';
 import type { Secrets, PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
 import {
   ACCOUNT_OUTCOME,
-  CHATGPT_AUTH,
-  GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
   SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
@@ -76,8 +75,8 @@ export function loginStartMessage(args: CliLoginSlashArgs): string {
 }
 
 /**
- * Subscription sign-in from the chat TUI, mirroring `signOutSubscription`
- * below: sign in with a copyable progress writer, flip the subscription
+ * Subscription sign-in from the chat TUI, mirroring the sign-out in
+ * `logoutLines` below: sign in with a copyable progress writer, flip the subscription
  * preference, then report the outcome in this surface's copy.
  */
 const loginToSubscription = Effect.fn('loginToSubscription')(function* (
@@ -193,11 +192,10 @@ const logoutLines = (
       );
     }
 
-    const signOutSubscription = (
-      providerId: SubscriptionProviderId,
-      label: string,
-    ): Effect.Effect<void, never, Secrets> =>
-      signOutCliSubscription(stores, providerId).pipe(
+    for (const providerId of SUBSCRIPTION_AUTH_PROVIDERS) {
+      if (target !== providerId && target !== 'all') continue;
+      const { label } = SUBSCRIPTION_AUTH_COPY[providerId];
+      yield* signOutCliSubscription(stores, providerId).pipe(
         Effect.match({
           onFailure: (error) => {
             lines.push(
@@ -216,13 +214,6 @@ const logoutLines = (
           },
         }),
       );
-
-    if (target === 'chatgpt' || target === 'all') {
-      yield* signOutSubscription('chatgpt', CHATGPT_AUTH.label);
-    }
-
-    if (target === 'grok' || target === 'all') {
-      yield* signOutSubscription('grok', GROK_AUTH.label);
     }
 
     const overviewLines = yield* loadCliModelAccessOverview(

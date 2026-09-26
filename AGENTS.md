@@ -542,7 +542,8 @@ the owner ruled that 1.0's exports start fresh, so a document from an older
 build fails loudly at the parse boundary (#12359). The session database is
 the same stance made mechanical: `SESSION_EVENT_FORMAT`
 (`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
-clears a store of any other version at open, and
+moves a store of an older version aside at open (`texra.db.format<N>`, never
+read again) and refuses to open one of a newer version, and
 `sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
 cannot land without bumping the version.
 

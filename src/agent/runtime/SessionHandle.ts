@@ -202,9 +202,9 @@ export class SessionHandle {
    * instead of hanging it.
    */
   readonly viewChanges: Stream.Stream<SessionView>;
-  /** Set when opening this session's store cleared another build's rows;
-   *  the host that opened the session presents it once. */
-  readonly storeCleared: SessionGraph['storeCleared'];
+  /** Set when opening this session's store moved an older build's rows
+   *  aside; the host that opened the session presents it once. */
+  readonly storeMovedAside: SessionGraph['storeMovedAside'];
   /**
    * The session's `Runs` service, as the session layer built it in the
    * session's scope (`SessionGraph.runs`): registration, lookup and
@@ -325,7 +325,7 @@ export class SessionHandle {
     this.ledger = graph.ledger;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
-    this.storeCleared = graph.storeCleared;
+    this.storeMovedAside = graph.storeMovedAside;
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;

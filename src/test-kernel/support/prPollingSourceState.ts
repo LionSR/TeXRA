@@ -49,7 +49,7 @@ export function createPRSubscriptionState(
   return {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
-    ...createBasePollState(),
+    ...createBasePollState(0),
     initialized: true,
     issueComments: dedupedById<GhIssueComment>(),
     reviewComments: dedupedById<GhReviewComment>(),
