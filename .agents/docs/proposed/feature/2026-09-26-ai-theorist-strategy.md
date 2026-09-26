@@ -192,7 +192,7 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 | `create <path> [from]`            | New folder, initialized as a project: empty, template, git clone, Overleaf, arXiv source. Reuses the existing sample, Overleaf and arXiv flows, now reachable without VS Code commands | once per create                    |
 | `open` / `close` / `archive`      | Registry operations; `close` stops only that project's runs                                                                                                     | `close` with live runs             |
 | `grant <project> <folder> ro\|rw` | Attaches an outside folder (data, a shared bibliography, a sibling repo) to a project                                                                           | always; revocable; shown on the project |
-| `start <project> <agent> <task>`  | `Sessions.open(roots).start(...)`: the run lives, is approved and is recorded **in the target project's session**, with a link back to the Principal's run     | the target project's own rules     |
+| `dispatch <project> <agent> <task> [goal] [budget] [model]` | Sends any agent (theorist lead, writer, Lean, a custom agent) to any registered project, as a one-off task or a standing goal with its own budget share. Several can run at once across projects. `Sessions.open(roots).start(...)`: the run lives, is approved and is recorded **in the target project's session**, with a link back to the Principal's run (§3.8.3) | per the autonomy level (§3.8.3); inside the run, the project's own rules |
 | `steer` / `stop <run>`            | Queues a follow-up into that run, or interrupts it                                                                                                             | none                               |
 | `read <project> board\|memory`    | Reads the project's Board and memory; writes go through the project's own agents                                                                                | none                               |
 
@@ -200,7 +200,7 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 
 - **Work runs where it belongs.** A run the Principal starts is an ordinary run in that project's session: its ledger, its Board, its approvals, its single publisher. The Principal holds references, never copies. This replaces the `working_directory` workaround for cross-project work, which records into the wrong session.
 - **No new event channel.** The Principal reads other projects through the session view and SDK `Run.events`, as the desktop's cross-project attention badge already does (`packages/desktop/src/main/desktopAttention.ts`). Anything it authors is a `SessionEvent` in its own home session.
-- **Three levels, fixed.** Principal → project lead → roles. The Principal never talks to a project's workers directly; it steers the lead.
+- **Three levels, fixed.** Principal → the agents it dispatches into a project (usually a theorist lead) → their roles and subagents. The Principal steers the runs it dispatched. It doesn't reach into a run's own subagents; the dispatched agent owns those.
 
 **Safety at computer scope.** A computer-root agent is the most powerful thing TeXRA would ship, so its own reach is narrow:
 
@@ -208,7 +208,7 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 - **Granted folders:** these become a new external-root kind (`userFolder`, read-only or writable) alongside the host-registered kinds in `src/utils/files/externalRoots.ts`. They are persisted per project and checked by the existing `resolveToolPath` guard, so `restrictPathsToWorkingDirectory` keeps its meaning.
 - **Bash:** the Principal's `bash` is always approval-gated, whatever the run's approval policy.
 
-**No scripted behaviors.** The Principal gets capabilities (the `projects` tool, the ledger in §3.8.2, its own memory, one budget envelope across projects) and the safety rules above. What it does with them is the model's call: when to brief, when to rebalance budget, whether something in one project matters to another, what to escalate. The system prompt says *what the job is* (keep the researcher's work moving and informed) and *what the limits are*, never a list of routines. Principle 3 of the July roadmap ("general methods, not problem-specific strategies") applies here exactly as it does in a project. Any behavior worth having should emerge from a capable model with good visibility. If it doesn't, the fix is better visibility or a better model, not a hand-written routine.
+**No scripted behaviors.** The Principal gets capabilities (the `projects` tool, the ledger in §3.8.2, its own memory, one budget envelope across projects) and the safety rules above. What it does with them is the model's call: when to brief, when to rebalance budget, whether something in one project matters to another, what to escalate. The system prompt says *what the job is* (be the researcher's strategy partner across their projects, keep the work moving and the researcher informed, and take initiative within the granted autonomy) and *what the limits are*, never a list of routines. Principle 3 of the July roadmap ("general methods, not problem-specific strategies") applies here exactly as it does in a project. Any behavior worth having should emerge from a capable model with good visibility. If it doesn't, the fix is better visibility or a better model, not a hand-written routine.
 
 #### 3.8.1 The Principal's own memory
 
@@ -229,8 +229,8 @@ The Principal gets **its own memory with no new mechanism**: the same tool in th
 **How knowledge moves between scopes:**
 
 - **Up, from project to Principal.** The Principal can read any project's memory and Board. What it keeps in its own memory, and when, is its call. Project memory stays the source of truth for the project.
-- **Down, from Principal to project.** This happens only by explicit dispatch, never by a project reading upward. When a project needs something the Principal knows (the researcher's notation, a deadline, a lesson from another project), the Principal puts it in the `start` instruction or a `steer` to that project's lead. If it should persist, the lead records it in *project* memory in its own words. Project agents get no tool, path or prompt that points at home: global storage sits outside every project root, so `resolveToolPath` refuses it for file tools while `restrictPathsToWorkingDirectory` is on (the default), and role prompts do not mention the Principal's memory. `bash` is not path-guarded, so for bash this is discouragement, not enforcement. If that is not enough, the home storage directory joins the deny list for project runs' approval preview.
-- **Across.** No direct channel. A project can't read or write another project's memory; anything that crosses goes through the Principal's own `steer`/`start`. This is a structural rule about who writes where, not a behavior: whether anything crosses is up to the Principal.
+- **Down, from Principal to project.** This happens only by explicit dispatch, never by a project reading upward. When a project needs something the Principal knows (the researcher's notation, a deadline, a lesson from another project), the Principal puts it in the `dispatch` instruction or a `steer` to that project's lead. If it should persist, the lead records it in *project* memory in its own words. Project agents get no tool, path or prompt that points at home: global storage sits outside every project root, so `resolveToolPath` refuses it for file tools while `restrictPathsToWorkingDirectory` is on (the default), and role prompts do not mention the Principal's memory. `bash` is not path-guarded, so for bash this is discouragement, not enforcement. If that is not enough, the home storage directory joins the deny list for project runs' approval preview.
+- **Across.** No direct channel. A project can't read or write another project's memory; anything that crosses goes through the Principal's own `steer`/`dispatch`. This is a structural rule about who writes where, not a behavior: whether anything crosses is up to the Principal.
 
 **Rules:**
 - **Read-only, not re-authored.** Memory read from another scope is shown to the agent as data, never re-authored as instructions.
@@ -272,6 +272,37 @@ Each wake-up is an ordinary queued input, so it is durable, deduplicated by the 
 
 The ledger reports facts, not interpretations. It has no "stalled", "collision" or "important" flags; noticing those is the Principal's job.
 
+#### 3.8.3 Strategy partner, initiative, dispatch
+
+The Principal is not a passive switchboard. It is the one agent the researcher plans *with*: which problems to pursue, in what order, with how much compute, and when to drop something. Each of the three needs below is met by a capability, not a script.
+
+**Working on strategy with the researcher.**
+- **The Strategy note.** A portfolio-level record in the home session. It holds the researcher's aims, the bets currently on (which projects, why, what would change the plan), what was decided and when, and open strategic questions.
+  - It is the §3.2 Board one level up: the Principal and the researcher both edit it.
+  - Every edit the researcher makes reaches the Principal as a queued input, as Board edits do.
+  - The Principal reads it every turn, next to the ledger.
+- **Structured decisions.** For a strategic choice the Principal can put options in front of the researcher with `ask_user_question` or an `inquiry`. For many candidate directions it can run the §3.4 tournament at portfolio level, with the researcher's votes as matches.
+- **Conversation.** The Home chat is where strategy gets discussed. Nothing constrains its form; the note is where conclusions land.
+
+**Initiative.** Proactivity needs two capabilities the Principal lacks today. Both come with researcher-set limits and no prescribed triggers:
+- **Its own clock.** A `schedule` capability lets the Principal set its next wake-up ("check back at 09:00", "in 3 hours"). It works like the §3.8.2 wake-ups and is stored as a durable queued input in the home session. The desktop main process or `texra daemon` delivers it, which is the same host piece as the §3.6 auto-resume daemon. When to check in is the Principal's call.
+- **Reaching the researcher first.** The Principal can open a conversation without being asked: a message in Home, an OS notification through the desktop's existing attention path, or an `inquiry` that waits for an answer. The researcher sets quiet hours and a maximum notification rate; the host enforces them.
+
+**Dispatch and the autonomy level.**
+- **Dispatch covers any agent, project and model.** The Principal can dispatch any agent the target project has to any registered project, with a budget share taken from the portfolio envelope. It can run several dispatches concurrently, then steer, stop or re-dispatch based on what the ledger shows.
+- **What it may do without asking** is one researcher setting, not behavior coded in the harness. The approval runtime enforces it:
+
+| Level       | Principal may, without asking                                                 | Needs the researcher                          |
+| ----------- | ----------------------------------------------------------------------------- | --------------------------------------------- |
+| `advise`    | Read, brief, propose                                                          | Every dispatch, steer and budget move         |
+| `delegate`  | Continue approved work: re-dispatch, steer and stop within existing goals and budgets | New goals, new projects, budget increases, `grant` |
+| `autonomous`| Dispatch new goals inside the portfolio envelope                              | Exceeding the envelope, `create`, `grant`, `close` with live runs |
+
+**What doesn't change at any level:**
+- The safety rules in §3.8.
+- Each project's own approval rules for edits and `bash` inside a dispatched run.
+- The researcher can override anything the Principal set in motion from the ledger view.
+
 ## 4. Evaluation first: a theorist benchmark
 
 Nothing above can be tuned without a benchmark. Keep a private, versioned set that is re-run on every model or prompt change and reports **success × tokens × dollars × wall-clock time**, per Brown:
@@ -293,7 +324,8 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 | 2     | Research Board (schema, `board` tool, three renderers, continuation injection)                                        | 1–2 wk | A campaign survives restart from Board + objective alone               |
 | 3     | Steering: tool-boundary nudges; Board edits as structured follow-ups; digest                                           | ~1 wk  | Steering benchmark cases pass                                          |
 | 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, the household ledger and its wake-ups (§3.8.2), the Principal's own memory (global storage, Settings scope switcher); `setup` folds in | ~1 wk  | The ledger shows every open project's runs, requests, spend and Board changes without a tool call; no project run can reach home storage |
-| 3c    | Principal, write side: `create`, `start`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list | 1–2 wk | A run started from Home is recorded, approved and resumable in its own project |
+| 3c    | Principal, write side: `create`, `dispatch`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list; autonomy levels; Strategy note | 1–2 wk | A run dispatched from Home is recorded, approved and resumable in its own project; autonomy level enforced by the approval runtime |
+| 3d    | Principal initiative: `schedule` (durable self wake-ups via desktop main process / `texra daemon`), researcher-first messages and notifications with quiet hours and rate cap | ~1 wk  | The Principal wakes itself overnight and reaches the researcher only within the set limits |
 | 4     | Verification ladder: `VerifierReport`, novelty rung with Semantic Scholar/OpenAlex, digestion rung, provenance card    | 2 wk   | No `verified` claim without its evidence; novelty traps caught         |
 | 5     | Tournament script library with human matches and meta-review                                                          | ~1 wk  | Tournament beats single-shot on the benchmark at equal cost, or is cut |
 | 6     | Budgets, daemon, handoff (July Tracks 2–3)                                                                             | 2 wk   | 48 h unattended campaign with no human restart                         |
@@ -322,6 +354,7 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 5. The Principal's read scope: the whole home directory with a deny list (proposed), or only folders the researcher has listed as "research roots"?
 6. The ledger's size cap: how many projects and rows per project before the Principal must `status` a project to see its detail?
 7. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
+8. Default autonomy level for a new install: `advise` (proposed) or `delegate`?
 
 ## 9. Sources
 
