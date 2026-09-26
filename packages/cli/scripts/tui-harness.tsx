@@ -1705,7 +1705,10 @@ registerBuiltinSlashCommands({
           HARNESS_PLATFORM_SERVICES,
           HARNESS_CLI_CONTEXT,
           selection,
-          { writeProgress: appendHarnessAssistantTranscript },
+          {
+            writeProgress: (message) =>
+              appendHarnessAssistantTranscript(message),
+          },
         ).pipe(
           Effect.map((access) => {
             appendHarnessAssistantTranscript(access.message);

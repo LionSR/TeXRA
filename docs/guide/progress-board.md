@@ -103,14 +103,20 @@ Each action in detail:
 Reviewed outputs are accepted per file: each row under **Generated Files** has
 an **Accept** action that copies the edited version into your workspace.
 
-### Auto-approving in a run
+### Auto-approve switches
 
-You grant auto-approval from an approval card: its ▾ menu approves this
-request and every later one of the same kind in the run (edits, commands,
-or agent work, which covers the other two). While a grant is on, the header
-shows an amber **Auto-approving** chip naming what it covers. Click the chip
-to go back to asking. The CLI shows the same grants as AUTO-EDIT, AUTO-BASH,
-and AUTO-TASK badges.
+While a run is going, its header has three auto-approve switches:
+**edits**, **commands** and **agent work**. Turn one on at any time, for
+example before you step away, and later requests of that kind in the run are
+approved without asking. Edits and commands are independent. Agent work
+also covers the other two, and turning it off returns all three to asking.
+An approval card's ▾ menu (**Approve all … in this run**) sets the same
+switch. In the narrow sidebar the switches move to the top of the run's ⋯
+menu as **Auto-approve edits**, **Auto-approve commands** and
+**Auto-approve agent work**, and an amber **Auto** tag in the header shows
+that one is on. The switches appear only on a live run this window is
+running. The CLI shows the same grants as AUTO-EDIT, AUTO-BASH and AUTO-TASK
+badges.
 
 ### Context utilization
 
@@ -131,7 +137,7 @@ header toolbar to put the run's output paths and compile failures on the
 clipboard, then start a tool-use chat from the **New** view and paste that text
 into the instruction box.
 
-When a run recorded a compile failure, **Run latexFixer** still appears under
+When a run recorded a compile failure, **Fix compile errors** still appears under
 **Generated Files** and starts a repair chat from those logs.
 
 ### Memory

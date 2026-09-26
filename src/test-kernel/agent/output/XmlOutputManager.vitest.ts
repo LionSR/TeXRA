@@ -255,6 +255,29 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
     ['notes.tex'],
   ],
   [
+    'closes a document left open at </documents> and keeps beamer overlay specs as text',
+    [
+      '<documents>',
+      '<document name="slides.tex">',
+      '\\documentclass{beamer}',
+      '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+      '\\begin{document}',
+      '\\only<2->{Shown later.}',
+      '\\end{document}',
+      '</documents>',
+    ],
+    {
+      'slides.tex': [
+        '\\documentclass{beamer}',
+        '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+        '\\begin{document}',
+        '\\only<2->{Shown later.}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+  ],
+  [
     'prefers percent filename headers over single-document input recovery',
     ['% declared.tex', ...RECOVERED_DOCUMENT_LINES],
     { 'declared.tex': RECOVERED_DOCUMENT_CONTENT },
@@ -1105,7 +1128,7 @@ Appendix.
   );
 
   // Agents like ocr/paper2slide declare one defaultOutputFiles entry while
-  // accepting several attached input files. runReflectionFlow.ts then builds
+  // accepting several attached input files. documentRounds.ts then builds
   // baseFiles from outputFiles, not inputFiles, so baseFiles[i] no longer
   // corresponds to inputFiles[i].
   const singleArtifactOptions: XmlManagerOptions = {

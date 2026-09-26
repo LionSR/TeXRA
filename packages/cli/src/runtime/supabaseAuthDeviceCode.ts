@@ -7,7 +7,7 @@
 // other sign-in flows in `supabaseAuth.ts`.
 
 // Third-party imports
-import { Data, Effect, Ref, Result } from 'effect';
+import { Data, Effect, Result } from 'effect';
 import { z } from 'zod';
 
 // Local imports - auth
@@ -15,6 +15,7 @@ import { DEVICE_AUTH_BASE_URL } from '@auth/config';
 import { GitHubTokenExchangeSchema } from '@auth/SupabaseSession';
 import {
   DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
   pollDeviceAuthorization,
 } from '@auth/oauth/deviceAuthorization';
 import { parseOAuthJson, postOAuth } from '@auth/oauth/oauthRequest';
@@ -26,9 +27,6 @@ const DEVICE_AUTH_REQUEST_TIMEOUT_MS = 30000;
 
 /** Extra milliseconds added to the poll interval on an RFC 8628 slow_down. */
 const SLOW_DOWN_INCREMENT_MS = 5000;
-
-/** Consecutive transient poll failures tolerated before giving up. */
-const MAX_TRANSIENT_POLL_FAILURES = 3;
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
 
@@ -129,20 +127,12 @@ function deviceErrorCode(text: string): string | undefined {
 
 /**
  * One poll of the token endpoint. Pending is a typed failure so the shared
- * poll keeps going; a few consecutive transient failures (headless/SSH
- * connections blip) are pending too, counted in `transientFailures`.
+ * poll keeps going; a network blip or a 5xx (headless/SSH connections blip)
+ * is transient, which the shared poll retries a few times in a row.
  */
 const pollOnce = Effect.fn('supabaseAuthDeviceCode.pollOnce')(function* (
   deviceCode: string,
-  transientFailures: Ref.Ref<number>,
 ) {
-  const transient = (fail: DeviceSignInError) =>
-    Effect.gen(function* () {
-      const failures = yield* Ref.updateAndGet(transientFailures, (n) => n + 1);
-      if (failures >= MAX_TRANSIENT_POLL_FAILURES) return yield* fail;
-      return yield* new DeviceAuthorizationPending({ slowDown: false });
-    });
-
   const response = yield* postOAuth({
     url: `${DEVICE_AUTH_BASE_URL}/token`,
     headers: JSON_HEADERS,
@@ -151,11 +141,13 @@ const pollOnce = Effect.fn('supabaseAuthDeviceCode.pollOnce')(function* (
     networkErrorMessage: 'Device sign-in poll failed',
   }).pipe(
     Effect.catchTag('OAuthNetworkError', (error) =>
-      transient(
-        new DeviceSignInError({
-          reason: 'poll',
-          message: error.message,
-          cause: error.cause,
+      Effect.fail(
+        new DeviceAuthorizationTransient({
+          error: new DeviceSignInError({
+            reason: 'poll',
+            message: error.message,
+            cause: error.cause,
+          }),
         }),
       ),
     ),
@@ -182,7 +174,6 @@ const pollOnce = Effect.fn('supabaseAuthDeviceCode.pollOnce')(function* (
   switch (errorCode) {
     case 'authorization_pending':
     case 'slow_down':
-      yield* Ref.set(transientFailures, 0);
       return yield* new DeviceAuthorizationPending({
         slowDown: errorCode === 'slow_down',
       });
@@ -195,12 +186,12 @@ const pollOnce = Effect.fn('supabaseAuthDeviceCode.pollOnce')(function* (
       });
     default:
       if (isTransientHttpStatus(response.status)) {
-        return yield* transient(
-          new DeviceSignInError({
+        return yield* new DeviceAuthorizationTransient({
+          error: new DeviceSignInError({
             reason: 'poll',
             message: `Device sign-in failed (HTTP ${response.status}). Try again.`,
           }),
-        );
+        });
       }
       return yield* new DeviceSignInError({
         reason: 'poll',
@@ -224,9 +215,8 @@ export const pollForDeviceSession = Effect.fn(
     'device_code' | 'expires_in' | 'interval'
   >,
 ) {
-  const transientFailures = yield* Ref.make(0);
   return yield* pollDeviceAuthorization({
-    poll: pollOnce(authorization.device_code, transientFailures),
+    poll: pollOnce(authorization.device_code),
     intervalMs: authorization.interval * 1000,
     expiresInMs: authorization.expires_in * 1000,
     slowDownIncrementMs: SLOW_DOWN_INCREMENT_MS,

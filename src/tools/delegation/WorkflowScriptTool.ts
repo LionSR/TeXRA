@@ -38,11 +38,7 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   formatWorkflowLaunchLead,
@@ -467,29 +463,20 @@ function executeWorkflowScriptTool(
               if (Exit.isFailure(registration)) {
                 const error = Cause.squash(registration.cause);
                 // Another live TeXRA process holds the run this id names: the
-                // claim acquisition refuses rather than moving the aggregate.
-                if (
-                  error instanceof DatabaseWriteFailed &&
-                  error.cause instanceof DatabaseClaimRefused
-                ) {
-                  return alreadyRunning();
-                }
-                // A first launch of this id has no prior row to acquire, so
-                // its claim rides the birth append and a foreign winner
-                // refuses that append as `DatabaseNotOwner` (as a relaunch's
-                // claim race does). Only an open
-                // aggregate is a live run to wait for: a closed one is a
-                // tombstone this id can never start over, and calling that
-                // "already in progress" would send the model to wait on a
-                // run that never reports.
-                if (error instanceof DatabaseNotOwner && !error.closed) {
-                  return alreadyRunning();
-                }
-                throw workflowScriptToolError(
-                  new ToolError(
-                    `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                // claim acquisition refuses, or (a first launch having no prior
+                // row to acquire) a foreign winner refuses the birth append.
+                // Only a live holder is a run to wait for: a closed aggregate
+                // is a tombstone this id can never start over, and an ownerless
+                // one runs nowhere, so "already in progress" would send the
+                // model to wait on a run that never reports.
+                if (heldElsewhereBy(error) !== null) return alreadyRunning();
+                return yield* Effect.fail(
+                  workflowScriptToolError(
+                    new ToolError(
+                      `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                    ),
+                    scriptPath,
                   ),
-                  scriptPath,
                 );
               }
 

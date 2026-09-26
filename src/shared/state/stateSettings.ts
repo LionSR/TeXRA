@@ -673,18 +673,17 @@ const CORE_SETTING_ROWS: Record<
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for file edits',
+    title: 'Require approval for file edits',
     description:
-      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
+      'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/toolEditApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for shell commands',
-    description:
-      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
+    title: 'Require approval for shell commands',
+    description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/bashApproval.ts'),
     surfaces: { settingsView: 'approval' },
@@ -745,7 +744,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
@@ -753,7 +752,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
       desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
     },
-    enumLabels: ['Never', 'Ask', 'Auto-approve'],
+    enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];
@@ -1045,11 +1044,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
-    // handler (headless), so the CLI does not honor it.
+    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // CLI handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
-      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      vscode: { reader: 'src/agent/output/documentRounds.ts' },
+      desktop: { reader: 'src/agent/output/documentRounds.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1063,14 +1062,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
+    honoredBy: everyHost('src/agent/output/documentRounds.ts'),
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them. The timeout is kept
-  // out of the settings view (an insider knob) and edited from CLI `/config`;
-  // the rest are deferred from `/config` by product decision.
+  // Run by the documents plugin, so every host honors them. The timeout is
+  // kept out of the settings view (an insider knob) and edited from CLI
+  // `/config`; the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),

@@ -239,9 +239,11 @@ const executeInBand = Effect.fn('executeInBand')(
       // before terminal persistence.
       const resultMeta = settledTurn?.resultMeta;
       if (!settledTurn || !resultMeta || resultMeta.producer !== 'subagent') {
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
-          loopFailure !== undefined ? { cause: loopFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} ended without a settled typed result (interrupted before terminal persistence, or the run loop failed).`,
+            loopFailure !== undefined ? { cause: loopFailure } : undefined,
+          ),
         );
       }
 
@@ -302,21 +304,25 @@ const executeInBand = Effect.fn('executeInBand')(
         if (persisted === null) {
           if (childFailed) {
             const error = childError();
-            throw new SubagentDurabilityError(
-              `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
-              {
-                cause: new AggregateError(
-                  readFailure === undefined ? [error] : [error, readFailure],
-                  `Subagent ${runId} run and persistence both failed.`,
-                ),
-              },
+            return yield* Effect.fail(
+              new SubagentDurabilityError(
+                `Subagent ${runId} failed (${toErrorMessage(error)}), and its failure result could not be persisted.`,
+                {
+                  cause: new AggregateError(
+                    readFailure === undefined ? [error] : [error, readFailure],
+                    `Subagent ${runId} run and persistence both failed.`,
+                  ),
+                },
+              ),
             );
           }
-          throw new SubagentDurabilityError(
-            readFailure === undefined
-              ? `Failed to persist result for subagent ${runId}.`
-              : `Failed to verify the persisted result for subagent ${runId}.`,
-            readFailure !== undefined ? { cause: readFailure } : undefined,
+          return yield* Effect.fail(
+            new SubagentDurabilityError(
+              readFailure === undefined
+                ? `Failed to persist result for subagent ${runId}.`
+                : `Failed to verify the persisted result for subagent ${runId}.`,
+              readFailure !== undefined ? { cause: readFailure } : undefined,
+            ),
           );
         }
       }
@@ -340,21 +346,25 @@ const executeInBand = Effect.fn('executeInBand')(
               (error: unknown) => error instanceof RunArtifactDrainError,
             )))
       ) {
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} failed to commit its final artifacts.`,
-          loopFailure !== undefined ? { cause: loopFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} failed to commit its final artifacts.`,
+            loopFailure !== undefined ? { cause: loopFailure } : undefined,
+          ),
         );
       }
 
-      if (childFailed) throw childError();
+      if (childFailed) return yield* Effect.fail(ensureError(childError()));
 
       if (!runEnd) {
         // The child did not fail, so the missing terminal row is an
         // infrastructure gap: the run's lifecycle never committed it, or the
         // read of it failed.
-        throw new SubagentDurabilityError(
-          `Subagent ${runId} ended without a terminal record.`,
-          endFailure !== undefined ? { cause: endFailure } : undefined,
+        return yield* Effect.fail(
+          new SubagentDurabilityError(
+            `Subagent ${runId} ended without a terminal record.`,
+            endFailure !== undefined ? { cause: endFailure } : undefined,
+          ),
         );
       }
 

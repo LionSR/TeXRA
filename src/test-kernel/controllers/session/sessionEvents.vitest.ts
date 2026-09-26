@@ -1174,51 +1174,98 @@ describe('the C1 event table and the C6 publisher', () => {
     }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
-  it.effect('clears a store written under another event format at open', () => {
+  /** A store holding one run row, then re-stamped as another build's. */
+  const storeOfFormat = (storage: string, format: number) =>
+    Database.pipe(
+      Effect.flatMap((database) => database.appendAll([runStart])),
+      Effect.provide(substrate(storage)),
+      Effect.andThen(
+        Effect.sync(() => {
+          const connection = reader(storage);
+          try {
+            connection.exec(`PRAGMA user_version = ${format}`);
+          } finally {
+            connection.close();
+          }
+        }),
+      ),
+    );
+
+  it.effect('moves a store of an older event format aside at open', () => {
     const storage = workspace();
+    const format = SESSION_EVENT_FORMAT - 1;
     return Effect.gen(function* () {
-      yield* Database.pipe(
-        Effect.flatMap((database) => database.appendAll([runStart])),
-        Effect.provide(substrate(storage)),
-      );
-      const connection = reader(storage);
-      try {
-        expect(connection.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: SESSION_EVENT_FORMAT,
-        });
-        // Another build's stamp: the rows are its, whatever they decode to.
-        connection.exec(`PRAGMA user_version = ${SESSION_EVENT_FORMAT + 1}`);
-      } finally {
-        connection.close();
-      }
+      yield* storeOfFormat(storage, format);
       const reopenedStore = yield* Database.pipe(
         Effect.flatMap((database) =>
           Effect.map(database.readListing(), (listing) => ({
             listing,
-            cleared: database.cleared,
+            movedAside: database.movedAside,
           })),
         ),
         Effect.provide(substrate(storage)),
       );
-      expect(reopenedStore.listing).toEqual([]);
-      expect(reopenedStore.cleared).toEqual({
-        path: join(storage, 'texra.db'),
-        rows: 1,
-        storedFormat: SESSION_EVENT_FORMAT + 1,
+      const asidePath = join(
+        realpathSync.native(storage),
+        `texra.db.format${format}`,
+      );
+      expect(reopenedStore).toEqual({
+        listing: [],
+        movedAside: {
+          path: join(storage, 'texra.db'),
+          aside: asidePath,
+          rows: 1,
+          storedFormat: format,
+        },
       });
+      const aside = new DatabaseSync(asidePath);
+      try {
+        expect(aside.prepare('PRAGMA user_version').get()).toEqual({
+          user_version: format,
+        });
+        expect(
+          aside.prepare('SELECT count(*) AS rows FROM event').get(),
+        ).toEqual({ rows: 1 });
+      } finally {
+        aside.close();
+      }
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
           user_version: SESSION_EVENT_FORMAT,
         });
-        expect(
-          reopened.prepare('SELECT count(*) AS rows FROM event').get(),
-        ).toEqual({ rows: 0 });
       } finally {
         reopened.close();
       }
     });
   });
+
+  it.effect(
+    'refuses a store of a newer event format and changes nothing',
+    () => {
+      const storage = workspace();
+      const format = SESSION_EVENT_FORMAT + 1;
+      return Effect.gen(function* () {
+        yield* storeOfFormat(storage, format);
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(storage))),
+        );
+        expect(failure._tag).toBe('DatabaseOpenFailed');
+        expect(failure.message).toContain('Update TeXRA');
+        const stored = reader(storage);
+        try {
+          expect(stored.prepare('PRAGMA user_version').get()).toEqual({
+            user_version: format,
+          });
+          expect(
+            stored.prepare('SELECT count(*) AS rows FROM event').get(),
+          ).toEqual({ rows: 1 });
+        } finally {
+          stored.close();
+        }
+      });
+    },
+  );
 
   it.effect('rolls back a failed commit before reusing the connection', () => {
     const storage = workspace();
@@ -2313,16 +2360,17 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (phase: string): RunLedgerDraft => ({
+  const snapshot = (
+    phase: 'model.ready' | 'results.ready',
+  ): RunLedgerDraft => ({
     type: 'flow.snapshot',
     aggregateId: AGGREGATE,
     payload: {
       family: 'toolUse',
       runtime: {
-        phase: phase === 'round.ready' ? 'round.ready' : 'results.ready',
+        phase,
         round: 0,
         turn: 0,
-        continuationIndex: 0,
         modelId: 'gpt-test',
         modelCompatibilityKey: null,
         lastError: null,
@@ -2423,7 +2471,7 @@ describe('RunLedger', () => {
             ],
           },
         },
-        snapshot('round.ready'),
+        snapshot('model.ready'),
       ]);
       state = yield* run.appendBatch(RUN, state, [
         {

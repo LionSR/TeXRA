@@ -321,7 +321,6 @@ const freshState = (): RunState => ({
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -337,7 +336,7 @@ const freshState = (): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
 });
 
 interface InvokerKit {
@@ -372,12 +371,9 @@ const openRun = Effect.fn('openRun')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);

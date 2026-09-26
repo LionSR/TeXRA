@@ -35,6 +35,7 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
+import { combineFailureLogExcerpts } from './compileFailureRoundContext';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -47,7 +48,6 @@ interface CompileCheckContext {
   runId: RunId;
 }
 
-const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 interface CompileCheckResult {
@@ -123,7 +123,7 @@ export function resolveWorkspaceSourceDir(
  * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains and non-root
  * fragments are skipped gracefully.
  */
-export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
+export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
@@ -282,7 +282,7 @@ type CompileAttempt =
   | { readonly kind: 'errored'; readonly message: string }
   | { readonly kind: 'compiled'; readonly result: CompileLatex2PdfResult };
 
-const compileOne = Effect.fn('reflection.compileOne')(function* (
+const compileOne = Effect.fn('documents.compileOne')(function* (
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
   currentRound: number,
@@ -469,7 +469,7 @@ interface WriteCompileFailureArgs extends CompileTarget {
  * a persistence error is logged at `warn` and recovered, so a failure is
  * always counted even when the log itself couldn't be written to disk.
  */
-const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
+const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   function* ({
     ctx,
     opts,
@@ -514,13 +514,3 @@ const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
     } satisfies PerFileOutcome;
   },
 );
-
-function combineFailureLogExcerpts(excerpts: string[]): string {
-  const combined = excerpts.filter(Boolean).join('\n\n');
-  if (combined.length <= COMPILE_LOG_EXCERPT_CHAR_LIMIT) return combined;
-
-  return [
-    `[truncated to last ${COMPILE_LOG_EXCERPT_CHAR_LIMIT} characters]`,
-    combined.slice(-COMPILE_LOG_EXCERPT_CHAR_LIMIT),
-  ].join('\n');
-}

@@ -64,7 +64,7 @@ sequenceDiagram
     Agent Backend->>LLM API: Create Response (Round 0 Prompt)
     Note over LLM API: Processes request based on prompts
     LLM API-->>Agent Backend: Response (Text + Usage + StopReason)
-    Agent Backend->>Agent Backend: Process Response (Save r0/output.* output, check for continuation)
+    Agent Backend->>Agent Backend: Process Response (Save r0/output.* output)
     Agent Backend-->>TeXRA UI: Update ProgressBoard / Signal Completion
 ```
 
@@ -94,7 +94,7 @@ Each round lands in its own folder under run storage:
 <RoundOutputTree />
 <p class="hero-caption">Every round saves the raw <code>output.xml</code>, one extracted file per <code>&lt;document name&gt;</code> (named after the input file, for example <code>paper.tex</code>), and an optional <code>latexdiff</code> PDF. <code>r0/</code> is the draft; <code>r1/</code> and later are reflection passes.</p>
 
-**Continuation handling:** If the LLM response is cut off by output token limits before the closing `</documents>` tag, TeXRA sends a continuation prompt that asks the model to resume exactly where it left off, so even very long outputs arrive complete. This happens within the same processing round.
+**Output limit:** If the LLM response is cut off by the model's max output tokens before the closing `</documents>` tag, TeXRA keeps what the model wrote as that round's output and warns in the transcript that it may be incomplete. Raise the model's max output tokens if a long document gets cut off.
 
 ### What goes into the prompt
 

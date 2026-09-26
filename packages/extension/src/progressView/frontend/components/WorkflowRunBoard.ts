@@ -430,8 +430,9 @@ export class WorkflowRunBoard extends LitElement {
     >`;
   }
 
-  /** A waiting card opens the run that is asking; a running one retries
-   *  or skips — the engine acts on a call only while it is in flight. */
+  /** A waiting card opens the run that is asking; a running one restarts
+   *  (the engine's `retry`) or skips — the engine acts on a call only while
+   *  it is in flight, so the button says what that does to a live call. */
   private renderActions(
     row: WorkflowTaskRow,
     child: RunView | undefined,
@@ -461,7 +462,8 @@ export class WorkflowRunBoard extends LitElement {
           event.stopPropagation();
           this.control(row.id, 'retry');
         }}
-        >${waIcon('rotate-right', { slot: 'start' })} Retry</wa-button
+        title="Stop this call and run it again from the start"
+        >${waIcon('rotate-right', { slot: 'start' })} Restart</wa-button
       ><wa-button
         size="s"
         appearance="outlined"
@@ -470,6 +472,7 @@ export class WorkflowRunBoard extends LitElement {
           event.stopPropagation();
           this.control(row.id, 'skip');
         }}
+        title="Stop this call; the workflow continues without its result"
         >${waIcon('forward-step', { slot: 'start' })} Skip</wa-button
       ></span
     >`;
@@ -635,13 +638,14 @@ export class WorkflowRunBoard extends LitElement {
   private renderRejection(error: SurfaceRefusal): TemplateResult {
     switch (error._tag) {
       case 'NotOwner':
-        return html`Another process holds this run.`;
+        return html`This run is controlled by another TeXRA window.`;
       case 'Unavailable':
       case 'Rejected':
       case 'Invalid':
         return html`${error.reason}`;
       case 'Internal':
-        return html`The request failed; the host log has it under ${error.ref}.`;
+        return html`The request failed. See the TeXRA log for details (reference
+        ${error.ref}).`;
       default:
         return assertNever(error, 'Unhandled request error');
     }

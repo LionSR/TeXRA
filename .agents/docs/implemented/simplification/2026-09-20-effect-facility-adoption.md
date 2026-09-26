@@ -1,9 +1,9 @@
 # Effect facility adoption: the four families with zero uses
 
 Date: 2026-09-20
-Status: proposed — step 2 only. Step 1 was refused (`EFF-ADOPT-config-provider`) and steps 3, 4 and 5 are on main; step 2, converting the `createLog` sites and deleting `logUtils.ts` with its last synchronous caller, is in flight.
+Status: implemented — steps 2 to 5 are on main and step 1 was refused (`EFF-ADOPT-config-provider`); every §4 acceptance line holds. The `process.env` lane §2 step 1 split off is done too (§5).
 Baseline: `main` at `3378a967`. Parent survey:
-[post-refactor architecture survey](../architecture/2026-09-20-post-refactor-architecture-survey.md).
+[post-refactor architecture survey](../../proposed/architecture/2026-09-20-post-refactor-architecture-survey.md).
 
 ## 1. Finding
 
@@ -48,12 +48,14 @@ primitives). Where those families are absent, hand-rolled equivalents live.
    until each moves behind a real execution boundary; `logUtils.ts` deletes
    itself with its last such caller, as its own header says, not before.
    This is the first step of the still-unstarted
-   [observability plane](../architecture/2026-09-09-observability-plane.md).
-   Status 2026-09-25: every call inside an Effect program is converted; 36
-   calls in 18 files remain, each in a plain synchronous function (the
-   extension's review service and activation handlers, the CLI's TUI host
-   adapters and approval queue, `platformPaths`, `unifiedDiff`, the usage
-   log service), so each waits on its own execution boundary.
+   [observability plane](../../proposed/architecture/2026-09-09-observability-plane.md).
+   Landed in #13249 and #13274: `createLog` and `logUtils.ts` are gone.
+   Calls inside a program use `Effect.log*` with `withLogChannel`. The
+   synchronous publication points (process-event handlers, TUI host
+   adapters, the trace emitter, pre-runtime and shutdown paths) call
+   `writeLogLine` in `@logger/logSink`, which writes to the same host sink
+   that the Effect logger layer feeds. That makes one mechanism with two
+   entry points, not two loggers.
 3. One `[1, 2)` backoff `Schedule` in a host-neutral module, replacing the
    two spellings in `tools/timeouts.ts` and `latex/arxivProcessor.ts`. The
    ±20 % capped helper in `src/utils/core` is a separate contract and stays.
@@ -106,3 +108,39 @@ and `JsonConfigProvider.get` keep their signatures. Effect `Config` is for
   `Effect.fn.Return<..., unknown, ...>` remains: the shrink-only
   `unknown-error-baseline.json` reached zero and was retired for the
   hardcoded rule in `unknownErrorChannelRatchet.vitest.ts`.
+
+## 5. The `process.env` lane
+
+`src/utils/system/envFlags.ts` owns it: `processEnvConfigLayer` serves Effect
+`Config` from the live `process.env`, and `envVar` / `envFlag` read through it.
+The composition roots and the CLI's pre-runtime run install the layer. Tests
+provide a record instead of mutating the process. The last two
+programs that read a named variable straight from the process now use
+`envVar` as well: the WSL check in the CLI's `launchBrowser` and the
+`CLAUDE_CODE_OAUTH_TOKEN` check in the plugin availability report.
+
+The reads left in production code fall into four groups, and none of them
+belongs in `Config`:
+
+- **Whole-environment enumeration for a child process.** `inheritedEnv`,
+  `gitEnv`, the MCP `serverEnv`, the desktop PTY's `ptyEnvironment` and
+  `withExtendedPath` copy or filter every variable. `Config` reads named
+  leaves; it cannot list the environment. The Claude agent's OAuth check
+  reads the record `buildClaudeAgentEnv` hands the subprocess, so that it
+  agrees with what Claude Code sees.
+- **Build constants.** esbuild's `define` inlines the four `TEXRA_CLI_*`
+  validation-model switches in `validationModel.ts` at bundle time, so a
+  runtime provider never sees them.
+- **Reads before the runtime exists, or deliberately synchronous code.**
+  These are the desktop `userData` override (`app.setPath` runs before
+  `ready`), the dev renderer URL that `scripts/dev.mjs` sets for window
+  creation, the CLI ambient state and colour detection, `platformPaths`
+  (resolved synchronously at startup), the ruled-synchronous PTY host
+  (`RT-desktop-pty-host-effect`), and the `packages/llm` constructors that
+  refuse `*_CUSTOM_HEADERS`.
+- **Writes.** The extension's startup `PATH` extension mutates the process
+  environment on purpose, so that child processes inherit it.
+
+The pager keeps its own `PAGER` read. `PAGER=` (empty) disables paging, and
+`envVar` reads empty and unset alike, so moving it to `Config` would lose the
+signal that `git` and `man` users rely on.

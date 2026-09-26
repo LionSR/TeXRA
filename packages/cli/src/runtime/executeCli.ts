@@ -36,8 +36,8 @@ import { cliToolUseApprovalOptions } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
   advertisesInterruptedRun,
+  type CheckpointRefinement,
   formatInterruptedResumeHint,
-  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
@@ -96,9 +96,7 @@ interface CliExecuteOptions {
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
-  readonly canAdvertiseInterruptedRun?: (
-    resumability: ResumableCheckpoint,
-  ) => boolean;
+  readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
   /** The agent boundary the request runs through. Composition leaves it
    *  unset and gets the agent runtime's own; a test harness injects its
    *  stand-ins here rather than mocking agent modules. */
@@ -397,14 +395,11 @@ export function executeCliRequest(
           // The lease was released just above, so the checkpoint alone decides
           // whether the recovery notice is usable.
           if (onFinalized !== undefined) {
-            const advertise = yield* Effect.try({
-              try: () =>
-                advertisesInterruptedRun(
-                  resumability,
-                  options.canAdvertiseInterruptedRun,
-                ),
-              catch: ensureError,
-            });
+            const advertise = yield* advertisesInterruptedRun(
+              runId,
+              resumability,
+              options.canAdvertiseInterruptedRun,
+            );
             if (advertise) {
               yield* Deferred.succeed(recoveryNoticeStarted, undefined);
               yield* Effect.tryPromise({
@@ -482,10 +477,11 @@ export function executeCliRequest(
               // when checkpoint inspection itself is unavailable.
               advertisesCheckpoint =
                 Result.isSuccess(inspection) &&
-                advertisesInterruptedRun(
+                (yield* advertisesInterruptedRun(
+                  interruptedRunId,
                   inspection.success,
                   options.canAdvertiseInterruptedRun,
-                );
+                ).pipe(Effect.orElseSucceed(() => false)));
             }
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
             // for runAgent to finish unwinding before the final drain releases
@@ -638,16 +634,16 @@ export function executeCliRequest(
         cleanupFailures,
         'CLI run cleanup encountered multiple failures',
       );
-      if (primaryRunFailure) {
-        throw aggregateError(
-          [primaryRunFailure.error, cleanupFailure],
-          'CLI run failed and its final artifacts could not be persisted',
-        );
-      }
-      throw cleanupFailure;
+      return yield* Effect.die(
+        primaryRunFailure
+          ? aggregateError(
+              [primaryRunFailure.error, cleanupFailure],
+              'CLI run failed and its final artifacts could not be persisted',
+            )
+          : cleanupFailure,
+      );
     }
-    if (primaryRunFailure) throw primaryRunFailure.error;
-
+    if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
     if (!runResult.ok) {
       return {
         ok: false as const,

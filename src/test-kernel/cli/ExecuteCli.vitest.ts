@@ -3,7 +3,6 @@ import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Fiber } from 'effect';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -288,27 +287,22 @@ async function spyOnArtifactFlush() {
 }
 
 /**
- * The reflection snapshot a resumable run carries on its aggregate. Only its
- * presence is read here; the workflow command owns the rule that reads its
- * fields.
+ * The snapshot a resumable run carries on its aggregate. Only its presence
+ * is read here; the workflow command owns the rule that reads its fields.
  */
-function reflectionSnapshot(): FlowSnapshotPayload {
+function checkpointSnapshot(): FlowSnapshotPayload {
   return {
-    family: 'reflection',
+    family: 'toolUse',
     runtime: {
       phase: 'initial',
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
       declinedRoutes: [],
     },
-    state: {
-      totalRounds: 4,
-      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   };
 }
 
@@ -343,7 +337,7 @@ async function stubExecuteCliDeps(): Promise<void> {
   });
   mocks.deriveResumability.mockResolvedValue({
     kind: 'checkpoint',
-    snapshot: reflectionSnapshot(),
+    snapshot: checkpointSnapshot(),
   });
   mocks.releaseRunLeaseAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite

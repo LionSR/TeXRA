@@ -34,7 +34,7 @@ export const ELEMENT_IDS = {
   ACTIVE_RUN_NAME: 'activeRunName',
   STATUS_INDICATOR: 'statusIndicator',
   GOAL_CHIP: 'goalChip',
-  BYPASS_CHIP: 'bypassChip',
+  AUTO_APPROVE: 'autoApprove',
   PROGRESS_BADGE: 'progressBadge',
   HEADER_MORE_BTN: 'headerMoreButton',
   STOP_STREAM_BTN: 'stopStreamBtn',

@@ -16,7 +16,6 @@ import {
   assertWritable,
   resolveToolPath,
 } from '@tools/pathResolution';
-import { toPosixPath } from '@utils/core/pathCore';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 
 describe('assertNoParentTraversal', () => {
@@ -107,7 +106,7 @@ describe('resolveToolPath path protection', () => {
           relative: logicalOutsidePath,
           absolute: outsidePath,
           fsPath: outsidePath,
-          display: toPosixPath(logicalOutsidePath),
+          display: logicalOutsidePath,
         });
         expect(
           yield* resolveToolPath(
@@ -118,7 +117,7 @@ describe('resolveToolPath path protection', () => {
           relative: logicalOutsidePath,
           absolute: outsidePath,
           fsPath: outsidePath,
-          display: toPosixPath(logicalOutsidePath),
+          display: logicalOutsidePath,
         });
       }),
   );

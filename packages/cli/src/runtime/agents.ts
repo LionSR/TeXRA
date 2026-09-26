@@ -91,23 +91,6 @@ export function missingMultiAgentPresetMessage(name: string): string {
 }
 
 /**
- * Resolve an identifier the way launch resolves it, scoped to `category`: a
- * `source:name` identifier lands on its exact entry even when a higher-priority
- * source shadows the name. Returns undefined when the identifier resolves
- * outside `category`.
- */
-export function resolveCliAgentInCategory(
-  stores: AgentRosterStores,
-  identifier: string,
-  category: AgentCategory,
-) {
-  return Effect.gen(function* () {
-    const entry = yield* resolveAgentForLaunch(stores, category, identifier);
-    return entry?.category === category ? entry : undefined;
-  });
-}
-
-/**
  * Validate a resolved entry for a category-pinned launch. Reports the refusal
  * as the `CliUsageError` value it is rather than throwing one: the launch
  * resolver below fails its Effect with it, and the chat slash command reads
@@ -132,7 +115,7 @@ export function checkCliAgentLaunch(
         ? AgentCategory.Workflow
         : AgentCategory.ToolUse;
     const found =
-      agent ?? (yield* resolveCliAgentInCategory(stores, name, otherCategory));
+      agent ?? (yield* resolveAgentForLaunch(stores, otherCategory, name));
     return new CliUsageError(
       found ? target.mismatch(name, found.category) : target.missing(name),
     );
@@ -189,7 +172,7 @@ function lookupCliAgent(
   category: AgentCategory | undefined,
 ) {
   return category
-    ? resolveCliAgentInCategory(stores, identifier, category)
+    ? resolveAgentForLaunch(stores, category, identifier)
     : Effect.succeed(getAgent(identifier));
 }
 
@@ -216,10 +199,10 @@ export function resolveCliRunAgent(stores: AgentRosterStores, name: string) {
     // before the remote-inclusive reload only for a source-qualified name (which
     // pins one cache key, so it cannot also hit here) or a signed-out session
     // (which has no remote catalog to add).
-    const toolUse = yield* resolveCliAgentInCategory(
+    const toolUse = yield* resolveAgentForLaunch(
       stores,
-      name,
       AgentCategory.ToolUse,
+      name,
     );
     if (workflow && toolUse) {
       return yield* Effect.fail(

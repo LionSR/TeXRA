@@ -141,7 +141,7 @@ export function createStartupTeamPanel({
           ${waIcon('wand-magic-sparkles')}
         </span>
         <div>
-          <h1 id=${titleId}>What are you working on?</h1>
+          <h1 id=${titleId}>What kind of work do you do?</h1>
           <p>
             TeXRA configures a team of agents, their tools, and their workflows
             for the kind of work you do. You can change any of it later.
@@ -296,9 +296,9 @@ export function createStartupTeamPanel({
           <div>
             <strong>Tabs</strong>
             <span>
-              Open a terminal, browser, or Settings from the bottom of the
-              sidebar. Open files from the project list; everything stays open
-              beside a running agent.
+              Open Files, a terminal, or a browser from the + on the side
+              panel's tab bar. They stay open beside a running agent; Settings
+              is at the bottom of the sidebar.
             </span>
           </div>
         </li>

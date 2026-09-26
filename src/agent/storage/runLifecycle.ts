@@ -339,10 +339,3 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   }
   return { ok: true, outcome: status.value };
 });
-
-/** Read the canonical run configuration from the owning database. */
-export const readPersistedRunRecord = (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.Effect<RunRecord | null, Error> =>
-  getRunRecords(session, runId).readRunRecord();

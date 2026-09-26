@@ -160,7 +160,16 @@ export const designTokens: CSSResult = css`
     --control-size-s: var(--wa-control-size-s, 24px);
     --control-size-m: var(--wa-control-size-m, 28px);
     --control-size-l: var(--wa-control-size-l, 32px);
-    --control-padding-inline: 6px;
+    --control-padding-inline: var(--wa-control-padding-inline, 6px);
+    /* The field (input, select, textarea, composer): one radius and one focus
+       treatment everywhere. Focus colors the border and adds a halo inside
+       the field's own footprint; the extension keeps a 1px ring, the desktop
+       a soft wider one. */
+    --field-radius: var(--wa-form-control-border-radius, var(--border-radius));
+    --field-focus-halo: var(
+      --wa-field-focus-halo,
+      0 0 0 1px var(--wa-color-focus)
+    );
     --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
     --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
     --row-height: var(--wa-row-height, 36px);

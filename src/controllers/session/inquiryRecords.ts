@@ -1,5 +1,5 @@
 /** Canonical global inquiry content; project events carry display notifications only. */
-import { Context, Effect, Layer, Result } from 'effect';
+import { Context, DateTime, Effect, Layer, Result } from 'effect';
 
 import {
   InquiryThreadIdSchema,
@@ -23,12 +23,13 @@ function inquiryOperations(
 ): Context.Service.Shape<typeof InquiryRecords> {
   const changeThread = <A extends InquiryThreadRecord | null>(
     id: InquiryThreadId,
-    change: (current: InquiryThreadRecord | null) => A,
+    change: (current: InquiryThreadRecord | null, timestamp: string) => A,
   ) =>
     Effect.gen(function* () {
+      const timestamp = DateTime.formatIso(yield* DateTime.now);
       const result = yield* database.updateInquiryRecord(id, (current) =>
         Result.try({
-          try: () => change(current),
+          try: () => change(current, timestamp),
           catch: ensureError,
         }),
       );
@@ -70,7 +71,7 @@ function inquiryOperations(
   ) {
     const threadId = params.threadId ?? (`ei_${hexId12()}` as InquiryThreadId);
 
-    return changeThread(threadId, (existing) => {
+    return changeThread(threadId, (existing, timestamp) => {
       if (params.threadId && !existing) {
         throw new ToolError(`External inquiry thread not found: ${threadId}`);
       }
@@ -89,8 +90,6 @@ function inquiryOperations(
           );
         }
       }
-
-      const timestamp = new Date().toISOString();
       const baseManifest: InquiryThreadRecord = existing ?? {
         threadId,
         parentRunId: params.parentRunId,
@@ -139,7 +138,7 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['recordAnswerForOpenTurn']
     >[0],
   ) {
-    return changeThread(params.threadId, (existing) => {
+    return changeThread(params.threadId, (existing, timestamp) => {
       if (
         !existing ||
         existing.status !== 'open' ||
@@ -151,8 +150,6 @@ function inquiryOperations(
       const lastTurn = existing.turns.at(-1)!;
       if (lastTurn.kind !== 'open' || lastTurn.turnIndex !== params.turnIndex)
         return null;
-
-      const timestamp = new Date().toISOString();
       const sessionLinks = normalizeSessionLinks(params.sessionLinks);
 
       const answeredTurn: AnsweredInquiryTurn = {
@@ -190,15 +187,13 @@ function inquiryOperations(
       Context.Service.Shape<typeof InquiryRecords>['markDropped']
     >[0],
   ) {
-    return changeThread(params.threadId, (existing) => {
+    return changeThread(params.threadId, (existing, timestamp) => {
       if (
         !existing ||
         existing.status !== 'open' ||
         existing.turns.at(-1)?.turnIndex !== params.turnIndex
       )
         return null;
-
-      const timestamp = new Date().toISOString();
       const nextManifest: InquiryThreadRecord = {
         ...existing,
         status: 'dropped',

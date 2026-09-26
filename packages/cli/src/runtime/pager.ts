@@ -1,6 +1,6 @@
 import { Effect, type Result } from 'effect';
 
-import { readCliEnv } from './cliContext';
+import { cliEnvValue } from './cliContext';
 import { runForegroundCommand } from './foregroundCommand';
 import { writeTextStdout } from './logSinks';
 import type { PlatformError } from 'effect/PlatformError';
@@ -22,9 +22,9 @@ const DEFAULT_PAGER = 'less -FIRX';
  * `PAGER=` disables paging, matching how `git`/`man` treat it.
  */
 export function resolvePagerCommand(
-  env: Record<string, string | undefined> = readCliEnv(),
+  pagerEnv: string | undefined,
 ): string | undefined {
-  const pager = env.PAGER?.trim() ?? DEFAULT_PAGER;
+  const pager = pagerEnv?.trim() ?? DEFAULT_PAGER;
   // `PAGER=` (empty) or `PAGER=cat` are the conventional "no pager" signals.
   if (pager === '' || pager === 'cat') return undefined;
   return pager;
@@ -45,7 +45,8 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
   options: {
     readonly stdoutIsTty?: boolean;
     readonly headless?: boolean;
-    readonly env?: Record<string, string | undefined>;
+    /** `$PAGER` in place of the live one; `''` disables paging. */
+    readonly pager?: string;
   } = {},
 ): Effect.fn.Return<void, never, ChildProcessSpawner> {
   // Empty output never pages — mirrors `emitCliResult`'s skip-empty behavior.
@@ -56,8 +57,7 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
     return;
   }
 
-  const env = options.env ? { ...readCliEnv(), ...options.env } : readCliEnv();
-  const command = resolvePagerCommand(env);
+  const command = resolvePagerCommand(options.pager ?? cliEnvValue('PAGER'));
   if (!command) {
     writeTextStdout(text);
     return;
@@ -68,10 +68,7 @@ export const pageStdout = Effect.fn('pageStdout')(function* (
   // pager owns the terminal: stdout and stderr are inherited and the text
   // arrives on its stdin.
   const launched = yield* Effect.result(
-    runForegroundCommand(command, {
-      input: `${text}\n`,
-      env: options.env ? env : undefined,
-    }),
+    runForegroundCommand(command, { input: `${text}\n` }),
   );
   const failure = pagerLaunchFailure(launched);
   if (failure !== undefined) {

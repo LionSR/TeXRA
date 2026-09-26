@@ -1798,7 +1798,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Agent asks:',
+      'Direction',
       'previous rows',
       'Which proof direction',
       '+2 more',
@@ -2137,7 +2137,9 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
     },
     keys: ['\t'],
-    expect: ['[4 total · 4 running · 0 finished]'],
+    // leanSolver sits idle between turns: it has delivered, so it counts
+    // as finished, not running.
+    expect: ['[4 total · 3 running · 1 finished]'],
     unexpect: ['● localChecker', '● strategy', '● reviewer'],
   },
   {

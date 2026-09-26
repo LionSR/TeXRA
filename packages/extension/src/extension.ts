@@ -8,7 +8,6 @@ import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 // Local imports
 import { loadAgents } from '@agent/index';
 import {
-  createAgentResponseTextConnector,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
@@ -114,9 +113,8 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
-import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -279,7 +277,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   // double-dispose. The session is initialized on the workspace path only;
   // the credential-only path has none to flush or release.
   registerRuntimeShutdownHandlers(lifecycle, {
-    afterAgentShutdown: [killActiveRecording()],
     flushArtifacts: Effect.suspend(
       () => tryDefaultSession()?.settlePublications() ?? Effect.void,
     ),
@@ -590,6 +587,11 @@ const activateExtension = Effect.fn('activateExtension')(function* (
     runtime,
     activateWorkspace(context, languageModel, secrets, runtime, roots),
   );
+  // Off the activation tick: extendEnvPath() runs synchronous glob probes.
+  yield* withProcessServices(
+    runtime,
+    initializeLatexSupport(roots.globalState),
+  ).pipe(Effect.delay('0 millis'), Effect.forkScoped);
 });
 
 /** The workspace path's activation, over the process runtime it just built. */
@@ -613,13 +615,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   const runtimeSession = yield* initializeDefaultSession({
     roots,
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
-    ),
+    responseTextProcessing: createTexraResponseTextProcessing(),
   });
-  if (runtimeSession.storeCleared) {
+  if (runtimeSession.storeMovedAside) {
     void vscode.window.showWarningMessage(
-      sessionStoreClearedMessage(runtimeSession.storeCleared),
+      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
     );
   }
   runtimeSession.setApprovalPolicy(
@@ -692,11 +692,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     Effect.logInfo('TeXRA extension activated'),
   ).pipe(withLogChannel(EXTENSION_CHANNEL));
 
-  // Deferred off the activation tick: extendEnvPath() inside performs
-  // synchronous glob probes of TeX install directories, which would
-  // otherwise block activation on slow disks. (Never rejects — the body is
-  // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(globalState, runtime), 0);
   registerCommands(
     context,
     globalState,

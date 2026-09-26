@@ -1,6 +1,7 @@
 import { Data, Effect } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { envVar } from '@utils/system/envFlags';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** The OS browser launcher could not open the URL. The message never
@@ -16,8 +17,17 @@ interface BrowserLaunchCommand {
 
 function resolveBrowserLaunch(
   url: string,
+  wsl: boolean,
   platform: NodeJS.Platform = process.platform,
 ): BrowserLaunchCommand {
+  // WSL usually has no `xdg-open`, and the browser the person uses is the
+  // Windows one: interop runs the same launcher `win32` uses.
+  if (platform === 'linux' && wsl) {
+    return {
+      command: 'rundll32.exe',
+      args: ['url.dll,FileProtocolHandler', url],
+    };
+  }
   switch (platform) {
     case 'darwin':
       return {
@@ -52,7 +62,10 @@ function resolveBrowserLaunch(
 export const launchBrowser = Effect.fn('launchBrowser')(function* (
   url: string,
 ): Effect.fn.Return<void, BrowserLaunchFailed, ChildProcessSpawner> {
-  const launch = resolveBrowserLaunch(url);
+  const wsl =
+    (yield* envVar('WSL_DISTRO_NAME')) !== undefined ||
+    (yield* envVar('WSL_INTEROP')) !== undefined;
+  const launch = resolveBrowserLaunch(url, wsl);
   const spawner = yield* ChildProcessSpawner;
   // Never the `PlatformError` message: it embeds the argv, and the argv is
   // the URL.

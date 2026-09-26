@@ -263,7 +263,7 @@ Two of those baselines budget the code itself rather than an import edge, and bo
 - `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails, which is the one way deleting lines breaks the suite: drop the entry in the same PR. A file that shrank but stayed over the threshold keeps its budget.
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
 
-A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity); a combinator that absorbs any failure is generic in it.
+A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
@@ -298,7 +298,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
-- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types only; `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
+- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types — plus `litControllers/`, `monaco/`, and `highlighting/`, rendering code that never made the move to `src/ui/` (consumers are webview/renderer UI code, plus one main-process diff-labeling caller, `packages/desktop/src/main/desktopDiffHost.ts`, and the UI toolkit's own markdown pipeline, `src/ui/markdown/katexHtmlProcessor.ts`; the three were shelved along with a broader, separately proposed regroup of six `src/shared/` subtrees into their own subdirectory that was rejected on cost — 235 import statements plus 9 hardcoded literal test paths for that six-directory regroup, not for these three alone — not because that code is a wire contract); `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 - `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
 
 ### Pragmatic implementations
@@ -542,7 +542,8 @@ the owner ruled that 1.0's exports start fresh, so a document from an older
 build fails loudly at the parse boundary (#12359). The session database is
 the same stance made mechanical: `SESSION_EVENT_FORMAT`
 (`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
-clears a store of any other version at open, and
+moves a store of an older version aside at open (`texra.db.format<N>`, never
+read again) and refuses to open one of a newer version, and
 `sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
 cannot land without bumping the version.
 
@@ -663,13 +664,13 @@ For good separation of concerns and platform independence, core business logic s
 
 A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph:
 
-- **Two programs**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`) for tool-use agents and `runReflection` (`loop/reflection.ts`) for multi-round reflection agents. `loop/rows.ts` builds every ledger draft a loop appends. `core/tools/toolCallParsing.ts` is the one helper both use.
+- **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). Workflow agents run it in round mode (`loop/rounds.ts`): the documents plugin's continuation policy opens each round's turn and processes its output (`src/agent/output/documentRounds.ts`), and the agent is offered no tools. `loop/rows.ts` builds every ledger draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
 - **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
 - **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), `FollowUps` (the run's lease over the follow-up queue), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `flow.step` for every wait and every halt; a `flow.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
 - **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`request.opened` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled; the helper path (`helperCompletion`) keeps its own bounded retry because it runs outside the invoker.
 - **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
-- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loops only execute and fail typed (`RunHalted`).
+- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes and fails typed (`RunHalted`).
 
 **Webviews and UI**
 
@@ -739,6 +740,7 @@ one the view you're touching already uses:
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
 - **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`
+- **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `src/ui/README.md`. Read it before adding a control or a local style override
 
 ### UI anti-patterns
 

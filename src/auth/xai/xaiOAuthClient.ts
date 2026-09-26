@@ -11,8 +11,12 @@ import { Data, Effect } from 'effect';
 
 // Local imports
 import { isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
-import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
+import {
+  DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
+} from '../oauth/deviceAuthorization';
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
   refreshOAuthTokens,
@@ -114,9 +118,10 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
 const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
   text: string,
 ) {
-  const raw = yield* Effect.try((): unknown => JSON.parse(text)).pipe(
-    Effect.orElseSucceed((): unknown => ({})),
-  );
+  const raw = yield* Effect.try({
+    try: (): unknown => JSON.parse(text),
+    catch: ensureError,
+  }).pipe(Effect.orElseSucceed((): unknown => ({})));
   const body: Record<string, unknown> = isObject(raw) ? raw : {};
   return body;
 });
@@ -124,7 +129,8 @@ const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
 /**
  * Poll once for the device authorization result. Succeeds with tokens, or
  * fails with {@link DeviceAuthorizationPending} while the user has not yet
- * approved (a network blip mid-poll is also pending so the loop keeps trying).
+ * approved. A network blip mid-poll is {@link DeviceAuthorizationTransient},
+ * which the shared poll retries a few times before failing with it.
  * Terminal device errors are {@link DeviceAuthorizationDenied} and
  * {@link DeviceCodeExpired}.
  */
@@ -138,8 +144,8 @@ export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
         device_code: deviceCode,
       }),
     ).pipe(
-      Effect.catchTag('OAuthNetworkError', () =>
-        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      Effect.catchTag('OAuthNetworkError', (error) =>
+        Effect.fail(new DeviceAuthorizationTransient({ error })),
       ),
     );
 

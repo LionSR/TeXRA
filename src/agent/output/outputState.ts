@@ -5,7 +5,7 @@
  * round data and workspace preparation.
  *
  * `OutputState.rounds` is the canonical live collection, keyed by round
- * index (`Map<number, RoundOutput>`). The reflection flow hydrates it from
+ * index (`Map<number, RoundOutput>`). The documents plugin hydrates it from
  * the persisted `roundOutputs` array on startup via `roundsFromPersisted`
  * and projects it back to that array shape via `roundsToPersisted` for
  * each durable `output.produced` row.
@@ -29,7 +29,7 @@ export interface OutputState {
   openedOutputs: Set<string>;
 }
 
-/** What the output pipeline reads of the reflection run. */
+/** What the output pipeline reads of the workflow run. */
 export interface OutputDependencies {
   readonly config: AgentConfig;
   readonly baseFiles: FileLocation[];

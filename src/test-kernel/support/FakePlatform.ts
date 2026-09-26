@@ -241,13 +241,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     target: ConfigTarget | undefined;
   }> = [];
 
-  /**
-   * When set, `update()` calls targeting this scope throw instead of
-   * applying -- simulates a persistence failure (e.g. VS Code rejecting the
-   * write) so tests can assert on partial-migration recovery behavior.
-   */
-  failUpdatesForTarget?: ConfigTarget;
-
   get<T>(key: string, defaultValue?: T): T {
     if (this.workspaceFolderValues.has(key))
       return this.workspaceFolderValues.get(key) as T;
@@ -263,17 +256,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     value: T,
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed> {
-    if (target !== undefined && target === this.failUpdatesForTarget) {
-      const message = `simulated ${target}-scope update failure for ${key}`;
-      return Effect.fail(
-        new ConfigWriteFailed({
-          key,
-          target,
-          message,
-          cause: new Error(message),
-        }),
-      );
-    }
     return Effect.sync(() => {
       this.updateCalls.push({ key, value, target });
       if (target === undefined) {

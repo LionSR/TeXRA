@@ -10,7 +10,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
@@ -84,7 +83,6 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     phase: 'initial',
     round: 0,
     turn: 0,
-    continuationIndex: 0,
     modelId: 'gpt54',
     modelCompatibilityKey: null,
     lastError: null,
@@ -95,28 +93,24 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
 
 /**
  * The checkpoint a workflow run's aggregate carries. The real
- * `retrieveSessionResumeData` reads it: the family must match the config's
- * category, and the runtime's model fields are what the resumed launch pins.
+ * `retrieveSessionResumeData` reads it: the runtime's model fields are what
+ * the resumed launch pins.
  */
 const workflowSnapshot = (
   modelId: string,
   modelCompatibilityKey: FlowSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
 ): FlowSnapshotPayload => ({
-  family: 'reflection',
+  family: 'toolUse',
   runtime: {
     phase: 'initial',
     round: 0,
     turn: 0,
-    continuationIndex: 0,
     modelId,
     modelCompatibilityKey,
     lastError: null,
     declinedRoutes: [],
   },
-  state: {
-    totalRounds: 4,
-    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-  },
+  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
 });
 
 /** The session the seeded run lives in, as the command resolves it. */

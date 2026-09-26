@@ -48,6 +48,10 @@ import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
 import { WorkflowSubagentUnsuccessful } from './workflowScriptRun';
 
+/** Fail the workflow run: the engine reports this call and ends the run. */
+const abortWorkflow = (message: string) =>
+  Effect.fail(new WorkflowRunAbortError(message));
+
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
     ? new WorkflowRunAbortError(error.message, { cause: error })
@@ -122,7 +126,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     if (call.options.schema !== undefined) {
       const requestedAgentName = call.options.agentName;
       if (requestedAgentName === undefined) {
-        throw new WorkflowRunAbortError(
+        return yield* abortWorkflow(
           'A structured workflow call must name a tool-use agent.',
         );
       }
@@ -157,7 +161,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
               parent.run.delegationAgentScope ?? undefined,
             );
       if (agent.category !== AgentCategory.Workflow) {
-        throw new WorkflowRunAbortError(
+        return yield* abortWorkflow(
           `Agent '${agent.name}' is a ${agent.category} agent but was ` +
             `launched as workflow. Use delegate_agent instead.`,
         );
@@ -197,7 +201,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         contextFiles,
       ).pipe(Effect.mapError(ensureError));
       if (oversizedBibRejection) {
-        throw new WorkflowRunAbortError(oversizedBibRejection.error);
+        return yield* abortWorkflow(oversizedBibRejection.error);
       }
       return {
         ...sharedConfigFields,
@@ -509,10 +513,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // could duplicate model work and file edits.
         if (journaled.attempt !== null && attempt <= journaled.attempt) {
           if (journaled.superseded.includes(runId)) continue;
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} was marked as launched but no longer exists; refusing to repeat it.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} was marked as launched but no longer exists; refusing to repeat it.`,
           );
         }
         // `exists()` is false for an id that never started AND for one the
@@ -568,10 +570,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           records.countActivations(),
         );
         if (activations !== 1 || launched?.outcome !== result.outcome) {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} started again before its result was journaled; refusing to report it.`,
           );
         }
         return { runId, result, recovered: false };
@@ -588,10 +588,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // as an owner of this run's own.
         const liveness = yield* resolveRunLiveness(runId, session);
         if (liveness.kind !== 'interrupted') {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
           );
         }
       }
@@ -649,10 +647,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // have edited files, and a stop that landed in that window leaves
         // exactly this shape — a CANCELLED row with no manifest. Work that
         // began is not repeated, whatever the row beside it says.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
-          ),
+        return yield* abortWorkflow(
+          `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
         );
       }
       if (turns.lastCompleted !== null) {
@@ -665,10 +661,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // FAILED, and an outcome lost under a manifest says as little the
         // other way round — and ambiguous work is never repeated.
         if (!delivered || end === null) {
-          return yield* Effect.fail(
-            new WorkflowRunAbortError(
-              `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
-            ),
+          return yield* abortWorkflow(
+            `Workflow child ${runId} settled a turn whose ${delivered ? 'outcome' : 'result manifest'} is missing; refusing to repeat it. That run needs operator attention.`,
           );
         }
         if (end.outcome === RUN_OUTCOME.COMPLETED) {
@@ -689,10 +683,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
             records.countActivations(),
           );
           if (activations !== 1) {
-            return yield* Effect.fail(
-              new WorkflowRunAbortError(
-                `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
-              ),
+            return yield* abortWorkflow(
+              `Workflow child ${runId} was resumed after it completed; its result manifest cannot be correlated with the latest lifecycle, so it will not be reported. That run needs operator attention.`,
             );
           }
           return {
@@ -716,20 +708,16 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // never ran, so what the outcome describes is the bookkeeping rather
         // than the work, and no fact here says the child stopped where the
         // row claims.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
-          ),
+        return yield* abortWorkflow(
+          `Workflow child ${runId} delivered its result but never settled its turn; refusing to repeat it. That run needs operator attention.`,
         );
       }
       if (end?.outcome === RUN_OUTCOME.COMPLETED) {
         // A completed row is the post-drain fact, so it cannot outlive the
         // manifest its own delivery committed: without one, the row describes
         // a completion nothing recorded.
-        return yield* Effect.fail(
-          new WorkflowRunAbortError(
-            `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
-          ),
+        return yield* abortWorkflow(
+          `Workflow child ${runId} completed without a result manifest; refusing to repeat it.`,
         );
       }
       // No turn and no manifest: the attempt opened nothing side-effectful,
@@ -737,10 +725,8 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // outcome at all (a dead lease) or ended FAILED or CANCELLED before it
       // reached a turn.
     }
-    return yield* Effect.fail(
-      new WorkflowRunAbortError(
-        `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
-      ),
+    return yield* abortWorkflow(
+      `Workflow call exceeded the ${MAX_WORKFLOW_CALL_ATTEMPTS} child-attempt limit.`,
     );
   },
 );

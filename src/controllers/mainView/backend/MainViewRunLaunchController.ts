@@ -4,6 +4,8 @@ import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
+import type { AgentRunHandle } from '@agent/runtime/RunHandle';
+import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 
 // Local imports - team launch
 import type {
@@ -122,6 +124,26 @@ function buildLaunchRequest(
   }
 
   return { valid: true, request: validation.request };
+}
+
+/**
+ * The run options an Auto-approve launch adds: its run starts with the
+ * delegated-work bypass on, the same state the run header's "agent work"
+ * switch writes, so the header shows it and the user can take it back
+ * mid-run. `onRun` runs before the run body (AgentRunLifecycle forks it
+ * with `startImmediately`) and this write is synchronous, so no approval
+ * opens ahead of it. Block still denies: the policy is decided before any
+ * bypass.
+ */
+export function launchApprovalOptions(
+  { launch }: LaunchRequest,
+  approvals: SessionApprovals,
+): { onRun?: (handle: AgentRunHandle) => Effect.Effect<void> } {
+  if (launch.approval !== 'autoApprove') return {};
+  return {
+    onRun: (handle) =>
+      Effect.sync(() => approvals.setDelegatedWorkBypasses(handle.runId, true)),
+  };
 }
 
 /** Both GUI hosts launch the selections carried by the requesting surface. */

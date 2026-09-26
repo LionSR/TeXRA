@@ -159,7 +159,7 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
     base: z.string().nullish(),
     prev: z.string().nullish(),
   }),
-  /** The "Copy to new task" link on a settled delegation row. */
+  /** The "Edit as new task" link on a settled delegation row. */
   z.object({
     kind: z.literal('restoreProposalConfig'),
     proposal: AgentProposalSchema,

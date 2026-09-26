@@ -80,7 +80,7 @@ import type {
   OpenWork,
   SessionEventReads,
 } from '@shared/session/sessionEvents';
-import { aggregateError, throwAggregated } from '@utils/core';
+import { aggregateError } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
   SessionHostInteractions,
@@ -202,9 +202,9 @@ export class SessionHandle {
    * instead of hanging it.
    */
   readonly viewChanges: Stream.Stream<SessionView>;
-  /** Set when opening this session's store cleared another build's rows;
-   *  the host that opened the session presents it once. */
-  readonly storeCleared: SessionGraph['storeCleared'];
+  /** Set when opening this session's store moved an older build's rows
+   *  aside; the host that opened the session presents it once. */
+  readonly storeMovedAside: SessionGraph['storeMovedAside'];
   /**
    * The session's `Runs` service, as the session layer built it in the
    * session's scope (`SessionGraph.runs`): registration, lookup and
@@ -325,7 +325,7 @@ export class SessionHandle {
     this.ledger = graph.ledger;
     this.view = graph.view;
     this.viewChanges = graph.viewChanges;
-    this.storeCleared = graph.storeCleared;
+    this.storeMovedAside = graph.storeMovedAside;
     this.folded = graph.folded;
     this.requests = graph.requests;
     this.inputs = graph.inputs;
@@ -1228,8 +1228,9 @@ export class SessionHandle {
 
   /**
    * Tear down everything this session owns through the constructor-registered
-   * LIFO teardown list, once: every step runs even when an earlier one fails,
-   * and the failures are aggregated into one. The session owner calls it, after disposing
+   * teardown list, once. The steps are a scope's finalizers: the close runs
+   * them newest first, every step runs even when an earlier one fails, and each
+   * failure stays its own reason in the defect it raises. The session owner calls it, after disposing
    * the session's runs, whenever it releases the session (a `closeSession`,
    * the runtime's disposal, {@link dispose}). On owner-release paths
    * (`closeSession`, runtime disposal) the owner has already dropped the
@@ -1240,18 +1241,13 @@ export class SessionHandle {
     return Effect.suspend(() => {
       if (this.unwound) return Effect.void;
       this.unwound = true;
-      const steps = this.teardown.toReversed();
-      this.teardown.length = 0;
-      return Effect.forEach(steps, Effect.exit).pipe(
-        Effect.flatMap((exits) =>
-          Effect.sync(() => {
-            throwAggregated(
-              exits.flatMap((exit) =>
-                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-              ),
-              'Multiple resources failed to dispose',
-            );
-          }),
+      return Effect.scoped(
+        Effect.forEach(
+          this.teardown,
+          (step) => Effect.addFinalizer(() => step),
+          {
+            discard: true,
+          },
         ),
       );
     });
@@ -1372,16 +1368,20 @@ export const settleLiveSessionRuns: Effect.Effect<void> = Effect.gen(
                   }),
             });
             if (!finalization.ok) {
-              throw new Error(
-                `Failed to persist the CANCELLED outcome for run ${runId}`,
-                { cause: finalization.error },
+              return yield* Effect.die(
+                new Error(
+                  `Failed to persist the CANCELLED outcome for run ${runId}`,
+                  { cause: finalization.error },
+                ),
               );
             }
             // A failed settle or a rolled-back closure must still pass
             // through the owner's release choreography after recording the
             // terminal outcome.
-            if (Exit.isFailure(open)) throw Cause.squash(open.cause);
-            if (closureFailure !== undefined) throw closureFailure;
+            if (Exit.isFailure(open))
+              return yield* Effect.die(Cause.squash(open.cause));
+            if (closureFailure !== undefined)
+              return yield* Effect.die(closureFailure);
           }),
         );
       });

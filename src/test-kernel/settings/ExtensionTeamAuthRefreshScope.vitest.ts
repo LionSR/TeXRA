@@ -41,18 +41,18 @@ describe('extension team auth catalog refresh scope', () => {
                   preset,
                   resolution: refreshed
                     ? {
-                        keys: {
+                        agentKeys: {
                           workflow: [],
                           toolUse: ['remote:orchestrator'],
                         },
-                        unresolvedNames: [],
+                        missingAgents: { workflow: [], toolUse: [] },
                       }
                     : {
-                        keys: {
+                        agentKeys: { workflow: [], toolUse: [] },
+                        missingAgents: {
                           workflow: [],
-                          toolUse: [],
+                          toolUse: ['orchestrator'],
                         },
-                        unresolvedNames: ['orchestrator'],
                       },
                 }),
               commitPreset,
