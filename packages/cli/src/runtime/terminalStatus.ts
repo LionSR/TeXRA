@@ -2,7 +2,9 @@ import { Effect } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import type { SessionHandle, runAgent } from '@agent/runtime';
+import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
+  type InstalledPlugin,
   RUN_OUTCOME,
   type RunOutcome,
   RUN_PHASE,
@@ -10,23 +12,53 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import type { DatabaseReadFailed } from '@shared/session/database';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { CliExitCode } from './exitCodes';
+import type { CliPluginPin } from '../schemas/cliOutput';
 import type { z } from 'zod';
 
 export type ExecuteAgentResult = Effect.Success<ReturnType<typeof runAgent>>;
 
-interface CliRunResultMetadata {
+// A type alias, not an interface: the result line types its payload as a
+// loose object, which an interface (no implicit index signature) cannot meet.
+type CliRunResultMetadata = {
+  /** The plugins installed when this invocation started or resumed the run. */
+  readonly plugins?: readonly CliPluginPin[];
   readonly workingDirectory?: string;
   readonly runDirectory?: string;
   readonly copiedOutput?: string;
   readonly copiedOutputs?: string[];
-}
+};
 
 // Intersecting distributes over the runAgent result union, attaching the
 // CLI-only metadata fields to every member.
 export type CliRunResult = ExecuteAgentResult & CliRunResultMetadata;
+
+/**
+ * The enabled plugins as a run result names them, read the way this
+ * invocation's skill catalog reads the list and without their local paths. A
+ * disabled plugin contributes nothing to the run, so it is not listed.
+ */
+export function readCliPluginPins(stores: SettingsStores) {
+  return readSettingFrom<InstalledPlugin[]>(
+    stores,
+    GlobalStateKey.INSTALLED_PLUGINS,
+  ).pipe(
+    Effect.map((plugins) =>
+      plugins
+        .filter(({ enabled }) => enabled)
+        .map(({ name, source, ref, commit }): CliPluginPin => ({
+          name,
+          source,
+          ref,
+          commit,
+        })),
+    ),
+  );
+}
 
 export type CliToolUseRunResult = CliRunResult & {
   readonly output: z.infer<typeof ToolUseRunEndOutputSchema>;

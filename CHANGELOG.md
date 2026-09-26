@@ -81,6 +81,13 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **`texra run` results record what the run ran with** — the JSON and NDJSON
+  result carries `compositionHash`, the hash of the tool composition the run
+  pinned, and `plugins`, the enabled plugins installed when it started or
+  resumed, with the commit each fetched plugin is pinned to. A script that
+  compares runs can tell whether two of them had the same tools and plugin
+  skills.
+
 - **Plainer multi-agent workflow screens.** The workflow launch row shows its
   summary alone; the instructions for the model stay in the tool output, and
   the model is no longer told to wait on a run whose result arrives by
