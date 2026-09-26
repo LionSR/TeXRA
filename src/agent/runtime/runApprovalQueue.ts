@@ -253,11 +253,8 @@ export function createSessionApprovals(
   // `createRunApprovalBypass` owns its own `byRun` map — so a parent
   // with bash bypassed but edits gated still propagates exactly that split.
   const parentOf = new Map<RunId, RunId>();
-  // The inverse of `parentOf`, written only through `link`/`unlink` so the
-  // two never disagree. Every subagent and every CLI round adds an edge for
-  // the session's lifetime; without this index each descendant walk scanned
-  // all of them, making every `registerRunParent`/`setBypass` O(session
-  // runs) and a long orchestration quadratic.
+  // The inverse of `parentOf`, written only through `link`/`unlink`, so a
+  // descendant walk visits the subtree instead of every edge in the session.
   const childrenOf = new Map<RunId, Set<RunId>>();
   const unlink = (child: RunId): void => {
     const parent = parentOf.get(child);

@@ -526,7 +526,7 @@ export function getEnabledModels(state: Pick<StateStore, 'get'>) {
  * `GlobalStateKey.MODEL_SELECTION`.
  *
  * Two invariants: at least one model stays enabled, and a retired model is
- * never enabled. Throws on either violation; callers surface the message.
+ * never enabled. Either violation fails with `StateWriteFailed`.
  */
 export function setModelEnabled(input: {
   readonly model: string;
