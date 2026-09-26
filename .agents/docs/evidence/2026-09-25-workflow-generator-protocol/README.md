@@ -57,7 +57,8 @@ about 1.3 s; the typecheck is clean.
   CPU budget, and the script's own `try/catch` cannot stop the preemption.
 - An `await`-format script fails with a hint to write `yield*`; yielding a
   non-operation fails with a named error.
-- `process`, `require`, `Function`, constructor escapes, `Math.random` and
+- `process`, `require`, `Function`, constructor escapes (including the
+  async-function and async-generator constructors), `Math.random` and
   `Date.now` are unreachable or refused.
 
 ## Checking the tests themselves

@@ -20,7 +20,8 @@ change; §8 records the rulings and the model-reliability measurement, and
 "As landed" below records where the implementation settled what this
 proposal left open.
 
-Baseline: `main` at `b4569d4c`.
+Baseline: `main` at `b4569d4c`. Line references in §1 and §6 point into
+the engine as it stood just before the switch, `main` at `1f856eb3`.
 
 ## 1. The seam, as it stands
 
@@ -29,7 +30,7 @@ scoped Effect, cancellation is interruption, and skip/retry is a per-attempt
 `Deferred` decision. The script side is still a Promise program, because the
 script's contract is `async`:
 
-- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:657`),
+- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:665`),
   and `parallel()` is a realm-side `Promise.all` over thunks, installed as
   trusted prelude code (`ORCHESTRATION_PRELUDE`, `runWorkflowScript.ts:120`).
 - Because the realm holds pending promises, the host must pump QuickJS jobs
@@ -38,8 +39,8 @@ script's contract is `async`:
   per-call settlement back into the realm (`settleHostPromise`, `:508`), and
   the async bridge wrappers in `BRIDGE_PRELUDE` (`:153`).
 - A failed call resolves to `null` and a skip to the string
-  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:725`, `:740`), so every
-  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:658`).
+  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:718`, `:733`), so every
+  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:666`).
 - Concurrency, retry and timeout policy the script wants is written by hand
   in the script, if at all; the host offers one semaphore.
 
@@ -207,7 +208,7 @@ adapter, shim, flag, or dual engine").
   with the `await` hint. There is no reader for the old form; the journal
   key means a rewritten script loses no completed work.
 - Retry and identity: a retried body re-issues the same call keys, so the
-  duplicate-key check (`runWorkflowScript.ts:502`) must admit a re-issue
+  duplicate-key check (`runWorkflowScript.ts:495`) must admit a re-issue
   inside the same `Retry` (decision 4).
 
 ## 7. Evidence
