@@ -19,7 +19,6 @@ import {
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
-import { tryParseUrl } from '@utils/core';
 import type { ModelConfig } from 'llm-zoo';
 
 import type { ModelRoute } from './modelRoute';
@@ -31,7 +30,7 @@ function normalizeProviderEndpoint(input: string): string {
   if (!input) return '';
 
   const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
+  const parsed = URL.parse(withProtocol);
   if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
