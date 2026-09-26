@@ -939,6 +939,16 @@ function makeRetryApprovalPayload(): RetryPermission {
       provider: 'openai',
       statusCode: 429,
     },
+    // The invoker decides the offer (#13236); a subscription quota declines
+    // its route for the model's own key.
+    credentialSwitch: RETRY_APPROVAL_CHATGPT
+      ? {
+          kind: 'decline-route',
+          route: 'chatgpt-subscription',
+          provider: 'openai',
+          automatic: false,
+        }
+      : null,
   };
 }
 
