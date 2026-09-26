@@ -122,6 +122,21 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   readonly verdict: 'alive' | 'unprovable';
 }> {}
 
+/**
+ * The live process that holds an aggregate this caller was refused, or null
+ * when the refusal names none: the claim verdict (carried as the write
+ * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
+ * aggregate. A closed aggregate is finished and an ownerless one is free, so
+ * neither is held elsewhere.
+ */
+export const heldElsewhereBy = (error: unknown): OwnerId | null => {
+  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
+  if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
+  return refusal instanceof DatabaseNotOwner && !refusal.closed
+    ? refusal.ownerId
+    : null;
+};
+
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly path: string;

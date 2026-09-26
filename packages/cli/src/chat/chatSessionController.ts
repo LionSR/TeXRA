@@ -58,11 +58,7 @@ import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { acceptsFollowUp } from '@shared/session/sessionView';
 import { RUN_OUTCOME, type RunId, AgentCategory } from '@shared/schemas';
-import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { heldElsewhereBy } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
@@ -531,17 +527,10 @@ export function createChatSessionController(
     }
     // Another live process holds the run: it refused the claim, or took it
     // after its owner was proved dead.
-    if (
-      (error instanceof DatabaseWriteFailed &&
-        error.cause instanceof DatabaseClaimRefused) ||
-      (error instanceof DatabaseNotOwner &&
-        !error.closed &&
-        error.ownerId !== null)
-    ) {
-      session.runExitCode = CliExitCode.Usage;
-    } else {
-      session.runExitCode = CliExitCode.AgentError;
-    }
+    session.runExitCode =
+      heldElsewhereBy(error) !== null
+        ? CliExitCode.Usage
+        : CliExitCode.AgentError;
   };
 
   // One interaction host for the chat session's lifetime, as the extension

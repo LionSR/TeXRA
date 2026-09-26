@@ -22,7 +22,9 @@ import {
 import { aggregateId, type RunId, type SessionEvent } from '@shared/schemas';
 import {
   DatabaseClaimRefused,
+  DatabaseNotOwner,
   DatabaseWriteFailed,
+  heldElsewhereBy,
 } from '@shared/session/database';
 import { foldRunRows, type QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
@@ -601,6 +603,26 @@ describe('ToolUseFollowUpQueue ownership', () => {
         expect(followUps.claimRecovery(id)).toBeDefined();
       }),
   );
+
+  it('counts only a live holder as held elsewhere', () => {
+    const owner = JSON.stringify(['other-host', 4321, null]);
+    const notOwner = (ownerId: string | null, closed: boolean) =>
+      new DatabaseNotOwner({
+        aggregateId: aggregateId('run', generateRunId()),
+        ownerId,
+        closed,
+      });
+    const refused = new DatabaseWriteFailed({
+      path: ':memory:',
+      cause: new DatabaseClaimRefused({ ownerId: owner, verdict: 'alive' }),
+    });
+    expect(heldElsewhereBy(refused)).toBe(owner);
+    expect(heldElsewhereBy(notOwner(owner, false))).toBe(owner);
+    // A closed aggregate is finished, an ownerless one free: neither refuses
+    // as another process's run.
+    expect(heldElsewhereBy(notOwner(owner, true))).toBeNull();
+    expect(heldElsewhereBy(notOwner(null, false))).toBeNull();
+  });
 
   it.effect(
     'forgets a terminal run so a late live-owner submission is refused',
