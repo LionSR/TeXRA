@@ -244,10 +244,12 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Dispatch every unsettled call of the pending response, then deliver. */
+/** Dispatch every unsettled call of the pending response, then deliver,
+ *  with the `joined` rows committed after the tool group. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   turn: TurnContext,
+  joined: readonly RunLedgerDraft[] = [],
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -958,6 +960,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
+    ...joined,
     snapshotRow(runId, state, {
       phase: 'results.ready',
       state: { family: 'toolUse', state: { ...flow, stateSlices } },

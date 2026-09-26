@@ -172,6 +172,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       state: { family: 'toolUse', state: flowState() },
     });
 
+  const instruct = (instruction: string | undefined): void => {
+    if (instruction !== undefined)
+      userChannels[USER_VAR_INSTRUCTION] = instruction;
+  };
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
     if (paths.length === 0) return;
@@ -526,19 +530,23 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         },
       );
       // A committed response whose live post-processing never ran is replayed
-      // through the same policy, once, when this turn is entered. The rows
-      // say so: the response row moved the step and cleared the attempt, and
-      // nothing since has delivered tools or begun another round. Treating it
-      // as a finished turn instead would skip the blank-turn continuation and
-      // the one forced structured-output attempt, so a crash at that commit
-      // boundary could finalize a run with no structured output at all.
+      // through the same policy, once, when this turn is entered (the rows
+      // say so: its step, no open attempt). Treating it as finished would
+      // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
         state = yield* applyPendingModelSwitch(state, cell);
         if (state.pendingResponse !== null) {
-          const dispatched = yield* dispatchPendingResponse(cell, turnContext);
+          // A user's follow-up to a stopped response joins its delivery.
+          const joined = yield* followUps.joinStopped(state);
+          const dispatched = yield* dispatchPendingResponse(
+            cell,
+            turnContext,
+            joined?.rows,
+          );
           state = dispatched.state;
-          if (dispatched.endTurn) return completeTurn(state);
+          instruct(joined?.delivered());
+          if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
         if (replayCommitted) {
@@ -694,9 +702,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             batch,
           );
           state = yield* cell.adopt(consumed.state);
-          if (consumed.instruction !== undefined) {
-            userChannels[USER_VAR_INSTRUCTION] = consumed.instruction;
-          }
+          instruct(consumed.instruction);
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns
@@ -707,19 +713,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
         // The turn's trace rows publish fire-and-forget while the ledger
-        // appends on this fiber, so the parking row would commit ahead of
-        // them: the transcript boundary closes on `waiting`, and this turn's
-        // `stream.start`/`stream.end`/`response.finalized` are then dropped by
-        // the fold, leaving a parked run whose transcript holds no assistant
-        // answer. Settling this run's publications here is the order between
-        // the two paths, and the run id is what makes it a barrier: a
-        // session-wide settle reports session-scoped failures only, so a
-        // rolled-back transcript of this run would return successfully here and
-        // park the run over it. It observes rather than answers: the failure it
-        // throws ends the run through the loop's failure path, and the terminal
-        // row that path writes is the one that has to carry the
-        // `artifact-drain` marker, which it can only do while the drain that
-        // decides it still finds the lost fact.
+        // appends here, so the `waiting` row would commit ahead of them and
+        // the fold would drop this turn's stream rows, parking a run with no
+        // answer in its transcript. Settling this run's publications (by run
+        // id: a session-wide settle misses this run's rollback) orders the
+        // two paths. Its failure ends the run through the failure path, whose
+        // terminal row carries the `artifact-drain` marker while the drain
+        // that decides it still finds the lost fact.
         yield* session.settlePublications(runId, { consume: false });
         // The turn boundary: the snapshot precedes the steps in one batch, so
         // a viewer cut at either step sees the fields, and a stop between the
