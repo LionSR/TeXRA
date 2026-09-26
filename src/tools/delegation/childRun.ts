@@ -5,7 +5,10 @@ import { Cause, Effect, Exit } from 'effect';
 import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import {
+  finalizeRun,
+  RunOutcomeUnpersisted,
+} from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -156,7 +159,8 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
                 finalization.ok
                   ? Effect.void
                   : Effect.fail(
-                      new Error('Failed to persist the child run failure', {
+                      new RunOutcomeUnpersisted({
+                        message: 'Failed to persist the child run failure',
                         cause: finalization.error,
                       }),
                     ),

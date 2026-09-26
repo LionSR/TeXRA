@@ -69,39 +69,20 @@ const loadCreatorConfig = Effect.fnUntraced(function* (
 function askForInput(
   options: vscode.InputBoxOptions,
 ): Effect.Effect<string | undefined, AgentCreatorUiFailed> {
-  return Effect.callback<string | undefined, AgentCreatorUiFailed>((resume) => {
-    const tokens = new vscode.CancellationTokenSource();
-    let settled = false;
-    const dispose = () => {
-      settled = true;
-      tokens.dispose();
-    };
-    void Promise.resolve(
-      vscode.window.showInputBox(options, tokens.token),
-    ).then(
-      (value) => {
-        dispose();
-        resume(Effect.succeed(value));
-      },
-      (cause: unknown) => {
-        dispose();
-        resume(
-          Effect.fail(
-            new AgentCreatorUiFailed({
-              reason: 'prompt-failed',
-              message: 'VS Code would not show the input box.',
-              cause,
-            }),
-          ),
-        );
-      },
-    );
-    return Effect.sync(() => {
-      if (settled) return;
-      tokens.cancel();
-      dispose();
-    });
-  });
+  return Effect.acquireUseRelease(
+    Effect.sync(() => new vscode.CancellationTokenSource()),
+    (tokens) =>
+      Effect.tryPromise({
+        try: () => vscode.window.showInputBox(options, tokens.token),
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'prompt-failed',
+            message: 'VS Code would not show the input box.',
+            cause,
+          }),
+      }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
+    (tokens) => Effect.sync(() => tokens.dispose()),
+  );
 }
 
 /**

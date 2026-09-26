@@ -85,13 +85,16 @@ class WorktreeStateStore implements StateStore {
  * one a {@link WorktreeStateStore} keyed by the repository every worktree of
  * it shares.
  *
- * The repository is what `git rev-parse --git-common-dir` answers, so a
- * linked worktree, a submodule and a bare repository resolve the way git
- * itself resolves them. A common directory named `.git` is keyed by the
- * checkout that holds it (the main worktree's root), any other by itself.
- * "Not a git repository" is the expected answer for a plain folder; any
- * other failure (git missing, a timeout) is logged at warn and the workspace
- * keeps its own state unshared, so host startup is never aborted by it.
+ * A linked worktree, whose git dir is `<dir>/worktrees/<name>`, keys by the
+ * checkout holding `<dir>` when `<dir>` is `.git` (a plain repository's main
+ * worktree) and by `<dir>` itself otherwise (a bare repository, or a
+ * submodule's `.git/modules/…`). Every other checkout (a main worktree, a
+ * submodule) keys by its own top level, so two submodules never share one
+ * namespace. "Not a git repository" (a plain folder) and "must be run in a
+ * work tree" (a bare repository opened directly) are expected answers; any
+ * other failure (git missing, a timeout) is logged at warn. In every failure
+ * the workspace keeps its own state unshared, so host startup is never
+ * aborted by it.
  */
 export const openWorktreeStateStore = Effect.fn('openWorktreeStateStore')(
   function* (
@@ -100,20 +103,37 @@ export const openWorktreeStateStore = Effect.fn('openWorktreeStateStore')(
     workspaceRoot: string,
   ): Effect.fn.Return<StateStore, never, ChildProcessSpawner> {
     const result = yield* executeCommand(
-      ['git', 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+      [
+        'git',
+        'rev-parse',
+        '--path-format=absolute',
+        '--git-dir',
+        '--show-toplevel',
+      ],
       { cwd: workspaceRoot, settings: undefined, timeout: 5_000, quiet: true },
     );
     if (!result.success) {
-      if (!/not a git repository/i.test(result.stderr)) {
+      if (
+        !/not a git repository|must be run in a work tree/i.test(result.stderr)
+      ) {
         yield* Effect.logWarning(
           `Cannot resolve the git repository of ${workspaceRoot}; worktree-shared settings stay per workspace. Cause: ${result.stderr}`,
         ).pipe(withLogChannel('platform'));
       }
       return projectState;
     }
-    const commonDir = path.normalize(result.stdout.trim());
-    const repoRoot =
-      path.basename(commonDir) === '.git' ? path.dirname(commonDir) : commonDir;
+    const [gitDirLine = '', topLevelLine = ''] = result.stdout
+      .trim()
+      .split(/\r?\n/);
+    const worktreesDir = path.dirname(path.normalize(gitDirLine.trim()));
+    const worktreesParent = path.dirname(worktreesDir);
+    let repoRoot = path.normalize(topLevelLine.trim());
+    if (path.basename(worktreesDir) === 'worktrees') {
+      repoRoot =
+        path.basename(worktreesParent) === '.git'
+          ? path.dirname(worktreesParent)
+          : worktreesParent;
+    }
     return new WorktreeStateStore(
       projectState,
       globalState,
