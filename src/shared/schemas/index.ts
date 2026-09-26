@@ -84,6 +84,7 @@ export * from './runState';
 export * from './runFlowState';
 export * from './rowValues';
 export * from './runLedgerEvent';
+export * from './followUp';
 export * from './sessionEvent';
 export * from './traceEvent';
 

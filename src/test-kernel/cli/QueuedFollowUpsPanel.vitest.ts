@@ -50,13 +50,13 @@ describe('CLI queued follow-up panel display model', () => {
     {
       family: 'subagent',
       payload:
-        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+        '<subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
       expected: '1. ✓ reviewer completed All good <ok>',
     },
     {
       family: 'claude-agent',
       payload:
-        '<orchestrator-followup><claude-agent-result id="child-q" session-id="s1"><response>Done.</response></claude-agent-result></orchestrator-followup>',
+        '<claude-agent-result id="child-q" session-id="s1"><response>Done.</response></claude-agent-result>',
       expected: '1. ✓ claude-agent completed Done.',
     },
   ])(

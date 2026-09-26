@@ -25,7 +25,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUse } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
-  summarizeFollowupMessage,
+  summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 import {
   formatWorkflowCallLine,
@@ -322,7 +322,7 @@ export function logPayloadRow(
         ...base,
         kind: 'user',
         text: measured,
-        summary: transcriptText(summarizeFollowupMessage(measured.full)),
+        summary: transcriptText(summarizeSubagentFollowup(measured.full)),
         ...(payload.data?.workflowSummary
           ? { workflowSummary: payload.data.workflowSummary }
           : {}),

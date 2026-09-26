@@ -4,7 +4,7 @@
   "files": {
     "packages/cli/src/chat/chatSessionController.ts": 1401,
     "packages/cli/src/chat/tui/App.tsx": 711,
-    "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 560,
+    "packages/cli/src/chat/tui/commands/registerBuiltins.tsx": 527,
     "packages/cli/src/chat/tui/panes/InputBar.tsx": 539,
     "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts": 794,
     "packages/cli/src/chat/tui/panes/statusBarDisplay.ts": 927,

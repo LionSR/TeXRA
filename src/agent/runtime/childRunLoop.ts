@@ -582,7 +582,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   );
   const followUp: FollowUpQueueInput = {
     text: msg,
-    origin: 'subagent_result',
+    from: { kind: 'run', runId },
     deliveryId: turnDeliveryId(runId, turnKey, params.consumed),
   };
   let pending: PendingChildDelivery | undefined;
@@ -908,7 +908,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 targetRunId,
                 {
                   text: formatSubagentProgress(runId, agentName, update),
-                  origin: 'subagent_result',
+                  from: { kind: 'run', runId },
                 },
                 'live_owner',
               ),
@@ -1199,7 +1199,7 @@ export function startChildRunLoop<TTurn, R = never>(
             yield* commitPark(runSession, runId, 'resumed');
             consumed = taken;
             const prompts: readonly FollowUpContent[] = batch.synthetic
-              ? [{ text: batch.text, origin: 'user' }]
+              ? [{ text: batch.text, from: { kind: 'user' } }]
               : taken.map((followUp) => followUp.content);
             runner = (signal) => nextRunTurn(prompts, ports, signal);
           }

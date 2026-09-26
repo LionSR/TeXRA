@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
-import { notifyFollowUpSent } from '@agent/followUp';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
@@ -27,9 +26,14 @@ import {
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { AgentCategory, type RunId } from '@shared/schemas';
+import { runRelation } from '@shared/session/runRelation';
+import type { RunView } from '@shared/session/sessionView';
 
 import { formatSlashCommandHelp } from '../helpText';
-import { listSlashCommands } from '../slashRegistry';
+import {
+  listSlashCommands,
+  type SlashCommandContribution,
+} from '../slashRegistry';
 import { type SlashCommandContext } from './slashContext';
 
 export function showCliSlashCommandHelp(): void {
@@ -137,7 +141,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
 
 /** `/compact`: one runtime request on the chat's session; the outcome or
  *  refusal becomes a notice. */
-export function requestCliSessionCompaction(
+function requestCliSessionCompaction(
   session: SessionHandle,
 ): Effect.Effect<void> {
   return Effect.suspend(() => {
@@ -152,7 +156,6 @@ export function requestCliSessionCompaction(
       Effect.match({
         onFailure: (error) => appendLocalRequestRefusal(error, runId),
         onSuccess: () => {
-          notifyFollowUpSent(runId, session);
           appendLocalAssistantTranscript(
             'Context compaction requested. The agent will process it on the next model call.',
             runId,
@@ -161,4 +164,134 @@ export function requestCliSessionCompaction(
       }),
     );
   });
+}
+
+/** `/ps`: every run in this session, most recent first, marked with where
+ *  it stands relative to the focused run and how many messages it has not
+ *  read. Any of them can be messaged with `/send`. */
+function showCliRunList(): void {
+  const view = currentView();
+  const focused = selectedRunIdSignal.get();
+  const runs = [...view.runs.values()].toSorted(
+    (left, right) => right.launchedAt - left.launchedAt,
+  );
+  if (runs.length === 0) {
+    openInfoPane('/ps', 'No runs in this session.');
+    return;
+  }
+  const parentOf = (id: RunId) => view.runs.get(id)?.parentId;
+  const relationTo = (run: RunView): string => {
+    if (focused === undefined) return '';
+    if (run.id === focused) return '  (focused)';
+    const relation = runRelation(run.id, focused, parentOf);
+    return relation === 'peer' ? '' : `  (${relation} of focused)`;
+  };
+  const lines = runs.map((run) => {
+    const unread = view.queuedFollowUps.get(run.id)?.length ?? 0;
+    return `${run.id}  ${run.label}  [${run.statusLabel}]${relationTo(run)}${unread > 0 ? `  unread=${unread}` : ''}`;
+  });
+  openInfoPane(
+    '/ps',
+    [...lines, '', 'Message a run with /send <run id> <message>.'].join('\n'),
+  );
+}
+
+/** `/send <run id> <message>`: type into another run's input, as its
+ *  composer would. A unique id prefix names the run. */
+function sendCliRunMessage(
+  session: SessionHandle,
+  remainder: string,
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    const [target = '', ...words] = remainder.trim().split(/\s+/);
+    const text = words.join(' ');
+    if (!target || !text) {
+      appendLocalAssistantTranscript('Usage: /send <run id> <message>');
+      return Effect.void;
+    }
+    const ids = [...currentView().runs.keys()];
+    const matches = ids.includes(target as RunId)
+      ? [target as RunId]
+      : ids.filter((id) => id.startsWith(target));
+    if (matches.length !== 1) {
+      appendLocalAssistantTranscript(
+        matches.length === 0
+          ? `No run matches '${target}'. Use /ps to list runs.`
+          : `'${target}' matches ${matches.length} runs (${matches.join(', ')}). Type more of the id.`,
+      );
+      return Effect.void;
+    }
+    const runId = matches[0]!;
+    return session.requests
+      .request({ kind: 'followUp.send', runId, text })
+      .pipe(
+        Effect.match({
+          onFailure: (error) => appendLocalRequestRefusal(error, runId),
+          onSuccess: () =>
+            appendLocalAssistantTranscript(`Message sent to ${runId}.`),
+        }),
+      );
+  });
+}
+
+/** The session commands that act on runs: looking at them and messaging
+ *  them (`/ps`, `/send`), compacting the focused one, and leaving. */
+export function sessionContributions(
+  session: SessionHandle,
+): SlashCommandContribution[] {
+  return [
+    {
+      pluginId: 'run-messaging',
+      commands: [
+        {
+          name: 'ps',
+          description: 'List the runs in this session',
+          category: 'session',
+          echo: 'never',
+          handler: () => Effect.sync(showCliRunList),
+        },
+        {
+          name: 'send',
+          description: 'Send a message to another run: /send <id> <text>',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: (remainder) => sendCliRunMessage(session, remainder),
+        },
+      ],
+    },
+    {
+      pluginId: 'session-lifecycle',
+      commands: [
+        {
+          name: 'compact',
+          description: 'Request context compaction',
+          category: 'session',
+          echo: 'ifPersists',
+          handler: () => requestCliSessionCompaction(session),
+        },
+        {
+          name: 'exit',
+          description: 'Exit the CLI session',
+          aliases: ['quit'],
+          category: 'session',
+          echo: 'never',
+          handler: (_remainder, context) =>
+            Effect.sync(() => {
+              // Deliberately does NOT interrupt: the graceful teardown owns
+              // that policy and skips the interrupt for a resumable-idle root,
+              // so `/exit` agrees with Ctrl-C by construction instead of
+              // pre-empting it.
+              //
+              // `stopRequested` stays and is the sole writer on this path. The
+              // teardown awaits the follow-up queue's `idle` BEFORE setting the
+              // flag itself, and the queued task polls this flag — dropping it
+              // would hang `/exit` forever with a follow-up queued and no
+              // stream id yet.
+              context.session.stopRequested = true;
+              context.requestInputExit();
+            }),
+        },
+      ],
+    },
+  ];
 }

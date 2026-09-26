@@ -557,7 +557,9 @@ describe('a parked child run', () => {
         const session = quietSession();
         const runId = startedRun(session);
         if (queued) {
-          yield* enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
+          yield* enqueue(session, runId, [
+            { text: 'later', from: { kind: 'user' as const } },
+          ]);
         }
 
         const { fiber, park, requests } = yield* forkLoop({
@@ -596,7 +598,7 @@ describe('a parked child run', () => {
           type: 'followup.queued' as const,
           aggregateId: rowAggregate(runId),
           followUpId: 'follow-up-1',
-          content: { text: asked, origin: 'user' as const },
+          content: { text: asked, from: { kind: 'user' as const } },
         };
         session.publish([queued]);
         yield* session.settlePublications();
@@ -611,7 +613,9 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.ledger.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(session.pendingFollowUps(runId)).toEqual([]);
+        expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
+          [],
+        );
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
@@ -662,7 +666,7 @@ describe('a parked root run', () => {
         const runId = startedRun(session);
         const onIdle = vi.fn();
         yield* enqueue(session, runId, [
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -786,7 +790,9 @@ describe('a parked root run', () => {
         script: [textTurn('first'), textTurn('second')],
       });
       yield* park(0);
-      yield* enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
+      yield* enqueue(session, runId, [
+        { text: 'carry on', from: { kind: 'user' as const } },
+      ]);
       yield* park(1);
       yield* Fiber.interrupt(fiber);
 
@@ -832,7 +838,7 @@ describe('a parked root run', () => {
       yield* enqueue(session, runId, [
         {
           text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
-          origin: 'subagent_result',
+          from: { kind: 'run' as const, runId: child },
         },
       ]);
       const recorded = recordSessionEvents(session);
@@ -895,6 +901,9 @@ describe('the batch a parked run consumes', () => {
       Effect.gen(function* () {
         const session = quietSession();
         const runId = startedRun(session);
+        const reporter = publishTestRunStart(session, undefined, {
+          parent: runId,
+        });
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
         // A progress notice whose child has since ended is consumed, never
@@ -913,13 +922,16 @@ describe('the batch a parked run consumes', () => {
         yield* enqueue(session, runId, [
           {
             text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
-            origin: 'subagent_result',
+            from: { kind: 'run' as const, runId: child },
           },
           {
             text: '<subagent-result>done</subagent-result>',
-            origin: 'subagent_result',
+            from: { kind: 'run' as const, runId: reporter },
           },
-          { text: 'please revise the theorem', origin: 'user' },
+          {
+            text: 'please revise the theorem',
+            from: { kind: 'user' as const },
+          },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -990,6 +1002,7 @@ describe('the batch a parked run consumes', () => {
       const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
       const session = quietSession();
       const runId = startedRun(session);
+      const child = publishTestRunStart(session, undefined, { parent: runId });
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
       yield* enqueue(session, runId, [
@@ -1000,7 +1013,7 @@ describe('the batch a parked run consumes', () => {
             `<workflow-summary>${escaped}</workflow-summary>`,
             '</workflow-script-result>',
           ].join('\n'),
-          origin: 'subagent_result',
+          from: { kind: 'run' as const, runId: child },
         },
       ]);
 
@@ -1033,7 +1046,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'please inspect this figure',
             mediaFiles: ['/tmp/texra-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -1074,7 +1087,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'use this diagram',
             mediaFiles: ['/tmp/texra-unreadable-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -1094,7 +1107,9 @@ describe('the batch a parked run consumes', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
         expect(
-          session.pendingFollowUps(runId).map((f) => f.content.text),
+          session.events
+            .pendingFollowUps(rowAggregate(runId))
+            .map((f) => f.content.text),
         ).toEqual(['use this diagram']);
       }),
   );
@@ -1141,7 +1156,7 @@ describe('an active goal at the wait', () => {
       const runId = startedRun(session);
       yield* startGoal(session, runId, 'Keep going autonomously.');
       yield* enqueue(session, runId, [
-        { text: 'user correction', origin: 'user' },
+        { text: 'user correction', from: { kind: 'user' as const } },
       ]);
 
       try {
@@ -1229,7 +1244,7 @@ describe('an active goal at the wait', () => {
           });
           const recorded = recordSessionEvents(session);
           yield* enqueue(session, runId, [
-            { text: 'try the other lemma', origin: 'user' },
+            { text: 'try the other lemma', from: { kind: 'user' as const } },
           ]);
 
           const recovered = yield* forkLoop({

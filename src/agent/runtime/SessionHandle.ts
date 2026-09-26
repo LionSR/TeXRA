@@ -74,7 +74,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
-import { foldRunRows, type QueuedFollowUp } from '@shared/session/runRows';
+import { foldRunRows } from '@shared/session/runRows';
 import type {
   Append,
   OpenWork,
@@ -331,13 +331,15 @@ export class SessionHandle {
     this.inputs = graph.inputs;
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
+    const run = (runId: RunId) => qualifyAggregateId('run', runId);
     this.followUps = new ToolUseFollowUpQueue({
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(() => job),
-      pending: (runId) => this.pendingFollowUps(runId),
-      rows: (runId) => graph.aggregateRows(qualifyAggregateId('run', runId)),
-      acquireClaim: (runId) =>
-        this.acquireClaims(qualifyAggregateId('run', runId)),
+      pending: (runId) => graph.events.pendingFollowUps(run(runId)),
+      parentOf: (runId) =>
+        SubscriptionRef.getUnsafe(graph.view).runs.get(runId)?.parentId,
+      rows: (runId) => graph.aggregateRows(run(runId)),
+      acquireClaim: (runId) => this.acquireClaims(run(runId)),
     });
     this.modelRetries = init.modelRetries;
     this.responseTextProcessing =
@@ -662,12 +664,6 @@ export class SessionHandle {
    *  what the host exit closes. Read after this run's publications settled. */
   openWork(runId: RunId): readonly OpenWork[] {
     return this.events.openWork(qualifyAggregateId('run', runId));
-  }
-
-  /** The run's pending follow-ups, in commit order
-   *  (`SessionEvents.pendingFollowUps`). */
-  pendingFollowUps(runId: RunId): readonly QueuedFollowUp[] {
-    return this.events.pendingFollowUps(qualifyAggregateId('run', runId));
   }
 
   /**

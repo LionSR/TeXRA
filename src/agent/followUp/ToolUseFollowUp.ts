@@ -104,10 +104,6 @@ export function presentFollowUpResult(
 
 const CHANNEL = 'ToolUseFollowUp';
 
-export function notifyFollowUpSent(runId: RunId, session: SessionHandle): void {
-  session.followUps.notifySent(runId);
-}
-
 /**
  * Wake a recovery lease whose follow-up row is already durable. The wake
  * owns its settlement: a declined or faulted attempt releases the lease here,
@@ -184,11 +180,9 @@ function admitFollowUp(
         (submission): Admission => {
           if (submission.kind === 'duplicate') return { status: 'sent' };
           if (submission.kind === 'delivered_live') {
-            if (options.mode === 'live_notification') {
-              return { status: 'queued' };
-            }
-            notifyFollowUpSent(runId, ownerSession);
-            return { status: 'sent' };
+            return {
+              status: options.mode === 'live_notification' ? 'queued' : 'sent',
+            };
           }
           if (submission.kind === 'queued') return { status: 'queued' };
           // The queue is the only way in. A refusal here means another process
@@ -298,11 +292,10 @@ const classifyRefusal = Effect.fn('classifyRefusal')(function* (
 
 export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
-  followUp: FollowUpQueueInput | string,
+  item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
 ): Effect.fn.Return<SubmitFollowUpResult, Error, AgentResume> {
   const ownerSession = options.session;
-  const item = typeof followUp === 'string' ? { text: followUp } : followUp;
   // A host callback must not be able to strand the recovery lease below:
   // its failure is the host's to log, never this boundary's to propagate.
   const notifyAdmitted = (admitted: boolean) =>

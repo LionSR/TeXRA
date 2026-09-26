@@ -585,7 +585,7 @@ export const createHostRunActions = (
         const deliver = Effect.gen(function* () {
           const result = yield* submitFollowUp(
             runId,
-            { text },
+            { text, from: { kind: 'user' } },
             { session },
           ).pipe(
             Effect.catch((error) =>

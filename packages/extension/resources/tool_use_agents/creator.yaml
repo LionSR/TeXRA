@@ -75,8 +75,8 @@ prompts:
        `execution_and_testing.md`: a workflow agent via
        `delegate_workflow` on a tiny `.tex` test input you create; a
        tool-use agent via `delegate_agent` with a short smoke
-       instruction (resume with the returned `execution_id` if
-       needed). Inspect the result and report pass/fail.
+       instruction (send follow-ups with the `executions` tool's
+       `send` action on the returned run ID if needed). Inspect the result and report pass/fail.
     6. **Iterate.** Use `edit_file` on the custom YAML to fix malformed
        YAML, missing tools, or unclear prompts, then re-test.
     7. **Hand off.** Summarise what was created and where. The user

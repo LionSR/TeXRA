@@ -87,12 +87,15 @@ export function formatRunStatus(run: RunView): string {
 }
 
 /** Format one run as a listing line. */
-export function formatListingLine(run: RunView): string {
+/** One /executions line. `marks` is what the line says about the run
+ *  relative to the caller: its relation and unread input. */
+export function formatListingLine(run: RunView, marks: string): string {
   const ts = formatTimestamp(new Date(run.launchedAt).toISOString());
   const modelTag = run.model === null ? '' : `  ${run.model}`;
   const parentSuffix = run.parentId === null ? '' : `  parent=${run.parentId}`;
+  const markSuffix = marks ? `  ${marks}` : '';
   const descSuffix = run.description ? `: ${run.description}` : '';
-  return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${descSuffix}`;
+  return `${run.id}  ${ts}  ${run.label}  ${runDisplayCategory(run)}${modelTag}  [${formatRunStatus(run)}]${parentSuffix}${markSuffix}${descSuffix}`;
 }
 
 /** Format a single child run as a summary line. */

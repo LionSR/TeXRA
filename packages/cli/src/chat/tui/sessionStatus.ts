@@ -4,7 +4,7 @@ import {
   formatTexraApprovalPolicy,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { getModelLabel } from '@shared/model/modelLabel';
 import { BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { truncateSummary } from '@utils/text/stringUtils';
@@ -50,7 +50,7 @@ function queuedFollowUpStatusLines(messages: readonly string[]): string[] {
     ...messages.map(
       (message, index) =>
         `${index + 1}. ${truncateSummary(
-          summarizeFollowupMessage(message),
+          summarizeSubagentFollowup(message),
           QUEUED_FOLLOW_UP_STATUS_LENGTH,
         )}`,
     ),

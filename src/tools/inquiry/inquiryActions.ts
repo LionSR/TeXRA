@@ -222,7 +222,11 @@ export const recordInquiryDecision = Effect.fn('recordInquiryDecision')(
     // and re-delivering after one it did is a no-op.
     const result = yield* submitFollowUp(
       parentRunId,
-      { text, deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}` },
+      {
+        text,
+        from: { kind: 'user' },
+        deliveryId: `inquiry:${threadId}:${lastTurn.turnIndex}`,
+      },
       { session },
     );
     if (result.status === 'failed') {

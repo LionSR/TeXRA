@@ -1041,7 +1041,14 @@ describe('sessionFold', () => {
       row(commit, {
         type: 'followup.queued',
         followUpId,
-        content: { text, origin: 'subagent_result' },
+        content: {
+          text,
+          from: {
+            kind: 'run' as const,
+            runId: 'c41dc41dc41d' as RunId,
+            relation: 'child' as const,
+          },
+        },
       });
     const view = foldAll(
       [

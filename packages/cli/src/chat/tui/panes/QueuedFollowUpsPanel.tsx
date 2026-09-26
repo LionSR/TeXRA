@@ -6,7 +6,7 @@ import {
   textDisplayWidth,
   truncateSummaryToWidth,
 } from '@cli/runtime/terminalText';
-import { summarizeFollowupMessage } from '@shared/subagentFollowup';
+import { summarizeSubagentFollowup } from '@shared/subagentFollowup';
 import { pluralize } from '@utils/text/stringUtils';
 
 const QUEUED_FOLLOW_UP_PANEL_MAX_ROWS = 3;
@@ -63,7 +63,7 @@ export function queuedFollowUpPanelDisplay({
       return {
         kind: 'message',
         text: `${prefix}${truncateSummaryToWidth(
-          summarizeFollowupMessage(message),
+          summarizeSubagentFollowup(message),
           bodyColumns,
         )}`,
       };

@@ -286,7 +286,7 @@ describe('desktop process resume owner', () => {
         const flow = harness.session.followUps.claimLive(runId, 'flow')!;
         yield* harness.session.followUps.submit(
           runId,
-          { text: 'keep this queued' },
+          { from: { kind: 'user' as const }, text: 'keep this queued' },
           'live_owner',
         );
         harness.session.followUps.release(flow, 'recoverable');
