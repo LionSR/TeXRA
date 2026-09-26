@@ -5,7 +5,8 @@ status: proposed
 
 # Core concepts: thirteen nouns, one owner each, laid out on Effect lifetimes
 
-Baseline: `origin/main` at `4311c54176`. This note defines the vocabulary the
+Baseline: `origin/main` at `4311c54176`, **with #13359 assumed merged** (see
+"Assumes #13359"). This note defines the vocabulary the
 rest of the architecture is checked against. It does not replace
 [the session-core programme](./2026-09-26-effect-native-session-core.md) (#13350).
 Each of that programme's moves fixes the owner of one concept below, and this
@@ -244,6 +245,28 @@ behavior rather than structure:
 | 8   | The composition key depends on a module cache, and the CLI never probes                                                                         | `toolAvailability.ts:174,347`                                                                                | 7         |
 | 9   | The CLI rewrites a run's outcome after its terminal decision                                                                                    | `packages/cli/src/commands/workflow.ts:375-414`                                                              | 8         |
 | 10  | One skill project's roots may widen the file allowlist for every session (inferred)                                                             | `externalRoots.ts:68`, `runtimeSkills.ts:235`                                                                | 4         |
+
+## Assumes #13359
+
+#13359 ("retire seven dual systems and pass-through layers from the
+2026-09-26 debt audit") is taken as merged. It settles or narrows these items
+in the concept model and the audit:
+
+| Concept                  | What #13359 settles                                                                                                                                                                                       | Still open after it                                                                                                                                           |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| History (claim)          | `runLiveness.ts` is deleted, so the aggregate claim is the only liveness authority (`probeChild`, `claimStanding`)                                                                                        | the three claim doors; the follow-up leases as second in-process owners (move 10)                                                                             |
+| Run (child edge)         | `ChildRunPort` is the one child-run handle contract; the dead `createChildRun` fields, the `childRunId` echo and the `registerChildRun` forward are gone                                                  | the launch door (R2); lineage vs supervision                                                                                                                  |
+| Call (model)             | `Model.generateTurn` is gone, so `completedTurn(streamTurn(...))` is the one turn path. Subscription providers are data: one `SubscriptionOAuthError`, and policies carrying their token endpoint.        | compaction and `helperModel` bypassing `ModelInvoker`; the retry gate's scope (move 8)                                                                        |
+| Trace (producer of rows) | `AgentTrace` keeps `emit` and its real producer surface; the six sugar emitters are gone, so #13350 move 7 PR 4 has nothing left to rename                                                                | stage, stream and card lifetimes (move 7 PRs 1–3)                                                                                                             |
+| Process (module slots)   | the first-call-wins `getCliSecrets` singleton is deleted; the extension serves `AgentDirectories` as a layer; `bootstrapHost` reads `host` and `secrets` from the runtime's `SetupPlatform` and `Secrets` | the rest of the roughly 30 slots, including `initProcessSettingHost`, the `agentDirectories` watcher singleton, skills, the catalog and `AppSignals` (move 4) |
+| Host                     | the Tools and LaTeX settings pages have one shared body (`settingsToolCommands.ts`), so the plugin-toggle side effect is no longer restated by the extension and desktop                                  | the CLI toggle path; the five per-host decisions (Request)                                                                                                    |
+| Output (documents)       | one `runDiff` entry for latexdiff; the duplicate host verbs and wrappers are gone                                                                                                                         | presentation from facts (move 13)                                                                                                                             |
+
+Two audit findings #13359 left for owner decisions are the same as this
+note's open requests:
+
+- follow-ups to an interrupted run, which is #13350 decision 8;
+- one approval-policy authority, which is #13350 decision 7 and invariant 8.
 
 ## Enforcement
 
