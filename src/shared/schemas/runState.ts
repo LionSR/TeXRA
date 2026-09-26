@@ -9,7 +9,7 @@ import { roundIndexedRecord } from './roundIndexed';
 const RoundStageSchema = z.object({
   /** Zero-based round/turn index. */
   index: z.int().nonnegative(),
-  /** Planned total, when known. Reflection workflows set this. */
+  /** Planned total, when known. Workflow rounds set this. */
   total: z.int().positive().optional(),
 });
 

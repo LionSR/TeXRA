@@ -466,7 +466,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       phase: null,
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
       lastError: null,
@@ -482,7 +481,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
-      overflowRecoveredAt: null,
+      overflowRecoveredAtTurn: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -492,12 +491,9 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         phase: 'model.ready',
         turn: 1,
         state: {
-          family: 'toolUse',
-          state: {
-            stateSlices: null,
-            offeredTools: [],
-            toolsetHash: '0'.repeat(64),
-          },
+          stateSlices: null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
         },
       }),
     ]);

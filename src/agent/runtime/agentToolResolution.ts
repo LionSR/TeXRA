@@ -4,8 +4,8 @@
  * A run's tools come from its composition (`@tools/composition`), a value:
  * the plugins still on (the user's dashboard switches and the dependency
  * probes applied), the host and approval gates, the agent's declared tools
- * and the tools the manifest injects while their setting is on (none for
- * reflection; none of a plugin that is off). The run pins its composition
+ * and the tools the manifest injects while their setting is on (none for a
+ * workflow run; none of a plugin that is off). The run pins its composition
  * in the process's `Compositions` for the scope it resolves in (the run's),
  * or joins the one its parent pinned: a delegated child's plugins are its
  * parent's, whatever the switches say now. A child only narrows its parent:
@@ -91,7 +91,8 @@ interface ResolveAgentToolsInput {
   host: SettingHost | undefined;
   /** Tools only this run holds, laid over the resolved list (step 4). */
   runTools?: readonly ITool[];
-  /** Whether the manifest's injected tools join (step 2); not for reflection. */
+  /** Whether the manifest's injected tools join (step 2); not for a workflow
+   *  run. */
   injectTools: boolean;
   /**
    * The run's stores: the session's three setting slots, which the injections'

@@ -21,7 +21,6 @@ import {
   RunUsageTotalsSchema,
   requestParksItsCaller,
   type CommitOrdinal,
-  type FlowSnapshotPayload,
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
@@ -98,24 +97,13 @@ export class RunLedgerInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The family state a `flow.snapshot` restores, keyed by its family. */
-const FlowStateSchema = FlowSnapshotPayloadSchema.options.map((arm) =>
-  arm.pick({ family: true, state: true }),
-);
-type FlowState = z.output<(typeof FlowStateSchema)[number]>;
+/** The flow state a `flow.snapshot` restores. */
+const FlowStateSchema = FlowSnapshotPayloadSchema.pick({
+  family: true,
+  state: true,
+});
+type FlowState = z.output<typeof FlowStateSchema>;
 type Message = z.output<typeof MessageSchema>;
-
-/**
- * The family state of a snapshot, keeping the family/state correlation. The
- * two arms are spelled out deliberately, though the text is the same: the
- * test narrows the discriminated payload so that `state` keeps the arm its
- * `family` names. Collapsing them widens the pair to a shape `FlowState`
- * does not accept, so the identical arms are load-bearing, not a leftover.
- */
-const flowOf = (p: FlowSnapshotPayload): FlowState =>
-  p.family === 'toolUse'
-    ? { family: p.family, state: p.state }
-    : { family: p.family, state: p.state };
 
 type OpenAttempt = {
   readonly invocation: InvocationRef;
@@ -188,8 +176,9 @@ export type RunState = RunPosition & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** Where the last `context-window` compaction (one per round) landed. */
-  readonly overflowRecoveredAt: Pick<RunPosition, 'round' | 'turn'> | null;
+  /** The turn the last `context-window` compaction (one per round) landed
+   *  in. */
+  readonly overflowRecoveredAtTurn: number | null;
   readonly flow: FlowState | null;
 };
 
@@ -252,7 +241,7 @@ const IGNORED_ROW_TYPES: Readonly<
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
 /** The state a run starts from: every field at its zero, no family bound
- *  yet. Both run programs open from this and stamp their own family. */
+ *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
   commit,
@@ -272,7 +261,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
-  overflowRecoveredAt: null,
+  overflowRecoveredAtTurn: null,
 });
 
 /**
@@ -349,7 +338,7 @@ function mutate(
 
 /**
  * Apply a settlement's operations over the run's mutable slices, `usage` and
- * the family `state`, and re-validate both through their schemas so the
+ * the flow `state`, and re-validate both through their schemas so the
  * state stays typed without a cast.
  */
 function applyMutations(
@@ -378,23 +367,16 @@ function applyMutations(
   }
   if (state.flow === null) {
     if (document.state !== null) {
-      return refuse('invalid-mutation', 'no family state to mutate', commit);
+      return refuse('invalid-mutation', 'no flow state to mutate', commit);
     }
     return Result.succeed({ ...state, usage: usage.data });
   }
-  const arm = FlowStateSchema.find(
-    (candidate) => candidate.shape.family.value === state.flow?.family,
-  );
-  const flow = arm?.safeParse({
+  const flow = FlowStateSchema.safeParse({
     family: state.flow.family,
     state: document.state,
   });
-  if (flow === undefined || !flow.success) {
-    return refuse(
-      'invalid-mutation',
-      flow === undefined ? 'unknown family' : flow.error.message,
-      commit,
-    );
+  if (!flow.success) {
+    return refuse('invalid-mutation', flow.error.message, commit);
   }
   return Result.succeed({ ...state, usage: usage.data, flow: flow.data });
 }
@@ -457,20 +439,17 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
   }
   switch (row.type) {
     case 'flow.snapshot': {
-      // Family state and the coordinates the loop owns, and nothing else: no
+      // Flow state and the coordinates the loop owns, and nothing else: no
       // reference set to reconcile, so there is no way for a snapshot to
       // disagree with the rows below it (single-owner note, section 3.3).
       const p = row.payload;
       const state = current ?? freshRunState(commit);
-      if (state.family !== null && state.family !== p.family) {
-        return refuse('out-of-order', 'a snapshot of another family', commit);
-      }
       return Result.succeed({
         ...advance(state),
         snapshotCommit: commit,
         family: p.family,
         ...p.runtime,
-        flow: flowOf(p),
+        flow: { family: p.family, state: p.state },
       });
     }
     case 'model.message': {
@@ -627,9 +606,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
         ...(p.cause === 'context-window'
-          ? {
-              overflowRecoveredAt: { round: current.round, turn: current.turn },
-            }
+          ? { overflowRecoveredAtTurn: current.turn }
           : {}),
       });
     }

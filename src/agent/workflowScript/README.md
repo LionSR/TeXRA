@@ -14,9 +14,9 @@ under `runKind: 'multiAgentWorkflow'`; each `agent()` invocation in that script 
 a **workflow call**. A **task run** is the host's stored execution record (and a
 **background task** is host-managed asynchronous work), not a workflow call.
 A trace **stage** is a generic grouping construct. Script **phases** and
-reflection **rounds** are distinct typed stage kinds with different semantics:
-phases group calls for progress display, while rounds delimit repeated
-reflection iterations.
+workflow-agent **rounds** are distinct typed stage kinds with different
+semantics: phases group calls for progress display, while rounds delimit a
+workflow agent's repeated revision turns.
 
 ## Shape
 

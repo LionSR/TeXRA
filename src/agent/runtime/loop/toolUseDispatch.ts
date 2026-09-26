@@ -65,7 +65,6 @@ import {
   appendRow,
   bindingRow,
   displayRow,
-  familyState,
   redactedForFact,
   rowAggregate,
   snapshotRow,
@@ -282,8 +281,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    const flow = familyState(state, 'toolUse');
-    if (flow === null || flow.stateSlices === null) return [];
+    if (state.flow?.state.stateSlices == null) return [];
     return [
       {
         op: 'set',
@@ -948,8 +946,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = familyState(settledState, 'toolUse');
-  if (flow === null) {
+  const flow = settledState.flow?.state;
+  if (flow === undefined) {
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   }
   const stateSlices =
@@ -966,7 +964,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ...joined,
     snapshotRow(runId, state, {
       phase: 'results.ready',
-      state: { family: 'toolUse', state: { ...flow, stateSlices } },
+      state: { ...flow, stateSlices },
     }),
     stepRow(runId, state, 'results.ready'),
   ]);

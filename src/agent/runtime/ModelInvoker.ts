@@ -153,7 +153,7 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 export interface InvokeRequest {
   readonly system: string | undefined;
-  /** The tools this turn advertises; a reflection turn advertises none. */
+  /** The tools this turn advertises; a workflow round advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
   /** The turn's round ordinal, for debug file naming. */

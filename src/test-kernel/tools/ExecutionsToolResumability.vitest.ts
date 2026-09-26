@@ -23,7 +23,6 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
         phase: 'initial',
         round: 0,
         turn: 0,
-        continuationIndex: 0,
         modelId: 'test-model',
         modelCompatibilityKey: null,
         lastError: null,

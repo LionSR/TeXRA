@@ -44,11 +44,7 @@ import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { AgentRun } from '@agent/runtime/run/AgentRun';
 import { mediaInputParts, type InputPart } from '@agent/runtime/run/mediaInput';
-import {
-  familyState,
-  rowAggregate,
-  type ReflectionFlowState,
-} from '@agent/runtime/loop/rows';
+import { rowAggregate } from '@agent/runtime/loop/rows';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import { logUserMessage } from '@agent/trace';
 import { LatexMediaManager } from '@latex/LatexMediaManager';
@@ -60,14 +56,12 @@ import {
 } from '@shared/constants/workflowOutput';
 import {
   fileLocationDisplayPath,
-  isTerminalCompileRejection,
   MESSAGE_TYPES,
   OUTPUT_END_TAG,
   type AgentFileLocation,
   type CompileFailure,
   type CompileResult,
   type FileLocation,
-  type RoundOutput,
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
@@ -160,27 +154,30 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       recover: () => Effect.void,
     });
 
-  let workspace = AgentWorkspaceState.create();
   /** Where each base file's pre-run content lives, as `prepareRunWorkspace`
    *  decided it: every round diffs against these, never the live file an
    *  in-place round overwrote. */
   let diffBaseFiles = baseFiles;
-  let rejectedFailures: readonly CompileFailure[] = []; // round mode, resumed
-  // The round budget and the compile-rejection facts no row carries.
-  let flow: ReflectionFlowState = {
-    totalRounds,
-    workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-  };
+  /** A resumed run's rejected round's failures, which `enter` turns into the
+   *  next prompt's context. */
+  let rejectedFailures: readonly CompileFailure[] = [];
+  /** The compile-rejection facts no row carries: the one-shot feedback the
+   *  next round's prompt carries, and a rejected compile awaiting an
+   *  explicit successful one. */
+  const compile: {
+    compileFailureContext?: string;
+    unresolvedCompileRejection?: boolean;
+  } = {};
   /** Disabling rejection is an explicit acceptance decision. */
   const normalizeCompileRejectionPolicy = Effect.fn(function* () {
     if (
       (yield* getRejectOnCompileFailure()) ||
-      (!flow.unresolvedCompileRejection && !flow.compileFailureContext)
+      (!compile.unresolvedCompileRejection && !compile.compileFailureContext)
     ) {
       return;
     }
-    delete flow.unresolvedCompileRejection;
-    delete flow.compileFailureContext;
+    delete compile.unresolvedCompileRejection;
+    delete compile.compileFailureContext;
   });
 
   /** The files a round works on: inputs first, then the previous outputs. */
@@ -200,7 +197,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
     round: number,
   ): Effect.fn.Return<InputPart[], Error, RoundServices> {
     const bound = yield* SynchronizedRef.get(run.model);
-    workspace = AgentWorkspaceState.create();
+    const workspace = AgentWorkspaceState.create();
     const files = filesForRound(round);
     const content: InputPart[] = [];
 
@@ -230,9 +227,9 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       const request = yield* promptBuilder.buildUserRequest(round);
       requestText = appendCompileFailureRoundContext(
         request,
-        flow.compileFailureContext,
+        compile.compileFailureContext,
       ).trim();
-      delete flow.compileFailureContext;
+      delete compile.compileFailureContext;
     }
 
     // Media: figures and PDFs of the round's files, plus the configured media
@@ -427,14 +424,11 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
         ? formatCompileFailureRoundContext(result.compileResult)
         : undefined;
       if (compileFailureContext) {
-        flow = {
-          ...flow,
-          compileFailureContext,
-          unresolvedCompileRejection: true,
-        };
+        compile.compileFailureContext = compileFailureContext;
+        compile.unresolvedCompileRejection = true;
       } else {
-        delete flow.compileFailureContext;
-        delete flow.unresolvedCompileRejection;
+        delete compile.compileFailureContext;
+        delete compile.unresolvedCompileRejection;
       }
     }
   });
@@ -508,22 +502,14 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
 
   return {
     totalRounds,
-    /** Restore a resumed run's outputs and rejection facts; the configured
-     *  total wins, so a YAML change (rounds: 2 -> 1) takes effect. Round mode
-     *  hands in the rejection its rows show, with the failures `enter` turns
-     *  into the next prompt's context. */
+    /** Restore a resumed run's outputs and the rejection its rows show,
+     *  with the failures `enter` turns into the next prompt's context. */
     restore: (
       state: RunState,
       rejection: { readonly failures: readonly CompileFailure[] } | null,
     ): void => {
-      const persisted = familyState(state, 'reflection');
-      if (persisted !== null) {
-        flow = { ...persisted, totalRounds };
-        workspace = AgentWorkspaceState.fromSnapshot(
-          persisted.workspaceSnapshot,
-        );
-      } else if (rejection !== null) {
-        flow.unresolvedCompileRejection = true;
+      if (rejection !== null) {
+        compile.unresolvedCompileRejection = true;
         rejectedFailures = rejection.failures;
       }
       outputState.rounds = roundsFromPersisted(state.roundOutputs);
@@ -550,28 +536,21 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
       // The next prompt says why the latest round was rejected, from the
       // logs its check wrote; a rerun of that round replaces it.
       const context = yield* failureContextFromLogs(rejectedFailures, logger);
-      if (context !== undefined) flow.compileFailureContext = context;
+      if (context !== undefined) compile.compileFailureContext = context;
       yield* normalizeCompileRejectionPolicy();
     }),
     nextRound,
     afterTurn,
     /** Whether ending at `round` leaves a compile rejection unresolved under
-     *  the current policy. */
+     *  the current policy: the last round's compile was rejected and no
+     *  round is left to fix it. */
     rejected: (round: number) =>
-      Effect.map(normalizeCompileRejectionPolicy(), () =>
-        isTerminalCompileRejection(flow, round),
+      Effect.map(
+        normalizeCompileRejectionPolicy(),
+        () =>
+          compile.unresolvedCompileRejection === true &&
+          round + 1 >= totalRounds,
       ),
-    /** The reflection snapshot's family state: the flow facts and the round's
-     *  media workspace. */
-    flowState: (): ReflectionFlowState => ({
-      ...flow,
-      workspaceSnapshot: workspace.toSnapshot({ excludeAssemblyStrings: true }),
-    }),
-    /** A round was entered: its media workspace starts empty. */
-    resetWorkspace: (): void => {
-      workspace = AgentWorkspaceState.create();
-    },
-    outputs: (): RoundOutput[] => roundsToPersisted(outputState),
   };
 });
 
