@@ -78,6 +78,12 @@ All notable changes to this project will be documented in this file.
   old form stop with a message saying how to rewrite them; calls they already
   completed are reused once the lead reruns the rewritten script under the
   same name.
+- **Workflow agents no longer continue a response cut off by the output
+  limit** — a round whose response hits the model's max output tokens keeps
+  what the model wrote and processes it as that round's output, and the
+  transcript warns that it may be incomplete. Raise the model's max output
+  tokens if a long document gets cut off. The extra helper-model call that
+  joined continued pieces is gone with it.
 
 - **OpenRouter models now run through the official OpenRouter SDK, with
   fewer response details.** Requests over the OpenRouter route
