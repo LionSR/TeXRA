@@ -588,7 +588,7 @@ export function setModelEnabled(input: {
     return yield* state
       .update(GlobalStateKey.MODEL_SELECTION, next)
       .pipe(Effect.as(nextEnabled));
-  }).pipe(withStateKeyLane(input.state, GlobalStateKey.MODEL_SELECTION));
+  }).pipe(withStateKeyLane(GlobalStateKey.MODEL_SELECTION));
 }
 
 /**

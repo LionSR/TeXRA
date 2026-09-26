@@ -48,5 +48,5 @@ export function setToolEnabled(
       set.add(toolId);
     }
     return yield* store.update(GlobalStateKey.DISABLED_TOOLS, [...set]);
-  }).pipe(withStateKeyLane(store, GlobalStateKey.DISABLED_TOOLS));
+  }).pipe(withStateKeyLane(GlobalStateKey.DISABLED_TOOLS));
 }
