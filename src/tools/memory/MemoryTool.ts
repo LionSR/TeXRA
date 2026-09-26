@@ -17,7 +17,7 @@ import { replaceLiteralMatches } from '@tools/fileEditFlow';
 import {
   deleteMemoryPath,
   memoryPathExists,
-  onMemoryFileLane,
+  onMemoryFileLanes,
   readMemoryFile,
   renameMemoryPath,
   setMemoryPinned,
@@ -182,8 +182,11 @@ function executeMemoryTool(
       agentName:
         runId === undefined ? undefined : runs.getHandle(runId)?.agentName,
     } satisfies MemoryInvocation;
-    const target = input.command === 'rename' ? input.old_path : input.path;
-    return yield* run(input, invocation).pipe(onMemoryFileLane(target));
+    const touched =
+      input.command === 'rename'
+        ? [input.old_path, input.new_path]
+        : [input.path];
+    return yield* run(input, invocation).pipe(onMemoryFileLanes(touched));
   }).pipe(Effect.catchTag('PlatformError', (error) => Effect.die(error)));
 }
 

@@ -45,7 +45,7 @@ import {
   setPinnedMeta,
   type MemoryFileMeta,
 } from '@tools/memory/memoryMeta';
-import { onFileLane } from '@utils/files/fileLanes';
+import { onFileLanes } from '@utils/files/fileLanes';
 import { pathExists, readNormalizedFile } from '@utils/files/fsDurability';
 import {
   normalizeLineEndings,
@@ -107,27 +107,32 @@ export const readMemoryFile = Effect.fn('memoryFileSystem.readMemoryFile')(
 );
 
 /**
- * Run a memory command on its file's lane (`onFileLane`): memory is storage
- * parallel runs edit at once, and each edit rewrites the file whole. A path
- * that names no memory file takes no lane; the command refuses it.
+ * Run a memory command on the lanes of the files it touches (`onFileLanes`):
+ * memory is storage parallel runs edit at once, and each edit rewrites a file
+ * whole. A path that names no memory file takes no lane; the command
+ * refuses it.
  */
-export function onMemoryFileLane(displayPath: string | null | undefined) {
+export function onMemoryFileLanes(
+  displayPaths: readonly (string | null | undefined)[],
+) {
   return <A, E, R>(
     self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R | StorageFs> => {
-    const storage =
-      displayPath == null
-        ? undefined
-        : Result.getOrUndefined(
-            Result.try(() => displayToStoragePath(displayPath)),
-          );
-    if (storage === undefined) return self;
-    return Effect.flatMap(StorageFs, ({ root }) =>
+  ): Effect.Effect<A, E, R | StorageFs | FileSystem.FileSystem> =>
+    Effect.flatMap(StorageFs, ({ root }) =>
       root === undefined
         ? self
-        : self.pipe(onFileLane(path.join(root, storage))),
+        : self.pipe(
+            onFileLanes(
+              displayPaths.flatMap((display) => {
+                if (display == null) return [];
+                const storage = Result.try(() => displayToStoragePath(display));
+                return Result.isSuccess(storage)
+                  ? [path.join(root, storage.success)]
+                  : [];
+              }),
+            ),
+          ),
     );
-  };
 }
 
 /** Write one memory file atomically, frontmatter first. */

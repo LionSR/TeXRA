@@ -11,7 +11,7 @@ import { ToolCall } from '@agent/runtime/ToolCall';
 import { WorkspaceFs } from '@platform/rootedFs';
 import { ToolError } from '@shared/schemas';
 import { recordToolFileRead } from '@tools/fileInteractions';
-import { onFileLane } from '@utils/files/fileLanes';
+import { onFileLanes } from '@utils/files/fileLanes';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { applyPatchToText } from '@utils/text/diff';
@@ -24,13 +24,13 @@ interface WriteApprovedContentResult {
 /**
  * The approved edit no longer applies: the file changed on disk while the
  * edit waited for approval (another run, a subagent, the user's editor), and
- * the three-way merge of the approved change onto that version failed.
- * Nothing was written.
+ * the three-way merge of the approved change onto that version failed, or the
+ * file was deleted. Nothing was written.
  */
 class ApprovedEditConflictError extends ToolError {
   constructor(path: string) {
     super(
-      `${path} changed on disk while this edit waited for approval, and the approved change no longer applies cleanly to the new content. Nothing was written. Re-read the file and redo the edit.`,
+      `${path} changed on disk or was deleted while this edit waited for approval, so the approved change no longer applies. Nothing was written. Re-read the file and redo the edit.`,
       { summary: `Edit conflict: ${path}` },
     );
   }
@@ -45,7 +45,7 @@ class ApprovedEditConflictError extends ToolError {
  * workspace-relative path through the session's confined `WorkspaceFs` view,
  * an already-absolute one (an external root, a worktree) through the process
  * `FileSystem`. The read, the merge and the write hold the file's lane
- * (`onFileLane`), and a merge that fails is an
+ * (`onFileLanes`), and a merge that fails is an
  * {@link ApprovedEditConflictError} rather than a write of the approved
  * content over the concurrent change.
  */
@@ -70,6 +70,11 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
       const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
+      // A file that had content when the edit was proposed and is gone now
+      // was deleted meanwhile: recreating it would undo that deletion.
+      if (!exists && originalContent !== '') {
+        return yield* Effect.fail(new ApprovedEditConflictError(path));
+      }
       if (
         exists &&
         (baseContent === finalContent || originalContent === finalContent)
@@ -90,7 +95,7 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       }
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent, baseContent };
-    }).pipe(onFileLane(file));
+    }).pipe(onFileLanes([file]));
     yield* recordToolFileRead(path);
     return written;
   },

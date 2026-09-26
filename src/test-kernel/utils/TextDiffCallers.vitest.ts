@@ -166,6 +166,24 @@ describe('shared text-diff caller fixtures', () => {
             readFile(fakePath('workspace/paper.tex'), 'utf-8'),
           ),
         ).toBe('rewritten\nby another\nwriter\n');
+
+        // So is a deletion: the approved content does not recreate the file.
+        yield* Effect.tryPromise(() => installFakePlatform({}));
+        const deleted = yield* approvedWriteConflict(
+          'paper.tex',
+          original,
+          final,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(deleted).toBeDefined();
+        expect(
+          yield* Effect.exit(
+            Effect.tryPromise(() => readFile(fakePath('workspace/paper.tex'))),
+          ),
+        ).toMatchObject({ _tag: 'Failure' });
       }),
   );
 });
