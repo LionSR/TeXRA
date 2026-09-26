@@ -473,40 +473,6 @@ const PROTOCOL_DESCRIPTORS: {
         config.name.startsWith('gpt5') || config.fullName.startsWith('gpt-5');
       const summary: 'auto' | null =
         !isGpt5 || gpt5ReasoningSummary ? 'auto' : null;
-      if (config.provider === ModelProvider.XAI) {
-        // xAI stores responses for 30 days and chains on their ids; it has
-        // no background mode, socket or `max` effort, and it always returns
-        // detailed reasoning, so no summary is requested.
-        const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
-        return {
-          ...base,
-          protocol: 'openai-responses',
-          background: 'unsupported',
-          supportsInputTokenEstimation: false,
-          supportsTemperature,
-          supportsMaxOutputTokens: true,
-          supportsStorage: true,
-          supportsResponseChaining: true,
-          supportsDocumentInput: capabilities.supportsNativePdf,
-          webSocketStreamParameter: 'implicit',
-          allowedReasoningEfforts: supportedEfforts.filter(
-            (value) => value !== ReasoningEffort.MAX,
-          ),
-          instructions: { kind: 'optional' },
-          continuationInheritsInstructions: true,
-          defaults: {
-            maxOutputTokens: controls.maxOutputTokens,
-            temperature: controls.temperature,
-            store: true,
-            parallelToolCalls: controls.parallelToolCalls,
-            reasoning:
-              capabilities.supportsReasoningEffort && xaiEffort !== null
-                ? { effort: xaiEffort, mode: null, summary: null }
-                : null,
-            serviceTier: null,
-          },
-        };
-      }
       if (credential.route === 'chatgpt-subscription') {
         let codexEffort: RouteEffort | null = effort;
         if (effort !== null && !CODEX_ALLOWED_EFFORTS.includes(effort)) {
@@ -548,10 +514,15 @@ const PROTOCOL_DESCRIPTORS: {
           },
         };
       }
+      // xAI stores and chains responses too, but has no background mode,
+      // `max` effort or summary control, and a chained request reuses the
+      // stored instructions.
+      const xai = config.provider === ModelProvider.XAI;
+      const routeEffort = xai && effort === ReasoningEffort.MAX ? null : effort;
       return {
         ...base,
         protocol: 'openai-responses',
-        background: 'supported',
+        background: xai ? 'unsupported' : 'supported',
         supportsInputTokenEstimation: false,
         supportsTemperature,
         supportsMaxOutputTokens: true,
@@ -560,10 +531,12 @@ const PROTOCOL_DESCRIPTORS: {
         supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length
-          ? [...supportedEfforts]
+          ? supportedEfforts.filter(
+              (value) => !xai || value !== ReasoningEffort.MAX,
+            )
           : ['low', 'medium', 'high'],
         instructions: { kind: 'optional' },
-        continuationInheritsInstructions: false,
+        continuationInheritsInstructions: xai,
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,
           temperature: controls.temperature,
@@ -574,9 +547,11 @@ const PROTOCOL_DESCRIPTORS: {
           parallelToolCalls: controls.parallelToolCalls,
           reasoning: capabilities.supportsReasoning
             ? {
-                effort: capabilities.supportsReasoningEffort ? effort : null,
+                effort: capabilities.supportsReasoningEffort
+                  ? routeEffort
+                  : null,
                 mode: capabilities.reasoningMode ?? null,
-                summary,
+                summary: xai ? null : summary,
               }
             : null,
           serviceTier: config.serviceTier ?? null,

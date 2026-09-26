@@ -41,7 +41,7 @@
     "packages/extension/src/settingsView/SettingsViewMessageHandler.ts": 538,
     "packages/llm/src/anthropicMessages.ts": 1094,
     "packages/llm/src/googleInteractions.ts": 1368,
-    "packages/llm/src/openaiChat.ts": 1391,
+    "packages/llm/src/openaiChat.ts": 1311,
     "packages/llm/src/openaiResponses.ts": 802,
     "packages/llm/src/openaiResponsesCodec.ts": 812,
     "packages/llm/src/openrouterChat.ts": 902,

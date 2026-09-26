@@ -21,6 +21,10 @@ import {
 } from './errors.js';
 import { openaiFailure } from './openaiError.js';
 import { parseInboundToolArguments, pullStream } from './transport.js';
+import {
+  ResponsesUsageSchema,
+  responsesUsage,
+} from './openaiResponsesUsage.js';
 
 // The codec is the lowest module of this split: the input lowering, the
 // request surface and the entry all name the response origin and the completed
@@ -44,8 +48,7 @@ const OutputItemSchema = z.discriminatedUnion('type', [
         z.strictObject({
           type: z.literal('output_text'),
           text: z.string(),
-          // Unsupported annotations/log probabilities cannot disappear in
-          // conversion; xAI reports absent log probabilities as `null`.
+          // Unsupported annotations/log probabilities cannot disappear in conversion.
           annotations: z.array(z.never()),
           logprobs: z.array(z.never()).nullish(),
         }),
@@ -145,20 +148,6 @@ export function agreesWithCompleted(
   return false;
 }
 
-const UsageSchema = z.object({
-  input_tokens: z.int().nonnegative(),
-  output_tokens: z.int().nonnegative(),
-  total_tokens: z.int().nonnegative(),
-  input_tokens_details: z
-    .object({ cached_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
-  output_tokens_details: z
-    .object({ reasoning_tokens: z.int().nonnegative().nullish() })
-    .nullish(),
-  // xAI's settled cost; only its receipts carry the key, and its
-  // `output_tokens` exclude the reasoning tokens it bills on top.
-  cost_in_usd_ticks: z.int().nonnegative().nullish(),
-});
 export const ResponseSchema = z.object({
   id: z.string().min(1),
   object: z.literal('response'),
@@ -172,7 +161,7 @@ export const ResponseSchema = z.object({
     'incomplete',
   ]),
   output: z.array(OutputItemSchema),
-  usage: UsageSchema.nullish(),
+  usage: ResponsesUsageSchema.nullish(),
   service_tier: z.string().nullish(),
   error: z.object({ code: z.string(), message: z.string() }).nullish(),
   incomplete_details: z
@@ -299,28 +288,7 @@ export const normalizeResponse = Effect.fn('llm.responses.normalizeResponse')(
         incompleteReason: response.incomplete_details?.reason ?? null,
       },
       usage: response.usage
-        ? {
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-            totalTokens: response.usage.total_tokens,
-            cachedInputTokens:
-              response.usage.input_tokens_details?.cached_tokens ?? null,
-            reasoningTokens:
-              response.usage.output_tokens_details?.reasoning_tokens ?? null,
-            ...(response.usage.cost_in_usd_ticks !== undefined
-              ? {
-                  providerUsage: {
-                    kind: 'xai',
-                    costInUsdTicks: response.usage.cost_in_usd_ticks,
-                    serviceTier:
-                      response.service_tier === 'default' ||
-                      response.service_tier === 'priority'
-                        ? response.service_tier
-                        : null,
-                  },
-                }
-              : {}),
-          }
+        ? responsesUsage(response.usage, response.service_tier)
         : null,
     });
     if (!result.success || result.data.providerResponseId === null) {

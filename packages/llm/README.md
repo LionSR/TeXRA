@@ -38,7 +38,7 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-Nineteen files, about 10 750 lines. No file exceeds 1 500 lines, and the
+Twenty files, about 10 300 lines. No file exceeds 1 500 lines, and the
 file-size ratchet holds every one of them at or under its current count.
 
 | File                          | What it owns                                                                                                                                              |
@@ -52,6 +52,7 @@ file-size ratchet holds every one of them at or under its current count.
 | `openaiChatChunks.ts`         | the OpenAI-compatible chunk vocabulary and the MiniMax-only decode helpers                                                                                |
 | `openaiResponses.ts`          | `openaiResponsesModel`, and the subpath's re-exports of the continuation and the WebSocket model                                                          |
 | `openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                             |
+| `openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                               |
 | `openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                |
 | `openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification, the input estimate                                                                            |
 | `openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                      |
