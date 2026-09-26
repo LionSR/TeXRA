@@ -24,6 +24,7 @@ import type {
   CliConfigExecuteResult,
 } from '@cli/runtime/executeCli';
 import { CliExitCode } from '@cli/runtime/exitCodes';
+import type { CheckpointRefinement } from '@cli/runtime/interruptedResumeHint';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
@@ -1399,19 +1400,25 @@ describe('CLI run command, workflow agents', () => {
         mockWorkflowRun(workflowRun('abc001'));
 
         yield* workflowProgram();
-        const canAdvertise =
+        const canAdvertise: CheckpointRefinement | undefined =
           mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot(
-              {},
-              {
-                lastError: { message: 'provider failed', userRetryable: true },
-              },
-            ),
-          }),
+          yield* canAdvertise!(
+            {
+              kind: 'checkpoint',
+              snapshot: reflectionSnapshot(
+                {},
+                {
+                  lastError: {
+                    message: 'provider failed',
+                    userRetryable: true,
+                  },
+                },
+              ),
+            },
+            'abc001' as RunId,
+          ),
         ).toBe(false);
       }),
   );
@@ -1423,26 +1430,32 @@ describe('CLI run command, workflow agents', () => {
         mockWorkflowRun(workflowRun('abc001'));
 
         yield* workflowProgram();
-        const canAdvertise =
+        const canAdvertise: CheckpointRefinement | undefined =
           mocks.executeCliConfig.mock.calls[0]?.[2].canAdvertiseInterruptedRun;
 
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot(
-              { totalRounds: 2, unresolvedCompileRejection: true },
-              { round: 1 },
-            ),
-          }),
+          yield* canAdvertise!(
+            {
+              kind: 'checkpoint',
+              snapshot: reflectionSnapshot(
+                { totalRounds: 2, unresolvedCompileRejection: true },
+                { round: 1 },
+              ),
+            },
+            'abc001' as RunId,
+          ),
         ).toBe(false);
         expect(
-          canAdvertise?.({
-            kind: 'checkpoint',
-            snapshot: reflectionSnapshot({
-              totalRounds: 2,
-              unresolvedCompileRejection: true,
-            }),
-          }),
+          yield* canAdvertise!(
+            {
+              kind: 'checkpoint',
+              snapshot: reflectionSnapshot({
+                totalRounds: 2,
+                unresolvedCompileRejection: true,
+              }),
+            },
+            'abc001' as RunId,
+          ),
         ).toBe(true);
       }),
   );

@@ -8,6 +8,7 @@
 import { Effect, FileSystem } from 'effect';
 
 import { debugInternal } from '@agent/trace';
+import { workflowOutputRoundDir } from '@shared/constants/workflowOutput';
 import type { FileLocation } from '@shared/schemas';
 
 import {
@@ -35,7 +36,14 @@ export const checkExpectedOutputs = Effect.fn(
       expected,
       (file) =>
         fs
-          .exists(deps.fileService.createLocation(file).absolutePath)
+          // The round writes its outputs into its own directory; the
+          // run-root entry of the same name is the workspace file, which
+          // exists only once an output has been delivered there.
+          .exists(
+            deps.fileService.createLocation(
+              `${workflowOutputRoundDir(currRound)}/${file}`,
+            ).absolutePath,
+          )
           .pipe(Effect.map((exists) => ({ file, exists }))),
       { concurrency: 'unbounded' },
     );

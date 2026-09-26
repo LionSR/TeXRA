@@ -30,9 +30,9 @@ import { createWorkbenchController } from './workbenchController';
 export function createProjectWorkbench(options: {
   session: string;
   surfaces: SessionSurfaces;
-  settingsView: HTMLElement;
   logsPane: HTMLElement;
   isActive(): boolean;
+  isBrowserCovered(): boolean;
   subagentsTemplate(): TemplateResult | typeof nothing;
   onLayoutChanged(
     session: string,
@@ -43,11 +43,7 @@ export function createProjectWorkbench(options: {
   const { session, surfaces } = options;
   const surface = surfaces.get(session);
   if (!surface) throw new Error(`No surface for project ${session}.`);
-  const restored = surface.surface$.get().workbench;
-  const layout =
-    restored === null
-      ? initialDesktopShellState()
-      : DesktopShellStateSchema.parse(restored);
+  const layout = restoredLayout(session, surface.surface$.get().workbench);
   surfaces.act(session, {
     kind: 'workbench',
     layout: {
@@ -126,12 +122,12 @@ export function createProjectWorkbench(options: {
   const workbench = createWorkbenchController({
     session,
     isActive: options.isActive,
+    isBrowserCovered: options.isBrowserCovered,
     editorPane,
     terminalPane,
     reviewPane,
     pdfPane,
     subagentsTemplate: options.subagentsTemplate,
-    settingsView: options.settingsView,
     logsPane: options.logsPane,
     getState,
     updateShell: updateState,
@@ -163,4 +159,20 @@ export function createProjectWorkbench(options: {
       reviewPane.clear();
     },
   };
+}
+
+/**
+ * The persisted layout, or a fresh one when there is none or it no longer
+ * parses (a tab kind this build does not have). The layout is view state, so
+ * an unreadable one is reset rather than failing the whole project, and the
+ * reset is logged with its cause.
+ */
+function restoredLayout(session: string, restored: unknown): DesktopShellState {
+  if (restored === null) return initialDesktopShellState();
+  const parsed = DesktopShellStateSchema.safeParse(restored);
+  if (parsed.success) return parsed.data;
+  console.warn(
+    `[desktop] resetting the unreadable workbench layout of ${session}: ${parsed.error.message}`,
+  );
+  return initialDesktopShellState();
 }

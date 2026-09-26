@@ -25,14 +25,13 @@ export const findBuildDirectories = Effect.gen(function* () {
     .filter((dir) => dir !== 'build')
     .map((dir) => `**/${dir}/**`);
 
+  // The trailing slash makes glob match directories only, so a plain file
+  // named `build` is never listed for recursive removal; results still come
+  // back without the slash.
+  const pattern = '**/build/';
   const directories = yield* Effect.tryPromise({
-    try: () =>
-      glob('**/build', {
-        cwd: workspacePath,
-        ignore: ignorePatterns,
-        nodir: false,
-      }),
-    catch: (cause) => new GlobFailed({ pattern: '**/build', cause }),
+    try: () => glob(pattern, { cwd: workspacePath, ignore: ignorePatterns }),
+    catch: (cause) => new GlobFailed({ pattern, cause }),
   });
   return directories.toSorted();
 });

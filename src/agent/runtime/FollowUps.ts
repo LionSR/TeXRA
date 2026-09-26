@@ -35,10 +35,12 @@ import {
 } from '@agent/followUp/RunInput';
 import { logUserMessage } from '@agent/trace';
 import { mediaNeedsVisionWarning } from '@agent/runtime/mediaVisionWarning';
-import type { MediaAttachmentKind } from '@shared/schemas';
+import type { MediaAttachmentKind, RunId } from '@shared/schemas';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
+import { subagentProgressRunId } from '@shared/subagentFollowup';
 import { RunLedger } from '@shared/session/runLedger';
 import type { QueuedFollowUp } from '@shared/session/runRows';
-import type { RunState } from '@shared/session/runStateFold';
+import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun } from './run/AgentRun';
 import { type InputPart, mediaInputParts } from './run/mediaInput';
@@ -51,8 +53,21 @@ import {
 } from './loop/rows';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
+/** A batch as the rows that consume it, for a caller that commits them in
+ *  its own batch; `delivered` logs them once durable and returns the user
+ *  instruction they carry. */
+export interface JoinedFollowUps {
+  readonly rows: readonly RunLedgerDraft[];
+  /** Whether the rows carry a message a turn answers. */
+  readonly turn: boolean;
+  readonly delivered: () => string | undefined;
+}
+
 export interface ConsumedFollowUps {
   readonly state: RunState;
+  /** False when every item was a progress notice of an ended child: the
+   *  batch was consumed without a message, and no turn follows. */
+  readonly turn: boolean;
   /** The user instruction of the batch, when a user wrote one. */
   readonly instruction: string | undefined;
   readonly synthetic: boolean;
@@ -66,6 +81,19 @@ export class FollowUps extends Context.Service<
     readonly appendSynthetic: (text: string) => void;
     /** Block for the next batch; null when the queue was taken away. */
     readonly wait: Effect.Effect<FollowUpBatch | null>;
+    /**
+     * A run the user stopped (its last step a cancelled halt): the follow-up
+     * batch queued for it, as rows the caller commits in its own transaction
+     * so one request carries both. Null, without waiting, for any other run
+     * or when no user follow-up is queued.
+     */
+    readonly joinStopped: (
+      state: RunState,
+    ) => Effect.Effect<
+      JoinedFollowUps | null,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    >;
     /** Release the lease: keep the run recoverable, or end it. */
     readonly release: (next: 'recoverable' | 'terminal') => void;
     /**
@@ -160,6 +188,20 @@ export const followUpsLayer: Layer.Layer<
       return { message: { role: 'user', content: parts }, kinds };
     });
 
+    /** A progress notice whose child run has ended: stale once its child is
+     *  terminal, so it is consumed without becoming a message. Results and
+     *  errors always deliver. */
+    const endedChildProgress = ({ content }: QueuedFollowUp): boolean => {
+      const child =
+        content.origin === 'subagent_result'
+          ? subagentProgressRunId(content.text)
+          : undefined;
+      return (
+        child !== undefined &&
+        isTerminalOutcomePhase(session.runView(child as RunId)?.status)
+      );
+    };
+
     const logFollowUps = (
       followUps: readonly QueuedFollowUp[],
       kinds: readonly MediaAttachmentKind[],
@@ -170,15 +212,18 @@ export const followUpsLayer: Layer.Layer<
       }
     };
 
-    const consume = Effect.fn('FollowUps.consume')(function* (
-      state: RunState,
+    /** The rows that consume one batch: its `followup.consumed` rows and
+     *  the one user message they become. */
+    const batchRows = Effect.fn('FollowUps.batchRows')(function* (
       batch: FollowUpBatch,
     ): Effect.fn.Return<
-      ConsumedFollowUps,
+      JoinedFollowUps,
       Error,
       FileSystem.FileSystem | ChildProcessSpawner
     > {
-      const followUps = batch.synthetic ? [] : batch.followUps;
+      const all = batch.synthetic ? [] : batch.followUps;
+      const followUps = all.filter((followUp) => !endedChildProgress(followUp));
+      const turn = batch.synthetic || followUps.length > 0;
       const built = yield* (
         batch.synthetic
           ? Effect.succeed({
@@ -192,28 +237,58 @@ export const followUpsLayer: Layer.Layer<
       ).pipe(
         Effect.tapCause(() => Effect.sync(() => logFollowUps(followUps, []))),
       );
-      const committed = yield* Effect.uninterruptible(
-        ledger.appendBatch(runId, state, [
-          ...followUps.map((followUp) => ({
+      if (all.length > followUps.length) {
+        logger.debug(
+          `Consumed ${all.length - followUps.length} progress notice(s) of ended subagents without delivering them.`,
+        );
+      }
+      return {
+        turn,
+        rows: [
+          ...all.map((followUp) => ({
             type: 'followup.consumed' as const,
             aggregateId: rowAggregate(runId),
             followUpId: followUp.followUpId,
           })),
-          appendRow(runId, [built.message]),
+          ...(turn ? [appendRow(runId, [built.message])] : []),
+        ],
+        // The user's rows are durable; the transcript shows what was asked.
+        delivered: () => {
+          logFollowUps(followUps, built.kinds);
+          return userFollowUpInstruction(
+            followUps.map((followUp) => followUp.content),
+          );
+        },
+      };
+    });
+
+    const consume = Effect.fn('FollowUps.consume')(function* (
+      state: RunState,
+      batch: FollowUpBatch,
+    ): Effect.fn.Return<
+      ConsumedFollowUps,
+      Error,
+      FileSystem.FileSystem | ChildProcessSpawner
+    > {
+      const joined = yield* batchRows(batch);
+      const committed = yield* Effect.uninterruptible(
+        ledger.appendBatch(runId, state, [
+          ...joined.rows,
           // The input that recovers a failed run clears the error fact in
           // the same transaction, so a resume taken between this batch and
           // the next turn's snapshot does not read the run as still failed.
-          snapshotRow(runId, state, { runtime: { lastError: null } }),
-          stepRow(runId, state, 'turn.ready'),
+          ...(joined.turn
+            ? [
+                snapshotRow(runId, state, { runtime: { lastError: null } }),
+                stepRow(runId, state, 'turn.ready'),
+              ]
+            : []),
         ]),
       );
-      // The user's rows are durable; the transcript shows what was asked.
-      logFollowUps(followUps, built.kinds);
       return {
         state: committed,
-        instruction: userFollowUpInstruction(
-          followUps.map((followUp) => followUp.content),
-        ),
+        turn: joined.turn,
+        instruction: joined.delivered(),
         synthetic: batch.synthetic,
       };
     });
@@ -226,6 +301,28 @@ export const followUpsLayer: Layer.Layer<
         input.wake(text);
       },
       wait: Effect.map(input.take, taken),
+      joinStopped: (state) =>
+        state.step === 'halted' &&
+        // Only a user stop joins: that halt carries no error fact to clear and
+        // no turn.ready row to write, which is why the join skips `consume`'s.
+        state.outcome === 'cancelled' &&
+        input.hasQueued() &&
+        !syntheticPending
+          ? Effect.flatMap(input.take, (batch) => {
+              // `!syntheticPending`: no maintenance wake is queued, so this
+              // take is follow-ups, which stay queued until consumed, and a
+              // declined batch is left for the ordinary wait.
+              if (batch?.synthetic) {
+                return Effect.die(
+                  new Error('joinStopped took a wake none was pending.'),
+                );
+              }
+              return batch === null ||
+                !batch.followUps.some((f) => f.content.origin === 'user')
+                ? Effect.succeed(null)
+                : batchRows(batch);
+            })
+          : Effect.succeed(null),
       release: (next) => {
         if (released || !lease) return;
         released = true;

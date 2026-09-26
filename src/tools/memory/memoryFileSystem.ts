@@ -15,6 +15,7 @@ import { Buffer } from 'node:buffer';
 import * as path from 'node:path';
 
 import {
+  DateTime,
   Effect,
   type FileSystem,
   Option,
@@ -410,7 +411,11 @@ export const setMemoryPinned = Effect.fn('memoryFileSystem.setMemoryPinned')(
       pinnedCount = priorPinned + 1;
     }
 
-    yield* writeMemoryFile(storagePath, content, setPinnedMeta(meta, pinned));
+    yield* writeMemoryFile(
+      storagePath,
+      content,
+      setPinnedMeta(meta, pinned, DateTime.formatIso(yield* DateTime.now)),
+    );
     return { status: 'changed', pinnedCount } satisfies SetMemoryPinnedResult;
   },
 );

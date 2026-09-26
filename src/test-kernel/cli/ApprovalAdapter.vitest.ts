@@ -732,7 +732,7 @@ describe('buildAgentProposalApprovalContent', () => {
 });
 
 describe('formatRetryRequestMessage', () => {
-  it("names the carried quota route's switch", () => {
+  it('offers no switch key the headless y/N prompt would read as a cancel', () => {
     const retry: RetryPermission = {
       ...credentialExhaustedRetry,
       errorDetails: {
@@ -747,12 +747,8 @@ describe('formatRetryRequestMessage', () => {
       },
     };
 
-    expect(formatRetryRequestMessage(retry)).toContain(
-      'Kimi Code subscription',
+    expect(formatRetryRequestMessage(retry)).toBe(
+      'Retry requested (Model request): HTTP 429 Too Many Requests',
     );
-    expect(formatRetryRequestMessage(retry)).toContain('Moonshot API keys');
-    expect(
-      formatRetryRequestMessage({ ...retry, credentialSwitch: null }),
-    ).not.toContain('Press `k`');
   });
 });

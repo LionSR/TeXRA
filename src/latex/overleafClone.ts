@@ -157,11 +157,13 @@ const checkOverleafClonePreconditions = Effect.fn(
 });
 
 /**
- * `git clone` ended without a clone. `message` is git's own stderr (or the
- * exit or start failure when it printed none), never a `PlatformError`
- * message.
+ * `git clone` ended without a clone. `message` is git's own stderr, the exit
+ * code when it printed none, or, when git could not be run at all, the
+ * PlatformError's own message after a fixed prefix (for a spawn failure,
+ * `Tag: Module.method (pathOrDescriptor)`, with a description only when the
+ * spawner supplies one).
  */
-class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
+export class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
   readonly exitCode: number | undefined;
   readonly message: string;
 }> {}
@@ -201,6 +203,12 @@ const runGit = (
   }).pipe(Effect.scoped);
 
 /**
+ * git translates its messages; the clone runs in the C locale so its stderr
+ * carries the English wording {@link GIT_AUTH_FAILURE} matches.
+ */
+const GIT_C_LOCALE = { LC_ALL: 'C', LANGUAGE: 'C' } as const;
+
+/**
  * Run `clone` in the existing directory `into`, then `git credential
  * approve` with its `approval`. The approval only offers the token to the
  * user's credential helper, so its failure is logged at warn rather than
@@ -210,12 +218,15 @@ export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
   clone: OverleafGitClone,
   into: string,
 ): Effect.fn.Return<void, GitCloneFailed, ChildProcessSpawner> {
-  const cloned = yield* runGit(clone.args, into, clone.env).pipe(
+  const cloned = yield* runGit(clone.args, into, {
+    ...clone.env,
+    ...GIT_C_LOCALE,
+  }).pipe(
     Effect.mapError(
       (error: PlatformError) =>
         new GitCloneFailed({
           exitCode: undefined,
-          message: `git clone did not complete: ${error.reason._tag}`,
+          message: `git clone did not complete: ${error.message}`,
         }),
     ),
   );
@@ -230,7 +241,7 @@ export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
   );
   let approveFailure: string | undefined;
   if (approved._tag === 'Failure') {
-    approveFailure = approved.failure.reason._tag;
+    approveFailure = approved.failure.message;
   } else if (approved.success.code !== 0) {
     approveFailure = `exit ${approved.success.code}: ${approved.success.stderr}`;
   }
@@ -241,11 +252,19 @@ export const gitClone = Effect.fn('overleafClone.gitClone')(function* (
   }
 });
 
-function isCloneAuthError(e: unknown): boolean {
-  return (
-    e instanceof Error && /auth|401|403|fatal: could not read/i.test(e.message)
-  );
-}
+/** git's own wording for a rejected credential; never URL or path text. */
+const GIT_AUTH_FAILURE =
+  /Authentication failed for|could not read (Username|Password) for|The requested URL returned error: 40[13]/;
+
+/**
+ * Only git exiting 128 with its own credential-rejection wording counts as an
+ * auth failure. A host error before git ran (a mkdir or realPath failure) or
+ * a network failure is a plain clone failure, so the stored token survives.
+ */
+const isCloneAuthError = (error: Error): boolean =>
+  error instanceof GitCloneFailed &&
+  error.exitCode === 128 &&
+  GIT_AUTH_FAILURE.test(error.message);
 
 /**
  * Resolve credentials, verify clone preconditions, and clone an

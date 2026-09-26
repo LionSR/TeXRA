@@ -337,7 +337,7 @@ const freshState = (): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAt: null,
 });
 
 interface InvokerKit {

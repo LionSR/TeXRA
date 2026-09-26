@@ -6,7 +6,7 @@
  * history view, and future agents can quickly understand each session.
  */
 
-import { Effect } from 'effect';
+import { Cause, Effect, Exit, Fiber } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -15,7 +15,12 @@ import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat'
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
-import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
+import {
+  aggregateId as qualifyAggregateId,
+  RUN_OUTCOME,
+  type RunId,
+  type RunOutcome,
+} from '@shared/schemas';
 import {
   isNonEmptyString,
   truncateWithEllipsis,
@@ -141,6 +146,27 @@ export const generateSessionDescription = Effect.fn(
     Effect.catchDefect((defect) => warnFailure(defect)),
   );
 });
+
+/**
+ * Settle the description fiber as the run's flow exits, before the lifecycle
+ * writes `run.end`: interrupt it after a stop, whose label is not worth
+ * waiting for, and join it otherwise, so its row lands first. A description
+ * committed after `run.end` reads as a fact of a run that has already ended.
+ */
+export const settleDescriptionOnExit =
+  (description: Fiber.Fiber<void>) =>
+  <A extends { readonly outcome: RunOutcome }, E, R>(
+    flow: Effect.Effect<A, E, R>,
+  ) =>
+    Effect.onExit(flow, (exit) =>
+      (
+        Exit.isSuccess(exit)
+          ? exit.value.outcome === RUN_OUTCOME.CANCELLED
+          : Cause.hasInterrupts(exit.cause)
+      )
+        ? Fiber.interrupt(description)
+        : Fiber.join(description),
+    );
 
 function warnFailure(cause: unknown): Effect.Effect<void> {
   return Effect.logWarning(

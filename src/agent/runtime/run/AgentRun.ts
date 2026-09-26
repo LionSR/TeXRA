@@ -29,6 +29,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
   DeclinableUsageRouteSchema,
+  MESSAGE_TYPES,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
   type JsonValue,
@@ -273,8 +274,22 @@ export const agentRunLayer = (
               toolsetHash: snapshot.payload.state.toolsetHash,
             }
           : null;
-      const toolset = recorded ?? offeredToolset(resolved.definitions);
-      let { definitions, registry: tools } = resolved;
+      // A workflow agent's rounds offer no tools: a YAML's declared `tools:`
+      // still resolve under the pinned composition, but none is offered, and
+      // a fresh run says so rather than narrowing silently.
+      const workflow = setting.agentCategory === AgentCategory.Workflow;
+      if (workflow && snapshot === null && resolved.definitions.length > 0) {
+        const declared = resolved.definitions.map((d) => d.name).join(', ');
+        logger.warn(
+          `The workflow family advertises no tools under this release, so the tools resolved for this run are not offered to the model: ${declared}. Run the agent in the tool-use family if it needs them.`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
+      }
+      const offered = workflow
+        ? { definitions: [], registry: new MapToolRegistry(new Map()) }
+        : resolved;
+      const toolset = recorded ?? offeredToolset(offered.definitions);
+      let { definitions, registry: tools } = offered;
       if (recorded !== null) {
         const byName = new Map(definitions.map((d) => [d.name, d]));
         definitions = recorded.offeredTools.flatMap((name) => {

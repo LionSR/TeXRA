@@ -22,10 +22,8 @@ import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import '@settingsView/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 import { applyShellAction, type Shell } from '@shared/session/shell';
 import {
   PersistedState,
@@ -44,7 +42,6 @@ import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
-  buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
@@ -84,6 +81,7 @@ import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
+import { createDesktopSettingsDialog } from './settingsDialog';
 import { createLogsPane } from './logsPane';
 import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
@@ -118,7 +116,7 @@ const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
-  openMultiAgent: () => openSettingsTab('agents/teams'),
+  openMultiAgent: () => settingsDialog.open('agents/teams'),
   // Lazy by necessity: the panel is constructed above the accelerator map's
   // declaration (which lands much later at module scope), so an eager or
   // captured read is a TDZ throw. Reading at render time is also what lets a
@@ -310,7 +308,7 @@ function toggleSidePanelVisibility(): void {
   currentWorkbench().workbench.togglePlacementVisibility('right', 'files');
 }
 
-// `<settings-app>` and `<progress-app>` are instantiated once and slotted into
+// `<progress-app>` is instantiated once and slotted into
 // the shell template via Lit's DOM-node interpolation, so Lit preserves their
 // internal state across re-renders and tab switches.
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
@@ -360,8 +358,14 @@ conversationView.placement = 'desktop';
 conversationView.setAttribute('placement', 'desktop');
 conversationView.setAttribute('data-desktop-view', 'progress');
 
-const settingsView: HTMLElement = document.createElement('settings-app');
-settingsView.setAttribute('data-desktop-view', 'settings');
+// Both hooks re-sync the browser view, which stays hidden while the dialog
+// is open (`isBrowserCovered`).
+const syncActiveBrowserView = () =>
+  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
+const settingsDialog = createDesktopSettingsDialog(appRoot, {
+  onShown: syncActiveBrowserView,
+  onHidden: syncActiveBrowserView,
+});
 
 // The logs viewer is hosted directly in its workbench tab body.
 const logsController = createLogsPane();
@@ -633,8 +637,7 @@ function shellTemplate(): TemplateResult {
                   collapsed: !shell.collapsed.includes(key),
                 }),
               ),
-            onOpenSettings: () =>
-              currentWorkbench().workbench.openKind('settings'),
+            onOpenSettings: () => settingsDialog.open(),
           },
         )}
       </div>
@@ -765,34 +768,13 @@ try {
 }
 
 // =============================================================================
-// Settings
-// =============================================================================
-//
-// Settings is a tab, not a modal dialog: configuring a run while watching it is
-// the common case, which an overlay would make mutually exclusive.
-
-type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
-
-function openSettingsTab(
-  tab?: ShowSettingsArgs[0],
-  agentSubTab?: ShowSettingsArgs[1],
-): void {
-  currentWorkbench().workbench.openKind('settings');
-  if (tab == null) return;
-  window.postMessage(
-    buildDesktopSettingsTabMessage(tab, agentSubTab),
-    resolvePostMessageTargetOrigin(window.location.origin),
-  );
-}
-
-// =============================================================================
 // Onboarding + command palette
 // =============================================================================
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
   openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
-  showSettings: openSettingsTab,
+  showSettings: settingsDialog.open,
   openDesktopDocs: () => {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
   },
@@ -862,6 +844,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
   isBootstrapFailed: () => bootstrapFailed,
   openKind: (kind) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
+  openSettings: () => settingsDialog.open(),
   toggleLayoutPanel: (panel) => {
     if (projectWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
   },
@@ -943,9 +926,9 @@ const MESSAGE_ROUTES = createMessageRoutes({
         const project = createProjectWorkbench({
           session: key,
           surfaces: projectSessions,
-          settingsView,
           logsPane,
           isActive: () => shell.active === key,
+          isBrowserCovered: settingsDialog.isOpen,
           subagentsTemplate: () => {
             const session = projectSessions.get(key);
             return session
@@ -973,6 +956,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
     }
     rerenderShell();
     if (previousKey !== message.activeKey) {
+      settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces({ focus: false });
       currentWorkbench().workbench.syncBrowserViewBounds();
     }

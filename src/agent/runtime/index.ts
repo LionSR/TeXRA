@@ -85,9 +85,6 @@ export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 
-// textConnection
-export { createAgentResponseTextConnector } from './textConnection';
-
 // RunHandle
 export type { AgentRunHandle } from './RunHandle';
 
