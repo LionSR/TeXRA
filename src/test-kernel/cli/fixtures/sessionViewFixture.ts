@@ -191,10 +191,6 @@ export function viewWith(
     }
     return rollup;
   };
-  for (const stream of [...byId.values()]) {
-    if (stream.childIds.length === 0) continue;
-    byId.set(stream.id, { ...stream, rollup: rollupOf(stream) });
-  }
   // A held run with a request that parks its caller is waiting on it, as the
   // fold's aggregates derive it. Fixture runs model runs this process holds;
   // one built interrupted (unheld) or with its own approval keeps it.
@@ -208,6 +204,10 @@ export function viewWith(
     )
       continue;
     byId.set(run.id, { ...run, approval: 'own', group: 'waiting' });
+  }
+  for (const stream of [...byId.values()]) {
+    if (stream.childIds.length === 0) continue;
+    byId.set(stream.id, { ...stream, rollup: rollupOf(stream) });
   }
   return {
     ...emptySessionView('test'),

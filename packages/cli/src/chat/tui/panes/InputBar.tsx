@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Box, Text, useInput, useWindowSize } from 'ink';
+import { Box, Text, useInput, useWindowSize, type Key } from 'ink';
 import { Cause, Effect } from 'effect';
 
 import { attachClipboardImage } from '@cli/runtime/clipboardImage';
@@ -81,10 +81,10 @@ interface InputBarProps {
   readonly keyboardActive?: boolean;
   /** Root-owned handle for draft-aware keyboard policy. */
   readonly controlRef?: React.Ref<InputBarHandle>;
-  /** Whether the root holds this key for itself (an `Esc 1..9` chord is
-   *  pending): the draft drops it, and the root either spends it or hands it
-   *  back through `appendInput`. */
-  readonly holdsKeystroke?: (input: string) => boolean;
+  /** Whether the root holds this typed key for itself (an `Esc 1..9` chord
+   *  is pending): the draft drops it, and the root either spends it or hands
+   *  it back through `appendInput`. */
+  readonly holdsKeystroke?: (input: string, key: Key) => boolean;
 }
 
 export interface InputBarHandle {
@@ -193,7 +193,8 @@ export function InputBar(props: InputBarProps): React.JSX.Element {
     [],
   );
   const dropHeldKeystroke = useCallback(
-    (input: string) => input.length > 0 && holdsKeystroke?.(input) === true,
+    (input: string, _value: string, _cursor: number, key: Key) =>
+      holdsKeystroke?.(input, key) === true,
     [holdsKeystroke],
   );
   const replaceDraft = useCallback(

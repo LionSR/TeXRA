@@ -42,14 +42,13 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runLedger';
-import { displayToolName } from '@shared/tools/toolDisplayName';
 import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
   type RunLedgerDraft,
   type RunState,
 } from '@shared/session/runStateFold';
 import { generateShortId, getBasename, groupBy } from '@utils/core';
-import { collapseWhitespace, isNonEmptyString } from '@utils/text/stringUtils';
+import { isNonEmptyString } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
 import { entryExists } from '@utils/files/fsEntryExists';
@@ -595,6 +594,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
     fact: DispatchFacts,
     call: LocalCall,
+    input: unknown,
     intent: {
       readonly attempt: number;
       readonly approvalRequestId: string | null;
@@ -636,9 +636,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? intent.approvalRequestId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
-    const preview = collapseWhitespace(
-      deriveToolInputPreview(fact.toolName, parseCallArguments(call, logger)),
-    );
+    const preview = deriveToolInputPreview(fact.toolName, input);
     const request = {
       requestId,
       allowBypass: false,
@@ -656,8 +654,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ],
         },
       ],
-      // The call as its transcript row names it, not its raw arguments.
-      context: `${displayToolName(fact.toolName)}${preview ? `: ${preview}` : ''}`,
+      context: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
     };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
@@ -760,10 +757,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     const intent = current.pendingIntents[fact.callId];
     if (intent !== undefined) {
-      const decision = yield* decideOutcomeUnknown(fact, call, intent);
+      const input = parseCallArguments(call, logger);
+      const decision = yield* decideOutcomeUnknown(fact, call, input, intent);
       if (decision === 'skip') {
         // The skip closes the card the interrupted attempt opened.
-        const input = parseCallArguments(call, logger);
         yield* settle(
           fact,
           intent.attempt,
