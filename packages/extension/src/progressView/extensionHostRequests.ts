@@ -28,7 +28,7 @@ import {
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
 import {
-  launchAutonomyOptions,
+  launchApprovalOptions,
   prepareSurfaceLaunch,
 } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -426,7 +426,7 @@ export function createExtensionHostRequests(
       );
       yield* runValidated(
         prepared,
-        launchAutonomyOptions(request, session.approvals),
+        launchApprovalOptions(request, session.approvals),
       ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
     });
   }

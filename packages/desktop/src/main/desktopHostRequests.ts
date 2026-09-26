@@ -14,7 +14,7 @@ import {
   primaryAgentError,
 } from '@common/errors/agentErrorClassification';
 import {
-  launchAutonomyOptions,
+  launchApprovalOptions,
   prepareSurfaceLaunch,
 } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
@@ -651,9 +651,9 @@ export function createDesktopHostRequests(
             session.roots.workspaceState,
             session.roots.storage,
           );
-          const autonomy = launchAutonomyOptions(request, session.approvals);
+          const approval = launchApprovalOptions(request, session.approvals);
           yield* run
-            .runValidated(launch, autonomy)
+            .runValidated(launch, approval)
             .pipe(Effect.mapError((e) => hostFailure('run.runValidated', e)));
           return done;
         }

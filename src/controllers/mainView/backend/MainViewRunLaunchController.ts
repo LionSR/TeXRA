@@ -127,7 +127,7 @@ function buildLaunchRequest(
 }
 
 /**
- * The run options an Autonomous launch adds: its run starts with the
+ * The run options an Auto-approve launch adds: its run starts with the
  * delegated-work bypass on, the same state the run header's "agent work"
  * switch writes, so the header shows it and the user can take it back
  * mid-run. `onRun` runs before the run body (AgentRunLifecycle forks it
@@ -135,11 +135,11 @@ function buildLaunchRequest(
  * opens ahead of it. Block still denies: the policy is decided before any
  * bypass.
  */
-export function launchAutonomyOptions(
+export function launchApprovalOptions(
   { launch }: LaunchRequest,
   approvals: SessionApprovals,
 ): { onRun?: (handle: AgentRunHandle) => Effect.Effect<void> } {
-  if (launch.autonomy !== 'autonomous') return {};
+  if (launch.approval !== 'autoApprove') return {};
   return {
     onRun: (handle) =>
       Effect.sync(() => approvals.setDelegatedWorkBypasses(handle.runId, true)),

@@ -100,16 +100,18 @@ Notion's AI design principles mapped onto TeXRA:
   the same composer a typed prompt uses; follow-ups refine.
 - **Compare before replacing.** Edits arrive as diffs to accept or merge.
 
-Beyond Notion, TeXRA has to work **autonomously when asked**. The composer
-now has an Autonomy chip beside agent and model:
+Beyond Notion, TeXRA has to work **autonomously when asked**, in the
+approval policy's own words (Ask / Block / Auto-approve), never a second
+vocabulary. The composer's **Approval** chip offers two choices:
 
-- **Ask me** follows the approval policy.
-- **Autonomous** starts the run with its delegated-work bypass on: the state
-  the run header's "agent work" switch already owns. The header shows it
-  for the run's whole life, and the user can take it back mid-run.
+- **Approval policy**, the default, as set in Settings.
+- **Auto-approve**, for this task only.
 
-Block remains the floor. The bypass is written in `onRun`, before the run
-body; a regression test in `SessionResultEvent.vitest.ts` pins that order.
+Auto-approve starts the run with its delegated-work bypass on: the state
+the run header's "agent work" switch already owns. The header shows it for
+the run's life, and the user can take it back. It can only loosen Ask;
+Block still blocks. The bypass is written in `onRun`, before the run body;
+a regression test in `SessionResultEvent.vitest.ts` pins that order.
 
 Next in this line, in order:
 

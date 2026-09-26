@@ -1,5 +1,5 @@
 /**
- * The new-task composer's chips: agent, model, autonomy, and the working
+ * The new-task composer's chips: agent, model, approval, and the working
  * directory when there are two or more roots. Each chip is a menu over the
  * launcher's selections; the composer renders them and owns the dispatch.
  */
@@ -9,7 +9,7 @@ import { repeat } from 'lit/directives/repeat.js';
 import { isModelOptionAvailable, type SessionType } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import type { Surface } from '@shared/session/surface';
-import { AUTONOMY } from '@ui/copy/autonomy';
+import { TASK_APPROVAL } from '@ui/copy/taskApproval';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
 
 /** The agent menu's sections: the category an agent belongs to is the run
@@ -158,7 +158,7 @@ export function launcherChipMenus(
       },
     },
   ];
-  menus.push(autonomyMenu(launch, actions.setLaunch));
+  menus.push(approvalMenu(launch, actions.setLaunch));
   if (host.workspaceRoots.length >= 2) {
     const root = host.workspaceRoots.find(
       (option) => option.value === launch.workingDirectory,
@@ -189,33 +189,33 @@ export function launcherChipMenus(
   return menus;
 }
 
-/** Autonomy sits beside agent and model because it is chosen per task, at
+/** Approval sits beside agent and model because it is chosen per task, at
  *  the moment of delegating; the run header then shows it and can revoke it. */
-function autonomyMenu(
+function approvalMenu(
   launch: Launch,
   setLaunch: (patch: Partial<Launch>) => void,
 ): ChipMenu {
-  const modes = ['ask', 'autonomous'] as const;
+  const choices = ['policy', 'autoApprove'] as const;
   return {
-    id: 'composer-autonomy',
-    icon: launch.autonomy === 'autonomous' ? 'rocket' : 'user',
-    label: AUTONOMY[launch.autonomy].label,
-    title: AUTONOMY.title,
-    items: html`${modes.map(
-      (mode) =>
+    id: 'composer-approval',
+    icon: launch.approval === 'autoApprove' ? 'rocket' : 'shield',
+    label: TASK_APPROVAL[launch.approval].label,
+    title: TASK_APPROVAL.title,
+    items: html`${choices.map(
+      (choice) =>
         html`<wa-dropdown-item
-          value=${`autonomy:${mode}`}
+          value=${`approval:${choice}`}
           type="checkbox"
-          title=${AUTONOMY[mode].description}
-          ?checked=${launch.autonomy === mode}
-          >${AUTONOMY[mode].label}<span slot="details"
-            >${AUTONOMY[mode].detail}</span
+          title=${TASK_APPROVAL[choice].description}
+          ?checked=${launch.approval === choice}
+          >${TASK_APPROVAL[choice].label}<span slot="details"
+            >${TASK_APPROVAL[choice].detail}</span
           ></wa-dropdown-item
         >`,
     )}`,
     onSelect: (value) => {
-      if (value === 'autonomy:ask' || value === 'autonomy:autonomous') {
-        setLaunch({ autonomy: value.slice(9) as Launch['autonomy'] });
+      if (value === 'approval:policy' || value === 'approval:autoApprove') {
+        setLaunch({ approval: value.slice(9) as Launch['approval'] });
       }
     },
   };
