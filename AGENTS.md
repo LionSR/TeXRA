@@ -279,7 +279,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
 
   Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
-  - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`)
+  - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)

@@ -8,11 +8,7 @@
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
-import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
-import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
+import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
   launchApprovalOptions,
   prepareSurfaceLaunch,
@@ -258,14 +254,10 @@ export function createDesktopHostRequests(
                       Effect.annotateLogs({ data: error }),
                       withLogChannel(CHANNEL),
                     );
-                    const primaryError = primaryAgentError(error);
-                    return yield* presentAgentFailure(
+                    return yield* presentRunFailure(
                       session.interactions,
-                      {
-                        kind: classifyAgentError(primaryError),
-                        message: `Merge failed: ${toErrorMessage(primaryError)}`,
-                      },
-                      { replayWhenAttached: true },
+                      error,
+                      'Merge failed: ',
                     );
                   }),
             ),

@@ -6,7 +6,13 @@
 import { Effect, SubscriptionRef } from 'effect';
 
 import type { ResultEvent } from '@agent/trace';
-import { agentErrorPresentation } from '@common/errors/agentErrorClassification';
+import {
+  agentErrorPresentation,
+  classifyAgentError,
+  primaryAgentError,
+} from '@common/errors/agentErrorClassification';
+import { Rejected } from '@shared/session/requestErrors';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import type { SessionHostInteractions } from './HostInteractions';
 import type { SessionHandle } from './SessionHandle';
@@ -58,7 +64,7 @@ export function trackTerminalResultPresentation(
  * plane builds, so the caller's own fiber carries it rather than dropping a
  * host failure on the floor.
  */
-export function presentAgentFailure(
+function presentAgentFailure(
   interactions: SessionHostInteractions,
   error: Parameters<typeof agentErrorPresentation>[0],
   options: { replayWhenAttached?: boolean } = {},
@@ -69,6 +75,26 @@ export function presentAgentFailure(
   if (toast?.type === 'error')
     return interactions.emit('requestShowError', toast.payload, options);
   return Effect.void;
+}
+
+/**
+ * Present a failed run from its raw error: the primary failure, classified,
+ * worded as `prefix` plus its text (a `Rejected` request's reason), and
+ * replayed to a surface that attaches later.
+ */
+export function presentRunFailure(
+  interactions: SessionHostInteractions,
+  error: unknown,
+  prefix = '',
+): Effect.Effect<void> {
+  const primary = primaryAgentError(error);
+  const text =
+    primary instanceof Rejected ? primary.reason : toErrorMessage(primary);
+  return presentAgentFailure(
+    interactions,
+    { kind: classifyAgentError(primary), message: `${prefix}${text}` },
+    { replayWhenAttached: true },
+  );
 }
 
 /** Returns a detach disposer; callers detach when the run/host tears down. */
