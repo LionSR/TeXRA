@@ -10,10 +10,7 @@ import {
 } from '@model/modelRoute';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiSubscriptionEligible,
-} from '@shared/model/kimiCodeRetryGate';
+import { isKimiSubscriptionEligible } from '@shared/model/kimiCodeRetryGate';
 import type { ModelConfig } from 'llm-zoo';
 
 const dual = {
@@ -42,13 +39,6 @@ describe('isKimiSubscriptionEligible', () => {
     expect(
       isKimiSubscriptionEligible({ provider: ModelProvider.MOONSHOT }),
     ).toBe(false);
-  });
-});
-
-describe('isKimiCodeExclusiveModel', () => {
-  it('requires the pinned coding base URL', () => {
-    expect(isKimiCodeExclusiveModel(exclusive)).toBe(true);
-    expect(isKimiCodeExclusiveModel(dual)).toBe(false);
   });
 });
 

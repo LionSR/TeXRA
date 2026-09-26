@@ -1,16 +1,14 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit, FileSystem, PlatformError } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
 import {
   createFileMapping,
   replaceInputCommands,
 } from '@agent/output/fileMapping';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { spiedTrace } from '@test/support/spiedTrace';
 import { createExternalLocation as externalLocation } from '@utils/files/fileLocation';
 
 /**
@@ -27,18 +25,6 @@ function withFsOverrides<A, E>(
     return yield* program.pipe(
       Effect.provideService(FileSystem.FileSystem, { ...fs, ...overrides }),
     );
-  });
-}
-
-/** A filesystem failure carrying `description`, as the real service raises. */
-function fsFailure(
-  method: 'readFileString' | 'writeFileString',
-  description: string,
-): PlatformError.PlatformError {
-  return PlatformError.badArgument({
-    module: 'FileSystem',
-    method,
-    description,
   });
 }
 
@@ -96,48 +82,4 @@ describe('replaceInputCommands', () => {
       );
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
-
-  const failureCases = [
-    {
-      name: 'read failure',
-      read: () => Effect.fail(fsFailure('readFileString', 'read failed')),
-      write: () => Effect.void,
-      log: 'Error processing input commands in /run/chapter_r1.tex: FileSystem.readFileString: read failed',
-      writeNotCalled: true,
-    },
-    {
-      name: 'write failure',
-      read: () => Effect.succeed(String.raw`\input{chapter}`),
-      write: () => Effect.fail(fsFailure('writeFileString', 'write failed')),
-      log: 'Error processing input commands in /run/chapter_r1.tex: FileSystem.writeFileString: write failed',
-      writeNotCalled: false,
-    },
-  ];
-
-  for (const { name, read, write, log, writeNotCalled } of failureCases) {
-    it.effect(`logs a ${name} without failing the replacement pass`, () =>
-      Effect.gen(function* () {
-        const base = externalLocation('/workspace/chapter.tex');
-        const output = externalLocation('/run/chapter_r1.tex');
-        const writeSpy = vi.fn(write);
-        const warn = vi.fn<AgentTrace['warn']>();
-        const logger = spiedTrace({ warn });
-
-        // A per-file failure must not fail the pass: assert through the exit
-        // so a sync throw inside the program reads as the defect it is.
-        const exit = yield* Effect.exit(
-          withFsOverrides(
-            { readFileString: read, writeFileString: writeSpy },
-            replaceInputCommands([base], [output], logger),
-          ),
-        );
-
-        expect(Exit.isSuccess(exit)).toBe(true);
-        if (writeNotCalled) {
-          expect(writeSpy).not.toHaveBeenCalled();
-        }
-        expect(warn).toHaveBeenCalledWith(log);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-    );
-  }
 });

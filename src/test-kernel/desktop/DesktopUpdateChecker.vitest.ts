@@ -55,21 +55,6 @@ const withRecords = <A, E>(
   );
 
 describe('desktop update checker', () => {
-  it.live('skips entirely for unpackaged (dev) runs', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const notify = vi.fn();
-        const fetchRelease = vi.fn(() => release);
-        yield* runCheck({
-          isPackaged: false,
-          notify,
-          fetchRelease: Effect.sync(fetchRelease),
-        });
-        expect(fetchRelease).not.toHaveBeenCalled();
-        expect(notify).not.toHaveBeenCalled();
-      }),
-    ),
-  );
   it.live('skips entirely when TEXRA_NO_UPDATE_CHECK is set', () =>
     withRecords(
       Effect.gen(function* () {

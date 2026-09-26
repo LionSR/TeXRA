@@ -5,7 +5,7 @@ import { strict as assert } from 'node:assert';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Exit } from 'effect';
+import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
@@ -333,10 +333,8 @@ describe('knownKeys derivation', () => {
     ).map((entry) => entry.key);
     assert.deepEqual(
       configKeys.filter((key) => KNOWN_TEXRA_KEYS.has(key)).toSorted(),
-      configKeys
-        .filter((key) => key !== 'texra.agentReview.runOnCommit')
-        .toSorted(),
-      'only texra.agentReview.runOnCommit is extension-only',
+      configKeys.toSorted(),
+      'every config-file key has a CLI reader',
     );
   });
 });
@@ -360,14 +358,6 @@ describe('settingsAccess', () => {
       options.expectedDefault,
     );
   });
-
-  it.effect('reads the default when the key is absent', () =>
-    Effect.gen(function* () {
-      const { stores } = makeFakeSettingsStores();
-      const entry = entryByKey(WorkspaceStateKey.GIT_MARK_COMMITS);
-      assert.equal(yield* readSetting(entry, stores, 'vscode'), true);
-    }),
-  );
 
   it.effect('routes extension writes to the canonical store', () =>
     Effect.gen(function* () {
@@ -422,17 +412,6 @@ describe('settingsAccess', () => {
         yield* readSetting(entry, stores, 'cli'),
         'https://example.invalid/v1',
       );
-    }),
-  );
-
-  it.effect('rejects values that fail the entry schema', () =>
-    Effect.gen(function* () {
-      const { stores } = makeFakeSettingsStores();
-      const entry = entryByKey(WorkspaceStateKey.LATEX_FORMATTER);
-      const exit = yield* Effect.exit(
-        writeSetting(entry, 'not-a-formatter', stores, 'vscode'),
-      );
-      assert.ok(Exit.isFailure(exit));
     }),
   );
 

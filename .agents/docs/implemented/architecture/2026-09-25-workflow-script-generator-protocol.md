@@ -1,6 +1,6 @@
 ---
 created: 2026-09-25
-status: proposed
+status: implemented
 ---
 
 # Workflow scripts as generators over an Effect interpreter
@@ -15,10 +15,12 @@ content-addressed journal key stay exactly as they are; what goes is every
 Promise inside the realm and the bridge machinery that exists only to carry
 them. A prototype of the protocol passes 18 behavioral tests
 ([evidence](../../evidence/2026-09-25-workflow-generator-protocol/README.md)).
-One decision gates the switch: whether models write the generator form as
-reliably as `async`/`await` (§8).
+The owner ruled the §8 decisions on 2026-09-25 and the switch landed in one
+change; §8 records the rulings and the model-reliability measurement, and
+"As landed" below records where the implementation settled what this
+proposal left open.
 
-Baseline: `main` at `5395cd6c` (re-checked after #13180 moved the cited lines).
+Baseline: `main` at `b4569d4c`.
 
 ## 1. The seam, as it stands
 
@@ -27,7 +29,7 @@ scoped Effect, cancellation is interruption, and skip/retry is a per-attempt
 `Deferred` decision. The script side is still a Promise program, because the
 script's contract is `async`:
 
-- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:665`),
+- `agent()` and `parallel()` return Promises (`WorkflowScriptTool.ts:657`),
   and `parallel()` is a realm-side `Promise.all` over thunks, installed as
   trusted prelude code (`ORCHESTRATION_PRELUDE`, `runWorkflowScript.ts:120`).
 - Because the realm holds pending promises, the host must pump QuickJS jobs
@@ -36,8 +38,8 @@ script's contract is `async`:
   per-call settlement back into the realm (`settleHostPromise`, `:508`), and
   the async bridge wrappers in `BRIDGE_PRELUDE` (`:153`).
 - A failed call resolves to `null` and a skip to the string
-  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:718`, `:733`), so every
-  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:666`).
+  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:725`, `:740`), so every
+  script filters two sentinels before synthesis (`WorkflowScriptTool.ts:658`).
 - Concurrency, retry and timeout policy the script wants is written by hand
   in the script, if at all; the host offers one semaphore.
 
@@ -87,14 +89,14 @@ return summary.structured;
 
 ### 2.2 The operation set
 
-| Operation                     | Script meaning                                                                    | Host combinator                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `agent(prompt, options)`      | one delegated call                                                                | today's journaled `agentPrimitive`, unchanged: identity, fingerprints, permits, the skip/retry decision      |
-| `all(items, { concurrency })` | run items concurrently; the first failure fails the whole and interrupts the rest | `Effect.forEach(items, run, { concurrency: min(requested, budget) })`                                        |
-| `forEach(items, fn, opts)`    | `all(items.map(fn), opts)`                                                        | realm-side shorthand; never crosses the wire                                                                 |
-| `attempt(body)`               | never fails: a `Success` or `Failure` value                                       | `Effect.catchTag('OpFailure', …)`                                                                            |
-| `retry(body, { times })`      | re-run a call or a whole branch                                                   | `Effect.retry({ times, while: isOpFailure })`                                                                |
-| `timeout(body, ms)`           | bound a call or a branch                                                          | `Effect.timeoutOrElse`, failing with `TimedOut`; the loser is interrupted, which reaches the child as a stop |
+| Operation                     | Script meaning                                                                    | Host combinator                                                                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `agent(prompt, options)`      | one delegated call                                                                | today's journaled `agentPrimitive`, unchanged: identity, fingerprints, permits, the skip/retry decision                            |
+| `all(items, { concurrency })` | run items concurrently; the first failure fails the whole and interrupts the rest | `Effect.forEach(items, run, { concurrency: requested ?? 'unbounded' })`; the session `Semaphore` inside `agent()` bounds what runs |
+| `forEach(items, fn, opts)`    | `all(items.map(fn), opts)`                                                        | realm-side shorthand; never crosses the wire                                                                                       |
+| `attempt(body)`               | never fails: a `Success` or `Failure` value                                       | `Effect.catchTag('OpFailure', …)`                                                                                                  |
+| `retry(body, { times })`      | re-run a call or a whole branch                                                   | `Effect.retry({ times, while: isOpFailure })`                                                                                      |
+| `timeout(body, ms)`           | bound a call or a branch                                                          | `Effect.timeoutOrElse`, failing with `TimedOut`; the loser is interrupted, which reaches the child as a stop                       |
 
 `race` is deliberately left out until a script needs it.
 
@@ -139,7 +141,7 @@ inside the realm.
   limits, the determinism prelude, disabled dynamic code. The runtime design
   calls the sandbox, its determinism requirement and the content-addressed
   key "the product" (§6.5 of the
-  [runtime design](./2026-09-10-effect-native-runtime-system-design.md));
+  [runtime design](../../proposed/architecture/2026-09-10-effect-native-runtime-system-design.md));
   this proposal keeps all three. The sandbox shrinks to "evaluate the
   prelude, then call `step` under a per-step CPU deadline".
 - **Identity and durability.** `journalKey` (prompt, options, dependency
@@ -157,7 +159,7 @@ inside the realm.
 
 ## 4. Interaction with the liveness program
 
-The [liveness design](./2026-09-21-effect-design-liveness-park-interruption.md)
+The [liveness design](../../proposed/architecture/2026-09-21-effect-design-liveness-park-interruption.md)
 is converting run stops to fiber interruption. On `main` already,
 `executeSubagentInBand` stops its child by run id through
 `Runs.interruptActive` rather than an `AbortSignal`, and that is the path
@@ -205,7 +207,7 @@ adapter, shim, flag, or dual engine").
   with the `await` hint. There is no reader for the old form; the journal
   key means a rewritten script loses no completed work.
 - Retry and identity: a retried body re-issues the same call keys, so the
-  duplicate-key check (`runWorkflowScript.ts:495`) must admit a re-issue
+  duplicate-key check (`runWorkflowScript.ts:502`) must admit a re-issue
   inside the same `Retry` (decision 4).
 
 ## 7. Evidence
@@ -231,7 +233,63 @@ fingerprints, the call cap, skip/retry control, the run timeout or the real
 runner. Each moves under the `Agent` case or around the interpreter
 unchanged; none conflicts with the protocol.
 
+## As landed
+
+- `src/agent/workflowScript/sandbox.ts` is the realm and the wire:
+  `openWorkflowRealm` evaluates the protocol and determinism preludes and the
+  body, and exposes `start`/`resume` over the one trusted `step`. The job
+  pump, its `Latch`, the pending-deferred set, `settleHostPromise`, the
+  host-call `FiberSet` and the async `BRIDGE_PRELUDE` wrappers are deleted.
+- `src/agent/workflowScript/interpreter.ts` holds the interpreter of §2.2
+  (split from `runWorkflowScript.ts` by the file-size budget);
+  `runWorkflowScript.ts` keeps the journaled `agentPrimitive`, which now
+  fails with `AgentFailed`/`Skipped` where it returned `'null'` and the skip
+  sentinel. `ORCHESTRATION_PRELUDE` and `WORKFLOW_SKIPPED_RESULT` are gone.
+- `parseScript.ts` parses the body as a generator function body and reports
+  `await` with "write `yield* agent(...)`".
+- No per-step CPU budget was added: the realm's interrupt handler preempts a
+  step still running at the run's wall-clock deadline, as before, and records
+  the timeout as the run's first fault. The wall clock is a
+  `WorkflowRunAbortError` run fault.
+- `all()` without `concurrency` runs every item (at most 512), so every
+  issued call shows its queued card; the session `Semaphore` inside
+  `agent()` bounds what runs. An explicit `concurrency` is the all()'s own
+  bound. These are the two bounds of §6.5.
+- A call an operation interrupts (a fail-fast sibling, a `timeout()`) settles
+  its card `cancelled`; a call a run-level fault interrupts is left to the
+  terminal sweep.
+- `retry()` does not re-run past `Skipped`: a skip is the user's verdict on
+  that call.
+- An `all()`/`forEach` item that is a started generator object is refused
+  with "pass the generator function itself (fn, not fn())", and an
+  `agent()` file option that received an object says to pass
+  `output.absolutePath` (both from the measurement below).
+
 ## 8. Decisions
+
+Ruled by the owner on 2026-09-25:
+
+1. **Model reliability.** Measured on 144 generations across gemini38f,
+   deepseek41T and glm53flash (48 per arm; failures on first submission →
+   after one repair turn): today's `async` description (A) 8/48 → 1/48; the
+   generator description with §2.1's example as written (B) 13/48 → 5/48;
+   the generator description plus one line mapping outputs to
+   `output.absolutePath` before a later call's `inputFiles` (B2) 6/48 →
+   0/48. All of B's lost ground was one multi-stage pipeline task. The
+   switch shipped with B2: the tool description's example keeps the
+   output-path mapping.
+2. **Failure default.** Fail-fast `all`; `attempt` for tolerant fan-out. No
+   `settle` option.
+3. **Operation set.** The five in §2.2, `forEach` as realm shorthand;
+   `race` deferred.
+4. **Retry and the journal.** A retried body replays calls it already
+   completed from the current run's journal (no re-billing, no second cost
+   observation); the duplicate-key check admits a key an earlier attempt of
+   the same `retry()` issued, and a key issued twice within one attempt is
+   still a duplicate.
+5. **Skip.** A skip is a `Skipped` failure.
+
+The proposal text of the decisions follows as the record.
 
 1. **Model reliability — the gate.** Models write `async`/`await` more
    fluently than `yield*`. Before the switch, run the orchestrator on the
@@ -267,7 +325,7 @@ unchanged; none conflicts with the protocol.
 
 ## Verified
 
-- Read on `main` at `b4569d4c`, and the cited lines re-checked at `5395cd6c`: `src/agent/workflowScript/{sandbox,runWorkflowScript,types,parseScript}.ts`,
+- Read on `main` at `b4569d4c`: `src/agent/workflowScript/{sandbox,runWorkflowScript,types,parseScript}.ts`,
   `docs/guide/multi-agent-workflows.md`, the three agent YAMLs that offer the
   tool (none teaches the format),
   `src/tools/delegation/{WorkflowScriptTool,workflowScriptStrategy,workflowScriptAgentRunner,inBandSubagentRun}.ts`,

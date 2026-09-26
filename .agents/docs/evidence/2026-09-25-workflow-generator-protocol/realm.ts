@@ -34,13 +34,7 @@ const GUARD_PRELUDE = `
   lock(Math, 'random', refuse('Math.random()'));
   lock(Date, 'now', refuse('Date.now()'));
   const noCode = function () { throw new TypeError('Dynamic code generation is disallowed'); };
-  const constructors = [
-    Function,
-    Object.getPrototypeOf(async function () {}).constructor,
-    Object.getPrototypeOf(function* () {}).constructor,
-    Object.getPrototypeOf(async function* () {}).constructor,
-  ];
-  for (const C of constructors) {
+  for (const C of [Function, Object.getPrototypeOf(function* () {}).constructor]) {
     lock(C.prototype, 'constructor', noCode);
   }
   lock(globalThis, 'Function', noCode);

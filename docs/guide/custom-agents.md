@@ -16,7 +16,7 @@ Before creating a custom agent, it helps to understand the underlying concepts:
 
 - <wa-icon library="texra" name="symbol-structure"></wa-icon> **Agent architecture and execution flow**: the `.yaml` structure, settings, prompts, and how agents run. Read the [Workflow agents: how they work](./agent-architecture.md) guide.
 - <wa-icon library="texra" name="sparkle"></wa-icon> **Built-in agents**: the standard agents TeXRA provides, useful as examples and as inheritance parents. Read the [Built-in agent reference](./built-in-agents.md).
-- <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard.
+- <wa-icon library="texra" name="dashboard"></wa-icon> **Agents tab**: browse and manage agent files from the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.
   :::
 
 ## <wa-icon library="texra" name="library"></wa-icon> Reference agents
@@ -31,7 +31,7 @@ Follow these steps to create a new custom agent.
 
 Custom agents live in a dedicated directory that TeXRA prepares for you.
 
-1. **Find the default folder**: TeXRA seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard to see its location.
+1. **Find the default folder**: TeXRA seeds a `custom_agents` directory inside its global storage. Open the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings to see its location.
 2. **Override (optional)**: to manage agents elsewhere, open the **Agents** tab and select **Change** (<wa-icon library="texra" name="edit"></wa-icon>) in the directory info bar to pick a new folder. TeXRA creates that directory if needed and uses it instead of the default.
 
 ### <wa-icon library="texra" name="wand"></wa-icon> Automatic creation
@@ -174,11 +174,11 @@ Tool-use agents are interactive: instead of producing a single polished file, th
 
 **Typical user story:** You are writing up results for a conference submission and realize you need three new BibTeX entries, a TikZ architecture diagram, and a consistency pass across four `.tex` files. Rather than juggling browser tabs and terminal windows, you open a `research` agent (<wa-icon library="texra" name="sparkle"></wa-icon>) and describe what you need. The agent reads your project, searches arXiv for the missing references, drafts the TikZ code, and edits the files, all in one session.
 
-To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Dashboard → Tools** <wa-icon library="texra" name="tools"></wa-icon>). Each chip below is a token you can put straight into your `tools:` array:
+To create your own tool-use agent, set `agentCategory: toolUse` and list the tools you want to grant. TeXRA groups tools by category (matching **Settings → Tools** <wa-icon library="texra" name="tools"></wa-icon>). Each chip below is a token you can put straight into your `tools:` array:
 
 <ToolCategoriesHero />
 
-<p class="hero-caption">The seven grantable tool categories on <strong>Dashboard → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
+<p class="hero-caption">The seven grantable tool categories on <strong>Settings → Tools</strong>; every chip is a name you can list verbatim in your agent's <code>tools:</code> array.</p>
 
 For the exact tool names to list in your YAML, browse any of the built-in tool-use agents (like `research`, `review`, `lean`, or `numerics`) in the **Agents** tab. Their `tools:` array shows which tools are wired up.
 
@@ -254,4 +254,4 @@ Verify the agent registered, then smoke-test it in one go:
 
 TeXRA expects the model's output to use properly closed XML tags. For agents producing multiple files, each `<document>` block must include a `name` attribute matching one of the filenames from the UI. If tags are mismatched or a filename does not match, extraction fails and no files are saved. Check the ProgressBoard (<wa-icon library="texra" name="type-hierarchy"></wa-icon>) logs for details.
 
-For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Dashboard.
+For more examples and advanced options, browse the built-in agent definitions through the **Agents** tab (<wa-icon library="texra" name="sparkle"></wa-icon>) in the TeXRA Settings.

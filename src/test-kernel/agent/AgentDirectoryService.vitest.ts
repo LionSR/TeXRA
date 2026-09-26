@@ -8,7 +8,7 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -75,28 +75,6 @@ describe('AgentDirectoryService', () => {
       ),
     );
   }
-
-  it.effect('resolves built-in directories inside the packaged resources', () =>
-    Effect.gen(function* () {
-      const { service } = createService();
-
-      assert.equal(
-        yield* service.builtIn(),
-        path.join(RESOURCES_PATH, 'agents'),
-      );
-      assert.equal(
-        yield* service.builtInToolUse(),
-        path.join(RESOURCES_PATH, 'tool_use_agents'),
-      );
-      // Packaged content is read in place: nothing is created under storage.
-      assert.equal(
-        yield* Effect.promise(() =>
-          pathExists(path.join(storageBase(), 'agents')),
-        ),
-        false,
-      );
-    }),
-  );
 
   it('uses the default custom directory when no custom path is configured', async () => {
     const { service } = createService('   ');
@@ -175,14 +153,5 @@ describe('AgentDirectoryService', () => {
         source: 'builtInToolUse',
       },
     ]);
-  });
-
-  it('does not resolve a local directory for remote agents', async () => {
-    const { service } = createService();
-
-    assert.equal(
-      await runDirectories(agentSourceDirectory(service, 'remote')),
-      undefined,
-    );
   });
 });

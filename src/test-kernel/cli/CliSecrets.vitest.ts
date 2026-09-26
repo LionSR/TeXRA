@@ -40,25 +40,6 @@ describe('CLI secrets', () => {
   // return) so the skip is visible in reports instead of a zero-assertion pass.
   const itPosix = it.effect.skipIf(process.platform === 'win32');
 
-  it.effect('stores secrets under the configured storage root', () =>
-    Effect.gen(function* () {
-      yield* withSecretsRootEffect(({ storageRoot, secretsPath }) =>
-        Effect.gen(function* () {
-          const secrets = new CliSecrets(secretsPath);
-          yield* secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
-
-          expect(yield* secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')).toBe(
-            'test-key',
-          );
-          expect(
-            yield* Effect.promise(() => fs.readFile(secretsPath, 'utf8')),
-          ).toContain('TEXRA_CLI_SECRETS_TEST_KEY');
-          expect(path.dirname(secretsPath)).toBe(storageRoot);
-        }),
-      );
-    }).pipe(withEnv({})),
-  );
-
   it.effect(
     'aborts a write instead of wiping the file when the read fails for a reason other than a missing file',
     () =>

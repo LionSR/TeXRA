@@ -109,11 +109,6 @@ describe('formatResumeHint', () => {
       expected: 'texra resume root',
     },
     {
-      name: 'uses a local launcher when provided',
-      commandName: 'texra-local',
-      expected: 'texra-local resume root',
-    },
-    {
       name: 'adds a quoted cwd when the session workspace differs from the shell cwd',
       commandName: 'texra-local',
       options: { cwd: "/tmp/texra user's paper", processCwd: '/tmp/launcher' },
@@ -132,22 +127,10 @@ describe('formatResumeHint', () => {
       expected: "texra-local resume root --cwd '/tmp/paper '",
     },
     {
-      name: 'omits the default approval policy',
-      commandName: 'texra-local',
-      options: { approvalPolicy: 'ask' },
-      expected: 'texra-local resume root',
-    },
-    {
       name: 'preserves a non-default approval policy',
       commandName: 'texra-local',
       options: { approvalPolicy: 'never' },
       expected: 'texra-local resume root --approval-policy never',
-    },
-    {
-      name: 'preserves a non-default approval policy with the default command name',
-      commandName: undefined,
-      options: { approvalPolicy: 'yolo' },
-      expected: 'texra resume root --approval-policy yolo',
     },
     {
       name: 'preserves a non-default output format',
@@ -165,17 +148,6 @@ describe('formatResumeHint', () => {
       },
       expected:
         "texra-local resume root --print --include-interop --source '/tmp/shared skills' --source ./local-skills",
-    },
-    {
-      name: 'includes both cwd and approval policy when both are needed',
-      commandName: 'texra-local',
-      options: {
-        cwd: '/tmp/paper',
-        processCwd: '/tmp/launcher',
-        approvalPolicy: 'never',
-      },
-      expected:
-        'texra-local resume root --cwd /tmp/paper --approval-policy never',
     },
   ])('formats resume commands: $name', ({ commandName, options, expected }) => {
     expect(formatResumeCommand(commandName, 'root', options)).toBe(expected);

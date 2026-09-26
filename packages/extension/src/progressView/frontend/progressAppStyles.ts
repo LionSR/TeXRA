@@ -78,6 +78,20 @@ export const progressAppStyles = css`
     width: min(760px, 100%);
     margin: 0 auto;
   }
+  /* The desktop's new task is one centred group: hero, attachments and
+     composer together, not the hero at the top and the composer across an
+     empty page at the bottom. Its rail already lists the running tasks, so
+     the Active now strip would be a second copy there. */
+  :host([placement='desktop']) .empty {
+    /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
+    justify-content: safe center;
+  }
+  :host([placement='desktop']) .launch-banners {
+    margin-top: 0;
+  }
+  :host([placement='desktop']) .active-now {
+    display: none;
+  }
 
   /* The dock cell of the header exists only docked wide (see the container
      query); until then the header is one cell. */
@@ -167,11 +181,10 @@ export const progressAppStyles = css`
     .shell.is-editor .dock {
       display: flex;
     }
-    /* The dock cell carries the paper name and the one New task control;
-       the main cell keeps only the stream's actions. */
+    /* The dock cell names the paper and the docked list replaces the
+       drawer; New task and Settings stay at the main cell's end. */
     .shell.is-editor .sessions-button,
     .shell.is-editor .header-main-title,
-    .shell.is-editor #shell-new-task,
     .shell.is-editor session-drawer {
       display: none;
     }

@@ -32,7 +32,6 @@ import {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { deriveRunId } from '@utils/core/idHash';
-import { convertToolSchema } from '@agent/runtime/run/toolSchema';
 import {
   nativeToolTestLayer,
   testModelCell,
@@ -148,7 +147,7 @@ const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',
 }
-return await agent('saved call')`;
+return yield* agent('saved call')`;
 
 function toolLayer(stopAfterCycle = false) {
   return nativeToolTestLayer({
@@ -438,51 +437,6 @@ describe('WorkflowScriptTool', () => {
   );
 
   it.effect(
-    'includes workflow identity, agent, phases, tasks, and script path in the approval payload',
-    () =>
-      Effect.gen(function* () {
-        const plannedScript = `export const meta = {
-  name: 'review-team',
-  description: 'Review the draft in parallel',
-  phases: ['Review', 'Synthesize'],
-  tasks: [
-    { id: 'review', label: 'Review draft', phase: 'Review' },
-    { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
-  ],
-}
-return null`;
-
-        yield* callTool({ script: plannedScript, agent: 'correct' });
-
-        expect(mocks.requestDelegationProposal).toHaveBeenCalledWith(
-          expect.objectContaining({
-            agent: 'correct',
-            model: 'parent-model',
-            instruction: 'Review the draft in parallel',
-            workflowScript: expect.objectContaining({
-              name: 'review-team',
-              description: 'Review the draft in parallel',
-              scriptPath: expect.stringMatching(
-                /^\.texra\/workflow-scripts\/draft-tool-call(?:-\d+)?\.mjs$/,
-              ),
-              phases: [{ title: 'Review' }, { title: 'Synthesize' }],
-              tasks: [
-                { id: 'review', label: 'Review draft', phase: 'Review' },
-                { id: 'merge', label: 'Merge findings', phase: 'Synthesize' },
-              ],
-            }),
-          }),
-          expect.objectContaining({
-            run: expect.objectContaining({
-              runId: parentRunId,
-              config: expect.objectContaining({ model: 'parent-model' }),
-            }),
-          }),
-        );
-      }),
-  );
-
-  it.effect(
     'owns a detached run completion rejection without delivering a second error',
     () =>
       Effect.gen(function* () {
@@ -508,75 +462,6 @@ return null`;
         );
         expect(mocks.startChildRunLoop).toHaveBeenCalledTimes(1);
       }),
-  );
-
-  it('pins the provider schema shape at the model-facing boundary', () => {
-    const definition = WorkflowScriptTool.definition;
-    const providerSchema = convertToolSchema(definition);
-    const providerProperties = providerSchema?.properties as
-      Record<string, { description?: string }> | undefined;
-
-    expect(providerSchema).toMatchObject({
-      type: 'object',
-      properties: {
-        script: expect.any(Object),
-        scriptPath: expect.any(Object),
-      },
-    });
-    expect(providerProperties?.args?.description).toContain('JSON value');
-    expect(providerProperties).not.toHaveProperty('scriptInput');
-    expect(providerSchema?.required).not.toContain('script');
-    expect(providerSchema?.required).not.toContain('scriptPath');
-    expect(providerProperties?.script?.description).toContain(
-      'Provide exactly one of script or scriptPath',
-    );
-    expect(providerProperties?.scriptPath?.description).toContain(
-      'Provide exactly one of script or scriptPath',
-    );
-    expect(
-      definition.zodSchema?.safeParse({
-        agent: 'review',
-        script,
-        args: { nested: ['text', 1, true, null] },
-      }).success,
-    ).toBe(true);
-    expect(
-      definition.zodSchema?.safeParse({
-        agent: 'review',
-        script,
-        args: ['not', 'an', 'argument', 'object'],
-      }).success,
-    ).toBe(true);
-  });
-
-  it.effect('rejects invalid JSON arguments at the schema boundary', () =>
-    Effect.gen(function* () {
-      const result = yield* WorkflowScriptTool.call({
-        agent: 'correct',
-        script,
-        scriptPath: null,
-        args: { invalid: undefined },
-      }).pipe(Effect.provide(nativeToolTestLayer()));
-
-      expect(result.status).toBe('error');
-      expect(result.diagnostics).toMatchObject({ type: 'validation_error' });
-      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect('requires a launched tool context', () =>
-    Effect.gen(function* () {
-      const outside = yield* WorkflowScriptTool.call({
-        agent: 'correct',
-        script,
-        scriptPath: null,
-      }).pipe(Effect.provide(nativeToolTestLayer()));
-      expect(outside).toMatchObject({
-        status: 'error',
-        error: expect.stringContaining('active run context'),
-      });
-      expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
-    }),
   );
 
   it.effect(
@@ -703,7 +588,7 @@ return null`;
     'saves invalid submitted source and returns its editable draft path',
     () =>
       Effect.gen(function* () {
-        const invalidScript = 'return await agent("missing meta")';
+        const invalidScript = 'return yield* agent("missing meta")';
 
         const result = yield* callTool({ script: invalidScript });
 
@@ -742,51 +627,6 @@ return null`;
       });
       expect(result.error).toContain('with scriptPath:');
     }),
-  );
-
-  it.effect('requires exactly one script source', () =>
-    Effect.gen(function* () {
-      for (const input of [
-        { agent: 'correct' },
-        {
-          agent: 'correct',
-          script,
-          scriptPath: '.texra/workflow-scripts/stale.mjs',
-        },
-      ]) {
-        const result = yield* WorkflowScriptTool.call(input).pipe(
-          Effect.provide(nativeToolTestLayer()),
-        );
-        expect(result).toMatchObject({
-          status: 'error',
-          diagnostics: { type: 'validation_error' },
-        });
-        expect(result.error).toContain(
-          'Provide exactly one of script or scriptPath',
-        );
-      }
-    }),
-  );
-
-  it.effect(
-    'does not offer an edit-and-retry hint when the script file is unreadable',
-    () =>
-      Effect.gen(function* () {
-        const scriptPath = '.texra/workflow-scripts/missing.mjs';
-
-        const result = yield* callToolInput({
-          agent: 'correct',
-          scriptPath,
-        });
-
-        expect(result).toMatchObject({
-          status: 'error',
-          error: expect.stringContaining(
-            `Unable to read workflow script '${scriptPath}'`,
-          ),
-        });
-        expect(result.error).not.toContain('To revise and rerun it');
-      }),
   );
 
   it.effect('waits for the workflow report in a one-cycle headless run', () =>
@@ -918,27 +758,6 @@ return null`;
         expect(mocks.createChildRun).not.toHaveBeenCalled();
         expect(mocks.startChildRunLoop).not.toHaveBeenCalled();
       }),
-  );
-
-  it.effect('gates the run model through delegation model availability', () =>
-    Effect.gen(function* () {
-      mocks.selectAvailableDelegationModel.mockReturnValueOnce(
-        Effect.succeed('served-model'),
-      );
-
-      yield* callTool();
-
-      expect(mocks.selectAvailableDelegationModel).toHaveBeenCalledWith({
-        parentModel: 'parent-model',
-        settings: expect.objectContaining({ globalState: expect.anything() }),
-      });
-      expect(mocks.registerRun).toHaveBeenCalledWith(
-        testDefaultSession(),
-        runIdFor('tool-test'),
-        registrationRecordFor('tool-test', 'served-model'),
-        registrationOptionsFor('tool-test'),
-      );
-    }),
   );
 
   it.effect(

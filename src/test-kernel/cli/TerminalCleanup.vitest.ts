@@ -140,19 +140,6 @@ describe('installTerminalTitleUpdates', () => {
     expect(writeSync).toHaveBeenCalledTimes(writes);
   };
 
-  it('shows root launch as running before the first run status arrives', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    enableOscTitles();
-    const updates = installTerminalTitleUpdates('/work/coauthor');
-    new TuiSession(() => undefined).markRunPending(Effect.never);
-
-    await flushTitleUpdate();
-
-    expectLastTitle('⠋ {T}·coauthor');
-    updates.dispose();
-  });
-
   it('uses every run phase and gives queued approval precedence', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);

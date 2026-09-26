@@ -176,8 +176,9 @@ export const chatToolResultMessages = Effect.fn('llm.chatToolResultMessages')(
  * scope close. The cancel finalizer is registered before the signal's abort
  * finalizer, so LIFO order aborts the request before cancellation joins a
  * pending read. Cancel repeats an errored reader's original failure; only that
- * repeat (the abort reason or the primary transport cause) is dropped, and
- * distinct cleanup defects stay in the scope's combined failure.
+ * repeat (the abort reason, or the cause the primary failure already carries,
+ * such as a transport error or a parser's rejection of a streamed event) is
+ * dropped, and distinct cleanup defects stay in the scope's combined failure.
  */
 export const readerAbortSignal = (
   reader: () => ReadableStreamDefaultReader<unknown> | undefined,
@@ -197,7 +198,6 @@ export const readerAbortSignal = (
               (reason) =>
                 Cause.isFailReason(reason) &&
                 reason.error instanceof ModelError &&
-                reason.error.kind === 'transport' &&
                 reason.error.cause === cause,
             ))
             ? Effect.void

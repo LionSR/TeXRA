@@ -276,7 +276,6 @@ function delegationOptions(
       agentCategory: AgentCategory.ToolUse,
       model: 'deepseekT',
     },
-    agentName: 'review',
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
     composition: emptyPinnedComposition.key,
@@ -303,23 +302,20 @@ function runInBand(
 }
 
 /**
- * One-shot executeAgent mock that reports a failed child via onRunError and
- * returns the same failed result, carrying the given subagent cost.
+ * One-shot executeAgent mock that returns a failed child result carrying its
+ * normalized error and the given subagent cost.
  */
 function mockExecuteAgentErrorOnce(
   totalCostUsd: number,
   extra: Record<string, unknown> = {},
 ): void {
-  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-    const failed = {
-      outcome: 'failed',
-      runId: CHILD_RUN_ID,
-      usage: { totalCost: totalCostUsd },
-      output: { category: 'toolUse', response: '', files: [] },
-      ...extra,
-    };
-    await options.onRunError?.(new Error('review model failed'), failed);
-    return failed;
+  mocks.executeAgent.mockResolvedValueOnce({
+    outcome: 'failed',
+    runId: CHILD_RUN_ID,
+    usage: { totalCost: totalCostUsd },
+    output: { category: 'toolUse', response: '', files: [] },
+    error: { message: 'review model failed', userRetryable: true },
+    ...extra,
   });
 }
 
@@ -395,7 +391,6 @@ function memoryChildRecords() {
 function recordTerminalFact(
   runId: RunId,
   turn: unknown,
-  reportedError: unknown,
   drainFailure: Error | undefined,
 ): void {
   const store = mocks.childRecords(runId) as {
@@ -405,12 +400,13 @@ function recordTerminalFact(
     outcome?: string;
     usage?: unknown;
     output?: unknown;
+    error?: { message: string };
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
   const outcome = drainFailure === undefined ? flow.outcome : 'failed';
   const flowError =
-    outcome === 'failed' && reportedError !== undefined
-      ? { kind: 'unexpected', message: toErrorMessage(reportedError) }
+    outcome === 'failed' && flow.error !== undefined
+      ? { kind: 'unexpected', message: flow.error.message }
       : undefined;
   const error =
     drainFailure === undefined
@@ -458,18 +454,9 @@ describe('headless delegation', () => {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async (signal) => {
-            let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
               turnSignal: signal,
-              onRunError: (error: unknown, result: unknown) => {
-                reportedError = error;
-                return (
-                  options as {
-                    onRunError?: (e: unknown, r: unknown) => unknown;
-                  }
-                ).onRunError?.(error, result);
-              },
             });
             // Production's lifecycle drains the facts this run queued before
             // it writes the terminal row, and the row is the post-drain fact
@@ -482,7 +469,7 @@ describe('headless delegation', () => {
                 Effect.catch((cause) => Effect.succeed(cause)),
               ),
             );
-            recordTerminalFact(runId, turn, reportedError, drainFailure);
+            recordTerminalFact(runId, turn, drainFailure);
             return turn;
           },
           catch: ensureError,
@@ -1056,30 +1043,6 @@ describe('headless delegation', () => {
     }),
   );
 
-  it.effect(
-    'composes interactive delegation through the same native launch primitive',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* callDelegateReview();
-
-        expect(result.summary).toBe("Launched 'review' (async)");
-        expect(result.output).toContain(
-          "Subagent 'review' launched. Result will be delivered automatically",
-        );
-        yield* testDefaultSession().runs.awaitDrained();
-        const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
-        expect(executeOptions).toEqual(
-          expect.objectContaining({
-            parentRunId: PARENT_RUN_ID,
-            session: expect.any(Object),
-          }),
-        );
-        expect(executeOptions).not.toEqual(
-          expect.objectContaining({ stopAfterCycle: true }),
-        );
-      }),
-  );
-
   it.effect('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
       const result = yield* delegateWithProposalDecision({
@@ -1144,82 +1107,6 @@ describe('headless delegation', () => {
           "Approved model override 'gpt5' is not available",
         );
         expect(mocks.executeAgent).not.toHaveBeenCalled();
-      }),
-  );
-
-  it.effect('launches with an approved model override that is available', () =>
-    Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockReturnValue(
-        Effect.succeed([
-          {
-            value: 'deepseekT',
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          },
-          {
-            value: 'gpt5',
-            label: 'GPT-5',
-            availability: 'provider-key',
-          },
-        ]),
-      );
-
-      const launched = Deferred.makeUnsafe<void>();
-      mocks.executeAgent.mockImplementationOnce(async () => {
-        Deferred.doneUnsafe(launched, Effect.void);
-        return {
-          outcome: 'completed',
-          runId: CHILD_RUN_ID,
-          output: {
-            category: 'toolUse',
-            response: 'The proof is correct.',
-            files: [],
-          },
-        };
-      });
-
-      const result = yield* delegateWithProposalDecision(
-        { action: 'approve', model: 'gpt5' },
-        { launchSignal: launched },
-      );
-
-      expect(result.status).toBe('executed');
-      expect(result.summary).toBe("Launched 'review' (async)");
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ model: 'gpt5' }),
-        }),
-        expect.any(String),
-        expect.anything(),
-      );
-    }),
-  );
-
-  it.effect(
-    'includes memory misses in interactive early-delivered reports',
-    () =>
-      Effect.gen(function* () {
-        // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
-        // WAITING result it returns is what the loop's single delivery site sees.
-        mockTrackedChildOnce({
-          memoryMisses: [
-            { path: '/memories/missing.md', reason: 'not found & unreadable' },
-          ],
-        });
-
-        const reportWritten = Deferred.makeUnsafe<void>();
-        mocks.writeReport.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(reportWritten, Effect.void);
-        });
-
-        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
-
-        yield* Deferred.await(reportWritten);
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining(
-            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-          ),
-        );
       }),
   );
 

@@ -33,9 +33,7 @@ function pendingFor(payload: ApprovalPayload): {
 }
 
 describe('CLI retry request', () => {
-  function subscriptionLimitPayload(
-    personalApiKeyAvailable: boolean,
-  ): RetryApprovalPayload {
+  function subscriptionLimitPayload(): RetryApprovalPayload {
     return {
       kind: 'retry',
       data: {
@@ -48,8 +46,13 @@ describe('CLI retry request', () => {
           classification: { kind: 'chatgpt-subscription' },
           provider: 'openai',
         },
+        credentialSwitch: {
+          kind: 'decline-route',
+          route: 'chatgpt-subscription',
+          provider: 'openai',
+          automatic: false,
+        },
       },
-      tui: { personalApiKeyAvailable },
     };
   }
 
@@ -63,7 +66,6 @@ describe('CLI retry request', () => {
         operation: 'Model invocation',
         errorMessage: 'Connection error',
       },
-      tui: {},
     });
     const { instance, stdin } = renderInteractive(
       ink,
@@ -101,7 +103,6 @@ describe('CLI retry request', () => {
               (_, index) => `stack frame ${index + 1}`,
             ).join('\n'),
           },
-          tui: {},
         },
         onDecide: vi.fn(),
       }),
@@ -117,7 +118,7 @@ describe('CLI retry request', () => {
 
   it('settles the approval queue from a real terminal k input', async () => {
     const { ink, React } = await loadInk();
-    const { pending, decision } = pendingFor(subscriptionLimitPayload(true));
+    const { pending, decision } = pendingFor(subscriptionLimitPayload());
     const { instance, stdin } = renderInteractive(
       ink,
       React.createElement(ApprovalModal, {
@@ -138,23 +139,5 @@ describe('CLI retry request', () => {
     } finally {
       instance.unmount();
     }
-  });
-
-  it('hides the impossible subscription switch and names the missing key', async () => {
-    const { ink, React } = await loadInk();
-    const output = await renderOutputAtTerminalSize(
-      ink,
-      React.createElement(RetryRequest, {
-        payload: subscriptionLimitPayload(false),
-        onDecide: vi.fn(),
-      }),
-      100,
-      { until: (frame) => frame.includes('API key is configured.') },
-    );
-
-    expect(output).toContain('No OpenAI API key is configured.');
-    expect(output).toContain('Press n to stop the run');
-    expect(output).toContain('/key');
-    expect(output).not.toContain('k use API key and retry');
   });
 });

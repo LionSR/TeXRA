@@ -27,6 +27,7 @@ import {
   createWorkspaceLocation,
 } from '@utils/files/fileLocation';
 import { toErrorMessage } from '@utils/errors/errorMessage';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { isStrictlyWithin } from '@utils/core/pathCore';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -141,13 +142,30 @@ const deleteWithAuxFiles = (
         ),
       );
     const baseName = path.basename(basePathNoExt);
-    const unlinkTargets = TEMP_EXTENSIONS.flatMap((tempExt) => {
-      if (!tempExt.endsWith('*')) return [basePathNoExt + tempExt];
+    const exactTargets: string[] = [];
+    const backupCandidates: string[] = [];
+    for (const tempExt of TEMP_EXTENSIONS) {
+      if (!tempExt.endsWith('*')) {
+        exactTargets.push(basePathNoExt + tempExt);
+        continue;
+      }
       const prefix = baseName + tempExt.slice(0, -1);
-      return siblings
-        .filter((name) => name.startsWith(prefix))
-        .map((name) => path.join(dir, name));
-    });
+      for (const name of siblings) {
+        if (name.startsWith(prefix))
+          backupCandidates.push(path.join(dir, name));
+      }
+    }
+    // Files only, as glob's nodir did: a non-recursive remove of an empty
+    // directory would succeed (rmdir) and delete it.
+    const backupTargets = yield* Effect.filter(backupCandidates, (candidate) =>
+      entryTypeIn(fs, candidate).pipe(
+        Effect.map((type) => type !== undefined && type !== 'Directory'),
+        // An entry that cannot be typed is still offered to the remove,
+        // which reports its own failure.
+        Effect.catch(() => Effect.succeed(true)),
+      ),
+    );
+    const unlinkTargets = [...exactTargets, ...backupTargets];
     yield* Effect.forEach(
       [filePath, ...unlinkTargets],
       (target) => silentDelete(target, 'file'),

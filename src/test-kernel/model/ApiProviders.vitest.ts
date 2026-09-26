@@ -13,7 +13,6 @@ import {
   getApiKey,
   hasUsableApiKey,
   loadApiKeyStatusMap,
-  lookupApiKey,
   lookupApiKeyOrigin,
 } from '@model/apiProviders';
 import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
@@ -113,14 +112,6 @@ describe('API provider key resolution', () => {
         'moonshot',
       ]);
     }).pipe(withEnv({ MOONSHOT_API_KEY: 'from-env' })),
-  );
-
-  it.effect('treats empty env keys as missing', () =>
-    Effect.gen(function* () {
-      const { secrets } = createSecrets({});
-
-      expect(yield* lookupApiKey(secrets, 'openai')).toBeUndefined();
-    }).pipe(withEnv({ OPENAI_API_KEY: '' })),
   );
 
   it.effect(

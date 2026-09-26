@@ -1,21 +1,14 @@
 /**
- * One run's follow-up input queue: an Effect `Queue` per owner generation,
- * seeded from the run's folded `followup.queued` rows that have no
- * `followup.consumed`, plus the follow-ups the session's admission boundary
- * queues for that owner while it runs.
+ * One run's follow-up input for one owner generation: a wake signal over the
+ * follow-ups the run's rows still queue. The rows are the authority; this
+ * holds no copy of them.
  */
-import { Queue, type Cause, Effect } from 'effect';
+import { Data, Effect, Latch } from 'effect';
 
-import type { SessionEvent } from '@shared/schemas';
-
-/** One queued follow-up as its row carries it. */
-export type QueuedFollowUp = Pick<
-  Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content'
->;
+import type { QueuedFollowUp } from '@shared/session/runRows';
 
 /**
- * What a run takes from its queue: queued follow-ups in queue order, or the
+ * What a run takes from its input: queued follow-ups in commit order, or the
  * loop's own maintenance wake (an immediate compaction's turn), which is no
  * row and never shares a batch with follow-ups.
  */
@@ -23,110 +16,72 @@ export type FollowUpBatch =
   | { readonly synthetic: false; readonly followUps: readonly QueuedFollowUp[] }
   | { readonly synthetic: true; readonly text: string };
 
-type InputEntry =
-  | { readonly kind: 'followUp'; readonly followUp: QueuedFollowUp }
-  | { readonly kind: 'synthetic'; readonly text: string };
+/** A live consumer claim refused: another consumer already holds the run's input. */
+export class FollowUpContinuationOwned extends Data.TaggedError(
+  'FollowUpContinuationOwned',
+)<{ readonly message: string }> {}
 
 /**
- * One owner generation's input queue. The session's admission boundary
- * offers each follow-up it queues for the owner; the consumer that folds
- * the run seeds it once with the pending rows the fold holds. Follow-ups
- * offered before that seed are held behind it, which is their commit order:
- * a row the fold does not hold was committed after the claim that attached
- * this queue. Ids dedupe the overlap (a row both offered and folded).
+ * One owner generation's input. A take reads what is pending from `pending`
+ * (the session publisher's pending follow-ups, less the ids the admission
+ * boundary holds back for a finalizing child), so a row an earlier process
+ * left queued and one admitted while this generation runs arrive the same
+ * way, in commit order. The admission boundary signals the generation when
+ * a row lands for it.
+ *
+ * One consumer per generation. A taken batch stays pending until its
+ * `followup.consumed` commit (the tool-use `consume`, the agent-CLI child's
+ * turn settle), and a consumer takes again only after that commit, so a
+ * batch in flight is never read twice.
  */
 export class RunInput {
-  private readonly seen = new Set<string>();
-  private held: QueuedFollowUp[] | null = [];
+  private readonly signal = Latch.makeUnsafe(false);
+  private readonly synthetic: string[] = [];
+  private ended = false;
 
-  private constructor(
-    private readonly queue: Queue.Queue<InputEntry, Cause.Done>,
-  ) {}
+  constructor(private readonly pending: () => readonly QueuedFollowUp[]) {}
 
-  static readonly make: Effect.Effect<RunInput> = Effect.map(
-    Queue.unbounded<InputEntry, Cause.Done>(),
-    (queue) => new RunInput(queue),
-  );
-
-  offer(followUp: QueuedFollowUp): void {
-    if (this.seen.has(followUp.followUpId)) return;
-    this.seen.add(followUp.followUpId);
-    if (this.held) this.held.push(followUp);
-    else Queue.offerUnsafe(this.queue, { kind: 'followUp', followUp });
+  /** Wake the consumer: a follow-up row landed for it. */
+  notify(): void {
+    Latch.openUnsafe(this.signal);
   }
 
   /**
-   * Seed with the fold's pending follow-ups in ledger order, then append
-   * held items the fold does not already name. `known` is every id the fold
-   * holds, consumed ones included: a held or later offer of a consumed id
-   * is a replayed delivery, and is dropped. A pending id already in `held`
-   * (a producer replay before this seed) stays at its ledger position.
-   *
-   * `held === null` means this generation is already seeded. A later seed
-   * (the inner tool-use flow sharing a native child's queue) only enqueues
-   * pending ids not already in `seen`, so a live offer is not duplicated.
+   * Queue one maintenance turn. It is queued only while nothing is pending,
+   * so every follow-up a later take finds arrived after it, and it is taken
+   * first.
    */
-  seed(
-    pending: readonly QueuedFollowUp[],
-    known: ReadonlySet<string> = new Set(),
-  ): void {
-    const pendingIds = new Set(pending.map((f) => f.followUpId));
-    if (this.held === null) {
-      const unseen = pending.filter((f) => !this.seen.has(f.followUpId));
-      for (const id of [...pendingIds, ...known]) this.seen.add(id);
-      Queue.offerAllUnsafe(
-        this.queue,
-        unseen.map((followUp) => ({
-          kind: 'followUp' as const,
-          followUp,
-        })),
-      );
-      return;
-    }
-    const extraHeld = this.held.filter(
-      (f) => !pendingIds.has(f.followUpId) && !known.has(f.followUpId),
-    );
-    for (const id of [...pendingIds, ...known]) this.seen.add(id);
-    this.held = null;
-    Queue.offerAllUnsafe(
-      this.queue,
-      [...pending, ...extraHeld].map((followUp) => ({
-        kind: 'followUp' as const,
-        followUp,
-      })),
-    );
-  }
-
-  /** Wake the consumer for a maintenance turn. */
   wake(text: string): void {
-    Queue.offerUnsafe(this.queue, { kind: 'synthetic', text });
+    this.synthetic.push(text);
+    Latch.openUnsafe(this.signal);
   }
 
   hasQueued(): boolean {
-    return (this.held?.length ?? 0) > 0 || Queue.sizeUnsafe(this.queue) > 0;
+    return this.synthetic.length > 0 || this.pending().length > 0;
   }
 
-  /** End the generation: what it still holds stays queued on the run's rows. */
+  /** End the generation: what is pending stays queued on the run's rows. */
   end(): void {
-    while (Queue.sizeUnsafe(this.queue) > 0) Queue.takeUnsafe(this.queue);
-    Queue.endUnsafe(this.queue);
+    this.ended = true;
+    this.synthetic.length = 0;
+    Latch.openUnsafe(this.signal);
   }
 
   /** Block for the next batch; null once the generation ended. */
   readonly take: Effect.Effect<FollowUpBatch | null> = Effect.suspend(() =>
     Effect.gen({ self: this }, function* () {
-      const first = yield* Queue.take(this.queue);
-      if (first.kind === 'synthetic') {
-        return { synthetic: true, text: first.text } as const;
+      for (;;) {
+        if (this.ended) return null;
+        // Closed before the read: a signal landing after it reopens the wait.
+        Latch.closeUnsafe(this.signal);
+        const text = this.synthetic.shift();
+        if (text !== undefined) return { synthetic: true, text } as const;
+        const followUps = this.pending();
+        if (followUps.length > 0) {
+          return { synthetic: false, followUps } as const;
+        }
+        yield* this.signal.await;
       }
-      const followUps = [first.followUp];
-      while (Queue.sizeUnsafe(this.queue) > 0) {
-        const next = yield* Queue.peek(this.queue);
-        if (next.kind !== 'followUp') break;
-        yield* Queue.take(this.queue);
-        followUps.push(next.followUp);
-      }
-      return { synthetic: false, followUps } as const;
-    }).pipe(Effect.catchTag('Done', () => Effect.succeed(null))),
+    }),
   );
 }

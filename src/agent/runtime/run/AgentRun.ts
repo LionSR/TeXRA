@@ -37,7 +37,6 @@ import {
   type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
 import type {
   CompositionKey,
   Compositions,
@@ -84,8 +83,8 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Current folded state at an idle turn boundary, after child delivery. */
-  readonly onIdle?: (state: RunState) => void;
+  /** An idle turn boundary, after child delivery. */
+  readonly onIdle?: () => void;
 }
 
 export interface AgentRunShape {
@@ -177,6 +176,18 @@ interface AgentRunLayerInput {
  * L0 provided), never from a file; a fresh run binds the launch's model
  * under the route the launch context already resolved.
  */
+/**
+ * A run program's result, stamped with the hash of the composition the run
+ * pinned, for a host that reports what the run ran with.
+ */
+export const withCompositionHash = <A extends object, E, R>(
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A & { readonly compositionHash: string }, E, R | AgentRun> =>
+  Effect.zipWith(program, Effect.service(AgentRun), (result, run) => ({
+    ...result,
+    compositionHash: run.composition.key.hash,
+  }));
+
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,

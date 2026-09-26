@@ -29,9 +29,7 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initCliPlatform: vi.fn(),
-  installCliProcessRuntime: vi.fn(),
   resolveCliLaunchAgent: vi.fn(),
-  runChat: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -40,11 +38,6 @@ const mocks = vi.hoisted(() => ({
 // SIGINT/SIGTERM owner once it mounts (see initPlatform.ts).
 vi.mock('@cli/runtime/initPlatform', () => ({
   initCliPlatform: mocks.initCliPlatform,
-}));
-
-vi.mock('@cli/runtime/cliProcessRuntime', () => ({
-  installCliProcessRuntime: mocks.installCliProcessRuntime,
-  disposeCliProcessRuntime: Effect.void,
 }));
 
 vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
@@ -68,10 +61,6 @@ vi.mock('@cli/runtime/workflowOutput', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@cli/runtime/workflowOutput')>()),
   assertOutputDirAvailable: mocks.assertOutputDirAvailable,
   assertOutputFileAvailable: mocks.assertOutputFileAvailable,
-}));
-
-vi.mock('@cli/chat/tui/runChatTui', () => ({
-  runChat: mocks.runChat,
 }));
 
 const RUN_ID = 'eec001' as RunId;
@@ -148,7 +137,6 @@ async function seedRunRecord(seed: {
       session: Effect.succeed(session),
     }),
   );
-  mocks.installCliProcessRuntime.mockImplementation(async () => testRuntime());
   await Effect.runPromise(
     session.commit([
       {
@@ -201,9 +189,10 @@ function cliContext(overrides: Partial<CliContext> = {}): CliContext {
   });
 }
 
+/** The command's program, run the way `defineCliCommand` runs it. */
 async function run(context: CliContext, id: RunId = RUN_ID) {
   const { runResumeCommand } = await import('@cli/commands/resumeRun');
-  return runResumeCommand(context, id);
+  return testRuntime().runPromise(runResumeCommand(context, id));
 }
 
 /** Seed a workflow run the real retrieval resumes. */
@@ -221,21 +210,16 @@ describe('runResumeCommand', () => {
         category: AgentCategory.Workflow,
       }),
     );
-    mocks.runChat.mockResolvedValue({ exitCode: 0 });
     mocks.executeCliWorkflowConfig.mockResolvedValue(0);
     mocks.assertOutputDirAvailable.mockReturnValue(Effect.void);
     mocks.assertOutputFileAvailable.mockReturnValue(Effect.void);
   });
 
   it('reopens the chat TUI with the persisted tool-use run record', async () => {
-    await expect(run(cliContext())).resolves.toBe(0);
+    await expect(run(cliContext())).resolves.toEqual({
+      chat: { initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG } },
+    });
 
-    expect(mocks.runChat).toHaveBeenCalledWith(
-      expect.any(Object),
-      expect.objectContaining({
-        initialResume: { id: RUN_ID, config: TOOL_USE_CONFIG },
-      }),
-    );
     expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalled();
   });
@@ -276,7 +260,6 @@ describe('runResumeCommand', () => {
       'correct',
       'workflowResume',
     );
-    expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   it('restores an absolute persisted workflow output directory', async () => {
@@ -333,24 +316,9 @@ describe('runResumeCommand', () => {
     );
   });
 
-  it('reports a missing workflow agent as a usage error', async () => {
-    await seedRunRecord({ config: WORKFLOW_CONFIG });
-    mocks.resolveCliLaunchAgent.mockReturnValue(
-      Effect.fail(new CliUsageError('Agent not found: correct.')),
-    );
-
-    await expect(run(cliContext())).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Agent not found: correct.',
-    );
-    expect(mocks.executeCliWorkflowConfig).not.toHaveBeenCalled();
-  });
-
   it('rejects tool-use resume when the context says stdout is not a TTY', async () => {
     await expect(run(cliContext({ stdoutIsTty: false }))).resolves.toBe(2);
 
-    expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       expect.stringContaining(`texra resume ${RUN_ID}`),
     );
@@ -362,7 +330,6 @@ describe('runResumeCommand', () => {
   it('rejects tool-use resume in dumb terminals before falling through to chat', async () => {
     await expect(run(cliContext({ termIsDumb: true }))).resolves.toBe(2);
 
-    expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'texra resume needs a capable terminal: TERM=dumb disables the cursor controls Ink uses. If this is an interactive PTY, prefix the command with `TERM=xterm-256color`. For non-interactive runs, use `texra run`.',
     );
@@ -376,7 +343,6 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Run not found: ${RUN_ID}`,
     );
-    expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   it('reports a run with no checkpoint as finished', async () => {
@@ -390,7 +356,6 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       'This run has finished. Start a new agent task to continue.',
     );
-    expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   it.effect('reports a live run instead of failing silently', () =>
@@ -404,8 +369,8 @@ describe('runResumeCommand', () => {
           .pipe(Effect.orDie),
       );
 
-      // `runResumeCommand` is the CLI's Promise-facing entry; the test awaits
-      // its facade the way the process entry does.
+      // The command's program runs on the runtime its boundary holds, which
+      // the `run` helper stands in for.
       expect(yield* Effect.promise(() => run(cliContext()))).toBe(2);
 
       expect(mocks.writeTextStderr).toHaveBeenCalledWith(
@@ -461,7 +426,6 @@ describe('runResumeCommand', () => {
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('This run has finished'),
     );
-    expect(mocks.runChat).not.toHaveBeenCalled();
   });
 
   // A transient failure over a checkpoint that is still on disk says nothing
@@ -489,7 +453,6 @@ describe('runResumeCommand', () => {
 
     await expect(run(cliContext())).resolves.toBe(1);
 
-    expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       `Could not load session ${RUN_ID}: Failed to retrieve workflow resume data for run: ${RUN_ID}: checkpoint could not be read (KV timeout)`,
     );
@@ -510,7 +473,6 @@ describe('runResumeCommand', () => {
 
     await expect(run(cliContext())).resolves.toBe(2);
 
-    expect(mocks.runChat).not.toHaveBeenCalled();
     expect(mocks.writeTextStderr).toHaveBeenCalledWith(
       "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );

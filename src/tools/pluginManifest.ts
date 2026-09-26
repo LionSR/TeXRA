@@ -6,7 +6,6 @@
 
 // Local imports
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
   MAX_CONCURRENT_PR_SUBSCRIPTIONS,
@@ -111,26 +110,17 @@ export const MANIFEST = [
     toolNames: [
       'memory',
       'todo_write',
-      'plan',
       'delegate_workflow',
       'delegate_agent',
       'executions',
       'accept_run_files',
     ],
-    injectedWhen: {
-      memory: GlobalStateKey.MEMORY_ENABLED,
-      // The `plan` tool owns planning and the goal lifecycle (update, pause,
-      // complete), so any tool-use agent can drive the goal loop while goal
-      // is on. The goal continuation itself is the tool-use loop's
-      // (`maybeBuildGoalContinuation`), not an injection.
-      plan: GOAL_FEATURE_FLAG_KEY,
-    },
+    injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
     name: 'Memory, Tasks & Delegation',
     category: 'workflow',
     keywords: [
       'memory',
       'todo',
-      'plan',
       'track',
       'delegate',
       'orchestrat',
@@ -140,6 +130,25 @@ export const MANIFEST = [
     ],
     description:
       'Persistent memory across sessions, task tracking with to-do lists, and delegate work to sub-agents.',
+  },
+  {
+    // The `plan` tool owns planning and the goal lifecycle (update, pause,
+    // complete), so any tool-use agent can drive the goal loop while the
+    // plugin is on; the synthetic turns are its continuation policy.
+    id: 'goal',
+    toolNames: ['plan'],
+    injectedWhen: { plan: true },
+    name: 'Goal Mode',
+    category: 'workflow',
+    keywords: ['plan', 'goal', 'autonomous', 'objective'],
+    description:
+      'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
+    configNotes:
+      'No local install required. Turning this off removes the plan tool from every agent, and runs started afterwards open no goal turns.',
+    toggleable: true,
+    onByDefault: true,
+    availability: ALWAYS_AVAILABLE,
+    continuation: true,
   },
   {
     id: 'texcount',
@@ -395,7 +404,6 @@ export const MANIFEST = [
     id: 'core',
     toolNames: [
       'inline_comment',
-      'report_review_issue',
       'open_pdf',
       'ask_user_question',
       'lean_loogle',

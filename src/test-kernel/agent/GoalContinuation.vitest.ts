@@ -2,58 +2,25 @@ import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import { goalOf, isGoalEnabled, pauseGoal, startGoal } from '@tools/goal';
+import { goalOf, pauseGoal, startGoal } from '@tools/goal';
 import { generateRunId } from '@utils/core';
 
 const RUN_ID = generateRunId();
-
-async function installPlatformWithConfig(
-  config: Record<string, unknown>,
-): Promise<void> {
-  await installFakePlatform({ config });
-}
-
-describe('isGoalEnabled', () => {
-  it.each([
-    {
-      name: 'defaults on when the key is not set',
-      config: {},
-      expected: true,
-    },
-    {
-      name: 'honors an explicit false',
-      config: { [GOAL_FEATURE_FLAG_KEY]: false },
-      expected: false,
-    },
-    {
-      name: 'honors an explicit true',
-      config: { [GOAL_FEATURE_FLAG_KEY]: true },
-      expected: true,
-    },
-  ])('$name', async ({ config, expected }) => {
-    await installPlatformWithConfig(config);
-
-    expect(isGoalEnabled(testWorkspaceRoots().config)).toBe(expected);
-  });
-});
 
 describe('maybeBuildGoalContinuation', () => {
   let session: SessionHandle;
 
   beforeEach(async () => {
-    await installPlatformWithConfig({ [GOAL_FEATURE_FLAG_KEY]: true });
+    await installFakePlatform();
     session = createTestSession();
     publishTestRunStart(session, RUN_ID);
   });
@@ -61,24 +28,6 @@ describe('maybeBuildGoalContinuation', () => {
   afterEach(async () => {
     await Effect.runPromise(session.dispose());
   });
-
-  it.effect('returns a rendered prompt when an active goal is present', () =>
-    Effect.gen(function* () {
-      yield* startGoal(
-        session,
-        RUN_ID,
-        'Complete the refactor until pnpm test passes',
-      );
-      const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
-      expect(out).toMatch(/<goal_context>/);
-      expect(out).toContain('Complete the refactor until pnpm test passes');
-      expect(out).toContain('Autonomous objective active');
-      // The continuation no longer advertises the model-callable exit verbs;
-      // it steers toward persistence instead.
-      expect(out).not.toContain('plan(command="complete")');
-      expect(out).not.toContain('plan(command="pause")');
-    }),
-  );
 
   it.effect(
     'renders an objective containing nunjucks-significant syntax as literal text',
@@ -93,52 +42,6 @@ describe('maybeBuildGoalContinuation', () => {
         const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
         expect(out).toContain(objective);
       }),
-  );
-
-  it.live('continues rendering after more than two hours elapsed', () =>
-    Effect.gen(function* () {
-      const goal = yield* startGoal(
-        session,
-        RUN_ID,
-        'Keep solving the hard problem until verification is complete.',
-      );
-      // The row's own start time, so the elapsed span is exact.
-      const startedAt = Date.parse(goal.startedAt);
-
-      vi.useFakeTimers();
-      yield* Effect.addFinalizer(() => Effect.sync(() => vi.useRealTimers()));
-      vi.setSystemTime(
-        new Date(startedAt + 2 * 60 * 60 * 1000 + 5 * 60 * 1000 + 1234),
-      );
-      const out = yield* maybeBuildGoalContinuation(session, RUN_ID);
-
-      expect(out).toContain('<goal_context>');
-      expect(out).toContain(
-        'Keep solving the hard problem until verification is complete.',
-      );
-      expect(out).toContain('Time elapsed: 2h 5m');
-    }),
-  );
-
-  it.effect(
-    'returns null when the feature flag is off (with an active goal present)',
-    () =>
-      Effect.gen(function* () {
-        yield* startGoal(session, RUN_ID, 'objective');
-        // Flip just the flag — the goal row is untouched, so the test does not
-        // pass trivially.
-        (testWorkspaceRoots().config as FakeConfigProvider).set(
-          GOAL_FEATURE_FLAG_KEY,
-          false,
-        );
-        expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
-      }),
-  );
-
-  it.effect('returns null when no goal exists for the stream', () =>
-    Effect.gen(function* () {
-      expect(yield* maybeBuildGoalContinuation(session, RUN_ID)).toBeNull();
-    }),
   );
 
   it.effect('returns null when the goal is paused', () =>

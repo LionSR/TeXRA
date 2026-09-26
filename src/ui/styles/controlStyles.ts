@@ -8,11 +8,10 @@
  * belongs in this file, not in a local override — a per-component skin is how
  * hover ends up meaning three different things on one screen.
  *
- * Every value is a `var()`, so the desktop's light-DOM mirror in
- * `packages/desktop/src/renderer/styles.css` cannot drift in appearance from
- * this sheet — only in existence. Shadow DOM can't adopt a document
- * stylesheet, and light DOM can't adopt a Lit `CSSResult`, which is why the
- * class names exist in both places.
+ * Every value is a `var()`. Shadow roots adopt these sheets per component;
+ * the desktop's light-DOM tree adopts the same sheets on its document
+ * (`packages/desktop/src/renderer/designTokens.ts`), so both trees render
+ * from this one definition.
  *
  * `.action-button` / `.action-icon-button` / `.header-action` are selector
  * aliases for the same skins, kept because `renderIconActionButton` emits them
@@ -220,16 +219,15 @@ export const buttonStyles: CSSResult = css`
     color: var(--wa-color-text-normal);
   }
 
+  /* Pressed and toggled-on are the shared overlays, like every state. */
   .icon-button::part(base):active,
-  .action-icon-button::part(base):active,
+  .action-icon-button::part(base):active {
+    background: var(--surface-active);
+  }
+
   .icon-button[aria-pressed='true']::part(base),
   .action-icon-button[aria-pressed='true']::part(base) {
-    border-color: color-mix(
-      in srgb,
-      var(--wa-color-focus) 34%,
-      var(--border-hairline)
-    );
-    background: var(--wa-color-brand-fill-quiet);
+    background: var(--surface-selected);
     color: var(--wa-color-text-normal);
   }
 

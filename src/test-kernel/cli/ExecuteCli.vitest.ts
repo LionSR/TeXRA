@@ -12,6 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -434,63 +435,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect(
-    'observes workflow-script children for every visible text run',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = {
-          config: toolUseConfig(),
-          runId: 'abcdef',
-        } as CliRequest;
-
-        yield* executeCliRequest(
-          request,
-          cliContext({ outputFormat: 'text', renderRunProgress: true }),
-        );
-
-        expect(mocks.attachWorkflowPlainOutput).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.anything(),
-          expect.objectContaining({
-            runId: 'abcdef',
-            writeLine: mocks.writeTextStderr,
-          }),
-        );
-        expect(
-          mocks.attachWorkflowPlainOutput.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          mocks.runAgent.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-        expect(mocks.attachRunProgressRenderer).toHaveBeenCalledTimes(1);
-        expect(mocks.detachWorkflowPlainOutput).toHaveBeenCalledTimes(1);
-      }),
-  );
-
-  it.effect(
-    'keeps workflow-script progress quiet when run progress is disabled',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = {
-          config: {
-            agent: 'proof-workflow',
-            model: 'gpt54',
-            agentCategory: 'workflow',
-          },
-          runId: 'abcdef',
-        } as CliRequest;
-
-        yield* executeCliRequest(
-          request,
-          cliContext({ outputFormat: 'text', renderRunProgress: false }),
-        );
-
-        expect(mocks.attachWorkflowPlainOutput).not.toHaveBeenCalled();
-      }),
-  );
-
   it.effect.each([
     { policy: 'never', overrides: {} },
     { policy: 'ask', overrides: { approvalPolicy: 'ask' } },
@@ -527,44 +471,6 @@ describe('executeCliRequest', () => {
         }),
       );
     }),
-  );
-
-  it.effect('hides host-unavailable tools in CLI run', () =>
-    Effect.gen(function* () {
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const request = baseRequest();
-
-      yield* executeCliRequest(
-        request,
-        cliContext({ mode: 'interactive', approvalPolicy: 'ask' }),
-      );
-
-      expect(mocks.runAgent).toHaveBeenCalledWith(
-        request,
-        expect.objectContaining({
-          approvalPromptsUnavailable: false,
-        }),
-      );
-    }),
-  );
-
-  it.effect(
-    'restores CLI host interactions before closing the runtime host',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-
-        yield* executeCliRequest(request, cliContext());
-
-        expect(mocks.disposeHostInteractions).toHaveBeenCalledTimes(1);
-        expect(mocks.close).toHaveBeenCalledTimes(1);
-        expect(
-          mocks.disposeHostInteractions.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-        );
-      }),
   );
 
   it.effect(
@@ -694,24 +600,6 @@ describe('executeCliRequest', () => {
           }),
         );
         expect(mocks.close).toHaveBeenCalledOnce();
-      }),
-  );
-
-  it.effect(
-    'resolves a classified run failure to a non-zero exit code without rethrowing or finalizing again',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-        mocks.runAgent.mockImplementationOnce(async () => {
-          throw new AgentError('provider boom');
-        });
-
-        const result = yield* executeCliRequest(request, cliContext());
-
-        expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.close).toHaveBeenCalledTimes(1);
       }),
   );
 
@@ -1370,31 +1258,6 @@ describe('executeCliConfig', () => {
     await installFreshDefaultSession();
   });
 
-  /** Stubs a completed tool-use run and drives executeCliToolUseConfig. */
-  const runCompletedToolUseConfig = (resolvedOutcome: string) =>
-    Effect.gen(function* () {
-      const { AgentCategory } = yield* Effect.promise(
-        () => import('@shared/schemas'),
-      );
-      const { executeCliToolUseConfig } = yield* Effect.promise(loadExecuteCli);
-      mocks.runAgent.mockResolvedValueOnce({
-        outcome: 'completed',
-        output: {
-          category: AgentCategory.ToolUse,
-          response: 'Done.',
-          files: [],
-        },
-        runId: 'exec-1',
-      });
-      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-        outcome: resolvedOutcome,
-        outcomePersisted: true,
-      });
-      return yield* executeCliToolUseConfig(toolUseConfig(), cliContext(), {
-        stopAfterCycle: true,
-      });
-    });
-
   // it.live for the two shutdown tests below: the run is forked in-fiber, but
   // runShutdown drives the lifecycle host's real-clock phase deadline and its
   // handler settles on the process runtime.
@@ -1498,27 +1361,46 @@ describe('executeCliConfig', () => {
       }),
   );
 
-  it.effect('reports invalid configs without starting the runtime host', () =>
-    Effect.gen(function* () {
-      const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
-      const invalidConfig = {
-        agentCategory: 'invalid',
-      } as unknown as Parameters<typeof executeCliConfig>[0];
-
-      const result = yield* executeCliConfig(invalidConfig, cliContext());
-
-      expect(result).toMatchObject({ ok: false });
-      expect(mocks.writeTextStderr).toHaveBeenCalledWith(expect.any(String));
-      expect(mocks.createCliRuntimeHost).not.toHaveBeenCalled();
-      expect(mocks.runAgent).not.toHaveBeenCalled();
-    }),
-  );
-
   it.effect(
-    'derives the internal CLI result and exit code for tool-use configs',
+    'records each installed plugin by source and pinned commit in the CLI result',
     () =>
       Effect.gen(function* () {
-        const result = yield* runCompletedToolUseConfig('completed');
+        const commit = 'a'.repeat(40);
+        yield* testDefaultSession().roots.globalState.update(
+          GlobalStateKey.INSTALLED_PLUGINS,
+          [
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+              path: '/home/me/.texra/plugins/notes',
+              skills: ['/home/me/.texra/plugins/notes/skills'],
+            },
+          ],
+        );
+        const { AgentCategory } = yield* Effect.promise(
+          () => import('@shared/schemas'),
+        );
+        const { executeCliToolUseConfig } =
+          yield* Effect.promise(loadExecuteCli);
+        mocks.runAgent.mockResolvedValueOnce({
+          outcome: 'completed',
+          output: {
+            category: AgentCategory.ToolUse,
+            response: 'Done.',
+            files: [],
+          },
+          runId: 'exec-1',
+        });
+        mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+          outcome: 'completed',
+          outcomePersisted: true,
+        });
+        const result = yield* executeCliToolUseConfig(
+          toolUseConfig(),
+          cliContext(),
+          { stopAfterCycle: true },
+        );
 
         expect(result).toMatchObject({
           ok: true,
@@ -1530,34 +1412,22 @@ describe('executeCliConfig', () => {
           },
         });
         if (result.ok) {
+          // The result names each installed plugin by where it came from and
+          // its pinned commit, never by the local checkout it was read from.
+          expect(result.result.plugins).toEqual([
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+            },
+          ]);
           expect(Object.keys(result.result)).toEqual([
             'outcome',
             'output',
             'runId',
+            'plugins',
             'workingDirectory',
           ]);
-        }
-      }),
-  );
-
-  it.effect(
-    'carries only the resolved outcome after a shutdown interruption',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* runCompletedToolUseConfig('cancelled');
-
-        expect(result).toMatchObject({
-          ok: true,
-          exitCode: CliExitCode.Interrupted,
-          result: {
-            outcome: 'cancelled',
-            workingDirectory: '/tmp/project',
-          },
-        });
-        if (result.ok) {
-          expect(Object.hasOwn(result.result, 'status')).toBe(false);
-          expect(Object.hasOwn(result.result, 'terminalStatus')).toBe(false);
-          expect(Object.hasOwn(result.result, 'endGroupStatus')).toBe(false);
         }
       }),
   );

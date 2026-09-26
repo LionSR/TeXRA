@@ -15,10 +15,7 @@ import {
   type CliContext,
   readCliVersion,
 } from '@cli/runtime/cliContext';
-import {
-  firstRunSetupAgentOverride,
-  SETUP_AGENT_HANDOFF_NOTICE,
-} from '@cli/onboarding/setupContinuation';
+import { firstRunSetupAgentOverride } from '@cli/onboarding/setupContinuation';
 import { resolveChatDefaults } from '@cli/runtime/chatDefaults';
 import { setCliAgentResumeHandler } from '@cli/runtime/cliAgentResume';
 import { installCliProcessRuntime } from '@cli/runtime/cliProcessRuntime';
@@ -63,6 +60,7 @@ import { makeFollowUpDeliveryQueue } from '../followUpDeliveryQueue';
 import { App } from './App';
 import {
   applyCliModelSelection,
+  applyCliTeamSelection,
   applyInitialCliAgentSelection,
   resolveChatToolUseAgent,
 } from './commands/handlers/agentModelCommands';
@@ -93,6 +91,13 @@ import {
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
 import { appendLocalAssistantTranscript } from './state/transcript';
+import { openCliSlashCommandForm } from './commands/slashForms';
+import {
+  checkModelConnection,
+  connectChatModel,
+  holdUntilConnected,
+  modelConnectionNeeded,
+} from './modelConnection';
 import { installTerminalTitleUpdates } from './terminalTitle';
 import {
   chatTuiCanStartRootRun,
@@ -105,7 +110,7 @@ interface ChatResult {
   exitCode: number;
 }
 
-interface RunChatInit {
+export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */
@@ -167,31 +172,22 @@ export async function runChat(
       const services = yield* initCliPlatform({ ...context, quietLogs: true });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);
-      // First-run gate (interactive only; headless already rejected above). A
-      // credential-less user signs in or saves a key here, and the model
-      // resolution below sees those credentials in the same process.
-      const { maybeRunCliOnboarding } = yield* Effect.promise(
-        () => import('@cli/onboarding/runOnboarding'),
-      );
-      const onboarding = yield* maybeRunCliOnboarding(services, context);
-      if (onboarding.declined) {
-        // The user saw the picker and chose "Skip for now"; the skip summary
-        // already told them how to set up later. Exit cleanly instead of
-        // falling through to the no-models resolution error, the dead-end this
-        // feature exists to fix.
-        return { exitCode: CliExitCode.Success };
-      }
-      // First-run setup yields to an explicitly selected agent.
+      // Without a usable credential the chat still opens: the "Connect a
+      // model" panel takes the first foreground slot, and model resolution
+      // waits for the connection instead of ending the process.
+      const hasCredential = yield* checkModelConnection(services);
       const explicitAgent = initialResume?.config.agent ?? init.agentOverride;
-      const setupAgentOverride = firstRunSetupAgentOverride({
-        onboardingConfigured: onboarding.configured,
+      // The setup-agent handoff belongs to the moment a first credential
+      // lands, which is after startup when the chat opened without one.
+      const firstRunSetupAgent = firstRunSetupAgentOverride({
+        onboardingConfigured: true,
         firstRunDone: yield* getFirstRunDone(services.globalState),
         pinnedAgent: explicitAgent ?? context.envAgent,
       });
       yield* loadAgents();
       const defaults = resolveChatDefaults({
         stores: services,
-        agentOverride: explicitAgent ?? setupAgentOverride,
+        agentOverride: explicitAgent,
         modelOverride: initialResume?.config.model ?? init.modelOverride,
         envAgent: context.envAgent,
         envModel: context.envModel,
@@ -213,17 +209,19 @@ export async function runChat(
       // resolution, the no-models hints, and the header/status all read this
       // same value so they can never disagree.
       const modelSelectionExit = yield* Effect.exit(
-        selectCliRunnableModel(defaults.model, {
-          stores: services,
-          fallbackReason: defaults.modelSource,
-          noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
-            CHAT_STARTUP_MODEL_RECOVERY,
-          ),
-        }).pipe(
-          Effect.tap((selection) =>
-            setCliHelperModel(services.globalState, selection.model),
-          ),
-        ),
+        hasCredential
+          ? selectCliRunnableModel(defaults.model, {
+              stores: services,
+              fallbackReason: defaults.modelSource,
+              noAvailableModelsMessage: formatCliNoAvailableModelsRecovery(
+                CHAT_STARTUP_MODEL_RECOVERY,
+              ),
+            }).pipe(
+              Effect.tap((selection) =>
+                setCliHelperModel(services.globalState, selection.model),
+              ),
+            )
+          : Effect.succeed({ model: defaults.model, notice: undefined }),
       );
       if (Exit.isFailure(modelSelectionExit)) {
         writeTextStderr(toErrorMessage(Cause.squash(modelSelectionExit.cause)));
@@ -257,9 +255,7 @@ export async function runChat(
       // First-run handoff explanation: when the setup agent owns this session
       // (decided here for both the bare-`texra` and `texra chat` entries), say
       // so - display-only, so the agent waits for the user's first message.
-      const startupNotice =
-        init.startupNotice ??
-        (setupAgentOverride ? SETUP_AGENT_HANDOFF_NOTICE : undefined);
+      const startupNotice = init.startupNotice;
       if (startupNotice) {
         appendLocalAssistantTranscript(startupNotice);
       }
@@ -267,6 +263,7 @@ export async function runChat(
         services,
         runtimeSession,
         defaults,
+        firstRunSetupAgent,
         model: modelSelection.model,
         inputHistory: yield* loadInputHistory,
         // The drain lives as long as the process runtime; the graceful exit
@@ -435,6 +432,18 @@ export async function runChat(
 
   // Pre-register the slash commands the input palette uses.
   registerBuiltinSlashCommands({
+    onAccountChanged: () =>
+      connectChatModel(
+        slashCommandContext(),
+        {
+          startupModel: model,
+          modelSource: defaults.modelSource,
+          recovery: CHAT_STARTUP_MODEL_RECOVERY,
+          firstRunSetupAgent: startup.firstRunSetupAgent,
+        },
+        (held) =>
+          chatController.submit(held.line, held.mediaFiles, held.images),
+      ),
     secrets: services.secrets,
     stores: services,
     runtime,
@@ -442,6 +451,8 @@ export async function runChat(
     canSelectAgent: () => chatTuiCanStartRootRun(session),
     onAgentSelect: (nextAgent) =>
       applyInitialCliAgentSelection(nextAgent, slashCommandContext()),
+    onTeamSelect: (teamId) =>
+      applyCliTeamSelection(teamId, slashCommandContext()),
     getApprovalPolicy,
     onApprovalPolicySelect: (policy) => {
       setApprovalPolicy(policy);
@@ -486,6 +497,7 @@ export async function runChat(
       runtime={runtime}
       session={runtimeSession}
       onSubmit={(line, mediaFiles, images) => {
+        if (holdUntilConnected({ line, mediaFiles, images })) return;
         runtime.runFork(chatController.submit(line, mediaFiles, images));
       }}
       commandName={context.commandName}
@@ -520,6 +532,8 @@ export async function runChat(
     },
   );
   inkRef.current = ink;
+  // No model yet: the "Connect a model" panel is the first thing on screen.
+  if (modelConnectionNeeded.get()) openCliSlashCommandForm('login', '');
 
   const exitController = createSessionExitController({
     ink,

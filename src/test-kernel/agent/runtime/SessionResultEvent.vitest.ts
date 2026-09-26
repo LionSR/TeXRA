@@ -142,23 +142,6 @@ describe('terminal result event', () => {
   );
 
   it.effect(
-    'keeps the failed subagent result when the onError delivery hook throws',
-    () =>
-      Effect.gen(function* () {
-        const { ctx, results } = setupResultCase();
-        const result = yield* runFlow(ctx, explodedRun, {
-          parentRunId: generateRunId(),
-          onError: () => {
-            throw new Error('delivery hook boom');
-          },
-        });
-        expect(result).toMatchObject({ outcome: RUN_OUTCOME.FAILED });
-
-        expectSingleResult(results, ctx, { outcome: 'failed' });
-      }),
-  );
-
-  it.effect(
     'emits the failed result even if ending the parent stage throws',
     () =>
       Effect.gen(function* () {

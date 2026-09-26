@@ -25,6 +25,12 @@ All notable changes to this project will be documented in this file.
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
   and the delegation roster an agent can see is still listed in the
   descriptions of its delegation tools.
+- **Goal mode is a Tools plugin, and its switch replaces the
+  `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
+  dashboard, or with `texra tools disable goal` / `texra tools enable goal`.
+  Off, no agent is offered the `plan` tool and runs open no goal turns. The
+  old setting is no longer read, so if you had set it to `false`, Goal Mode is
+  on again (its default) until you switch the plugin off.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.
@@ -61,8 +67,49 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
+- **Multi-agent workflow scripts are written in a new form** — a lead's
+  script now writes `yield* agent(...)` and `yield* all([...])` instead of
+  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
+  and `timeout()` around any call. A failed call no longer comes back as an
+  empty result: inside `all()` it stops the other tasks and fails the step,
+  unless the script wraps each task in `attempt()` to keep the ones that
+  succeeded. A retried step reuses the calls it already finished instead of
+  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
+  old form stop with a message saying how to rewrite them; calls they already
+  completed are reused once the lead reruns the rewritten script under the
+  same name.
+
+- **OpenRouter models now run through the official OpenRouter SDK, with
+  fewer response details.** Requests over the OpenRouter route
+  (`openrouter-chat`) now go through `@openrouter/sdk`. Streaming text,
+  reasoning, tool calls, usage and cost are unchanged. The SDK does not carry
+  some details the previous client read, so:
+  - OpenRouter replies no longer include file annotations (the parsed-PDF
+    cache OpenRouter returns) or URL citations, and earlier annotations are
+    no longer sent back on the next turn, so OpenRouter may parse a PDF again.
+  - The provider's own finish reason (`native_finish_reason`) is no longer
+    recorded.
+  - A stream that is cut off after the model has finished but before the
+    closing `[DONE]` marker is accepted as complete, and a usage chunk that
+    never arrived leaves the turn without usage or cost.
+  - An error that arrives mid-stream keeps its message only when its code is
+    a number; a string code or unexpected error details fail the turn as
+    malformed output instead.
+  - Unknown fields in a streamed chunk are ignored rather than rejected. A
+    chunk that breaks the SDK's schema, such as a `null` where it expects an
+    absent field, fails the turn as malformed output.
+
+  Saved session history from an earlier build is cleared once, since the
+  stored shape of a model reply changed.
 
 ### Features
+
+- **`texra run` results record what the run ran with** — the JSON and NDJSON
+  result carries `compositionHash`, the hash of the tool composition the run
+  pinned, and `plugins`, the enabled plugins installed when it started or
+  resumed, with the commit each fetched plugin is pinned to. A script that
+  compares runs can tell whether two of them had the same tools and plugin
+  skills.
 
 - **Plainer multi-agent workflow screens.** The workflow launch row shows its
   summary alone; the instructions for the model stay in the tool output, and
@@ -127,6 +174,17 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Turning telemetry off now stops all usage reporting** — rounds run on a
+  ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
+  out, on the grounds that they metered a plan cap. Nothing has enforced
+  that cap since the relay was removed, so the setting, `TEXRA_NO_TELEMETRY`,
+  and `DO_NOT_TRACK` now cover every round, and `texra doctor` no longer says
+  subscription rounds are still recorded.
+
+- **Tool availability rechecks after a change made during a check.** If a
+  credential or setting changed just as a tool-availability check started,
+  the follow-up check could be skipped, leaving a tool shown as missing or
+  available when it no longer was.
 - **The VS Code dashboard shows your agents, teams and saved settings
   again.** The Agents page listed no tool-use or workflow agents and no
   teams, and several pages showed defaults instead of your saved values
@@ -316,6 +374,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Breaking Changes
 
+- **Removed: the Agent Review panel in Source Control** — the Find Issues
+  section, its commands, the `changeReviewer` agent and the "Automatically
+  review your changes after each commit" setting are gone. To review a
+  change, ask the `codeReviewer` agent in the TeXRA panel.
 - **"Clean All LLM Output Files (Workspace-wide)" is removed** — it is gone
   from the command palette, the Progress toolbar and the getting-started
   walkthrough. Clean in the Progress toolbar now clears the selected run's
@@ -331,7 +393,7 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   button does it), Indent All LaTeX Files, Import or Create LaTeX Project,
   and Sign In with Grok Subscription (Settings has it). **TeXRA: Sign In** is
   now **Sign In to TeXRA Account (Remote Agents)**, since model access never
-  needed it. The panel's title bar shows only the Settings gear; it no longer
+  needed it. The panel's title bar no longer
   swaps in workspace-wide Indent and Clean buttons over a conversation.
   **Delete All build/ Folders in Workspace** (formerly Clean All Build Files)
   now lists the folders and asks before deleting them, then says what it
@@ -370,6 +432,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Changes
 
+- **Settings has a gear in the TeXRA panel header**, next to New task, in
+  every state and in the editor tab; the hover-only gear in the view's title
+  bar is gone. Editor tabs read "TeXRA Sessions" and "TeXRA Settings", a
+  session row says "2 background tasks · 1 running" and "Needs approval" instead of
+  bare number badges, and the run header's chip reads "3 tool calls"
+  rather than "t1, 3 tool calls".
 - **The TeXRA panel is calmer.** A run shows one header row with one Stop
   and one ⋯ menu instead of two stacked headers. A new project shows one
   card at a time (setup, then "No LaTeX files yet") and at most one warning
@@ -378,8 +446,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   TeXRA can't do without it. The run header's AUTO-EDIT, AUTO-BASH and AUTO-TASK
   toggles are replaced by an "Auto-approving …" chip that appears only while
   a grant from an approval card is on; click it to go back to asking. Open
-  dashboard and Attach TeX Count left the ⋯ menu (the gear and the Input
-  file menu have them). The desktop app no longer draws a second header,
+  dashboard and Attach TeX Count left the ⋯ menu (the header's Settings
+  gear and the Input file menu have them). The desktop app no longer draws a second header,
   Sessions button and New task inside its own window.
 - **Deleting a session asks first.** The × on a Sessions row, which deleted
   the conversation in one click, is gone. Delete now lives at the end of
@@ -391,6 +459,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   instruction), plus **Resume** when the session was interrupted. Workflow
   runs get the same line. Edit as new task left the ⋯ menu. The run board
   calls steps it has not reached "Not started" instead of "Declared".
+- **Run and diff buttons say what they do.** A delegated agent's row reads
+  "Subagent: lint" with **Copy to new task** (was "Delegate agent" and
+  "Restore setup"); the multi-agent proposal names its model in the first
+  line; and the LaTeXDiffs buttons are **Diff vs. edited**, **Diff vs.
+  commit**, **Move to Diffs folder** (was "Pack") and **Delete diff files**,
+  with refresh icons on the two refresh buttons.
 
 #### Bug Fixes
 
@@ -486,6 +560,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Bug Fixes
 
+- **The "use your own API key" retry works the same everywhere** — when a
+  Kimi Code or GLM Coding Plan quota runs out and the matching provider key
+  is already saved, every app now retries on that key by itself, including
+  runs with nobody watching and subagents, and says so in the run. Before,
+  only the terminal app did this. When the key is not saved yet, pressing
+  `k` in the terminal app now asks for it instead of telling you to use
+  `/key` first, and a key whose account ran out of credit can be replaced
+  from the terminal app's retry prompt too.
 - **Google image uploads fail visibly** — a missing or failed Gemini
   attachment now stops the request instead of sending it without the file.
 - **Finished and crashed runs are no longer treated as still running** — TeXRA
@@ -552,6 +634,24 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 ### Shared (all surfaces)
 
 #### Features
+
+- **First run in the terminal opens the chat with a "Connect a model"
+  panel.** Before, a fresh install showed a three-option picker; choosing
+  "Skip for now" exited with a missing-API-key error and saved the skip, so
+  every later `texra` printed that error and quit. Now the chat always opens,
+  and when no model is connected the panel offers a ChatGPT or Grok
+  subscription, a provider API key (including Kimi Code and GLM), or device-code
+  sign-in for SSH. Esc leaves you in the chat with "No model connected · /login"
+  in the status bar; a message you type meanwhile is held and sent as soon as a
+  model is connected. On a first run the chat then goes to the setup assistant
+  and opens `/agent`.
+- **`/agent` can start a team.** Alongside single agents, now shown with their
+  descriptions, it lists the team presets (Lean Project, Physicist,
+  Mathematician, Computer Scientist, Software Engineer and your custom teams)
+  with any unavailable members. Picking one sets the team's lead as the root
+  agent with the team's roster, the same way the extension and desktop launch a
+  team. Before, a team could only be started with `texra multi-agent run`.
+- `/login` gains an **Add a provider API key** row.
 
 - **GPT-6 Astra is available** — OpenAI's most capable model joins the model
   list with a 1M-token context window, reasoning effort up to Max, and vision,

@@ -27,6 +27,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   formatTexraApprovalPolicy,
@@ -231,7 +232,9 @@ const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
-const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
+const HARNESS_RESOURCES_PATH = await Effect.runPromise(
+  resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
+);
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -936,6 +939,16 @@ function makeRetryApprovalPayload(): RetryPermission {
       provider: 'openai',
       statusCode: 429,
     },
+    // The invoker decides the offer (#13236); a subscription quota declines
+    // its route for the model's own key.
+    credentialSwitch: RETRY_APPROVAL_CHATGPT
+      ? {
+          kind: 'decline-route',
+          route: 'chatgpt-subscription',
+          provider: 'openai',
+          automatic: false,
+        }
+      : null,
   };
 }
 

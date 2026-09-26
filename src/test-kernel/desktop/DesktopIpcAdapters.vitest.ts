@@ -7,10 +7,6 @@ import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
-type DesktopShellIpcModule = typeof import('@desktop/main/desktopShellIpc');
-type DesktopShellActionFactoryOptions = Parameters<
-  DesktopShellIpcModule['createDesktopShellActions']
->[1];
 type DesktopOnboardingMainModule =
   typeof import('@desktop/main/desktopOnboardingIpc');
 type DesktopOnboardingOptions = NonNullable<
@@ -29,35 +25,6 @@ async function flushAsync(): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
-}
-
-async function createShellHarness(
-  overrides: Partial<DesktopShellActionFactoryOptions> = {},
-) {
-  const { createDesktopShellActions, createDesktopShellIpc } =
-    await import('@desktop/main/desktopShellIpc');
-  const postToRenderer = vi.fn();
-  const actions = createDesktopShellActions(
-    { postToRenderer },
-    {
-      getCustomAgentDirectory: () => Effect.succeed('/agents/custom'),
-      openExternalUrl: vi.fn(() => Effect.void),
-      openLogFolder: vi.fn(() => Effect.void),
-      openPath: vi.fn(() => Effect.void),
-      openWorkspaceFolder: vi.fn(() => Effect.void),
-      signIn: vi.fn(() => Effect.void),
-      showInfoMessage: vi.fn(),
-      showLauncher: vi.fn(),
-      onAsyncError: vi.fn(),
-      runtime: testRuntime(),
-      ...overrides,
-    },
-  );
-  return {
-    actions,
-    postToRenderer,
-    shellIpc: createDesktopShellIpc(actions),
-  };
 }
 
 // `update` is spied so tests can assert persisted keys.
@@ -104,27 +71,6 @@ function expectFunnelState(
 }
 
 describe('desktop IPC adapters', () => {
-  it.effect('claims only the desktop-local shell commands', () =>
-    Effect.gen(function* () {
-      const openExternalUrl = vi.fn(() => Effect.void);
-      const { postToRenderer, shellIpc } = yield* Effect.promise(() =>
-        createShellHarness({ openExternalUrl }),
-      );
-
-      expect(
-        shellIpc.handleMessage({ command: 'texra.totallyUnknown' }),
-      ).toBeUndefined();
-      const program = shellIpc.handleMessage({
-        command: 'texra.desktop.openDesktopDocs',
-      });
-      expect(program).toBeDefined();
-      yield* withProcessServices(testRuntime(), program!);
-      yield* Effect.promise(() => flushAsync());
-      expect(openExternalUrl).toHaveBeenCalledTimes(1);
-      expect(postToRenderer).not.toHaveBeenCalled();
-    }),
-  );
-
   it.effect(
     'persists first-run walkthrough dismissal in the onboarding adapter',
     () =>
@@ -247,26 +193,6 @@ describe('desktop IPC adapters', () => {
         true,
       );
       expectFunnelState(onboarding, 'done');
-    }),
-  );
-
-  it.effect('runs the real kickoff path on runSetup and refreshes after', () =>
-    Effect.gen(function* () {
-      const kickoffSetup = vi.fn(() => Effect.void);
-      const { onboarding, runtime } = yield* Effect.promise(() =>
-        createOnboardingHarness({
-          hasCredential: () => Effect.succeed(true),
-          kickoffSetup,
-        }),
-      );
-
-      yield* withProcessServices(runtime, onboarding.runSetup());
-      yield* Effect.promise(() => flushAsync());
-
-      // Real run-setup path: `runSetup` kicks off the conversation, then
-      // recomputes the funnel, which enters State 1 (credential present).
-      expect(kickoffSetup).toHaveBeenCalledOnce();
-      expectFunnelState(onboarding, 'setup');
     }),
   );
 

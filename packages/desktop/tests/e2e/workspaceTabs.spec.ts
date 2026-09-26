@@ -87,8 +87,8 @@ function hideWorkbench(placement: 'right' | 'bottom'): string {
 const ACTIVE_PROJECT_ROW = '.shell-project-row[aria-current="true"]';
 
 /**
- * Opens a file from the project tree. The tree is the Files tab, which shares
- * the right pane with the editors it opens, so it is brought forward first.
+ * Opens a file from the project tree: the Files tab's, or the column beside
+ * an open editor. With neither showing, Files is brought forward first.
  */
 async function clickTreeRow(path: string): Promise<void> {
   const { page } = launched;
@@ -420,10 +420,9 @@ test('loads a workspace file into the Monaco editor workbench', async () => {
   await expect(latexRow).toBeVisible({ timeout: 15_000 });
   await expect(typescriptRow).toBeVisible();
 
-  // Hit the cold Monaco path with two selections in quick succession. The
-  // Files tab is brought back between them (the tree and the editor share
-  // the right pane), but Monaco's cold load outlasts that click, so both
-  // requests still share one editor load and the last one must remain the
+  // Hit the cold Monaco path with two immediate selections: the tree stays
+  // beside the editor it opened, so the second click needs no tab switch.
+  // Both requests share one editor load, and the last click must remain the
   // visible model even if the first file read resolves later.
   await clickTreeRow('sample.tex');
   await clickTreeRow('sample.ts');
@@ -677,11 +676,12 @@ test('keeps project workbenches alive across selection and releases them on clos
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBoxSync = () => 1;
     });
-    await page
-      .locator(
-        `.shell-project-item:has(.shell-project-row[title="${projectA}"]) .shell-project-close`,
-      )
-      .click();
+    // The row's actions take room only while it is hovered.
+    const itemA = page.locator(
+      `.shell-project-item:has(.shell-project-row[title="${projectA}"])`,
+    );
+    await itemA.hover();
+    await itemA.locator('.shell-project-close').click();
     await expect(
       page.locator(`.shell-project-row[title="${projectA}"]`),
     ).toHaveCount(0);

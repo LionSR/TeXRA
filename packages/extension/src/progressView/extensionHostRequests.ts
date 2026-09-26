@@ -610,15 +610,10 @@ export function createExtensionHostRequests(
       commandVerb('texra.merge', baseFile, editedFile),
     latexdiffFiles: (baseFile, editedFile) =>
       commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
-    openSettings: (section, sessionType) => {
-      if (section === 'agents')
-        return commandVerb(
-          'texra.showAgents',
-          sessionType === 'toolUse' ? 'toolUse' : undefined,
-        );
-      return commandVerb(
-        section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
-      );
+    openSettings: (section) => {
+      if (section === 'teams') return commandVerb('texra.showMultiAgent');
+      if (section === 'models') return commandVerb('texra.showModels');
+      return commandVerb('texra.showDashboard');
     },
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.

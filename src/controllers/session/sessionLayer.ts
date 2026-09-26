@@ -287,7 +287,7 @@ const sessionHandleLayer = (
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, settle, openStreams, ...reads } =
+      const { publish, exclusive, detach, settle, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
@@ -383,11 +383,12 @@ const sessionHandleLayer = (
             }
             return pieces.reverse().join('');
           },
-          openStreams: (runId) => openStreams(qualifyAggregateId('run', runId)),
           acquireClaims: (id) =>
-            eventLog
-              .acquireClaims([id])
-              .pipe(Effect.map((ids) => eventLog.releaseClaims(ids))),
+            eventLog.acquireClaims([id]).pipe(
+              // A claim moving here seeds the publisher's pending follow-ups.
+              Effect.tap((ids) => reads.hydrateFollowUps(id, ids.length > 0)),
+              Effect.map((ids) => eventLog.releaseClaims(ids)),
+            ),
           releaseClaims: (id) => eventLog.releaseClaims([id]),
           runRecords: (id) =>
             eventLog.readRunRecords(qualifyAggregateId('run', id)),

@@ -82,7 +82,8 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
  * Seed the disabled-tool list for first-time users only, on any host.
  *
  * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
- * opt-in and seeded as disabled on a fresh install. Callers pass
+ * opt-in and seeded as disabled on a fresh install, unless it is
+ * `onByDefault`. Callers pass
  * the global state store they already hold. DISABLED_TOOLS is its own
  * fresh-install signal, because this seed is the only thing that writes it
  * before the user does: an absent value means neither the seed nor the user
@@ -97,9 +98,9 @@ export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
     );
     if (disabledTools !== undefined) return;
 
-    const defaults = TOOL_PLUGINS.filter((plugin) => plugin.toggleable).map(
-      (plugin) => plugin.id,
-    );
+    const defaults = TOOL_PLUGINS.filter(
+      (plugin) => plugin.toggleable && !plugin.onByDefault,
+    ).map((plugin) => plugin.id);
     yield* state.update(GlobalStateKey.DISABLED_TOOLS, defaults);
     yield* Effect.logInfo(
       `First install: default-disabled toggleable tools: ${defaults.join(', ')}`,
@@ -130,7 +131,10 @@ class ToolAvailabilityCache {
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
     return Effect.suspend(() => {
-      if (this.probes.inFlight) this.pendingRerun = true;
+      // The latch resets in the segment that claims the slot, not on the
+      // detached fiber: a caller joining before that fiber's first step
+      // must not have its rerun wiped.
+      this.pendingRerun = this.probes.inFlight;
       return this.probes.run(() => this.probeUntilSettled(inputs));
     });
   }
@@ -141,7 +145,6 @@ class ToolAvailabilityCache {
   private probeUntilSettled(
     inputs: ToolProbeInputs,
   ): Effect.Effect<ExternalToolCheckResult[], never, ToolProbeServices> {
-    this.pendingRerun = false;
     // Every group probes at once and no group's failure cancels a sibling,
     // because each one resolves to a result of its own.
     return Effect.forEach(
@@ -151,9 +154,9 @@ class ToolAvailabilityCache {
     ).pipe(
       Effect.flatMap((results) => {
         this.lastResults = results;
-        return this.pendingRerun
-          ? this.probeUntilSettled(inputs)
-          : Effect.succeed(results);
+        if (!this.pendingRerun) return Effect.succeed(results);
+        this.pendingRerun = false;
+        return this.probeUntilSettled(inputs);
       }),
     );
   }

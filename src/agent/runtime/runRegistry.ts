@@ -9,7 +9,7 @@
  * records lives in `runStopping.ts`.
  */
 
-import { Context, Effect, Semaphore, type Scope } from 'effect';
+import { Context, Data, Effect, Semaphore, type Scope } from 'effect';
 
 import type { ProcessServices } from '@platform/processRuntime';
 import {
@@ -35,6 +35,11 @@ import type {
   RunStopOptions,
   ToolUseFollowUpTarget,
 } from './runRegistryTypes';
+
+/** Run work refused because the session is disposed or closing. */
+class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
+  readonly message: string;
+}> {}
 
 /**
  * Session-owned registry of active runs. One
@@ -129,8 +134,10 @@ export class RunRegistry {
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
-      this.assertActive();
-      return this.roster.launch(runId, operation, true);
+      const refused = this.closedRefusal();
+      return refused
+        ? Effect.fail(refused)
+        : this.roster.launch(runId, operation, true);
     });
   }
 
@@ -141,8 +148,8 @@ export class RunRegistry {
    */
   holdInactiveRun(runId: RunId): Effect.Effect<void, Error, Scope.Scope> {
     return Effect.suspend(() => {
-      this.assertActive();
-      return this.roster.holdInactive(runId);
+      const refused = this.closedRefusal();
+      return refused ? Effect.fail(refused) : this.roster.holdInactive(runId);
     });
   }
 
@@ -161,8 +168,10 @@ export class RunRegistry {
     operation: Effect.Effect<A, E, R>,
   ): Effect.Effect<A, E | Error, R> {
     return Effect.suspend(() => {
-      this.assertActive();
-      return this.roster.launch(runId, operation);
+      const refused = this.closedRefusal();
+      return refused
+        ? Effect.fail(refused)
+        : this.roster.launch(runId, operation);
     });
   }
 
@@ -201,13 +210,23 @@ export class RunRegistry {
     this.closing = true;
   }
 
+  /** Why this registry admits no run work, or `undefined` while it does. */
+  private closedRefusal(): RunAdmissionClosed | undefined {
+    if (this.disposed)
+      return new RunAdmissionClosed({
+        message: 'Cannot register run work after session disposal.',
+      });
+    if (this.closing)
+      return new RunAdmissionClosed({
+        message: 'Cannot register run work while the session is closing.',
+      });
+    return undefined;
+  }
+
+  /** {@link closedRefusal} for the synchronous admissions, which throw it. */
   private assertActive(): void {
-    if (this.disposed) {
-      throw new Error('Cannot register run work after session disposal.');
-    }
-    if (this.closing) {
-      throw new Error('Cannot register run work while the session is closing.');
-    }
+    const refused = this.closedRefusal();
+    if (refused) throw refused;
   }
 
   /**
@@ -388,9 +407,9 @@ export class RunRegistry {
 
   /** Kill the background OS process of every run whose child loop declared
    *  one (`RunHandle.backgroundProcess`), leaving every other run untouched
-   *  (#8155): an agent run is deliberately left running for restart recovery,
-   *  and its status is rewritten from its durable facts, never from a phase a
-   *  later pass rewrites.
+   *  (#8155): a native agent run is deliberately left running for restart
+   *  recovery, and its status is rewritten from its durable facts, never
+   *  from a phase a later pass rewrites.
    */
   killBackgroundProcesses(): void {
     for (const handle of this.roster.allHandles()) {

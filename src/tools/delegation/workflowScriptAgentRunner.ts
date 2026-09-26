@@ -46,6 +46,7 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
+import { WorkflowSubagentUnsuccessful } from './workflowScriptRun';
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -67,7 +68,7 @@ function workflowScriptModelSelection(
   }).pipe(
     Effect.mapError((error) => {
       // A declared model is workflow configuration, so its rejection must not
-      // disappear as a nullable call inside parallel(). When the
+      // become a call failure a script's attempt() absorbs. When the
       // script omits the field, preserve the established delegation failure
       // semantics; per-call model routing must not broaden that behavior.
       if (requestedModel === undefined) return ensureError(error);
@@ -104,7 +105,7 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
     defaultAgent: AgentEntry,
     runId: RunId,
   ): Effect.fn.Return<
-    { configPayload: AgentConfigPayload; agentName: string },
+    AgentConfigPayload,
     Error,
     Secrets | AppState | FileSystem.FileSystem | LanguageModel
   > {
@@ -137,15 +138,12 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         parentModel,
       );
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          agentCategory: AgentCategory.ToolUse,
-          outputSchema: call.options.schema,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        agentCategory: AgentCategory.ToolUse,
+        outputSchema: call.options.schema,
       };
     } else {
       const requestedAgentName = call.options.agentName;
@@ -202,17 +200,14 @@ const resolveWorkflowCallConfig = Effect.fn('resolveWorkflowCallConfig')(
         throw new WorkflowRunAbortError(oversizedBibRejection.error);
       }
       return {
-        configPayload: {
-          ...sharedConfigFields,
-          agent: agent.name,
-          agentSource: agent.source,
-          model,
-          inputFiles,
-          contextFiles,
-          mediaFiles,
-          agentCategory: AgentCategory.Workflow,
-        },
-        agentName: agent.name,
+        ...sharedConfigFields,
+        agent: agent.name,
+        agentSource: agent.source,
+        model,
+        inputFiles,
+        contextFiles,
+        mediaFiles,
+        agentCategory: AgentCategory.Workflow,
       };
     }
   },
@@ -260,7 +255,7 @@ function livenessClause(liveness: RunLiveness): string {
 
 /**
  * A storage fault while inspecting a child is not this call's own failure: the
- * engine turns a failed call into a `null` the script can swallow, so an
+ * engine turns a failed call into a failure the script can catch, so an
  * unreadable child aggregate has to abort the run rather than read as a child
  * that answered nothing.
  */
@@ -628,7 +623,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
         // it — a stop that reached the run reports CANCELLED over the same
         // lost drain — which is the verdict the in-band caller reaches on the
         // same marker, and the outer boundary turns it into the abort that
-        // keeps it out of the engine's nullable call result.
+        // keeps it out of the call failures a script can catch.
         return yield* Effect.fail(
           new SubagentDurabilityError(
             `Workflow child ${runId} failed to commit its final artifacts.`,
@@ -802,23 +797,21 @@ export function createWorkflowScriptAgentRunner(
         },
         prepare: () =>
           Effect.gen(function* () {
-            const { configPayload, agentName } =
-              yield* resolveWorkflowCallConfig(
-                invocation,
-                parent,
-                parentModel,
-                defaultAgent,
-                run.runId,
-              );
+            const configPayload = yield* resolveWorkflowCallConfig(
+              invocation,
+              parent,
+              parentModel,
+              defaultAgent,
+              run.runId,
+            );
             // Surface the resolved child model so the engine can attach it to
             // this call's `agent:end` progress event.
             invocation.report({
               model: configPayload.model,
-              agent: agentName,
+              agent: configPayload.agent,
             });
             return {
               configPayload,
-              agentName,
               parentRunId: run.runId,
               session,
               approvalPromptsUnavailable:
@@ -856,10 +849,7 @@ export function createWorkflowScriptAgentRunner(
         // result. The recovered marker keeps the id out of the engine's
         // skip/retry map; a recovered result is authoritative and must stay
         // uncontrollable.
-        invocation.report({
-          childRunId: child.runId,
-          recovered: true,
-        });
+        invocation.report({ childRunId: child.runId, recovered: true });
       }
       // Live physical attempts always charge the terminal result cost (covers
       // failed/cancelled outcomes and empty-output validation throws that
@@ -873,17 +863,18 @@ export function createWorkflowScriptAgentRunner(
         invocation.report({ costUsd: result.usage?.totalCost ?? 0 });
       }
       if (result.outcome !== 'completed') {
-        throw new Error(
-          `Workflow subagent ended with ${result.outcome} outcome.`,
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message: `Workflow subagent ended with ${result.outcome} outcome.`,
+        });
       }
       if (
         result.output.category === 'workflow' &&
         result.output.outputs.length === 0
       ) {
-        throw new Error(
-          'Workflow subagent completed without producing any output files.',
-        );
+        return yield* new WorkflowSubagentUnsuccessful({
+          message:
+            'Workflow subagent completed without producing any output files.',
+        });
       }
       return result;
     },

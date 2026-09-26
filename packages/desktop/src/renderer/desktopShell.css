@@ -178,8 +178,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.015em;
 }
-
-.shell-section-split-handle wa-icon,
 .shell-split-handle wa-icon,
 .shell-bottom-split-handle wa-icon,
 .shell-header-button wa-icon,
@@ -262,17 +260,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-focus);
 }
 
-.shell-section-split-handle {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-}
-
 .shell-sidebar-section {
   width: 100%;
   min-width: 0;
@@ -281,10 +268,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   box-sizing: border-box;
   overflow: auto;
   scrollbar-width: thin;
-}
-
-.shell-history-section {
-  padding-top: 4px;
 }
 
 .shell-sidebar-section-label {
@@ -340,17 +323,17 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-brand-fill-loud);
 }
 
-/* The row's own actions, shown while the row is hovered or focused. */
+/* The row's own actions take room only while the row is hovered or
+   focused, so at rest the project name has the sidebar's whole width. */
 .shell-project-new,
 .shell-project-close {
   flex: 0 0 auto;
-  opacity: 0;
   color: var(--wa-color-text-quiet);
 }
 
-.shell-project-item:hover :is(.shell-project-new, .shell-project-close),
-.shell-project-item:focus-within :is(.shell-project-new, .shell-project-close) {
-  opacity: 1;
+.shell-project-item:not(:hover, :focus-within)
+  :is(.shell-project-new, .shell-project-close) {
+  display: none;
 }
 
 .shell-project-add {
@@ -569,19 +552,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   --dot-color: var(--color-warning);
   border: 1.5px solid var(--wa-color-surface-default);
   pointer-events: none;
-}
-
-.shell-header-spacer {
-  flex: 1 1 auto;
-}
-
-.shell-layout-controls {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 3px;
-  padding-left: 2px;
-  -webkit-app-region: no-drag;
 }
 
 .shell-layout-toggle {
@@ -884,15 +854,6 @@ body[data-desktop-platform='darwin']
   color: var(--wa-color-text-quiet);
 }
 
-.shell-conversation-dock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: min(760px, 100%);
-  margin: 0 auto;
-  padding: 8px 0;
-}
-
 /* The Subagents workbench tab. */
 .shell-subagents {
   display: flex;
@@ -954,33 +915,47 @@ body[data-desktop-platform='darwin']
 
 /* The Files tab: the tree alone; the tab names it, so its own heading
    keeps only the refresh control. */
-.shell-files {
+.shell-files,
+.shell-editor-tree {
   align-content: start;
   padding: 6px 4px;
 }
 
-.shell-files .desktop-editor-tree-header > span {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
   visibility: hidden;
 }
 
-.shell-files .desktop-editor-tree-list {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
   display: block;
   max-height: none;
   padding: 0;
   overflow: visible;
 }
 
-.shell-files .desktop-editor-tree-row {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row {
   --indent-size: 1.15em;
 }
 
-.shell-files .desktop-editor-tree-row::part(item) {
+/* An open file keeps the tree it came from beside it, so the next file is
+   one click away rather than a tab switch back to Files. */
+.shell-editor-with-tree {
+  grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
+}
+
+.shell-editor-tree {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--wa-color-surface-border);
+}
+
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
   min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
 }
 
-.shell-files .desktop-editor-tree-empty {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {
   padding: 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);

@@ -41,6 +41,7 @@
  * Indexes are module-private, keyed by their transcript/view, and advance only
  * with the latest level: row/group positions, text and thinking state, claims,
  * listing commits, owners, ended/listed runs, snapshots, and shared-row slices.
+ * So `fold` refuses any view but the level it last returned.
  * Every container write must report changed so foldWith publishes its copy.
  */
 
@@ -110,7 +111,6 @@ import {
   lifecycleToTaskGroups,
   replaceTranscript,
   resetTranscriptOwnership,
-  type TranscriptContext,
 } from './transcriptState';
 
 import { emptySessionView, isLiveRun } from './sessionView';
@@ -127,19 +127,27 @@ export function fold(
   view: SessionView,
   input: FoldInput | readonly FoldInput[],
 ): SessionView {
+  const indexes = sessionIndexesOf(view);
+  if (indexes.head !== null && indexes.head !== view) {
+    throw new Error('Fold onto a superseded or failed SessionView level');
+  }
+  indexes.head = FOLD_FAILED;
   // One call publishes one level: nothing this call did not copy is written.
   owned = new WeakSet();
   resetTranscriptOwnership();
-  if (!Array.isArray(input)) return foldWith(view, input as FoldInput, null);
-  const deferred = new Set<RunId>();
+  const frame = Array.isArray(input);
+  const deferred = frame ? new Set<RunId>() : null;
   let next = view;
-  for (const each of input as readonly FoldInput[]) {
-    next = foldWith(next, each, deferred);
+  for (const each of frame ? (input as readonly FoldInput[]) : [input]) {
+    next = foldWith(next, each as FoldInput, deferred);
   }
-  for (const runId of deferred) {
+  for (const runId of deferred ?? []) {
     const run = next.runs.get(runId);
     if (run) setRun(next, withRunModel(next, run));
   }
+  // A `debug` input starts fresh indexes; the ones it left name `next` too.
+  indexes.head = next;
+  sessionIndexesOf(next).head = next;
   return next;
 }
 
@@ -255,7 +263,12 @@ interface SessionIndexes {
   /** This process's local truth, the snapshot the next one diffs against:
    *  a fold input, never durable. */
   local: LocalRuntimeState;
+  /** The level these indexes describe: the view `fold` last returned, null
+   *  before the first, `FOLD_FAILED` during a fold and after one threw. */
+  head: SessionView | typeof FOLD_FAILED | null;
 }
+
+const FOLD_FAILED = Symbol('fold failed');
 
 /** Keyed by the run index; a copied index inherits its predecessor's
  *  entry, so every level of one session resolves the same indexes. */
@@ -272,6 +285,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       rows: new Map(),
       latest: new Map(),
       local: { self: [], dead: [], unreadable: [] },
+      head: null,
     };
     SESSION_INDEXES.set(view.runs, indexes);
   }
@@ -1200,13 +1214,6 @@ function relink(
   refreshAncestors(view, run.id);
 }
 
-/** The run a durable event names: its aggregate, bar an inquiry's thread. */
-function runOfEvent(event: DisplaySessionEvent): RunId | null {
-  return event.type === 'inquiryThreadUpdated'
-    ? null
-    : runIdOf(event.aggregateId);
-}
-
 /** Returns whether the event changed anything. */
 function foldDurable(
   view: SessionView,
@@ -1228,7 +1235,9 @@ function foldDurable(
   const newest = latest.get(listingKey);
   if (newest !== undefined && event.commit <= newest) return traceChanged;
 
-  const runId = runOfEvent(event);
+  // The run the event names: its aggregate, bar an inquiry's thread.
+  const runId =
+    event.type === 'inquiryThreadUpdated' ? null : runIdOf(event.aggregateId);
   if (runId === null) {
     latest.set(listingKey, event.commit);
     applySessionSlices(view, null, event);
@@ -1304,18 +1313,6 @@ function foldDurable(
   return true;
 }
 
-/** The transcript context a run folds under. */
-function transcriptContextOf(
-  view: SessionView,
-  run: RunView,
-): TranscriptContext {
-  return {
-    debug: view.debug,
-    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
-    runLabels: view.runs,
-  };
-}
-
 /** One trace or lifecycle row onto a resident run's transcript. */
 function foldTraceEvent(
   view: SessionView,
@@ -1327,11 +1324,11 @@ function foldTraceEvent(
   const runId = runIdOf(event.aggregateId);
   const run = runId === null ? undefined : view.runs.get(runId);
   if (!run) return false;
-  const transcript = foldTranscriptEvent(
-    run.transcript,
-    event,
-    transcriptContextOf(view, run),
-  );
+  const transcript = foldTranscriptEvent(run.transcript, event, {
+    debug: view.debug,
+    lifecycleToTaskGroups: lifecycleToTaskGroups(run),
+    runLabels: view.runs,
+  });
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
   // transcript references stable when that fact produced no presentation.

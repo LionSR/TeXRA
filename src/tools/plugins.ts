@@ -53,14 +53,21 @@ export interface ToolPlugin {
    *  already names the plugin, so 'Model' rather than 'Claude Code model'). */
   readonly settings?: readonly (readonly [key: string, label: string])[];
   /** Tools of this plugin offered to every tool-use agent, declared or not,
-   *  while a boolean catalog setting is on: tool name to setting key. An
+   *  while the plugin is on and a boolean catalog setting is on: tool name to
+   *  setting key, or `true` for no setting but the plugin's own switch. An
    *  injected tool still passes the host and approval gates; reflection
    *  runs get none. */
-  readonly injectedWhen?: Readonly<Record<string, string>>;
+  readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
-   *  seeds the plugin disabled, and while disabled its tools are withheld
-   *  from every agent. */
+   *  seeds the plugin disabled (unless `onByDefault`), and while disabled its
+   *  tools are withheld from every agent. */
   readonly toggleable?: boolean;
+  /** A toggleable plugin a fresh install seeds on rather than off. */
+  readonly onByDefault?: true;
+  /** Decides what a parked tool-use run does next: a policy in
+   *  `PLUGIN_CONTINUATIONS` (`@agent/runtime/loop/continuationPolicy`), which
+   *  a run gets only while its pinned composition includes the plugin. */
+  readonly continuation?: true;
   /** Owns resources: a layer in `@tools/registry`, built while an open
    *  composition includes the plugin (`@tools/compositions`). */
   readonly layer?: true;

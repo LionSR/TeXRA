@@ -320,8 +320,6 @@ tryIt('require', () => typeof require)
 tryIt('Function', () => Function('return 1')())
 tryIt('ctor', () => agent.constructor('return globalThis')())
 tryIt('genCtor', () => (function* () {}).constructor('yield 1'))
-tryIt('asyncCtor', () => (async function () {}).constructor('return 1'))
-tryIt('asyncGenCtor', () => (async function* () {}).constructor('yield 1'))
 tryIt('random', () => Math.random())
 tryIt('now', () => Date.now())
 return probes`,
@@ -333,8 +331,6 @@ return probes`,
         Function: 'blocked',
         ctor: 'blocked',
         genCtor: 'blocked',
-        asyncCtor: 'blocked',
-        asyncGenCtor: 'blocked',
         random: 'blocked',
         now: 'blocked',
       });

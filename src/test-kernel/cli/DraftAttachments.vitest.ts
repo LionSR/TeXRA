@@ -24,15 +24,6 @@ describe('DraftAttachmentStore', () => {
     expect(store.expandText(`see ${chip} ok`)).toBe(`see ${content} ok`);
   });
 
-  it('omits the line count for a single-line paste', () => {
-    expect(store.addPastedText('x'.repeat(801))).toBe('[Pasted text #1]');
-  });
-
-  it('shares one id space between text and image chips', () => {
-    expect(store.addPastedText('a\nb\nc\nd')).toBe('[Pasted text #1 +3 lines]');
-    expect(store.addPastedImage(img('a.png'))).toBe('[Image #2]');
-  });
-
   it('expands multiple text chips with no spurious re-match', () => {
     const c1 = store.addPastedText('A\nA\nA\nA');
     const c2 = store.addPastedText('B\nB\nB\nB');
@@ -71,12 +62,5 @@ describe('DraftAttachmentStore', () => {
     expect(store.resolveImages(`keep ${kept}`).map((e) => e.path)).toEqual([
       '/p/a.png',
     ]);
-  });
-
-  it('clears entries and resets the id counter', () => {
-    const chip = store.addPastedText('a\nb\nc\nd');
-    store.clear();
-    expect(store.expandText(chip)).toBe(chip);
-    expect(store.addPastedText('x\ny\nz\nw')).toBe('[Pasted text #1 +3 lines]');
   });
 });

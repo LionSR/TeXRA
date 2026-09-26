@@ -92,11 +92,6 @@ import {
 } from '@test/support/sessionTestUtils';
 import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { testRunHandle } from '@test/support/runHandleFixtures';
-import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-} from '@tools/agentCliSessionStores';
 import { createChildRun } from '@tools/delegation/childRun';
 import { createWorkflowAttemptCostTracker } from '@tools/delegation/workflowScriptRun';
 import { generateRunId } from '@utils/core';
@@ -351,14 +346,23 @@ describe('childRunLoop E2E fixtures', () => {
           Effect.fail(new Error('Engine startup failed')),
         );
         let stop: ReturnType<typeof session.runs.kill> | undefined;
+        // The stop lands inside loop setup, after the queue claim and before
+        // the launch.
+        const claimChildRun = session.followUps.claimChildRun.bind(
+          session.followUps,
+        );
+        const claim = vi
+          .spyOn(session.followUps, 'claimChildRun')
+          .mockImplementationOnce((id) => {
+            const lease = claimChildRun(id);
+            if (outcome === RUN_OUTCOME.CANCELLED)
+              stop = session.runs.kill(runId);
+            return lease;
+          });
         const loop = yield* startLoop(runId, {
           ...createTerminalStrategy('Engine startup', launch),
           continuous: true,
-          onLoopStart: () => {
-            if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.kill(runId);
-          },
-        });
+        }).pipe(Effect.ensuring(Effect.sync(() => claim.mockRestore())));
         if (stop) {
           expect(stop.accepted()).toBe(true);
           yield* stop.settlement;
@@ -417,10 +421,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const runId = loopRunId();
-        const registry = new AgentCliSessionRegistry(session.runs);
-        const releaseSessionOwnership = vi.fn(() =>
-          registry.releaseByRunId(runId),
-        );
+        const releaseSessionOwnership = vi.fn();
         trackChildHandle(runId, PARENT_RUN_ID);
         const interruptRun = vi.spyOn(session.runs, 'interrupt');
         const registerLoop = vi
@@ -436,9 +437,7 @@ describe('childRunLoop E2E fixtures', () => {
               runId,
               {
                 ...strategy,
-                onLoopStart: () => {
-                  registry.trackInFlight({ runId });
-                },
+                ownsBackgroundProcess: true,
                 releaseSessionOwnership,
               },
               { agentName: 'fake-cli' },
@@ -448,108 +447,33 @@ describe('childRunLoop E2E fixtures', () => {
 
           expect(releaseSessionOwnership).toHaveBeenCalledOnce();
           expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-          // The failed setup left no generation fiber behind, and the CLI
-          // registry's interrupt sweep reaches nothing of it.
+          // The failed setup left no generation fiber behind, and the
+          // shutdown drain reaches nothing of it.
           expect(session.runs.interrupt(runId)).toBe(false);
           interruptRun.mockClear();
-          registry.interruptAll();
+          session.runs.killBackgroundProcesses();
           expect(interruptRun).not.toHaveBeenCalled();
           expect(yield* queuedFollowUps(session, runId)).toEqual([]);
         } finally {
           registerLoop.mockRestore();
           interruptRun.mockRestore();
-          registry.releaseByRunId(runId);
         }
       }),
   );
 
   it.effect(
-    'admits a follow-up submitted during startup into the seeded queue',
+    'shutdown drain interrupts a real agent-CLI initial-turn loop and releases ownership once',
     () =>
       Effect.gen(function* () {
-        // The queue claim precedes the seed's aggregate read, so a submission
-        // landing inside that read is held for the seed instead of being
-        // refused against a child the registry already shows active, or
-        // committing behind the snapshot the seed reads.
         const runId = loopRunId();
-        const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
-        const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
-          run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
-          config: childRunConfig,
-        }).pipe(Effect.provideService(Runs, session.runs));
-        trackedRunIds.add(runId);
-
-        const readStarted = yield* Deferred.make<void>();
-        const releaseRead = yield* Deferred.make<void>();
-        const readAggregate = session.readAggregate.bind(session);
-        const gate = vi
-          .spyOn(session, 'readAggregate')
-          .mockImplementationOnce((id) =>
-            Effect.gen(function* () {
-              yield* Deferred.succeed(readStarted, undefined);
-              yield* Deferred.await(releaseRead);
-              return yield* readAggregate(id);
-            }),
-          );
-        try {
-          const starter = yield* Effect.forkScoped(
-            startLoop(runId, strategy, { childRun }),
-          );
-          yield* Deferred.await(readStarted);
-          expect(
-            yield* session.followUps.submit(
-              runId,
-              { text: 'early', origin: 'user' },
-              'live_owner',
-            ),
-          ).toEqual({ kind: 'queued' });
-          yield* Deferred.succeed(releaseRead, undefined);
-          const loop = yield* Fiber.join(starter);
-
-          yield* resolveTurn(1, { kind: 'interim', value: 'first' });
-          // Only the seeded follow-up starts a second turn.
-          yield* turnStarted(2);
-          yield* resolveTurn(2, { kind: 'terminal', value: 'final' });
-          yield* Fiber.join(loop);
-        } finally {
-          gate.mockRestore();
-        }
-      }),
-  );
-
-  it.effect.each([
-    {
-      name: 'CodexThreads',
-      track: (runId: RunId, runSession: SessionHandle) =>
-        codexThreadsFor(runSession.runs).trackInFlight({ runId }),
-      interruptAll: () => codexThreadsFor(session.runs).interruptAll(),
-      release: (runId: RunId) =>
-        codexThreadsFor(session.runs).releaseByRunId(runId),
-    },
-    {
-      name: 'ClaudeAgentSessions',
-      track: (runId: RunId, runSession: SessionHandle) =>
-        claudeAgentSessionsFor(runSession.runs).trackInFlight({ runId }),
-      interruptAll: () => claudeAgentSessionsFor(session.runs).interruptAll(),
-      release: (runId: RunId) =>
-        claudeAgentSessionsFor(session.runs).releaseByRunId(runId),
-    },
-  ])(
-    '$name interrupts a real initial-turn loop and releases ownership once',
-    ({ name, track, interruptAll, release }) =>
-      Effect.gen(function* () {
-        const runId = loopRunId();
-        const events: string[] = [];
         const aborted = vi.fn();
-        const releaseSessionOwnership = vi.fn(() => release(runId));
-        // The CLI session registries track process children, so the fixture
-        // is one: the loop's own fiber survives the stop (the ruled
-        // permanent resident) and the loop's abort signal is what reaches
-        // the strategy's in-flight launch — a native-shaped fixture would
-        // take the stop as the run fiber's interruption instead, which the
-        // launch's abort listener is not guaranteed to observe.
+        const releaseSessionOwnership = vi.fn();
+        // An agent-CLI child is a process child, so the fixture is one: the
+        // loop's own fiber survives the stop (the ruled permanent resident)
+        // and the loop's abort signal is what reaches the strategy's
+        // in-flight launch. A native-shaped fixture would take the stop as
+        // the run fiber's interruption instead, which the launch's abort
+        // listener is not guaranteed to observe.
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
           userFollowUpSupport: 'terminalBacked',
@@ -560,10 +484,10 @@ describe('childRunLoop E2E fixtures', () => {
         const launched = yield* Deferred.make<void>();
 
         const strategy: ChildRunStrategy<FakeTurn> = {
-          stageLabel: `${name} session`,
+          stageLabel: 'fake-cli session',
+          ownsBackgroundProcess: true,
           launch: (_ports, signal) =>
             Effect.gen(function* () {
-              events.push('launch');
               yield* Deferred.succeed(launched, undefined);
               return yield* Effect.callback<never, Error>((resume) => {
                 const rejectAbort = () => {
@@ -579,37 +503,27 @@ describe('childRunLoop E2E fixtures', () => {
           isTerminal: () => false,
           formatDelivery: () => Effect.succeed('unexpected delivery'),
           formatError: () => 'unexpected error',
-          onLoopStart: (runSession) => {
-            events.push('registered');
-            track(runId, runSession);
-          },
           releaseSessionOwnership,
         };
 
-        try {
-          const loop = yield* startLoop(runId, strategy, {
-            agentName: name,
-            childRun,
-          });
+        const loop = yield* startLoop(runId, strategy, {
+          agentName: 'fake-cli',
+          childRun,
+        });
 
-          expect(events).toEqual(['registered']);
-          expect(session.followUps.hasLiveOwner(runId)).toBe(true);
-          // The loop body is a generation on the run's lane: it starts
-          // once the lane admits it, not inside `startChildRunLoop`.
-          yield* Deferred.await(launched);
-          expect(events).toEqual(['registered', 'launch']);
-          interruptAll();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(true);
+        // The loop body is a generation on the run's lane: it starts once
+        // the lane admits it, not inside `startChildRunLoop`.
+        yield* Deferred.await(launched);
+        session.runs.killBackgroundProcesses();
 
-          // A process child's loop fiber survives the stop: the aborted
-          // turn ends the loop as interrupted and it finalizes CANCELLED.
-          yield* Fiber.join(loop);
-          expect(aborted).toHaveBeenCalledOnce();
-          expect(session.followUps.hasLiveOwner(runId)).toBe(false);
-          expect(releaseSessionOwnership).toHaveBeenCalledOnce();
-          expect(session.runs.getHandle(runId)).toBeUndefined();
-        } finally {
-          release(runId);
-        }
+        // A process child's loop fiber survives the stop: the aborted turn
+        // ends the loop as interrupted and it finalizes CANCELLED.
+        yield* Fiber.join(loop);
+        expect(aborted).toHaveBeenCalledOnce();
+        expect(session.followUps.hasLiveOwner(runId)).toBe(false);
+        expect(releaseSessionOwnership).toHaveBeenCalledOnce();
+        expect(session.runs.getHandle(runId)).toBeUndefined();
       }),
   );
 
@@ -915,7 +829,6 @@ describe('childRunLoop E2E fixtures', () => {
         const runId = loopRunId();
         const { strategy, callCount, resolveTurn, turnStarted } =
           createFakeStrategy();
-        const onLoopStart = vi.fn();
         const onTurnSuccess = vi.fn();
         const parentWake = vi.fn();
         const deliveryStarted = yield* Deferred.make<void>();
@@ -931,12 +844,9 @@ describe('childRunLoop E2E fixtures', () => {
 
         const loop = yield* startLoop(runId, {
           ...strategy,
-          onLoopStart,
           onTurnSuccess,
         });
 
-        expect(onLoopStart).toHaveBeenCalledOnce();
-        expect(onLoopStart).toHaveBeenCalledWith(session);
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
 

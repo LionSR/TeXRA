@@ -13,7 +13,6 @@ import {
   FILE_UPLOAD_LIFETIME_SECONDS,
   ModelConfigurationSchema,
   ObservationPolicySchema,
-  ResolvedTurnSchema,
   TurnResultSchema,
   type BackgroundEvent,
   type BackgroundSubmission,
@@ -362,25 +361,22 @@ export function openaiResponsesModel(
   });
 
   const observe: NonNullable<Model['background']>['observe'] = (
-    admitted,
+    turn,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input, origin);
-        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
         if (
-          !parsedTurn.success ||
-          parsedTurn.data.protocol !== 'openai-responses' ||
-          parsedTurn.data.mode !== 'background' ||
-          !sameModelOrigin(parsedTurn.data, operation.origin)
+          turn.protocol !== 'openai-responses' ||
+          turn.mode !== 'background' ||
+          !sameModelOrigin(turn, operation.origin)
         )
           return yield* new ModelError({
             kind: 'unsupported',
             message: 'The admitted turn belongs to another model binding.',
           });
-        const turn = parsedTurn.data;
         const chains = yield* canChain(
           RESPONSES_PREFIX_DOMAIN,
           turn,
@@ -712,14 +708,13 @@ export function openaiResponsesModel(
       });
     return yield* Effect.gen(function* () {
       const raw = yield* ownedAbortSafeRequest(
-        (signal) =>
-          client.responses
+        async (signal) => {
+          const response = await client.responses
             .cancel(operation.providerResponseId, { signal })
-            .asResponse()
-            .then((response) => {
-              requestId = response.headers.get('x-request-id') ?? undefined;
-              return response.json() as Promise<unknown>;
-            }),
+            .asResponse();
+          requestId = response.headers.get('x-request-id') ?? undefined;
+          return (await response.json()) as unknown;
+        },
         (cause) =>
           enrich(
             cause instanceof SyntaxError
