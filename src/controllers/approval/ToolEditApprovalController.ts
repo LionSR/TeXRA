@@ -553,8 +553,9 @@ export class ToolEditApprovalController {
         concurrency: 'unbounded',
         discard: true,
       });
+      // closeDiff can reject at window teardown; the latexdiff files must still go.
       yield* entry.preview.dispose().pipe(
-        Effect.andThen(
+        Effect.ensuring(
           Effect.suspend(() =>
             Effect.forEach(
               entry.workspaceTempCleanup,

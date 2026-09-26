@@ -382,6 +382,12 @@ describe('tool edit approval controller', () => {
     await run(Deferred.await(secondBuildStarted));
     expect(openBuildDisplay).toHaveBeenCalledTimes(2);
 
+    // closeDiff rejecting at window teardown still removes the temp files.
+    testHost.preview.dispose.mockImplementationOnce(() =>
+      Effect.sync(() => {
+        events.push('dispose');
+      }).pipe(Effect.andThen(Effect.die(new Error('closeDiff rejected')))),
+    );
     const secondRelease = run(controller.release(secondRequestId));
     Deferred.doneUnsafe(builds[1], Effect.fail(new Error('the build failed')));
     await secondRelease;
@@ -393,5 +399,8 @@ describe('tool edit approval controller', () => {
       'dispose',
       'temp-cleanup',
     ]);
+    expect(testHost.host.reportError).toHaveBeenCalledWith(
+      'closeDiff rejected',
+    );
   });
 });

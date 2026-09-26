@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Clock, Data, Effect, Option } from 'effect';
+import { Clock, Data, Effect, FileSystem, Option } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -47,50 +47,51 @@ function pastedImageFileName(fileName: string): string {
 }
 
 /**
- * Delete pasted images older than three days. Never fails the save that runs
- * it: the listing and every unlink report their cause on the warn channel, and
- * one bad entry does not stop the rest of the sweep.
+ * Delete the files under `directory` older than three days. Never fails the
+ * operation that runs it: the listing and every unlink report their cause at
+ * warn, and one bad entry does not stop the rest of the sweep. The caller
+ * names the log channel.
  */
-const cleanupOldPastedImages = Effect.fn('pastedImage.cleanupOld')(
-  function* () {
-    const storageFs = yield* StorageFs;
-    const cutoff = (yield* Clock.currentTimeMillis) - THREE_DAYS_MS;
-    const names = yield* storageFs
-      .readDirectory(PASTED_DIR)
-      .pipe(
+export const sweepStaleFiles = Effect.fn('sweepStaleFiles')(function* (
+  fs: FileSystem.FileSystem,
+  directory: string,
+) {
+  const cutoff = (yield* Clock.currentTimeMillis) - THREE_DAYS_MS;
+  const names = yield* fs
+    .readDirectory(directory)
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Skipped cleanup of ${directory}: ${toErrorMessage(error)}`,
+        ).pipe(Effect.as([] as string[])),
+      ),
+    );
+  yield* Effect.forEach(
+    names,
+    (name) => {
+      const filePath = path.join(directory, name);
+      return fs.stat(filePath).pipe(
+        Effect.flatMap((stats) => {
+          // The stat follows links, as the sweep it replaced did by filtering
+          // on the provider's type bits: a link to a file is swept by its
+          // target's age, a link to a directory is not swept at all.
+          if (stats.type !== 'File') return Effect.void;
+          const mtime = Option.match(stats.mtime, {
+            onNone: () => 0,
+            onSome: (modified) => modified.getTime(),
+          });
+          return mtime <= cutoff ? fs.remove(filePath) : Effect.void;
+        }),
         Effect.catch((error) =>
           Effect.logWarning(
-            `Skipped cleanup of ${PASTED_DIR}: ${toErrorMessage(error)}`,
-          ).pipe(withLogChannel(CHANNEL), Effect.as([] as string[])),
+            `Could not remove stale file ${filePath}: ${toErrorMessage(error)}`,
+          ),
         ),
       );
-    yield* Effect.forEach(
-      names,
-      (name) => {
-        const filePath = path.join(PASTED_DIR, name);
-        return storageFs.stat(filePath).pipe(
-          Effect.flatMap((stats) => {
-            // The sweep it replaces filtered on the provider's type bits, where
-            // a symlink answered for its target and so counted as a file when it
-            // pointed at one. The follow here does the same job.
-            if (stats.type !== 'File') return Effect.void;
-            const mtime = Option.match(stats.mtime, {
-              onNone: () => 0,
-              onSome: (modified) => modified.getTime(),
-            });
-            return mtime <= cutoff ? storageFs.remove(filePath) : Effect.void;
-          }),
-          Effect.catch((error) =>
-            Effect.logWarning(
-              `Could not remove stale file ${filePath}: ${toErrorMessage(error)}`,
-            ).pipe(withLogChannel(CHANNEL)),
-          ),
-        );
-      },
-      { concurrency: 'unbounded', discard: true },
-    );
-  },
-);
+    },
+    { concurrency: 'unbounded', discard: true },
+  );
+});
 
 /** Why a pasted image could not be persisted, worded as the host shows it so
  *  the caller yields this failure instead of re-minting one of its own. */
@@ -123,6 +124,6 @@ export const savePastedImageBuffer = Effect.fn(
   });
   yield* storageFs.makeDirectory(PASTED_DIR, { recursive: true });
   yield* storageFs.writeFile(relativePath, data);
-  yield* cleanupOldPastedImages();
+  yield* sweepStaleFiles(storageFs, PASTED_DIR).pipe(withLogChannel(CHANNEL));
   return yield* storageFs.resolve(relativePath);
 }, Effect.mapError(saveFailed));
