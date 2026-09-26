@@ -210,7 +210,7 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 - **Bash:** the Principal's `bash` is always approval-gated, whatever the run's approval policy.
 
 **What it adds for the researcher:**
-- **One place to ask "what's happening?"** A cross-project digest: which claims moved, which runs wait on you, spend against each budget.
+- **One place to ask "what's happening?"** The household ledger (§3.8.2) and its digest: which claims moved, which runs wait on you, spend against each budget.
 - **A portfolio budget.** The Principal splits one envelope across projects and is where the §3.6 auto-resume daemon lives.
 - **Cross-pollination.** When a lemma on one project's Board looks relevant to another, the Principal proposes it to that project's lead. This is the consolidation step from §3.6, applied between projects.
 - **Memory about the researcher** that persists across every project. See the next subsection.
@@ -225,7 +225,7 @@ The Principal gets **its own memory with no new mechanism**: the same tool in th
 
 | Scope         | Lives in                          | Written by                                  | Read by                                                        |
 | ------------- | --------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
-| **Principal** | home session storage (global)     | the Principal; the researcher in Settings   | the Principal; project runs see only notes marked `shared`     |
+| **Principal** | home session storage (global)     | the Principal; the researcher in Settings   | the Principal only. Project runs never see it                  |
 | **Project**   | that project's storage (as today) | that project's agents; the researcher       | that project's runs; the Principal read-only via `projects read` |
 | **Board**     | that project's session (§3.2)     | that project's lead and roles; the researcher | campaign state, not memory: what is true *now* in one campaign |
 
@@ -239,7 +239,7 @@ The Principal gets **its own memory with no new mechanism**: the same tool in th
 **How knowledge moves between scopes:**
 
 - **Up, from project to Principal.** When a project closes, or in the digest cycle, the Principal reads that project's memory and Board and *distills*. It writes its own note in its own words, with a pointer back, never a copy. Project memory stays the source of truth for the project.
-- **Down, from Principal to project.** A Principal note marked `shared` (frontmatter, alongside the existing pinned flag in `memoryMeta.ts`) is readable, read-only, by every project run at `/memories/principal/…`. This is how a project agent learns the researcher's notation and taste without being told each time. Anything more specific reaches a project as an ordinary `steer` to its lead.
+- **Down, from Principal to project.** This happens only by explicit dispatch, never by a project reading upward. When a project needs something the Principal knows (the researcher's notation, a deadline, a lesson from another project), the Principal puts it in the `start` instruction or a `steer` to that project's lead. If it should persist, the lead records it in *project* memory in its own words. Project agents get no tool, path or prompt that points at home: global storage sits outside every project root, so `resolveToolPath` refuses it for file tools while `restrictPathsToWorkingDirectory` is on (the default), and role prompts do not mention the Principal's memory. `bash` is not path-guarded, so for bash this is discouragement, not enforcement. If that is not enough, the home storage directory joins the deny list for project runs' approval preview.
 - **Across.** Never directly. Project A's memory reaches project B only through the Principal, as a proposal to B's lead (the cross-pollination step). That keeps every write inside the scope that owns it.
 
 **Rules:**
@@ -247,6 +247,45 @@ The Principal gets **its own memory with no new mechanism**: the same tool in th
 - **Same pin limit.** The Principal's pinned notes load at every Principal session start, with the same limit as today (10).
 - **No secrets.** The home session's deny list (§3.8) applies to what the Principal may copy into memory; keys and credentials never land there.
 - **Researcher sees and edits everything.** The Settings Memory tab gains a scope switcher (Principal / this project), so the researcher can read, edit, unpin or delete anything the Principal remembers about them.
+
+#### 3.8.2 The holistic view: the household ledger
+
+The Principal's job is that of a 大内总管, the palace's chief steward. It knows at all times what is happening in every project, surfaces what needs the researcher, and dispatches work. The researcher decides. Information flows **up** to the Principal continuously. It flows **down** only as the Principal's explicit dispatches. Projects never look up and never look sideways.
+
+That knowledge must not depend on the Principal remembering to call `status` on every project. The Principal gets a **household ledger**: a derived, always-current view across the registry, injected compactly into every Principal turn.
+
+- **Per project:**
+  - Priority and deadline, from the Principal's `projects/` note.
+  - Live runs, with their phase and how long they've run.
+  - Requests waiting on the researcher, with their age.
+  - Spend against budget.
+  - Board changes since the Principal last looked: claims that moved level, ideas promoted or killed, new open questions.
+  - The last researcher decision.
+- **Across projects:**
+  - Everything blocked on the researcher, oldest first.
+  - Budget burn.
+  - Stalled runs: no progress row for a long time.
+  - Collisions: two projects working on the same lemma or the same outside folder.
+
+**How it is built, from pieces that exist:**
+- The ledger is a **fold over each project session's view**, the same view the desktop's cross-project attention badge already computes (`packages/desktop/src/main/desktopAttention.ts`), plus the registry. It is derived, never stored, so it cannot drift from the projects.
+- It uses **no new event channel.** The Principal's host subscribes through the SDK's session views; see "No new event channel" in §3.8.
+- **"Since last looked"** is the one piece of state the Principal owns: a per-project watermark in the home session, advanced when a ledger is delivered to a Principal turn.
+
+**Wake-ups.** The Principal does not poll. A small set of ledger transitions queue a follow-up into the Principal's home run:
+- A run finished or failed.
+- A request has waited longer than the researcher's threshold.
+- A budget crossed a set fraction.
+- A claim reached `verified` or `refuted`.
+- A run stalled.
+
+Each wake-up is an ordinary queued input, so it is durable, deduplicated by the watermark, and visible in the Principal's transcript.
+
+**What the Principal does with it:**
+- **Triage.** Answer what it can on its own authority (restart a stalled run, rebalance budget within the envelope). Escalate the rest to the researcher, batched.
+- **Brief.** The digest (§3.3) is the ledger in prose, with judgment on top: what matters today, what can wait.
+- **Dispatch.** `start` and `steer` to project leads, carrying whatever context the lead needs, and only that.
+- **Remember.** Update its `projects/` and `lessons/` notes from what the ledger showed.
 
 ## 4. Evaluation first: a theorist benchmark
 
@@ -268,7 +307,7 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 | 1     | Consolidate agents into theorist + roles + skills; one name for presets; strip prover heuristics                      | ~1 wk  | Benchmark no worse; agent and prompt file count down about 5×          |
 | 2     | Research Board (schema, `board` tool, three renderers, continuation injection)                                        | 1–2 wk | A campaign survives restart from Board + objective alone               |
 | 3     | Steering: tool-boundary nudges; Board edits as structured follow-ups; digest                                           | ~1 wk  | Steering benchmark cases pass                                          |
-| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, cross-project digest, the Principal's own memory (global storage, `shared` flag, Settings scope switcher); `setup` folds in | ~1 wk  | One digest shows every open project's runs, requests and spend; a `shared` Principal note is visible in a new project's first run |
+| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, the household ledger and its wake-ups (§3.8.2), the Principal's own memory (global storage, Settings scope switcher); `setup` folds in | ~1 wk  | The ledger shows every open project's runs, requests, spend and Board changes without a tool call; no project run can reach home storage |
 | 3c    | Principal, write side: `create`, `start`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list | 1–2 wk | A run started from Home is recorded, approved and resumable in its own project |
 | 4     | Verification ladder: `VerifierReport`, novelty rung with Semantic Scholar/OpenAlex, digestion rung, provenance card    | 2 wk   | No `verified` claim without its evidence; novelty traps caught         |
 | 5     | Tournament script library with human matches and meta-review                                                          | ~1 wk  | Tournament beats single-shot on the benchmark at equal cost, or is cut |
@@ -296,7 +335,7 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 3. Tool-boundary nudges: default on, or opt-in per run?
 4. Benchmark contents: whose problems, and how are they kept out of training data?
 5. The Principal's read scope: the whole home directory with a deny list (proposed), or only folders the researcher has listed as "research roots"?
-6. Should `shared` Principal notes load into project runs automatically (like pinned notes) or only on request? Auto-loading costs context in every run.
+6. The ledger's size cap: how many projects and rows per project before the Principal must `status` a project to see its detail?
 7. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
 
 ## 9. Sources
