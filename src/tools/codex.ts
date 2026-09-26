@@ -29,6 +29,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
+import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentResume } from '@platform/interfaces';
@@ -62,7 +63,6 @@ import {
   getCodexConfig,
   openCodexClient,
 } from './codexImport';
-import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
@@ -360,7 +360,7 @@ export function runStreamedTurn(
  */
 function buildCodexLaunch(params: {
   thread: Thread;
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   initialPrompt: string;
   /**

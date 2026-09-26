@@ -17,6 +17,7 @@ import { Cause, Effect, Exit, Fiber } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
+import { registerRun } from '@agent/storage/runLifecycle';
 import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import {
   prepareAgentDefinition,
@@ -47,7 +48,6 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import {
-  registerChildRun,
   startDetachedChildRunLoop,
   type DetachedChildRunInput,
 } from './detachedChildRun';
@@ -181,9 +181,8 @@ const executeInBand = Effect.fn('executeInBand')(
     );
     if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));
 
-    yield* registerChildRun(options.session, {
-      runId,
-      config,
+    yield* registerRun(options.session, runId, config, {
+      identity: { kind: 'agent', agent: config.agent },
       userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
       parentRunId: options.parentRunId,
     }).pipe(

@@ -79,7 +79,7 @@ export interface ChildRunPorts {
  * Agent-CLI presentation and finalization. Native engines own their run
  * handle and terminal finalization and omit this port.
  */
-interface ChildRunPort {
+export interface ChildRunPort {
   readonly logger: AgentTrace;
   /** Show the handle to stops, once the loop has reserved their target. */
   track(): void;

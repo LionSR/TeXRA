@@ -34,6 +34,7 @@ import {
 } from '@agent/trace';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
+import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import type { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -74,7 +75,6 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
@@ -405,7 +405,7 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // ============================================================================
 
 function buildClaudeAgentLaunch(params: {
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   initialPrompt: string;
   model: string;
