@@ -8,7 +8,7 @@ import {
   findBuildDirectories,
   removeBuildDirectories,
 } from '@housekeeping/clean';
-import { runCleanRunDir } from '@housekeeping/runDirOps';
+import { fileOpResultMessage, runCleanRunDir } from '@housekeeping/runDirOps';
 import { withLogChannel } from '@logger/effectLog';
 
 import type { FileOpResult } from '@shared/schemas';
@@ -21,27 +21,13 @@ const showCleanResult = (
   inputFile: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    switch (result.status) {
-      case 'success':
-        vscode.window.showInformationMessage(
-          `Cleanup complete for ${inputFile}`,
-        );
-        break;
-      case 'noFiles':
-        vscode.window.showInformationMessage(
-          `No files found to clean for ${inputFile}`,
-        );
-        break;
-      case 'missingParams':
-        yield* Effect.forkDetach(
-          showLoggedMessage(CHANNEL, 'Select an input file before cleaning.'),
-        );
-        break;
-      case 'error':
-        void vscode.window.showErrorMessage(
-          `Error during cleanup: ${result.error}`,
-        );
-        break;
+    const { level, text } = fileOpResultMessage('clean', result, inputFile);
+    if (result.status === 'missingParams') {
+      yield* Effect.forkDetach(showLoggedMessage(CHANNEL, text));
+    } else if (level === 'error') {
+      void vscode.window.showErrorMessage(text);
+    } else {
+      void vscode.window.showInformationMessage(text);
     }
   });
 
