@@ -1,6 +1,7 @@
 import { Data, Effect } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { cliEnvValue } from './cliContext';
 import type { PlatformError } from 'effect/PlatformError';
 
 /** The OS browser launcher could not open the URL. The message never
@@ -18,6 +19,17 @@ function resolveBrowserLaunch(
   url: string,
   platform: NodeJS.Platform = process.platform,
 ): BrowserLaunchCommand {
+  // WSL usually has no `xdg-open`, and the browser the person uses is the
+  // Windows one: interop runs the same launcher `win32` uses.
+  if (
+    platform === 'linux' &&
+    (cliEnvValue('WSL_DISTRO_NAME') || cliEnvValue('WSL_INTEROP'))
+  ) {
+    return {
+      command: 'rundll32.exe',
+      args: ['url.dll,FileProtocolHandler', url],
+    };
+  }
   switch (platform) {
     case 'darwin':
       return {

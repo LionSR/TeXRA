@@ -189,6 +189,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **CLI sign-in always shows the sign-in URL** — `texra login`, `/login`, and
+  the account panel now print the sign-in link before opening a browser, and
+  keep it on screen while waiting. If the browser that opens is signed in to a
+  different account, or no browser opens, copy the link into another browser.
+  A failed browser launch no longer ends the sign-in, and under WSL the CLI
+  opens the Windows browser.
+
 - **Beamer slides are no longer cut short** — when a model left its last
   output document unclosed, a frame overlay such as `\begin{frame}<beamer>`
   was read as markup and the slides were truncated at that point. The
