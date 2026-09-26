@@ -1,7 +1,8 @@
 import * as path from 'node:path';
 import { Context, Effect } from 'effect';
 
-import { describe, expect, it, vi } from 'vitest';
+import { it } from '@effect/vitest';
+import { describe, expect, vi } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime';
 
@@ -104,25 +105,27 @@ function loadFileActions(outcome: DiffRunOutcome): {
 }
 
 describe('DesktopProgressFileActions latexdiff', () => {
-  it('opens every successful diff, not just the first', async () => {
-    const { actions, openBuildDisplay } = loadFileActions({
-      results: [
-        successResult(absolutePath('run', 'r1', 'main.tex')),
-        successResult(absolutePath('run', 'r2', 'main.tex')),
-        failureResult('one failed'),
-      ],
-    });
+  it.effect('opens every successful diff, not just the first', () =>
+    Effect.gen(function* () {
+      const { actions, openBuildDisplay } = loadFileActions({
+        results: [
+          successResult(absolutePath('run', 'r1', 'main.tex')),
+          successResult(absolutePath('run', 'r2', 'main.tex')),
+          failureResult('one failed'),
+        ],
+      });
 
-    await Effect.runPromise(actions.diffStreamToolbarAction(RUN_ID));
+      yield* actions.diffStreamToolbarAction(RUN_ID);
 
-    expectOpenedDiff(
-      openBuildDisplay,
-      absolutePath('run', 'r1', 'main_diff.tex'),
-    );
-    expectOpenedDiff(
-      openBuildDisplay,
-      absolutePath('run', 'r2', 'main_diff.tex'),
-    );
-    expect(openBuildDisplay).toHaveBeenCalledTimes(2);
-  });
+      expectOpenedDiff(
+        openBuildDisplay,
+        absolutePath('run', 'r1', 'main_diff.tex'),
+      );
+      expectOpenedDiff(
+        openBuildDisplay,
+        absolutePath('run', 'r2', 'main_diff.tex'),
+      );
+      expect(openBuildDisplay).toHaveBeenCalledTimes(2);
+    }),
+  );
 });
