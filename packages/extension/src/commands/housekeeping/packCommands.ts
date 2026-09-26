@@ -24,16 +24,23 @@ const showPackResult = (
       case 'success': {
         const folder = result.outputFolder;
         if (!folder || !folderPath) return;
-        vscode.window
-          .showInformationMessage(`Files packed into ${folder}`, 'Open Folder')
-          .then((sel) => {
-            if (sel === 'Open Folder') {
-              void vscode.commands.executeCommand(
+        yield* Effect.forkDetach(
+          Effect.gen(function* () {
+            const sel = yield* Effect.promise(() =>
+              vscode.window.showInformationMessage(
+                `Files packed into ${folder}`,
+                'Open Folder',
+              ),
+            );
+            if (sel !== 'Open Folder') return;
+            yield* Effect.promise(() =>
+              vscode.commands.executeCommand(
                 'revealFileInOS',
                 vscode.Uri.file(folderPath),
-              );
-            }
-          });
+              ),
+            );
+          }),
+        );
         break;
       }
       case 'noFiles':

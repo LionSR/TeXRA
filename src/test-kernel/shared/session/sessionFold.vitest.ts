@@ -188,8 +188,14 @@ describe('sessionFold', () => {
     });
     // The same rows on a quiet view: the debug row is dropped, its cursor
     // still advances.
-    const filtered = fold({ ...live, debug: false }, tail(hidden));
-    expect(filtered.runs).toBe(live.runs);
+    const quiet = foldAll(
+      log.events
+        .filter((event) => event !== hidden)
+        .map((event) => ({ _tag: 'event', read: 'aggregate', event })),
+      foldAll([subscribe(CHILD), alive], emptySessionView('paper', 0, false)),
+    );
+    const filtered = fold(quiet, tail(hidden));
+    expect(filtered.runs).toBe(quiet.runs);
     expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
@@ -673,7 +679,7 @@ describe('sessionFold', () => {
         chunk('response-1', 5, 7, '!!'),
         chunk('response-2', 0, 4, 'Late'),
       ],
-      view,
+      buffered,
     );
     const rows = runView(settled, CHILD).transcript.rows;
     expect(rows[0].kind === 'assistant' && rows[0].text.full).toBe(
@@ -1089,6 +1095,26 @@ describe('sessionFold', () => {
     // Promoted to top level, the detached child takes its creation-time
     // place in the listing rather than being appended to the end.
     expect(detached.order).toStrictEqual([PROCESS, CHILD, ROOT]);
+  });
+
+  it('refuses a level it has already folded past', () => {
+    // The indexes advance in place: a second branch off one level would see
+    // the first branch's open card and paint a tool it never started.
+    const { log, pending } = buildScenario();
+    const base = foldAll(pending);
+    const toolStart = (logId: string): FoldInput =>
+      tail(
+        log.emit(CHILD, T.childDone, {
+          type: 'tool.start',
+          logId,
+          toolName: 'bash',
+          input: {},
+        }),
+      );
+    const started = fold(base, toolStart('first'));
+    expect(() => fold(base, toolStart('second'))).toThrow('superseded');
+    // The level it returned folds on.
+    expect(() => fold(started, alive)).not.toThrow();
   });
 
   it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {

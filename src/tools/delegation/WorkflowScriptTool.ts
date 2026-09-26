@@ -5,6 +5,7 @@ import * as nodePath from 'node:path';
 import { z } from 'zod';
 import {
   Cause,
+  Data,
   Effect,
   Exit,
   Fiber,
@@ -202,6 +203,11 @@ const persistWorkflowScript = Effect.fn('persistWorkflowScript')(function* (
     return resolved.relative;
   }
 });
+
+/** A waited workflow run that settled without the report it owes its caller. */
+class WorkflowScriptReportMissing extends Data.TaggedError(
+  'WorkflowScriptReportMissing',
+)<{ readonly message: string }> {}
 
 function workflowScriptToolError(
   error: unknown,
@@ -610,9 +616,9 @@ function executeWorkflowScriptTool(
           runStore.readRunEnd(),
         ]);
         if (!report) {
-          throw new Error(
-            `Workflow script '${meta.name}' completed without a persisted report.`,
-          );
+          return yield* new WorkflowScriptReportMissing({
+            message: `Workflow script '${meta.name}' completed without a persisted report.`,
+          });
         }
         if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) {
           return errorResult(report, {

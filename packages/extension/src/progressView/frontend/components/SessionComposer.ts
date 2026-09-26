@@ -368,13 +368,13 @@ export class SessionComposer extends LitElement {
     );
   };
 
-  private handlePaste = (event: ClipboardEvent): void => {
+  private handlePaste = async (event: ClipboardEvent): Promise<void> => {
     const files = clipboardImageFiles(event);
     if (files.length === 0) return;
     event.preventDefault();
     const pastedText = event.clipboardData?.getData('text/plain') || '';
     const target = this.textArea;
-    void Promise.all(
+    const images = await Promise.all(
       files.map(
         async ({ file, type }): Promise<ExtractedClipboardImage | null> => {
           const base64 = await readFileAsBase64(file);
@@ -386,42 +386,41 @@ export class SessionComposer extends LitElement {
           };
         },
       ),
-    ).then((images) => {
-      const added = images.filter(filterNotNullish);
-      if (added.length === 0) return;
-      for (const image of added) {
-        this.dispatchEvent(
-          SessionUiEvents.host({ kind: 'savePastedImage', ...image }),
-        );
-      }
-      const insert = appendClipboardImageChips(
-        pastedText,
-        added.map(({ fileName }) => fileName),
+    );
+    const added = images.filter(filterNotNullish);
+    if (added.length === 0) return;
+    for (const image of added) {
+      this.dispatchEvent(
+        SessionUiEvents.host({ kind: 'savePastedImage', ...image }),
       );
-      // The draft holds each chip's name now and its stored path once the
-      // host answers (`sessionSurfaces.settleHost`).
-      const pending = added.map(({ fileName }) => ({ fileName, path: null }));
-      if (target && this.isConnected) {
-        // setRangeText fires no input event, so the draft is set explicitly.
-        target.setRangeText(
-          insert,
-          target.selectionStart,
-          target.selectionEnd,
-          'end',
-        );
-        this.setText(target.value, {
-          images: [...this.draft.images, ...pending],
-        });
-      } else {
-        this.setText(`${this.text}${insert}`, {
-          images: [...this.draft.images, ...pending],
-        });
-      }
-      this.announcement =
-        added.length === 1
-          ? 'Image attached.'
-          : `${added.length} images attached.`;
-    });
+    }
+    const insert = appendClipboardImageChips(
+      pastedText,
+      added.map(({ fileName }) => fileName),
+    );
+    // The draft holds each chip's name now and its stored path once the
+    // host answers (`sessionSurfaces.settleHost`).
+    const pending = added.map(({ fileName }) => ({ fileName, path: null }));
+    if (target && this.isConnected) {
+      // setRangeText fires no input event, so the draft is set explicitly.
+      target.setRangeText(
+        insert,
+        target.selectionStart,
+        target.selectionEnd,
+        'end',
+      );
+      this.setText(target.value, {
+        images: [...this.draft.images, ...pending],
+      });
+    } else {
+      this.setText(`${this.text}${insert}`, {
+        images: [...this.draft.images, ...pending],
+      });
+    }
+    this.announcement =
+      added.length === 1
+        ? 'Image attached.'
+        : `${added.length} images attached.`;
   };
 
   private replyToParent(parentId: RunId): void {
