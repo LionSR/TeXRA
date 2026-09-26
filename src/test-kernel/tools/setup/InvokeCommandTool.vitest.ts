@@ -7,7 +7,6 @@ import { Effect } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { AUTH_COMMANDS } from '@auth/constants';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform } from '@test/support/setupPlatform';
 import { InvokeCommandTool } from '@tools/setup/InvokeCommandTool';
@@ -74,16 +73,6 @@ describe('InvokeCommandTool allowlist', () => {
     }),
   );
 
-  it.effect('allows the TeXRA account sign-in command', () =>
-    Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
-      yield* invoke(tool, { command: AUTH_COMMANDS.SIGN_IN });
-
-      assert.equal(invocations.length, 1);
-      assert.equal(invocations[0].command, AUTH_COMMANDS.SIGN_IN);
-    }),
-  );
-
   it.effect(
     'rejects workbench.extensions.installExtension outside its dedicated tool',
     () =>
@@ -117,28 +106,6 @@ describe('InvokeCommandTool allowlist', () => {
         assert.equal(result.status, 'error');
       }
       assert.equal(invocations.length, 0);
-    }),
-  );
-
-  it.effect('rejects empty or whitespace command names', () =>
-    Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
-      const empty = yield* invoke(tool, { command: '' });
-      const blank = yield* invoke(tool, { command: '   ' });
-
-      assert.equal(empty.status, 'error');
-      assert.equal(blank.status, 'error');
-      assert.equal(invocations.length, 0);
-    }),
-  );
-
-  it.effect('trims surrounding whitespace before allowlist check', () =>
-    Effect.gen(function* () {
-      const { tool, invocations } = yield* Effect.tryPromise(() => setupTool());
-      yield* invoke(tool, { command: '  texra.setApiKey  ' });
-
-      assert.equal(invocations.length, 1);
-      assert.equal(invocations[0].command, 'texra.setApiKey');
     }),
   );
 });

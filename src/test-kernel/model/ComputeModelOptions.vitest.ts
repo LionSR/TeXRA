@@ -234,18 +234,6 @@ describe('model availability', () => {
     }),
   );
 
-  it.effect('reports a model with no stored key as missing a key', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => installAccessPlatform({ secrets: {} }));
-
-      const [model] = modelOptionsFrom(
-        yield* availabilityInputs(hostStores(), ['gpt55']),
-      );
-
-      expect(model.availability).toBe('missing-key');
-    }),
-  );
-
   it.effect(
     'warns once per provider when the picker cannot read credentials',
     () =>
@@ -396,17 +384,6 @@ describe('model availability', () => {
           availability: 'unknown-model',
         });
       }),
-  );
-
-  it.effect('reports a stored personal key as provider-key access', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => installAccessPlatform());
-
-      const [model] = modelOptionsFrom(yield* availabilityInputs(hostStores()));
-
-      expect(model.availability).toBe('provider-key');
-      expect(isModelOptionAvailable(model)).toBe(true);
-    }),
   );
 
   it.effect('marks retired models unavailable', () =>
@@ -599,25 +576,6 @@ describe('model availability', () => {
         });
       }
     }),
-  );
-
-  it.effect(
-    'shows subscription access for a signed-in preferred subscription',
-    () =>
-      Effect.gen(function* () {
-        yield* Effect.promise(() =>
-          installAccessPlatform({
-            config: PREFER_CODEX_CONFIG,
-            secrets: { ...codexSessionSecrets(), ...OPENAI_KEY_SECRETS },
-          }),
-        );
-
-        const [model] = modelOptionsFrom(
-          yield* availabilityInputs(hostStores(), ['gpt55']),
-        );
-
-        expect(model.availability).toBe('subscription-access');
-      }),
   );
 });
 

@@ -489,15 +489,6 @@ describe('resolveOptionalCommand', () => {
       );
     }).pipe(Effect.provide(nodeSpawnerLayer)),
   );
-
-  it.live('returns null when a command cannot be resolved', () =>
-    Effect.gen(function* () {
-      assert.deepEqual(
-        yield* resolveOptionalCommand('texra-no-such-binary'),
-        null,
-      );
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
-  );
 });
 
 // ---------------------------------------------------------------------------

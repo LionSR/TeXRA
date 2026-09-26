@@ -200,19 +200,6 @@ describe('ChatGPT subscription model routing', () => {
       expect(yield* prospectiveRoute()).toBeUndefined();
     }),
   );
-
-  it.effect('reports unknown model identifiers inactive', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => installSubscriptionPlatform());
-
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          readProspectiveUsageRoute(hostStores(), 'unknown-subscription-model'),
-        ),
-      ).toBeUndefined();
-    }),
-  );
 });
 
 describe('codexBackendModelId', () => {

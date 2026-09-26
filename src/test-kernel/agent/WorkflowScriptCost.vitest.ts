@@ -92,7 +92,7 @@ describe('workflow attempt cost', () => {
         const started = yield* Deferred.make<void>();
         const run = runWorkflowScript({
           script: `${meta}
-return await agent('retry cost')`,
+return yield* agent('retry cost')`,
           onEvent: (event) => {
             if (event.type === 'call') lastCard = event.call;
           },
@@ -257,8 +257,8 @@ describe('workflow-script completed journal cost', () => {
   it.live('produces the same total after a checkpoint replay', () =>
     Effect.gen(function* () {
       const script = `${meta}
-await agent('first')
-return await agent('second')`;
+yield* agent('first')
+return yield* agent('second')`;
       const results = [workflowResult(0.4), toolUseResult(0.6)];
       const first = yield* runPersistedWorkflowScript({
         session,
@@ -288,7 +288,7 @@ return await agent('second')`;
   it.live('can settle completed entries retained after a script failure', () =>
     Effect.gen(function* () {
       const script = `${meta}
-await agent('completed')
+yield* agent('completed')
 throw new Error('later failure')`;
 
       expect(

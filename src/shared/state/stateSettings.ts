@@ -103,16 +103,15 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * `settingSlot(entry, host)`.
  */
 
-/** Hosts that may store, honor, or surface a setting. */
-export type SettingHost = 'vscode' | 'cli' | 'desktop';
+/** The product hosts, spelled once: for settings and `unavailableHosts`. */
+export const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
+export type SettingHost = (typeof SETTING_HOSTS)[number];
 
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 
 /** Storage slot per host. Absent means the host does not store the key. */
-type SettingSlots = {
-  readonly [H in SettingHost]?: SettingStore;
-};
+type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
 
 export type SettingsViewSnapshot =
   | 'approval'
@@ -415,12 +414,6 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  'goal.enabled': {
-    schema: z.boolean().prefault(true),
-    description:
-      'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-    honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
-  },
   // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
@@ -657,7 +650,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
     title: 'Share usage telemetry',
     description:
-      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
+      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
     category: 'account',
     configTarget: 'global',
     honoredBy: everyHost('src/telemetry/UsageLogService.ts'),

@@ -588,19 +588,7 @@ export function anthropicMessagesModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const prepared = ResolvedTurnSchema.safeParse(input);
-          if (!prepared.success)
-            return yield* new ModelError({
-              kind: 'invalid-request',
-              message: 'The prepared Anthropic invocation is invalid.',
-              cause: prepared.error,
-            });
-          const body = yield* invocationBody(
-            prepared.data,
-            origin,
-            config,
-            uploads,
-          );
+          const body = yield* invocationBody(input, origin, config, uploads);
           const signal = yield* Effect.abortSignal;
           const source = yield* Effect.tryPromise({
             try: () => client.messages.create(body, { signal }),
@@ -982,14 +970,12 @@ export function anthropicMessagesModel(
   const generateTurn: Model['generateTurn'] = (turn) =>
     completedTurn(streamTurn(turn));
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.anthropic.estimateInputTokens')(function* (input) {
-      const parsed = ResolvedTurnSchema.safeParse(input);
-      if (!parsed.success || parsed.data.protocol !== 'anthropic-messages')
+    Effect.fn('llm.anthropic.estimateInputTokens')(function* (turn) {
+      if (turn.protocol !== 'anthropic-messages')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'The prepared Anthropic count invocation is unsupported.',
         });
-      const turn = parsed.data;
       const body = yield* invocationBody(turn, origin, config, uploads);
       const message = turn.messages[0];
       if (

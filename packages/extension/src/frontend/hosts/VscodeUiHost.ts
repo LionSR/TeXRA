@@ -127,42 +127,21 @@ class VscodeUiHost implements MessageHost, PromptHost {
   input(
     options: PromptInputOptions,
   ): Effect.Effect<string | undefined, PromptFailed> {
-    return Effect.callback<string | undefined, PromptFailed>((resume) => {
-      const tokens = new vscode.CancellationTokenSource();
-      let settled = false;
-      const dispose = () => {
-        if (settled) return false;
-        settled = true;
-        tokens.dispose();
-        return true;
-      };
-      void Promise.resolve(
-        vscode.window.showInputBox(options, tokens.token),
-      ).then(
-        (value) => {
-          dispose();
-          resume(Effect.succeed(value));
-        },
-        (cause: unknown) => {
-          dispose();
-          resume(
-            Effect.fail(
-              new PromptFailed({
-                reason: 'presentation-failed',
-                member: 'input',
-                message: 'VS Code would not show the input box.',
-                cause,
-              }),
-            ),
-          );
-        },
-      );
-      return Effect.sync(() => {
-        if (settled) return;
-        tokens.cancel();
-        dispose();
-      });
-    });
+    return Effect.acquireUseRelease(
+      Effect.sync(() => new vscode.CancellationTokenSource()),
+      (tokens) =>
+        Effect.tryPromise({
+          try: () => vscode.window.showInputBox(options, tokens.token),
+          catch: (cause) =>
+            new PromptFailed({
+              reason: 'presentation-failed',
+              member: 'input',
+              message: 'VS Code would not show the input box.',
+              cause,
+            }),
+        }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
+      (tokens) => Effect.sync(() => tokens.dispose()),
+    );
   }
 
   /** The one wrap of `vscode.window.show*Message` this host holds. */

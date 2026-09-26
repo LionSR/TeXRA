@@ -67,12 +67,9 @@ import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
-  agentCliCall,
-  type AgentCliToolFailure,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
-  reraiseAgentCliCallFailure,
 } from './agentCliShared';
 import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
@@ -467,7 +464,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   input: CodexInput,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const toolCall = yield* ToolCall;
@@ -519,7 +516,7 @@ export const CodexTool = defineTool({
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-  execute: (input) => reraiseAgentCliCallFailure(runCodex(input)),
+  execute: (input) => runCodex(input),
 });
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
@@ -531,13 +528,16 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const { roots } = yield* ToolCall;
-  const thread = yield* agentCliCall(
-    createCodexThread(input, sandboxMode, roots, parentWorkingDirectory),
-  );
+  const thread = yield* createCodexThread(
+    input,
+    sandboxMode,
+    roots,
+    parentWorkingDirectory,
+  ).pipe(Effect.orDie);
   // Synthetic run metadata for the child run: Codex runs outside the normal
   // run loop, so the tool-use category and a stable Codex model label are
   // stated here rather than inherited from the generic AgentConfig defaults.

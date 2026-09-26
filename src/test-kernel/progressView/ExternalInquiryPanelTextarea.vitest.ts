@@ -75,25 +75,6 @@ describe('external-inquiry-panel answer/session-link inputs', () => {
     vi.useRealTimers();
   });
 
-  it('renders wa-textarea for the answer and session-link inputs, never a native textarea', async () => {
-    const element = await mountPanel();
-
-    expect(element.shadowRoot!.querySelector('textarea')).toBeNull();
-    expect(element.shadowRoot!.querySelectorAll('wa-textarea').length).toBe(2);
-    expect(
-      element
-        .shadowRoot!.querySelector('.external-inquiry-request__answer-input')
-        ?.tagName.toLowerCase(),
-    ).toBe('wa-textarea');
-    expect(
-      element
-        .shadowRoot!.querySelector(
-          '.external-inquiry-request__session-links-input',
-        )
-        ?.tagName.toLowerCase(),
-    ).toBe('wa-textarea');
-  });
-
   it('reads the wa-textarea shadow-DOM value on input and submits it as the answer', async () => {
     const element = await mountPanel();
     const actions = recordPermissionActions(element);

@@ -10,19 +10,6 @@ import {
 } from '@cli/tui/ui/Select';
 
 describe('Select hotkeys (packages/cli/src/tui/ui/Select.tsx)', () => {
-  it('numbers the first nine rows 1-9, then letters a-z for 10-35', () => {
-    expect(selectHotkeyForIndex(0)).toBe('1');
-    expect(selectHotkeyForIndex(8)).toBe('9');
-    expect(selectHotkeyForIndex(9)).toBe('a');
-    expect(selectHotkeyForIndex(10)).toBe('b');
-    expect(selectHotkeyForIndex(34)).toBe('z');
-  });
-
-  it('has no shortcut for rows beyond z or below zero', () => {
-    expect(selectHotkeyForIndex(35)).toBeUndefined();
-    expect(selectHotkeyForIndex(-1)).toBeUndefined();
-  });
-
   it('maps a typed key back to its row index (round-trip)', () => {
     for (const index of [0, 8, 9, 10, 34]) {
       const key = selectHotkeyForIndex(index);

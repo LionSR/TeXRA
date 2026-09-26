@@ -113,19 +113,7 @@
       "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
       "category": "production-dead",
       "kind": "exports",
-      "name": "isCompactPlanApprovalRows"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "isPlanApprovalGoalActionVisible"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "planApprovalCompactBodyRowsBudget"
     },
     {
       "file": "packages/cli/src/chat/tui/modals/PlanApproval.tsx",
@@ -180,12 +168,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "buildStaticTranscriptItems"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "sessionHeaderIdentityLine"
     },
     {
       "file": "packages/cli/src/chat/tui/panes/staticTranscriptRing.ts",
@@ -299,12 +281,6 @@
       "file": "packages/cli/src/runtime/cliContext.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "resolveCliCommandName"
-    },
-    {
-      "file": "packages/cli/src/runtime/cliContext.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "resolveStreamColor"
     },
     {
@@ -348,12 +324,6 @@
       "category": "production-dead",
       "kind": "exports",
       "name": "findCliModelAccessEntry"
-    },
-    {
-      "file": "packages/cli/src/runtime/modelAccess.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatModelStatusForCli"
     },
     {
       "file": "packages/cli/src/runtime/modelAccess.ts",

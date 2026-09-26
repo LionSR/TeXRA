@@ -3,10 +3,8 @@
  */
 
 import type { ToolDefinition, ToolResult } from '@shared/schemas';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type { Effect } from 'effect';
-
-/** Product hosts that expose the shared agent-tool registry. */
-export type ToolHost = 'cli' | 'desktop' | 'extension';
 
 /**
  * The guard the run loop applies before a tool's body runs, declared on the
@@ -51,7 +49,7 @@ export interface ToolGuard<T, R = never> {
 export interface ITool<E = Error, R = never> {
   readonly definition: ToolDefinition;
   /** Hosts this tool is statically excluded from; an omitted host supports it. */
-  readonly unavailableHosts?: readonly ToolHost[];
+  readonly unavailableHosts?: readonly SettingHost[];
   /**
    * True only for tools that are side-effect-free AND approval-free, so
    * parallel calls in one model response may execute concurrently.

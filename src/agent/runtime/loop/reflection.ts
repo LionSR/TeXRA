@@ -52,7 +52,6 @@ import {
 } from '@agent/output/outputState';
 import { checkExpectedOutputs } from '@agent/output/outputValidation';
 import { summarizeRound, type RoundSummary } from '@agent/output/roundSummary';
-import { resolveBaseFilesForDiff } from '@agent/output/snapshotResolution';
 import type { RoundFileMapping } from '@agent/output/types';
 import { XmlOutputManager } from '@agent/output/XmlOutputManager';
 import {
@@ -246,7 +245,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       workflowOutputPath({ ext: WORKFLOW_RAW_OUTPUT_EXT, round }),
     ) as AgentFileLocation;
   const deps: OutputDependencies = {
-    setting,
     config,
     baseFiles,
     logger,
@@ -266,6 +264,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
+  /** Where each base file's pre-run content lives, as `prepareRunWorkspace`
+   *  decided it: every round diffs against these, never the live file an
+   *  in-place round overwrote. */
+  let diffBaseFiles = baseFiles;
   // The family state no row carries: the round budget and the compile
   // rejection facts. The round is the folded `state.round`.
   let flow: ReflectionFlowState = {
@@ -747,11 +749,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     outputLocation: AgentFileLocation,
     endTurn: boolean,
   ): Effect.fn.Return<OutputExecResult, Error, RoundServices> {
-    const diffBaseFiles = yield* resolveBaseFilesForDiff(
-      baseFiles,
-      runId,
-      roots,
-    );
     let mapping: RoundFileMapping | undefined;
     let compileRoundResult: CompileResult | undefined;
     const compiledArtifacts: RunStorageFileLocation[] = [];
@@ -1035,7 +1032,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       // Run-workspace preparation, before the first round: extraction reads
       // the prepared snapshot, and a failure is a transcript warning, never
       // an unhandled rejection.
-      yield* fileService
+      diffBaseFiles = yield* fileService
         .prepareRunWorkspace(baseFiles, {
           linkFiles: collectRunSupportFiles(roots.workspace, config),
         })
@@ -1046,6 +1043,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
                 `Failed to prepare run workspace; in-place diffs may be empty: ${toErrorMessage(error)}`,
                 { data: error, messageType: MESSAGE_TYPES.INTERNAL },
               );
+              return baseFiles;
             }),
           ),
         );

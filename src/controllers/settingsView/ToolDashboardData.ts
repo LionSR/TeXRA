@@ -10,8 +10,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { AppState } from '@platform/interfaces';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -81,7 +81,7 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
  */
 export function isToolPluginVisible(
   plugin: ToolPlugin,
-  host: ToolHost,
+  host: SettingHost,
 ): boolean {
   return (
     plugin.hidden !== true &&
@@ -106,7 +106,7 @@ export function isToolPluginVisible(
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    host: ToolHost,
+    host: SettingHost,
     probeInputs: ToolProbeInputs,
     cachedResults?: ExternalToolCheckResult[],
   ) {

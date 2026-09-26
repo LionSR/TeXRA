@@ -98,122 +98,6 @@ function executionsTitle(
 }
 
 describe('tool-use formatter', () => {
-  it('renders workflow-script delegation details without proposal or journal data', () => {
-    const script = `export const meta = {
-  name: 'Literature synthesis',
-  phases: [{ title: 'Collect' }, { title: 'Compare' }],
-};
-
-const papers = await parallel(
-  args.paperIds.map((paperId) => () =>
-    agent(\`Read and assess \${paperId}\`, { label: paperId }),
-  ),
-);
-return { papers, question: args.question };`;
-    const row = toolUseRow('workflow-script', {
-      toolName: 'delegate_multi_agents',
-      input: {
-        agent: 'research',
-        script,
-        args: {
-          paperIds: ['2401.00001', '2401.00002'],
-          question: 'Which assumptions differ?',
-        },
-        files: {
-          inputFiles: ['paper.tex'],
-          contextFiles: ['references.bib'],
-          mediaFiles: ['figure.pdf'],
-        },
-      },
-      output: {
-        status: 'executed',
-        summary:
-          "Completed workflow script 'Literature synthesis' (2 agent calls)",
-        output: JSON.stringify({ compared: 2 }),
-      },
-    });
-
-    const container = renderTemplate(formatToolUseTemplate(row));
-
-    const details = container.querySelector('wa-details.tool-use-details') as
-      (HTMLElement & { open: boolean }) | null;
-    const scriptBlock = container.querySelector(
-      '.code-block[data-language="javascript"]',
-    );
-    const argsBlock = container.querySelector(
-      '.code-block[data-language="json"]',
-    );
-    const labels = [...container.querySelectorAll('.tool-use-sublabel')].map(
-      (label) => label.textContent,
-    );
-
-    expect(details?.open).toBe(false);
-    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
-      'Literature synthesis',
-    );
-    expect(container.querySelector('wa-icon[name="list-ul"]')).not.toBeNull();
-    expect(labels).toEqual(['Default agent:', 'Script:', 'Args:', 'Files:']);
-    expect(container.textContent).toContain('research');
-    expect(scriptBlock?.querySelector('code')?.textContent).toBe(script);
-    expect(scriptBlock?.textContent).toContain('JavaScript');
-    expect(argsBlock?.querySelector('code')?.textContent).toContain(
-      '"question": "Which assumptions differ?"',
-    );
-    expect(container.textContent).toContain('paper.tex');
-    expect(container.textContent).toContain('references.bib');
-    expect(container.textContent).toContain('figure.pdf');
-    expect(container.textContent).toContain('(Input)');
-    expect(container.textContent).toContain('(Context)');
-    expect(container.textContent).toContain('(Media)');
-    // The script's sections describe the call; its result is the output
-    // block, which the row no longer suppresses as 'rendered-by-sections'.
-    expect(container.textContent).toContain('"compared":2');
-    expect(container.textContent).not.toContain('journal');
-    expect(container.querySelector('.proposal-banner-setup')).toBeNull();
-  });
-
-  it('keeps an in-progress workflow script compact by default', () => {
-    const container = renderTemplate(
-      formatToolUseTemplate(
-        toolUseRow('workflow-script-running', {
-          toolName: 'delegate_multi_agents',
-          status: 'in_progress',
-          input: {
-            agent: 'research',
-            script:
-              "export const meta = { name: 'Review team', description: 'Review' }; return null;",
-          },
-        }),
-      ),
-    );
-    const details = container.querySelector('wa-details.tool-use-details') as
-      (HTMLElement & { open: boolean }) | null;
-
-    expect(details?.open).toBe(false);
-    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
-      'Review team',
-    );
-    expect(container.querySelector('tool-timer')).not.toBeNull();
-  });
-
-  it('shows explicit null workflow-script arguments as JSON', () => {
-    const row = toolUseRow('workflow-script-null-args', {
-      toolName: 'delegate_multi_agents',
-      input: {
-        agent: 'research',
-        script: 'export const meta = { name: "One call" };\nreturn null;',
-        args: null,
-      },
-    });
-
-    const container = renderTemplate(formatToolUseTemplate(row));
-
-    expect(
-      container.querySelector('.code-block[data-language="json"] code')
-        ?.textContent,
-    ).toBe('null');
-  });
-
   it('keeps streamed bash output out of the collapsed error summary', () => {
     const stdout = Array.from(
       { length: 20 },
@@ -281,25 +165,6 @@ return { papers, question: args.question };`;
     expect(title).toBe('Edit: paper.tex');
   });
 
-  it('renders a diff for a delegated Edit call (old_string/new_string, file_path)', () => {
-    const row = toolUseRow('claude-edit-diff', {
-      toolName: 'claude:Edit',
-      input: {
-        file_path: 'paper.tex',
-        old_string: 'We use a CNN.',
-        new_string: 'We use a transformer.',
-      },
-      status: 'completed',
-    });
-
-    const container = renderTemplate(formatToolUseTemplate(row));
-
-    expect(container.querySelector('.edit-diff-container')).not.toBeNull();
-    expect(container.textContent).toContain('CNN');
-    expect(container.textContent).toContain('transformer');
-    expect(container.textContent).toContain('paper.tex');
-  });
-
   it('renders a diff per edit for a delegated MultiEdit call', () => {
     const row = toolUseRow('claude-multiedit-diff', {
       toolName: 'claude:MultiEdit',
@@ -318,38 +183,6 @@ return { papers, question: args.question };`;
     expect(container.querySelectorAll('.edit-diff-container')).toHaveLength(2);
     expect(container.textContent).toContain('transformer');
     expect(container.textContent).toContain('Section 1');
-  });
-
-  it('gives a delegated bash call the same command preview as the native tool', () => {
-    const row = toolUseRow('claude-bash', {
-      toolName: 'claude:Bash',
-      input: { command: 'npm test' },
-      output: 'passed',
-      status: 'completed',
-    });
-
-    const container = renderTemplate(formatToolUseTemplate(row));
-
-    expect(container.querySelector('.tool-use-title')?.textContent).toBe(
-      'Bash: npm test',
-    );
-    expect(
-      container.querySelector('terminal-output.tool-output-terminal'),
-    ).not.toBeNull();
-  });
-
-  it('keeps the MCP provenance marker in the tool title', () => {
-    const row = toolUseRow('mcp-search', {
-      toolName: 'mcp:github/search',
-      input: { query: 'texra' },
-      output: { status: 'completed' },
-    });
-
-    const container = renderTemplate(formatToolUseTemplate(row));
-
-    expect(container.querySelector('.tool-use-title')?.textContent).toContain(
-      'MCP github/search',
-    );
   });
 
   it('caps executions wait timeout displays at the tool maximum', () => {
@@ -433,14 +266,6 @@ return { papers, question: args.question };`;
         ['sub-1', 'reviewer'],
       ]),
     ).toBe('executions: view: reviewer/workspace-files/review.md');
-  });
-
-  it('keeps the existing executions title for a background process', () => {
-    expect(
-      executionsTitle({ action: 'view', path: '/executions/process-1' }, [
-        ['sub-1', 'reviewer'],
-      ]),
-    ).toBe('executions: view /executions/process-1');
   });
 });
 

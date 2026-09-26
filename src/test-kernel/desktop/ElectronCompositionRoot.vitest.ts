@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
 import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
@@ -26,6 +26,7 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 import { sourceFilesUnder } from '@test/support/repoScan';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { withEnv } from '@test/support/testEnv';
 import { normalizeFilePath } from '@utils/core';
 import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
 
@@ -283,20 +284,25 @@ describe('desktop composition root and launch environment', () => {
     ]);
   });
 
-  it('shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)', async () => {
-    const { resolveDesktopDataRoot } =
-      await import('@desktop/main/platform/paths');
-    const userDataPath = '/tmp/some-electron-user-data';
+  effectIt.effect(
+    'shares the CLI ~/.texra data root by default, isolating only under the e2e override (#7987)',
+    () =>
+      Effect.gen(function* () {
+        const { resolveDesktopDataRoot } = yield* Effect.promise(
+          () => import('@desktop/main/platform/paths'),
+        );
+        const userDataPath = '/tmp/some-electron-user-data';
 
-    expect(resolveDesktopDataRoot(userDataPath, { env: {} })).toBe(
-      join(homedir(), '.texra'),
-    );
-    expect(
-      resolveDesktopDataRoot(userDataPath, {
-        env: { TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath },
+        expect(
+          yield* resolveDesktopDataRoot(userDataPath).pipe(withEnv({})),
+        ).toBe(join(homedir(), '.texra'));
+        expect(
+          yield* resolveDesktopDataRoot(userDataPath).pipe(
+            withEnv({ TEXRA_DESKTOP_E2E_USER_DATA_PATH: userDataPath }),
+          ),
+        ).toBe(userDataPath);
       }),
-    ).toBe(userDataPath);
-  });
+  );
 
   effectIt.effect(
     'finds resources in packaged and monorepo development layouts',
@@ -344,85 +350,6 @@ describe('desktop composition root and launch environment', () => {
             resourcesPath: join(root, 'missing-electron-resources'),
           }),
         ).toBe(monorepoResources);
-      }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  effectIt.effect('requires bundled agent sources to be directories', () =>
-    Effect.gen(function* () {
-      const { resolveResourcesPath } = yield* Effect.promise(
-        () => import('@desktop/main/platform/paths'),
-      );
-      const root = yield* Effect.promise(() =>
-        makeTempDir('texra-electron-root-', tempDirs),
-      );
-      const incompleteApp = join(root, 'incomplete-app');
-      const fileBackedApp = join(root, 'file-backed-app');
-      const monorepoResources = join(
-        root,
-        'packages',
-        'extension',
-        'resources',
-      );
-      const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
-
-      yield* Effect.promise(async () => {
-        await Promise.all([
-          mkdir(join(incompleteApp, 'resources', 'agents'), {
-            recursive: true,
-          }),
-          mkdir(join(fileBackedApp, 'resources', 'agents'), {
-            recursive: true,
-          }),
-          createResourceTree(monorepoResources),
-        ]);
-        await writeFile(
-          join(fileBackedApp, 'resources', 'tool_use_agents'),
-          '',
-        );
-      });
-
-      expect(
-        yield* resolveResourcesPath(mainDirname, {
-          appPath: fileBackedApp,
-          resourcesPath: join(root, 'missing-electron-resources'),
-        }),
-      ).toBe(monorepoResources);
-      expect(
-        yield* resolveResourcesPath(mainDirname, {
-          appPath: incompleteApp,
-          resourcesPath: join(root, 'missing-electron-resources'),
-        }),
-      ).toBe(monorepoResources);
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
-
-  effectIt.effect(
-    'fails with every checked resource candidate when resources are missing',
-    () =>
-      Effect.gen(function* () {
-        const { resolveResourcesPath } = yield* Effect.promise(
-          () => import('@desktop/main/platform/paths'),
-        );
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-electron-root-', tempDirs),
-        );
-        const mainDirname = join(root, 'packages', 'desktop', 'dist', 'main');
-
-        const error = yield* Effect.flip(
-          resolveResourcesPath(mainDirname, {
-            appPath: join(root, 'app'),
-            resourcesPath: join(root, 'electron-resources'),
-          }),
-        );
-        expect(error._tag).toBe('DesktopResourcesNotFound');
-        expect(error.message).toContain(
-          [
-            join(root, 'app', 'resources'),
-            join(root, 'electron-resources', 'resources'),
-            join(root, 'packages', 'extension', 'resources'),
-            join(root, 'resources'),
-          ].join(', '),
-        );
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
 

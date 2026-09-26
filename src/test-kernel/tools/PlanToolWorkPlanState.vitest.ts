@@ -8,14 +8,12 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 // Local imports
 import { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
-import { planSummaryLine, GOAL_FEATURE_FLAG_KEY } from '@shared/schemas';
+import { planSummaryLine } from '@shared/schemas';
 import type { Goal, Plan, RequestDecision, RunId } from '@shared/schemas';
-import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
-import { FakeConfigProvider } from '@test/support/FakePlatform';
 import { clearGoal, goalOf, startGoal } from '@tools/goal';
 import { releaseRunResources } from '@tools/approval';
 import { PlanTool } from '@tools/plan/PlanTool';
@@ -46,10 +44,6 @@ const followUpPlan: Plan = {
     'Retarget the active goal at the newly approved objective.',
   ].join('\n'),
 };
-
-async function installPlatform(flagOn: boolean): Promise<void> {
-  await installFakePlatform({ config: { [GOAL_FEATURE_FLAG_KEY]: flagOn } });
-}
 
 /** Request watchers the cases opened, released after each. */
 const cleanups: Array<() => void> = [];
@@ -136,7 +130,7 @@ describe('PlanTool — update (plan approval)', () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          yield* Effect.tryPromise(() => installPlatform(false));
+          yield* Effect.tryPromise(() => installFakePlatform());
           const { result, workPlanState, permission, decide } =
             yield* startPlanUpdate(generateRunId(), plan.objective);
 
@@ -159,7 +153,7 @@ describe('PlanTool — update (plan approval)', () => {
     () =>
       Effect.scoped(
         Effect.gen(function* () {
-          yield* Effect.tryPromise(() => installPlatform(false));
+          yield* Effect.tryPromise(() => installFakePlatform());
           const runId = generateRunId();
           const { session, awaitPlanRequest } = planSession(runId);
           const workPlanState = new WorkPlanState();
@@ -198,7 +192,7 @@ describe('PlanTool — update (plan approval)', () => {
   it.live('clears a rejected plan from displayed work-plan state', () =>
     Effect.scoped(
       Effect.gen(function* () {
-        yield* Effect.tryPromise(() => installPlatform(false));
+        yield* Effect.tryPromise(() => installFakePlatform());
         const { result, workPlanState, decide } = yield* startPlanUpdate(
           generateRunId(),
           plan.objective,
@@ -217,7 +211,7 @@ describe('PlanTool — update (plan approval)', () => {
   it.live('does not attribute a lifecycle cancellation to the user', () =>
     Effect.scoped(
       Effect.gen(function* () {
-        yield* Effect.tryPromise(() => installPlatform(false));
+        yield* Effect.tryPromise(() => installFakePlatform());
         const { result, decide } = yield* startPlanUpdate(
           generateRunId(),
           plan.objective,
@@ -241,7 +235,7 @@ describe('PlanTool — update (plan approval)', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const runId = generateRunId();
-          yield* Effect.tryPromise(() => installPlatform(true));
+          yield* Effect.tryPromise(() => installFakePlatform());
 
           const { result, session, permission, decide } =
             yield* startPlanUpdate(runId, plan.objective);
@@ -277,7 +271,7 @@ describe('PlanTool — update (plan approval)', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const runId = generateRunId();
-          yield* Effect.tryPromise(() => installPlatform(true));
+          yield* Effect.tryPromise(() => installFakePlatform());
 
           const { result, session, decide } = yield* startPlanUpdate(
             runId,
@@ -310,7 +304,7 @@ describe('PlanTool — update (plan approval)', () => {
       Effect.scoped(
         Effect.gen(function* () {
           const runId = generateRunId();
-          yield* Effect.tryPromise(() => installPlatform(true));
+          yield* Effect.tryPromise(() => installFakePlatform());
 
           let existing: Goal | undefined;
           const { result, session, decide } = yield* startPlanUpdate(
@@ -347,40 +341,6 @@ describe('PlanTool — update (plan approval)', () => {
         }),
       ),
   );
-
-  it.live(
-    'approve_and_goal explicitly reports when goal is disabled before resolution',
-    () =>
-      Effect.scoped(
-        Effect.gen(function* () {
-          const runId = generateRunId();
-          yield* Effect.tryPromise(() => installPlatform(true));
-
-          const { result, permission, decide, session } =
-            yield* startPlanUpdate(runId, plan.objective);
-          yield* Effect.addFinalizer(() =>
-            Effect.sync(() => releaseRunResources(runId, session)),
-          );
-
-          expect(permission.goalEnabled).toBe(true);
-
-          (testWorkspaceRoots().config as FakeConfigProvider).set(
-            GOAL_FEATURE_FLAG_KEY,
-            false,
-          );
-          decide({ action: 'approve_and_goal' });
-
-          const outcome = yield* result;
-          expect(outcome.status).toBe('executed');
-          expect(outcome.summary).toMatch(/autonomous run unavailable/i);
-          expect(outcome.output).toContain(
-            'feature flag is currently disabled',
-          );
-          yield* session.settlePublications();
-          expect(goalOf(session, runId)).toBeNull();
-        }),
-      ),
-  );
 });
 
 describe('PlanTool — pause/complete (goal lifecycle)', () => {
@@ -389,7 +349,7 @@ describe('PlanTool — pause/complete (goal lifecycle)', () => {
   let RUN_ID: RunId;
 
   beforeEach(async () => {
-    await installPlatform(true);
+    await installFakePlatform();
     RUN_ID = generateRunId();
     publishTestRunStart(testDefaultSession(), RUN_ID);
     await Effect.runPromise(testDefaultSession().settlePublications());

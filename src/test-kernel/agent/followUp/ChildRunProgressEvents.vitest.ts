@@ -25,10 +25,7 @@ import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import {
-  launchAgentCliSession,
-  reraiseAgentCliCallFailure,
-} from '@tools/agentCliShared';
+import { launchAgentCliSession } from '@tools/agentCliShared';
 import { createChildRun, type ChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
@@ -496,31 +493,32 @@ describe('child run progress events', () => {
         let childRunId: RunId | undefined;
         let visibleBeforeLoop = true;
 
-        // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
-        // defect, so flip the defect back into the error channel.
+        // The launch dies with the loop's throw, so flip the defect back
+        // into the error channel.
         const defect = yield* Effect.flip(
-          reraiseAgentCliCallFailure(
-            launchAgentCliSession({
-              session: testDefaultSession(),
-              parentRunId,
-              agentName: 'codex',
-              description: 'Fail during synchronous loop setup',
-              config,
-              registerFailedMessage: 'registration failed',
-              buildLaunch: (context) => {
-                childRun = context.childRun;
-                childRunId = context.runId;
-                // Before the loop reserves its stop target, no stop can find
-                // the handle: a stop never reaches a run it cannot interrupt.
-                visibleBeforeLoop =
-                  session.runs.getHandle(context.runId) !== undefined;
-                throw setupError;
-              },
-              summary: 'unreachable',
-              launchedLine: 'unreachable',
-              followUpLine: 'unreachable',
-            }).pipe(Effect.provideService(Runs, session.runs)),
-          ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
+          launchAgentCliSession({
+            session: testDefaultSession(),
+            parentRunId,
+            agentName: 'codex',
+            description: 'Fail during synchronous loop setup',
+            config,
+            registerFailedMessage: 'registration failed',
+            buildLaunch: (context) => {
+              childRun = context.childRun;
+              childRunId = context.runId;
+              // Before the loop reserves its stop target, no stop can find
+              // the handle: a stop never reaches a run it cannot interrupt.
+              visibleBeforeLoop =
+                session.runs.getHandle(context.runId) !== undefined;
+              throw setupError;
+            },
+            summary: 'unreachable',
+            launchedLine: 'unreachable',
+            followUpLine: 'unreachable',
+          }).pipe(
+            Effect.provideService(Runs, session.runs),
+            Effect.catchDefect((cause) => Effect.fail(cause)),
+          ),
         );
         expect(defect).toBe(setupError);
         expect(visibleBeforeLoop).toBe(false);

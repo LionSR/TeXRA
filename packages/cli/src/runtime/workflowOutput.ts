@@ -14,7 +14,7 @@ import {
   RUN_OUTCOME,
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { withWorkflowDiffs } from '@tools/delegation/subagentResults';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
@@ -177,12 +177,9 @@ interface WorkflowOutputResolutionOptions {
 function outputCopyRelativePath(output: OutputFileSummary): string {
   const relativePath =
     output.relativePath || path.basename(output.absolutePath);
-  const parts = toPosixPath(relativePath).split('/');
-  const withoutRoundDir =
-    parts[0] !== undefined && parseWorkflowOutputRoundDir(parts[0]) !== null
-      ? parts.slice(1)
-      : parts;
-  return getSafeDocumentRelativePath(withoutRoundDir.join('/'));
+  return getSafeDocumentRelativePath(
+    stripWorkflowRoundDir(toPosixPath(relativePath)),
+  );
 }
 
 function outputCopyRelativePathForExpectedOutput(

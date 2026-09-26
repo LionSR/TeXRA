@@ -1573,18 +1573,6 @@ describe('CLI run command, workflow agents', () => {
       }),
   );
 
-  it.effect('does not print a recovery command for completed workflows', () =>
-    Effect.gen(function* () {
-      mockWorkflowRun(workflowRun('abc001'));
-
-      const exitCode = yield* workflowProgram();
-
-      expect(exitCode).toBe(CliExitCode.Success);
-      expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
-      expect(cliLogSinksMock.writeTextStderr).not.toHaveBeenCalled();
-    }),
-  );
-
   it.effect.each(['json', 'ndjson'] as const)(
     'keeps %s stdout free of the cancellation recovery hint',
     (outputFormat) =>

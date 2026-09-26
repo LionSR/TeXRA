@@ -914,8 +914,3 @@ describe('App foreground Escape ownership', () => {
     }
   });
 });
-
-// The two enqueue calls below recur across this describe block: a
-// stream-scoped approval on an unrelated stream (which must never satisfy an
-// assertion on its own) and a session-wide (runId: '') approval that
-// should promote onto whatever stream ends up visible.

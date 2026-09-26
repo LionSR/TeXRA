@@ -106,7 +106,9 @@ export const initializeElectronPlatform = Effect.fn(
   // Desktop's memory/history/executions data root: shared with the CLI's
   // `~/.texra` scheme in production so a workspace worked on from both hosts
   // shows one history.
-  const dataRoot = resolveDesktopDataRoot(userDataPath);
+  const dataRoot = yield* resolveDesktopDataRoot(userDataPath).pipe(
+    Effect.provide(processEnvConfigLayer),
+  );
   // The process roots are the no-workspace roots. Each open project gets its
   // own roots (desktopProjects.ts); this pair only backs the window before a
   // folder is open.
@@ -183,7 +185,7 @@ export const initializeElectronPlatform = Effect.fn(
     // Desktop model traffic goes to the same Supabase usage log the extension
     // and CLI write to, tagged with editorType 'desktop' and the app version.
     // The runtime's disposal drains the queue, so a queue shorter than one
-    // batch is not lost at quit -- plan accounting included.
+    // batch is not lost at quit.
     usageLog: usageLogLayer({
       version: app.getVersion(),
       editorType: 'desktop',

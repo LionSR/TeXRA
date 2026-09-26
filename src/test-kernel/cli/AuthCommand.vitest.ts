@@ -125,25 +125,6 @@ describe('CLI auth command', () => {
     expect(stderr).toBe('');
   });
 
-  it('clears ChatGPT subscription preference on chatgpt logout', async () => {
-    const result = await runCli([
-      'auth',
-      'chatgpt',
-      'logout',
-      '--output-format',
-      'json',
-      '--no-input',
-    ]);
-
-    expect(result.exitCode).toBe(0);
-    expect(mocks.signOutCliSubscription).toHaveBeenCalledOnce();
-    expect(JSON.parse(stdout)).toEqual({
-      authenticated: false,
-      preferSubscription: false,
-    });
-    expect(stderr).toBe('');
-  });
-
   it('reports ChatGPT logout success when preference cleanup fails', async () => {
     mocks.signOutCliSubscription.mockReturnValueOnce(
       Effect.succeed({ preferenceError: 'Config write failed' }),

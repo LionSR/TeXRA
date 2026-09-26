@@ -25,6 +25,12 @@ All notable changes to this project will be documented in this file.
   remove it from your agent YAML. `{% if IS_ANTHROPIC_MODEL %}` is unchanged,
   and the delegation roster an agent can see is still listed in the
   descriptions of its delegation tools.
+- **Goal mode is a Tools plugin, and its switch replaces the
+  `texra.goal.enabled` setting** — turn Goal Mode on or off on the Tools
+  dashboard, or with `texra tools disable goal` / `texra tools enable goal`.
+  Off, no agent is offered the `plan` tool and runs open no goal turns. The
+  old setting is no longer read, so if you had set it to `false`, Goal Mode is
+  on again (its default) until you switch the plugin off.
 - **One streaming toggle instead of one per provider** — the per-provider
   Streaming switches in the Models tab are gone. The global **Enable
   streaming** setting now governs every provider.
@@ -61,6 +67,17 @@ All notable changes to this project will be documented in this file.
   dashboard switch and are withheld only when `lean4` is added to the
   setting. A plugin whose dependency is merely missing keeps its skills and
   agents listed, so the setup guidance they carry stays reachable.
+- **Multi-agent workflow scripts are written in a new form** — a lead's
+  script now writes `yield* agent(...)` and `yield* all([...])` instead of
+  `await agent(...)` and `parallel(...)`, and can use `attempt()`, `retry()`
+  and `timeout()` around any call. A failed call no longer comes back as an
+  empty result: inside `all()` it stops the other tasks and fails the step,
+  unless the script wraps each task in `attempt()` to keep the ones that
+  succeeded. A retried step reuses the calls it already finished instead of
+  paying for them again. Scripts saved under `.texra/workflow-scripts/` in the
+  old form stop with a message saying how to rewrite them; calls they already
+  completed are reused once the lead reruns the rewritten script under the
+  same name.
 
 ### Features
 
@@ -126,6 +143,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **Turning telemetry off now stops all usage reporting** — rounds run on a
+  ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
+  out, on the grounds that they metered a plan cap. Nothing has enforced
+  that cap since the relay was removed, so the setting, `TEXRA_NO_TELEMETRY`,
+  and `DO_NOT_TRACK` now cover every round, and `texra doctor` no longer says
+  subscription rounds are still recorded.
 
 - **Tool availability rechecks after a change made during a check.** If a
   credential or setting changed just as a tool-availability check started,
@@ -506,6 +530,14 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Bug Fixes
 
+- **The "use your own API key" retry works the same everywhere** — when a
+  Kimi Code or GLM Coding Plan quota runs out and the matching provider key
+  is already saved, every app now retries on that key by itself, including
+  runs with nobody watching and subagents, and says so in the run. Before,
+  only the terminal app did this. When the key is not saved yet, pressing
+  `k` in the terminal app now asks for it instead of telling you to use
+  `/key` first, and a key whose account ran out of credit can be replaced
+  from the terminal app's retry prompt too.
 - **Google image uploads fail visibly** — a missing or failed Gemini
   attachment now stops the request instead of sending it without the file.
 - **Finished and crashed runs are no longer treated as still running** — TeXRA

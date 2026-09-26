@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LOG_LEVELS, MESSAGE_TYPES } from '@shared/schemas';
-import {
-  compactionActivityRow,
-  streamingTextRow,
-  type TranscriptRow,
-} from '@ui/transcript';
+import { streamingTextRow, type TranscriptRow } from '@ui/transcript';
 
 import { useLitComponentTestDom } from '../settings/litComponentTestUtils';
 
@@ -70,29 +66,6 @@ describe('progress view live activity rendering', () => {
     // Raw text needs its own whitespace rule (no <p>/<br> from markdown).
     expect(
       container.querySelector('.banner-content--streaming'),
-    ).not.toBeNull();
-  });
-
-  it('renders projected context compaction as a non-collapsible activity', async () => {
-    const container = renderRow(
-      compactionActivityRow({
-        operationId: 'operation-1',
-        status: 'running',
-        finalized: false,
-        startPosition: 4,
-        startedAt: 10,
-      }),
-    );
-    const activity = container.querySelector('compaction-activity');
-    expect(activity).not.toBeNull();
-    document.body.append(container);
-    await (activity as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
-
-    expect(activity?.shadowRoot?.textContent).toContain('Compacting context…');
-    expect(activity?.shadowRoot?.querySelector('wa-details')).toBeNull();
-    expect(
-      activity?.shadowRoot?.querySelector('[role="status"]'),
     ).not.toBeNull();
   });
 

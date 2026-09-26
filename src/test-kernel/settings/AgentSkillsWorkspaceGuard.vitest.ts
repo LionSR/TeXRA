@@ -40,7 +40,7 @@ import {
 } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { AGENT_SKILLS_CONFIG_KEY } from '@shared/schemas';
-import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -163,28 +163,6 @@ describe('agent skills workspace guard', () => {
       expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith(
         'multi-agent',
       );
-    }),
-  );
-
-  it.effect('surfaces rejected values and restores the owning snapshot', () =>
-    Effect.gen(function* () {
-      const handler = createHarness();
-
-      yield* withProcessServices(
-        testRuntime(),
-        handler.updateStateSetting(
-          WorkspaceStateKey.LATEXDIFF_MATH_MARKUP,
-          'bogus',
-        ),
-      );
-
-      expect(mocks.writeSetting).not.toHaveBeenCalled();
-      expect(mocks.showLoggedErrorMessage).toHaveBeenCalledWith(
-        'SettingsViewMessageHandler',
-        'Invalid value for “Math markup in diffs”',
-        expect.any(Error),
-      );
-      expect(handler.postStateSettingSnapshot).toHaveBeenCalledWith('latex');
     }),
   );
 });

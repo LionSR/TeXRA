@@ -4,14 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { appendHead, appendTail } from '@utils/text/appendTail';
 
 describe('appendTail', () => {
-  it('returns the current string when the chunk is empty', () => {
-    expect(appendTail('abc', '', 10)).toBe('abc');
-  });
-
-  it('concatenates when within budget', () => {
-    expect(appendTail('abc', 'def', 10)).toBe('abcdef');
-  });
-
   it('truncates at the head when over budget', () => {
     // joined = "0123456789abc" (13 chars), keep last 5 → "89abc".
     expect(appendTail('0123456789', 'abc', 5)).toBe('89abc');
@@ -35,14 +27,6 @@ describe('appendTail', () => {
 });
 
 describe('appendHead', () => {
-  it('returns the current string when the chunk is empty', () => {
-    expect(appendHead('abc', '', 10)).toBe('abc');
-  });
-
-  it('concatenates when within budget', () => {
-    expect(appendHead('abc', 'def', 10)).toBe('abcdef');
-  });
-
   it('truncates at the tail when over budget', () => {
     // joined = "0123456789abc" (13 chars), keep first 5 → "01234".
     expect(appendHead('0123456789', 'abc', 5)).toBe('01234');

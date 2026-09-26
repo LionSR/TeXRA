@@ -39,6 +39,7 @@ import {
   CHATGPT_AUTH,
   GROK_AUTH,
   RESEARCHER_ACCESS_AUTH,
+  SUBSCRIPTION_AUTH_COPY,
 } from '@ui/copy/accountAuth';
 import { collapseWhitespace } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -54,19 +55,6 @@ const CHAT_LOGIN_USAGE = [
   '       /login grok [--no-browser] [--device]',
   '       /login status',
 ].join('\n');
-
-/** Sign-in copy shared by the subscription auth objects. */
-interface SubscriptionAuthCopy {
-  readonly startingDevice: string;
-  readonly startingNoBrowser: string;
-  readonly startingBrowser: string;
-  readonly signedInEnabled: (accountLabel: string) => string;
-}
-
-const SUBSCRIPTION_AUTH_COPY: Record<
-  SubscriptionProviderId,
-  SubscriptionAuthCopy
-> = { chatgpt: CHATGPT_AUTH, grok: GROK_AUTH };
 
 function isSubscriptionLogin(
   args: CliLoginSlashArgs,

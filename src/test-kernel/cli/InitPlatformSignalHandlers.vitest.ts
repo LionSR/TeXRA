@@ -118,42 +118,6 @@ describe('CLI platform signal handlers', () => {
     vi.doUnmock('@cli/runtime/foregroundCommand');
   });
 
-  it('handOffCliShutdownSignalHandlers removes exactly the listeners it installed', async () => {
-    vi.resetModules();
-    const handlers = captureSignalHandlers();
-    const removed: Array<[string | symbol, unknown]> = [];
-    vi.spyOn(process, 'removeListener').mockImplementation(((
-      event: string | symbol,
-      listener: (...args: unknown[]) => void,
-    ) => {
-      removed.push([event, listener]);
-      return process;
-    }) as typeof process.removeListener);
-
-    const {
-      installCliShutdownSignalHandlers,
-      handOffCliShutdownSignalHandlers,
-    } = await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(
-      fakeLifecycle(vi.fn(async () => undefined)),
-    );
-    expect(handlers.size).toBe(2);
-
-    handOffCliShutdownSignalHandlers();
-
-    // The install-order disposers are released LIFO, so SIGTERM first.
-    expect(removed).toEqual([
-      ['SIGTERM', handlers.get('SIGTERM')],
-      ['SIGINT', handlers.get('SIGINT')],
-    ]);
-
-    // A second handoff (e.g. a stray second call) is a no-op, not a crash or
-    // a spurious removeListener call for listeners already handed off.
-    removed.length = 0;
-    handOffCliShutdownSignalHandlers();
-    expect(removed).toEqual([]);
-  });
-
   it('waits for persistent stderr writes before shutdown resolves', async () => {
     vi.resetModules();
     const order: string[] = [];

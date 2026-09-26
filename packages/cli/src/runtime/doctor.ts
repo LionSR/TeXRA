@@ -383,11 +383,8 @@ function checkConfig(
  *
  * `doctor` is where a user goes to see what the CLI is doing, and usage logging
  * is the one thing it does that leaves the machine without being asked for. The
- * wording states the two facts that decide whether someone cares: what is in a
- * record, and what stays on after opting out.
+ * wording states what is in a record and how to switch it off.
  */
-const USAGE_STILL_RECORDED_NOTE =
-  'Rounds that used a subscription are still recorded, because they meter your plan.';
 
 function checkTelemetry(
   deps: ResolvedDoctorDependencies,
@@ -402,7 +399,6 @@ function checkTelemetry(
           'telemetry',
           'Usage logging',
           `Off (${optOut.envVar} is set).`,
-          USAGE_STILL_RECORDED_NOTE,
         );
       }
       if (optOut?.source === 'setting') {
@@ -410,7 +406,6 @@ function checkTelemetry(
           'telemetry',
           'Usage logging',
           `Off (${TELEMETRY_ENABLED_KEY}).`,
-          USAGE_STILL_RECORDED_NOTE,
         );
       }
       return check(

@@ -1,11 +1,8 @@
 import { Text, useWindowSize } from 'ink';
 
-import { isCliApiSwitchableRetry } from '@cli/runtime/approval/approvalPrompts';
 import { wrappedRowCount } from '@cli/tui/ansiWrap';
 import { COLOR_HINT, COLOR_WARNING } from '@cli/tui/ui/colors';
-import { missingApiKeyRetryMessage } from '@cli/tui/ui/retryCopy';
 import { confirmCardContentWidth } from '@cli/tui/ui/theme';
-import { isApiProvider } from '@model/apiProviders';
 import type { SurfaceDecision } from '@shared/session/approvalDecision';
 import { ConfirmCard } from './ConfirmCard';
 import {
@@ -34,32 +31,25 @@ function retryGuidanceRows(
 
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
-  const { data, tui } = props.payload;
+  const { data } = props.payload;
   const errorText = data.errorMessage ?? data.operation;
-  const isApiSwitchable = isCliApiSwitchableRetry(data);
+  // The run decided the offer; the card only renders it. The Copilot move is
+  // the editor's, so no run on this host carries it.
   const canSwitchToPersonalKey =
-    isApiSwitchable && tui.personalApiKeyAvailable === true;
+    data.credentialSwitch != null &&
+    data.credentialSwitch.kind !== 'copilot-fallback';
   // The modal only names the answer. `y` retries on the credentials the run
   // already has; `approvalDecisionArms` turns a retry on personal credentials
-  // into the host's `useOwnApiKey`, which stores the key and turns the quota
-  // route off before retrying.
+  // into the host's `useOwnApiKey`, which asks for the key when none is
+  // stored and then settles the retry on it.
   const retryDecision: SurfaceDecision = { action: 'retry' };
   const switchDecision: SurfaceDecision = {
     action: 'retry',
     credentials: 'personal',
   };
-  let guidanceText: string | undefined;
-  if (isApiSwitchable && !canSwitchToPersonalKey) {
-    const requestedProvider = data.errorDetails?.provider;
-    const provider =
-      requestedProvider && isApiProvider(requestedProvider)
-        ? requestedProvider
-        : undefined;
-    guidanceText =
-      tui.missingPersonalApiKeyMessage ?? missingApiKeyRetryMessage(provider);
-  } else if (canSwitchToPersonalKey) {
-    guidanceText = 'Press k to use your own API key for this retry.';
-  }
+  const guidanceText = canSwitchToPersonalKey
+    ? 'Press k to use your own API key for this retry.'
+    : undefined;
 
   const contentWidth = confirmCardContentWidth(columns);
   // A provider stack trace can be arbitrarily tall. Budget the body the same

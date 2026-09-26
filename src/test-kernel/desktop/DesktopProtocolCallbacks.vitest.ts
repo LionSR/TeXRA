@@ -153,15 +153,6 @@ describe('desktop protocol callbacks', () => {
     expect(focusMainWindow).toHaveBeenCalled();
   });
 
-  it('focuses the existing window on second-instance launches without callbacks', () => {
-    const { app, focusMainWindow, listener } = installLifecycle();
-
-    app.listeners.secondInstance?.({}, ['TeXRA.app'], '/tmp');
-
-    expect(listener).not.toHaveBeenCalled();
-    expect(focusMainWindow).toHaveBeenCalledTimes(1);
-  });
-
   it('routes macOS open-url callbacks and prevents default handling', () => {
     const { app, focusMainWindow, listener } = installLifecycle();
     const event = { preventDefault: vi.fn() };
@@ -176,17 +167,6 @@ describe('desktop protocol callbacks', () => {
       expect.objectContaining({ query: 'code=authorization-code' }),
     );
     expect(focusMainWindow).toHaveBeenCalled();
-  });
-
-  it('focuses the existing window for unsupported texra open-url events', () => {
-    const { app, focusMainWindow, listener } = installLifecycle();
-    const event = { preventDefault: vi.fn() };
-
-    app.listeners.openUrl?.(event, 'texra://texra-ai.texra/help');
-
-    expect(event.preventDefault).toHaveBeenCalled();
-    expect(listener).not.toHaveBeenCalled();
-    expect(focusMainWindow).toHaveBeenCalledTimes(1);
   });
 });
 

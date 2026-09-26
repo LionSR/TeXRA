@@ -90,12 +90,9 @@ describe('executeSubagent child run launch', () => {
 
   function runDefaultSubagent() {
     return Effect.provide(
-      executeSubagent(
-        parent,
-        defaultPayload,
-        'proof-checker',
-        orchestratorRunId,
-      ).pipe(Effect.provideService(Runs, testRunRegistry())),
+      executeSubagent(parent, defaultPayload, orchestratorRunId).pipe(
+        Effect.provideService(Runs, testRunRegistry()),
+      ),
       fakeProcessServices(),
     );
   }

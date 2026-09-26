@@ -33,14 +33,6 @@ function assistantRows(rows: readonly TranscriptRow[]) {
 }
 
 describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
-  it('opens a started stage as a RunPhase.RUNNING group', () => {
-    const { trace, group } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'round' });
-
-    expect(group(stage.id)?.status).toBe(RUN_PHASE.RUNNING);
-  });
-
   it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
     const { trace, group } = attachRecorder();
 

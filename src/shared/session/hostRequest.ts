@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import {
   AgentProposalSchema,
+  CredentialSwitchSchema,
   CurrentFileTypeSchema,
   DocumentFileTypeSchema,
   GettingStartedActionSchema,
@@ -41,14 +42,14 @@ export const HostRequestSchema = z.discriminatedUnion('kind', [
   /** The latexFixer follow-up over a workflow run's compile failures. */
   z.object({ kind: z.literal('runCompileFixer'), ...runScoped }),
   /** A retry on the user's own API key: the host stores one, then settles
-   *  the pending retry on personal credentials. */
+   *  the pending retry on personal credentials. `credentialSwitch` is the
+   *  move the retry request carried, as the run decided it. */
   z.object({
     kind: z.literal('useOwnApiKey'),
     ...runScoped,
     requestId: z.string().min(1),
     model: z.string().nullish(),
-    provider: z.string().nullish(),
-    exhaustionReason: z.string().nullish(),
+    credentialSwitch: CredentialSwitchSchema,
   }),
   z.object({ kind: z.literal('latexdiff'), ...runScoped }),
   z.object({ kind: z.literal('pack'), ...runScoped }),
