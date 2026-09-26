@@ -159,8 +159,9 @@ const checkOverleafClonePreconditions = Effect.fn(
 /**
  * `git clone` ended without a clone. `message` is git's own stderr, the exit
  * code when it printed none, or, when git could not be run at all, the
- * PlatformError's own message (tag, module.method, path, description) after a
- * fixed prefix.
+ * PlatformError's own message after a fixed prefix (for a spawn failure,
+ * `Tag: Module.method (pathOrDescriptor)`, with a description only when the
+ * spawner supplies one).
  */
 export class GitCloneFailed extends Data.TaggedError('GitCloneFailed')<{
   readonly exitCode: number | undefined;

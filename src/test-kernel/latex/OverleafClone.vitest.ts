@@ -221,6 +221,20 @@ describe('cloneOverleafProject', () => {
       expect(yield* clone(offlinePorts)).toEqual({ status: 'cloneFailed' });
       expect(offlinePorts.deleteStoredToken).not.toHaveBeenCalled();
       expect(offlinePorts.showCloneFailed).toHaveBeenCalled();
+
+      // A failure before git ran (the destination's mkdir) is never an auth
+      // failure, even when its path contains "auth".
+      const mkdirPorts = createPorts({
+        runClone: vi.fn(() =>
+          Effect.fail(
+            new Error(
+              "EACCES: permission denied, mkdir '/home/user/coauthor-paper'",
+            ),
+          ),
+        ),
+      });
+      expect(yield* clone(mkdirPorts)).toEqual({ status: 'cloneFailed' });
+      expect(mkdirPorts.deleteStoredToken).not.toHaveBeenCalled();
     }),
   );
 });
