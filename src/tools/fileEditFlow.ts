@@ -15,9 +15,9 @@ import {
   appendApprovalDiffNote,
   buildApprovalRejectedResult,
   requestToolEditApproval,
-  writeApprovedContent,
   type AcceptedToolEditApprovalResult,
 } from '@tools/approval/toolEditApproval';
+import { writeApprovedContent } from '@tools/approval/approvedWrite';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 import { ensureError } from '@utils/errors/errorMessage';
