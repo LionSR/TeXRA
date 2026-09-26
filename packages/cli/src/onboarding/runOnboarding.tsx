@@ -424,7 +424,6 @@ function ChatGptProgressStep(props: {
       ? 'Requesting a ChatGPT device code...'
       : 'Preparing ChatGPT sign-in...',
   );
-  // The URL or device code stays on screen under later status lines.
   const [instructions, setInstructions] = useState<string>();
 
   useCancellableEffect(
@@ -436,9 +435,8 @@ function ChatGptProgressStep(props: {
             { device, noBrowser: false },
             {
               writeProgress: (next, options) => {
-                if (isCancelled()) return;
-                if (options?.copyable) setInstructions(next);
-                else setMessage(next);
+                if (!isCancelled())
+                  (options?.copyable ? setInstructions : setMessage)(next);
               },
             },
           );
@@ -467,12 +465,7 @@ function ChatGptProgressStep(props: {
       }
     >
       <Box marginTop={1} flexDirection="column">
-        {[instructions, message]
-          .filter((block) => block !== undefined)
-          .flatMap((block) => block.split('\n'))
-          .map((line, index) => (
-            <Text key={`${index}:${line}`}>{line}</Text>
-          ))}
+        <Text>{[instructions, message].filter(Boolean).join('\n')}</Text>
       </Box>
     </BorderedPanel>
   );
