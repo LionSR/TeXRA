@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import * as vscode from 'vscode';
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import { ModelError } from '@texra-ai/llm/turn';
+import { ModelError, completedTurn } from '@texra-ai/llm/turn';
 
 import type { SessionHandle } from '@agent/runtime';
 import { refresh as refreshAgentCatalog } from '@agent/index';
@@ -435,7 +435,7 @@ export class SettingsViewMessageHandler {
                   });
                 }
                 // Consume completion; partial output does not establish access.
-                yield* model.generateTurn(turn);
+                yield* completedTurn(model.streamTurn(turn));
               }).pipe(Effect.scoped),
             );
             yield* Effect.forkScoped(

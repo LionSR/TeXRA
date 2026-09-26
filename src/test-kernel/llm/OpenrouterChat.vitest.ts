@@ -7,6 +7,7 @@ import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import {
   ModelError,
+  completedTurn,
   type Model,
   type OpenRouterConfiguration,
   type TurnRequest,
@@ -150,7 +151,7 @@ function run(model: Model, request: TurnRequest = REQUEST) {
   return Effect.gen(function* () {
     const turn = yield* model.prepareTurn(request);
     assert.equal(turn.mode, 'foreground');
-    return yield* model.generateTurn(turn);
+    return yield* completedTurn(model.streamTurn(turn));
   });
 }
 /** Let the forked turn reach its fetch, or its interrupt reach the reader. */
@@ -691,7 +692,7 @@ describe('native OpenRouter Chat', () => {
           Effect.gen(function* () {
             const turn = yield* model.prepareTurn(REQUEST);
             assert.equal(turn.mode, 'foreground');
-            return yield* model.generateTurn(turn);
+            return yield* completedTurn(model.streamTurn(turn));
           }),
         );
         const failure = errors(exit)[0];
@@ -722,7 +723,7 @@ describe('native OpenRouter Chat', () => {
           Effect.gen(function* () {
             const turn = yield* model.prepareTurn(REQUEST);
             assert.equal(turn.mode, 'foreground');
-            return yield* model.generateTurn(turn);
+            return yield* completedTurn(model.streamTurn(turn));
           }),
         );
         expect(errors(exit)[0].kind).toBe(
