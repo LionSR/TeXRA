@@ -19,6 +19,7 @@ import type { Surface } from '@shared/session/surface';
 import { unseenRuns } from '@shared/session/unseenRuns';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import {
@@ -350,23 +351,8 @@ function handleTablistKeydown(
     0,
     tabs.findIndex((tab) => tab.id === activeTabId),
   );
-  let nextIndex: number;
-  switch (event.key) {
-    case 'ArrowRight':
-      nextIndex = (currentIndex + 1) % tabs.length;
-      break;
-    case 'ArrowLeft':
-      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-      break;
-    case 'Home':
-      nextIndex = 0;
-      break;
-    case 'End':
-      nextIndex = tabs.length - 1;
-      break;
-    default:
-      return;
-  }
+  const nextIndex = nextTablistIndex(event.key, currentIndex, tabs.length);
+  if (nextIndex === undefined) return;
   event.preventDefault();
   const next = tabs[nextIndex];
   if (!next) return;

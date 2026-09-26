@@ -22,7 +22,7 @@
     "packages/desktop/src/main/desktopHostRequests.ts": 688,
     "packages/desktop/src/main/desktopWorkspaceIpc.ts": 531,
     "packages/desktop/src/main/index.ts": 1827,
-    "packages/desktop/src/renderer/desktopShell.ts": 596,
+    "packages/desktop/src/renderer/desktopShell.ts": 553,
     "packages/desktop/src/renderer/editorPane.ts": 627,
     "packages/desktop/src/renderer/main.ts": 1102,
     "packages/extension/src/commands/latex/latexdiffCommands.ts": 545,
