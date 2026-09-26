@@ -9,7 +9,7 @@ import {
   resolveToolPath,
   type ToolPathResolution,
 } from '@tools/pathResolution';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { entryExists } from '@utils/files/fsEntryExists';
 import { formatBytes, isNonEmptyString } from '@utils/text/stringUtils';
@@ -40,7 +40,7 @@ const MANY_IMAGE_MAX_DIMENSION = 2000;
 
 /** Returns true if buffer is an image exceeding the many-image dimension limit. */
 function isOversizedImage(buffer: Buffer | Uint8Array): Effect.Effect<boolean> {
-  return Effect.try(() => imageSize(buffer)).pipe(
+  return Effect.try({ try: () => imageSize(buffer), catch: ensureError }).pipe(
     Effect.map(
       ({ width, height }) =>
         width > MANY_IMAGE_MAX_DIMENSION || height > MANY_IMAGE_MAX_DIMENSION,

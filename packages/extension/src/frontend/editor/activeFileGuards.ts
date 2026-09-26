@@ -12,6 +12,7 @@ import { vscodeUi } from '@frontend/hosts/VscodeUiHost';
 import type { NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
+import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'ActiveFileGuards';
 
@@ -77,7 +78,10 @@ const getActiveLatexEditor = (
 
     if (saveDocument && editor.document.isDirty) {
       // A rejected save is the same answer as a declined one: saveFailed.
-      const saved = yield* Effect.tryPromise(() => editor.document.save()).pipe(
+      const saved = yield* Effect.tryPromise({
+        try: () => editor.document.save(),
+        catch: ensureError,
+      }).pipe(
         Effect.catch((error) =>
           Effect.logWarning('Saving the active document failed', error).pipe(
             withLogChannel(CHANNEL),

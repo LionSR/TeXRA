@@ -64,7 +64,7 @@ import { escapeText } from '@shared/utils/xmlEscape';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
 import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
 import {
   CHAT_API_MODE_MODEL_RECOVERY,
@@ -629,9 +629,10 @@ export function createChatSessionController(
       recoverRun(
         Effect.gen(function* () {
           yield* adoptRunConfig(config);
-          const registeredConfig = yield* Effect.try(() =>
-            AgentConfigSchema.parse(config),
-          );
+          const registeredConfig = yield* Effect.try({
+            try: () => AgentConfigSchema.parse(config),
+            catch: ensureError,
+          });
           const result = yield* agentRuns.launch(
             { kind: 'fresh', config: registeredConfig, runId },
             {
