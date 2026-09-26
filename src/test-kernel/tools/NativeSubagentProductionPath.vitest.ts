@@ -615,7 +615,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(session.releaseRunLease(PARENT_RUN_ID));
+    await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
     await Effect.runPromise(teardownDefaultSession());
     vi.restoreAllMocks();
   });

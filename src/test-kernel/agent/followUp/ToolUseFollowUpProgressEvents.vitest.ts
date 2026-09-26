@@ -117,10 +117,11 @@ describe('tool-use follow-up progress events', () => {
         yield* Effect.promise(() =>
           seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED),
         );
-        // A finished run's driver gave its claim back with its last drain; these
-        // rows stand in for that driver, so the claim goes back here too.
-        yield* testDefaultSession().releaseClaims(
-          qualifyAggregateId('run', runId),
+        // A finished run's driver released its claim when its scope closed;
+        // these rows stand in for that driver, so the claim they took goes
+        // back here too: a hold taken and let go releases it.
+        yield* Effect.flatten(
+          testDefaultSession().acquireClaims(qualifyAggregateId('run', runId)),
         );
         trackToolUseFlow();
 

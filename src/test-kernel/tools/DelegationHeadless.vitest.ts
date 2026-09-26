@@ -424,7 +424,7 @@ function recordTerminalFact(
 describe('headless delegation', () => {
   /**
    * The claim release the session's exit choreography ends with. The failure
-   * paths fail it rather than `releaseRunLease` itself, so the drain, the
+   * paths fail it rather than `commitRunEnd` itself, so the drain, the
    * terminal write and the settle above it still run for real.
    */
   let releaseClaims: MockInstance<SessionHandle['releaseClaims']>;

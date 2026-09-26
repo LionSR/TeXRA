@@ -71,13 +71,13 @@ export const registerRun = Effect.fn('registerRun')(function* (
   record: RunRecord,
   options: RegisterRunOptions,
 ): Effect.fn.Return<void, Error> {
-  let releaseClaims: Effect.Effect<void, Error> = Effect.void;
-  const registration = yield* Effect.exit(
+  return yield* Effect.scoped(
     Effect.gen(function* () {
-      const records = getRunRecords(session, runId);
-      const prior = yield* records.exists();
-      if (prior)
-        releaseClaims = yield* session.acquireClaims(aggregateId('run', runId));
+      const prior = yield* getRunRecords(session, runId).exists();
+      // A re-registration writes into a run that already has rows, so it
+      // takes the run's claim for itself: a hold for this registration
+      // only. The run's driver takes its own hold for the run's life.
+      if (prior) yield* session.holdRunClaim(runId);
       if (options.parentRunId !== undefined) {
         // A record read goes straight to the database; it never queues behind
         // the publisher. A parent whose `run.start` is queued but uncommitted
@@ -161,42 +161,6 @@ export const registerRun = Effect.fn('registerRun')(function* (
         });
       yield* session.commitRegistration(events);
     }),
-  );
-  if (Exit.isFailure(registration)) {
-    const cause = Cause.squash(registration.cause);
-    const claimRelease = yield* Effect.exit(releaseClaims);
-    const failures = [
-      cause,
-      ...(Exit.isFailure(claimRelease)
-        ? [Cause.squash(claimRelease.cause)]
-        : []),
-    ];
-    return yield* Effect.fail(
-      failures.length > 1
-        ? new AggregateError(
-            failures,
-            `Run registration and claim rollback failed for ${runId}`,
-          )
-        : ensureError(cause),
-    );
-  }
-});
-
-/** Admit a resumed turn and return rollback for only this admission's resources. */
-export const acquireResumedRunOwnership = Effect.fn(
-  'acquireResumedRunOwnership',
-)(function* (
-  session: SessionHandle,
-  runId: RunId,
-): Effect.fn.Return<Effect.Effect<void, Error>, Error> {
-  const release = yield* session.acquireClaims(aggregateId('run', runId));
-  return release.pipe(
-    Effect.mapError(
-      (error) =>
-        new Error(`Run admission rollback failed for ${runId}`, {
-          cause: error,
-        }),
-    ),
   );
 });
 

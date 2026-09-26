@@ -68,20 +68,16 @@ export interface SessionGraph {
   /** The run ledger over this root's event plane: the run loop's one
    *  writer of run rows, provided to each run's program from here. */
   readonly ledger: Context.Service.Shape<typeof RunLedger>;
-  /** One aggregate's claim, acquired before a resume reads or mutates a run
-   *  and before a relaunch appends to a workflow checkpoint. Private record
-   *  reads never enter display transport. */
+  /** A hold on one aggregate's claim, answered with its release: taken for a
+   *  run's lifetime, and before a resume reads or mutates a run or a
+   *  relaunch appends to a workflow checkpoint. Holds are counted, so the
+   *  claim is released only when the last holder lets go. */
   readonly acquireClaims: (
     id: AggregateId,
   ) => Effect.Effect<
-    Effect.Effect<void, DatabaseWriteFailed>,
+    Effect.Effect<void>,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   >;
-  /** Drop this process's claim on one aggregate: a run's when its lease
-   *  ends, a workflow checkpoint's when its invocation does. */
-  readonly releaseClaims: (
-    id: AggregateId,
-  ) => Effect.Effect<void, DatabaseWriteFailed>;
   readonly runRecords: (
     id: RunId,
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;

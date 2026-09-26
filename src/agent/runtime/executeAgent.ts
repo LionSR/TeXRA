@@ -5,7 +5,6 @@ import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 import { logConversationProgress, type AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
-import { acquireResumedRunOwnership } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
 import { AgentError } from '@common/errors';
 import { withLogChannel } from '@logger/effectLog';
@@ -618,16 +617,17 @@ const resumeToolUse = Effect.fn('resumeToolUse')(function* (
         // A recovered child's continuous driver holds the claim already; a
         // standalone resume takes it here.
         if (!options.turns) {
-          yield* Effect.acquireRelease(
-            acquireResumedRunOwnership(session, identity.runId),
-            () =>
-              session.releaseRunLease(identity.runId).pipe(
-                Effect.catch((error) =>
-                  Effect.sync(() => {
-                    releaseFailure = error;
-                  }),
-                ),
+          yield* session.holdRunClaim(identity.runId);
+          // Registered after the hold, so it runs before the hold's release:
+          // the run's ending commits under the claim it is written with.
+          yield* Effect.addFinalizer(() =>
+            session.commitRunEnd(identity.runId).pipe(
+              Effect.catch((error) =>
+                Effect.sync(() => {
+                  releaseFailure = error;
+                }),
               ),
+            ),
           );
         }
         const retrieved = yield* retrieveSessionResumeData(

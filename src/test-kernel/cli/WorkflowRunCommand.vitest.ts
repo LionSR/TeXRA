@@ -843,7 +843,7 @@ describe('CLI run command, workflow agents', () => {
               .pipe(
                 Effect.as(run),
                 Effect.ensuring(
-                  session.releaseRunLease(runId).pipe(Effect.orDie),
+                  session.commitRunEnd(runId).pipe(Effect.orDie),
                 ),
               ),
         );

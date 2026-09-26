@@ -265,7 +265,13 @@ const fenceRoster = () =>
     commit: () => Effect.void,
     approvals: createSessionApprovals(),
     finalizeRun: () => Effect.die('finalizeRun is not reached by the fence'),
-    acquireRunClaim: (runId) => mocks.acquireClaims(aggregateId('run', runId)),
+    holdRunClaim: (runId: RunId) =>
+      Effect.asVoid(
+        Effect.acquireRelease(
+          mocks.acquireClaims(aggregateId('run', runId)),
+          (release: Effect.Effect<void>) => release,
+        ),
+      ),
   });
 let lanes = fenceRoster();
 const runs = {

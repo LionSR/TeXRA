@@ -94,6 +94,7 @@ import {
   ownerIdentity,
   RUN_OUTCOME,
   TOOL_CALL_STATUS,
+  type AggregateId,
   type CommitOrdinal,
   type OwnerId,
   type RunId,
@@ -337,6 +338,35 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
           : settleTo(last.commit).pipe(Effect.as(rows));
       };
       const now = () => SubscriptionRef.getUnsafe(eventLog.observedCommit);
+      /**
+       * This process's holds on aggregate claims, counted: the first holder
+       * of an aggregate proves any prior owner dead and takes its claim (or
+       * finds it already this process's, as a run's birth claim is), every
+       * later holder shares it, and the claim is released when the last
+       * holder's scope closes. So nested holders nest — a run holding its
+       * own claim for its lifetime, a parent's detach batch over that run,
+       * a deletion's hold — and none of them releases under another. The map
+       * closes with the session, releasing whatever is still held.
+       */
+      const claims = yield* RcMap.make({
+        lookup: (id: AggregateId) =>
+          Effect.acquireRelease(
+            eventLog.acquireClaims([id]).pipe(
+              // A claim moving here seeds the publisher's pending follow-ups.
+              Effect.tap((ids) => reads.hydrateFollowUps(id, ids.length > 0)),
+            ),
+            () =>
+              eventLog
+                .releaseClaims([id])
+                .pipe(
+                  Effect.catch(
+                    logFailure(
+                      `The claim on ${id} was not released; the next process proves this one dead before it takes the claim.`,
+                    ),
+                  ),
+                ),
+          ),
+      });
       const graph = (session: SessionHandle): SessionGraph => {
         // The session scope owns one approval state shared by its runs and
         // request handler. Effective changes publish the full policy snapshot.
@@ -371,12 +401,14 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             return pieces.reverse().join('');
           },
           acquireClaims: (id) =>
-            eventLog.acquireClaims([id]).pipe(
-              // A claim moving here seeds the publisher's pending follow-ups.
-              Effect.tap((ids) => reads.hydrateFollowUps(id, ids.length > 0)),
-              Effect.map((ids) => eventLog.releaseClaims(ids)),
-            ),
-          releaseClaims: (id) => eventLog.releaseClaims([id]),
+            Effect.gen(function* () {
+              const hold = yield* Scope.make();
+              yield* RcMap.get(claims, id).pipe(
+                Scope.provide(hold),
+                Effect.onError(() => Scope.close(hold, Exit.void)),
+              );
+              return Scope.close(hold, Exit.void);
+            }),
           runRecords: (id) =>
             eventLog.readRunRecords(qualifyAggregateId('run', id)),
           ownsRun: (id) =>
@@ -476,8 +508,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             commit: (events) => session.commit(events).pipe(Effect.asVoid),
             approvals,
             finalizeRun: (input) => finalizeRun(session, input),
-            acquireRunClaim: (runId) =>
-              session.acquireClaims(qualifyAggregateId('run', runId)),
+            holdRunClaim: (runId) => session.holdRunClaim(runId),
           }),
           // The session's requests: the approval state above and the handler
           // that admits on the root graph's log.
@@ -826,7 +857,7 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
           ? ensureError(Cause.squash(settled.cause))
           : undefined;
       });
-    yield* session.releaseRunLease(runId, (drainFailure) =>
+    yield* session.commitRunEnd(runId, (drainFailure) =>
       Effect.gen(function* () {
         const closureFailure = yield* closeTranscriptGroups(
           session.runView(runId)?.durableOutcome ?? RUN_OUTCOME.CANCELLED,

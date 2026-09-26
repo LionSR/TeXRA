@@ -3,7 +3,6 @@ import stableStringify from 'safe-stable-stringify';
 
 import { registerRun, getRunRecords } from '@agent/storage';
 import {
-  acquireResumedRunOwnership,
   finalizeRun,
 } from '@agent/storage/runLifecycle';
 import { persistedParentRunId } from '@agent/storage/runRecords';
@@ -174,9 +173,12 @@ export const runAgent = Effect.fn('runAgent')(function* (
           identity: { kind: 'agent', agent: config.agent },
           userFollowUpSupport,
         });
-      } else {
-        yield* acquireResumedRunOwnership(runSession, runId);
       }
+      // The run's claim, held by this launch for the run's whole life: a
+      // fresh run's birth claim, a resumed run's taken over after its prior
+      // owner is proved dead. Released when this launch's scope closes,
+      // after its ending has committed below.
+      yield* runSession.holdRunClaim(runId);
 
       let lifecycleStarted = false;
       const callerOnRun = executeAgentOptions.onRun;
@@ -225,7 +227,8 @@ export const runAgent = Effect.fn('runAgent')(function* (
         }).pipe(
           // The launch's terminal: a stop lands before it or after it, never
           // inside — the prior-outcome restore, the host's final artifacts
-          // and the lease release settle atomically, on every exit.
+          // and the run's ending commit atomically, on every exit, before
+          // the claim this launch holds is released.
           Effect.onExit((exit) =>
             Effect.uninterruptible(
               Effect.gen(function* () {
@@ -281,7 +284,7 @@ export const runAgent = Effect.fn('runAgent')(function* (
                   failures.push(Cause.squash(artifacts.cause));
                 if (Exit.isFailure(artifacts) || artifacts.value !== true) {
                   const release = yield* Effect.exit(
-                    runSession.releaseRunLease(runId),
+                    runSession.commitRunEnd(runId),
                   );
                   if (Exit.isFailure(release))
                     failures.push(Cause.squash(release.cause));
@@ -305,6 +308,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
       return yield* Effect.fail(
         aggregated ?? ensureError(Cause.squash(run.cause)),
       );
-    }),
+    }).pipe(Effect.scoped),
   );
 });

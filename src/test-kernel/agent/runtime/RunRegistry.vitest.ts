@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, type Scope } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -114,9 +114,7 @@ function createRegistry(
     commit?: (
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
-    acquireRunClaim?: (
-      runId: RunId,
-    ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
+    holdRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -149,7 +147,7 @@ function createRegistry(
       }),
     approvals: createSessionApprovals(),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
-    acquireRunClaim: () => Effect.succeed(Effect.void),
+    holdRunClaim: () => Effect.void,
     ...options,
   });
   return { events, phases, registry };
@@ -1181,8 +1179,10 @@ it.effect('holds a run against launches without making it a stop target', () =>
     const claimed = yield* Deferred.make<void>();
     const released = vi.fn();
     const { registry: roster } = createRegistry({
-      acquireRunClaim: () =>
-        Deferred.await(claimed).pipe(Effect.as(Effect.sync(released))),
+      holdRunClaim: () =>
+        Effect.acquireRelease(Deferred.await(claimed), () =>
+          Effect.sync(released),
+        ),
     });
     const runId = 'abcd13' as RunId;
     const hold = yield* Effect.forkChild(

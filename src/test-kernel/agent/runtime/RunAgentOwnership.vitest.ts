@@ -77,6 +77,7 @@ import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import {
   aggregateId as qualifyAggregateId,
+  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
@@ -126,19 +127,23 @@ const sessionRuns = {
   launchRun: vi.fn(
     (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
   ),
-  // No parent is detaching this run, so its release waits on nothing.
-  throughDetach: () => Effect.void,
 };
 const SESSION = {
   runs: sessionRuns,
   readView: () => Effect.succeed({ runs: persistedRuns }),
-  acquireClaims: (...args: unknown[]) => mocks.acquireClaims(...args),
-  graph: {
-    releaseClaims: (...args: unknown[]) => mocks.releaseClaims(...args),
-  },
-  releaseClaims: SessionHandle.prototype.releaseClaims,
+  // The launch's hold on the run's claim: the release it hands back also
+  // reports to `mocks.releaseClaims`, which the release-order cases observe.
+  acquireClaims: (id: AggregateId) =>
+    (
+      mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>
+    ).pipe(
+      Effect.map((release) =>
+        release.pipe(Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id)))),
+      ),
+    ),
+  holdRunClaim: SessionHandle.prototype.holdRunClaim,
   settlePublications,
-  releaseRunLease: SessionHandle.prototype.releaseRunLease,
+  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 const EXECUTE_RESULT = {
@@ -176,7 +181,7 @@ function realRunRegistry(): RunRegistry {
     approvals: createSessionApprovals(),
     finalizeRun: ((input: { readonly outcome: string }) =>
       Effect.succeed({ ok: true, outcome: input.outcome })) as never,
-    acquireRunClaim: () => Effect.succeed(Effect.void),
+    holdRunClaim: () => Effect.void,
   });
 }
 
@@ -581,7 +586,11 @@ describe('runAgent run ownership', () => {
 
         expect(order).toEqual(['execute', 'host-artifacts-and-release']);
         expect(settlePublications).not.toHaveBeenCalled();
-        expect(mocks.releaseClaims).not.toHaveBeenCalled();
+        // The host committed the run's ending; the claim is still the
+        // launch's hold, released once as its scope closes.
+        expect(mocks.releaseClaims).toHaveBeenCalledExactlyOnceWith(
+          qualifyAggregateId('run', RUN_ID),
+        );
       }),
   );
 
@@ -645,8 +654,8 @@ describe('runAgent run ownership', () => {
             ? { type: 'instruction', payload: { key: 'missingApiKey' } }
             : { type: 'error', payload: { message: primaryError.message } },
         );
-        // A failed host hook never changes ownership: the one drain still runs
-        // and releases the claim.
+        // A failed host hook never changes ownership: the run's ending still
+        // commits, and the launch's scope still releases the claim.
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', RUN_ID),
         );

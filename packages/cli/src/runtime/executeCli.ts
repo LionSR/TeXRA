@@ -390,7 +390,7 @@ export function executeCliRequest(
             outcome: RUN_OUTCOME.CANCELLED,
             report: reportShutdownFinalizationFailure,
           })).ok;
-          yield* session.releaseRunLease(runId);
+          yield* session.commitRunEnd(runId);
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;

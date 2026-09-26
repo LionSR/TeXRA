@@ -153,12 +153,13 @@ export interface RunRegistryInit {
   readonly finalizeRun: (
     input: FinalizeRunInput,
   ) => Effect.Effect<FinalizeRunResult, Error>;
-  /** Admit one run's claim and hand back its release. A run aggregate takes
-   *  an append from its claim holder alone, so a stop that reached no live
-   *  target takes the claim before it writes the run's terminal row. */
-  readonly acquireRunClaim: (
+  /** Hold one run's claim for the caller's scope (`SessionHandle.holdRunClaim`).
+   *  A run aggregate takes an append from its claim holder alone, so a stop
+   *  that reached no live target holds the claim while it writes the run's
+   *  terminal row. */
+  readonly holdRunClaim: (
     runId: RunId,
-  ) => Effect.Effect<Effect.Effect<void, Error>, Error>;
+  ) => Effect.Effect<void, Error, Scope.Scope>;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -195,12 +196,6 @@ export class RunRegistry {
   /** Steps admitted but not yet started, across every run: session disposal
    *  fails all of them at once, so they need no per-run keying. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
-  /** The children a detach in flight has snapshotted, each held until that
-   *  detach settles ({@link throughDetach}). Its batch lands on the child's
-   *  own aggregate, which takes an append from its claim holder alone, so a
-   *  child that ends in this window keeps its claim until the batch has
-   *  committed instead of having it refused with nothing severed. */
-  private readonly detaching = new Map<RunId, Deferred.Deferred<void>>();
   /** The session's child-run concurrency budget, made on first use. */
   private budget: Semaphore.Semaphore | undefined;
   private disposed = false;
@@ -552,10 +547,7 @@ export class RunRegistry {
             const latch = yield* Latch.make(false);
             const hold = Effect.scoped(
               Effect.gen({ self: this }, function* () {
-                yield* Effect.acquireRelease(
-                  this.init.acquireRunClaim(runId),
-                  Effect.orDie,
-                );
+                yield* this.init.holdRunClaim(runId);
                 yield* Deferred.succeed(ready, undefined);
                 yield* Latch.await(latch);
               }),
@@ -736,10 +728,8 @@ export class RunRegistry {
       );
       settlement = local
         ? apply
-        : Effect.acquireUseRelease(
-            this.init.acquireRunClaim(runId),
-            () => apply,
-            (release) => release,
+        : Effect.scoped(
+            this.init.holdRunClaim(runId).pipe(Effect.andThen(apply)),
           );
     }
     return {
@@ -885,26 +875,19 @@ export class RunRegistry {
    * it, so no child is admitted under it in the window this covers.
    *
    * Each row lands on its own child's aggregate, which takes an append only
-   * from its claim holder, so every snapshotted child is claimed here and
-   * named in {@link detaching} until the commit and the local sever are done:
-   * a live child's own claim is one this acquire retains nothing of, so what
-   * holds it is that child's lease release waiting there ({@link throughDetach}).
+   * from its claim holder, so every snapshotted child's claim is held here
+   * until the commit and the local sever are done: holds nest, so a child
+   * that ends meanwhile releases its own hold without releasing the claim
+   * out from under this batch.
    */
   private detachActiveChildren(parentRunId: RunId): Effect.Effect<void, Error> {
     return Effect.suspend(() => {
       const detachedChildRunIds = this.childRunIds(parentRunId);
       if (detachedChildRunIds.length === 0) return Effect.void;
-      const detached = Deferred.makeUnsafe<void>();
-      for (const childRunId of detachedChildRunIds)
-        this.detaching.set(childRunId, detached);
       return Effect.scoped(
         Effect.forEach(
           detachedChildRunIds,
-          (childRunId) =>
-            Effect.acquireRelease(
-              this.init.acquireRunClaim(childRunId),
-              (release) => release.pipe(Effect.orDie),
-            ),
+          (childRunId) => this.init.holdRunClaim(childRunId),
           { discard: true },
         ).pipe(
           Effect.andThen(
@@ -920,19 +903,6 @@ export class RunRegistry {
               this.detachChildren(parentRunId, detachedChildRunIds);
             }),
           ),
-        ),
-      ).pipe(
-        // Whatever the batch did, the children stop waiting here: a refused
-        // commit leaves both edges standing and a retry snapshots them again,
-        // and a child holding its claim for a detach that will never commit
-        // would never end.
-        Effect.ensuring(
-          Effect.sync(() => {
-            for (const childRunId of detachedChildRunIds)
-              if (this.detaching.get(childRunId) === detached)
-                this.detaching.delete(childRunId);
-            Deferred.doneUnsafe(detached, Effect.void);
-          }),
         ),
       );
     });
@@ -951,15 +921,6 @@ export class RunRegistry {
       if (parent?.current === parentRunId) parent.current = null;
       this.init.approvals.detachRunFromParent(childRunId);
     }
-  }
-
-  /** The wait a child's lease release takes before it drops its claim
-   *  (`SessionHandle.releaseRunLease`, the one release): nothing unless a
-   *  detach of its parent is in flight over it, and that detach's settlement
-   *  otherwise. */
-  throughDetach(runId: RunId): Effect.Effect<void> {
-    const detached = this.detaching.get(runId);
-    return detached === undefined ? Effect.void : Deferred.await(detached);
   }
 
   // ----------------------------------------------------------------- close

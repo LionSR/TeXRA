@@ -43,7 +43,7 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(),
+  commitRunEndAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Promise<void>>(async () => undefined),
@@ -346,14 +346,14 @@ async function stubExecuteCliDeps(): Promise<void> {
     kind: 'checkpoint',
     snapshot: reflectionSnapshot(),
   });
-  mocks.releaseRunLeaseAfterArtifacts.mockResolvedValue(undefined);
+  mocks.commitRunEndAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
   // observes it through the same spy the deleted host-local shim fed.
   const { SessionHandle } = await import('@agent/runtime/SessionHandle');
-  vi.spyOn(SessionHandle.prototype, 'releaseRunLease').mockImplementation(
+  vi.spyOn(SessionHandle.prototype, 'commitRunEnd').mockImplementation(
     function (this: unknown, runId) {
       return Effect.tryPromise({
-        try: () => mocks.releaseRunLeaseAfterArtifacts(this, runId),
+        try: () => mocks.commitRunEndAfterArtifacts(this, runId),
         catch: (error) => error as Error,
       });
     },
@@ -641,7 +641,7 @@ describe('executeCliRequest', () => {
         );
         const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
         const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
-        mocks.releaseRunLeaseAfterArtifacts.mockImplementationOnce(
+        mocks.commitRunEndAfterArtifacts.mockImplementationOnce(
           async (session, runId) =>
             Effect.runPromise(session.settlePublications(runId)),
         );
@@ -678,7 +678,7 @@ describe('executeCliRequest', () => {
         expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
           detachActiveChildren: false,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
@@ -693,7 +693,7 @@ describe('executeCliRequest', () => {
         expect(shutdownResolved).toBe(false);
         settleRecoveryWrite();
         yield* Fiber.join(shutdown);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledOnce();
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledOnce();
         expect(flushSpy).toHaveBeenCalled();
         expect(mocks.finalizeRun).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -702,14 +702,14 @@ describe('executeCliRequest', () => {
           }),
         );
         expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.releaseRunLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
+          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0] ??
             Number.POSITIVE_INFINITY,
         );
         expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
           'exec-1',
         );
         expect(
-          mocks.releaseRunLeaseAfterArtifacts.mock.invocationCallOrder[0],
+          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0],
         ).toBeLessThan(
           onInterruptedRunFinalized.mock.invocationCallOrder[0] ??
             Number.POSITIVE_INFINITY,
@@ -775,7 +775,7 @@ describe('executeCliRequest', () => {
         loadExecuteCliOnInstalledHost,
       );
       const drainError = new Error('snapshot drain failed');
-      mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
+      mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(drainError);
       const published = yield* Deferred.make<LeaseOptions>();
       const hangingRun = stubHangingRun(published);
 
@@ -880,7 +880,7 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(run);
 
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
       }),
   );
 
@@ -1081,7 +1081,7 @@ describe('executeCliRequest', () => {
         const { DatabaseNotOwner } = yield* Effect.promise(
           () => import('@shared/session/database'),
         );
-        mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(
+        mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(
           new DatabaseNotOwner({
             // The fixture's run id is not a canonical one, so the key is
             // written directly: only its type matters to the drain.

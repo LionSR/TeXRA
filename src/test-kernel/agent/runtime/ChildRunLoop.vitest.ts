@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
   persistChildRunDelivery: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(
+  commitRunEndAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
 }));
@@ -319,8 +319,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'releaseRunLease').mockImplementation((runId) =>
-    Effect.promise(() => mocks.releaseRunLeaseAfterArtifacts(session, runId)),
+  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
+    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
   );
   mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
@@ -384,7 +384,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -543,7 +543,7 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
@@ -565,7 +565,7 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );

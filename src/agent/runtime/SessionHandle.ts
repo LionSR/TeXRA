@@ -33,7 +33,15 @@
  * session is justified only as the ownership container.
  */
 
-import { Cause, Effect, Exit, Option, Stream, SubscriptionRef } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Option,
+  type Scope,
+  Stream,
+  SubscriptionRef,
+} from 'effect';
 
 import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
@@ -403,43 +411,32 @@ export class SessionHandle {
   }
 
   /**
-   * End ownership of one run after the facts it queued have committed.
-   * An optional post-drain operation publishes lifecycle state that belongs
-   * after those facts; it runs before the claim is unlinked.
-   * The claim is unlinked whatever the drain did: resumability is the
-   * checkpoint, so a failed flush is logged and rethrown but never changes
-   * who owns the run. A release failure never masks a drain failure: the
-   * drain's error is the one the caller sees, as a
-   * {@link RunArtifactDrainError} so a caller can tell rolled-back facts from
-   * a release that failed with everything already committed; the release's is
-   * logged. This is the one exit choreography every run driver calls.
+   * Commit one run's ending: settle the facts it queued, run its terminal
+   * step, settle what that step published. The terminal step runs whether or
+   * not the first settle rejected, and hears which it was: it is where the
+   * run's terminal row is written, and a run whose claim ends with no
+   * terminal row reads back as merely interrupted — the one classification a
+   * shutdown must not leave behind. A failed settle is what that row carries
+   * (the `artifact-drain` marker), and it is still the error this call
+   * reports once the row has landed, as a {@link RunArtifactDrainError}, so a
+   * caller can tell rolled-back facts from a step that failed afterwards.
    *
-   * The post-drain step runs whether or not the drain rejected, and hears
-   * which it was: it is where the run's terminal row is written, and a run
-   * whose ownership ends with no terminal row at all reads back as merely
-   * interrupted — the one classification a shutdown must not leave behind. A
-   * failed drain is what the row it writes carries (the `artifact-drain`
-   * marker `finalizeRunTerminal` stamps on the same fact), and the drain's
-   * own failure is still the error this call reports once that row has
-   * landed.
+   * It releases nothing: the run's claim is its driver's hold
+   * ({@link holdRunClaim}), released when the driver's scope closes, after
+   * this has run.
    */
-  releaseRunLease(
+  commitRunEnd(
     runId: RunId,
-    afterArtifactsDrained: (
+    terminal: (
       drainFailure: Error | undefined,
     ) => Effect.Effect<void, Error> = () => Effect.void,
   ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const drained = yield* Effect.exit(
         this.settlePublications(runId).pipe(
-          // The drain is the ordered publisher's settle, so anything that
-          // fails here left facts this run had queued uncommitted. The one
-          // exception is a refused append, which keeps its own identity: it
-          // says this process no longer holds the run's claim, and the
-          // callers that treat shutdown contention as expected read that
-          // type. A drain that refused several publications aggregates them
-          // and the identity is lost; one refusal, the case those callers
-          // exercise, arrives unwrapped.
+          // A refused append keeps its own identity: it says this process no
+          // longer holds the run's claim, and the callers that treat shutdown
+          // contention as expected read that type.
           Effect.mapError((cause) =>
             cause instanceof DatabaseNotOwner
               ? cause
@@ -447,42 +444,51 @@ export class SessionHandle {
           ),
         ),
       );
-      const finalized = yield* Effect.exit(
-        afterArtifactsDrained(
+      const ended = yield* Effect.exit(
+        terminal(
           Exit.isFailure(drained)
             ? ensureError(Cause.squash(drained.cause))
             : undefined,
         ),
       );
-      // Settle whatever the drain and the post-drain step did. When the drain
-      // rejected, this settle still stops claim release from overtaking facts
-      // the owner already queued, and it covers the facts
-      // `afterArtifactsDrained` published.
+      // Settle whatever the terminal step published, so the claim's release
+      // after this never overtakes it.
       const published = yield* Effect.exit(
         this.settlePublications(runId).pipe(
           Effect.mapError((cause) => new RunArtifactDrainError(runId, cause)),
         ),
       );
-      // A child a parent's detach has snapshotted keeps its claim until that
-      // batch has committed: the `run.detach` row lands on the child's own
-      // aggregate, which takes an append from its claim holder alone, so a
-      // release that overtook the batch would have it refused with nothing
-      // severed. The one check at the one release.
-      yield* this.runs.throughDetach(runId);
-      const claimRelease = yield* Effect.exit(
-        this.releaseClaims(qualifyAggregateId('run', runId)),
-      );
-      const failures = [drained, finalized, published, claimRelease].flatMap(
-        (exit) => (Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : []),
+      const failures = [drained, ended, published].flatMap((exit) =>
+        Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
       );
       const primary = failures.shift();
       for (const error of failures)
-        yield* Effect.logWarning(
-          `Run ${runId}: claim release also failed`,
-        ).pipe(Effect.annotateLogs({ data: error }), withLogChannel(CHANNEL));
+        yield* Effect.logWarning(`Run ${runId}: its ending also failed`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+        );
       if (primary !== undefined)
         return yield* Effect.fail(ensureError(primary));
     });
+  }
+
+  /** Hold one run's claim for the caller's scope: the claim a run's driver
+   *  holds for the run's lifetime, and anything else that must append to the
+   *  run meanwhile. Holds nest; the claim is released when the last one's
+   *  scope closes. */
+  holdRunClaim(
+    runId: RunId,
+  ): Effect.Effect<
+    void,
+    DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed,
+    Scope.Scope
+  > {
+    return Effect.asVoid(
+      Effect.acquireRelease(
+        this.acquireClaims(qualifyAggregateId('run', runId)),
+        (release) => release,
+      ),
+    );
   }
 
   /** Admit an aggregate's existing claim before this process appends to it:
@@ -491,7 +497,7 @@ export class SessionHandle {
   acquireClaims(
     id: AggregateId,
   ): Effect.Effect<
-    Effect.Effect<void, DatabaseWriteFailed>,
+    Effect.Effect<void>,
     DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
   > {
     return this.graph.acquireClaims(id);
@@ -514,14 +520,6 @@ export class SessionHandle {
    */
   claimOwner(runId: RunId): Effect.Effect<AggregateClaim, DatabaseReadFailed> {
     return this.graph.claimOwner(runId);
-  }
-
-  /** Drop this process's claim on one aggregate, so the next process resumes
-   *  it instead of reading a live owner: a run's when its lease ends, a
-   *  workflow checkpoint's when its invocation does. The claim belongs to the
-   *  invocation, not to the process, and this is its one release. */
-  releaseClaims(id: AggregateId): Effect.Effect<void, DatabaseWriteFailed> {
-    return this.graph.releaseClaims(id);
   }
 
   /**
@@ -1025,7 +1023,7 @@ export class SessionHandle {
    *  run-tagged one stays tracked until that run's own drain takes it: that
    *  drain is what stamps the `artifact-drain` marker on the row it decides,
    *  and a session close settling a run past its budget settles the session
-   *  before it releases each live run's lease ({@link releaseRunLease}, the terminal path every run
+   *  before it releases each live run's lease ({@link commitRunEnd}, the terminal path every run
    *  driver takes), which would otherwise read an empty set and write an
    *  unmarked CANCELLED row that recovery would treat as repeatable.
    *

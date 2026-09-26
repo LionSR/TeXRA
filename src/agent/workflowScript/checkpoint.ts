@@ -310,13 +310,6 @@ export function runPersistedWorkflowScript<R = never>(
       ...runOptions
     } = options;
     const target = checkpointAggregate(checkpointId);
-    // Existence alone decides the claim step; nothing is derived from this
-    // read. An aggregate that exists has its claim taken over, one that does
-    // not is claimed by the script row the run body commits — and a process
-    // that creates it in this gap owns it, so that commit is refused rather
-    // than written behind its back.
-    const exists =
-      (yield* readWorkflowScriptCheckpoint(session, checkpointId)) !== null;
 
     // The process that first journals into a checkpoint claims its aggregate
     // (C5); a relaunch from another process takes the claim over after proving
@@ -327,7 +320,7 @@ export function runPersistedWorkflowScript<R = never>(
     // finished workflow leaves the journal free for the next process to resume
     // instead of holding it until this one exits.
     return yield* Effect.acquireUseRelease(
-      exists ? Effect.asVoid(session.acquireClaims(target)) : Effect.void,
+      session.acquireClaims(target),
       () =>
         Effect.gen(function* () {
           // The journal is read under the claim: a process that finished this
@@ -455,22 +448,10 @@ export function runPersistedWorkflowScript<R = never>(
                 ),
           });
         }),
-      // A release that fails leaves the claim standing: the next process reads
-      // it as a live owner and refuses, so the invocation fails with it. The
-      // journal is already durable, so the caller loses no work by hearing
-      // that the checkpoint is still owned.
-      () =>
-        session
-          .releaseClaims(target)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new Error(
-                  `Workflow checkpoint ${checkpointId} claim was not released.`,
-                  { cause },
-                ),
-            ),
-          ),
+      // The hold's release: the claim goes once no other holder of it is
+      // left. One that fails leaves the claim standing, and says so; the next
+      // process reads it as a live owner until it proves this one dead.
+      (release) => release,
     );
   }).pipe(withPerKeyLane(checkpointLanes, options.checkpointId));
 }
