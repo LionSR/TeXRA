@@ -260,6 +260,7 @@ export const MANIFEST = [
       'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
     toggleable: true,
     availability: ALWAYS_AVAILABLE,
+    skills: true,
   },
   {
     // ID kept as `github-pr-subscription` for back-compat with persisted

@@ -28,10 +28,10 @@ import { truncatedHexId } from '@utils/core/idHash';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { parseWorkflowScript } from './parseScript';
+import { ORCHESTRATION_PRELUDE } from './realmPreludes';
 import { runScriptInSandbox } from './sandbox';
 import { WorkflowRunState } from './workflowRunState';
 import {
-  WORKFLOW_SKIPPED_RESULT,
   WorkflowAgentCallOptionsSchema,
   WorkflowScriptPhaseTitleSchema,
   type WorkflowAgentCallOptions,
@@ -71,9 +71,10 @@ function journalKey(
 // (`resolveChildRunConcurrencyBudget`) as `concurrency`, so this value
 // governs no product run.
 const DEFAULT_CONCURRENCY = 4;
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_MAX_AGENT_CALLS = 200;
-const MAX_FANOUT = 512;
+// Wall clock for the whole run, waiting on agents included. Safe to keep long
+// because guest code itself is held to the sandbox's separate CPU budget.
+const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
+const DEFAULT_MAX_AGENT_CALLS = 1000;
 const LABEL_EXCERPT_LENGTH = 80;
 
 /** The two statuses a failed attempt can terminalize a call with. */
@@ -102,51 +103,6 @@ interface InFlightAgentCall {
   key: string;
   readonly decision: Deferred.Deferred<WorkflowControlGesture | undefined>;
 }
-
-/**
- * The fan-out primitive, defined INSIDE the sandbox realm (trusted prelude,
- * compiled by the host, run before the script body). They must not live
- * host-side: parallel consumes script-created arrays and thunks, and any host
- * code that calls a method on a
- * sandbox array (`thunks.map(hostCb)`) or awaits a sandbox thenable hands
- * the script a host-realm function whose .constructor is the host's
- * ungated Function constructor. Realm-side, every callback and resolve
- * function a script can capture is realm-local and codegen-gated.
- *
- * agent() and log() are the bridged globals installed before this prelude
- * runs; concurrency, journaling, and the call cap all stay host-side in
- * agentPrimitive.
- */
-const ORCHESTRATION_PRELUDE = `
-'use strict';
-(() => {
-  const MAX_FANOUT = ${MAX_FANOUT};
-  const define = (name, value) =>
-    Object.defineProperty(globalThis, name, {
-      value,
-      writable: false,
-      configurable: false,
-    });
-  define('parallel', async function parallel(thunks) {
-    if (!Array.isArray(thunks)) {
-      throw new Error(
-        'parallel(thunks) requires an array of zero-arg functions.',
-      );
-    }
-    if (thunks.length > MAX_FANOUT) {
-      throw new Error('parallel() accepts at most ' + MAX_FANOUT + ' items.');
-    }
-    return Promise.all(
-      thunks.map((thunk, i) => {
-        if (typeof thunk !== 'function') {
-          throw new Error('parallel(): item ' + i + ' is not a function.');
-        }
-        return thunk();
-      }),
-    );
-  });
-})();
-`;
 
 /**
  * Thrown when the whole run must stop, and the reason every run-level abort
@@ -719,10 +675,13 @@ export function runWorkflowScript<R = never>(
                 }
                 if (gesture?.action === 'skip') {
                   yield* Fiber.interrupt(runnerFiber);
+                  // The script sees a skip as it sees a failure, null; the
+                  // skipped status on the call card and in the run log is
+                  // what tells the two apart.
                   workflowRunState.settleCall(progressId, {
                     status: WORKFLOW_CALL_STATUS.SKIPPED,
                   });
-                  return JSON.stringify(WORKFLOW_SKIPPED_RESULT);
+                  return 'null';
                 }
 
                 const attemptExit = yield* Fiber.await(runnerFiber);

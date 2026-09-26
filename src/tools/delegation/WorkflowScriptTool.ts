@@ -650,12 +650,12 @@ export const WorkflowScriptTool = defineTool({
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
 Script rules:
-- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
+- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, pipeline, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
 - Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before run. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
 - Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
-- Awaiting: agent() and parallel() return Promises: await them. Use ordinary JavaScript loops and awaited calls for sequential stages.
-- Failures: a failed agent call, including a workflow agent that produces no output files, resolves to null. An interactive skip resolves to the truthy '__WORKFLOW_SKIPPED__' sentinel; exclude both non-results before synthesis. JavaScript errors in parallel() thunks fail the workflow and preserve the editable script path rather than being silently converted to null.
+- Awaiting: agent(), parallel(), and pipeline() return Promises: await them. parallel(thunks) is a barrier: it waits for every thunk. pipeline(items, stage1, stage2, ...) runs each item through the stages independently, so one item can reach a later stage while another is still in an earlier one; each stage receives (previousResult, originalItem, index), and a stage that returns null ends that item as null. Prefer pipeline() for multi-stage work and a parallel() barrier only when a stage needs every earlier result at once (dedup, early exit on zero findings, cross-item comparison). Inside pipeline stages without meta.tasks, pass { phase } on each call rather than relying on phase().
+- Failures: a failed agent call, including a workflow agent that produces no output files, and a call the user skips both resolve to null; filter nulls before synthesis. The run log reports which calls failed and which were skipped. JavaScript errors in parallel() thunks and pipeline() stages fail the workflow and preserve the editable script path rather than being silently converted to null.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
@@ -680,7 +680,7 @@ const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) =>
   })
 ))
 const correctedFiles = results
-  .filter((result) => result != null && result !== '__WORKFLOW_SKIPPED__')
+  .filter((result) => result != null)
   .flatMap((result) => result.outputs.map((output) => output.absolutePath))
 phase('Merge')
 return await agent('Merge the corrected drafts.', {
@@ -688,7 +688,9 @@ return await agent('Merge the corrected drafts.', {
   inputFiles: correctedFiles,
 })
 
-Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
+Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. Limits: the default whole-run wall clock is 60 minutes (set meta.timeoutMs, 1s to 24h, for longer runs); guest code separately gets 60s of CPU in total, and time spent waiting on agents does not count; at most 1000 live agent() calls per run and 4096 items per parallel() or pipeline() call.
+
+Patterns: for how to shape a run (adversarial verification, referee panels, loop until nothing new, completeness critic), read the multi-agent-orchestration skill's SKILL.md (listed in available_skills) before writing the script.`,
   schema: WorkflowScriptToolInputSchema,
   execute: executeWorkflowScriptTool,
 });

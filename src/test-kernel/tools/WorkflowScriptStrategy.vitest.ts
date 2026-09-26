@@ -12,7 +12,6 @@ import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import {
   RunUsageTotalsSchema,
@@ -687,7 +686,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBeNull();
         expect(fake.attempts()).toBe(1);
         // The registration is dropped when the run settles.
         workflowControls.control(grandchildRunId, 'skip');
@@ -782,7 +781,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         // The attempt-specific id the roster exposes reaches the engine index.
         workflowControls.control(attemptRunId, 'skip');
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBeNull();
         expect(fake.attempts()).toBe(2);
       }),
   );
@@ -809,7 +808,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBeNull();
         expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
       }),
   );

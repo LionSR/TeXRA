@@ -35,9 +35,7 @@ const sections = await parallel([
   () => agent('Draft the introduction.', { id: 'introduction' }),
   () => agent('Draft the results.', { id: 'results' }),
 ]);
-return sections.filter(
-  (result) => result !== null && result !== '__WORKFLOW_SKIPPED__',
-);
+return sections.filter((result) => result !== null);
 ```
 
 When the task set comes from runtime arguments, the script omits `meta.tasks`
@@ -85,9 +83,9 @@ return await parallel(
   result: in production the child's output plus `outcome` and `cost`, so a
   workflow call reads `{ category, outcome, outputs, diffs, compileFailures,
 cost }` and a tool-use call `{ category, outcome, response, files,
-structured, cost }`), `null` on failure, or the truthy
-  `'__WORKFLOW_SKIPPED__'` sentinel when an interactive user skips it. Exclude
-  both non-results before synthesis.
+structured, cost }`), or `null` when the call failed or an interactive user
+  skipped it. The call's card and run-log line say which; the script only
+  needs to filter nulls before synthesis.
   Set `opts.model` to an available model short name when a call needs a
   different cost or capability profile; otherwise ordinary delegation policy
   chooses the model. An explicitly selected model that is unavailable aborts
@@ -98,6 +96,12 @@ structured, cost }`), `null` on failure, or the truthy
   validated object rather than edited files.
 - `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
   `null`; other thrown errors reject the workflow.
+- `pipeline(items, ...stages)` — each item runs through the stages on its own,
+  with no barrier between stages. A stage receives `(previousResult,
+originalItem, index)`; a stage that returns `null` ends that item as `null`.
+  Both primitives live in the realm prelude for the reason given under
+  Sandbox. Orchestration patterns for the model are in the
+  `multi-agent-orchestration` skill the `workflow-script` plugin ships.
 - Ordinary JavaScript loops and awaited `agent()` calls own sequential control
   flow; array methods such as `.filter()` and `.join()` own local fan-in.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
@@ -179,8 +183,10 @@ structured, cost }`), `null` on failure, or the truthy
   boundary, rather than mutating parent totals during child launch; this keeps
   live execution, recovered manifests, and journal replay on one accounting
   path.
-- **Sandbox**: a fresh QuickJS runtime and context per script, with a CPU
-  interrupt deadline, 64 MB heap limit, 1 MB stack limit, dynamic code
+- **Sandbox**: a fresh QuickJS runtime and context per script, with a
+  wall-clock interrupt deadline, a separate 60 s guest CPU budget (time spent
+  executing guest code, so waiting on `agent()` calls never counts), 64 MB
+  heap limit, 1 MB stack limit, dynamic code
   generation disabled, and no `require`/`process`. The WASM module is loaded
   once, while script heaps and interrupt state remain isolated. The boundary
   is **data-only in both directions**
@@ -191,15 +197,17 @@ structured, cost }`), `null` on failure, or the truthy
   arrive as JSON revived with the sandbox's own `JSON.parse`; host errors
   are re-thrown as realm-local Errors. The script's own return value is
   reported through a result channel as JSON text rather than awaited
-  host-side. Crucially, `parallel()` runs **inside the realm** as a trusted
-  prelude — it consumes script-created arrays and thunks, so running it host-side
+  host-side. Crucially, `parallel()` and `pipeline()` run **inside the
+  realm** as a trusted prelude — they consume script-created arrays and
+  callbacks, so running them host-side
   would hand the script a host callback (via an overridden `arr.map`) or a
   host resolve function (via a malicious `thenable.then`) whose
   `.constructor` is the host's ungated `Function`. This closes the classic
   `fn.constructor('return process')()` escape in both directions. Script
   bodies are also forced into strict mode. QuickJS promise jobs are pumped
-  explicitly, so the same interrupt deadline preempts synchronous loops and
-  loops reached after an `await` without blocking the host event loop.
+  explicitly, so the same interrupt handler preempts synchronous loops and
+  loops reached after an `await` without blocking the host event loop; the
+  CPU budget is what stops them long before a long wall clock would.
 - **Determinism**: `Date.now()`, `Math.random()`, and argless `new Date()`
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
@@ -221,8 +229,10 @@ structured, cost }`), `null` on failure, or the truthy
   Otherwise-identical calls must provide distinct `id` options; ambiguous
   duplicates fail before launch.
 - **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
-  calls, a live-call cap (default 200; journal replays are free), a fan-out cap per
-  `parallel()` call, and a wall-clock timeout. The cap raises
+  calls, a live-call cap (default 1000; journal replays are free), a fan-out
+  cap of 4096 per `parallel()` or `pipeline()` call, a wall-clock timeout
+  (default 60 minutes, `meta.timeoutMs` up to 24 hours), and the guest CPU
+  budget. The cap raises
   `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
   whole run fails. The timeout is the sandbox's own error: guest execution is
   interrupted and every in-flight `agent()` fiber is interrupted and awaited
@@ -241,7 +251,7 @@ structured, cost }`), `null` on failure, or the truthy
   loop's abort into an interrupt of the run, and `executeSubagentInBand`
   turns an interrupt of its caller into a stop of the in-band child by run
   id, then waits for the child to settle.
-- **Debuggability**: a thrown error inside a `parallel()` thunk
+- **Debuggability**: a thrown error inside a `parallel()` thunk or `pipeline()` stage
   (a script bug, as opposed to an `agent()` failure,
   which already resolves to `null` with its own `agent:end` event) rejects the
   workflow so the saved script can be edited and rerun.

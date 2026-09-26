@@ -12,7 +12,6 @@ import type {
   WorkflowScriptRunResult,
 } from '@agent/workflowScript/types';
 import { runWorkflowScript } from '@agent/workflowScript/runWorkflowScript';
-import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import {
   runScriptInSandbox,
   type SandboxHostBridge,
@@ -472,6 +471,37 @@ return [a, b]`,
       expect(runner).toHaveBeenCalledTimes(2);
       expect(run.journal).toHaveLength(2);
     }),
+  );
+
+  it.effect(
+    'pipes each item through its stages and ends a failed item as null',
+    () =>
+      Effect.gen(function* () {
+        const runner = vi.fn(
+          (
+            invocation: WorkflowAgentInvocation,
+          ): Effect.Effect<string, Error> =>
+            invocation.prompt === 'read:b'
+              ? Effect.fail(new Error('unreadable'))
+              : echoRunner(invocation),
+        );
+        const run = yield* runScript(
+          `
+return await pipeline(
+  ['a', 'b', 'c'],
+  (item) => agent('read:' + item),
+  (read, item, index) => agent('check:' + item + ':' + index + ':' + read),
+)`,
+          { runAgent: runner },
+        );
+        expect(run.result).toEqual([
+          'result:check:a:0:result:read:a',
+          null,
+          'result:check:c:2:result:read:c',
+        ]);
+        // The failed item never reaches its second stage.
+        expect(runner).toHaveBeenCalledTimes(5);
+      }),
   );
 
   it.effect('exposes launch files as immutable script context', () =>
@@ -1918,6 +1948,31 @@ while (true) {}`,
   );
 
   it.live(
+    'holds guest code to a CPU budget that waiting on the host does not spend',
+    () =>
+      Effect.gen(function* () {
+        const limits = { timeoutMs: 60_000, cpuBudgetMs: 30 };
+        const waited = yield* runScriptInSandbox(
+          `await agent('slow'); return 'done'`,
+          sandboxBridge({
+            asyncFns: { agent: () => sleep(100).pipe(Effect.as('"ok"')) },
+          }),
+          { filename: 'wait.workflow.js', ...limits },
+        );
+        expect(waited).toBe('done');
+
+        const startedAt = Date.now();
+        yield* expectEffect(
+          runScriptInSandbox(`while (true) {}`, sandboxBridge(), {
+            filename: 'spin.workflow.js',
+            ...limits,
+          }),
+        ).rejects.toThrow(/guest CPU budget/);
+        expect(Date.now() - startedAt).toBeLessThan(1_000);
+      }),
+  );
+
+  it.live(
     'ignores a host promise that settles after its runtime is disposed',
     () =>
       Effect.gen(function* () {
@@ -2278,7 +2333,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
         const run = yield* Fiber.join(runFiber);
         const result = run.result as string[];
         expect(result[0]).toBe('done:0');
-        expect(result[1]).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(result[1]).toBeNull();
         expect(result[2]).toBe('done:2');
         // Skipped call is NOT journaled (resume re-runs it); siblings are.
         expect(run.journal.map((entry) => entry.index).toSorted()).toEqual([
@@ -2324,7 +2379,7 @@ return await parallel([() => agent('running'), () => agent('queued')])`,
           },
         });
 
-        expect(run.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(run.result).toBeNull();
         expect(run.journal).toEqual([]);
         expect(runner).toHaveBeenCalledTimes(1);
       }),

@@ -16,6 +16,8 @@ import { z } from 'zod';
 // Local imports - utilities
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+import { DETERMINISM_PRELUDE } from './realmPreludes';
+
 export interface SandboxHostBridge<R = never> {
   /**
    * Async primitives. Arguments and results cross as JSON text only. Each call
@@ -38,11 +40,20 @@ export interface SandboxHostBridge<R = never> {
 export interface SandboxOptions {
   /** Wall-clock cap for the whole (async) script run. */
   timeoutMs: number;
+  /** Guest CPU budget; defaults to {@link GUEST_CPU_BUDGET_MS}. */
+  cpuBudgetMs?: number;
   filename: string;
 }
 
 const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
 const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;
+/**
+ * Total time guest code may spend executing, apart from the wall clock.
+ * Orchestration is cheap between awaits, so this budget stops a synchronous
+ * runaway loop long before a multi-hour wall clock would, while time spent
+ * waiting on agent() calls never counts against it.
+ */
+const GUEST_CPU_BUDGET_MS = 60_000;
 const MAX_JOBS_PER_TURN = 100;
 
 const getQuickJsModule = memoizePromiseFactory(() =>
@@ -55,94 +66,6 @@ const getQuickJsModule = memoizePromiseFactory(() =>
     }),
   ),
 );
-
-/**
- * Nondeterminism and dynamic-code guards. Journal replay requires stable call
- * order, while workflow scripts have no reason to compile source at runtime.
- */
-const DETERMINISM_PRELUDE = `
-'use strict';
-(() => {
-  const guard = (what, hint) =>
-    function () {
-      throw new Error(
-        what + ' is unavailable in workflow scripts (breaks resume); ' + hint,
-      );
-    };
-  Object.defineProperty(Math, 'random', {
-    value: guard('Math.random()', 'vary prompts by call index instead.'),
-    writable: false,
-    configurable: false,
-  });
-
-  const RealDate = Date;
-  function GuardedDate(...args) {
-    if (args.length === 0) {
-      throw new Error(
-        'new Date() without arguments is unavailable in workflow scripts (breaks resume); pass timestamps in via args.',
-      );
-    }
-    const instance = Reflect.construct(RealDate, args);
-    return new.target ? instance : String(instance);
-  }
-  GuardedDate.prototype = RealDate.prototype;
-  GuardedDate.parse = RealDate.parse;
-  GuardedDate.UTC = RealDate.UTC;
-  Object.defineProperty(GuardedDate, 'now', {
-    value: guard('Date.now()', 'pass timestamps in via args.'),
-    writable: false,
-    configurable: false,
-  });
-  Object.defineProperty(RealDate.prototype, 'constructor', {
-    value: GuardedDate,
-    writable: false,
-    configurable: false,
-  });
-  Object.defineProperty(globalThis, 'Date', {
-    value: GuardedDate,
-    writable: false,
-    configurable: false,
-  });
-
-  Object.defineProperty(globalThis, 'Intl', {
-    value: undefined,
-    writable: false,
-    configurable: false,
-  });
-
-  const dynamicCodeDisabled = function () {
-    throw new TypeError('Dynamic code generation is disallowed in workflow scripts.');
-  };
-  const constructors = [
-    Function,
-    Object.getPrototypeOf(async function () {}).constructor,
-    Object.getPrototypeOf(function* () {}).constructor,
-    Object.getPrototypeOf(async function* () {}).constructor,
-  ];
-  for (const constructor of constructors) {
-    Object.defineProperty(constructor.prototype, 'constructor', {
-      value: dynamicCodeDisabled,
-      writable: false,
-      configurable: false,
-    });
-  }
-  for (const name of ['Function', 'eval']) {
-    Object.defineProperty(globalThis, name, {
-      value: dynamicCodeDisabled,
-      writable: false,
-      configurable: false,
-    });
-  }
-
-  for (const method of ['then', 'catch', 'finally']) {
-    Object.defineProperty(Promise.prototype, method, {
-      value: Promise.prototype[method],
-      writable: false,
-      configurable: false,
-    });
-  }
-})();
-`;
 
 /**
  * Captures the three opaque host dispatchers, deletes their temporary globals,
@@ -259,7 +182,8 @@ const GuestErrorRecordSchema = z.object({
 type SandboxSettlement =
   | { readonly kind: 'outcome'; readonly outcome: GuestOutcome }
   | { readonly kind: 'host-failure'; readonly error: Error }
-  | { readonly kind: 'timeout' };
+  | { readonly kind: 'timeout' }
+  | { readonly kind: 'cpu-exhausted' };
 
 const loadQuickJsModule = Effect.tryPromise({
   try: () => getQuickJsModule(),
@@ -302,6 +226,20 @@ export function runScriptInSandbox<R = never>(
         interruptRequested = true;
         settle({ kind: 'timeout' });
       };
+      // Guest CPU: time spent inside guest-executing calls, accumulated
+      // across slices; the interrupt handler reads the open slice.
+      const cpuBudgetMs = options.cpuBudgetMs ?? GUEST_CPU_BUDGET_MS;
+      let guestCpuMs = 0;
+      let sliceStartedAt: number | undefined;
+      const inGuestSlice = <A>(execute: () => A): A => {
+        sliceStartedAt = performance.now();
+        try {
+          return execute();
+        } finally {
+          guestCpuMs += performance.now() - sliceStartedAt;
+          sliceStartedAt = undefined;
+        }
+      };
 
       const runtime = yield* Effect.acquireRelease(
         Effect.try({
@@ -310,8 +248,17 @@ export function runScriptInSandbox<R = never>(
               memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
               maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
               interruptHandler: () => {
-                if (interruptRequested || performance.now() >= deadline) {
+                const now = performance.now();
+                if (interruptRequested || now >= deadline) {
                   markTimedOut();
+                  return true;
+                }
+                if (
+                  sliceStartedAt !== undefined &&
+                  guestCpuMs + (now - sliceStartedAt) >= cpuBudgetMs
+                ) {
+                  interruptRequested = true;
+                  settle({ kind: 'cpu-exhausted' });
                   return true;
                 }
                 return false;
@@ -399,9 +346,10 @@ export function runScriptInSandbox<R = never>(
           try: () => {
             setGlobal(context, '__wfBody', bodyThunk);
             setGlobal(context, '__wfDeliver', deliver);
-            evaluateAndDispose(
-              context,
-              `(() => {
+            inGuestSlice(() =>
+              evaluateAndDispose(
+                context,
+                `(() => {
   const body = globalThis.__wfBody;
   const deliver = globalThis.__wfDeliver;
   delete globalThis.__wfBody;
@@ -411,7 +359,8 @@ export function runScriptInSandbox<R = never>(
     (error) => deliver(error, true),
   );
 })()`,
-              'workflow-kickoff.js',
+                'workflow-kickoff.js',
+              ),
             );
           },
           catch: ensureError,
@@ -420,7 +369,9 @@ export function runScriptInSandbox<R = never>(
         while (!settled()) {
           const executed = yield* Effect.try({
             try: () => {
-              const result = runtime.executePendingJobs(MAX_JOBS_PER_TURN);
+              const result = inGuestSlice(() =>
+                runtime.executePendingJobs(MAX_JOBS_PER_TURN),
+              );
               // Result delivery is the run's linearization point. A later
               // guest job in the same QuickJS batch must not replace that
               // result with its own error.
@@ -453,18 +404,27 @@ export function runScriptInSandbox<R = never>(
             return yield* Effect.fail(settlement.error);
           case 'timeout':
             return yield* Effect.fail(timeoutError(options));
+          case 'cpu-exhausted':
+            return yield* Effect.fail(cpuExhaustedError(options));
           case undefined:
             return yield* Effect.fail(
               new Error('Workflow sandbox stopped without a result.'),
             );
         }
       });
-      // A step the deadline interrupted fails with QuickJS's own interrupt
-      // error; the run's outcome is the timeout.
+      // A step the deadline or the CPU budget interrupted fails with QuickJS's
+      // own interrupt error; the run's outcome is the limit it hit.
       return yield* run.pipe(
-        Effect.mapError((error) =>
-          settlement?.kind === 'timeout' ? timeoutError(options) : error,
-        ),
+        Effect.mapError((error) => {
+          switch (settlement?.kind) {
+            case 'timeout':
+              return timeoutError(options);
+            case 'cpu-exhausted':
+              return cpuExhaustedError(options);
+            default:
+              return error;
+          }
+        }),
       );
     }),
   );
@@ -696,5 +656,11 @@ function toErrorRecord(error: unknown): { name: string; message: string } {
 function timeoutError(options: SandboxOptions): Error {
   return new Error(
     `Workflow script ${options.filename} timed out after ${options.timeoutMs}ms`,
+  );
+}
+
+function cpuExhaustedError(options: SandboxOptions): Error {
+  return new Error(
+    `Workflow script ${options.filename} used its ${options.cpuBudgetMs ?? GUEST_CPU_BUDGET_MS}ms guest CPU budget; look for a loop that never awaits.`,
   );
 }

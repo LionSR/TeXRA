@@ -820,6 +820,10 @@
         "path": "resources/skills/mathematical-enhancer/SKILL.md"
       },
       {
+        "name": "multi-agent-orchestration",
+        "path": "resources/plugins/workflow-script/skills/multi-agent-orchestration/SKILL.md"
+      },
+      {
         "name": "scientific-presenter",
         "path": "resources/skills/scientific-presenter/SKILL.md"
       },

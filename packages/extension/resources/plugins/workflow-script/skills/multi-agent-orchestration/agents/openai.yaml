@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Multi-Agent Orchestration'
+  short_description: 'Shape thorough, verified multi-agent workflows'
+  default_prompt: 'Use $multi-agent-orchestration to plan a workflow script that fans out the work and adversarially verifies the findings.'
