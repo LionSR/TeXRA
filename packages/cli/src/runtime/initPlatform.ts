@@ -36,7 +36,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -77,6 +77,11 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
+  /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
+   *  in its transcript, since stderr written before Ink mounts is left
+   *  above its header. Otherwise the database's own warning says it, or,
+   *  under a silenced log, this init prints it to stderr. */
+  readonly presentsStoreMovedAside?: boolean;
 };
 
 /**
@@ -348,9 +353,13 @@ export function initCliPlatform(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const cleared = session.storeCleared;
-                  if (cleared) {
-                    writeTextStderr(sessionStoreClearedMessage(cleared));
+                  const moved = session.storeMovedAside;
+                  if (
+                    moved &&
+                    context.quietLogs &&
+                    context.presentsStoreMovedAside !== true
+                  ) {
+                    writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
                 }),
               ),
@@ -403,7 +412,7 @@ export function initCliPlatform(
           ),
         );
       }),
-    ).pipe(Effect.onError(() => disposeCliProcessRuntime));
+    );
 
     // The stores this root opened, handed back rather than read off a
     // process-wide singleton: the secret store is the same stateless view over

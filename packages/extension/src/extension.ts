@@ -115,7 +115,7 @@ import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -620,9 +620,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
     ),
   });
-  if (runtimeSession.storeCleared) {
+  if (runtimeSession.storeMovedAside) {
     void vscode.window.showWarningMessage(
-      sessionStoreClearedMessage(runtimeSession.storeCleared),
+      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
     );
   }
   runtimeSession.setApprovalPolicy(

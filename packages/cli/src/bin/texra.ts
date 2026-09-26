@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Exit } from 'effect';
 import { installedProcessRuntime } from '@agent/runtime';
 import { setLogSink } from '@logger/logSink';
 import { Lifecycle } from '@platform/interfaces';
@@ -64,10 +64,17 @@ await Effect.runPromise(
     Effect.ensuring(
       Effect.suspend(() => {
         const runtime = installedProcessRuntime();
+        // A runtime whose layers failed to build (a global store it refused
+        // to open) started nothing to drain, and the catch above has already
+        // reported that failure; reading its `Lifecycle` would raise it a
+        // second time, past this entry, as an unhandled rejection.
         return runtime
-          ? Effect.flatMap(
-              withProcessServices(runtime, Effect.service(Lifecycle)),
-              (lifecycle) => lifecycle.runShutdown,
+          ? Effect.flatMap(Effect.exit(runtime.contextEffect), (built) =>
+              Exit.isSuccess(built)
+                ? withProcessServices(runtime, Effect.service(Lifecycle)).pipe(
+                    Effect.flatMap((lifecycle) => lifecycle.runShutdown),
+                  )
+                : Effect.void,
             )
           : Effect.void;
       }).pipe(

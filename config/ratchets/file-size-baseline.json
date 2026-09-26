@@ -69,7 +69,7 @@
     "src/common/errors/sdkError/providerErrorFormat.ts": 687,
     "src/common/teams/TeamPlan.ts": 508,
     "src/controllers/approval/ToolEditApprovalController.ts": 726,
-    "src/controllers/session/Database.ts": 1466,
+    "src/controllers/session/Database.ts": 1395,
     "src/controllers/session/hostRunActions.ts": 722,
     "src/controllers/session/sessionLayer.ts": 1186,
     "src/latex/arxivProcessor.ts": 734,

@@ -86,7 +86,9 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = toErrorMessage(this.cause);
+}
 
 /**
  * A batch was rejected. C6 is all-or-nothing: the transaction rolled back, so
@@ -146,27 +148,28 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   override readonly message = toErrorMessage(this.cause);
 }
 
-/** Why a session's root could not be opened: its database would not open,
- *  or the reads the session is built from failed. */
-export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
-
 /**
- * What opening a store of another event format left behind: the file, the
- * rows it held, and the format they were written under. Null when the store
- * was this build's or empty. The one fact a host presents about it; the
- * database keeps no other memory of the rows.
+ * What opening a store of an older event format moved aside: the store, the
+ * rows it held, the format they were written under, and the file they were
+ * moved to. Null when the store was this build's or empty. The one fact a
+ * host presents about it; this build never reads the moved rows.
  */
-export interface SessionStoreCleared {
+export interface SessionStoreMovedAside {
   readonly path: string;
+  readonly aside: string;
   readonly rows: number;
   readonly storedFormat: number;
 }
 
+/** Why a session's root could not be opened: its database would not open,
+ *  or the reads the session is built from failed. */
+export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
+
 export class Database extends Context.Service<
   Database,
   {
-    /** Set when this open cleared a store of another event format. */
-    readonly cleared: SessionStoreCleared | null;
+    /** Set when this open moved a store of an older event format aside. */
+    readonly movedAside: SessionStoreMovedAside | null;
     /**
      * C6: append an ordered batch, possibly across several aggregates, in one
      * `BEGIN IMMEDIATE` under the process's single permit. Each target's
