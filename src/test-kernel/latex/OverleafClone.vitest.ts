@@ -4,6 +4,7 @@ import { describe, expect, vi } from 'vitest';
 
 import {
   cloneOverleafProject,
+  GitCloneFailed,
   type OverleafCloneWorkflowPorts,
 } from '@latex/overleafClone';
 import { overleafGitClone, type OverleafRemote } from '@latex/overleafProject';
@@ -188,9 +189,11 @@ describe('cloneOverleafProject', () => {
       const ports = createPorts({
         runClone: vi.fn(() =>
           Effect.fail(
-            new Error(
-              "fatal: Authentication failed for 'https://git.overleaf.com/0123456789abcdef01234567/'",
-            ),
+            new GitCloneFailed({
+              exitCode: 128,
+              message:
+                "fatal: Authentication failed for 'https://git.overleaf.com/0123456789abcdef01234567/'",
+            }),
           ),
         ),
       });
@@ -202,6 +205,22 @@ describe('cloneOverleafProject', () => {
       expect(ports.logCloneError).toHaveBeenCalledWith(
         expect.stringContaining('Authentication failed'),
       );
+
+      // A network failure on a project id containing 403 keeps the token.
+      const offlinePorts = createPorts({
+        runClone: vi.fn(() =>
+          Effect.fail(
+            new GitCloneFailed({
+              exitCode: 128,
+              message:
+                "fatal: unable to access 'https://git.overleaf.com/40300000000000000000abcd/': Could not resolve host: git.overleaf.com",
+            }),
+          ),
+        ),
+      });
+      expect(yield* clone(offlinePorts)).toEqual({ status: 'cloneFailed' });
+      expect(offlinePorts.deleteStoredToken).not.toHaveBeenCalled();
+      expect(offlinePorts.showCloneFailed).toHaveBeenCalled();
     }),
   );
 });
