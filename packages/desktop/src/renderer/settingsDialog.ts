@@ -10,16 +10,18 @@ import { createOverlayDialog } from './overlayDialog';
 interface DesktopSettingsDialog {
   open(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
   isOpen(): boolean;
-  /** Re-announce the view after the active project changed. */
+  /** Swap in a fresh view after the active project changed. */
   remount(): void;
 }
 
 /**
  * Settings as a popup over the shell. The one `<settings-app>` is mounted on
  * first open and stays in the dialog afterwards, so its state survives
- * closing and reopening. Its settings IPC is per project and answers only a
- * `webviewReady`, which `<settings-app>` posts on connect, so a project switch
- * remounts it to load the new project's values. `onShown` / `onHidden` let
+ * closing and reopening. Its settings IPC is per project, so a project switch
+ * replaces it with a new `<settings-app>`: the constructor resets the
+ * module-level settings state, and connecting posts the `webviewReady` the new
+ * project's IPC answers with its snapshot, so no control shows the previous
+ * project's values while that snapshot loads. `onShown` / `onHidden` let
  * the shell hide the native browser view while the dialog is up: a
  * WebContentsView paints over renderer DOM, the dialog included.
  */
@@ -29,8 +31,12 @@ export function createDesktopSettingsDialog(
 ): DesktopSettingsDialog {
   const content = document.createElement('div');
   content.classList.add('desktop-settings-content');
-  const settingsView = document.createElement('settings-app');
-  settingsView.setAttribute('data-desktop-view', 'settings');
+  const createSettingsView = (): HTMLElement => {
+    const view = document.createElement('settings-app');
+    view.setAttribute('data-desktop-view', 'settings');
+    return view;
+  };
+  let settingsView = createSettingsView();
 
   const { dialog, subtitleEl } = createOverlayDialog({
     appRoot,
@@ -64,8 +70,9 @@ export function createDesktopSettingsDialog(
     isOpen: () => dialog.open,
     remount() {
       if (!settingsView.isConnected) return;
-      settingsView.remove();
-      content.append(settingsView);
+      const next = createSettingsView();
+      settingsView.replaceWith(next);
+      settingsView = next;
     },
   };
 }
