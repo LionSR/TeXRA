@@ -148,12 +148,35 @@ function identityCatches(file: string): number {
   return sites;
 }
 
+/** Names this file binds to a function: a `function` declaration, or a
+ *  variable whose initializer is an arrow or `function` expression. */
+function functionBindings(sourceFile: ts.SourceFile): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name) names.add(node.name.text);
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      (ts.isArrowFunction(node.initializer) ||
+        ts.isFunctionExpression(node.initializer))
+    )
+      names.add(node.name.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
 /** `Effect.try(fn)` / `Effect.tryPromise(fn)` sites in one file, as
- *  `line: text`: the thunk forms, whose failure is `UnknownError`. */
+ *  `line: text`: the thunk forms, whose failure is `UnknownError`. A bare
+ *  identifier counts only when this file binds it to a function, so a
+ *  hoisted `{ try, catch }` options object (the typed overload) passes. */
 function thunkTries(file: string): string[] {
   const sourceFile = parseSourceFile(resolve(REPO_ROOT, file), {
     setParentNodes: false,
   });
+  const functions = functionBindings(sourceFile);
   const sites: string[] = [];
   const visit = (node: ts.Node): void => {
     if (
@@ -168,7 +191,7 @@ function thunkTries(file: string): string[] {
         first !== undefined &&
         (ts.isArrowFunction(first) ||
           ts.isFunctionExpression(first) ||
-          ts.isIdentifier(first))
+          (ts.isIdentifier(first) && functions.has(first.text)))
       ) {
         const { line } = sourceFile.getLineAndCharacterOfPosition(
           node.getStart(sourceFile),
