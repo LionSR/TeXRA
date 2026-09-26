@@ -21,6 +21,8 @@ import { collectStringFlagValues } from './globalArgs';
 export function contextFromArgs(
   args: ParsedGlobalArgs,
   rawArgs: readonly string[] = [],
+  /** `texra doctor` reports the config warnings in its own Config row. */
+  options: { readonly printConfigWarnings?: boolean } = {},
 ): Promise<CliContext> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -35,7 +37,9 @@ export function contextFromArgs(
       const printed = context.quietLogs
         ? context.configDegradations
         : [...context.configDegradations, ...context.configWarnings];
-      for (const warning of printed) writeTextStderr(`WARN ${warning}`);
+      if (options.printConfigWarnings !== false) {
+        for (const warning of printed) writeTextStderr(`WARN ${warning}`);
+      }
       return context;
     }).pipe(
       Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),

@@ -255,6 +255,29 @@ const RECOVERY_CASES: readonly RecoveryCase[] = [
     ['notes.tex'],
   ],
   [
+    'closes a document left open at </documents> and keeps beamer overlay specs as text',
+    [
+      '<documents>',
+      '<document name="slides.tex">',
+      '\\documentclass{beamer}',
+      '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+      '\\begin{document}',
+      '\\only<2->{Shown later.}',
+      '\\end{document}',
+      '</documents>',
+    ],
+    {
+      'slides.tex': [
+        '\\documentclass{beamer}',
+        '\\AtBeginSection[]{\\begin{frame}<beamer>\\tableofcontents\\end{frame}}',
+        '\\begin{document}',
+        '\\only<2->{Shown later.}',
+        '\\end{document}',
+        '',
+      ].join('\n'),
+    },
+  ],
+  [
     'prefers percent filename headers over single-document input recovery',
     ['% declared.tex', ...RECOVERED_DOCUMENT_LINES],
     { 'declared.tex': RECOVERED_DOCUMENT_CONTENT },

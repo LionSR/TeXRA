@@ -92,7 +92,9 @@ export const doctorCommand = defineCommand({
   // begins, and an init that fails disposes the one it installed before it
   // re-raises. So the `contextFromArgs` → `setExitCode` fold stays here.
   async run(ctx) {
-    const context = await contextFromArgs(ctx.args, ctx.rawArgs);
+    const context = await contextFromArgs(ctx.args, ctx.rawArgs, {
+      printConfigWarnings: false,
+    });
     setExitCode(await runDoctor(context));
   },
 });

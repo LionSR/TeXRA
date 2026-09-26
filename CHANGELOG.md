@@ -174,6 +174,19 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Beamer slides are no longer cut short** — when a model left its last
+  output document unclosed, a frame overlay such as `\begin{frame}<beamer>`
+  was read as markup and the slides were truncated at that point. The
+  document now runs to the end of the output and overlays stay as LaTeX.
+- **No false "Missing output files detected" notice** — agents that declare
+  their output file, such as paper2slide and ocr, reported it missing after
+  every round even when the round wrote it.
+- **Polish without an instruction polishes** — the polish agent returned the
+  paper unchanged when no instruction was given; it now improves clarity,
+  flow and readability of the whole paper by default.
+- **Read-only path refusals show the full path** — the message an agent gets
+  when it tries to write inside a read-only folder no longer drops the
+  leading `/` of an absolute path.
 - **Turning telemetry off now stops all usage reporting** — rounds run on a
   ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
   out, on the grounds that they metered a plan cap. Nothing has enforced
@@ -563,6 +576,21 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 #### Bug Fixes
 
+- **Unwritable `--output` and `--output-dir` paths are usage errors** — a
+  path the CLI may not create or write (permission denied, operation not
+  permitted, read-only file system, a missing parent) is reported with the
+  path and exit code 2, before the model is called, instead of as a crash to
+  report. An existing target file you cannot write is caught up front too.
+- **A workflow that fails its LaTeX compile says so** — `texra run` names
+  the document that failed to compile and its log file on stderr instead of
+  ending on a bare "Error".
+- **Cleaner headless stderr** — run notices no longer carry a log
+  timestamp, an invalid value in `.texra/config.json` is reported once
+  instead of twice, and `texra doctor` lists config warnings only in its
+  Config row.
+- **No run description after the run ends** — stopping a run with Ctrl-C no
+  longer lets its generated description arrive after the final `run.end`
+  record in `--output-format ndjson`.
 - **The "use your own API key" retry works the same everywhere** — when a
   Kimi Code or GLM Coding Plan quota runs out and the matching provider key
   is already saved, every app now retries on that key by itself, including
