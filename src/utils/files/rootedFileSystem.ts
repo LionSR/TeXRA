@@ -141,9 +141,12 @@ export function globEscape(
       segment = segment.rest()
     ) {
       const matcher = segment.pattern();
+      // minimatch overrides `test` on some compiled segments with a fast
+      // path (with `dot`, `*.` becomes `endsWith('.')`, true for '..'), so
+      // the check runs the underlying regex.
       if (
         matcher === '..' ||
-        (matcher instanceof RegExp && matcher.test('..'))
+        (matcher instanceof RegExp && RegExp.prototype.test.call(matcher, '..'))
       ) {
         return alternative.globString();
       }

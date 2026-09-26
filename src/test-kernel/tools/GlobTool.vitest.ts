@@ -163,6 +163,23 @@ describe('GlobTool match metadata', () => {
       }),
   );
 
+  it.live('matches names ending in a dot, which cannot escape', () =>
+    Effect.gen(function* () {
+      yield* withGlobWorkspace((workspacePath) =>
+        Effect.gen(function* () {
+          yield* Effect.promise(() =>
+            writeFile(path.join(workspacePath, 'trailing.'), 'x'),
+          );
+
+          const result = yield* GlobTool.call({ pattern: '*.' });
+
+          expect(result).toMatchObject({ status: 'executed' });
+          expect(result.output).toContain('trailing.');
+        }),
+      );
+    }),
+  );
+
   it.live(
     'does not pass unrestricted external paths to the workspace ignore matcher',
     () =>

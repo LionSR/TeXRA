@@ -651,12 +651,13 @@ class ArxivSourceProcessor {
 
       if (isArchive) {
         progressCallback?.('Extracting source files...', 60);
-        // Staged: no entry overwrites the workspace; Cancel cannot split the
-        // moves, though a failed rename leaves the entries moved before it.
-        const extractedDir = path.join(downloadDirFull, 'extracted');
+        // Staged fresh (a killed run's leftover never collides): no entry
+        // overwrites the workspace; Cancel cannot split the moves.
+        const extractedDir = yield* permanentFs(
+          fs.makeTempDirectory({ directory: downloadDirFull, prefix: 'x-' }),
+        );
         const staged = (entry: string) => path.join(extractedDir, entry);
         const placed = (entry: string) => path.join(paperDirFull, entry);
-        yield* permanentFs(fs.makeDirectory(extractedDir));
         const extractResult = yield* this.extractTarFile(
           downloadedPath,
           extractedDir,
