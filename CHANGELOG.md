@@ -215,6 +215,18 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A delegated workflow agent no longer stops the chat that launched it** —
+  when the assistant handed a document to a workflow agent (`polish`,
+  `correct`, … through `delegate_workflow` or a `delegate_multi_agents`
+  script), the chat stopped the moment that agent finished: its result never
+  reached the assistant, and the next message started a new session. The chat
+  now stays idle, receives the result, and continues in the same session.
+
+- **`texra run` shows when a round was cut off** — a round that hit the
+  model's output limit printed its warning only in the transcript and the
+  NDJSON stream. Text output now shows it too, with the advice to raise the
+  model's max output tokens.
+
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it
   was killed (a force-quit, an out-of-memory kill, or a crash), so it could

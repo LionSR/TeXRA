@@ -101,11 +101,13 @@ export interface RoundTurns {
     RoundServices
   >;
   /** A committed response of round `index`: the overflow retry's request
-   *  (not done), or the round's output (done). */
+   *  (not done), or the round's output (done). `live` is false for a
+   *  response a resume replays: its notices were given when it arrived. */
   readonly afterResponse: (
     state: RunState,
     cell: RunCell,
     index: number,
+    live: boolean,
   ) => Effect.Effect<
     { readonly state: RunState; readonly done: boolean },
     Error,
@@ -196,6 +198,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
       initial: RunState,
       cell: RunCell,
       index: number,
+      live: boolean,
     ) {
       const turn = initial.lastTurn;
       if (turn === null) {
@@ -210,7 +213,16 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
         session.roots.config,
       );
       logger.debug(`Stop reason: ${finish}`);
-      const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
+      // A replayed response's scratchpad and cut-off notice were given when
+      // it arrived. The replay restates the step it resumes at instead, so a
+      // resumed run shows its round rather than no position until the next
+      // round opens.
+      const at = live
+        ? initial
+        : yield* cell.append([stepRow(runId, initial, 'response.ready')]);
+      const scratchpad = live
+        ? extractScratchpad(text, SCRATCHPAD_TAG)
+        : undefined;
       if (scratchpad) {
         logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
       }
@@ -222,13 +234,18 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
       // finish reason says; only an open one is retried or reported cut off.
       const closed = text.includes(OUTPUT_END_TAG);
       if (finish === 'context-window-exceeded' && !closed) {
-        const retried = yield* overflowRetry(initial, cell);
+        const retried = yield* overflowRetry(at, cell);
         if (retried !== null) return { state: retried, done: false };
       }
-      if (finish === 'length' && !closed) {
-        logger.warn(
-          `Round ${index + 1} hit the model's output limit, so its output may be incomplete. Raise the model's max output tokens to let it finish.`,
-        );
+      if (live && finish === 'length' && !closed) {
+        const message = `Round ${index + 1} hit the model's output limit, so its output may be incomplete. Raise the model's max output tokens to let it finish.`;
+        logger.warn(message);
+        // Actionable, so it is also an instruction: the host surface that
+        // shows the run's errors and instructions shows it too.
+        yield* session.interactions.emit('requestShowInstruction', {
+          key: 'roundOutputLimit',
+          message,
+        });
       }
       const state = yield* docs.afterTurn(index, { text, finish }, cell);
       return { state, done: true };
