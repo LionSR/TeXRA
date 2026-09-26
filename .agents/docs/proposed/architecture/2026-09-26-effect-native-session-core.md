@@ -56,14 +56,14 @@ owner outside any scope. Moves 8 to 13 apply the same rule to them.
 
 These do not depend on any architectural decision. Each is one small PR.
 
-| Defect                                                                                      | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Fix                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desktop **Resume** on a halted workflow run turns it into a failed run _(confirmed)_        | `HostRunActions.resume` passes `{config, runId}` to the host's `runValidated` (`src/controllers/session/hostRunActions.ts:625-632`). The desktop always wraps it as `kind:'fresh'` (`packages/desktop/src/main/desktopAgentRun.ts:196`), so `runAgent` registers again, `loadRun` refuses with "already has ledger state" (`src/agent/runtime/loop/runProgram.ts:159-165`) and the lifecycle writes `run.end FAILED`. The defect is desktop-only: the extension maps the id to `kind:'resume'` (`extensionHostRequests.ts:215-222`) and resumes correctly. Its workflow resume still bypasses `resumeRun`, the route tool-use runs take, so it drops the persisted `modelCompatibilityKey` (`resumeRun.ts:260-266`) and refuses a run another process holds through the claim acquisition rather than `resumeRun`'s owned-elsewhere marking. | Send workflow runs through `AgentResume.tryResumeRun` too (tool-use runs already go there; `resumeRun` has the workflow branch). Then remove `runId` from `RunRequest`/`ValidatedRunRequest`, so `runValidated` is fresh-only on both hosts and the desktop's hard-coded `fresh` is correct by construction.                     |
-| The SDK never runs `bootstrapHost` _(confirmed)_                                            | `packages/agent/src/effect/runtime.ts:228` calls `installProcessRuntime` directly. `bootstrapHost` (`src/controllers/hostBootstrap.ts:77-115`) installs the long-stream dispatcher, so embedders get undici's 300 s body timeout instead of 30 min and no proxy. The setting host defaults to `'vscode'` while the tool gate reads `undefined` and `PACKAGE_SETUP.host` throws.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Make `storageDir` explicit (today it defaults to the real `~/.texra`), derive the MCP config path from it, and add a `modelTransport` option that defaults to `'none'` for embedders. The full fix is [move 4](#move-4-the-process-is-one-layer-graph).                                                                          |
-| `run.removed` bypasses the publisher _(confirmed)_                                          | `Database.removeRun` appends it inside its own transaction (`src/controllers/session/Database.ts:1048`). The publisher's `run.removed` arm (`src/agent/runtime/SessionEvents.ts:183`) never fires, so its open-work and follow-up entries for removed runs are never pruned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Widen the publisher job to `(ops: { append; removeRun })` and route removal through `exclusive`. The dependent-closure transaction stays in SQL. The tracker's `run.removed` arm must prune every id in `row.runIds` (the whole closed dependent set), not only `row.aggregateId` as it does today (`SessionEvents.ts:183-187`). |
-| Tool cards opened by the Claude and Codex strategies are never swept on abort _(confirmed)_ | `toolLogRefs` in `src/tools/claudeAgent.ts:236` and Codex's `itemLogRefs` have no finalizer. `OpenWork` tracks stages, streams and workflow calls but not cards.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Consume both SDKs' async iterators as Streams in a scope whose finalizer ends any open card (move 7, PR 1).                                                                                                                                                                                                                      |
-| Seven dead imports in `SessionHandle.ts`, one of them from #13340 _(confirmed)_             | `AgentTrace`, `finalizeRun`, `interruptedWorkflowCall`, `RUN_OUTCOME`, `RunOutcome`, `toErrorMessage`, `heldSessions` each appear only on their import line. `no-unused-vars` is off (`eslint.config.mjs:615`). The dead import hid that `heldSessions` and `SessionOwner.held` are test-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Delete them. Consider re-enabling unused-import detection.                                                                                                                                                                                                                                                                       |
-| Webview requests stay pending after close                                                   | `sessionTransport.ts:91,143-150,211-224`: the pending map is not keyed by session and `close`/`dispose` never settle it. Callers guard, so the effect is a leaked closure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Scope-owned `Deferred`s per session, interrupted on close (move 5, PR 1).                                                                                                                                                                                                                                                        |
+| Defect                                                                                      | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | Fix                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desktop **Resume** on a halted workflow run turns it into a failed run _(confirmed)_        | `HostRunActions.resume` passes `{config, runId}` to the host's `runValidated` (`src/controllers/session/hostRunActions.ts:625-632`). The desktop always wraps it as `kind:'fresh'` (`packages/desktop/src/main/desktopAgentRun.ts:196`), so `runAgent` registers again, `loadRun` refuses with "already has ledger state" (`src/agent/runtime/loop/runProgram.ts:159-165`) and the lifecycle writes `run.end FAILED`. The defect is desktop-only: the extension maps the id to `kind:'resume'` (`extensionHostRequests.ts:215-222`) and resumes correctly. Its workflow resume still bypasses `resumeRun`, the route tool-use runs take, so it drops the persisted `modelCompatibilityKey` (`resumeRun.ts:260-266`) and refuses a run another process holds through the claim acquisition rather than `resumeRun`'s owned-elsewhere marking. | Send workflow runs through `AgentResume.tryResumeRun` too (tool-use runs already go there; `resumeRun` has the workflow branch). Then remove `runId` from `RunRequest`/`ValidatedRunRequest`, so `runValidated` is fresh-only on both hosts and the desktop's hard-coded `fresh` is correct by construction.                              |
+| The SDK never runs `bootstrapHost` _(confirmed)_                                            | `packages/agent/src/effect/runtime.ts:228` calls `installProcessRuntime` directly. `bootstrapHost` (`src/controllers/hostBootstrap.ts:77-115`) installs the long-stream dispatcher, so embedders get undici's 300 s body timeout instead of 30 min and no proxy. The setting host defaults to `'vscode'` while the tool gate reads `undefined` and `PACKAGE_SETUP.host` throws.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Make `storageDir` explicit (today it defaults to the real `~/.texra`), derive the MCP config path from it, and give embedders the long-stream transport by default as a fetch bound to the model factories rather than a global dispatcher (`modelTransport: 'bound'`). The full fix is [move 4](#move-4-the-process-is-one-layer-graph). |
+| `run.removed` bypasses the publisher _(confirmed)_                                          | `Database.removeRun` appends it inside its own transaction (`src/controllers/session/Database.ts:1048`). The publisher's `run.removed` arm (`src/agent/runtime/SessionEvents.ts:183`) never fires, so its open-work and follow-up entries for removed runs are never pruned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Widen the publisher job to `(ops: { append; removeRun })` and route removal through `exclusive`. The dependent-closure transaction stays in SQL. The tracker's `run.removed` arm must prune every id in `row.runIds` (the whole closed dependent set), not only `row.aggregateId` as it does today (`SessionEvents.ts:183-187`).          |
+| Tool cards opened by the Claude and Codex strategies are never swept on abort _(confirmed)_ | `toolLogRefs` in `src/tools/claudeAgent.ts:236` and Codex's `itemLogRefs` have no finalizer. `OpenWork` tracks stages, streams and workflow calls but not cards.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Consume both SDKs' async iterators as Streams in a scope whose finalizer ends any open card (move 7, PR 1).                                                                                                                                                                                                                               |
+| Seven dead imports in `SessionHandle.ts`, one of them from #13340 _(confirmed)_             | `AgentTrace`, `finalizeRun`, `interruptedWorkflowCall`, `RUN_OUTCOME`, `RunOutcome`, `toErrorMessage`, `heldSessions` each appear only on their import line. `no-unused-vars` is off (`eslint.config.mjs:615`). The dead import hid that `heldSessions` and `SessionOwner.held` are test-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Delete them. Consider re-enabling unused-import detection.                                                                                                                                                                                                                                                                                |
+| Webview requests stay pending after close                                                   | `sessionTransport.ts:91,143-150,211-224`: the pending map is not keyed by session and `close`/`dispose` never settle it. Callers guard, so the effect is a leaked closure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Scope-owned `Deferred`s per session, interrupted on close (move 5, PR 1).                                                                                                                                                                                                                                                                 |
 
 ### Defects from the second survey
 
@@ -159,8 +159,10 @@ Persistence:
   `seedDisabledToolDefaults`, tells users only about "session history" on the
   extension and the CLI, and says nothing on desktop (`storeFormat.ts:51`,
   `toolAvailability.ts:84-100`, `ui/copy/sessionStore.ts:10-15`).
-- **Moved-aside copies are never pruned**, one full copy per format per root
-  (`storeFormat.ts:54-88`).
+- **Moved-aside copies accumulate unreported**, one full copy per format per
+  root (`storeFormat.ts:54-88`). They may be a user's only copy of old settings
+  and history, so the fix reports their location and size; it does not delete
+  them (AGENTS.md: "leave old state untouched").
 
 Hosts:
 
@@ -292,16 +294,26 @@ export const EVENT_TIER: {
     tier: 'display' | 'ledger' | 'record' | 'checkpoint' | 'state';
     listing: 'latest' | 'request' | 'followup' | 'lifecycle' | null;
     sharedRun: boolean;
-    closes: 'stream' | 'card' | 'runWindow' | null; // what transient state the row ends
+    // What transient state the row ends. A function of the row, because
+    // cleanup depends on the payload, not only the type.
+    closes:
+      ((row: Extract<SessionEvent, { type: K }>) => Closing | null) | null;
   };
 };
+type Closing =
+  | { kind: 'stream'; streamId: string }
+  | { kind: 'card'; cardId: string }
+  | { kind: 'runWindow'; runId: RunId };
 ```
 
-The `closes` field carries the cleanup classification `sessionLayer.ts:660-680`
-keeps by hand today: `stream.end` closes a stream by id, a terminal `tool.end`
-closes a card by id and status, and `closesRunWindow` rows and `run.removed`
-close a run's window by prefix. The chunk-drop list is derived from it, so a new
-closing arm cannot be missed.
+The `closes` entry carries the cleanup classification `sessionLayer.ts:660-680`
+keeps by hand today, and it has to read the payload. `stream.end` closes a
+stream by id. `tool.end` closes its card only for a terminal status: the
+incremental updates `endToolUseCard` emits with `status: in_progress` close
+nothing. `flow.step` and `child.park` close the run's window only in the phases
+`closesRunWindow` selects, and `run.removed` closes every run in `runIds`. A
+type without cleanup maps to `null`, so the record stays total and a new arm
+cannot be forgotten.
 
 An architecture test forbids `runView(` and `getUnsafe(...view)` in
 `src/agent/**`, `src/tools/**`, and a hardcoded list of controller modules that
@@ -593,7 +605,7 @@ export interface TexraProcessOptions {
   readonly workspaceDir?: string;
   readonly storageDir: string; // required: no silent ~/.texra
   readonly mcpConfig?: string | false; // default: `mcp.json` under storageDir; false disables MCP
-  readonly modelTransport?: 'process-global' | 'none'; // default 'none'
+  readonly modelTransport?: 'bound' | 'process-global'; // default 'bound': the long-stream fetch, not global
   readonly diagnostics?: Layer.Layer<never>;
 }
 export const TexraProcess: {
@@ -611,8 +623,10 @@ without a host" is true only up to them:
   refuses the second graph; the alternative, a graph nonce in `OwnerId`, is a
   durable-format change.
 - **The fetch dispatcher** is global in Node; hosts keep `'process-global'`.
-  `packages/llm` already accepts `transport.fetch`, so LLM traffic can move to
-  a bound fetch later.
+  Embedders get `'bound'`: the same long-stream timeouts and proxy policy as a
+  `fetch` passed to the model factories, which `packages/llm` already accepts
+  as `transport.fetch`. That fixes the 300 s timeout without touching the
+  embedder's own global `fetch`.
 - **A plain log writer** before and after the runtime (desktop installs its
   sink at module load; the extension logs after a failed activation).
 
@@ -1079,13 +1093,19 @@ class RunInbox extends Context.Service<
 >()('@texra/session/RunInbox') {}
 
 // on Runs
-deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'live' | 'resume' }):
+deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'live' | 'resume' | 'deferred' }):
   Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>;
+wake(runId: RunId): Effect.Effect<void>; // the second phase of a deferred delivery
 ```
 
 `deliver` appends `followup.queued` through the publisher; a live entry is
 notified, and a resumable one is woken by `Runs.run({ _tag: 'Resume' })`
-forked into the session scope, with no host port. Resume becomes interruptible
+forked into the session scope, with no host port. `'deferred'` admits the row
+durably and wakes nobody. A native child uses it for its turn result before it
+finalizes and calls `wake` afterwards, as `deliverTurn` and
+`submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
+row survives a crash, and the parent never sees the child as still running
+when it wakes (#8093). Resume becomes interruptible
 with `acquireRelease` on its recovery lease. The inbox is keyed on the fiber,
 not the claim (liveness note §2.5).
 
@@ -1211,8 +1231,8 @@ key on every host. One global root for `AppState`.
 
 ### PRs
 
-1. Every host reports every moved-aside store and names settings; prune old
-   copies.
+1. Every host reports every moved-aside store, with its location and size,
+   and names settings. Nothing is deleted.
 2. One write for the desktop lists; no poll on the global databases.
 3. `CurrentValues` with its own stamp on the next forced bump; retire
    `state.value.set` and `borrowsClaim` (lands the decision and move 1 PR 6).
@@ -1260,7 +1280,12 @@ for each child (inference). The host-neutral controllers still carry
   `run.interrupt`.
 - Presentation reacts to facts: a scoped `attachPresentation(session)` reads
   `output.produced` for root or focused runs and applies the host's policy;
-  the documents plugin only commits facts.
+  the documents plugin only commits facts. This covers only side effects that
+  cannot change a verdict: opening outputs and PDFs for children, and the
+  "missing outputs" dialog. Finalization that can fail or change the outcome,
+  such as `openWorkflowOutput` (`executeAgent.ts:234-243`), stays a
+  pre-terminal launch hook (move 3's `launch` on both arms) that runs before
+  `run.end` is committed.
 
 ### PRs
 
@@ -1269,8 +1294,10 @@ for each child (inference). The host-neutral controllers still carry
 3. Desktop window and project binding as scopes; quit awaits them.
 4. Split `createWindow` along its seams (auth, project navigation, bindings,
    settings attach, IPC routes) into scoped modules; lower the budget.
-5. Presentation from facts. Argue against the one-run-program parity table's
-   placement of presentation in `afterTurn`; root-run behaviour stays the same.
+5. Presentation from facts for side effects only; verdict-affecting
+   finalization stays pre-terminal. Argue against the one-run-program parity
+   table's placement of presentation in `afterTurn`; root-run behaviour stays
+   the same.
 6. Controller renames into `controllers/session`, `launch` and `catalog`, with
    no shims (the VS Code ids stay).
 7. After move 3 PR 4: the CLI slot on `Run`.
