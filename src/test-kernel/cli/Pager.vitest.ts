@@ -41,9 +41,9 @@ const signalled = (method: string) =>
 
 describe('resolvePagerCommand', () => {
   it('treats empty $PAGER or PAGER=cat as "no pager"', () => {
-    expect(resolvePagerCommand({ PAGER: '' })).toBeUndefined();
-    expect(resolvePagerCommand({ PAGER: '   ' })).toBeUndefined();
-    expect(resolvePagerCommand({ PAGER: 'cat' })).toBeUndefined();
+    expect(resolvePagerCommand('')).toBeUndefined();
+    expect(resolvePagerCommand('   ')).toBeUndefined();
+    expect(resolvePagerCommand('cat')).toBeUndefined();
   });
 });
 
@@ -77,34 +77,25 @@ describe('pageStdout', () => {
   });
 
   it('pages through $PAGER only on an interactive TTY', async () => {
-    process.env.TEXRA_PAGER_TEST_ENV = 'inherited';
-    try {
-      const calls = await page('row1\nrow2', {
-        stdoutIsTty: true,
-        env: { PAGER: 'less -R' },
-      });
-      expect(calls).toHaveLength(1);
-      const [command] = calls;
-      expect(command.command).toBe('less -R');
-      expect(command.options).toMatchObject({
-        shell: true,
-        detached: false,
-        stdout: 'inherit',
-        stderr: 'inherit',
-      });
-      expect(await stdinText(command)).toBe('row1\nrow2\n');
-      expect(command.options.env).toMatchObject({
-        PAGER: 'less -R',
-        TEXRA_PAGER_TEST_ENV: 'inherited',
-      });
-      // Paging writes through the child; nothing is written directly to stdout.
-      expect(stdout).toBe('');
-    } finally {
-      delete process.env.TEXRA_PAGER_TEST_ENV;
-    }
+    const calls = await page('row1\nrow2', {
+      stdoutIsTty: true,
+      pager: 'less -R',
+    });
+    expect(calls).toHaveLength(1);
+    const [command] = calls;
+    expect(command.command).toBe('less -R');
+    expect(command.options).toMatchObject({
+      shell: true,
+      detached: false,
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
+    expect(await stdinText(command)).toBe('row1\nrow2\n');
+    // Paging writes through the child; nothing is written directly to stdout.
+    expect(stdout).toBe('');
   });
 
-  it('inherits the live environment when no explicit env override is passed', async () => {
+  it('reads the live $PAGER when no pager override is passed', async () => {
     const originalPager = process.env.PAGER;
     process.env.PAGER = 'less -R';
     try {
@@ -120,9 +111,7 @@ describe('pageStdout', () => {
   });
 
   it('writes directly (no pager) when $PAGER is disabled even on a TTY', async () => {
-    expect(
-      await page('row', { stdoutIsTty: true, env: { PAGER: '' } }),
-    ).toEqual([]);
+    expect(await page('row', { stdoutIsTty: true, pager: '' })).toEqual([]);
     expect(stdout).toBe('row\n');
   });
 
@@ -162,11 +151,7 @@ describe('pageStdout', () => {
       expected: '',
     },
   ])('$name', async ({ answer, pager, expected }) => {
-    const calls = await page(
-      'row',
-      { stdoutIsTty: true, env: { PAGER: pager } },
-      answer,
-    );
+    const calls = await page('row', { stdoutIsTty: true, pager }, answer);
     expect(calls).toHaveLength(1);
     expect(stdout).toBe(expected);
   });
@@ -191,7 +176,7 @@ describe('pageStdout', () => {
         return answer;
       });
       const exit = await Effect.runPromiseExit(
-        pageStdout('long listing', { stdoutIsTty: true, env: {} }).pipe(
+        pageStdout('long listing', { stdoutIsTty: true, pager: 'less' }).pipe(
           Effect.provide(spawner.layer),
         ),
       );

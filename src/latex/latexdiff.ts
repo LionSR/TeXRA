@@ -20,6 +20,10 @@ import { DiffFileProcessor } from './latexdiff/diffFileProcessor';
 import { DiffCommandExecutor } from './latexdiff/diffCommandExecutor';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
+/** `missing-document-environment` is an input with no `\begin{document}`,
+ *  which callers skip rather than report. */
+type LaTeXdiffFailureReason = 'missing-document-environment' | 'failed';
+
 export type LaTeXdiffResult =
   | {
       success: true;
@@ -35,12 +39,16 @@ export type LaTeXdiffResult =
     }
   | {
       success: false;
+      reason: LaTeXdiffFailureReason;
       message: string;
     };
 
 /** A failed diff, as the value every entry point resolves to. */
-function failed(message: string): LaTeXdiffResult {
-  return { success: false, message };
+function failed(
+  message: string,
+  reason: LaTeXdiffFailureReason = 'failed',
+): LaTeXdiffResult {
+  return { success: false, reason, message };
 }
 
 function succeeded(diffPath: string, message: string): LaTeXdiffResult {
@@ -165,7 +173,10 @@ export class LaTeXdiffService {
         return failed(message);
       }
       if (!contents.every(hasDocumentEnvironment)) {
-        return failed('Files missing document environment');
+        return failed(
+          'Files missing document environment',
+          'missing-document-environment',
+        );
       }
 
       const diffFileName = generateDiffFileName(editedFile, suffix);
@@ -227,7 +238,7 @@ export class LaTeXdiffService {
         const message =
           'File missing document environment (must contain \\begin{document} and \\end{document})';
         yield* Effect.logError(message);
-        return failed(message);
+        return failed(message, 'missing-document-environment');
       }
 
       // latexdiff-vc --git runs `git show <commit>:<file>`, which expects

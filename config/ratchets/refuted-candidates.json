@@ -5,7 +5,7 @@
       "id": "EFF-ADOPT-config-provider",
       "candidate": "the platform config providers onto an Effect ConfigProvider",
       "why": "Config<T> over the platform port's own get buys nothing: the read stays synchronous and answers for the workspace the caller was handed. Naming each row a second time as Config.Boolean/Config.Int beside the Zod catalog row that owns it is a dual schema system with a ConfigError where readSettingFrom's validation already stands. Settings stay synchronous by ruling; Effect Config is for process.env reads, a separate lane.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
           "file": "src/platform/interfaces.ts",
@@ -23,7 +23,7 @@
       "id": "EFF-ADOPT-per-key-lane-semaphore",
       "candidate": "withPerKeyLane onto an Effect Semaphore",
       "why": "Semaphore barges; the lane is FIFO and offers a synchronous refuse. The six lane maps are also self-pruning, so making them services is a pure net-add.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
           "file": "src/utils/core/perKeyQueue.ts",
@@ -36,7 +36,7 @@
       "id": "EFF-ADOPT-retry-gate-schedule",
       "candidate": "ModelRetryGate onto Schedule",
       "why": "The gate is a cross-fiber circuit breaker shared by every call on a route; Schedule is per-fiber.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
           "file": "src/agent/runtime/ModelRetryGate.ts",
@@ -49,7 +49,7 @@
       "id": "EFF-ADOPT-timeouts-already-effect",
       "candidate": "src/tools/timeouts.ts onto Effect timeouts and Schedule",
       "why": "Already Effect.timeoutOrElse and Schedule. The one real item in this area is the duplicated [1, 2) backoff spelling, which moves to a host-neutral module; the module itself is not the candidate.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#3-not-re-proposed",
       "symbols": [
         {
           "file": "src/tools/timeouts.ts",
@@ -62,7 +62,7 @@
       "id": "EFF-ADOPT-jitter-helper-stays",
       "candidate": "Folding jitteredExponentialBackoffMs into the shared [1, 2) backoff Schedule",
       "why": "A different contract: symmetric ±20 % jitter with a cap, used by ModelRetryGate and GitHub polling. Schedule.jittered over the [1, 2) contract would cut the mean wait by a third.",
-      "ruling": ".agents/docs/proposed/simplification/2026-09-20-effect-facility-adoption.md#2-changes",
+      "ruling": ".agents/docs/implemented/simplification/2026-09-20-effect-facility-adoption.md#2-changes",
       "symbols": [
         {
           "file": "src/utils/core/index.ts",
