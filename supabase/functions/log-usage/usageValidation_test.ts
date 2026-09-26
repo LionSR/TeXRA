@@ -45,7 +45,7 @@ Deno.test(
     const parsed = UsageLogEntrySchema.parse({
       ...usageEntry(),
       model: 'k3',
-      provider: 'kimi-chat',
+      provider: 'openai-responses',
       usageRoute: 'kimi-code-subscription',
     });
 
@@ -57,7 +57,7 @@ Deno.test('classifies GLM Coding Plan usage under the GLM source', () => {
   const parsed = UsageLogEntrySchema.parse({
     ...usageEntry(),
     model: 'glm-5',
-    provider: 'glm-chat',
+    provider: 'openai-responses',
     usageRoute: 'glm-coding-plan-subscription',
   });
 

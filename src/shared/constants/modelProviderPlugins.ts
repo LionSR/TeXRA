@@ -183,7 +183,7 @@ const MANIFEST = [
       international: 'https://api.moonshot.ai/v1',
     },
     compatibilityKey: 'Kimi',
-    setupModel: 'kimi26T',
+    setupModel: 'kimi3',
     modelSource: true,
   },
   {
@@ -223,7 +223,7 @@ const MANIFEST = [
       control: {
         label: 'MiniMax China region',
         description:
-          'Use the China region endpoint (api.minimaxi.com) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
+          'Use the China region endpoint (api.minimax.cn) instead of international (api.minimax.io). API keys are region-specific — you must obtain a key from the matching region.',
         warning:
           'International keys do not work with the China endpoint, and vice versa. Coding Plan keys are also region-specific.',
         warningUrl: 'https://platform.minimax.io/',
@@ -231,9 +231,8 @@ const MANIFEST = [
       },
       keyUrlWhenSet: 'https://platform.minimaxi.com/',
     },
-    // China: api.minimaxi.com (note the extra 'i').
     baseUrl: {
-      china: 'https://api.minimaxi.com/v1',
+      china: 'https://api.minimax.cn/v1',
       international: 'https://api.minimax.io/v1',
     },
     compatibilityKey: 'MiniMax',
@@ -246,25 +245,9 @@ const MANIFEST = [
     keyUrl: 'https://open.bigmodel.cn/',
     apiKey: true,
     endpointKey: GlobalStateKey.ENDPOINT_GLM,
-    // China=true is the default since bigmodel.cn is the primary platform;
-    // when toggled off (international), the key URL is z.ai.
-    region: {
-      key: GlobalStateKey.GLM_USE_CHINA,
-      default: true,
-      control: {
-        label: 'GLM China region',
-        description:
-          'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
-        warningUrl: 'https://open.bigmodel.cn/',
-        warningUrlLabel: 'BigModel console',
-      },
-      keyUrlWhenUnset: 'https://z.ai/',
-    },
-    // The standard API; `@model/routeEndpoint` owns the Coding Plan path.
-    baseUrl: {
-      china: 'https://open.bigmodel.cn/api/paas/v4',
-      international: 'https://api.z.ai/api/paas/v4',
-    },
+    // Zhipu serves Responses only on bigmodel.cn, for API and Coding Plan
+    // keys alike; Z.ai's international API has no Responses endpoint.
+    baseUrl: 'https://open.bigmodel.cn/api/v1',
     compatibilityKey: 'GLM',
     setupModel: 'glm53',
     modelSource: true,
@@ -293,7 +276,7 @@ const MANIFEST = [
     keyUrl: 'https://www.kimi.com/code/console',
     apiKey: true,
     apiKeyEnvName: 'KIMI_CODE_API_KEY',
-    setupModel: 'kimiCoding',
+    setupModel: 'kimi3',
     modelSource: true,
   },
   {

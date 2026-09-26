@@ -28,6 +28,8 @@ liveProtocol({
         allowedReasoningEfforts: ['low', 'high'],
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: true,
+        supportsForcedToolChoice: true,
+        requestDialect: 'openai',
         defaults: {
           temperature: null,
           maxOutputTokens: 2048,

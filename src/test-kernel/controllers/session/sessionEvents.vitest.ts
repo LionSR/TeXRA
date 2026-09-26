@@ -2296,7 +2296,7 @@ describe('RunLedger', () => {
   const AGGREGATE = qualifyAggregateId('run', RUN);
   const SECRET = 'sk-abcdefghijklmnopqrstuvwxyz0123';
   const ORIGIN = {
-    protocol: 'deepseek-chat',
+    protocol: 'openai-responses',
     requestedModel: 'deepseek-test',
     deployment: {
       endpoint: 'https://api.example.test/v1',
@@ -2320,7 +2320,7 @@ describe('RunLedger', () => {
         kind: 'reasoning',
         summary: [],
         content: [{ kind: 'text', text: `the key is ${SECRET}` }],
-        evidence: { kind: 'chat-reasoning-content' },
+        evidence: { kind: 'openai-responses-reasoning', itemId: 'rs-1' },
       },
       {
         kind: 'local-call',

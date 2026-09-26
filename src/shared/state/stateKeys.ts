@@ -88,7 +88,6 @@ export enum GlobalStateKey {
   // Region settings
   DASHSCOPE_USE_CHINA = 'texra.dashscope.useChina',
   MINIMAX_USE_CHINA = 'texra.minimax.useChina',
-  GLM_USE_CHINA = 'texra.glm.useChina',
   MOONSHOT_USE_CHINA = 'texra.moonshot.useChina',
 
   // Coding plan settings

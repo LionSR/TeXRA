@@ -3,39 +3,38 @@ import { openaiResponsesModel } from '../src/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({
-  protocol: 'openai-responses',
-  apiKeyEnv: 'OPENAI_API_KEY',
-  // Stored responses plus response chaining: the codec returns an anchor the
-  // next turn sends in place of the prefix it covers.
-  continuation: 'supported',
+  protocol: 'openai-responses (DeepSeek)',
+  apiKeyEnv: 'DEEPSEEK_API_KEY',
+  // Stateless: DeepSeek ignores storage, so every turn resends the prefix.
+  continuation: 'unsupported',
   bind: (apiKey) =>
     openaiResponsesModel(
       {
         protocol: 'openai-responses',
-        requestedModel: 'gpt-4.1-mini-2025-04-14',
+        requestedModel: 'deepseek-flash',
         deployment: {
-          endpoint: 'https://api.openai.com/v1',
+          endpoint: 'https://api.deepseek.com',
           credentialScope: 'live',
         },
         background: 'unsupported',
         supportsInputTokenEstimation: false,
         supportsTemperature: true,
         supportsMaxOutputTokens: true,
-        supportsStorage: true,
-        supportsResponseChaining: true,
-        supportsDocumentInput: true,
+        supportsStorage: false,
+        supportsResponseChaining: false,
+        supportsDocumentInput: false,
         webSocketStreamParameter: 'implicit',
-        allowedReasoningEfforts: [],
+        allowedReasoningEfforts: ['none', 'low', 'high', 'max'],
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: false,
         supportsForcedToolChoice: true,
-        requestDialect: 'openai',
+        requestDialect: 'compatible',
         defaults: {
           temperature: 0,
           maxOutputTokens: 2048,
-          store: true,
+          store: false,
           parallelToolCalls: true,
-          reasoning: null,
+          reasoning: { effort: 'none', mode: null, summary: null },
           serviceTier: null,
         },
       },

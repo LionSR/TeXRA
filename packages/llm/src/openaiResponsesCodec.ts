@@ -36,6 +36,10 @@ export type HttpTurnResult = Extract<
 >;
 
 const ItemStatusSchema = z.enum(['in_progress', 'completed', 'incomplete']);
+const ReasoningTextSchema = z.strictObject({
+  type: z.literal('reasoning_text'),
+  text: z.string(),
+});
 const OutputItemSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('message'),
@@ -48,8 +52,9 @@ const OutputItemSchema = z.discriminatedUnion('type', [
         z.strictObject({
           type: z.literal('output_text'),
           text: z.string(),
-          // Unsupported annotations/log probabilities cannot disappear in conversion.
-          annotations: z.array(z.never()),
+          // Unsupported annotations/log probabilities cannot disappear in
+          // conversion; Zhipu omits the empty annotation list.
+          annotations: z.array(z.never()).optional(),
           logprobs: z.array(z.never()).nullish(),
         }),
         z.strictObject({ type: z.literal('refusal'), refusal: z.string() }),
@@ -61,13 +66,17 @@ const OutputItemSchema = z.discriminatedUnion('type', [
     id: z.string().min(1),
     status: ItemStatusSchema.optional(),
     encrypted_content: z.string().nullish(),
-    summary: z.array(
-      z.strictObject({ type: z.literal('summary_text'), text: z.string() }),
-    ),
-    content: z
+    // Zhipu reports no summary and one reasoning-text object, not a list.
+    summary: z
       .array(
-        z.strictObject({ type: z.literal('reasoning_text'), text: z.string() }),
+        z.strictObject({ type: z.literal('summary_text'), text: z.string() }),
       )
+      .default([]),
+    content: z
+      .union([
+        z.array(ReasoningTextSchema),
+        ReasoningTextSchema.transform((part) => [part]),
+      ])
       .optional(),
   }),
   z.strictObject({

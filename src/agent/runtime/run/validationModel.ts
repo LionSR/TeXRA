@@ -147,7 +147,7 @@ export function validationModel(config: ModelConfig): {
   readonly origin: ModelOrigin;
 } {
   const origin = {
-    protocol: 'openai-chat',
+    protocol: 'openai-responses',
     codecVersion: 1,
     requestedModel: config.fullName,
     deployment: {
@@ -229,12 +229,15 @@ export function validationModel(config: ModelConfig): {
       system: request.system,
       messages: request.messages,
       tools: request.tools ?? [],
+      transport: { kind: 'http' },
       controls: {
         temperature: request.temperature ?? 0,
         maxOutputTokens: request.maxOutputTokens ?? config.maxOutputTokens,
+        store: false,
         parallelToolCalls: request.parallelToolCalls ?? true,
         toolChoice: request.toolChoice ?? 'auto',
-        effort: null,
+        reasoning: null,
+        serviceTier: null,
       },
     });
   // The workflow-script switch is read per turn, so a validation run can flip

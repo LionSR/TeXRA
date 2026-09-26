@@ -8,7 +8,8 @@ import type { TurnResult } from './turn.js';
 export const ResponsesUsageSchema = z.object({
   input_tokens: z.int().nonnegative(),
   output_tokens: z.int().nonnegative(),
-  total_tokens: z.int().nonnegative(),
+  // Zhipu reports no total.
+  total_tokens: z.int().nonnegative().optional(),
   input_tokens_details: z
     .object({ cached_tokens: z.int().nonnegative().nullish() })
     .nullish(),
@@ -31,7 +32,7 @@ export function responsesUsage(
   return {
     inputTokens: usage.input_tokens,
     outputTokens: usage.output_tokens,
-    totalTokens: usage.total_tokens,
+    totalTokens: usage.total_tokens ?? null,
     cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? null,
     reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? null,
     ...(usage.cost_in_usd_ticks !== undefined

@@ -16,7 +16,6 @@ import {
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   BackgroundEvent,
@@ -51,6 +50,8 @@ const CONFIG: OpenAIResponsesConfiguration = {
   ],
   instructions: { kind: 'optional' },
   continuationInheritsInstructions: false,
+  supportsForcedToolChoice: true,
+  requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',
   defaults: {
@@ -1183,34 +1184,16 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.effect.each(['Chat', 'Responses'] as const)(
-    '%s rejects ambient header overrides and disables SDK diagnostic logging',
-    (protocol) =>
+  it.effect(
+    'rejects ambient header overrides and disables SDK diagnostic logging',
+    () =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           new Response('data: malformed-provider-data\n\n', {
             headers: { 'content-type': 'text/event-stream' },
           }),
         );
-        const construct = () =>
-          protocol === 'Responses'
-            ? modelWith(fetch)
-            : openaiChatModel(
-                {
-                  protocol: 'openai-chat',
-                  requestedModel: CONFIG.requestedModel,
-                  deployment: CONFIG.deployment,
-                  supportsTemperature: true,
-                  supportedEfforts: [],
-                  defaults: {
-                    temperature: 0,
-                    effort: null,
-                    maxOutputTokens: 100,
-                    parallelToolCalls: true,
-                  },
-                },
-                { apiKey: 'synthetic-not-a-secret', fetch },
-              );
+        const construct = () => modelWith(fetch);
         vi.stubEnv(
           'OPENAI_CUSTOM_HEADERS',
           'Authorization: Bearer other-account',
@@ -1697,6 +1680,65 @@ describe('native OpenAI Responses protocol', () => {
         expect(opening).toMatchObject({ instructions: 'policy' });
         expect(chained).toMatchObject({ previous_response_id: 'resp_1' });
         expect(chained).not.toHaveProperty('instructions');
+      }),
+  );
+
+  it.effect(
+    'sends a compatible route only its documented fields and reads Zhipu output',
+    () =>
+      Effect.gen(function* () {
+        const reasoning = {
+          type: 'reasoning',
+          id: 'rs_1',
+          content: { type: 'reasoning_text', text: 'think' },
+        };
+        const message = {
+          type: 'message',
+          id: 'msg_1',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'Done.' }],
+        };
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            events(
+              [reasoning, message],
+              snapshot([reasoning, message], {
+                usage: { input_tokens: 5, output_tokens: 3 },
+              }),
+            ),
+          ),
+        );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          supportsForcedToolChoice: false,
+          requestDialect: 'compatible',
+        });
+        expect(
+          (yield* Effect.flip(
+            model.prepareTurn({
+              ...REQUEST,
+              toolChoice: { name: 'read_file' },
+            }),
+          )).kind,
+        ).toBe('unsupported');
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const result = yield* model.generateTurn(turn);
+        const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+        expect(body).not.toHaveProperty('include');
+        expect(body).not.toHaveProperty('store');
+        expect(body.tools[0]).not.toHaveProperty('strict');
+        expect(result.content[0]).toMatchObject({
+          kind: 'reasoning',
+          summary: [],
+          content: [{ kind: 'text', text: 'think' }],
+        });
+        expect(result.usage).toMatchObject({
+          inputTokens: 5,
+          outputTokens: 3,
+          totalTokens: null,
+        });
       }),
   );
 

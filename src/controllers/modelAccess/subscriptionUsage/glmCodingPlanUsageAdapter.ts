@@ -15,8 +15,6 @@ import type { HttpClient, HttpClientError } from 'effect/unstable/http';
 
 export const GLM_CODING_PLAN_USAGE_URL =
   'https://open.bigmodel.cn/api/monitor/usage/quota/limit';
-export const GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL =
-  'https://api.z.ai/api/monitor/usage/quota/limit';
 
 interface GlmLimitEntry {
   readonly value: Record<string, unknown>;

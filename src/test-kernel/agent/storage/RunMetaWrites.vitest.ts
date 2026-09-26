@@ -76,7 +76,7 @@ describe('run metadata updates', () => {
           attempt: 1,
         } as const;
         const origin = {
-          protocol: 'openai-chat',
+          protocol: 'openai-responses',
           codecVersion: 1,
           requestedModel: 'gpt-test',
           deployment: {
@@ -140,7 +140,7 @@ describe('run metadata updates', () => {
                 outputTokens: 30,
                 cost: 0.25,
                 responseTimeMs: 40,
-                provider: 'openai-chat',
+                provider: 'openai-responses',
               },
             },
           },

@@ -148,7 +148,8 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         !config.allowedReasoningEfforts.includes(
           turn.controls.reasoning.effort,
         )) ||
-      (turn.continuation !== undefined && !config.supportsResponseChaining)
+      (turn.continuation !== undefined && !config.supportsResponseChaining) ||
+      (turn.controls.toolChoice !== 'auto' && !config.supportsForcedToolChoice)
     )
       return yield* new ModelError({
         kind: 'unsupported',
@@ -156,6 +157,16 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       });
     const wireInput = yield* responseInput(turn, config, uploads);
     const reasoning = turn.controls.reasoning;
+    // A compatible route sends `store` only to ask for storage it defaults off.
+    let storage: Pick<ResponseCreateParamsBase, 'store' | 'include'> = {};
+    if (config.requestDialect === 'openai') {
+      storage = {
+        store: turn.controls.store,
+        include: ['reasoning.encrypted_content'],
+      };
+    } else if (turn.controls.store) {
+      storage = { store: true };
+    }
     const parameters: ResponseCreateParamsBase = {
       model: turn.requestedModel,
       ...wireInput,
@@ -169,8 +180,7 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       ...(turn.controls.maxOutputTokens !== null
         ? { max_output_tokens: turn.controls.maxOutputTokens }
         : {}),
-      store: turn.controls.store,
-      include: ['reasoning.encrypted_content'],
+      ...storage,
       ...(turn.controls.temperature !== null
         ? { temperature: turn.controls.temperature }
         : {}),
@@ -192,11 +202,16 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
         : {}),
       ...(turn.tools.length > 0
         ? {
-            tools: turn.tools.map((tool) => ({
-              type: 'function' as const,
-              ...tool,
-              strict: false,
-            })),
+            tools: turn.tools.map((tool): OpenAI.Responses.FunctionTool =>
+              config.requestDialect === 'openai'
+                ? { type: 'function', ...tool, strict: false }
+                : // The vendor endpoints take no `strict`, which the
+                  // OpenAI typings require.
+                  ({
+                    type: 'function',
+                    ...tool,
+                  } as OpenAI.Responses.FunctionTool),
+            ),
             parallel_tool_calls: turn.controls.parallelToolCalls,
             tool_choice:
               turn.controls.toolChoice === 'auto'

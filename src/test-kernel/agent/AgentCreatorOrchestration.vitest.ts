@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
+import { openaiResponsesModel } from '@texra-ai/llm/openai-responses';
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
@@ -127,16 +127,36 @@ describe('agent creator orchestration', () => {
   const fetchModel = vi.fn<typeof fetch>();
 
   function generatedResponse(text: string): Response {
-    const chunk = {
-      id: 'synthetic-agent-yaml',
-      object: 'chat.completion.chunk',
-      created: 0,
-      model: 'configured-helper',
-      choices: [{ index: 0, delta: { content: text }, finish_reason: 'stop' }],
+    const message = {
+      type: 'message',
+      id: 'msg-agent-yaml',
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text, annotations: [] }],
     };
-    return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
-      headers: { 'content-type': 'text/event-stream' },
+    const snapshot = (status: string, output: object[]) => ({
+      id: 'synthetic-agent-yaml',
+      object: 'response',
+      model: 'configured-helper',
+      status,
+      output,
     });
+    const events = [
+      { type: 'response.created', response: snapshot('in_progress', []) },
+      {
+        type: 'response.completed',
+        response: snapshot('completed', [message]),
+      },
+    ];
+    return new Response(
+      events
+        .map(
+          (event, sequence_number) =>
+            `data: ${JSON.stringify({ ...event, sequence_number })}\n\n`,
+        )
+        .join(''),
+      { headers: { 'content-type': 'text/event-stream' } },
+    );
   }
 
   beforeEach(async () => {
@@ -150,24 +170,40 @@ describe('agent creator orchestration', () => {
       .mockImplementation(async () =>
         generatedResponse('<yaml>generated: true</yaml>'),
       );
-    const model = openaiChatModel(
+    const model = openaiResponsesModel(
       {
-        protocol: 'openai-chat',
+        protocol: 'openai-responses',
         requestedModel: 'configured-helper',
-        supportsTemperature: true,
-        supportedEfforts: [],
         deployment: {
           endpoint: 'https://synthetic.invalid/v1',
           credentialScope: 'synthetic-agent-creator',
         },
+        background: 'unsupported',
+        supportsInputTokenEstimation: false,
+        supportsTemperature: true,
+        supportsMaxOutputTokens: true,
+        supportsStorage: false,
+        supportsResponseChaining: false,
+        supportsDocumentInput: false,
+        webSocketStreamParameter: 'implicit',
+        allowedReasoningEfforts: [],
+        instructions: { kind: 'optional' },
+        continuationInheritsInstructions: false,
+        supportsForcedToolChoice: true,
+        requestDialect: 'openai',
         defaults: {
           temperature: 0,
-          effort: null,
           maxOutputTokens: 4096,
+          store: false,
           parallelToolCalls: true,
+          reasoning: null,
+          serviceTier: null,
         },
       },
-      { apiKey: 'synthetic', fetch: fetchModel },
+      {
+        authentication: { kind: 'api-key', apiKey: 'synthetic' },
+        fetch: fetchModel,
+      },
     );
     // Development proof only: the production helper's configured routes remain unchanged.
     mocks.helperCompletion.mockImplementation(

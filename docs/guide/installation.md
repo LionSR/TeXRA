@@ -332,7 +332,7 @@ Read the [TeXRA CLI guide](./texra-cli.md) for provider keys, subscriptions, and
 - **Moonshot API Key**: Available from [Moonshot Console](https://platform.moonshot.cn/console); a Kimi Code plan key (`KIMI_CODE_API_KEY`) is a separate slot alongside it
 - **DashScope API Key**: Available from [DashScope Console](https://dashscope.aliyun.com/api-console/)
 - **MiniMax API Key**: Available from [MiniMax Platform](https://platform.minimax.io/) (international) or [MiniMax China](https://platform.minimaxi.com/) (China region)
-- **GLM API Key**: Available from [Z.AI](https://z.ai/) (international) or [BigModel](https://open.bigmodel.cn/) (China region)
+- **GLM API Key**: Available from [BigModel](https://open.bigmodel.cn/)
 - **Meta API Key** (Muse Spark): Available from [dev.meta.ai](https://dev.meta.ai/)
   :::
 

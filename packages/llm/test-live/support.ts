@@ -260,17 +260,14 @@ export function liveProtocol(spec: LiveProtocol): void {
           const usage = result.usage;
           // Every principal count in `UsageSchema` is nullable, and the
           // receipts these routes document differ: Google may report only a
-          // total, and MiniMax bills on characters and may report only those.
-          // So the contract under test is that a real receipt parsed into a
-          // usage record carrying some real count of what the route bills.
+          // total, and Zhipu reports no total. So the contract under test is
+          // that a real receipt parsed into a usage record carrying some real
+          // count of what the route bills.
           assert(usage !== null);
           const billed =
             (usage.inputTokens ?? 0) +
             (usage.outputTokens ?? 0) +
-            (usage.totalTokens ?? 0) +
-            (usage.providerUsage?.kind === 'minimax'
-              ? usage.providerUsage.totalCharacters
-              : 0);
+            (usage.totalTokens ?? 0);
           expect(billed).toBeGreaterThan(0);
         }),
       );

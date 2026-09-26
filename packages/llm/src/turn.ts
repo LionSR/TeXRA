@@ -31,7 +31,6 @@ import {
   EditorContentSchema,
   EVIDENCE_PROTOCOL,
   GoogleContinuationSchema,
-  MiniMaxDetectionSchema,
   PreparedHistorySchema,
   ResponsesContinuationSchema,
   validateAssistantContent,
@@ -153,16 +152,6 @@ export const TurnRequestSchema = z
   .readonly();
 export type TurnRequest = z.infer<typeof TurnRequestSchema>;
 
-const OpenAIControlsSchema = z.strictObject({
-  temperature: z.number().min(0).max(2),
-  maxOutputTokens: z.int().positive(),
-  parallelToolCalls: z.boolean(),
-  toolChoice: ToolChoiceSchema,
-});
-const OpenAIChatControlsSchema = OpenAIControlsSchema.extend({
-  temperature: OpenAIControlsSchema.shape.temperature.nullable(),
-  effort: ReasoningEffortSchema,
-});
 const GoogleControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
   store: z.boolean(),
@@ -187,32 +176,6 @@ const AnthropicControlsSchema = z.strictObject({
   effort: EffortSchema,
   cache: CacheSchema,
   stopSequences: z.array(z.string()).readonly(),
-});
-const ChatReasoningControlsSchema = z.strictObject({
-  maxOutputTokens: z.int().positive(),
-  temperature: z.number().min(0).max(2).nullable(),
-  parallelToolCalls: z.boolean(),
-  thinking: z
-    .strictObject({ mode: z.enum(['enabled', 'disabled']) })
-    .readonly(),
-  effort: EffortSchema,
-  toolChoice: ToolChoiceSchema,
-});
-const KimiControlsSchema = ChatReasoningControlsSchema.extend({
-  preserveThinking: z.boolean(),
-});
-const GlmControlsSchema = ChatReasoningControlsSchema.extend({
-  temperature: z.number().min(0).max(1).nullable(),
-  clearThinking: z.boolean(),
-});
-const DashscopeControlsSchema = OpenAIControlsSchema.extend({
-  temperature: z.number().min(0).lt(2),
-  stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
-  thinking: DisabledThinkingSchema.readonly(),
-});
-const MiniMaxControlsSchema = OpenAIControlsSchema.extend({
-  reasoningSplit: z.boolean(),
-  stopSequences: TurnRequestSchema.unwrap().shape.stopSequences.unwrap(),
 });
 const OpenRouterControlsSchema = z.strictObject({
   maxOutputTokens: z.int().positive(),
@@ -269,14 +232,6 @@ function validateEffortDefault<E extends string>(
 
 /** Already-selected protocol binding and defaults, provided by the application. */
 export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
-  BindingSchema.extend({
-    protocol: z.literal('minimax-chat'),
-    reasoningSplit: z.boolean(),
-    defaults: MiniMaxControlsSchema.omit({
-      toolChoice: true,
-      reasoningSplit: true,
-    }).readonly(),
-  }).readonly(),
   EditorBindingSchema.extend({
     protocol: z.literal('vscode-lm'),
     supportsImageInput: z.boolean(),
@@ -298,56 +253,10 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     })
     .readonly(),
   BindingSchema.extend({
-    protocol: z.literal('openai-chat'),
-    supportsTemperature: z.boolean(),
-    supportedEfforts: z.array(ReasoningEffortSchema.unwrap()).readonly(),
-    defaults: OpenAIChatControlsSchema.omit({ toolChoice: true }).readonly(),
-  })
-    .superRefine((configuration, ctx) => {
-      validateTemperatureDefault(configuration, ctx);
-      validateEffortDefault(configuration, ctx);
-    })
-    .readonly(),
-  BindingSchema.extend({
     protocol: z.literal('google-interactions'),
     background: BackgroundCapabilitySchema,
     supportsInputTokenEstimation: z.boolean(),
     defaults: GoogleControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('deepseek-chat'),
-    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
-    supportsForcedToolChoice: z.boolean(),
-    defaults: ChatReasoningControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('kimi-chat'),
-    supportsImageInput: z.boolean(),
-    supportsInputTokenEstimation: z.boolean(),
-    thinkingControl: z.enum(['toggle', 'always', 'effort']),
-    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
-    supportsForcedToolChoice: z.boolean(),
-    temperatureByThinking: z
-      .strictObject({
-        enabled: z.number().min(0).max(2).nullable(),
-        disabled: z.number().min(0).max(2).nullable(),
-      })
-      .readonly(),
-    defaults: KimiControlsSchema.omit({
-      toolChoice: true,
-      temperature: true,
-    }).readonly(),
-  }).readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('glm-chat'),
-    supportsImageInput: z.boolean(),
-    supportsThinkingDisabled: z.boolean(),
-    supportedEfforts: z.array(EffortSchema.unwrap()).readonly(),
-    defaults: GlmControlsSchema.omit({ toolChoice: true }).readonly(),
-  }).readonly(),
-  BindingSchema.extend({
-    protocol: z.literal('dashscope-chat'),
-    defaults: DashscopeControlsSchema.omit({ toolChoice: true }).readonly(),
   }).readonly(),
   BindingSchema.extend({
     protocol: z.literal('openai-responses'),
@@ -380,6 +289,14 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
      * fingerprint already pins the system prompt a continuation covers.
      */
     continuationInheritsInstructions: z.boolean(),
+    /** The route takes `tool_choice` naming one function, not only `auto`. */
+    supportsForcedToolChoice: z.boolean(),
+    /**
+     * `openai` sends OpenAI's full request surface; `compatible` omits what
+     * the vendor Responses endpoints do not take: the encrypted-reasoning
+     * `include`, `strict` on tools, and a `store` that is only the default.
+     */
+    requestDialect: z.enum(['openai', 'compatible']),
     defaults: ResponsesControlsSchema.omit({ toolChoice: true }).readonly(),
   })
     .superRefine((configuration, ctx) => {
@@ -439,18 +356,6 @@ export const ModelConfigurationSchema = z.discriminatedUnion('protocol', [
     .readonly(),
 ]);
 export type ModelConfiguration = z.infer<typeof ModelConfigurationSchema>;
-export type ChatConfiguration = Extract<
-  ModelConfiguration,
-  {
-    protocol:
-      | 'openai-chat'
-      | 'deepseek-chat'
-      | 'kimi-chat'
-      | 'glm-chat'
-      | 'dashscope-chat'
-      | 'minimax-chat';
-  }
->;
 export type GoogleInteractionsConfiguration = Extract<
   ModelConfiguration,
   { protocol: 'google-interactions' }
@@ -494,10 +399,6 @@ const HttpTransportSchema = z
 /** Prepared semantic input; execution never reapplies current defaults. */
 export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
   z.discriminatedUnion('protocol', [
-    PreparedInputSchema.extend({
-      protocol: z.literal('minimax-chat'),
-      controls: MiniMaxControlsSchema.readonly(),
-    }).readonly(),
     EditorOriginSchema.extend({
       ...PreparedInputSchema.pick({
         mode: true,
@@ -513,27 +414,7 @@ export const ResolvedTurnSchema = z.discriminatedUnion('mode', [
       protocol: z.literal('openrouter-chat'),
       controls: OpenRouterControlsSchema.readonly(),
     }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('openai-chat'),
-      controls: OpenAIChatControlsSchema.readonly(),
-    }).readonly(),
     GooglePreparedSchema.readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('deepseek-chat'),
-      controls: ChatReasoningControlsSchema.readonly(),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('kimi-chat'),
-      controls: KimiControlsSchema.readonly(),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('glm-chat'),
-      controls: GlmControlsSchema.readonly(),
-    }).readonly(),
-    PreparedInputSchema.extend({
-      protocol: z.literal('dashscope-chat'),
-      controls: DashscopeControlsSchema.readonly(),
-    }).readonly(),
     ResponsesPreparedSchema.extend({
       transport: z.discriminatedUnion('kind', [
         HttpTransportSchema,
@@ -574,12 +455,6 @@ const UsageSchema = z
             kind: z.literal('google'),
             /** Reported tool-use prompt count; absence does not mean zero. */
             toolUsePromptTokens: z.int().nonnegative().nullable(),
-          })
-          .readonly(),
-        z
-          .strictObject({
-            kind: z.literal('minimax'),
-            totalCharacters: z.int().nonnegative(),
           })
           .readonly(),
         z
@@ -685,9 +560,6 @@ const HttpTurnResultSchema = z
     stopSequence: z.string().optional(),
     finishEvidence: z
       .discriminatedUnion('kind', [
-        MiniMaxDetectionSchema.extend({
-          kind: z.literal('minimax'),
-        }).readonly(),
         z
           .strictObject({
             kind: z.literal('google-interactions'),
