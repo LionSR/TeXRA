@@ -109,14 +109,15 @@ describe('desktop file selection', () => {
           createFileSelection({ showOpenFileDialog }),
         );
 
-        expect(
-          yield* Effect.promise(() => files.pickFiles('input', 'main.tex')),
-        ).toEqual(['main.tex', 'sections/main_r1.tex']);
+        expect(yield* Effect.promise(() => files.pickFiles('input'))).toEqual([
+          'main.tex',
+          'sections/main_r1.tex',
+        ]);
         expect(showOpenFileDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             title: 'Select input files',
             allowMultiple: true,
-            defaultPath: join(workspacePath, 'main.tex'),
+            defaultPath: workspacePath,
           }),
         );
       }),
