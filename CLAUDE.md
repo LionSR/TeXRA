@@ -104,10 +104,14 @@ Things the tree won't tell you:
   `@agent/*` imports. Do not confuse it with `src/transcript/` (`@transcript`),
   the run-transcript persistence layer. **`src/shared/{litControllers,monaco,highlighting}/`
   never made that move** — Lit reactive controllers, a Monaco bootstrap, and a
-  highlight.js wrapper, every consumer a webview frontend, not a wire-contract
-  reader. They stayed behind because moving them costs 235 import statements
-  plus 9 hardcoded literal paths in two `test-kernel` specs, not because the
-  code belongs with wire contracts. Treat them as the UI toolkit's territory:
+  highlight.js wrapper. Consumers are webview/renderer UI code, plus one
+  main-process diff-labeling caller (`packages/desktop/src/main/desktopDiffHost.ts`)
+  and the UI toolkit's own markdown pipeline (`src/ui/markdown/katexHtmlProcessor.ts`);
+  none is a wire-contract reader. The three were shelved along with a broader,
+  separately proposed regroup of six `src/shared/` subtrees under `src/shared/ui/`
+  that was rejected on cost (235 import statements plus 9 hardcoded literal test
+  paths for that six-directory regroup, not for these three alone) — not because
+  the code belongs with wire contracts. Treat them as the UI toolkit's territory:
   don't duplicate a controller or a highlighter in `src/ui/` without checking
   here first, and don't read their location as license to add more rendering
   code under `src/shared/`.
