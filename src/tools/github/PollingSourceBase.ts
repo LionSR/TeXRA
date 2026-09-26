@@ -15,12 +15,14 @@ import {
   Effect,
   Exit,
   FiberSet,
+  Option,
   Random,
   Result,
   Schedule,
   Scope,
 } from 'effect';
 
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 
@@ -94,12 +96,19 @@ interface PollingSourceConfig {
 export interface PollingLifetime {
   readonly pollScope: Scope.Closeable;
   readonly deliveries: FiberSet.FiberSet<void>;
+  /** Stop polling and drain the deliveries already admitted, within the
+   *  session close budget; idempotent. A process shutdown runs it before it
+   *  closes the sessions those deliveries reach, and the caller's scope runs
+   *  it again, as a no-op, when it closes. */
+  readonly drain: Effect.Effect<void>;
 }
 
 /**
- * A poller's lifetime in the caller's scope. When that scope closes, polling
- * stops and the deliveries already admitted are drained before their own
- * scope closes, so a follow-up a poll round produced still reaches its run.
+ * A poller's lifetime in the caller's scope. When that scope closes (or
+ * {@link PollingLifetime.drain} runs first), polling stops and the
+ * deliveries already admitted are drained before their own scope closes, so
+ * a follow-up a poll round produced still reaches its run. The drain has a
+ * budget: a delivery still stuck past it is interrupted, and says so.
  */
 export const makePollingLifetime: Effect.Effect<
   PollingLifetime,
@@ -111,13 +120,23 @@ export const makePollingLifetime: Effect.Effect<
   const deliveries = yield* FiberSet.make<void>().pipe(
     Effect.provideService(Scope.Scope, deliveryScope),
   );
-  yield* Effect.addFinalizer(() =>
-    Scope.close(pollScope, Exit.void).pipe(
-      Effect.andThen(FiberSet.awaitEmpty(deliveries)),
-      Effect.ensuring(Scope.close(deliveryScope, Exit.void)),
+  const drain = Scope.close(pollScope, Exit.void).pipe(
+    Effect.andThen(
+      FiberSet.awaitEmpty(deliveries).pipe(
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      ),
     ),
+    Effect.flatMap((drained) =>
+      Option.isSome(drained)
+        ? Effect.void
+        : Effect.logWarning(
+            'GitHub deliveries did not settle within the close budget; interrupting them',
+          ),
+    ),
+    Effect.ensuring(Scope.close(deliveryScope, Exit.void)),
   );
-  return { pollScope, deliveries };
+  yield* Effect.addFinalizer(() => drain);
+  return { pollScope, deliveries, drain };
 });
 
 type SuccessfulConditionalResponse<T> = Extract<

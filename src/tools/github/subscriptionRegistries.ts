@@ -41,9 +41,14 @@ export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
   Layer.effect(
     GitHubSubscriptions,
     Effect.gen(function* () {
-      const pr = new PRPollingSource(yield* makePollingLifetime);
-      const repo = new RepoPollingSource(yield* makePollingLifetime);
-      const issue = new IssuePollingSource(yield* makePollingLifetime);
+      const lifetimes = [
+        yield* makePollingLifetime,
+        yield* makePollingLifetime,
+        yield* makePollingLifetime,
+      ] as const;
+      const pr = new PRPollingSource(lifetimes[0]);
+      const repo = new RepoPollingSource(lifetimes[1]);
+      const issue = new IssuePollingSource(lifetimes[2]);
       return yield* Effect.acquireRelease(
         Effect.sync(() => ({
           pr: new RunSubscriptionRegistry<string, PRSubscribeInput>({
@@ -61,6 +66,11 @@ export const gitHubSubscriptionsLayer: Layer.Layer<GitHubSubscriptions> =
             source: issue,
             keyOf: issueKeyToString,
           }),
+          drainDeliveries: Effect.forEach(
+            lifetimes,
+            (lifetime) => lifetime.drain,
+            { concurrency: 'unbounded', discard: true },
+          ),
         })),
         (registries) =>
           Effect.sync(() => {

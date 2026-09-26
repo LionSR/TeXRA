@@ -48,6 +48,7 @@ import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManage
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
+import { writeLogLine } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -356,6 +357,24 @@ export class SessionHandle {
     this.resultListeners.clear();
   }
 
+  /** Whether a publication arrives after {@link closeDoors}: it writes
+   *  nothing, and the first one says so. What still publishes then is a run
+   *  that outlived its session's close budget, whose closing facts this
+   *  session can no longer take. */
+  private refusedAfterClose(): boolean {
+    if (!this.disposed) return false;
+    if (!this.reportedLateWrite) {
+      this.reportedLateWrite = true;
+      writeLogLine(
+        'WARN',
+        CHANNEL,
+        `Session ${this.roots.storage} is closed; a run still running published into it and nothing was written`,
+      );
+    }
+    return true;
+  }
+  private reportedLateWrite = false;
+
   /** Live host-neutral approval policy for executable requests. */
   get approvalPolicy(): TexraApprovalPolicy {
     return this.texraApprovalPolicy;
@@ -392,7 +411,7 @@ export class SessionHandle {
    * this session's {@link requests}, which is the other caller.
    */
   publishApprovalPolicy(runId: RunId): void {
-    if (this.disposed) return;
+    if (this.refusedAfterClose()) return;
     const snapshot = this.approvalPolicySnapshotFor(runId);
     this.detachPublication(runId, (append) =>
       Effect.gen({ self: this }, function* () {
@@ -570,7 +589,7 @@ export class SessionHandle {
    * trace fact for a run whose own trace is already gone call it directly.
    */
   publishRunEvent(runId: RunId, event: AgentEvent): void {
-    if (this.disposed) return;
+    if (this.refusedAfterClose()) return;
     if (event.type === 'stream.chunk') {
       const { text } = event;
       this.detachPublication(runId, () =>
@@ -824,7 +843,7 @@ export class SessionHandle {
    * owners have unwound and a late fact has no reader.
    */
   publish(events: readonly SessionEventDraft[]): void {
-    if (this.disposed || events.length === 0) return;
+    if (events.length === 0 || this.refusedAfterClose()) return;
     this.detachPublication(draftedRun(events), (append) => append(events));
   }
 

@@ -121,6 +121,7 @@ import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -960,10 +961,11 @@ const settleRun = (session: SessionHandle, runId: RunId): Effect.Effect<void> =>
  * releasing its default session. In order, on the caller's fiber:
  *
  * 1. refuse new runs and kill the background OS processes its runs own;
- * 2. stop every run (the stop cascades into children) and wait for their
- *    drivers to settle them, inside one budget: the shutdown-phase deadline;
- * 3. settle from here each run still live when the budget runs out
- *    ({@link settleRun}), reporting it as abandoned;
+ * 2. stop every run (the stop cascades into children), settle the ones
+ *    no driver answered for, and wait for the drivers to settle theirs,
+ *    inside one budget ({@link SESSION_CLOSE_DEADLINE_MS});
+ * 3. settle from here, inside a second budget, each run still held when the
+ *    first runs out ({@link settleRun}), reporting it as abandoned;
  * 4. release the entry, whose finalizers flush the session's publications
  *    and unwind its owners.
  *
@@ -984,27 +986,39 @@ const closeSession = (root: string) =>
     // A run the stop reached no driver for, or whose stop failed, has nothing
     // to settle it: the close settles it now instead of waiting out the
     // budget for it.
-    const undriven = yield* runs.stopAll();
-    for (const runId of undriven) {
-      yield* settleRun(session, runId);
-      const handle = runs.getHandle(runId);
-      if (handle) runs.untrackIfCurrent(handle);
-    }
-    const drained = yield* runs
-      .awaitDrained()
-      .pipe(
-        Effect.interruptible,
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-      );
+    const drained = yield* Effect.gen(function* () {
+      const undriven = yield* runs.stopAll();
+      for (const runId of undriven) {
+        yield* settleRun(session, runId);
+        const handle = runs.getHandle(runId);
+        if (handle) runs.untrackIfCurrent(handle);
+      }
+      yield* runs.awaitDrained();
+    }).pipe(
+      Effect.interruptible,
+      Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+    );
     const settled = Option.isSome(drained);
-    const abandoned = settled ? [] : runs.activeIds();
+    const abandoned = settled ? [] : runs.heldIds();
     if (abandoned.length > 0) {
       yield* Effect.logWarning(
         `Session ${root} closed with runs still live past its budget; settling them from the close: ${abandoned.join(', ')}`,
       ).pipe(withLogChannel(CHANNEL));
-      yield* Effect.forEach(abandoned, (runId) => settleRun(session, runId), {
-        discard: true,
-      });
+      // The settlement has a budget of its own: a store too stuck to take
+      // the terminal rows must not hold the process's exit. A run left
+      // unsettled is classified from its checkpoint by the next launch.
+      const settledLate = yield* Effect.forEach(
+        abandoned,
+        (runId) => settleRun(session, runId),
+        { discard: true },
+      ).pipe(
+        Effect.interruptible,
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+      );
+      if (Option.isNone(settledLate))
+        yield* Effect.logWarning(
+          `Session ${root} could not settle its abandoned runs within the close budget; the next launch classifies them from their checkpoints`,
+        ).pipe(withLogChannel(CHANNEL));
     }
     yield* sessions.invalidate(key);
     return { settled, abandoned } satisfies SessionCloseReport;
@@ -1232,6 +1246,22 @@ export function installProcessRuntime({
     held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),
+    closeAll: () =>
+      Effect.flatMap(runtime.contextEffect, (context) =>
+        Effect.gen(function* () {
+          // A delivery a poll round admitted reaches its run's session: it
+          // lands before that session closes, not after.
+          yield* (yield* GitHubSubscriptions).drainDeliveries;
+          // The held sessions, read synchronously: a shutdown never waits on
+          // an entry still building (a store that will not open), which the
+          // runtime's own disposal tears down.
+          return yield* Effect.forEach(
+            [...held.values()],
+            (session) => closeSession(session.roots.storage),
+            { concurrency: 'unbounded' },
+          );
+        }).pipe(Effect.provideContext(context)),
+      ),
   });
   return runtime;
 }

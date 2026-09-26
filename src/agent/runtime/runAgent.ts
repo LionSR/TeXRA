@@ -173,11 +173,6 @@ export const runAgent = Effect.fn('runAgent')(function* (
           userFollowUpSupport,
         });
       }
-      // The run's claim, held by this launch for the run's whole life: a
-      // fresh run's birth claim, a resumed run's taken over after its prior
-      // owner is proved dead. Released when this launch's scope closes,
-      // after its ending has committed below.
-      yield* runSession.holdRunClaim(runId);
 
       let lifecycleStarted = false;
       const callerOnRun = executeAgentOptions.onRun;
@@ -191,6 +186,13 @@ export const runAgent = Effect.fn('runAgent')(function* (
       let aggregated: Error | undefined;
       const run = yield* Effect.exit(
         Effect.gen(function* () {
+          // The run's claim, held by this launch for the run's whole life: a
+          // fresh run's birth claim, a resumed run's taken over after its
+          // prior owner is proved dead. Taken inside the terminal's reach, so
+          // a hold that fails still ends a run this launch registered; and
+          // released when this launch's scope closes, after its ending has
+          // committed below.
+          yield* runSession.holdRunClaim(runId);
           onRunClaimed?.(runId);
           // Ownership is the fence for the edge as well: a detach another
           // host committed while this launch prepared has folded by now, and

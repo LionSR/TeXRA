@@ -436,27 +436,6 @@ export function executeCliRequest(
         ? shutdownStatusFinalized
         : Effect.succeed(false),
     );
-    // A child of the process's shutdown scope, so a shutdown runs this step
-    // before it closes the sessions; closed with the step disarmed once the
-    // run has settled here, so a completed run leaves nothing behind.
-    const shutdownStatusScope = yield* Scope.fork(options.shutdownScope);
-    let shutdownStatusArmed = true;
-    yield* Scope.addFinalizer(
-      shutdownStatusScope,
-      Effect.suspend(() =>
-        shutdownStatusArmed ? shutdownStatus : Effect.void,
-      ).pipe(
-        // The step's one deadline: the same budget a session close spends,
-        // so a run that never unwinds cannot hold SIGTERM open. Its
-        // uninterruptible wait for a promised recovery notice still finishes.
-        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
-        Effect.catchCause((cause) =>
-          Effect.logError("The run's shutdown step failed").pipe(
-            Effect.annotateLogs({ data: Cause.squash(cause) }),
-          ),
-        ),
-      ),
-    );
     const shutdownStatus = Effect.suspend(() =>
       Effect.gen(function* () {
         shutdownRequested = true;
@@ -537,6 +516,29 @@ export function executeCliRequest(
           }),
         );
       }),
+    );
+    // Registered only once `shutdownStatus` exists: a shutdown scope already
+    // closing runs this finalizer at once. A child of the process's shutdown
+    // scope, so a shutdown runs this step
+    // before it closes the sessions; closed with the step disarmed once the
+    // run has settled here, so a completed run leaves nothing behind.
+    const shutdownStatusScope = yield* Scope.fork(options.shutdownScope);
+    let shutdownStatusArmed = true;
+    yield* Scope.addFinalizer(
+      shutdownStatusScope,
+      Effect.suspend(() =>
+        shutdownStatusArmed ? shutdownStatus : Effect.void,
+      ).pipe(
+        // The step's one deadline: the same budget a session close spends,
+        // so a run that never unwinds cannot hold SIGTERM open. Its
+        // uninterruptible wait for a promised recovery notice still finishes.
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+        Effect.catchCause((cause) =>
+          Effect.logError("The run's shutdown step failed").pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+          ),
+        ),
+      ),
     );
     const openWorkflowOutput = options.openWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>

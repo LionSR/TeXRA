@@ -177,6 +177,9 @@ export interface SessionOwner {
   /** Close the session of a storage root, settling what it owns inside the
    *  runtime's shutdown-phase budget. */
   close(root: string): Effect.Effect<SessionCloseReport>;
+  /** A process shutdown's close: stop the process's pollers and drain the
+   *  deliveries they admitted, then close every held session at once. */
+  closeAll(): Effect.Effect<readonly SessionCloseReport[]>;
 }
 
 let owner: SessionOwner | undefined;
@@ -368,9 +371,5 @@ export function closeSession(root: string): Effect.Effect<SessionCloseReport> {
 export function closeAllSessions(): Effect.Effect<
   readonly SessionCloseReport[]
 > {
-  return Effect.flatMap(listSessions(), (sessions) =>
-    Effect.forEach(sessions, (session) => closeSession(session.roots.storage), {
-      concurrency: 'unbounded',
-    }),
-  );
+  return Effect.suspend(() => owner?.closeAll() ?? Effect.succeed([]));
 }

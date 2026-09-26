@@ -289,6 +289,13 @@ export class RunRegistry {
     return ids;
   }
 
+  /** Every run this session still keeps a record of: what `awaitDrained`
+   *  waits on, so what a close stops and, past its budget, settles — a
+   *  launch still resolving (a fiber, no handle yet) included. */
+  heldIds(): RunId[] {
+    return [...this.entries.keys()];
+  }
+
   /** Whether this process holds a live generation of the run: its fiber, a
    *  hold, or an admitted launch. A live tool-use flow is not a fourth arm:
    *  the flow attaches and detaches inside the run program, which runs on
@@ -751,7 +758,7 @@ export class RunRegistry {
    *  since nothing here drives them, and those whose stop failed to record
    *  what it owed storage (logged here). */
   stopAll(): Effect.Effect<readonly RunId[]> {
-    const active = new Set(this.activeIds());
+    const active = new Set(this.heldIds());
     const stops = [...active].flatMap((runId) => {
       const parent = this.getHandle(runId)?.parent ?? null;
       return parent !== null && active.has(parent)
