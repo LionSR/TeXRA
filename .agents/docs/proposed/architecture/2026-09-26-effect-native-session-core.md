@@ -726,6 +726,10 @@ export interface TexraProcessOptions {
   readonly mcpConfig?: string | false; // default: `mcp.json` under storageDir; false disables MCP
   readonly modelTransport?: 'bound' | 'process-global'; // default 'bound': the long-stream fetch, not global
   readonly diagnostics?: Layer.Layer<never>;
+  // Which plugins the process composes: a preset id or an explicit set.
+  // Default: core only, so an embedder opts in to Setup, GitHub, Lean and the rest.
+  readonly plugins?:
+    { readonly preset: string } | { readonly ids: readonly PluginId[] };
 }
 export const TexraProcess: {
   layer(
@@ -738,9 +742,10 @@ Three things stay process-global by necessity, so "the SDK is the same graph
 without a host" is true only up to them:
 
 - **One graph per process.** The owner id is `[hostname, pid, processStart]`,
-  so two graphs in one process cannot be told apart by the lease. A latch
-  refuses the second graph; the alternative, a graph nonce in `OwnerId`, is a
-  durable-format change.
+  so two graphs in one process cannot be told apart by the lease. After review
+  the owner id gains a per-graph nonce, which makes the bad state impossible;
+  the durable-format change rides a free bump. (The first draft's latch, which
+  refused the second graph, is dropped.)
 - **The fetch dispatcher** is global in Node; hosts keep `'process-global'`.
   Embedders get `'bound'`: the same long-stream timeouts and proxy policy as a
   `fetch` passed to the model factories, which `packages/llm` already accepts
@@ -762,7 +767,8 @@ without a host" is true only up to them:
    collapse.
 7. A `CliPlatform` layer for the 38 `initCliPlatform` sites; delete the auth
    `runSync`.
-8. `TexraProcess.layer`; the SDK's holds machinery becomes the latch.
+8. `TexraProcess.layer`; the SDK's holds machinery goes, and each graph
+   carries its own owner-id nonce.
 
 Estimated net: about −300 production lines, fourteen slots and five detached
 fibers gone, one bare-run site fewer.
@@ -1006,7 +1012,9 @@ Effect callers emit them.
 For the SDK, the 2026-09-21 ruling already makes the root an Effect surface
 with no Promise entry. The changes:
 
-- `run.events` is `RunTrace.events` ended by the run's exit: it fails with
+- `run.events` is the run's trace events ended by the run's exit (after
+  review, read from the existing `TraceEmitter`; `RunTrace` below is the first
+  draft's name for the same stream): it fails with
   the run's `RunFailure` when the run fails, as the SDK's stream does today
   (`sessionPrograms.ts:263-265`), so it keeps the `Stream<AgentEvent,
 RunFailure>` contract of move 3's `Run`. `RunTrace.events` itself stays
@@ -1064,10 +1072,11 @@ const program = Effect.gen(function* () {
 1. Foreign loops to Streams, with a card sweep.
 2. Scoped stages (root, child session, workflow phases) over today's emitter.
 3. `ModelInvoker` streams in a per-attempt scope.
-4. `RunTrace` replaces `TraceEmitter` in one PR ("no temporary adapters"):
-   174 mechanical rewrites, 26 helpers returning data, 46 test files onto one
-   test layer.
-5. SDK events from `RunTrace.events`.
+4. ~~`RunTrace` replaces `TraceEmitter`~~: dropped after review (it deletes
+   nothing but test fakes).
+5. SDK events from the existing emitter: `run.events` reads the run's
+   `TraceEmitter` through a sink added at construction, ended by the run's
+   exit, with the bounded handoff above; the `onTraceEvent` tap goes.
 6. Approvals stream, `decide`, the `Approvals` layer.
 7. `TexraAgent.layer`, after move 4.
 
@@ -1185,16 +1194,21 @@ class Approvals extends Context.Service<
       runId: RunId,
       payload: PermissionPayload,
     ) => Effect.Effect<RequestDecision | 'present', never, ToolCall>; // every request kind
+    // Scoped: the grant lasts as long as its owner's scope (a host launch, a
+    // plan approval), and closing the scope removes exactly this owner's grant.
     readonly grant: (
       owner: GrantOwner,
       runId: RunId,
       kinds: readonly BypassKind[],
-    ) => Effect.Effect<void>; // revoke restores
+    ) => Effect.Effect<void, never, Scope.Scope>;
   }
 >()('@texra/session/Approvals') {}
 ```
 
-`openRequest` calls `decide` first, so every host only presents. `ToolGuard`
+`openRequest` calls `decide` first, so every host only presents. A grant is
+acquired in its owner's scope and released when that scope closes; the goal's
+command grant is not held at all but computed from the goal and policy rows
+(move 2), so it survives resume and cannot outlive the goal. `ToolGuard`
 gains `confirm` and `external` kinds beside `bash`, `requiresApproval` goes
 back to filtering only what is offered, and a `toolCall` request kind replaces
 approving MCP calls as shell. `approval.policy` rows follow `state`. It lives
@@ -1245,14 +1259,17 @@ class RunInbox extends Context.Service<
 >()('@texra/session/RunInbox') {}
 
 // on Runs
-deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'live' | 'resume' | 'deferred' }):
+deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'auto' | 'deferred' }):
   Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>;
 wake(runId: RunId): Effect.Effect<void>; // the second phase of a deferred delivery
 ```
 
-`deliver` appends `followup.queued` through the publisher; a live entry is
-notified, and a resumable one is woken by `Runs.run({ _tag: 'Resume' })`
-forked into the session scope, with no host port. `'deferred'` admits the row
+`deliver` appends `followup.queued` through the publisher. Under `'auto'`,
+`Runs` chooses the wake inside the run's lane, atomically with the append: a
+live entry is notified, and a resumable one is woken by
+`Runs.run({ _tag: 'Resume' })` forked into the session scope, with no host
+port. The caller never chooses, so a run that turns live or idle while the
+delivery is prepared cannot leave the row unwoken. `'deferred'` admits the row
 durably and wakes nobody. A native child uses it for its turn result before it
 finalizes and calls `wake` afterwards, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
@@ -1325,8 +1342,10 @@ class AgentCatalog extends Context.Service<
 
 A scoped layer in move 4's graph: an initial load, then a `DirectoryWatch` host
 port (VS Code watcher or `FileSystem.watch`) debounced into `refresh`. The
-scanner becomes the one validating loader. Runs record the resolved setting on
-the snapshot and resume from it. Post-auth invalidation stays per host, as
+scanner becomes the one validating loader. Runs record the full resolved
+definition on the snapshot (setting and prompt, with its digest) and resume
+from it, so an edit to the YAML between a halt and its resume changes neither
+the settings nor the instructions. Post-auth invalidation stays per host, as
 ruled.
 
 ### PRs
@@ -1514,8 +1533,8 @@ the owner confirms them:
    everywhere?
 9. Guard kinds on the tool contract (move 9 PR 4) touch the frozen
    `defineTool` contract: allowed?
-10. Does a run pin its agent definition the way it pins its composition, so
-    resume uses the recorded setting?
+10. Does a run pin its agent definition (setting and prompt) the way it pins
+    its composition, so resume uses the recorded definition?
 11. Does the creator wizard give way to the cross-host `creator` agent?
 12. One global root for application state on desktop, instead of the Electron
     profile database?
