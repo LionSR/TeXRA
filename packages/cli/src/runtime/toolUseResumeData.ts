@@ -5,16 +5,19 @@ import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  aggregateId,
   AgentCategory,
   HISTORY_RUN_STATUS,
   isTerminalCompileRejection,
   RUN_OUTCOME,
+  type FlowSnapshotPayload,
   type HistoryRunStatus,
   type RunId,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { foldRunRows } from '@shared/session/runRows';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
 
@@ -57,9 +60,10 @@ export interface CliRunStanding {
  *
  * The one exception buys back a refusal the user would otherwise be walked
  * into: a workflow that stopped at its round cap on an unresolved compile
- * rejection has a snapshot that only replays the same rejection. The
- * reflection loop writes that marker during the final round, before
- * `finalizeRun` writes the `run.end` row, so the terminal outcomes that prove
+ * rejection has a snapshot that only replays the same rejection
+ * ({@link isTerminalWorkflowCheckpoint}, the rule the interrupt hint reads
+ * too). The loop decides it before `finalizeRun` writes the `run.end` row,
+ * so the terminal outcomes that prove
  * `resolveOutcome` already ran — CANCELLED and COMPLETED, neither of which
  * `deriveRunOutcome` can produce over a terminal rejection — skip the read,
  * while FAILED and a missing outcome are read.
@@ -94,13 +98,11 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
     } else {
       resumable =
         decision.kind === 'checkpoint' &&
-        !(
-          decision.snapshot.family === 'reflection' &&
-          isTerminalCompileRejection(
-            decision.snapshot.state,
-            decision.snapshot.runtime.round,
-          )
-        );
+        !(yield* isTerminalWorkflowCheckpoint(
+          facts.id,
+          decision.snapshot,
+          session,
+        ));
     }
   }
   const status =
@@ -108,6 +110,40 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
       ? HISTORY_RUN_STATUS.RESUMABLE
       : (outcome ?? HISTORY_RUN_STATUS.UNKNOWN);
   return { status, resumable };
+});
+
+/**
+ * Whether a workflow checkpoint only replays a terminal compile rejection:
+ * the last round's compile was rejected and no round is left to fix it. A
+ * reflection snapshot carries that marker. A round-mode run (the `toolUse`
+ * family) carries none: its snapshot is `halted` with no model failure and
+ * its loop's own `halted` step says FAILED, which only the rejection leaves
+ * (output finalization's verdict is `run.end`'s, not the loop's). Rows that
+ * cannot be read or folded leave the run offered, and refused at open time
+ * like any unreadable run.
+ */
+export const isTerminalWorkflowCheckpoint = Effect.fn(
+  'isTerminalWorkflowCheckpoint',
+)(function* (
+  id: RunId,
+  snapshot: FlowSnapshotPayload,
+  session: SessionHandle,
+): Effect.fn.Return<boolean> {
+  const { runtime } = snapshot;
+  if (snapshot.family === 'reflection')
+    return isTerminalCompileRejection(snapshot.state, runtime.round);
+  if (runtime.phase !== 'halted' || runtime.lastError != null) return false;
+  const verdict = yield* session.readAggregate(aggregateId('run', id)).pipe(
+    Effect.flatMap((rows) =>
+      Effect.try({ try: () => foldRunRows(rows).outcome, catch: ensureError }),
+    ),
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+    ),
+  );
+  return verdict === RUN_OUTCOME.FAILED;
 });
 
 /**

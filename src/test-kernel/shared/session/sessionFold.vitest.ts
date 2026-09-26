@@ -1595,10 +1595,13 @@ describe('foldRunState', () => {
         const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
         // Only an overflow compaction spends the round's one overflow retry.
-        expect(state?.overflowRecoveredAtRound).toBeNull();
+        expect(state?.overflowRecoveredAt).toBeNull();
         const overflow = compacted('context-window');
         expect(overflow?.round).toBeTypeOf('number');
-        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
+        expect(overflow?.overflowRecoveredAt).toEqual({
+          round: overflow?.round,
+          turn: overflow?.turn,
+        });
       },
     ],
     [

@@ -37,18 +37,23 @@ type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
 
 /**
  * Each category's resume family, in one exhaustive table: the resume type a
- * host launches and the snapshot family the run's rows must be in. A new
- * category fails to compile here rather than resolving to nothing at runtime.
+ * host launches and the snapshot families the run's rows may be in. A
+ * workflow run records the `toolUse` family (round mode); one from before
+ * round mode is in the `reflection` family and still resumes. A new category
+ * fails to compile here rather than resolving to nothing at runtime.
  */
 const RESUME_BY_CATEGORY: Record<
   AgentConfig['agentCategory'],
   {
     readonly type: SessionResumeData['type'];
-    readonly family: FlowSnapshotPayload['family'];
+    readonly families: readonly FlowSnapshotPayload['family'][];
   }
 > = {
-  [AgentCategory.ToolUse]: { type: 'toolUse', family: 'toolUse' },
-  [AgentCategory.Workflow]: { type: 'workflow', family: 'reflection' },
+  [AgentCategory.ToolUse]: { type: 'toolUse', families: ['toolUse'] },
+  [AgentCategory.Workflow]: {
+    type: 'workflow',
+    families: ['toolUse', 'reflection'],
+  },
 };
 
 /**
@@ -66,8 +71,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     agentConfig: AgentConfig,
     session: SessionHandle,
   ): Effect.fn.Return<SessionResumeData | null, Error> {
-    const { type, family: expectedFamily } =
-      RESUME_BY_CATEGORY[agentConfig.agentCategory];
+    const { type, families } = RESUME_BY_CATEGORY[agentConfig.agentCategory];
     const resumability = yield* deriveResumability(runId, session);
     if (resumability.kind === 'unreadable') {
       return yield* Effect.fail(
@@ -84,7 +88,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
       return null;
     }
     const { snapshot } = resumability;
-    if (snapshot.family !== expectedFamily) {
+    if (!families.includes(snapshot.family)) {
       return yield* Effect.fail(
         new Error(
           `Run ${runId} is configured as ${type} but its snapshot is a ${snapshot.family} run.`,

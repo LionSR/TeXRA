@@ -151,6 +151,21 @@ export const MANIFEST = [
     continuation: true,
   },
   {
+    // A workflow agent's rounds: its continuation policy opens each round
+    // and its documents pipeline turns the round's text into output files
+    // (`@agent/runtime/loop/rounds`). Built in and always on, so every
+    // composition holds it, as a delegated workflow child's parent's does;
+    // its policy serves the workflow category only.
+    id: 'documents',
+    toolNames: [],
+    name: 'Documents',
+    category: 'workflow',
+    description:
+      'Run a workflow agent round by round and write its output documents.',
+    hidden: true,
+    continuation: true,
+  },
+  {
     id: 'texcount',
     toolNames: ['texcount'],
     name: 'TeXcount',
