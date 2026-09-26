@@ -10,7 +10,10 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
+import {
+  DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
+} from '../oauth/deviceAuthorization';
 import {
   exchangeAuthorizationCode as exchangeFormAuthorizationCode,
   refreshOAuthTokens,
@@ -103,7 +106,8 @@ export const requestDeviceUserCode = Effect.fn(
  * Poll once for the device authorization result. Succeeds with the
  * authorization code + verifier, or fails with
  * {@link DeviceAuthorizationPending} while the user has not yet approved
- * (403/404). A network blip mid-poll is also pending so the loop keeps trying.
+ * (403/404). A network blip mid-poll is {@link DeviceAuthorizationTransient},
+ * which the shared poll retries a few times before failing with it.
  */
 export const pollDeviceToken = Effect.fn('codexOAuthClient.pollDeviceToken')(
   function* (params: { deviceAuthId: string; userCode: string }) {
@@ -112,8 +116,8 @@ export const pollDeviceToken = Effect.fn('codexOAuthClient.pollDeviceToken')(
       { device_auth_id: params.deviceAuthId, user_code: params.userCode },
       'Network error polling device authorization',
     ).pipe(
-      Effect.catchTag('OAuthNetworkError', () =>
-        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      Effect.catchTag('OAuthNetworkError', (error) =>
+        Effect.fail(new DeviceAuthorizationTransient({ error })),
       ),
     );
     if (response.status === 403 || response.status === 404) {
