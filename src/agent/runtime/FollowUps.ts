@@ -27,6 +27,7 @@ import {
 
 import {
   followUpDisplay,
+  isInstruction,
   userFollowUpInstruction,
 } from '@agent/followUp/followUpMessages';
 import {
@@ -193,7 +194,7 @@ export const followUpsLayer: Layer.Layer<
      *  errors always deliver. */
     const endedChildProgress = ({ content }: QueuedFollowUp): boolean => {
       const child =
-        content.origin === 'subagent_result'
+        content.from.kind === 'run' && content.from.relation === 'child'
           ? subagentProgressRunId(content.text)
           : undefined;
       return (
@@ -318,7 +319,7 @@ export const followUpsLayer: Layer.Layer<
                 );
               }
               return batch === null ||
-                !batch.followUps.some((f) => f.content.origin === 'user')
+                !batch.followUps.some((f) => isInstruction(f.content))
                 ? Effect.succeed(null)
                 : batchRows(batch);
             })

@@ -524,7 +524,7 @@ describe('tool dispatch interrupted mid-turn', () => {
       yield* session.settlePublications();
       yield* session.followUps.submit(
         runId,
-        { text: 'What is 2+2?', origin: 'user' },
+        { text: 'What is 2+2?', from: { kind: 'user' } },
         'recoverable',
       );
 

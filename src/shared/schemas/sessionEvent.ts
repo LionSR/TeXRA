@@ -37,6 +37,7 @@ import {
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
+import { FollowUpContentSchema } from './followUp';
 import { WorkflowScriptFilesSchema } from './workflowScriptFiles';
 import { InquiryThreadUpdatedEventSchema } from './inquiry';
 import { PermissionPayloadSchema } from './progressView/data';
@@ -60,22 +61,6 @@ import {
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
-
-/**
- * One follow-up as it is queued, taken, and shown. `origin` keeps the
- * provenance a consumer reads: a user's text becomes the run's instruction,
- * a child's delivery envelope is summarized for the transcript. A loop's own
- * maintenance wake is never a follow-up row.
- */
-const FollowUpContentSchema = z.object({
-  text: z.string(),
-  /** What the transcript and the queued list show instead of `text`. */
-  displayText: z.string().nullish(),
-  /** Media file paths (e.g. pasted images) attached to a user follow-up. */
-  mediaFiles: z.array(z.string()).nullish(),
-  origin: z.enum(['user', 'subagent_result']),
-});
-export type FollowUpContent = z.infer<typeof FollowUpContentSchema>;
 
 /** C5's complete process identity, encoded canonically without losing null. */
 const OwnerIdentitySchema = z.tuple([
@@ -588,7 +573,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 18;
+export const SESSION_EVENT_FORMAT = 19;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

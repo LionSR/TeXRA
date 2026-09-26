@@ -347,7 +347,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+        '<subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -357,11 +357,7 @@ const SCENARIOS = [
       '1. ✓ reviewer completed All good <ok>',
       'Queued follow-ups (1)',
     ],
-    unexpect: [
-      '(empty follow-up)',
-      '<orchestrator-followup>',
-      '<subagent-result',
-    ],
+    unexpect: ['(empty follow-up)', '<subagent-result'],
   },
   {
     name: 'queued-subagent-followup-status-preview',
@@ -369,7 +365,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>',
+        '<subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
@@ -379,7 +375,7 @@ const SCENARIOS = [
       'queued 1',
       '⟳ review · todos · 6 done, 0 active, 0 pending',
     ],
-    unexpect: ['<orchestrator-followup>', '<subagent-progress'],
+    unexpect: ['<subagent-progress'],
   },
   {
     name: 'compact-queued-followups',
@@ -565,7 +561,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 8 more',
+      '… 10 more',
     ],
     unexpect: [
       '/ap  Switch',
