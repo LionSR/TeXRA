@@ -56,10 +56,11 @@ can be ratified.
      through the `packages/llm` (`@texra-ai/llm`) `Model` bound by
      `runtime/run/modelBinding.ts`. Exceptions outside that route remain and are
      deliberate: audio transcription builds `OpenAI` directly in
-     `src/tools/media/audio.ts`, the Codex tool uses `@openai/codex-sdk`, and the
-     settings-view consent probe (`SettingsViewMessageHandler.ts:403-438`)
-     acquires a VS Code `Model` and runs its own `prepareTurn`/`generateTurn`
-     to confirm language-model access.
+     `src/tools/media/audio.ts`; the Codex tool uses `@openai/codex-sdk` and the
+     Claude Code tool loads `@anthropic-ai/claude-agent-sdk`'s `query()`
+     (`src/tools/claudeAgent.ts`); and the settings-view consent probe
+     (`SettingsViewMessageHandler.ts:403-438`) acquires a VS Code `Model` and
+     runs its own `prepareTurn`/`generateTurn` to confirm language-model access.
    - Logger: `src/logger/` (`effectLog.ts`, `logSink.ts`, `effectDiagnostics.ts`,
      `formatLogData.ts`, `redaction.ts`).
    - SDK surface: `packages/agent` (`@texra-ai/agent`) — `index.ts`, `node.ts`,
@@ -82,11 +83,12 @@ can be ratified.
      target four incompatible SDK wire types and cannot share without a mapping
      layer heavier than the code it removes. The `Model` interface takes only a
      Zod-guarded materialized `TurnRequest` and keeps every host concern in
-     `BoundModel` — clean enough to publish, with two small leaks (§New.3).
+     `BoundModel` — clean enough to publish, with only the small edge items in
+     §New.3 (one real ambient-read leak; one framing correction).
    - **Logger** is reached through a clean host-agnostic _producer_ port
      (`Effect.log*` + `withLogChannel`), and the render→redact→truncate pipeline
-     is single-owner. Steps 1–4 of the sync-facades program have landed; the one
-     remaining leak is the sink-injection side (§New.2).
+     is single-owner. Steps 1–5 of the sync-facades program have landed; the one
+     remaining step is the sink→Layer conversion (§New.2).
    - **SDK surface** center (Sessions/Session/Run + tagged errors + `defineTool`,
      pure-Effect, no in-package `runPromise`) is minimal and clean; the
      redundancy is at the edges (§New.1, §New.3).
@@ -106,11 +108,16 @@ can be ratified.
    outside `executeAgent`, not workflow grandchildren. The other candidates a
    charter tends to
    name — reflection output extraction (`loop/reflection.ts` `processOutput`),
-   `compileCheck`, `LatexDiffManager`, `runAgentCreator` — are deterministic
-   sub-run library stages (or, for the creator, a helper-model wizard below the
-   run machinery). Reifying any of them as an agent boundary would add a run
-   lifecycle, roster entry and delivery choreography around pure data work: pure
-   indirection that would fight the "no flow engine / one Effect per run" rule.
+   `compileCheck`, `LatexDiffManager`, `runAgentCreator` — are effectful sub-run
+   stages (file extraction and host presentation; file/settings reads and
+   LaTeX/latexdiff subprocesses; and, for the creator, a helper-model call
+   before writing YAML and driving host UI). They are not "pure data," but none
+   has an **independent run or model lifecycle** of its own — no owned `RunId`,
+   no model turn through `ModelInvoker`, no roster entry — so that, not purity,
+   is why an agent boundary buys nothing: reifying one would wrap a run
+   lifecycle, roster entry and delivery choreography around work that has no
+   lifecycle to own, fighting the "no flow engine / one Effect per run" rule
+   while still owning its real interruption and resource-lifetime needs inline.
    No boundary change is warranted.
 
 ## New since the 2026-09-24 pass (needs an owner, not a routine)
@@ -235,8 +242,8 @@ finalizer-before-release ordering (comments at `:531-535`, `:604-613`).
 No refactor to land autonomously from this charter. The single new,
 concrete action for an owner is to **re-enumerate the Tier-1 manifest against
 `index.ts` before ratifying it** (§New.1). The logger sink→Layer step (§New.2) is
-owned by `2026-09-21-effect-design-synchronous-facades.md` §5 and should ride it;
-the `packages/llm` leaks (§New.3) are in the hardening note's territory but not
-yet recorded there (that note is closed), so they need filing before they have
-an owner. Re-running this audit as a routine will again add no signal until the
+owned by `2026-09-21-effect-design-synchronous-facades.md` §5/step 6 and should
+ride it; the `packages/llm` items (§New.3 — one real ambient-read leak, one
+framing correction) are in the hardening note's territory but not yet recorded
+there (that note is closed), so they need filing before they have an owner. Re-running this audit as a routine will again add no signal until the
 manifest is re-enumerated and moves.
