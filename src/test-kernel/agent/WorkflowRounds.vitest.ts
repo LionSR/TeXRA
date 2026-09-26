@@ -919,6 +919,7 @@ describe('the output facts a workflow round publishes', () => {
                     )
                   : stateStore.get(key, defaultValue),
               update: (key, value) => stateStore.update(key, value),
+              modify: (key, change) => stateStore.modify(key, change),
             },
           },
         ),

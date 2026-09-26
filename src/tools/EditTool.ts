@@ -58,7 +58,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   if ('blocked' in prepared) {
     return prepared.blocked;
   }
-  const { path, displayPath, originalContent } = prepared.target;
+  const { path, displayPath, exists, originalContent } = prepared.target;
 
   // A missing or ambiguous match is the model's error to correct, so it stays
   // a failure the tool runner reports rather than a defect.
@@ -87,6 +87,7 @@ const edit = Effect.fn('EditFileTool.execute')(function* (
   return yield* applyApprovedFileEdit({
     path,
     displayPath,
+    exists,
     originalContent,
     proposedContent: replacement.content,
     sourceTool: 'edit_file',
