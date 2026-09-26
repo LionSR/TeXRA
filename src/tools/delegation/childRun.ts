@@ -1,5 +1,5 @@
 // Third-party imports
-import { Effect } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
@@ -106,11 +106,26 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
 ) {
   const { handle, session, logger, closeTrace, options } = args;
 
-  const failed = options.outcome === RUN_OUTCOME.FAILED;
-  const errorMessage =
-    failed && options.error != null ? toErrorMessage(options.error) : undefined;
-  if (errorMessage) {
-    logger.error(errorMessage);
+  // Describing the failure is fallible: `error` is `unknown`, and formatting
+  // a foreign value can throw (a throwing `message` getter or `toString`).
+  // That must never keep `finalizeRunTerminal` below from running, or the
+  // handle stays tracked and the run never gets its `run.end` row.
+  const described = yield* Effect.exit(
+    Effect.sync(() => {
+      if (options.outcome !== RUN_OUTCOME.FAILED) return undefined;
+      const message =
+        options.error != null ? toErrorMessage(options.error) : undefined;
+      if (message) logger.error(message);
+      return {
+        kind: classifyAgentError(options.error),
+        message: message ?? 'Child run failed',
+      };
+    }),
+  );
+  if (Exit.isFailure(described)) {
+    logger.error('Child run finalize prologue failed', {
+      data: { error: Cause.squash(described.cause) },
+    });
   }
 
   // What the child saw, in the shared vocabulary. Which of this and an
@@ -120,13 +135,15 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   const finalized = yield* finalizeRunTerminal({
     session,
     handle,
-    outcome: options.outcome,
-    error: failed
-      ? {
-          kind: classifyAgentError(options.error),
-          message: errorMessage ?? 'Child run failed',
-        }
-      : undefined,
+    ...(Exit.isSuccess(described)
+      ? { outcome: options.outcome, error: described.value }
+      : {
+          outcome: RUN_OUTCOME.FAILED,
+          error: {
+            kind: 'unexpected' as const,
+            message: 'Child run finalize prologue failed',
+          },
+        }),
     stage: options.stage,
     stopped: options.stopped,
   });

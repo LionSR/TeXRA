@@ -44,6 +44,7 @@ const runId = 'c11111' as RunId;
 const parentRunId = 'c11112' as RunId;
 const stoppedRunId = 'c11114' as RunId;
 const failedRunId = 'c11116' as RunId;
+const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
@@ -522,6 +523,34 @@ describe('child run progress events', () => {
           kind: 'unexpected',
           message: 'child process exited 1',
         },
+      });
+    }),
+  );
+
+  // `error` is `unknown`: a value with no primitive conversion throws when
+  // formatted, and the child must still settle with its `run.end` row.
+  it.effect('settles a failed child whose error cannot be formatted', () =>
+    Effect.gen(function* () {
+      const childRun = yield* Effect.promise(() =>
+        startCodexChild(unformattableRunId, 'Run an unformattable failure'),
+      );
+
+      yield* childRun.finalize({
+        outcome: RUN_OUTCOME.FAILED,
+        error: Object.create(null),
+      });
+
+      expect(
+        testDefaultSession().runs.getHandle(unformattableRunId),
+      ).toBeUndefined();
+      expect(
+        yield* getRunRecords(
+          testDefaultSession(),
+          unformattableRunId,
+        ).readRunEnd(),
+      ).toMatchObject({
+        outcome: 'failed',
+        error: { message: 'Child run finalize prologue failed' },
       });
     }),
   );
