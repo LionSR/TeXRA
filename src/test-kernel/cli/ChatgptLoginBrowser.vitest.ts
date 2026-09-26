@@ -95,7 +95,7 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
       expect(progress).toEqual([
         '[copyable] ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
         'Browser launch in progress...',
-        'Automatic browser launch failed; open the sign-in URL above.',
+        'Automatic browser launch failed; open the sign-in URL above. Over SSH or in a container, forward the callback port to open it from your local browser.',
       ]);
     }),
   );
@@ -112,6 +112,7 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
         expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
         expect(progress).toEqual([
           '[copyable] ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
+          'Over SSH or in a container, forward the callback port to open it from your local browser.',
         ]);
       }),
   );

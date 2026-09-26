@@ -3,9 +3,12 @@
  * sign-in and every subscription sign-in.
  */
 import { Effect } from 'effect';
+import { tryOpenBrowser } from './browser';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import { tryOpenBrowser } from './browser';
+/** The URL is a loopback address on the machine running texra. */
+const REMOTE_CALLBACK_HINT =
+  'Over SSH or in a container, forward the callback port to open it from your local browser.';
 
 /**
  * Progress sink shared by every sign-in. `copyable` marks the instructions
@@ -35,7 +38,10 @@ export function presentCliSignInUrl(options: {
   const { writeProgress, displayName, url, noBrowser } = options;
   return Effect.gen(function* () {
     writeProgress(`${displayName} sign-in URL:\n${url}`, { copyable: true });
-    if (noBrowser) return;
+    if (noBrowser) {
+      writeProgress(REMOTE_CALLBACK_HINT);
+      return;
+    }
 
     writeProgress('Browser launch in progress...');
     // Infallible by construction: `tryOpenBrowser` answers false rather than
@@ -47,7 +53,7 @@ export function presentCliSignInUrl(options: {
       return;
     }
     writeProgress(
-      'Automatic browser launch failed; open the sign-in URL above.',
+      `Automatic browser launch failed; open the sign-in URL above. ${REMOTE_CALLBACK_HINT}`,
     );
   });
 }
