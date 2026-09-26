@@ -36,7 +36,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { SessionOpenError } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
@@ -77,6 +77,11 @@ type CliPlatformInitOptions = Pick<
   | 'version'
 > & {
   readonly installSignalHandlers?: boolean;
+  /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
+   *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
+   *  above its header. Otherwise the database's own warning says it, or,
+   *  under a silenced log, this init prints it to stderr. */
+  readonly presentsStoreMovedAside?: boolean;
 };
 
 /**
@@ -282,11 +287,12 @@ export function initCliPlatform(
     // the first call builds them below.
     //
     // A step that fails after the runtime exists (a store that will not open, a
-    // seed that will not write) must not leave the runtime installed with
-    // nothing registered to dispose it: the failure disposes it and is
-    // re-raised, so the caller reports the cause rather than a half-built
-    // platform. Keep the roots and lazy session private until the fallible
-    // setup has succeeded: their ports have no reset operation.
+    // seed that will not write) registers nothing to dispose it; the failure
+    // is re-raised so the caller reports the cause, and the process entry
+    // (`bin/texra.ts`) disposes the still-installed runtime in its
+    // `Effect.ensuring`, never a fiber on that runtime. Keep the roots and
+    // lazy session private until the fallible setup has succeeded: their
+    // ports have no reset operation.
     const { globalState, lifecycle, roots } = yield* withProcessServices(
       runtime,
       Effect.gen(function* () {
@@ -348,9 +354,13 @@ export function initCliPlatform(
               Scope.provide(projectScope),
               Effect.tap((session) =>
                 Effect.sync(() => {
-                  const cleared = session.storeCleared;
-                  if (cleared) {
-                    writeTextStderr(sessionStoreClearedMessage(cleared));
+                  const moved = session.storeMovedAside;
+                  if (
+                    moved &&
+                    context.quietLogs &&
+                    context.presentsStoreMovedAside !== true
+                  ) {
+                    writeTextStderr(sessionStoreMovedAsideMessage(moved));
                   }
                 }),
               ),
@@ -403,7 +413,7 @@ export function initCliPlatform(
           ),
         );
       }),
-    ).pipe(Effect.onError(() => disposeCliProcessRuntime));
+    );
 
     // The stores this root opened, handed back rather than read off a
     // process-wide singleton: the secret store is the same stateless view over

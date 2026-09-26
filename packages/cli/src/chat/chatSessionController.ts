@@ -62,6 +62,7 @@ import { heldElsewhereBy } from '@shared/session/database';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { handleTuiSlashCommand } from './tui/commands/handleSlashCommand';
@@ -356,6 +357,13 @@ export function createChatSessionController(
     records: getRunRecords,
     ...init.agentRuns,
   };
+  // Said in the transcript the controller writes to, not on stderr before
+  // Ink mounts, where it would be left above the header.
+  if (runtimeSession.storeMovedAside) {
+    appendLocalAssistantTranscript(
+      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
+    );
+  }
   let interruptedContinuation: InterruptedContinuationBatch | undefined;
   let pendingInterruptedFollowUps: InterruptedFollowUp[] = [];
   const pendingSkillActivations = new Map<string, string>();

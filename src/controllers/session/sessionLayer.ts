@@ -461,7 +461,7 @@ const sessionHandleLayer = (
             }),
           view: view.ref,
           viewChanges: view.changes,
-          storeCleared: eventLog.cleared,
+          storeMovedAside: eventLog.movedAside,
           // Release rows only once both the view fold and local reconciliation
           // have applied them. Readers can then query either state consistently.
           folded: (fromCommit) =>

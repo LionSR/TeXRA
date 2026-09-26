@@ -8,9 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
-  documents and research files are unchanged. History a different build
-  wrote is cleared the first time this build opens that workspace, and
-  TeXRA says so when it happens.
+  documents and research files are unchanged. History an older build wrote
+  is moved aside (`texra.db.format<N>`) rather than read, and TeXRA says so
+  when it happens; a store written by a newer TeXRA is never opened or
+  deleted by an older one.
 - **1.0 preview builds start from a clean slate** — a preview does not carry
   over session history or other application state from TeXRA 0.40 or earlier,
   and going back to 0.40 does not bring what the preview created. Previews
