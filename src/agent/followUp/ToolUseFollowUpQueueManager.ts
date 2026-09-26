@@ -514,11 +514,12 @@ export class ToolUseFollowUpQueue {
           // The recovery owner has not launched its run: the claim is its to
           // end, when a consumer adopts it or the lease exits without one.
           admitted.adoptedClaim = releaseClaim;
-        } else if (owner === undefined || queued.length === 0) {
+        } else {
+          // Every other hold this admission took is given back now: no owner
+          // needs it, a flow or child that claimed the run meanwhile holds
+          // the claim itself, and a recovery owner already keeps one.
           yield* this.releaseClaim(runId, releaseClaim);
         }
-        // A flow or child that claimed the run meanwhile runs it under its
-        // own run lease, whose release ends the claim.
       }
       if (!current) return { kind: 'refused' };
       // Every follow-up already on the rows: a replay. One still queued for a

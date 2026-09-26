@@ -599,16 +599,24 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       // slot settles pending approvals), the presentation hosts; and first of
       // all the runs, so no run is admitted over a session that is unwinding.
       yield* Effect.addFinalizer(() =>
-        session
-          .settlePublications()
-          .pipe(
-            Effect.catch(
-              logFailure(
-                `Session ${key.storage} left a failed publication behind as it closed.`,
-              ),
+        session.settlePublications().pipe(
+          Effect.catch(
+            logFailure(
+              `Session ${key.storage} left a failed publication behind as it closed.`,
             ),
-            Effect.ensuring(Effect.sync(() => session.closeDoors())),
           ),
+          // Bounded like the close that invalidates this entry: a
+          // publisher too stuck to settle must not hold the release.
+          Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+          Effect.flatMap((settled) =>
+            Option.isSome(settled)
+              ? Effect.void
+              : Effect.logWarning(
+                  `Session ${key.storage} closed with publications still unsettled past the close budget`,
+                ).pipe(withLogChannel(CHANNEL)),
+          ),
+          Effect.ensuring(Effect.sync(() => session.closeDoors())),
+        ),
       );
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => session.followUps.dispose()),
