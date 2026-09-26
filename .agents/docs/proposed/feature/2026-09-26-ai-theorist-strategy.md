@@ -213,7 +213,40 @@ The Principal runs on the same tool-use loop as every other agent. It differs on
 - **One place to ask "what's happening?"** A cross-project digest: which claims moved, which runs wait on you, spend against each budget.
 - **A portfolio budget.** The Principal splits one envelope across projects and is where the §3.6 auto-resume daemon lives.
 - **Cross-pollination.** When a lemma on one project's Board looks relevant to another, the Principal proposes it to that project's lead. This is the consolidation step from §3.6, applied between projects.
-- **Home memory.** Researcher-level memory: taste, notation preferences, recurring collaborators, and tournament votes aggregated across projects. It sits above per-project memory, which stays local.
+- **Memory about the researcher** that persists across every project. See the next subsection.
+
+#### 3.8.1 The Principal's own memory
+
+Today memory is per project. The `memory` tool writes `/memories/*.md` under the session's storage root (`src/tools/memory/memoryFileSystem.ts` through `StorageFs`), which lands at `~/.texra/workspace-storage/<workspace>-<hash>/memories/` (`docs/guide/memory.md`).
+
+The Principal gets **its own memory with no new mechanism**: the same tool in the home session writes under the home session's storage root, the global one. Implementation has to confirm the fallback session's storage resolves there rather than to an anonymous workspace slot.
+
+**Three scopes, one tool:**
+
+| Scope         | Lives in                          | Written by                                  | Read by                                                        |
+| ------------- | --------------------------------- | ------------------------------------------- | -------------------------------------------------------------- |
+| **Principal** | home session storage (global)     | the Principal; the researcher in Settings   | the Principal; project runs see only notes marked `shared`     |
+| **Project**   | that project's storage (as today) | that project's agents; the researcher       | that project's runs; the Principal read-only via `projects read` |
+| **Board**     | that project's session (§3.2)     | that project's lead and roles; the researcher | campaign state, not memory: what is true *now* in one campaign |
+
+**What goes in the Principal's memory.** It is a suggested layout, so the prompt describes it rather than a schema enforcing it:
+
+- `researcher/`: who the researcher is. Fields, taste (what counts as significant), notation and writing preferences, collaborators, standing constraints such as deadlines, venues and compute budget.
+- `projects/<name>.md`: one note per project. Why it exists, its priority, where it stands, what the researcher last decided. This is the Principal's own view, not a copy of the project's Board.
+- `lessons/`: what the Principal learns about running work. Which agent, model and budget suited which kind of task; which strategies died and why. This is the co-scientist meta-review applied at portfolio level.
+- `taste/`: preferences distilled from the researcher's tournament votes and prunes across projects (§3.3). This is the one place the researcher's taste accumulates as data.
+
+**How knowledge moves between scopes:**
+
+- **Up, from project to Principal.** When a project closes, or in the digest cycle, the Principal reads that project's memory and Board and *distills*. It writes its own note in its own words, with a pointer back, never a copy. Project memory stays the source of truth for the project.
+- **Down, from Principal to project.** A Principal note marked `shared` (frontmatter, alongside the existing pinned flag in `memoryMeta.ts`) is readable, read-only, by every project run at `/memories/principal/…`. This is how a project agent learns the researcher's notation and taste without being told each time. Anything more specific reaches a project as an ordinary `steer` to its lead.
+- **Across.** Never directly. Project A's memory reaches project B only through the Principal, as a proposal to B's lead (the cross-pollination step). That keeps every write inside the scope that owns it.
+
+**Rules:**
+- **Read-only, not re-authored.** Memory read from another scope is shown to the agent as data, never re-authored as instructions.
+- **Same pin limit.** The Principal's pinned notes load at every Principal session start, with the same limit as today (10).
+- **No secrets.** The home session's deny list (§3.8) applies to what the Principal may copy into memory; keys and credentials never land there.
+- **Researcher sees and edits everything.** The Settings Memory tab gains a scope switcher (Principal / this project), so the researcher can read, edit, unpin or delete anything the Principal remembers about them.
 
 ## 4. Evaluation first: a theorist benchmark
 
@@ -235,7 +268,7 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 | 1     | Consolidate agents into theorist + roles + skills; one name for presets; strip prover heuristics                      | ~1 wk  | Benchmark no worse; agent and prompt file count down about 5×          |
 | 2     | Research Board (schema, `board` tool, three renderers, continuation injection)                                        | 1–2 wk | A campaign survives restart from Board + objective alone               |
 | 3     | Steering: tool-boundary nudges; Board edits as structured follow-ups; digest                                           | ~1 wk  | Steering benchmark cases pass                                          |
-| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, cross-project digest; `setup` folds in | ~1 wk  | One digest shows every open project's runs, requests and spend         |
+| 3b    | Principal, read side: home session, `ProjectRegistry` port, `projects list/status/read`, cross-project digest, the Principal's own memory (global storage, `shared` flag, Settings scope switcher); `setup` folds in | ~1 wk  | One digest shows every open project's runs, requests and spend; a `shared` Principal note is visible in a new project's first run |
 | 3c    | Principal, write side: `create`, `start`, `steer`/`stop`, `grant` with the `userFolder` external-root kind and deny list | 1–2 wk | A run started from Home is recorded, approved and resumable in its own project |
 | 4     | Verification ladder: `VerifierReport`, novelty rung with Semantic Scholar/OpenAlex, digestion rung, provenance card    | 2 wk   | No `verified` claim without its evidence; novelty traps caught         |
 | 5     | Tournament script library with human matches and meta-review                                                          | ~1 wk  | Tournament beats single-shot on the benchmark at equal cost, or is cut |
@@ -263,7 +296,8 @@ The benchmark also decides whether the tournament, prove/disprove splits and fan
 3. Tool-boundary nudges: default on, or opt-in per run?
 4. Benchmark contents: whose problems, and how are they kept out of training data?
 5. The Principal's read scope: the whole home directory with a deny list (proposed), or only folders the researcher has listed as "research roots"?
-6. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
+6. Should `shared` Principal notes load into project runs automatically (like pinned notes) or only on request? Auto-loading costs context in every run.
+7. Does the Principal replace the desktop's project rail as the entry screen, or sit beside it as a Home tab?
 
 ## 9. Sources
 
