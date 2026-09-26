@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
+import type { AgentTrace } from '@agent/trace';
 import {
   AgentSetting,
   AgentPrompt,
@@ -216,7 +216,13 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
 
   // Emit aggregated file list if any files were loaded
   if (requiredFiles.length > 0) {
-    logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
+    logger.emit({
+      type: 'domain',
+      key: 'filesLoaded',
+      data: { category: 'all', entries: requiredFiles },
+      text: 'all',
+      stageId: options.stageId,
+    });
   }
 
   return userVars;
@@ -429,8 +435,18 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
       const entries = allFiles.map((file) => ({
         path: file,
         ok: file === primaryFile ? primaryFileOk : readable.has(file),
+        source: cardLabel,
+        sourceDisplay: cardLabel,
       }));
-      logFileCategory(logger, cardLabel, entries, stageId);
+      if (entries.length > 0) {
+        logger.emit({
+          type: 'domain',
+          key: 'filesLoaded',
+          data: { category: cardLabel, entries },
+          text: cardLabel,
+          stageId,
+        });
+      }
     }
 
     userVars[`ALL_${prefix}S`] = xml;

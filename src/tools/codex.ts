@@ -25,7 +25,6 @@ import { z } from 'zod';
 import {
   emitToolUseCard,
   endToolUseCard,
-  logWebSearch,
   type AgentTrace,
   type ToolUseCardRef,
 } from '@agent/trace';
@@ -156,7 +155,11 @@ function logCodexItem(item: ThreadItem, logger: AgentTrace): void {
       logger.info(item.text, { messageType: MESSAGE_TYPES.THINKING });
       break;
     case 'web_search':
-      logWebSearch(logger, { query: item.query });
+      logger.emit({
+        type: 'domain',
+        key: 'webSearch',
+        data: { query: item.query },
+      });
       break;
     case 'error':
       logger.error(item.message);

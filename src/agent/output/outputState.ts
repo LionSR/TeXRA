@@ -110,7 +110,8 @@ export function reportMissingOutputs(
   },
 ): void {
   const { round, missing, xmlFile } = info;
-  trace.domain({
+  trace.emit({
+    type: 'domain',
     key: 'missingOutputs',
     text: `${formatResultCount(missing.length, 'output file')} missing`,
     data: { missing, xmlFile },

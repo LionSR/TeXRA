@@ -285,7 +285,8 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.domain({
+        this.logger.emit({
+          type: 'domain',
           key: 'latexdiff',
           text: `Latexdiff results: ${aggregated.length}`,
           data: aggregated,

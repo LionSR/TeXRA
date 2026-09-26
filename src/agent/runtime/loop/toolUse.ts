@@ -455,7 +455,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           if (text) {
             workspace.assembly.lastResponse = text;
-            if (live) logger.responseFinalized(text);
+            if (live) logger.emit({ type: 'response.finalized', text });
           }
           workspace.resetReasoning();
           if (

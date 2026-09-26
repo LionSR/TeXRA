@@ -553,10 +553,12 @@ export function buildAgentCliLaunch<TTurn>(
         // the child run's running total and publishes that. Not a transcript
         // event: the session's `usage` row is a latest-only listing key.
         cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
-        logger.usage(
-          { runId, usage: cumulativeUsage },
-          { recordTranscript: false },
-        );
+        logger.emit({
+          type: 'usage',
+          runId,
+          usage: cumulativeUsage,
+          recordTranscript: false,
+        });
       },
       formatDelivery: (turn, wallTimeMs) =>
         Effect.try({

@@ -2,7 +2,7 @@
  * TeXRA sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
- * single primitive call (`info` / `warn` / `error` / `domain` / `emit`).
+ * single primitive call (`info` / `warn` / `error` / `emit`).
  * Agent code uses these instead of the bigger
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
@@ -25,9 +25,7 @@ import {
   type CompactionActivityData,
   type CompactionActivityOutcome,
   type ContextManagementData,
-  type ConversationProgress,
   type ErrorContext,
-  type FileListEntry,
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
@@ -192,65 +190,5 @@ export function logContextManagementEvent(
   data?: ContextManagementData,
   stageId?: string,
 ): void {
-  trace.domain({ key: 'contextManagement', text, data, stageId });
-}
-
-export function logWebSearch(
-  trace: AgentTrace,
-  data: unknown,
-  stageId?: string,
-): void {
-  trace.domain({ key: 'webSearch', data, stageId });
-}
-
-/** Files-loaded card with full {@link FileListEntry} entries. */
-export function logFilesLoaded(
-  trace: AgentTrace,
-  category: string,
-  entries: readonly FileListEntry[],
-  stageId?: string,
-): void {
-  trace.domain({
-    key: 'filesLoaded',
-    data: { category, entries },
-    text: category,
-    stageId,
-  });
-}
-
-/**
- * Files-loaded card built from path/ok pairs — the category becomes both
- * the source label and the display label.
- */
-export function logFileCategory(
-  trace: AgentTrace,
-  category: string,
-  files: ReadonlyArray<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
-  stageId?: string,
-): void {
-  if (files.length === 0) return;
-  const entries: FileListEntry[] = files.map((f) => ({
-    path: f.path,
-    ok: f.ok === true,
-    source: category,
-    sourceDisplay: category,
-  }));
-  logFilesLoaded(trace, category, entries, stageId);
-}
-
-/**
- * Report conversation-progress counters (tool-call count).
- * The retained `updateConversationProgress` host event is projected from this
- * run fact by the session progress projector instead of flow code calling
- * `session.interactions.emit` directly.
- * Never rendered as a transcript row (suppressed in the transcript fold)
- * — it is a UI-only signal, not a log line. Round labels come from typed
- * `stage.start` metadata with `kind: "round"`.
- */
-export function logConversationProgress(
-  trace: AgentTrace,
-  data: ConversationProgress,
-  stageId?: string,
-): void {
-  trace.emit({ type: 'conversation.progress', progress: data, stageId });
+  trace.emit({ type: 'domain', key: 'contextManagement', text, data, stageId });
 }

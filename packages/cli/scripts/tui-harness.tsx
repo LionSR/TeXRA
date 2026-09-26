@@ -1184,13 +1184,9 @@ async function seedRunningWorkflow(): Promise<void> {
   );
   const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
-    {
-      id: 'harness-workflow-running-run',
-      kind: 'run',
-    },
+    { kind: 'run' },
   );
   const phaseStage = trace.openStage('Proofread', {
-    id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
