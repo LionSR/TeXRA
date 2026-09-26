@@ -190,6 +190,25 @@ describe('shared text-diff caller fixtures', () => {
           ),
         ).toBe('title\nmode=green\nend\n');
 
+        // A concurrent change to the edited copy of a duplicated block is a
+        // conflict; the edit never moves onto the untouched duplicate.
+        const block = 'a\nb\nc\nx\nd\ne\nf\n';
+        yield* Effect.tryPromise(() =>
+          installFakePlatform({
+            '/workspace/paper.tex': `a\nb\nc\ny\nd\ne\nf\n${block}`,
+          }),
+        );
+        const duplicated = yield* approvedWriteConflict(
+          'paper.tex',
+          `${block}${block}`,
+          `a\nb\nc\nX\nd\ne\nf\n${block}`,
+        ).pipe(
+          Effect.provide(
+            nativeToolTestLayer({ workingDirectory: fakePath('workspace') }),
+          ),
+        );
+        expect(duplicated).toBeDefined();
+
         // So is a deletion, even of a file that was empty when proposed: the
         // approved content does not recreate it.
         yield* Effect.tryPromise(() => installFakePlatform({}));

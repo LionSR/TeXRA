@@ -1,5 +1,5 @@
 // Third-party imports
-import { applyPatch, structuredPatch, type StructuredPatchHunk } from 'diff';
+import { diffArrays, structuredPatch, type StructuredPatchHunk } from 'diff';
 import { Effect } from 'effect';
 
 // Local imports - common
@@ -33,23 +33,77 @@ export interface DiffHunks {
   readonly timeout: string | undefined;
 }
 
+/** Lines with their terminators, so a missing final newline is a change. */
+function toTerminatedLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/** One changed region of a base text: base lines `[start, end)` replaced. */
+interface Replacement {
+  readonly start: number;
+  readonly end: number;
+  readonly lines: readonly string[];
+}
+
+/** The regions `next` changes in `base`, or `undefined` past the bound. */
+function replacementsOf(
+  base: string[],
+  next: string[],
+): Replacement[] | undefined {
+  const changes = diffArrays(base, next, { timeout: DIFF_TIMEOUT_MS });
+  if (changes === undefined) return undefined;
+  const replacements: Replacement[] = [];
+  let at = 0;
+  let open: { start: number; end: number; lines: string[] } | undefined;
+  for (const change of changes) {
+    if (!change.added && !change.removed) {
+      if (open) replacements.push(open);
+      open = undefined;
+      at += change.value.length;
+      continue;
+    }
+    open ??= { start: at, end: at, lines: [] };
+    if (change.removed) {
+      at += change.value.length;
+      open.end = at;
+    } else {
+      open.lines.push(...change.value);
+    }
+  }
+  if (open) replacements.push(open);
+  return replacements;
+}
+
 /**
  * The edit from `oldText` to `newText` applied onto `targetText`, a version
  * of the file that moved on meanwhile, or `undefined` when it does not apply.
- * Each hunk must find the lines it removes and its context unchanged in
- * `targetText` (at any offset), so an edit that overlaps or touches a
- * concurrent change is a conflict, never a fuzzy placement over it.
+ * A three-way merge by position in `oldText`: both sides' changed regions
+ * are located there, and one of ours that overlaps or touches one of theirs
+ * is a conflict. Nothing is relocated by content, so a duplicate of the
+ * edited lines elsewhere in the file can never receive the edit. A diff
+ * that exceeds its bound is a conflict too.
  */
 export function mergeEditOnto(
   oldText: string,
   newText: string,
   targetText: string,
 ): string | undefined {
-  const patch = structuredPatch('a', 'b', oldText, newText, '', '', {
-    context: DIFF_CONTEXT_LINES,
-  });
-  const merged = applyPatch(targetText, patch);
-  return merged === false ? undefined : merged;
+  const base = toTerminatedLines(oldText);
+  const ours = replacementsOf(base, toTerminatedLines(newText));
+  const theirs = replacementsOf(base, toTerminatedLines(targetText));
+  if (ours === undefined || theirs === undefined) return undefined;
+  const clash = ours.some((mine) =>
+    theirs.some((other) => mine.start <= other.end && other.start <= mine.end),
+  );
+  if (clash) return undefined;
+  const merged: string[] = [];
+  let at = 0;
+  for (const change of [...ours, ...theirs].sort((a, b) => a.start - b.start)) {
+    merged.push(...base.slice(at, change.start), ...change.lines);
+    at = change.end;
+  }
+  merged.push(...base.slice(at));
+  return merged.join('');
 }
 
 /**
