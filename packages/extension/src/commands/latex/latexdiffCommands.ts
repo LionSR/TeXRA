@@ -286,18 +286,13 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
 });
 
 /**
- * The file a latexdiff run compares against: the picked base file, falling
- * back to the primary input the webview sends beside it. Both arrive as bare
- * `z.string()` wire fields and clearing the base picker writes `''`, so `||`
- * — not `??` — is what makes the fallback the producer already pays for
- * actually fire. Reports once and returns undefined when neither is set.
+ * The file a latexdiff run compares against: the picked base file. It
+ * arrives as a bare `z.string()` wire field and clearing the base picker
+ * writes `''`, so an empty string counts as unset. Reports once and returns
+ * undefined when it is.
  */
-const resolveDiffBase = Effect.fnUntraced(function* (
-  inputFile: string,
-  baseFile: string,
-) {
-  const fileToUse = baseFile || inputFile;
-  if (fileToUse) return fileToUse;
+const resolveDiffBase = Effect.fnUntraced(function* (baseFile: string) {
+  if (baseFile) return baseFile;
   yield* showLoggedMessageWithDocs(
     CHANNEL,
     'No base file specified for latexdiff',
@@ -309,11 +304,10 @@ const resolveDiffBase = Effect.fnUntraced(function* (
 
 const handleLatexdiff = Effect.fnUntraced(function* (
   session: SessionHandle,
-  inputFile: string,
   baseFile: string,
   editedFile: string,
 ) {
-  const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
+  const fileToUse = yield* resolveDiffBase(baseFile);
   if (!fileToUse) return;
   if (!editedFile) {
     yield* showLoggedMessageWithDocs(
@@ -342,11 +336,10 @@ const handleLatexdiff = Effect.fnUntraced(function* (
 
 const handleLatexdiffvc = Effect.fnUntraced(function* (
   session: SessionHandle,
-  inputFile: string,
   baseFile: string,
   commitHash: string,
 ) {
-  const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
+  const fileToUse = yield* resolveDiffBase(baseFile);
   if (!fileToUse) return;
   yield* withLatexdiffTool(
     'latexdiff-vc',
@@ -363,7 +356,6 @@ const handleLatexdiffvc = Effect.fnUntraced(function* (
 
 const handlePackLatexdiffvc = Effect.fnUntraced(function* (
   session: SessionHandle,
-  inputFile: string,
   baseFile: string,
   commitHash: string,
   clean: boolean,
@@ -373,9 +365,9 @@ const handlePackLatexdiffvc = Effect.fnUntraced(function* (
     clean ? 'Error cleaning LaTeX diff' : 'Error packing LaTeX diff',
     Effect.gen(function* () {
       yield* Effect.logDebug(
-        `Command called with: inputFile=${inputFile}, baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
+        `Command called with: baseFile=${baseFile}, commitHash=${commitHash}, clean=${clean}`,
       );
-      const fileToUse = yield* resolveDiffBase(inputFile, baseFile);
+      const fileToUse = yield* resolveDiffBase(baseFile);
       if (!fileToUse) return;
       // The pack run is a step of this program, over the session's rooted
       // filesystems, rather than a nested settle on the entry's runtime.
@@ -471,42 +463,27 @@ export function registerLatexdiffCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.latexdiff',
-      handler: (inputFile: string, baseFile: string, editedFile: string) =>
-        runtime.runPromise(
-          handleLatexdiff(session, inputFile, baseFile, editedFile),
-        ),
+      handler: (baseFile: string, editedFile: string) =>
+        runtime.runPromise(handleLatexdiff(session, baseFile, editedFile)),
     },
     {
       id: 'texra.latexdiffvc',
-      handler: (inputFile: string, baseFile: string, commitHash: string) =>
-        runtime.runPromise(
-          handleLatexdiffvc(session, inputFile, baseFile, commitHash),
-        ),
+      handler: (baseFile: string, commitHash: string) =>
+        runtime.runPromise(handleLatexdiffvc(session, baseFile, commitHash)),
     },
     {
       id: 'texra.packLatexdiffvc',
-      handler: (
-        inputFile: string,
-        baseFile: string,
-        commitHash: string,
-        clean: boolean,
-      ) =>
+      handler: (baseFile: string, commitHash: string) =>
         runtime.runPromise(
-          handlePackLatexdiffvc(
-            session,
-            inputFile,
-            baseFile,
-            commitHash,
-            clean,
-          ),
+          handlePackLatexdiffvc(session, baseFile, commitHash, false),
         ),
     },
     {
       id: 'texra.cleanLatexdiffvc',
       // Clean is a pack run with `clean` set, and the failure label follows it.
-      handler: (inputFile: string, baseFile: string, commitHash: string) =>
+      handler: (baseFile: string, commitHash: string) =>
         runtime.runPromise(
-          handlePackLatexdiffvc(session, inputFile, baseFile, commitHash, true),
+          handlePackLatexdiffvc(session, baseFile, commitHash, true),
         ),
     },
     {
