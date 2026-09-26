@@ -1,7 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
-import { TraceEmitter, type AgentTrace } from '@agent/trace';
+import { TraceEmitter } from '@agent/trace';
 import { heldSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
 import type {
   SessionHandle,
@@ -23,6 +23,7 @@ import {
   emptyTranscript,
   resetTranscriptOwnership,
 } from '@shared/session/transcriptState';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { generateRunId } from '@utils/core';
 
@@ -76,7 +77,7 @@ export function createProcessSession(
     const predecessors = heldSessions().filter(
       (live) => live.roots.storage === roots.storage,
     );
-    yield* Effect.forEach(predecessors, (live) => live.dispose(), {
+    yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {
       discard: true,
     });
     return yield* openSessionEffect({
@@ -125,18 +126,15 @@ export const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
   });
 
 /**
- * Fold a trace's events straight into a transcript with deterministic source
- * coordinates, for tests that exercise the fold without a session. Each event
- * is its own publication level, as a session frame of one.
+ * A standalone run trace whose events fold straight into a transcript with
+ * deterministic source coordinates, for tests that exercise the fold without
+ * a session. Each event is its own publication level, as a session frame of
+ * one.
  */
-export function attachTestTranscriptFold(
-  trace: AgentTrace,
-  runId: RunId,
-  debug = false,
-) {
+export function createTestRunTrace(runId: RunId) {
   // Fixture run ids need not be well-formed; the fold only stamps them.
   const aggregate = JSON.stringify(['run', runId]) as AggregateId;
-  const ctx = { debug, lifecycleToTaskGroups: true };
+  const ctx = { debug: false, lifecycleToTaskGroups: true };
   let transcript: TranscriptView = emptyTranscript();
   let seq = 1;
   const apply = (fact: object) => {
@@ -148,11 +146,11 @@ export function attachTestTranscriptFold(
       ctx,
     );
   };
-  const unsubscribe = trace.subscribe((event) => {
+  const trace = new TraceEmitter((event) => {
     if (isTranscriptEvent(event)) apply(event);
   });
   return {
-    unsubscribe,
+    trace,
     /** The phase the run reached; the fold settles its open rows on it. */
     settlePhase: (phase: RunPhase) => {
       if (phase === RUN_PHASE.RUNNING) apply({ type: 'run.activate' });
@@ -162,18 +160,6 @@ export function attachTestTranscriptFold(
     },
     transcript: () => transcript,
     rows: () => transcript.rows,
-  };
-}
-
-/** Standalone trace projection for tests that exercise formatting without a session. */
-export function createTestRunTrace(runId: RunId) {
-  const trace = new TraceEmitter();
-  const projection = attachTestTranscriptFold(trace, runId);
-  return {
-    trace,
-    settlePhase: projection.settlePhase,
-    rows: projection.rows,
-    transcript: projection.transcript,
-    dispose: projection.unsubscribe,
+    dispose: () => trace.close(),
   };
 }

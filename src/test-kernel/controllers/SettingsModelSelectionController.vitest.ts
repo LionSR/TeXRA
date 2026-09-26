@@ -49,7 +49,6 @@ function createController(
     secrets: new FakeSecrets(),
     resolveModelOptions,
     copilotRoutes: Effect.succeed(new Map()),
-    getPreferredCopilotRouteModels: () => Effect.succeed([]),
     ...overrides,
   });
 }
@@ -209,13 +208,18 @@ describe('SettingsModelSelectionController', () => {
     () =>
       Effect.gen(function* () {
         const controller = createController({
-          getPreferredCopilotRouteModels: () => Effect.succeed(['sonnet46']),
+          stores: {
+            ...makeFakeSettingsStores().stores,
+            globalState: new FakeStateStore({
+              [GlobalStateKey.COPILOT_ROUTE_MODELS]: ['sonnet5'],
+            }),
+          },
         });
 
         expect((yield* controller.buildSelectionData()).copilotModels).toEqual([
           {
-            name: 'sonnet46',
-            label: MODEL_CONFIGS.sonnet46.label,
+            name: 'sonnet5',
+            label: MODEL_CONFIGS.sonnet5.label,
             access: 'unavailable',
             preferred: true,
           },

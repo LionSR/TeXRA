@@ -239,15 +239,14 @@ function start(
     const runId = generateRunId();
     const trace = yield* Queue.unbounded<AgentEvent, RunFailure | Cause.Done>();
     const admitted = yield* Deferred.make<void, RunFailure>();
-    let detach: (() => void) | undefined;
+    let tapping = true;
     let reading = false;
     let buffered = 0;
-    /** Detach the trace, once: the reader's close does it while the run
-     *  continues, and the run's settlement does it for a reader that never
-     *  came. */
+    /** Stop taking the run's trace events: the reader's close does it while
+     *  the run continues, and the run's settlement does it for a reader that
+     *  never came. */
     const release = (): void => {
-      detach?.();
-      detach = undefined;
+      tapping = false;
     };
     const settle = (
       exit: Exit.Exit<AgentFlowResult, RunFailure>,
@@ -292,14 +291,17 @@ function start(
             { kind: 'fresh', config, runId },
             {
               approvalPromptsUnavailable: true,
-              onRunResolved: (_, runTrace) => {
-                detach = runTrace.subscribe((event) => {
-                  if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
-                    release(); // `settle` logs it: no fiber here to log from.
-                    return;
-                  }
-                  Queue.offerUnsafe(trace, event);
-                });
+              // The run's trace is built with this tap, so it hears the run
+              // from its first event.
+              onTraceEvent: (event) => {
+                if (!tapping) return;
+                if (!reading && (buffered += 1) > TRACE_HANDOVER_EVENTS) {
+                  release(); // `settle` logs it: no fiber here to log from.
+                  return;
+                }
+                Queue.offerUnsafe(trace, event);
+              },
+              onRunResolved: () => {
                 Deferred.doneUnsafe(admitted, Effect.void);
               },
               session,

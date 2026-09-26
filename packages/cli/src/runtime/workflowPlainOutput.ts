@@ -19,7 +19,7 @@ import { claimRootRun, followView } from './sessionViewFollow';
  *  prints, since transcript rows fold only for subscribed aggregates. */
 export type WorkflowPlainSession = Pick<
   SessionHandle,
-  'view' | 'setTranscriptSubscriptions'
+  'view' | 'viewChanges' | 'setTranscriptSubscriptions'
 >;
 
 interface WorkflowPlainOutputOptions {

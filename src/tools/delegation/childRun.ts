@@ -5,10 +5,6 @@ import { Cause, Effect, Exit } from 'effect';
 import { TraceEmitter, type AgentTrace, type StageHandle } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import {
-  finalizeRun,
-  RunOutcomeUnpersisted,
-} from '@agent/storage/runLifecycle';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -21,7 +17,7 @@ import type {
   UserFollowUpSupport,
 } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildRunOptions {
   /** What owns this run — the launch site declares the truth once. */
@@ -93,7 +89,11 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
   // settle would instead report whatever session-scoped publication anyone
   // else queued and fail an otherwise sound launch over it.
   const runs = yield* Runs;
-  const trace = new TraceEmitter();
+  // The run's canonical event publication, from its first event: the trace
+  // is built with the session as its sink, and closed with the run.
+  const trace = new TraceEmitter((event) =>
+    session.publishRunEvent(runId, event),
+  );
   const handle = new RunHandle(
     {
       runId,
@@ -103,95 +103,34 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     parentRunId,
     trace,
   );
-  let detachSessionTrace: (() => void) | undefined;
-  let started = false;
-  const setup = yield* Effect.exit(
-    Effect.sync(() => {
-      // Registration already committed the launch and activation together.
-      started = true;
-      // Attach the run's canonical event publication before activation. The
-      // handle is tracked by the loop (`track`) once its stop target exists,
-      // so a stop never finds this handle with nothing to interrupt.
-      detachSessionTrace = session.attachRunTrace(trace, runId);
-      const disposeTrace = () => detachSessionTrace?.();
-      trace.emit({
-        type: 'run.config',
-        runId,
-        config: options.config,
-      });
-
-      return {
-        childRunId: runId,
+  // Registration already committed the launch and activation together. The
+  // handle is tracked by the loop (`track`) once its stop target exists, so
+  // a stop never finds this handle with nothing to interrupt.
+  trace.emit({
+    type: 'run.config',
+    runId,
+    config: options.config,
+  });
+  return {
+    childRunId: runId,
+    logger: trace,
+    track: () => runs.track(handle),
+    finalize: (finalizeOptions) =>
+      finalizeChildRun({
+        handle,
+        session,
         logger: trace,
-        track: () => runs.track(handle),
-        finalize: (finalizeOptions) =>
-          finalizeChildRun({
-            handle,
-            session,
-            logger: trace,
-            disposeTrace,
-            options: finalizeOptions,
-          }),
-      } satisfies ChildRun;
-    }),
-  );
-  if (Exit.isFailure(setup)) {
-    const error = Cause.squash(setup.cause);
-    // Roll back every fallible setup step in reverse-ish order; a cleanup
-    // failure must neither mask the original error nor skip later steps. A
-    // run that already published its `run.start` exists for every fold,
-    // so it ends with its `run.end` row instead of lingering as a
-    // started-but-never-run ghost — written by the one terminal writer, whose
-    // commit is awaited, so no barrier stands behind it.
-    const failures: unknown[] = [error];
-    const cleanups: Effect.Effect<unknown, Error>[] = [
-      Effect.suspend(() =>
-        started
-          ? finalizeRun(session, {
-              runId,
-              outcome: RUN_OUTCOME.FAILED,
-              error: {
-                kind: classifyAgentError(error),
-                message: `Child run setup failed: ${toErrorMessage(error)}`,
-              },
-            }).pipe(
-              Effect.flatMap((finalization) =>
-                finalization.ok
-                  ? Effect.void
-                  : Effect.fail(
-                      new RunOutcomeUnpersisted({
-                        message: 'Failed to persist the child run failure',
-                        cause: finalization.error,
-                      }),
-                    ),
-              ),
-            )
-          : Effect.void,
-      ),
-      Effect.sync(() => {
-        runs.untrackIfCurrent(handle);
+        closeTrace: () => trace.close(),
+        options: finalizeOptions,
       }),
-      Effect.sync(() => detachSessionTrace?.()),
-    ];
-    for (const cleanup of cleanups) {
-      const cleaned = yield* Effect.exit(cleanup);
-      if (Exit.isFailure(cleaned)) failures.push(Cause.squash(cleaned.cause));
-    }
-    if (failures.length > 1) {
-      return yield* Effect.fail(
-        new AggregateError(failures, 'Child run setup and cleanup failed'),
-      );
-    }
-    return yield* Effect.fail(ensureError(error));
-  }
-  return setup.value;
-}, Effect.uninterruptible);
+  } satisfies ChildRun;
+});
 
 interface FinalizeChildRunArgs {
   handle: RunHandle;
   session: SessionHandle;
   logger: AgentTrace;
-  disposeTrace: () => void;
+  closeTrace: () => void;
   options: FinalizeChildRunOptions;
 }
 
@@ -209,7 +148,7 @@ interface FinalizeChildRunArgs {
 const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
-  const { handle, session, logger, disposeTrace, options } = args;
+  const { handle, session, logger, closeTrace, options } = args;
 
   // The failure prologue (error formatting, logging, classification) is
   // fallible. It must never prevent `finalizeRunTerminal` below from running:
@@ -260,7 +199,7 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     stage: options.stage,
     stopped: options.stopped,
   });
-  disposeTrace();
+  closeTrace();
 
   // The port's contract is "resolves once the terminal finalizer has
   // persisted": a `run.end` row that never wrote is this finalize's failure,

@@ -21,8 +21,9 @@ import type {
   UsageReport,
 } from './events';
 
-/** Subscriber receives every event emitted on the trace. */
-export type AgentTraceSubscriber = (event: AgentEvent) => void;
+/** A sink the trace was built with: it receives every event emitted on the
+ *  trace until the trace closes. */
+export type AgentTraceSink = (event: AgentEvent) => void;
 
 /** Options accepted by `openStage`. */
 export interface StageOptions {
@@ -140,7 +141,6 @@ export interface UsageEmitOptions extends StagedEmitOptions {
 export interface AgentTrace {
   // ─── SSoT primitives ────────────────────────────────────────────────
   emit(event: AgentEvent): void;
-  subscribe(subscriber: AgentTraceSubscriber): () => void;
 
   // ─── Plain logging (sugar over emit) ────────────────────────────────
   debug(message: string, options?: LogOptions): void;

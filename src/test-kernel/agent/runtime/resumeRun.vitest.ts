@@ -10,6 +10,7 @@ import { AgentCategory, aggregateId, RUN_OUTCOME } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
 import {
   createTestSession,
@@ -74,7 +75,11 @@ const seedRecoverable = Effect.fn('test.seedRecoverable')(function* (
 ) {
   const flow = session.followUps.claimLive(RUN, 'flow')!;
   for (const text of texts) {
-    yield* session.followUps.submit(RUN, { text }, 'live_owner');
+    yield* session.followUps.submit(
+      RUN,
+      { from: { kind: 'user' as const }, text },
+      'live_owner',
+    );
   }
   session.followUps.release(flow, 'recoverable');
 });
@@ -113,7 +118,7 @@ const sessions: ReturnType<typeof createTestSession>[] = [];
 
 afterEach(async () => {
   for (const session of sessions.splice(0)) {
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   }
 });
 
@@ -203,7 +208,7 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(
           yield* session.followUps.submit(
             RUN,
-            { text: 'raced' },
+            { from: { kind: 'user' as const }, text: 'raced' },
             'recoverable',
           ),
         ).toEqual({ kind: 'queued' });
@@ -234,7 +239,11 @@ describe('resumeRun tool-use queue ownership', () => {
       );
       yield* Deferred.await(existsRead);
       expect(
-        yield* session.followUps.submit(RUN, { text: 'raced' }, 'recoverable'),
+        yield* session.followUps.submit(
+          RUN,
+          { from: { kind: 'user' as const }, text: 'raced' },
+          'recoverable',
+        ),
       ).toEqual({ kind: 'queued' });
 
       yield* Deferred.succeed(exists, false);
@@ -259,7 +268,7 @@ describe('resumeRun tool-use queue ownership', () => {
                 expect(
                   yield* session.followUps.submit(
                     RUN,
-                    { text: 'second' },
+                    { from: { kind: 'user' as const }, text: 'second' },
                     'recoverable',
                   ),
                 ).toEqual({ kind: 'queued' });
@@ -307,7 +316,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = yield* createSession();
       const submission = yield* session.followUps.submit(
         RUN,
-        { text: 'stale' },
+        { from: { kind: 'user' as const }, text: 'stale' },
         'recoverable',
       );
       expect(submission).toMatchObject({ kind: 'queued' });
@@ -378,7 +387,10 @@ describe('resumeRun tool-use queue ownership', () => {
         expect(
           yield* session.followUps.submit(
             RUN,
-            { text: 'completed child', origin: 'subagent_result' },
+            {
+              text: 'completed child',
+              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+            },
             'recoverable',
           ),
         ).toEqual({ kind: 'queued' });
@@ -399,7 +411,7 @@ describe('resumeRun tool-use queue ownership', () => {
       const session = yield* createSession();
       const submission = yield* session.followUps.submit(
         RUN,
-        { text: 'claimed' },
+        { from: { kind: 'user' as const }, text: 'claimed' },
         'recoverable',
       );
       expect(submission).toMatchObject({ kind: 'queued' });
@@ -432,7 +444,7 @@ describe('resumeRun tool-use queue ownership', () => {
         const session = yield* createSession();
         const submission = yield* session.followUps.submit(
           RUN,
-          { text: 'workflow input' },
+          { from: { kind: 'user' as const }, text: 'workflow input' },
           'recoverable',
         );
         expect(submission).toMatchObject({ kind: 'queued' });

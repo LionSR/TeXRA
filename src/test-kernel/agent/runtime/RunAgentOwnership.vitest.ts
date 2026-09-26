@@ -77,6 +77,7 @@ import { AgentError } from '@common/errors/agentErrors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';
 import {
   aggregateId as qualifyAggregateId,
+  type AggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
@@ -126,19 +127,24 @@ const sessionRuns = {
   launchRun: vi.fn(
     (_runId: RunId, operation: Effect.Effect<unknown, unknown>) => operation,
   ),
-  // No parent is detaching this run, so its release waits on nothing.
-  throughDetach: () => Effect.void,
 };
 const SESSION = {
   runs: sessionRuns,
   readView: () => Effect.succeed({ runs: persistedRuns }),
-  acquireClaims: (...args: unknown[]) => mocks.acquireClaims(...args),
-  graph: {
-    releaseClaims: (...args: unknown[]) => mocks.releaseClaims(...args),
-  },
-  releaseClaims: SessionHandle.prototype.releaseClaims,
+  // The launch's hold on the run's claim: the release it hands back also
+  // reports to `mocks.releaseClaims`, which the release-order cases observe.
+  acquireClaims: (id: AggregateId) =>
+    (mocks.acquireClaims(id) as Effect.Effect<Effect.Effect<void>>).pipe(
+      Effect.map((release) =>
+        release.pipe(
+          Effect.andThen(Effect.suspend(() => mocks.releaseClaims(id))),
+        ),
+      ),
+    ),
+  holdRunClaim: SessionHandle.prototype.holdRunClaim,
+  borrowRunClaim: SessionHandle.prototype.borrowRunClaim,
   settlePublications,
-  releaseRunLease: SessionHandle.prototype.releaseRunLease,
+  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 const EXECUTE_RESULT = {
@@ -176,7 +182,8 @@ function realRunRegistry(): RunRegistry {
     approvals: createSessionApprovals(),
     finalizeRun: ((input: { readonly outcome: string }) =>
       Effect.succeed({ ok: true, outcome: input.outcome })) as never,
-    acquireRunClaim: () => Effect.succeed(Effect.void),
+    holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
   });
 }
 
@@ -212,24 +219,6 @@ describe('runAgent run ownership', () => {
     mocks.finalizeRun.mockResolvedValue(FINALIZE_RESULT);
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
-
-  it.effect(
-    'refuses a resume of a run this session already runs before any snapshot',
-    () =>
-      Effect.gen(function* () {
-        mocks.runActive.mockReturnValueOnce(true);
-        expect(
-          yield* Effect.flip(
-            launchRun(
-              { kind: 'resume', config: CONFIG, runId: RUN_ID },
-              { session: SESSION },
-            ),
-          ),
-        ).toMatchObject({ message: `Run is already running: ${RUN_ID}` });
-        expect(mocks.readRunEnd).not.toHaveBeenCalled();
-        expect(trackRun).not.toHaveBeenCalled();
-      }),
-  );
 
   it.effect.each(['fresh', 'resume'] as const)(
     'refuses a %s launch while the first is still in its lineage reads',
@@ -547,7 +536,7 @@ describe('runAgent run ownership', () => {
 
       yield* launch({
         kind: 'fresh',
-        beforeLeaseRelease: () =>
+        beforeRunEnd: () =>
           Effect.sync(() => {
             order.push('artifacts');
           }),
@@ -580,7 +569,7 @@ describe('runAgent run ownership', () => {
   );
 
   it.effect(
-    'does not drain artifacts again after the host disposed of ownership',
+    'does not drain artifacts again after the host committed the run end',
     () =>
       Effect.gen(function* () {
         const order: string[] = [];
@@ -590,7 +579,7 @@ describe('runAgent run ownership', () => {
         });
         yield* launch({
           kind: 'fresh',
-          beforeLeaseRelease: () =>
+          beforeRunEnd: () =>
             Effect.sync(() => {
               order.push('host-artifacts-and-release');
               return true;
@@ -599,7 +588,11 @@ describe('runAgent run ownership', () => {
 
         expect(order).toEqual(['execute', 'host-artifacts-and-release']);
         expect(settlePublications).not.toHaveBeenCalled();
-        expect(mocks.releaseClaims).not.toHaveBeenCalled();
+        // The host committed the run's ending; the claim is still the
+        // launch's hold, released once as its scope closes.
+        expect(mocks.releaseClaims).toHaveBeenCalledExactlyOnceWith(
+          qualifyAggregateId('run', RUN_ID),
+        );
       }),
   );
 
@@ -640,7 +633,7 @@ describe('runAgent run ownership', () => {
         const failure = yield* Effect.flip(
           launch({
             kind: 'fresh',
-            beforeLeaseRelease: () => Effect.fail(artifactError),
+            beforeRunEnd: () => Effect.fail(artifactError),
           }),
         );
 
@@ -663,8 +656,8 @@ describe('runAgent run ownership', () => {
             ? { type: 'instruction', payload: { key: 'missingApiKey' } }
             : { type: 'error', payload: { message: primaryError.message } },
         );
-        // A failed host hook never changes ownership: the one drain still runs
-        // and releases the claim.
+        // A failed host hook never changes ownership: the run's ending still
+        // commits, and the launch's scope still releases the claim.
         expect(mocks.releaseClaims).toHaveBeenCalledWith(
           qualifyAggregateId('run', RUN_ID),
         );

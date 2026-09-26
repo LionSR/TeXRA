@@ -60,7 +60,7 @@ import { rootedFsLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
-  attachTestTranscriptFold,
+  createTestRunTrace,
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
@@ -538,7 +538,7 @@ const setRejectOnCompileFailure = (enabled: boolean) =>
 
 /** The verdict each round stage closed with, in transcript order. */
 function roundStageOutcomes(
-  recorder: ReturnType<typeof attachTestTranscriptFold>,
+  recorder: ReturnType<typeof createTestRunTrace>,
 ): unknown[] {
   return recorder
     .transcript()
@@ -789,11 +789,9 @@ describe('the workflow round loop', () => {
     Effect.gen(function* () {
       const session = yield* createProcessSession();
       const runId = startedRun(session);
-      const logger = new TraceEmitter();
-      const recorder = attachTestTranscriptFold(logger, runId);
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => recorder.unsubscribe()),
-      );
+      const recorder = createTestRunTrace(runId);
+      const logger = recorder.trace;
+      yield* Effect.addFinalizer(() => Effect.sync(() => recorder.dispose()));
 
       const { result } = yield* runLoop({
         runId,
@@ -921,6 +919,7 @@ describe('the output facts a workflow round publishes', () => {
                     )
                   : stateStore.get(key, defaultValue),
               update: (key, value) => stateStore.update(key, value),
+              modify: (key, change) => stateStore.modify(key, change),
             },
           },
         ),
@@ -1103,11 +1102,9 @@ describe('an interrupted workflow run', () => {
       Effect.gen(function* () {
         const session = yield* createProcessSession();
         const runId = startedRun(session);
-        const logger = new TraceEmitter();
-        const recorder = attachTestTranscriptFold(logger, runId);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => recorder.unsubscribe()),
-        );
+        const recorder = createTestRunTrace(runId);
+        const logger = recorder.trace;
+        yield* Effect.addFinalizer(() => Effect.sync(() => recorder.dispose()));
 
         const halted = yield* interruptedAt(
           { runId, session, rounds: 2, logger },

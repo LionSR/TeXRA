@@ -311,9 +311,7 @@ export function createHeadlessCliHostInteractions(
       ),
     );
 
-  const fiber = runtime.runFork(
-    Stream.runForEach(SubscriptionRef.changes(session.view), take),
-  );
+  const fiber = runtime.runFork(Stream.runForEach(session.viewChanges, take));
 
   return {
     emit: hooks.emit,

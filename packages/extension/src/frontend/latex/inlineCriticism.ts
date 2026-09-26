@@ -18,12 +18,12 @@
  */
 
 // Third-party imports
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect, Fiber, FileSystem, Stream } from 'effect';
 import * as vscode from 'vscode';
 
 // Local imports
 import { type ManualCriticismEntry, type SessionHandle } from '@agent/runtime';
-import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
+import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 import { lineToRange } from '@frontend/vscode/vscodeEditor';
 import { parseCriticismAnnotations } from '@latex/criticismParser';
 import { withLogChannel } from '@logger/effectLog';
@@ -158,11 +158,16 @@ function enable({ context, session, runtime }: CriticismRegistration): boolean {
   if (collection) return false;
   collection = vscode.languages.createDiagnosticCollection(COLLECTION_NAME);
   context.subscriptions.push(collection);
-  outputUnsubscribe = subscribeOutputFiles(
-    session,
-    (payload) => handleAddOutputFiles(payload, runtime),
-    runtime,
+  // The diagnostics toggle with a setting, so this listener's lifetime is
+  // theirs: `disable` interrupts it.
+  const fiber = runtime.runFork(
+    Stream.runForEach(outputFilesProduced(session), (payload) =>
+      Effect.sync(() => handleAddOutputFiles(payload, runtime)),
+    ),
   );
+  outputUnsubscribe = () => {
+    runtime.runFork(Fiber.interrupt(fiber));
+  };
   return true;
 }
 

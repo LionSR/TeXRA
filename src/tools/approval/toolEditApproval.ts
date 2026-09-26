@@ -1,13 +1,10 @@
-import * as nodePath from 'node:path';
-
-import { Cause, Effect, FileSystem } from 'effect';
+import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { isLatexFile } from '@common/files/fileTypeUtils';
 import { withLogChannel } from '@logger/effectLog';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { WorkspaceFs } from '@platform/rootedFs';
 import {
   decideTexraApproval,
   isTexraApprovalDenied,
@@ -22,14 +19,10 @@ import {
   type ToolResult,
 } from '@shared/schemas';
 import { refusalCopy, refusalOf } from '@shared/session/approvalDecision';
-import { recordToolFileRead } from '@tools/fileInteractions';
 import { errorResult } from '@tools/core/result';
 import { clamp, generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { entryExists } from '@utils/files/fsEntryExists';
-import { readNormalizedFile } from '@utils/files/fsDurability';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { applyPatchToText } from '@utils/text/diff';
 import {
   buildDiffHunks,
   reportDiffTimeout,
@@ -377,67 +370,6 @@ export type AcceptedToolEditApprovalResult = Extract<
   ToolEditApprovalResult,
   { action: 'apply' }
 >;
-
-interface WriteApprovedContentResult {
-  appliedContent: string;
-  baseContent: string;
-}
-
-/**
- * Reconcile approved content with the current workspace file and mark the path
- * as read after the operation succeeds, so every approved-write caller keeps
- * the later-edit guard in sync.
- *
- * The path is written through its own view of the filesystem: a
- * workspace-relative path through the session's confined `WorkspaceFs` view,
- * an already-absolute one (an external root, a worktree) through the process
- * `FileSystem`.
- */
-export const writeApprovedContent = Effect.fn('writeApprovedContent')(
-  function* (
-    path: string,
-    originalContent: string,
-    finalContent: string,
-  ): Effect.fn.Return<
-    WriteApprovedContentResult,
-    Error,
-    ToolCall | FileSystem.FileSystem | WorkspaceFs
-  > {
-    yield* ToolCall;
-    const fs = nodePath.isAbsolute(path)
-      ? yield* FileSystem.FileSystem
-      : yield* WorkspaceFs;
-    const exists = yield* entryExists(fs, path);
-    let baseContent = '';
-    let appliedContent = finalContent;
-    let shouldWrite = true;
-
-    if (exists) {
-      // All content is already LF-normalized at the FS read boundary,
-      // so comparisons work directly without extra normalization.
-      const currentContent = yield* readNormalizedFile(fs, path);
-      baseContent = currentContent;
-
-      if (currentContent === finalContent || originalContent === finalContent) {
-        appliedContent = currentContent;
-        shouldWrite = false;
-      } else if (currentContent !== originalContent) {
-        const { content: patchedContent, results } = applyPatchToText(
-          originalContent,
-          finalContent,
-          currentContent,
-        );
-        appliedContent = results.every(Boolean) ? patchedContent : finalContent;
-      }
-    }
-
-    if (shouldWrite) {
-      yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
-    }
-    yield* recordToolFileRead(path);
-    return { appliedContent, baseContent };
-  },
-);
 
 /**
  * Append the unified user-adjustment diff note to a base output message, or

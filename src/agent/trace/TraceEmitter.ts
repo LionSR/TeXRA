@@ -6,8 +6,8 @@
  * `toolUseHelpers.ts` that operate on the emitted event stream.
  *
  * Responsibilities at the emit boundary (one place, not many):
- *   - fan out to subscribers
- *   - swallow per-subscriber exceptions so one bad sink can't break the run
+ *   - fan out to the sinks it was built with
+ *   - swallow per-sink exceptions so one bad sink can't break the run
  */
 import { writeLogLine } from '@logger/logSink';
 import {
@@ -28,7 +28,7 @@ import type {
 } from './events';
 import type {
   AgentTrace,
-  AgentTraceSubscriber,
+  AgentTraceSink,
   DomainEventInput,
   LogOptions,
   StagedEmitOptions,
@@ -42,40 +42,39 @@ import type {
 const CHANNEL = 'TraceEmitter';
 
 export class TraceEmitter implements AgentTrace {
-  /**
-   * Subscribers in registration order. `emit` iterates the live Set, so a
-   * subscriber that unsubscribes during a dispatch (its own or a peer's) is
-   * not visited afterwards — the same semantics as iterating `values()`.
-   */
-  private readonly subscribers = new Set<AgentTraceSubscriber>();
+  /** The sinks this trace was built with, in order; null once it closed. */
+  private sinks: readonly AgentTraceSink[] | null;
+
+  constructor(...sinks: readonly AgentTraceSink[]) {
+    this.sinks = sinks;
+  }
 
   // ─── SSoT primitives ───────────────────────────────────────────────
 
-  subscribe(subscriber: AgentTraceSubscriber): () => void {
-    this.subscribers.add(subscriber);
-    return () => {
-      this.subscribers.delete(subscriber);
-    };
+  /** End the trace with its run: an event emitted after this reaches no
+   *  sink, since the run it would describe has ended. */
+  close(): void {
+    this.sinks = null;
   }
 
   emit(event: AgentEvent): void {
-    for (const sub of this.subscribers) {
+    for (const sink of this.sinks ?? []) {
       try {
-        sub(event);
+        sink(event);
       } catch (err) {
-        // A misbehaving subscriber must not break the run. Write the entry
+        // A misbehaving sink must not break the run. Write the entry
         // to the host log sink directly (not back through this emitter, and
         // not through a fiber: `emit` is the trace plane's one synchronous
         // publication point) so a throwing sink is diagnosable without
         // recursing into the trace stream.
-        // `warn`, not `debug`: swallowing a subscriber fault at debug level is
+        // `warn`, not `debug`: swallowing a sink fault at debug level is
         // the quiet-degradation shape the guardrail forbids, and it matches the
         // sibling session plane (`SessionHandle.publish`) and the app-signal
         // bus, whose delivery fiber warns and keeps its subscription.
         writeLogLine(
           'WARN',
           CHANNEL,
-          `Trace subscriber threw while handling event: ${toErrorMessage(err)}`,
+          `Trace sink threw while handling event: ${toErrorMessage(err)}`,
         );
       }
     }

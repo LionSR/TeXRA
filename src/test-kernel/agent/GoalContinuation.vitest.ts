@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
 import {
   createTestSession,
@@ -26,7 +27,7 @@ describe('maybeBuildGoalContinuation', () => {
   });
 
   afterEach(async () => {
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   });
 
   it.effect(

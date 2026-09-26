@@ -683,9 +683,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           succeedAtAttempt: 2,
           attemptCosts: [0.1, 0.5],
         });
-        const logger = new TraceEmitter();
         const completedTaskCosts: number[] = [];
-        logger.subscribe((event) => {
+        const logger = new TraceEmitter((event) => {
           if (
             event.type === 'workflow.call' &&
             event.call.status === 'completed'

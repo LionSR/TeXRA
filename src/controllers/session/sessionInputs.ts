@@ -8,8 +8,9 @@
 import { isDeepStrictEqual } from 'node:util';
 
 // Third-party imports
-import { Effect, Layer, Stream, SubscriptionRef } from 'effect';
+import { Effect, Layer, Schedule, Stream, SubscriptionRef } from 'effect';
 
+import { withLogChannel } from '@logger/effectLog';
 import {
   DEBUG_MODE_KEY,
   referencedAggregates,
@@ -20,7 +21,11 @@ import {
   type FoldInput,
   type TextChunk,
 } from '@shared/schemas';
-import { Database, type AggregateState } from '@shared/session/database';
+import {
+  Database,
+  type AggregateState,
+  type DatabaseReadFailed,
+} from '@shared/session/database';
 import { SessionInputs } from '@shared/session/sessionInputs';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import {
@@ -30,6 +35,29 @@ import {
   type InflightTextChunk,
 } from './sessionSources';
 import { WorkspaceRoots } from './WorkspaceRoots';
+
+/**
+ * A read the fold cannot continue without. A failure is logged and retried
+ * with backoff, so a transient one (a busy database, an I/O hiccup) costs a
+ * delay rather than the session's view; one that persists ends the fold,
+ * which fails every reader of the view's changes at that boundary.
+ */
+const foldRead = <A>(
+  read: Effect.Effect<A, DatabaseReadFailed>,
+): Effect.Effect<A> =>
+  read.pipe(
+    Effect.tapError((error) =>
+      Effect.logWarning('Session fold read failed; retrying').pipe(
+        Effect.annotateLogs({ data: error }),
+        withLogChannel('sessionInputs'),
+      ),
+    ),
+    Effect.retry({
+      schedule: Schedule.exponential('50 millis'),
+      times: 5,
+    }),
+    Effect.orDie,
+  );
 
 export const sessionInputsLayer = Layer.effect(
   SessionInputs,
@@ -52,11 +80,11 @@ export const sessionInputsLayer = Layer.effect(
             const effectiveCommit = reset ? 0 : fromCommit;
             const anchor =
               effectiveCommit === 0
-                ? yield* log.currentCommit.pipe(Effect.orDie)
+                ? yield* foldRead(log.currentCommit)
                 : effectiveCommit;
-            const listing = (yield* log
-              .readListing()
-              .pipe(Effect.orDie)).filter(isDisplaySessionEvent);
+            const listing = (yield* foldRead(log.readListing())).filter(
+              isDisplaySessionEvent,
+            );
             let checked = new Set<AggregateId>(
               effectiveAggregates.map(({ id }) => id),
             );
@@ -78,20 +106,20 @@ export const sessionInputsLayer = Layer.effect(
               set: [...effectiveAggregates],
             });
             for (const aggregate of effectiveAggregates) {
-              const rows = yield* log
-                .readAggregate(aggregate.id, aggregate.fromSeq)
-                .pipe(Effect.orDie);
+              const rows = yield* foldRead(
+                log.readAggregate(aggregate.id, aggregate.fromSeq),
+              );
               for (const event of rows.filter(isDisplaySessionEvent)) {
                 replay.push({ _tag: 'event', read: 'aggregate', event });
               }
             }
-            const replayState = yield* log
-              .readInputBatch(
+            const replayState = yield* foldRead(
+              log.readInputBatch(
                 effectiveAggregates.map(({ id }) => id),
                 anchor,
                 [...checked],
-              )
-              .pipe(Effect.orDie);
+              ),
+            );
             const replayExistence = reconcileExistence(replayState);
             checked = new Set(
               replayExistence.claims.map(({ aggregateId }) => aggregateId),
@@ -135,8 +163,8 @@ export const sessionInputsLayer = Layer.effect(
                   Effect.gen(function* () {
                     const nextText = yield* SubscriptionRef.get(text.ref);
                     const snapshot = yield* SubscriptionRef.get(local.ref);
-                    const read = yield* log
-                      .readInputBatch(
+                    const read = yield* foldRead(
+                      log.readInputBatch(
                         aggregates.map(({ id }) => id),
                         previous.cursor,
                         [
@@ -145,8 +173,8 @@ export const sessionInputsLayer = Layer.effect(
                             ...effectiveAggregates.map(({ id }) => id),
                           ]),
                         ],
-                      )
-                      .pipe(Effect.orDie);
+                      ),
+                    );
                     const { cursor, events: rows } = read;
                     const existence = reconcileExistence(read);
                     checked = new Set(

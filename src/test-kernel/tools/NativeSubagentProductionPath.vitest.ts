@@ -390,7 +390,7 @@ function childRunId(resultOutput: string | undefined): RunId {
 }
 
 function interruptActiveRuns(session: SessionHandle): void {
-  for (const runId of session.runs.getActiveIds()) {
+  for (const runId of session.runs.activeIds()) {
     session.runs.interrupt(runId);
   }
 }
@@ -448,13 +448,10 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    DelegateAgentTool.call({
-      agent: null,
-      model: null,
-      instruction,
-      memories: [],
-      working_directory: null,
-      execution_id: runId,
+    ExecutionsTool.call({
+      path: `/executions/${runId}`,
+      action: 'send',
+      message: instruction,
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -615,7 +612,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     interruptActiveRuns(session);
     if (parentFiber) await Effect.runPromise(Fiber.await(parentFiber));
     if (childId) await waitForClaimRelease(childId);
-    await Effect.runPromise(session.releaseRunLease(PARENT_RUN_ID));
+    await Effect.runPromise(session.commitRunEnd(PARENT_RUN_ID));
     await Effect.runPromise(teardownDefaultSession());
     vi.restoreAllMocks();
   });
@@ -646,7 +643,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
@@ -706,7 +703,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect(resumedRuns).toEqual([]);
         expect(parentTurns).toHaveLength(0);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         yield* waitForParentTurns(2);
         const afterStop = yield* readCompletedRunConversation(
@@ -724,7 +721,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             resumeRun(runId, {
               session,
               extraFollowUps: [
-                { text: 'Continue after restart.', origin: 'user' },
+                {
+                  text: 'Continue after restart.',
+                  from: { kind: 'user' as const },
+                },
               ],
               executeWorkflow: () =>
                 Effect.fail(new Error('Expected a tool-use child.')),
@@ -747,15 +747,22 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
-        yield* submitFollowUp(runId, 'Continue in the recovered run.', {
-          session,
-        }).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        yield* submitFollowUp(
+          runId,
+          {
+            text: 'Continue in the recovered run.',
+            from: { kind: 'user' as const },
+          },
+          {
+            session,
+          },
+        ).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
         yield* waitForParentTurns(4);
         expect(session.runs.getHandle(runId)).toBe(recoveredHandle);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
 
         // An already idle saved run needs no new input or model turn to
@@ -784,7 +791,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         );
         expect((yield* readChildTurnState(session, runId)).active).toBeNull();
         expect(childTurns).toHaveLength(0);
-        yield* session.runs.kill(runId).settlement;
+        yield* session.runs.stop(runId).settlement;
         yield* Effect.promise(() => waitForClaimRelease(runId));
         modelBindingMocks.bindModel.mockReturnValueOnce(
           Effect.fail(new Error('Recovered model binding failed.')),
@@ -796,7 +803,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             resumeRun(runId, {
               session,
               extraFollowUps: [
-                { text: 'Keep this unconsumed input.', origin: 'user' },
+                {
+                  text: 'Keep this unconsumed input.',
+                  from: { kind: 'user' as const },
+                },
               ],
               executeWorkflow: () =>
                 Effect.fail(new Error('Expected a tool-use child.')),
@@ -834,7 +844,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         // The answerless turn still delivers: its report/result overwrite turn 1's
         // with an explicitly empty response rather than replaying 'Result A.' — and
@@ -1004,7 +1014,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             PARENT_RUN_ID,
             {
               text: report!,
-              origin: 'subagent_result',
+              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
               deliveryId,
             },
             { session },
@@ -1023,7 +1033,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           {
             text: report!,
-            origin: 'subagent_result',
+            from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             deliveryId: `${deliveryId}:other`,
           },
           { session },
@@ -1102,7 +1112,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         // Stop the child before turn 2 persists any result. The registry stop
         // reaches the loop as well as the turn, so the turn is interrupted rather
         // than delivered as a cancelled completion.
-        const stopped = session.runs.kill(runId);
+        const stopped = session.runs.stop(runId);
         expect(stopped.accepted()).toBe(true);
         const stopFiber = yield* Effect.forkChild(stopped.settlement, {
           startImmediately: true,

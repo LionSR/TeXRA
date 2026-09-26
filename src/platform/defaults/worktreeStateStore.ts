@@ -2,7 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type Result } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
@@ -72,6 +72,15 @@ class WorktreeStateStore implements StateStore {
     }
 
     return this.globalState.update(this.namespacedKey(key), value);
+  }
+
+  modify<T, E>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E | StateWriteFailed> {
+    return this.sharedKeys.has(key)
+      ? this.globalState.modify(this.namespacedKey(key), change)
+      : this.workspaceState.modify(key, change);
   }
 
   private namespacedKey(key: string): string {

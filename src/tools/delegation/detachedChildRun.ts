@@ -21,7 +21,7 @@ import { registerRun } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
-  runWithOwnedRunLeaseLaunchGuard,
+  runWithLaunchGuard,
   type ChildRunLoopParams,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -125,7 +125,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
   Error,
   R | Runs | AgentResume
 > {
-  return runWithOwnedRunLeaseLaunchGuard(
+  return runWithLaunchGuard(
     input.session,
     input.runId,
     Effect.gen(function* () {

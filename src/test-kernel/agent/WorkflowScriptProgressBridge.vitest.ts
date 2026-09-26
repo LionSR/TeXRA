@@ -25,6 +25,8 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { projectWorkflowScriptProgress } from '@tools/delegation/workflowScriptRun';
 
+import { recordingTrace } from './progressTestUtils';
+
 const meta = `export const meta = {
   name: 'progress-test',
   description: 'tests workflow progress projection',
@@ -55,16 +57,6 @@ beforeEach(async () => {
 afterEach(async () => {
   await Effect.runPromise(closeSession(session.roots.storage));
 });
-
-function recordingTrace(): {
-  readonly trace: TraceEmitter;
-  readonly events: AgentEvent[];
-} {
-  const trace = new TraceEmitter();
-  const events: AgentEvent[] = [];
-  trace.subscribe((event) => events.push(event));
-  return { trace, events };
-}
 
 function stageId(events: readonly AgentEvent[], label: string): string {
   const event = events.find(

@@ -2,7 +2,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
+import { Effect, Exit, Scope } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 import { aggregateId as qualifyAggregateId, type RunId } from '@shared/schemas';
@@ -188,42 +188,48 @@ describe('output-file run fact frontend subscriptions', () => {
     }
   });
 
-  it('badges run-fact output files and app-scoped workspace writes', async () => {
-    const session = createTestSession();
-    publishTestRunStart(session, runId);
-    const context = fakeExtensionContext();
-    registerFileDecorations(
-      context as unknown as VSCode.ExtensionContext,
-      testRuntime(),
-      session,
-    );
-    const provider = mocks.registeredProviders.at(-1) as {
-      provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
-    };
-    const texraBadge = { badge: 'T', tooltip: 'Modified by TeXRA' };
+  it.live('badges run-fact output files and app-scoped workspace writes', () =>
+    Effect.gen(function* () {
+      const session = createTestSession();
+      publishTestRunStart(session, runId);
+      const context = fakeExtensionContext();
+      // The listeners are fibers of this scope, as they are of activation's.
+      const scope = yield* Scope.make();
+      yield* registerFileDecorations(
+        context as unknown as VSCode.ExtensionContext,
+        session,
+      ).pipe(Scope.provide(scope));
+      const provider = mocks.registeredProviders.at(-1) as {
+        provideFileDecoration(uri: { scheme: string; fsPath: string }): unknown;
+      };
+      const texraBadge = { badge: 'T', tooltip: 'Modified by TeXRA' };
 
-    const runFactPath = '/tmp/texra-run-fact-output.tex';
-    await emitOutputFiles(session, runFactPath);
-    expect(
-      provider.provideFileDecoration(vscode.Uri.file(runFactPath)),
-    ).toMatchObject(texraBadge);
+      const runFactPath = '/tmp/texra-run-fact-output.tex';
+      yield* Effect.promise(() => emitOutputFiles(session, runFactPath));
+      expect(
+        provider.provideFileDecoration(vscode.Uri.file(runFactPath)),
+      ).toMatchObject(texraBadge);
 
-    const writtenPath = '/tmp/texra-workspace-written.tex';
-    emitAppSignal('workspaceFilesWritten', {
-      absolutePaths: [writtenPath],
-    });
-    // The badge lands on the subscriber's own fiber, a turn after the publish.
-    await vi.waitFor(() =>
+      const writtenPath = '/tmp/texra-workspace-written.tex';
+      emitAppSignal('workspaceFilesWritten', {
+        absolutePaths: [writtenPath],
+      });
+      // The badge lands on the subscriber's own fiber, a turn after the publish.
+      yield* Effect.promise(() =>
+        vi.waitFor(() =>
+          expect(
+            provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
+          ).toMatchObject(texraBadge),
+        ),
+      );
+
+      yield* Scope.close(scope, Exit.void);
+      disposeContext(context);
       expect(
         provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
-      ).toMatchObject(texraBadge),
-    );
-
-    disposeContext(context);
-    expect(
-      provider.provideFileDecoration(vscode.Uri.file(writtenPath)),
-    ).toBeUndefined();
-  });
+      ).toBeUndefined();
+    }),
+  );
 
   it.live(
     'refreshes inline criticism only for live output rows while enabled',

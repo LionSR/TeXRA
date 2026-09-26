@@ -68,6 +68,7 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -374,7 +375,7 @@ describe('TUI request decisions', () => {
         session.setApprovalPolicy('yolo');
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
         yield* waitForNoApproval();
-        session.runs.untrack(runId);
+        untrackRun(session.runs, runId);
       }),
   );
 

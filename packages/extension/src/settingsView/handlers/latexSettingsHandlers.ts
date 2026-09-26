@@ -242,9 +242,9 @@ export class LatexSettingsHandlers {
       if (
         !this.toolingController.isAllowedInstallCommand(data.installCommand)
       ) {
-        return yield* Effect.logWarning(
-          `Rejected unknown install command: ${data.installCommand}`,
-        ).pipe(withLogChannel(this.ctx.channel));
+        return yield* Effect.fail(
+          new Error(`Rejected unknown install command: ${data.installCommand}`),
+        );
       }
 
       const terminal = vscode.window.createTerminal({

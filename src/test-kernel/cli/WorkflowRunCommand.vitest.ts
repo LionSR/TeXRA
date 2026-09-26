@@ -34,6 +34,7 @@ import {
   type SessionEventDraft,
   AgentCategory,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { createRunCommandCliContext } from '@test/cli/fixtures/cliContext';
 import {
   fakeProcessServices,
@@ -488,7 +489,7 @@ describe('CLI run command, workflow agents', () => {
   });
 
   afterEach(async () => {
-    if (fixtureSession) await Effect.runPromise(fixtureSession.dispose());
+    if (fixtureSession) await Effect.runPromise(closeSessionOf(fixtureSession));
     fixtureSession = undefined;
   });
 
@@ -816,7 +817,7 @@ describe('CLI run command, workflow agents', () => {
         );
         const session = yield* Effect.acquireRelease(
           Effect.sync(() => createTestSession()),
-          (owned) => owned.dispose(),
+          (owned) => closeSessionOf(owned),
         );
         const runId = 'abc123abc123' as RunId;
         const run = workflowRun(runId);
@@ -843,17 +844,24 @@ describe('CLI run command, workflow agents', () => {
           },
         ]);
         // The executeCliConfig stub is an Effect port. Its run owns output
-        // finalization and releases the real claim before returning.
+        // finalization, and the driver it stands in for holds the real
+        // claim, released once the run's ending has committed.
         mocks.executeCliConfig.mockImplementationOnce(
           (_config, _context, options) =>
-            options
-              .openWorkflowOutput(run.result, [], () => true)
-              .pipe(
-                Effect.as(run),
-                Effect.ensuring(
-                  session.releaseRunLease(runId).pipe(Effect.orDie),
+            Effect.scoped(
+              session
+                .holdRunClaim(runId)
+                .pipe(
+                  Effect.andThen(
+                    options.openWorkflowOutput(run.result, [], () => true),
+                  ),
+                  Effect.as(run),
+                  Effect.ensuring(
+                    session.commitRunEnd(runId).pipe(Effect.orDie),
+                  ),
+                  Effect.orDie,
                 ),
-              ),
+            ),
         );
         expect(yield* workflowProgram({}, createRunCommandCliContext())).toBe(
           0,
@@ -1509,9 +1517,9 @@ describe('CLI run command, workflow agents', () => {
           {
             session: Effect.succeed(session),
             runtime: testRuntime(),
-            lifecycle: installedHost().platform.lifecycle,
+            shutdownScope: installedHost().platform.shutdownScope,
           },
-        ).pipe(Effect.ensuring(session.dispose()));
+        ).pipe(Effect.ensuring(closeSessionOf(session)));
 
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(cliLogSinksMock.writeTextStdout).not.toHaveBeenCalled();
@@ -1561,9 +1569,9 @@ describe('CLI run command, workflow agents', () => {
           {
             session: Effect.succeed(session),
             runtime: testRuntime(),
-            lifecycle: installedHost().platform.lifecycle,
+            shutdownScope: installedHost().platform.shutdownScope,
           },
-        ).pipe(Effect.ensuring(session.dispose()));
+        ).pipe(Effect.ensuring(closeSessionOf(session)));
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(cwdSpy).toHaveBeenCalledOnce();
         cwdSpy.mockRestore();
