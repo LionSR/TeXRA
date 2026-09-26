@@ -362,7 +362,6 @@ export function App(props: AppProps): React.JSX.Element {
         return (
           <WorkPlanReader
             availableRows={availableRows}
-            loading={reader.loading === true}
             onClose={closeForegroundReader}
             runId={reader.runId}
             session={props.session}
