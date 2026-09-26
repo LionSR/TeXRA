@@ -375,10 +375,10 @@ export function foldTranscriptEvent(
 
 /**
  * One aggregate's transcript, folded cold from its committed rows by the same
- * reducer the session view runs: where no view is resident (export, a parked
- * run's closure, host exit). Empty when the run has no rows. `settledRows`
- * stays 0: only the live session fold advances that prefix, so a cold read
- * uses `rows` and `openWork`, never `settledRows`.
+ * reducer the session view runs: where no view is resident (the completed-run
+ * archive). Empty when the run has no rows. `settledRows` stays 0: only the
+ * live session fold advances that prefix, so a cold read uses `rows`, never
+ * `settledRows`.
  */
 export function foldRunTranscript(
   events: readonly SessionEvent[],
