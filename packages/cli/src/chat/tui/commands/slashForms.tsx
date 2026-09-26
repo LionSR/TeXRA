@@ -143,10 +143,7 @@ export function openRegisteredCliSlashForm(
 export function openCliSlashCommandForm(
   commandName: string,
   remainder: string,
-  onPersist?: () => void,
 ): boolean {
   const command = findSlashCommand(commandName);
-  return command
-    ? openRegisteredCliSlashForm(command, remainder, onPersist)
-    : false;
+  return command ? openRegisteredCliSlashForm(command, remainder) : false;
 }

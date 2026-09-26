@@ -6,12 +6,10 @@ import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
   selectedRunId as selectedRunIdSignal,
-  beginWorkPlanReaderRequest,
-  cancelPendingWorkPlanReaderRequest,
-  cancelWorkPlanReaderRequest,
   clearTransientNotice,
-  finishWorkPlanReaderRequest,
+  closeForegroundReader,
   openInfoPane,
+  openWorkPlanReader,
   sessionMeta,
   setTransientNotice,
 } from '@cli/chat/tui/state/cliState';
@@ -46,19 +44,18 @@ export function showCliSlashCommandHelp(): void {
 export function showCliWorkPlan(session: SessionHandle): void {
   const runId = selectedRunIdSignal.get();
   if (!runId) {
-    cancelPendingWorkPlanReaderRequest();
     setTransientNotice('No focused session.');
     return;
   }
   clearTransientNotice();
-  const request = beginWorkPlanReaderRequest(runId);
   const run = session.runView(runId);
   if (
     run?.category === AgentCategory.ToolUse &&
     (run.plan !== null || run.todos.length > 0)
   ) {
-    finishWorkPlanReaderRequest(request);
-  } else if (cancelWorkPlanReaderRequest(request)) {
+    openWorkPlanReader(runId);
+  } else {
+    closeForegroundReader();
     setTransientNotice('The focused session has no work plan.');
   }
 }

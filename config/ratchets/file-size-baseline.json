@@ -12,7 +12,7 @@
     "packages/cli/src/chat/tui/render/ansiMarkdown.ts": 555,
     "packages/cli/src/chat/tui/runChatTui.tsx": 606,
     "packages/cli/src/chat/tui/state/approvalQueue.ts": 561,
-    "packages/cli/src/chat/tui/state/cliState.ts": 553,
+    "packages/cli/src/chat/tui/state/cliState.ts": 510,
     "packages/cli/src/commands/_helpers/dispatch.ts": 670,
     "packages/cli/src/commands/workflow.ts": 513,
     "packages/cli/src/runtime/doctor.ts": 586,
