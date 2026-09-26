@@ -357,6 +357,70 @@ pipeline behind a boundary.
   a separate bug, found while testing. Since PR 2 that run warns that it hit
   the output limit.
 
+## Later: model-directed reflection
+
+Round mode is the parity step. Once it lands, the main limit on workflow
+agents is that every round after the first runs a prompt written in advance.
+`polish.yaml`'s second `userRequest` is a fixed checklist: missing equations,
+notation used before it is defined, generic filler, changes the instruction
+did not ask for. That checklist only checks for mistakes. It never pushes the
+work further, and its guard against invented weaknesses ("reproduce it
+unchanged") works against depth. Round 3 of a fixed script repeats round 2's
+questions.
+
+Reflection has two jobs, and the proposed mode gives each its own critique:
+
+- **Correct.** Find what is wrong in round _n_ from evidence rather than
+  questions: the round's latexdiff, compile output and chktex warnings. The
+  no-invented-weaknesses rule belongs here.
+- **Deepen.** Name the most valuable way to push the work further: a
+  derivation that is only sketched, a missing case or regime, a claim that
+  needs a stronger argument or a citation, a weaker section order, an example
+  that would make an abstract point concrete.
+
+Each later round runs a correct critique and, while depth remains, a deepen
+critique. Its revision then works from both, and the model writes them
+instead of the YAML.
+
+1. **Depth is the user's choice.** `rounds` keeps meaning the number of passes
+   asked for, and the run does not stop early by default. An early stop when
+   the correct critique finds nothing is opt-in, for example `depth: quick`,
+   for users who want a fast pass.
+2. **Each deepen critique must build on the last.** The earlier critiques are
+   in the conversation, so the next one has to name something new or say
+   plainly that what remains is cosmetic. That is reported to the user, not
+   used as a silent stop.
+3. **The checklist becomes a rubric.** Today's `userRequest[1]` text stays in
+   the YAML as hints for the correct critique. Domain rules such as `\tr`
+   and non-breaking references stay; the scripted conversation goes.
+4. **Where the critique runs.** First as turns in the same conversation,
+   where the cached prefix makes them cheap. Later, optionally, as a critic
+   subagent on another model for a fresh reading.
+
+It is a different round policy, not a loop change. The policy's `nextRound`
+returns the critiques' output instead of `userRequest[n]`. Two follow-ons
+build on it:
+
+- The evidence the correct critique reads (compile, references, chktex, a
+  Lean proof check) becomes plugin contributions.
+- Once workflow agents may declare read and verify tools, a deepen critique
+  can check a claim or look up a reference before proposing it, and the
+  revision can patch the flagged places instead of reprinting the document.
+
+**Not breaking what exists.** The mode is opt-in through an agent YAML field,
+for example `reflection: critique`. Bundled agents keep `userRequest[1]`
+until an evaluation shows the new mode is better at the same round count.
+That evaluation runs a fixed set of papers on the cheap test models and
+measures depth as well as fewer mistakes:
+
+- a blind judge's comparison of substance: derivations, coverage, strength
+  of arguments;
+- compile and chktex failures;
+- diff size and cost.
+
+The comparison is itself the harness improving under measurement: the change
+stays only if the numbers say so.
+
 ## Not in scope
 
 - Offering tools to workflow agents. Round mode makes it possible, since the
