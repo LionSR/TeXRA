@@ -331,8 +331,8 @@ export class SettingsViewMessageHandler {
           commandKind: data.kind,
         });
         if (action.kind === 'none') {
-          const missing = `${data.kind} command for ${data.toolId}`;
-          return Effect.fail(new Error(`No ${missing}: ${action.reason}`));
+          const missing = `${data.kind} command for tool "${data.toolId}"`;
+          return Effect.fail(new Error(`No ${missing} (${action.reason})`));
         }
         return Effect.sync(() => {
           const terminal = vscode.window.createTerminal({ name: action.name });
