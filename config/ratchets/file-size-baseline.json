@@ -47,7 +47,7 @@
     "packages/llm/src/openaiResponsesCodec.ts": 812,
     "packages/llm/src/openrouterChat.ts": 902,
     "packages/llm/src/turn.ts": 1089,
-    "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 736,
+    "src/agent/followUp/ToolUseFollowUpQueueManager.ts": 726,
     "src/agent/index/agentRegistry.ts": 544,
     "src/agent/output/compileCheck.ts": 526,
     "src/agent/output/extraction/filenameHeaders.ts": 564,
