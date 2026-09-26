@@ -32,6 +32,8 @@ import type { createReviewPane } from './reviewPane';
 interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
+  /** A modal (Settings) covers the shell; the native browser view stays hidden. */
+  isBrowserCovered(): boolean;
   editorPane: ReturnType<typeof createEditorPane>;
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
@@ -61,6 +63,7 @@ interface WorkbenchController {
 export function createWorkbenchController({
   session,
   isActive,
+  isBrowserCovered,
   editorPane,
   terminalPane,
   reviewPane,
@@ -88,7 +91,7 @@ export function createWorkbenchController({
     const tab = WORKBENCH_PLACEMENTS.map((placement) =>
       activeWorkbenchTab(getState(), placement),
     ).find((candidate) => candidate?.kind === 'browser');
-    if (tab?.kind !== 'browser') {
+    if (tab?.kind !== 'browser' || isBrowserCovered()) {
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
       return;
     }
@@ -96,7 +99,7 @@ export function createWorkbenchController({
     // Measure after layout settles; a workbench that just appeared has no box
     // until the browser has flushed the style change.
     requestAnimationFrame(() => {
-      if (!isActive()) return;
+      if (!isActive() || isBrowserCovered()) return;
       const slot = document.querySelector(
         `[data-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
       );

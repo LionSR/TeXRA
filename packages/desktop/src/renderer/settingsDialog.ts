@@ -9,14 +9,19 @@ import { createOverlayDialog } from './overlayDialog';
 
 interface DesktopSettingsDialog {
   open(tab?: SettingsTarget, agentSubTab?: AgentCategory): void;
+  isOpen(): boolean;
+  /** Re-announce the view after the active project changed. */
+  remount(): void;
 }
 
 /**
  * Settings as a popup over the shell. The one `<settings-app>` is mounted on
  * first open and stays in the dialog afterwards, so its state survives
- * closing and reopening. `onShown` / `onHidden` let the shell hide the native
- * browser view while the dialog is up: a WebContentsView paints over renderer
- * DOM, the dialog included.
+ * closing and reopening. Its settings IPC is per project and answers only a
+ * `webviewReady`, which `<settings-app>` posts on connect, so a project switch
+ * remounts it to load the new project's values. `onShown` / `onHidden` let
+ * the shell hide the native browser view while the dialog is up: a
+ * WebContentsView paints over renderer DOM, the dialog included.
  */
 export function createDesktopSettingsDialog(
   appRoot: HTMLElement,
@@ -55,6 +60,12 @@ export function createDesktopSettingsDialog(
         buildDesktopSettingsTabMessage(tab, agentSubTab),
         resolvePostMessageTargetOrigin(window.location.origin),
       );
+    },
+    isOpen: () => dialog.open,
+    remount() {
+      if (!settingsView.isConnected) return;
+      settingsView.remove();
+      content.append(settingsView);
     },
   };
 }

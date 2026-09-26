@@ -32,6 +32,7 @@ export function createProjectWorkbench(options: {
   surfaces: SessionSurfaces;
   logsPane: HTMLElement;
   isActive(): boolean;
+  isBrowserCovered(): boolean;
   subagentsTemplate(): TemplateResult | typeof nothing;
   onLayoutChanged(
     session: string,
@@ -121,6 +122,7 @@ export function createProjectWorkbench(options: {
   const workbench = createWorkbenchController({
     session,
     isActive: options.isActive,
+    isBrowserCovered: options.isBrowserCovered,
     editorPane,
     terminalPane,
     reviewPane,

@@ -32,11 +32,23 @@ test.beforeAll(async () => {
 // The Settings popup is modal; a journey that opened it must not leave it
 // over the next one's clicks.
 test.afterEach(async () => {
-  await launched.page.evaluate(() => {
+  // `open = false` only starts the hide animation; wait until it has left
+  // the top layer.
+  await launched.page.evaluate(async () => {
     const dialog = document.querySelector<HTMLElement & { open: boolean }>(
       'wa-dialog.desktop-settings-overlay',
     );
-    if (dialog) dialog.open = false;
+    if (!dialog?.open) return;
+    const hidden = new Promise<void>((resolve) => {
+      const onHide = (event: Event) => {
+        if (event.target !== dialog) return;
+        dialog.removeEventListener('wa-after-hide', onHide);
+        resolve();
+      };
+      dialog.addEventListener('wa-after-hide', onHide);
+    });
+    dialog.open = false;
+    await hidden;
   });
 });
 

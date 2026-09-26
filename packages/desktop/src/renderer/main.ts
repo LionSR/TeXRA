@@ -41,7 +41,6 @@ import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
-import { DESKTOP_WORKSPACE_COMMANDS } from '../shared/desktopWorkspaceMessages';
 import {
   DESKTOP_LOCAL_COMMANDS,
   getDesktopCommandMenuEntries,
@@ -359,13 +358,13 @@ conversationView.placement = 'desktop';
 conversationView.setAttribute('placement', 'desktop');
 conversationView.setAttribute('data-desktop-view', 'progress');
 
+// Both hooks re-sync the browser view, which stays hidden while the dialog
+// is open (`isBrowserCovered`).
+const syncActiveBrowserView = () =>
+  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
 const settingsDialog = createDesktopSettingsDialog(appRoot, {
-  onShown: () =>
-    postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE, {
-      session: shell.active,
-    }),
-  onHidden: () =>
-    projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds(),
+  onShown: syncActiveBrowserView,
+  onHidden: syncActiveBrowserView,
 });
 
 // The logs viewer is hosted directly in its workbench tab body.
@@ -929,6 +928,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
           surfaces: projectSessions,
           logsPane,
           isActive: () => shell.active === key,
+          isBrowserCovered: settingsDialog.isOpen,
           subagentsTemplate: () => {
             const session = projectSessions.get(key);
             return session
@@ -956,6 +956,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
     }
     rerenderShell();
     if (previousKey !== message.activeKey) {
+      settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces({ focus: false });
       currentWorkbench().workbench.syncBrowserViewBounds();
     }
