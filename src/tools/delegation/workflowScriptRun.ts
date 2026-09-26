@@ -1,4 +1,4 @@
-import { Cause, Exit } from 'effect';
+import { Cause, Data, Exit } from 'effect';
 
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -19,6 +19,20 @@ import {
 } from '@shared/schemas';
 import { formatWorkflowCallLine } from '@ui/copy/workflowCall';
 import { generateShortId } from '@utils/core';
+
+/**
+ * A workflow subagent that ran but cannot resolve its agent() call: it ended
+ * with a non-completed outcome, or completed without the output files a
+ * workflow agent owes. The script sees it as that call's rejection.
+ */
+export class WorkflowSubagentUnsuccessful extends Data.TaggedError(
+  'WorkflowSubagentUnsuccessful',
+)<{ readonly message: string }> {}
+
+/** A waited workflow run that settled without the report it owes its caller. */
+export class WorkflowScriptReportMissing extends Data.TaggedError(
+  'WorkflowScriptReportMissing',
+)<{ readonly message: string }> {}
 
 /**
  * `onEvent` is omitted deliberately: this projection owns the engine's event

@@ -9,10 +9,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import {
-  FollowUpContinuationOwned,
-  type RunInput,
-} from '@agent/followUp/RunInput';
+import { FollowUpContinuationOwned } from '@agent/followUp/RunInput';
+import type { RunInput } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
@@ -846,11 +844,10 @@ export function startChildRunLoop<TTurn, R = never>(
         childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
-        if (!queueLease) {
+        if (!queueLease)
           return yield* new FollowUpContinuationOwned({
             message: `Follow-up continuation already has an owner for child ${runId}.`,
           });
-        }
         if (!params.queueLease)
           input = runSession.followUps.attachInput(runId, queueLease)!;
       }),
