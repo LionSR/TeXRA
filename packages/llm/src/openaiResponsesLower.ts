@@ -5,7 +5,6 @@ import OpenAI from 'openai';
 // Local imports - canonical model contract
 import {
   ModelConfigurationSchema,
-  ResolvedTurnSchema,
   TurnResultSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
@@ -269,21 +268,18 @@ export const openaiResponsesContinuation = Effect.fn(
   'llm.responses.continuation',
 )(function* (
   configuration: OpenAIResponsesConfiguration,
-  input: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
+  turn: Extract<ResolvedTurn, { protocol: 'openai-responses' }>,
   completed: TurnResult,
 ): Effect.fn.Return<Continuation | undefined, ModelError> {
   const parsedConfiguration = ModelConfigurationSchema.safeParse(configuration);
-  const parsedTurn = ResolvedTurnSchema.safeParse(input);
   const parsedResult = TurnResultSchema.safeParse(completed);
   if (
     !parsedConfiguration.success ||
     parsedConfiguration.data.protocol !== 'openai-responses' ||
-    !parsedTurn.success ||
-    parsedTurn.data.protocol !== 'openai-responses' ||
     !parsedResult.success ||
     parsedResult.data.providerResponseId === null ||
-    !sameModelOrigin(parsedTurn.data, parsedResult.data.requestedOrigin) ||
-    !sameModelOrigin(parsedTurn.data, {
+    !sameModelOrigin(turn, parsedResult.data.requestedOrigin) ||
+    !sameModelOrigin(turn, {
       ...parsedConfiguration.data,
       codecVersion: 1,
     })
@@ -293,7 +289,6 @@ export const openaiResponsesContinuation = Effect.fn(
       message:
         'Continuation requires the original admitted input and matching completed output.',
     });
-  const turn = parsedTurn.data;
   const result = parsedResult.data;
   // HTTP stored-response chaining is separate from temporary background retrieval.
   // https://developers.openai.com/api/docs/guides/conversation-state

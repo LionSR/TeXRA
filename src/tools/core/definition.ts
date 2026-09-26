@@ -1,7 +1,8 @@
 // Type imports
 import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
-import type { ITool, ToolGuard, ToolHost } from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
+import type { SettingHost } from '@shared/state/stateSettings';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -28,7 +29,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly parallelSafe: boolean | undefined;
   readonly requiresApproval: boolean | undefined;
   readonly slow: boolean | undefined;
-  readonly unavailableHosts: readonly ToolHost[] | undefined;
+  readonly unavailableHosts: readonly SettingHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
 };
 
@@ -39,7 +40,7 @@ export type DefineToolOptions<T, R = never> = {
   /** Roster namespace a delegation tool's description is annotated from. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** Product hosts this tool definition statically excludes itself from. */
-  unavailableHosts?: readonly ToolHost[];
+  unavailableHosts?: readonly SettingHost[];
   /**
    * What the run loop checks before this tool's body runs: the paths the call
    * writes and the command it must get approved. Declared here, applied once

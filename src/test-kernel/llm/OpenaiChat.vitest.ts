@@ -1085,7 +1085,6 @@ describe('native OpenAI Chat protocol', () => {
       },
       controls: { effort: 'xhigh' },
     },
-    { config: QWEN_CONFIG, controls: { thinking: { mode: 'enabled' } } },
   ])(
     'revalidates rehydrated $config.protocol controls before transport',
     ({ config, controls }) =>

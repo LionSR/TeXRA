@@ -74,7 +74,7 @@ const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
     browser: {
       target: 'chatgpt',
       label: CHATGPT_AUTH.signInLabel,
-      description: 'Use a ChatGPT subscription',
+      description: CHATGPT_AUTH.signInDescription,
     },
     device: {
       target: 'chatgpt --device',
@@ -88,7 +88,7 @@ const SIGN_IN_TRANSPORTS: ReadonlyArray<ProviderSignInTransports> = [
     browser: {
       target: 'grok',
       label: GROK_AUTH.signInLabel,
-      description: 'Use a Grok / SuperGrok subscription',
+      description: GROK_AUTH.signInDescription,
     },
     device: {
       target: 'grok --device',
@@ -160,8 +160,8 @@ function buildAccountAccessFormItems(
       description: row.description,
     }));
   const signedIn: Record<SignInProvider, boolean> = {
-    chatgpt: status.chatGptSignedIn,
-    grok: status.grokSignedIn,
+    chatgpt: status.subscriptions.chatgpt.signedIn,
+    grok: status.subscriptions.grok.signedIn,
     texra: status.texraSignedIn ?? false,
   };
   // Signed-out subscriptions get the one sign-in transport their toggle row

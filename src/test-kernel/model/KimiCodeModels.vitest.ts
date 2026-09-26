@@ -8,41 +8,7 @@ import {
   type BindableRoute,
 } from '@agent/runtime/modelRoutes';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiCodeExclusiveRetryModel,
-  isKimiCodeSubscriptionRetryBlocked,
-} from '@shared/model/kimiCodeRetryGate';
-
-describe('Kimi Code exclusivity single-source', () => {
-  it('keeps the retry model-id gate aligned with the shared field predicate', () => {
-    for (const [id, config] of Object.entries(MODEL_CONFIGS)) {
-      expect(isKimiCodeExclusiveRetryModel(id)).toBe(
-        isKimiCodeExclusiveModel(config),
-      );
-    }
-    expect(isKimiCodeExclusiveRetryModel(undefined)).toBe(false);
-    expect(isKimiCodeExclusiveRetryModel('not-a-registered-model')).toBe(false);
-  });
-
-  it('blocks the personal-key switch only for exclusive plan-quota exhaustion', () => {
-    expect(
-      isKimiCodeSubscriptionRetryBlocked(
-        'kimiCoding',
-        'kimi-code-subscription',
-      ),
-    ).toBe(true);
-    expect(
-      isKimiCodeSubscriptionRetryBlocked('kimiCoding', 'upstream-credit'),
-    ).toBe(false);
-    expect(
-      isKimiCodeSubscriptionRetryBlocked('kimi3', 'kimi-code-subscription'),
-    ).toBe(false);
-    expect(
-      isKimiCodeSubscriptionRetryBlocked(undefined, 'kimi-code-subscription'),
-    ).toBe(false);
-  });
-});
+import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 
 describe('Kimi Code routing', () => {
   const route = (model: string, useOpenRouter: boolean) =>

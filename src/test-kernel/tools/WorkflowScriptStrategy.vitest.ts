@@ -11,7 +11,6 @@ import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
-import { WORKFLOW_SKIPPED_RESULT } from '@agent/workflowScript/types';
 import { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import {
   RunUsageTotalsSchema,
@@ -42,7 +41,8 @@ const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
 }
-return await agent('saved call')`;
+const call = yield* attempt(agent('saved call'))
+return call._tag === 'Success' ? call.value : call.error.name`;
 const paperOutput: OutputFileSummary = {
   round: 0,
   relativePath: 'paper.tex',
@@ -221,7 +221,7 @@ describe('createWorkflowScriptStrategy', () => {
   name: 'structured-envelope',
   description: 'reads the structured envelope',
 }
-return await agent('Solve.', {
+return yield* agent('Solve.', {
   agentName: 'prover',
   schema: {
     type: 'object',
@@ -345,7 +345,7 @@ return 'done'`,
   name: 'retained-settlement',
   description: 'tests retained journal settlement',
 }
-await agent('saved call')
+yield* agent('saved call')
 throw new Error('script failed after replay')`;
         const seedError = yield* Effect.flip(
           runPersistedWorkflowScript({
@@ -399,8 +399,8 @@ throw new Error('script failed after replay')`;
   name: '${name}',
   description: 'seeds stale recovery entries',
 }
-await agent('stale file')
-return await agent('malformed stale')`;
+yield* agent('stale file')
+return yield* agent('malformed stale')`;
         const staleResult: RunEnd = {
           ...finalResult,
           output: {
@@ -447,7 +447,7 @@ return await agent('malformed stale')`;
   name: '${name}',
   description: 'fails after current work',
 }
-await agent('current file')
+yield* agent('current file')
 throw new Error('current revision failed')`,
             createRunAgent: (hooks) => (invocation) =>
               Effect.sync(() => {
@@ -520,7 +520,7 @@ throw new Error('current revision failed')`,
   name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
 }
-return await agent('saved call')`;
+return yield* agent('saved call')`;
       const ports = fakePorts();
       const strategy = createWorkflowScriptStrategy(
         strategyParams({
@@ -667,7 +667,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBe('Skipped');
         expect(fake.attempts()).toBe(1);
         // The registration is dropped when the run settles.
         workflowControls.control(grandchildRunId, 'skip');
@@ -762,7 +762,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         // The attempt-specific id the roster exposes reaches the engine index.
         workflowControls.control(attemptRunId, 'skip');
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBe('Skipped');
         expect(fake.attempts()).toBe(2);
       }),
   );
@@ -789,7 +789,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBe(WORKFLOW_SKIPPED_RESULT);
+        expect(turn.result).toBe('Skipped');
         expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
       }),
   );

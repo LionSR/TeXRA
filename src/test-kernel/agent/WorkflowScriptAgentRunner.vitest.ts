@@ -657,7 +657,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'correct',
           parentRunId: runId,
           approvalPromptsUnavailable: true,
           configPayload: expect.objectContaining({
@@ -827,7 +826,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.exists).toHaveBeenCalledWith(workspacePath('notes.tex'));
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
-          agentName: 'merge',
           configPayload: expect.objectContaining({
             inputFiles: [firstCanonical, 'notes.tex', secondCanonical],
           }),
@@ -1724,7 +1722,6 @@ describe('createWorkflowScriptAgentRunner', () => {
         });
         expect(mocks.preparedOptions[0]).toEqual(
           expect.objectContaining({
-            agentName: 'assistant',
             configPayload: expect.objectContaining({
               agentCategory: 'toolUse',
               outputSchema: schema,
@@ -1778,7 +1775,7 @@ describe('createWorkflowScriptAgentRunner', () => {
       );
       const outcome = yield* runWorkflowScript({
         script: `export const meta = { name: 'staggered', description: 'fan out' }
-const found = await parallel(['fast', 'slow', 'fast again'].map((what, i) => () =>
+const found = yield* all(['fast', 'slow', 'fast again'].map((what, i) =>
   agent('Review ' + what, { id: 'call' + i, agentName: 'assistant', schema: { type: 'object' } })))
 return found.map((value) => value && value.outcome)`,
         runAgent: defaultRunner(),

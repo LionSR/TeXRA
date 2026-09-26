@@ -1,11 +1,9 @@
 /**
- * Wait-coordination helpers for the executions tool's blocking `wait` action.
- * Decides which executions are worth blocking on and lets a follow-up message
- * break a blocking wait early.
+ * Wait coordination for the executions tool's blocking `wait` action:
+ * decides which executions are worth blocking on.
  */
 
 import type { RunRegistry } from '@agent/runtime/runRegistry';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
 
@@ -40,27 +38,4 @@ export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
     handle.category === 'toolUse' &&
     handle.isChild
   );
-}
-
-/**
- * Listen for follow-up messages on the current run and call `onFollowUp`
- * when one arrives. This lets users break out of a blocking
- * `executions wait` by sending a follow-up message.
- *
- * Observes the owning session's follow-up queue (`ToolUseFollowUpQueue.onSent`,
- * what `notifyFollowUpSent` fires), so follow-up delivery has exactly one
- * in-process channel and no plane row.
- *
- * Returns a cleanup function that removes the listener.
- */
-export function listenForFollowUp(
-  session: SessionHandle,
-  runId: RunId | undefined,
-  onFollowUp: () => void,
-): () => void {
-  if (!runId) return () => {};
-
-  return session.followUps.onSent((sentRunId) => {
-    if (sentRunId === runId) onFollowUp();
-  });
 }

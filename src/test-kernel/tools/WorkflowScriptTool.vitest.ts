@@ -147,7 +147,7 @@ const script = `export const meta = {
   name: 'tool-test',
   description: 'tests the workflow script tool',
 }
-return await agent('saved call')`;
+return yield* agent('saved call')`;
 
 function toolLayer(stopAfterCycle = false) {
   return nativeToolTestLayer({
@@ -588,7 +588,7 @@ describe('WorkflowScriptTool', () => {
     'saves invalid submitted source and returns its editable draft path',
     () =>
       Effect.gen(function* () {
-        const invalidScript = 'return await agent("missing meta")';
+        const invalidScript = 'return yield* agent("missing meta")';
 
         const result = yield* callTool({ script: invalidScript });
 

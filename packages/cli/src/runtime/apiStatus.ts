@@ -8,15 +8,17 @@ import { CODING_PLAN_SUBSCRIPTIONS } from '@shared/codingPlanSubscriptions';
 import { formatSubscriptionUsageSummary } from '@shared/subscriptionUsagePresentation';
 import type { SubscriptionUsageSnapshot } from '@shared/schemas';
 import { providerDisplayName } from '@shared/constants/providers';
+import { SUBSCRIPTION_AUTH_PROVIDERS } from '@shared/settingsView/settingsViewMessages';
+import { SUBSCRIPTION_AUTH_COPY } from '@ui/copy/accountAuth';
 import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { RESEARCHER_ACCESS } from '@ui/copy/onboarding';
 
 import {
-  formatCliChatGptPreference,
-  formatCliGrokPreference,
   formatCliCodingPlanPreference,
   formatCliModelAccessRoute,
+  formatCliSubscriptionPreference,
   cliCodingPlanStatus,
+  subscriptionAccountLabel,
   type CliAccountStatus,
 } from './modelAccessRoute';
 import {
@@ -66,8 +68,10 @@ export const loadCliModelAccessOverview = Effect.fn(
     { concurrency: 'unbounded' },
   );
   const lines = [
-    `ChatGPT preference: ${formatCliChatGptPreference(access)}`,
-    `Grok preference: ${formatCliGrokPreference(access)}`,
+    ...SUBSCRIPTION_AUTH_PROVIDERS.map(
+      (provider) =>
+        `${SUBSCRIPTION_AUTH_COPY[provider].label} preference: ${formatCliSubscriptionPreference(access.subscriptions[provider])}`,
+    ),
     ...CODING_PLAN_SUBSCRIPTIONS.map(
       (plan) =>
         `${plan.displayName} preference: ${formatCliCodingPlanPreference(access, plan)}`,
@@ -143,7 +147,7 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     new SubscriptionUsageService({ secrets, stores });
   const [chatGptUsage, codingPlanUsageEntries] = yield* Effect.all(
     [
-      access.chatGptSignedIn
+      access.subscriptions.chatgpt.signedIn
         ? usageReader.getUsage('chatgpt', { forceRefresh: true })
         : Effect.succeed(undefined),
       Effect.forEach(
@@ -175,23 +179,23 @@ export const loadCliDetailedAccountStatusLines = Effect.fn(
     return summary ? `${line} · ${summary}` : line;
   };
 
-  const chatGptLine = formatModelPreferenceLine(
-    'ChatGPT',
-    access.preferences.chatGpt === 'on',
-    access.chatGptSignedIn,
-    'sign in required',
-    formatAccountStatus(access.chatGptSignedIn, access.chatGptAccountLabel),
-  );
-  if (chatGptLine) lines.push(withUsage(chatGptLine, chatGptUsage));
-
-  const grokLine = formatModelPreferenceLine(
-    'Grok',
-    access.preferences.grok === 'on',
-    access.grokSignedIn,
-    'sign in required',
-    formatAccountStatus(access.grokSignedIn, access.grokAccountLabel),
-  );
-  if (grokLine) lines.push(grokLine);
+  for (const provider of SUBSCRIPTION_AUTH_PROVIDERS) {
+    const subscription = access.subscriptions[provider];
+    const line = formatModelPreferenceLine(
+      SUBSCRIPTION_AUTH_COPY[provider].label,
+      subscription.preferSubscription,
+      subscription.signedIn,
+      'sign in required',
+      formatAccountStatus(
+        subscription.signedIn,
+        subscriptionAccountLabel(subscription),
+      ),
+    );
+    // Only the ChatGPT session reports subscription usage.
+    if (line) {
+      lines.push(provider === 'chatgpt' ? withUsage(line, chatGptUsage) : line);
+    }
+  }
 
   for (const plan of CODING_PLAN_SUBSCRIPTIONS) {
     const status = cliCodingPlanStatus(access, plan);
