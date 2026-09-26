@@ -204,7 +204,7 @@ Hosts:
 | [5. Wire realignment](#move-5-realign-the-wire-to-the-ratified-protocol)                 | host detours for decisions, per-host copies, Promise webview transport                                                                                               | M      | none (returns to PRD one-fold §8)                                                    |
 | [6. Session surface split](#move-6-split-the-session-handle-by-audience)                 | after review: dead surface, two subscription doors, per-host session lookups for resume, the default-session machinery                                               | S–M    | none (respects `SCOPE-held-sessions-as-effects`)                                     |
 | [7. Effect-native trace and SDK](#move-7-effect-native-trace-and-sdk)                    | after review: split stage ownership, unswept cards and streams, the SDK trace tap, approvals without an SDK surface                                                  | M      | none (the SDK-is-Effect ruling already requires it)                                  |
-| [8. Model plane](#move-8-the-model-plane-is-a-layer)                                     | bindings retired only at run end, calls outside the invoker, a session-scoped retry gate, the global dispatcher, two error taxonomies                                | L      | the ModelCell ruling (its files are gone)                                            |
+| [8. Model plane](#move-8-the-model-plane-stays-inside-the-invoker)                       | bindings retired only at run end, calls outside the invoker, a session-scoped retry gate, the global dispatcher, two error taxonomies                                | L      | the ModelCell ruling (its files are gone)                                            |
 | [9. Approval plane](#move-9-one-approval-authority-per-session)                          | the policy decided in core for two request kinds and in the CLI for the rest, seven bypass writers, grants without owners, MCP calls approved as shell               | M–L    | the `defineTool` freeze amendment (guard kinds)                                      |
 | [10. Run input and wakes](#move-10-a-runs-input-belongs-to-its-run-entry)                | the 729-line follow-up queue as a second in-process owner, 31 manual lease hand-offs, host resume ports for wakes, resume's cancellation predicates                  | L      | none                                                                                 |
 | [11. Agent catalog](#move-11-the-agent-catalog-is-a-process-service-that-runs-pin)       | module-slot catalog with 22 defensive loads, two loaders for one format, an extension-only watcher, live re-reads on resume                                          | M–L    | the plugin note's agent-source line if definitions are pinned                        |
@@ -217,7 +217,9 @@ one table per seam; move 3 shrinks to routing workflow resume through the
 tool-use path and consolidating terminals onto `runWithLaunchGuard`; move 4
 shrinks to the SDK bootstrap, `AppSignals`, `forkScoped` and an owner-id nonce;
 move 5 keeps PRs 1, 2, 6 and 7, reshaped; move 6 drops `SessionPlane`; move 7
-drops the `RunTrace` rename. Moves 8 to 13 are not yet reviewed one by one.
+drops the `RunTrace` rename. The owner's second review accepted moves 8 to 13
+with two reshapes: move 8 stays inside `ModelInvoker`, and move 10's inbox is
+not a context tag.
 
 Dependencies: 1 before the tag half of 6. 4 before 7's `TexraAgent.layer`. 3 is
 easier after 1 (lineage reads). 2, 5 and the first half of 7 are independent.
@@ -936,11 +938,11 @@ const program = Effect.gen(function* () {
 Estimated net: about −200 production lines plus four test fakes collapsed into
 one layer. PRs 1–3 fix real lifecycle bugs before any API change.
 
-## Move 8: the model plane is a Layer
+## Move 8: the model plane stays inside the invoker
 
-Moves 8 to 13 came from the second survey. The owner's review did not rule on
-them one by one; the same two standards apply, and each PR that is not a
-defect fix lands only if it deletes more than it adds.
+Moves 8 to 13 came from the second survey. The owner's second review accepted
+their direction and reshaped two of them (this move, and move 10); each PR that
+is not a defect fix still lands only if it deletes more than it adds.
 
 ### Current state
 
@@ -962,57 +964,49 @@ routing and in a persisted enum.
 
 ### Target
 
-```ts
-class ModelPlane extends Context.Service<
-  ModelPlane,
-  {
-    readonly bind: (
-      i: BindModelInput,
-    ) => Effect.Effect<BoundModel, BindFailed, Scope.Scope>;
-    readonly gate: ModelRetryGate; // process-scoped, keyed by wire route
-  }
->()('@texra/model/ModelPlane') {}
+No new service. `ModelInvoker` stays the one service that calls the
+`packages/llm` `Model` (CLAUDE.md), and the goals land inside it and the
+existing run binding:
 
-class RunModel extends Context.Service<
-  RunModel,
-  {
-    readonly current: Effect.Effect<BoundModel>;
-    readonly swap: (i: BindModelInput) => Effect.Effect<BoundModel, BindFailed>; // closes the retired scope
-    readonly auxiliary: (
-      req: TurnRequest,
-      purpose: 'compaction' | 'helper',
-    ) => Effect.Effect<
-      { turn: TurnResult; usage: NormalizedUsage | null },
-      ModelFailure
-    >;
-  }
->()('@texra/agent/RunModel') {}
-```
+- **Auxiliary calls through `ModelInvoker`.** Compaction and helper calls take
+  the same path as a turn, with a `purpose` field
+  (`'turn' | 'compaction' | 'helper'`), so they are gated by the retry gate,
+  priced, and recorded like any other call. That removes the two call paths
+  that bypass the invoker today and the helpers' third retry owner.
+- **Binding lifetime inside `run/modelBinding.ts`.** Each binding gets
+  `Scope.fork(run.scope)`, and a swap closes the retired binding's scope.
+- **WebSocket reacquisition.** A transport failure on a WebSocket origin
+  rebinds through the same swap before the next automatic attempt.
+- **One transport.** `ModelTransport` (move 4) supplies `fetch` and a proxy
+  agent to every factory. Once every host uses the bound transport,
+  `setGlobalDispatcher` and the `'process-global'` option go together; until
+  then `'process-global'` keeps installing the global dispatcher.
+- **The retry gate at process scope, keyed by wire route**, because the
+  credential is its real owner.
+- **Classification from `ModelError` first**, keeping `sdkError` only for
+  provider evidence the package cannot know. This is the largest deletion,
+  about 1.5k lines of cause heuristics.
+- **`EditorModel` merges into `LanguageModel`**; the validation model becomes a
+  CLI test Layer.
 
-Each binding gets `Scope.fork(run.scope)` and a swap closes the old one. A
-transport failure on a WebSocket origin reacquires through `swap` before the
-next automatic attempt. `ModelTransport` (move 4) supplies `fetch` and a proxy
-agent to every factory. Once every host uses the bound transport,
-`setGlobalDispatcher` and the `'process-global'` option go together; until
-then `'process-global'` keeps installing the global dispatcher. Classification reads
-`ModelError` first and keeps `sdkError` only for provider evidence the package
-cannot know. `EditorModel` merges into `LanguageModel`; the validation model
-becomes a CLI test Layer.
+A new service is added only if a PR shows it deletes more than it adds.
 
 ### PRs
 
 1. The usage-row and manual-rebind defects.
-2. Per-binding scopes, with the ModelCell ruling rewritten in the same PR.
-3. WebSocket reacquisition through `swap`.
-4. The `auxiliary` path: compaction gated, priced and recorded (the usage field
-   rides an existing format bump).
+2. Per-binding scopes in `run/modelBinding.ts`, with the ModelCell ruling
+   rewritten in the same PR.
+3. WebSocket reacquisition through the swap.
+4. Compaction and helper calls through `ModelInvoker` with a `purpose`: gated,
+   priced and recorded (the usage field rides a format bump).
 5. `ModelTransport` for every host; then delete `setGlobalDispatcher` and the
    `'process-global'` option in the same PR.
-6. The retry gate moves to process scope; helpers run under it.
+6. The retry gate moves to process scope, keyed by route.
 7. `EditorModel` merged; validation model as a Layer.
 8. Classify from `ModelError`.
-9. A Node-side provider table keyed by plugin id for binding quirks, price
-   tiers and detection (provider names appear in 14 to 23 files each).
+9. Extend `MODEL_PROVIDER_PLUGINS` (`src/shared/constants/modelProviderPlugins.ts`)
+   with the Node-side binding quirks, price tiers and detection (provider names
+   appear in 14 to 23 files each), rather than starting a second table.
 
 Estimated net: −300 to −800 lines, most of it from PR 8.
 
@@ -1110,20 +1104,28 @@ interface RunEntry {
   // existing fields…
   readonly inbox?: RunInbox; // exists iff the generation's fiber or activation does
 }
-class RunInbox extends Context.Service<
-  RunInbox,
-  {
-    readonly take: Effect.Effect<FollowUpBatch | null>;
-    readonly hasQueued: Effect.Effect<boolean>;
-    readonly consume: (s: RunState, b: FollowUpBatch) => Effect.Effect<ConsumedFollowUps, Error>;
-  }
->()('@texra/session/RunInbox') {}
+// A plain value on the run's own entry, handed explicitly to the one program
+// that owns the run. Not a Context.Service: a run never reads another run's
+// input from context (#13348).
+interface RunInbox {
+  readonly take: Effect.Effect<FollowUpBatch | null>;
+  readonly hasQueued: Effect.Effect<boolean>;
+  readonly consume: (s: RunState, b: FollowUpBatch) => Effect.Effect<ConsumedFollowUps, Error>;
+}
 
 // on Runs
 deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'auto' | 'deferred' }):
   Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>; // Delivery carries a WakeToken when deferred
 wake(token: WakeToken): Effect.Effect<void>; // releases exactly that delivery's ids
 ```
+
+The inbox is deliberately not a context tag. A run that read its input from
+context is how a workflow child cancelled its parent: `runToolUse` read
+`FollowUps` with `Effect.serviceOption`, a workflow child inherited its
+parent's `FollowUps` from the delegating fiber, and the child's `settleRun`
+released the parent's lease. #13348 removes that tag, so each conversation run
+claims its own queue in its own scope (`claimFollowUps(run, ledger)`); this move
+builds on that.
 
 `deliver` appends `followup.queued` through the publisher. Under `'auto'`,
 `Runs` chooses the wake inside the run's lane, atomically with the append: a
@@ -1179,51 +1181,51 @@ is pinned. `AgentDirectories` is built three ways.
 
 ### Target
 
+The catalog is a fixed, ordered table of sources, not a service wrapped around
+today's module state:
+
 ```ts
-type RemoteStatus = Data.TaggedEnum<{
-  NotLoaded: {};
-  SignedOut: {};
-  Loaded: { at: number };
-  Failed: { cause: unknown };
-}>;
-interface ResolvedAgent {
-  entry: AgentEntry;
-  setting: AgentSetting;
-  prompt: AgentPrompt;
-  digest: string;
+// ordered: a later source never shadows an earlier one silently
+const AGENT_SOURCES = [
+  bundledAgents, // BundledResources
+  userAgents, // the custom directory, from AgentDirectories
+  remoteAgents, // signed-in only; carries a RemoteStatus
+  installedPluginAgents, // `plugin:<id>/<name>` from installed plugins (move 2)
+] as const satisfies readonly AgentSource[];
+
+interface AgentSource {
+  readonly id: string;
+  // a pure function of the source's last read
+  readonly read: Effect.Effect<SourceRead, AgentSourceError>;
 }
-class AgentCatalog extends Context.Service<
-  AgentCatalog,
-  {
-    readonly state: SubscriptionRef.SubscriptionRef<{
-      agents: ReadonlyMap<AgentKey, ResolvedAgent>;
-      issues: readonly AgentScanIssue[];
-      remote: RemoteStatus;
-    }>;
-    readonly refresh: (o: {
-      remote: 'keep' | 'fetch' | 'drop';
-    }) => Effect.Effect<void, AgentCatalogLoadError>;
-    readonly resolve: (
-      req: AgentLaunchRef,
-    ) => Effect.Effect<ResolvedAgent, AgentNotFound>;
-  }
->()('@texra/agent/AgentCatalog') {}
+// the catalog is rebuilt from empty on every refresh
+declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 ```
 
-A scoped layer in move 4's graph: an initial load, then a `DirectoryWatch` host
-port (VS Code watcher or `FileSystem.watch`) debounced into `refresh`. The
-scanner becomes the one validating loader. Runs record the full resolved
-definition on the snapshot (setting and prompt, with its digest) and resume
-from it, so an edit to the YAML between a halt and its resume changes neither
-the settings nor the instructions. Post-auth invalidation stays per host, as
-ruled.
+- **Rebuilt from empty.** Each refresh folds the sources' reads into a fresh
+  catalog. That deletes `agentRegistry.ts`'s epoch, carry-over and "re-remove"
+  special cases rather than wrapping them in a service.
+- **A remote status.** The remote source records `NotLoaded`, `SignedOut`,
+  `Loaded` or `Failed`, so a failed fetch keeps the previous rows and is
+  retried instead of being recorded as success.
+- **One validating loader.** The scanner produces the fully resolved
+  definition (setting and prompt, with inheritance) or an issue; the launch
+  loader reads it from the catalog.
+- **A watcher on every host.** A `DirectoryWatch` host port (VS Code watcher,
+  or `FileSystem.watch`) triggers a refresh.
+- **Refresh reaches runs only at run open.** Runs record the full resolved
+  definition on the snapshot (setting and prompt, with its digest) and resume
+  from it, so an edit between a halt and its resume changes neither the
+  settings nor the instructions.
+- Post-auth invalidation stays per host, as ruled.
 
 ### PRs
 
 1. The agent defects above.
 2. Remote status in the existing state, no API change.
 3. One validating loader; delete the launch loader's inheritance walk.
-4. `AgentCatalog` in the process graph; delete the 22 loads, the extension's
+4. The ordered source table, rebuilt from empty; delete the epoch,
+   carry-over and re-remove cases, the 22 defensive loads, the extension's
    manager and the plugin-directory slot; watchers on every host.
 5. Pin the definition on the snapshot. Needs decision 10.
 6. Retire the creator wizard in favour of the cross-host `creator` agent.
@@ -1277,8 +1279,9 @@ key on every host. One global root for `AppState`.
 1. Every host reports every moved-aside store, with its location and size,
    and names settings. Nothing is deleted.
 2. One write for the desktop lists; no poll on the global databases.
-3. `CurrentValues` on the next format bump, as the accepted decision
-   specifies; retire `state.value.set` and `borrowsClaim`.
+3. `CurrentValues` on its own format bump, taken now rather than waiting for
+   another (eight bumps have gone by without it; 1.0 starts clean); retire
+   `state.value.set` and `borrowsClaim`.
 4. After decision 12: desktop `AppState` onto the global database, in the same
    bump.
 5. The `repoState` slot replaces `WORKTREE_SHARED_KEYS`; the CLI goes through
@@ -1379,17 +1382,24 @@ These were in the first draft and did not survive the checks:
 
 ## Decisions for the owner
 
-The owner's review recommends answers to the first six; they stay open until
+The owner's two reviews recommend answers to all thirteen; they stay open until
 the owner confirms them:
 
-| Decision                            | Review recommendation                                                                                                      |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 1. Plugins owning schema arms       | Yes, with tier and fold slice in the plugin module.                                                                        |
-| 2. Kernel-only runtime reads        | Not as a new service now; the single-run lineage read first. A future kernel lives inside `SessionEvents` with one writer. |
-| 3. D5 and "one process is one host" | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                 |
-| 4. Own-key retry with no key        | Leave it pending on every host.                                                                                            |
-| 5. Approve-all                      | Also decide requests already pending, on every host, as recorded rows.                                                     |
-| 6. The plugin drain                 | Neither a hook nor a drain layer: a layer dependency on `Sessions`.                                                        |
+| Decision                                                      | Review recommendation                                                                                                      |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 1. Plugins owning schema arms                                 | Yes, with tier and fold slice in the plugin module.                                                                        |
+| 2. Kernel-only runtime reads                                  | Not as a new service now; the single-run lineage read first. A future kernel lives inside `SessionEvents` with one writer. |
+| 3. D5 and "one process is one host"                           | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                 |
+| 4. Own-key retry with no key                                  | Leave it pending on every host.                                                                                            |
+| 5. Approve-all                                                | Also decide requests already pending, on every host, as recorded rows.                                                     |
+| 6. The plugin drain                                           | Neither a hook nor a drain layer: a layer dependency on `Sessions`.                                                        |
+| 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                |
+| 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                            |
+| 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                     |
+| 10. Pin the agent definition on the snapshot                  | Yes: the log records what the model saw, and resume uses the recorded definition.                                          |
+| 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                     |
+| 12. One global app-state root on desktop                      | Yes.                                                                                                                       |
+| 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                |
 
 1. May static in-tree plugins own durable state as arms of the one closed
    schema? Move 2 assumes yes.
