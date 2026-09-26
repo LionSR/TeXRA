@@ -30,4 +30,7 @@ export {
   logInternal,
   debugInternal,
   logContextManagementEvent,
+  logWebSearch,
+  logFilesLoaded,
+  logFileCategory,
 } from './helpers';

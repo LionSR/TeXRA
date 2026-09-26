@@ -494,11 +494,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-        if (
-          usage !== null &&
-          usage.inputTokens > 0 &&
-          bound.contextWindow > 0
-        ) {
+        if (usage && usage.inputTokens > 0 && bound.contextWindow > 0) {
           logger.emit({
             type: 'context.state',
             inputTokens: usage.inputTokens,

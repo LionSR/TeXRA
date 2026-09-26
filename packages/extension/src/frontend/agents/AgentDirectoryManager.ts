@@ -1,8 +1,12 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import {
   Cause,
   Effect,
   FileSystem,
+  Layer,
   type PlatformError,
   Schedule,
   Stream,
@@ -10,15 +14,18 @@ import {
 import * as vscode from 'vscode';
 
 // Local imports
-import { builtInToolUseRoots } from '@agent/index';
+import { AgentDirectoryService, builtInToolUseRoots } from '@agent/index';
+import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentDirectories,
   type AgentDirectoriesFailed,
+  AppState,
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { AGENT_SOURCE } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -204,3 +211,28 @@ class AgentDirectoryManager {
 }
 
 export const agentDirectories = new AgentDirectoryManager();
+
+/**
+ * The extension's `AgentDirectories` port, served over `AppState`. Built-in
+ * agents are read straight out of the installed extension's `resources`,
+ * never copied into global storage.
+ */
+export const agentDirectoriesLayer = (extensionPath: string) =>
+  Layer.effect(
+    AgentDirectories,
+    Effect.map(
+      AppState,
+      (state) =>
+        new AgentDirectoryService({
+          channel: CHANNEL,
+          resourcesPath: path.join(extensionPath, 'resources'),
+          customDirectoryStore: {
+            get: () => state.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+          },
+          issueReporter: {
+            report: (message, docsId) =>
+              showLoggedMessageWithDocs(CHANNEL, message, docsId),
+          },
+        }),
+    ),
+  );

@@ -15,10 +15,13 @@ import type {
 } from '@auth/oauth/SubscriptionOAuthCoordinator';
 import type {
   CodexSession,
-  CodexTokenResponse,
+  CodexTokenResponseSchema,
 } from '@auth/codex/codexSessionTypes';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
+import type { z } from 'zod';
+
+type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;

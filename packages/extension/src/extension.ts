@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 
 // Local imports
-import { AgentDirectoryService, loadAgents } from '@agent/index';
+import { loadAgents } from '@agent/index';
 import {
   closeAllSessions,
   initializeDefaultSession,
@@ -52,7 +52,7 @@ import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
-import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
+import { agentDirectoriesLayer } from '@frontend/agents/AgentDirectoryManager';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -108,7 +108,6 @@ import {
 } from '@shared/approvalPolicy';
 import type { CommandId } from '@shared/commands/catalog';
 import { GlobalDatabase } from '@shared/session/database';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
@@ -235,26 +234,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
-    // Built-in agents are read straight out of the installed extension's
-    // `resources`, never copied into global storage.
-    agentDirectories: Layer.effect(
-      AgentDirectories,
-      Effect.map(
-        AppState,
-        (state) =>
-          new AgentDirectoryService({
-            channel: 'AgentLoad',
-            resourcesPath: path.join(context.extensionPath, 'resources'),
-            customDirectoryStore: {
-              get: () => state.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-            },
-            issueReporter: {
-              report: (message, docsId) =>
-                showLoggedMessageWithDocs('AgentLoad', message, docsId),
-            },
-          }),
-      ),
-    ),
+    agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`

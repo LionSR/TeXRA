@@ -11,5 +11,7 @@
  */
 export { CODEX_BACKEND_BASE_URL } from './codexConstants';
 export { codexCoordinator, getCodexStatus } from './codexAuthAccess';
+/** The failure a subscription route's session raises (Codex and xAI share it). */
+export { SubscriptionOAuthError } from '../oauth/subscriptionOAuthError';
 export { loginWithLoopback } from './codexLoopbackLogin';
 export { loginWithDeviceCode } from './codexDeviceLogin';

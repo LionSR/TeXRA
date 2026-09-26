@@ -26,6 +26,7 @@ import {
   type CompactionActivityOutcome,
   type ContextManagementData,
   type ErrorContext,
+  type FileListEntry,
   type MediaAttachmentKind,
   type WorkflowScriptDeliverySummary,
 } from '@shared/schemas';
@@ -191,4 +192,48 @@ export function logContextManagementEvent(
   stageId?: string,
 ): void {
   trace.emit({ type: 'domain', key: 'contextManagement', text, data, stageId });
+}
+
+export function logWebSearch(
+  trace: AgentTrace,
+  data: unknown,
+  stageId?: string,
+): void {
+  trace.emit({ type: 'domain', key: 'webSearch', data, stageId });
+}
+
+/** Files-loaded card with full {@link FileListEntry} entries. */
+export function logFilesLoaded(
+  trace: AgentTrace,
+  category: string,
+  entries: readonly FileListEntry[],
+  stageId?: string,
+): void {
+  trace.emit({
+    type: 'domain',
+    key: 'filesLoaded',
+    data: { category, entries },
+    text: category,
+    stageId,
+  });
+}
+
+/**
+ * Files-loaded card built from path/ok pairs — the category becomes both
+ * the source label and the display label.
+ */
+export function logFileCategory(
+  trace: AgentTrace,
+  category: string,
+  files: ReadonlyArray<Pick<FileListEntry, 'path'> & { ok?: boolean }>,
+  stageId?: string,
+): void {
+  if (files.length === 0) return;
+  const entries: FileListEntry[] = files.map((f) => ({
+    path: f.path,
+    ok: f.ok === true,
+    source: category,
+    sourceDisplay: category,
+  }));
+  logFilesLoaded(trace, category, entries, stageId);
 }

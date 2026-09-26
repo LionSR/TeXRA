@@ -209,9 +209,7 @@ export class LatexDiffManager {
           ([, base]) => entryExists(fs, base.absolutePath),
           { concurrency: 'unbounded' },
         );
-        const basePairs = candidatePairs.filter(
-          (_, index) => baseExists[index],
-        );
+        const basePairs = candidatePairs.filter((_, i) => baseExists[i]);
         if (basePairs.length < candidatePairs.length) {
           this.logger.debug(
             `Skipping ${candidatePairs.length - basePairs.length} latexdiff base pair(s): base file not present`,

@@ -3,12 +3,12 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { setLogSink } from '@logger/logSink';
 import {
   completedTurn,
   type TurnRequest,
   type VscodeLanguageModelConfiguration,
 } from '@texra-ai/llm/turn';
+import { setLogSink } from '@logger/logSink';
 
 class LanguageModelTextPart {
   constructor(public readonly value: string) {}

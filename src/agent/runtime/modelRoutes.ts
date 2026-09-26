@@ -2,8 +2,11 @@ import { Effect } from 'effect';
 import { ModelProvider, type ModelConfig } from 'llm-zoo';
 
 import { shouldUseInternalValidationModel } from '@agent/runtime/run/validationModel';
-import { CODEX_BACKEND_BASE_URL, codexCoordinator } from '@auth/codex';
-import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
+import {
+  CODEX_BACKEND_BASE_URL,
+  codexCoordinator,
+  SubscriptionOAuthError,
+} from '@auth/codex';
 import { xaiCoordinator } from '@auth/xai';
 import { AgentError } from '@common/errors';
 import { attachMissingApiKeyError } from '@common/errors/sdkError/errorMetadata';

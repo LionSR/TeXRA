@@ -18,7 +18,6 @@ export const CodexTokenResponseSchema = z.object({
   id_token: z.string().min(1).nullish(),
   expires_in: z.number(),
 });
-export type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
