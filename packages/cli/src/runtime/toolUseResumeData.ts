@@ -8,7 +8,6 @@ import {
   aggregateId,
   AgentCategory,
   HISTORY_RUN_STATUS,
-  isTerminalCompileRejection,
   RUN_OUTCOME,
   type FlowSnapshotPayload,
   type HistoryRunStatus,
@@ -114,10 +113,9 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
 
 /**
  * Whether a workflow checkpoint only replays a terminal compile rejection:
- * the last round's compile was rejected and no round is left to fix it. A
- * reflection snapshot carries that marker. A round-mode run (the `toolUse`
- * family) carries none: its snapshot is `halted` with no model failure and
- * its loop's own `halted` step says FAILED, which only the rejection leaves
+ * the last round's compile was rejected and no round is left to fix it. The
+ * snapshot carries no such marker: it is `halted` with no model failure and
+ * the loop's own `halted` step says FAILED, which only the rejection leaves
  * (output finalization's verdict is `run.end`'s, not the loop's). Rows that
  * cannot be read or folded leave the run offered, and refused at open time
  * like any unreadable run.
@@ -130,8 +128,6 @@ export const isTerminalWorkflowCheckpoint = Effect.fn(
   session: SessionHandle,
 ): Effect.fn.Return<boolean> {
   const { runtime } = snapshot;
-  if (snapshot.family === 'reflection')
-    return isTerminalCompileRejection(snapshot.state, runtime.round);
   if (runtime.phase !== 'halted' || runtime.lastError != null) return false;
   const verdict = yield* session.readAggregate(aggregateId('run', id)).pipe(
     Effect.flatMap((rows) =>

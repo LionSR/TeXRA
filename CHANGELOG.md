@@ -12,6 +12,12 @@ All notable changes to this project will be documented in this file.
   is moved aside (`texra.db.format<N>`) rather than read, and TeXRA says so
   when it happens; a store written by a newer TeXRA is never opened or
   deleted by an older one.
+- **Session history from earlier preview builds starts over** — the first
+  time this build opens a workspace, the session history an earlier preview
+  wrote is moved aside, as above, and TeXRA says so. Conversations and
+  workflow runs from those builds, finished or interrupted, cannot be
+  resumed; start them again. Project documents and research files are
+  unchanged.
 - **1.0 preview builds start from a clean slate** — a preview does not carry
   over session history or other application state from TeXRA 0.40 or earlier,
   and going back to 0.40 does not bring what the preview created. Previews

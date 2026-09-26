@@ -1,5 +1,4 @@
 import { isAuthCallbackPath } from '@auth/authCallback';
-import { tryParseUrl } from '@utils/core';
 import {
   isDesktopProtocolUrl,
   TEXRA_PROTOCOL,
@@ -68,7 +67,7 @@ interface InstallDesktopProtocolOptions {
 export function parseDesktopProtocolCallback(
   rawUrl: string,
 ): DesktopProtocolCallback | null {
-  const url = tryParseUrl(rawUrl);
+  const url = URL.parse(rawUrl);
   if (!url || url.protocol !== TEXRA_PROTOCOL_SCHEME) return null;
 
   const path = normalizeProtocolPath(url);

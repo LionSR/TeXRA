@@ -13,7 +13,7 @@ import type {
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
 import { HOMEBREW_INSTALL_COMMAND } from '@shared/constants/latexToolchain';
-import { assertSupported, isUnsupported } from '@shared/utils/dispatcher';
+import { isUnsupported } from '@shared/utils/dispatcher';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { FakeConfigProvider, FakeStateStore } from '@test/support/FakePlatform';
@@ -238,10 +238,14 @@ describe('DefaultDesktopToolingSettingsController', () => {
   it.effect('runs only allowlisted LaTeX installation commands', () =>
     Effect.gen(function* () {
       const { controller, commands } = createFixture();
+      const runInstallCommand = controller.latexHandlers.runInstallCommand;
+      if (isUnsupported(runInstallCommand)) {
+        throw new Error(runInstallCommand.unsupported);
+      }
 
       yield* withProcessServices(
         testRuntime(),
-        assertSupported(controller.latexHandlers.runInstallCommand)({
+        runInstallCommand({
           command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
           installCommand: HOMEBREW_INSTALL_COMMAND,
         }),
@@ -249,7 +253,7 @@ describe('DefaultDesktopToolingSettingsController', () => {
       const error = yield* Effect.flip(
         withProcessServices(
           testRuntime(),
-          assertSupported(controller.latexHandlers.runInstallCommand)({
+          runInstallCommand({
             command: SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND,
             installCommand: 'echo not-allowlisted',
           }),

@@ -113,8 +113,6 @@ export const DEFAULT_POLLING_BACKOFF_CONFIG = Object.freeze({
   'backoffBaseMs' | 'backoffMaxMs' | 'maxFailureDurationMs'
 >);
 
-export { DedupedResource, dedupeComments, MAX_SEEN_IDS } from './pollingDedup';
-
 /**
  * `K` is the canonical string key (PR keys flatten to `owner/repo#N`,
  * repo keys are `owner/repo`); `S` is the per-subscription state object,

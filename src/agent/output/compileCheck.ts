@@ -123,7 +123,7 @@ export function resolveWorkspaceSourceDir(
  * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains and non-root
  * fragments are skipped gracefully.
  */
-export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
+export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
@@ -282,7 +282,7 @@ type CompileAttempt =
   | { readonly kind: 'errored'; readonly message: string }
   | { readonly kind: 'compiled'; readonly result: CompileLatex2PdfResult };
 
-const compileOne = Effect.fn('reflection.compileOne')(function* (
+const compileOne = Effect.fn('documents.compileOne')(function* (
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
   currentRound: number,
@@ -469,7 +469,7 @@ interface WriteCompileFailureArgs extends CompileTarget {
  * a persistence error is logged at `warn` and recovered, so a failure is
  * always counted even when the log itself couldn't be written to disk.
  */
-const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
+const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   function* ({
     ctx,
     opts,

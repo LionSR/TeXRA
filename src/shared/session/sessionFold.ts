@@ -1039,9 +1039,9 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, projected from the slice the rows folded
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
-  const { family, step, round, turn, continuationIndex } = rows;
+  const { family, step, round, turn } = rows;
   if (family === null || step === null) return run;
-  const flow = { family, step, round, turn, continuationIndex };
+  const flow = { family, step, round, turn };
   const phase = phaseMoveOf(row);
   return phase === null
     ? { ...run, flow }

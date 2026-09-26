@@ -53,7 +53,6 @@ import {
 import { followUpsLayer } from './FollowUps';
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, withCompositionHash } from './run/AgentRun';
-import { runReflection } from './loop/reflection';
 import { runToolUse } from './loop/toolUse';
 import { Runs } from './runRegistry';
 import type { AgentRunServices } from './runRegistry';
@@ -199,8 +198,8 @@ function launchToolUseRun(
 }
 
 /**
- * A workflow agent in round mode, or in reflection when its rows are; output
- * finalization may change the verdict. A child's one turn wraps it all.
+ * A workflow agent, in round mode; output finalization may change the
+ * verdict. A child's one turn wraps it all.
  */
 function launchWorkflowRun(
   ctx: AgentLaunchContext,
@@ -208,12 +207,9 @@ function launchWorkflowRun(
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
   const start = { resume: options.resumed === true };
   const program = Effect.gen(function* () {
-    const snapshot = yield* ctx.session.ledger.latestSnapshot(ctx.runId);
-    const result = yield* withCompositionHash(
-      snapshot?.payload.family === 'reflection'
-        ? runReflection(start)
-        : runToolUse(start),
-    ).pipe(Effect.provide(runLayerFor(ctx, options, undefined)));
+    const result = yield* withCompositionHash(runToolUse(start)).pipe(
+      Effect.provide(runLayerFor(ctx, options, undefined)),
+    );
     const flowResult: WorkflowFlowResult = {
       outcome: result.outcome,
       output: {

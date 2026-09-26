@@ -12,7 +12,7 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
  * The run header's progress chip, in words: "3 tool calls", or "Round 2 ·
- * 3 tool calls" for a reflection run. A tool-use turn number stays in the
+ * 3 tool calls" for a workflow run. A tool-use turn number stays in the
  * tooltip ({@link getProgressBadgeTitle}): the conversation already shows
  * the turns. Used by RunHeader.
  */

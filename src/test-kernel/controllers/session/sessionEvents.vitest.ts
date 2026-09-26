@@ -2360,16 +2360,17 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (phase: string): RunLedgerDraft => ({
+  const snapshot = (
+    phase: 'model.ready' | 'results.ready',
+  ): RunLedgerDraft => ({
     type: 'flow.snapshot',
     aggregateId: AGGREGATE,
     payload: {
       family: 'toolUse',
       runtime: {
-        phase: phase === 'round.ready' ? 'round.ready' : 'results.ready',
+        phase,
         round: 0,
         turn: 0,
-        continuationIndex: 0,
         modelId: 'gpt-test',
         modelCompatibilityKey: null,
         lastError: null,
@@ -2470,7 +2471,7 @@ describe('RunLedger', () => {
             ],
           },
         },
-        snapshot('round.ready'),
+        snapshot('model.ready'),
       ]);
       state = yield* run.appendBatch(RUN, state, [
         {

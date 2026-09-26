@@ -1045,11 +1045,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
-    // handler (headless), so the CLI does not honor it.
+    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // CLI handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
-      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      vscode: { reader: 'src/agent/output/documentRounds.ts' },
+      desktop: { reader: 'src/agent/output/documentRounds.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1063,14 +1063,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
+    honoredBy: everyHost('src/agent/output/documentRounds.ts'),
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them. The timeout is kept
-  // out of the settings view (an insider knob) and edited from CLI `/config`;
-  // the rest are deferred from `/config` by product decision.
+  // Run by the documents plugin, so every host honors them. The timeout is
+  // kept out of the settings view (an insider knob) and edited from CLI
+  // `/config`; the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),

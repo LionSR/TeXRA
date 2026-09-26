@@ -132,7 +132,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
     initial: RunState,
     cell: RunCell,
   ): Effect.fn.Return<RunState | null, Error, RunLedger> {
-    if (initial.overflowRecoveredAt?.turn === initial.turn) {
+    if (initial.overflowRecoveredAtTurn === initial.turn) {
       logger.warn(
         'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
       );

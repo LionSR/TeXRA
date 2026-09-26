@@ -92,8 +92,7 @@ export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
-  /** The setting with the run's resolved tool list; the loop of the run's
-   *  family narrows it. */
+  /** The setting with the run's resolved tool list. */
   readonly setting: AgentSetting;
   readonly prompt: AgentPrompt;
   readonly logger: AgentTrace;
@@ -244,7 +243,7 @@ export const agentRunLayer = (
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : input.tools,
-        // The reflection family injects none: memory and plan are tool-use
+        // A workflow run injects none: memory and plan are tool-use
         // infrastructure.
         injectTools: setting.agentCategory === AgentCategory.ToolUse,
         stores: ctx.stores,
@@ -268,12 +267,12 @@ export const agentRunLayer = (
       // removed, a dependency gone) is named in the run's transcript; a call
       // the model still makes to it settles as `tool_unavailable`.
       const recorded =
-        snapshot?.payload.family === 'toolUse'
-          ? {
+        snapshot === null
+          ? null
+          : {
               offeredTools: snapshot.payload.state.offeredTools,
               toolsetHash: snapshot.payload.state.toolsetHash,
-            }
-          : null;
+            };
       // A workflow agent's rounds offer no tools: a YAML's declared `tools:`
       // still resolve under the pinned composition, but none is offered, and
       // a fresh run says so rather than narrowing silently.

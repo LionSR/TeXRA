@@ -1,9 +1,6 @@
 // Local imports - tools
-import {
-  createBasePollState,
-  DedupedResource,
-  MAX_SEEN_IDS,
-} from '@tools/github/PollingSourceBase';
+import { createBasePollState } from '@tools/github/PollingSourceBase';
+import { DedupedResource, MAX_SEEN_IDS } from '@tools/github/pollingDedup';
 import type {
   PRCurrentShaState,
   PRSubscriptionState,

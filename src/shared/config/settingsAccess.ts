@@ -228,8 +228,10 @@ export function writeSetting(
     for (const excludedKey of entry.onWrite?.disablesWhenEnabled ?? []) {
       const excluded = settingByKey(excludedKey);
       if (!excluded) {
-        throw new Error(
-          `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+        return yield* Effect.die(
+          new Error(
+            `Setting "${entry.key}" excludes unknown setting "${excludedKey}"`,
+          ),
         );
       }
       yield* writeSlot(excluded, false, stores, host, target);
