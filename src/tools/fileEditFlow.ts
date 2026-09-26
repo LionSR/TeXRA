@@ -240,6 +240,8 @@ interface FileEditPresentation {
 interface ApprovedFileEditRequest {
   path: string;
   displayPath: string;
+  /** Whether the file existed when the edit was proposed. */
+  exists: boolean;
   originalContent: string;
   proposedContent: string;
   sourceTool: string;
@@ -256,6 +258,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
   function* ({
     path,
     displayPath,
+    exists,
     originalContent,
     proposedContent,
     sourceTool,
@@ -277,7 +280,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
 
     const written = yield* writeApprovedContent(
       path,
-      originalContent,
+      exists ? originalContent : null,
       approval.appliedContent,
     );
     const presentation = present({ approval, ...written });

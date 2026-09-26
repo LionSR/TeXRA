@@ -167,11 +167,12 @@ describe('shared text-diff caller fixtures', () => {
           ),
         ).toBe('rewritten\nby another\nwriter\n');
 
-        // So is a deletion: the approved content does not recreate the file.
+        // So is a deletion, even of a file that was empty when proposed: the
+        // approved content does not recreate it.
         yield* Effect.tryPromise(() => installFakePlatform({}));
         const deleted = yield* approvedWriteConflict(
           'paper.tex',
-          original,
+          '',
           final,
         ).pipe(
           Effect.provide(

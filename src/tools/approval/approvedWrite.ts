@@ -52,7 +52,9 @@ class ApprovedEditConflictError extends ToolError {
 export const writeApprovedContent = Effect.fn('writeApprovedContent')(
   function* (
     path: string,
-    originalContent: string,
+    /** The file as the edit was proposed against; `null` when it did not
+     *  exist, which is not the same as an empty file. */
+    original: string | null,
     finalContent: string,
   ): Effect.fn.Return<
     WriteApprovedContentResult,
@@ -70,11 +72,12 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
       // All content is already LF-normalized at the FS read boundary,
       // so comparisons work directly without extra normalization.
       const baseContent = exists ? yield* readNormalizedFile(fs, path) : '';
-      // A file that had content when the edit was proposed and is gone now
-      // was deleted meanwhile: recreating it would undo that deletion.
-      if (!exists && originalContent !== '') {
+      // A file that existed when the edit was proposed and is gone now was
+      // deleted meanwhile: recreating it would undo that deletion.
+      if (!exists && original !== null) {
         return yield* Effect.fail(new ApprovedEditConflictError(path));
       }
+      const originalContent = original ?? '';
       if (
         exists &&
         (baseContent === finalContent || originalContent === finalContent)
@@ -105,10 +108,10 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
  *  outcome: a conflict is the value, every other failure stays one. */
 export function approvedWriteConflict(
   path: string,
-  originalContent: string,
+  original: string | null,
   finalContent: string,
 ) {
-  return writeApprovedContent(path, originalContent, finalContent).pipe(
+  return writeApprovedContent(path, original, finalContent).pipe(
     Effect.as(undefined),
     Effect.catchIf(
       (error): error is ApprovedEditConflictError =>

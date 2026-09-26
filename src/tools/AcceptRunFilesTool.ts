@@ -334,7 +334,7 @@ const acceptFiles = Effect.fn('AcceptRunFilesTool.acceptFiles')(function* (
     // A conflict is this file's outcome; the rest are still offered.
     const conflict = yield* approvedWriteConflict(
       entry.original,
-      entry.originalContent,
+      entry.destExists ? entry.originalContent : null,
       approval.appliedContent,
     );
     if (conflict !== undefined) {
