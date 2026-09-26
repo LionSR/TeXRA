@@ -605,7 +605,11 @@ export interface TexraProcessOptions {
   readonly approvals?: ApprovalMode; // default 'denyAll'
 }
 export const TexraProcess: {
-  layer(o: TexraProcessOptions): Layer.Layer<Sessions, DatabaseOpenFailed>;
+  // PlatformConflict: a second graph refused while the module slots are
+  // still process-global (the existing SDK already types it, sessions.ts:144-149).
+  layer(
+    o: TexraProcessOptions,
+  ): Layer.Layer<Sessions, DatabaseOpenFailed | PlatformConflict>;
 };
 ```
 
@@ -704,8 +708,13 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
 - `request.decide` covers tool-edit approve and reject on every host, and
   carries the edited content in its payload, so the approved text lands in the
   log. There is no `StagedEdits` port.
-- `policy.set` enabling approve-all also decides that run's pending requests,
-  on every host, inside `SessionRequests` (decision 5).
+- `policy.set` enabling approve-all also decides that run's pending requests
+  of the kinds the bypass covers (`toolEdit`, `bash`, `proposal`, the keys of
+  `BYPASS_OF_KIND` in `approvalDecision.ts:66-72`), on every host, inside
+  `SessionRequests` (decision 5). Questions, inquiries, retries and plan
+  approvals stay pending: they need an answer or carry their own credential
+  semantics, which is the filter the TUI applies today
+  (`approvalQueue.ts:457-477`).
 - `HostRequest` shrinks from 37 to about 28 genuinely host-only arms, plus
   `storeApiKey` and the desktop file I/O that travels on `desktop:*` today
   (PRD 8.3 already names it a host request). After this move `desktop:*`
@@ -968,11 +977,17 @@ No new service. `ModelInvoker` stays the one service that calls the
 `packages/llm` `Model` (CLAUDE.md), and the goals land inside it and the
 existing run binding:
 
-- **Auxiliary calls through `ModelInvoker`.** Compaction and helper calls take
-  the same path as a turn, with a `purpose` field
+- **Auxiliary calls through `ModelInvoker`.** Compaction and in-run helper
+  calls take the same path as a turn, with a `purpose` field
   (`'turn' | 'compaction' | 'helper'`), so they are gated by the retry gate,
   priced, and recorded like any other call. That removes the two call paths
   that bypass the invoker today and the helpers' third retry owner.
+- **Helpers with no run.** Draft polish runs before any run exists
+  (`hostDraftRequests.ts:104-112`), and `invoke` requires `AgentRun` and a
+  `RunCell`. So the invoker keeps a second operation, `helper`, that needs no
+  run: it takes the same process-scoped retry gate and pricing, and records
+  its usage on the session rather than a run ledger. No synthetic run is
+  invented.
 - **Binding lifetime inside `run/modelBinding.ts`.** Each binding gets
   `Scope.fork(run.scope)`, and a swap closes the retired binding's scope.
 - **WebSocket reacquisition.** A transport failure on a WebSocket origin
@@ -1115,8 +1130,8 @@ interface RunInbox {
 
 // on Runs
 deliver(runId: RunId, items: readonly FollowUpQueueInput[], o: { wake: 'auto' | 'deferred' }):
-  Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere>; // Delivery carries a WakeToken when deferred
-wake(token: WakeToken): Effect.Effect<void>; // releases exactly that delivery's ids
+  Effect.Effect<Delivery, RunAdmissionClosed | HeldElsewhere | DatabaseWriteFailed>; // WakeToken when deferred
+wake(token: WakeToken): Effect.Effect<void, DatabaseWriteFailed>; // appends followup.released for that delivery
 ```
 
 The inbox is deliberately not a context tag. A run that read its input from
@@ -1137,8 +1152,13 @@ durably, wakes nobody, and stays invisible to consumption until `wake`: the
 run entry holds its delivery ids in a deferred set that `take` skips, as the
 manager's `deferred` set does today (`ToolUseFollowUpQueueManager.ts:53-58,287`),
 so an unrelated resume of the parent cannot consume the child's row before the
-child finalizes. After a crash, hydration releases a deferred row whose
-producing child already has its `run.end`. A native child uses it for its turn result before it
+child finalizes. The deferral is durable, not inferred: `followup.queued`
+gains a `deferred` flag and `wake` appends `followup.released {followUpIds}`
+(one format bump). Today neither `followup.queued` (`sessionEvent.ts:375-378`)
+nor `child.turn` (`sessionEvent.ts:460-464`) records the mode, so after a
+crash a non-finalizing child turn and a finalizing result look alike. With
+the flag, hydration rebuilds the deferred set as "deferred and not released",
+and nothing reads `run.end` to guess. A native child uses it for its turn result before it
 finalizes and calls `wake` with the token its own delivery returned, so a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
@@ -1206,8 +1226,12 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
   catalog. That deletes `agentRegistry.ts`'s epoch, carry-over and "re-remove"
   special cases rather than wrapping them in a service.
 - **A remote status.** The remote source records `NotLoaded`, `SignedOut`,
-  `Loaded` or `Failed`, so a failed fetch keeps the previous rows and is
-  retried instead of being recorded as success.
+  `Loaded` or `Failed`, so a failed fetch keeps the previous rows instead of
+  being recorded as success. A `Failed` source is retried by its own
+  `Effect.retry` on an exponential `Schedule` while the user stays signed in,
+  forked into the catalog's scope. It needs no auth transition and none of
+  the 22 defensive loads, which PR 4 deletes, so the retry lands with or
+  before that deletion.
 - **One validating loader.** The scanner produces the fully resolved
   definition (setting and prompt, with inheritance) or an issue; the launch
   loader reads it from the catalog.
@@ -1222,7 +1246,8 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 ### PRs
 
 1. The agent defects above.
-2. Remote status in the existing state, no API change.
+2. Remote status in the existing state, with the scheduled retry of a
+   `Failed` source; no API change.
 3. One validating loader; delete the launch loader's inheritance walk.
 4. The ordered source table, rebuilt from empty; delete the epoch,
    carry-over and re-remove cases, the 22 defensive loads, the extension's
@@ -1262,7 +1287,7 @@ export class CurrentValues extends Context.Service<
       f: F,
       key: string,
       change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
-    ): Effect.Effect<A, DatabaseWriteFailed>; // one BEGIN IMMEDIATE
+    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>; // one BEGIN IMMEDIATE; a malformed row rolls back
     readonly movedAside: StoreMovedAside | null; // reported by every host
   }
 >()('@texra/session/CurrentValues') {}
@@ -1403,10 +1428,12 @@ the owner confirms them:
 
 1. May static in-tree plugins own durable state as arms of the one closed
    schema? Move 2 assumes yes.
-2. Is `SessionKernel` the only thing runtime decisions read, with
-   `SessionView` display-only? Move 1 assumes yes, against one-run-model §3.8.
-3. Re-rule D5 and "one process is one host" for move 4, and choose between a
-   one-graph-per-process latch and an owner-id nonce.
+2. Confirm move 1's reviewed target: no `SessionKernel` service; the
+   single-run lineage read and an exhaustive `listingTypeOf` now, and any
+   future kernel inside `SessionEvents` with one writer.
+3. Re-rule D5 and "one process is one host" for move 4, confirming the
+   reviewed target: an owner-id nonce, plus the typed second-graph refusal
+   until the module slots are graph-owned.
 4. Own-key retry with no key entered: leave the retry pending (GUI today) or
    deny it (TUI today)?
 5. Should "approve all delegated" also decide requests already pending, on
