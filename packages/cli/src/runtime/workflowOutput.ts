@@ -126,6 +126,15 @@ const probeOutputPath = Effect.fn('probeOutputPath')(
     if (stats === null) {
       yield* fs.makeDirectory(requiredDirectory, { recursive: true });
     }
+    // A target of the wrong kind (a file for --output-dir, a directory for
+    // --output) is the caller's report, which names the real problem; a
+    // writability answer about it would not.
+    if (
+      stats !== null &&
+      (stats.type === 'Directory') !== (flagLabel === '--output-dir')
+    ) {
+      return stats;
+    }
     // An existing --output file is overwritten in place; anything else is
     // written into the required directory.
     yield* fs.access(
@@ -322,13 +331,14 @@ export function resolveWorkflowOutput(
       workingDirectory: context.cwd,
       runDirectory,
     };
-    // Only completed runs may publish to user-requested destinations. Partial or
-    // rejected artifacts remain inspectable in run storage through baseResult.
     // A rejected compile fails the run without an error to present, so the
     // status line alone would end on a bare "Error": name the documents the
     // last round failed to compile and where their logs are.
     if (result.outcome === RUN_OUTCOME.FAILED && !result.error) {
       const failures = result.output.compileFailures;
+      // A failure with neither an error nor a compile failure has nothing
+      // more to name than the status line already says.
+      if (failures.length === 0) return baseResult;
       const lastRound = Math.max(...failures.map((failure) => failure.round));
       for (const failure of failures) {
         if (failure.round !== lastRound) continue;
@@ -337,6 +347,8 @@ export function resolveWorkflowOutput(
         );
       }
     }
+    // Only completed runs may publish to user-requested destinations. Partial or
+    // rejected artifacts remain inspectable in run storage through baseResult.
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
     // Commit before validation as well as copying: once output finalization owns
     // the verdict, its missing-output and filesystem failures must stay visible.
