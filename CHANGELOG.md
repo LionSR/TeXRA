@@ -196,6 +196,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 - **Read-only path refusals show the full path** — the message an agent gets
   when it tries to write inside a read-only folder no longer drops the
   leading `/` of an absolute path.
+- **Waiting on a background run returns its result once.** When an agent
+  waited for a subagent or a multi-agent workflow to finish, the result
+  still arrived afterwards as a follow-up message, which started another
+  turn (for a workflow, the wait had already returned the same result). The
+  wait now returns the full result and no follow-up is sent. The workflow's
+  completion card also names the workspace file it edited instead of a path
+  inside run storage.
 - **Turning telemetry off now stops all usage reporting** — rounds run on a
   ChatGPT, Grok, Kimi, or GLM subscription were still sent after you opted
   out, on the grounds that they metered a plan cap. Nothing has enforced
