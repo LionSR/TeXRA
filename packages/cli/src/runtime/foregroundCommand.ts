@@ -70,10 +70,7 @@ const releaseTerminal = Effect.sync(() => {
 export const runForegroundCommand = Effect.fn('runForegroundCommand')(
   function* (
     command: string | readonly [string, ...string[]],
-    options: {
-      readonly input?: string;
-      readonly env?: Record<string, string | undefined>;
-    } = {},
+    options: { readonly input?: string } = {},
   ): Effect.fn.Return<number, PlatformError, ChildProcessSpawner> {
     const spawner = yield* ChildProcessSpawner;
     const common: ChildProcess.CommandOptions = {
@@ -83,8 +80,6 @@ export const runForegroundCommand = Effect.fn('runForegroundCommand')(
           : Stream.make(new TextEncoder().encode(options.input)),
       stdout: 'inherit',
       stderr: 'inherit',
-      env: options.env,
-      extendEnv: true,
       detached: false,
       forceKillAfter: '5 seconds',
     };

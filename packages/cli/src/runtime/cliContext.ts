@@ -171,10 +171,6 @@ export function cliEnvValue(key: string): string | undefined {
   return process.env[key];
 }
 
-export function readCliEnv(): Record<string, string | undefined> {
-  return { ...process.env };
-}
-
 export async function readCliStdinText(): Promise<string> {
   process.stdin.setEncoding('utf8');
   const chunks: string[] = [];
