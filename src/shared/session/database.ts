@@ -123,7 +123,8 @@ export class DatabaseClaimRefused extends Data.TaggedError(
 }> {}
 
 /**
- * The live process that holds an aggregate this caller was refused, or null
+ * The owner the database names as holding an aggregate this caller was
+ * refused (not proven alive: a claim verdict may be `unprovable`), or null
  * when the refusal names none: the claim verdict (carried as the write
  * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
  * aggregate. A closed aggregate is finished and an ownerless one is free, so
