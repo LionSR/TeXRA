@@ -1,5 +1,5 @@
 // Third-party imports
-import { Cause, Data, Effect, FileSystem, type Scope } from 'effect';
+import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -46,15 +46,7 @@ import {
 } from './inputFields';
 import { selectAvailableDelegationModel } from './delegationAvailability';
 import { requireVisibleAgent, type DelegationParent } from './proposalFlow';
-
-/**
- * A workflow subagent that ran but cannot resolve its agent() call: it ended
- * with a non-completed outcome, or completed without the output files a
- * workflow agent owes. The script sees it as that call's rejection.
- */
-class WorkflowSubagentUnsuccessful extends Data.TaggedError(
-  'WorkflowSubagentUnsuccessful',
-)<{ readonly message: string }> {}
+import { WorkflowSubagentUnsuccessful } from './workflowScriptRun';
 
 function workflowRunnerError(error: unknown): Error {
   return error instanceof SubagentDurabilityError
@@ -857,10 +849,7 @@ export function createWorkflowScriptAgentRunner(
         // result. The recovered marker keeps the id out of the engine's
         // skip/retry map; a recovered result is authoritative and must stay
         // uncontrollable.
-        invocation.report({
-          childRunId: child.runId,
-          recovered: true,
-        });
+        invocation.report({ childRunId: child.runId, recovered: true });
       }
       // Live physical attempts always charge the terminal result cost (covers
       // failed/cancelled outcomes and empty-output validation throws that
