@@ -9,15 +9,20 @@ subagent boundaries; document findings. This note is the finding, and it
 supersedes the [2026-09-24 pass](../../archived/architecture/2026-09-24-agent-sdk-readiness-reverify.md),
 which is now archived.
 
-Pin: verified against branch `claude/eager-noether-q6bj0r` at `f0811a0`, which
-is **20 merged PRs ahead** of the 2026-09-24 pass's pin (`7326fb4`) in the
-audited areas (`src/agent`, `src/model`, `src/logger`, `packages/llm/src`,
-`packages/agent/src`). Every one of those PRs is human-owned and continues the
-same program the standing note named — e.g. #12886/#13249 (retire `logUtils`,
-every producer logs through Effect or the sink), #13236 (the retry offer is
-decided once by the retry owner), #13293 (a prepared turn is parsed once), #13274
-(typed run-lifecycle errors), #13094 (model providers as plugin contributions),
-#13271 (workflow scripts are generators over an Effect interpreter). Alignment
+Pin: verified against branch `claude/eager-noether-q6bj0r` at `f0811a0`. The
+2026-09-24 pass's pin, `7326fb4`, is itself PR #13094 ("model providers are
+plugin contributions"), so it is the baseline, not part of the delta. `f0811a0`
+sits well past it (the exact commit count in `7326fb4..f0811a0` is
+checkout-dependent — the two are not in a single ancestor line — so no fixed
+number is asserted here; reproduce with `git log 7326fb4..f0811a0` against the
+canonical history). What matters is that every intervening commit in the audited
+areas (`src/agent`, `src/model`, `src/logger`, `packages/llm/src`,
+`packages/agent/src`) is a human-owned PR continuing the same program the
+standing note named — e.g. #12886/#13249 (retire `logUtils`, every producer logs
+through Effect or the sink), #13236 (the retry offer is decided once by the retry
+owner), #13293 (a prepared turn is parsed once), #13274 (typed run-lifecycle
+errors), #13271 (workflow scripts are generators over an Effect interpreter),
+each verified present in `7326fb4..f0811a0` and absent from `7326fb4`. Alignment
 has **improved**, entirely through review, not this routine.
 
 ## Verdict (unchanged)
