@@ -7,17 +7,21 @@
  *
  * The write points, in order (manifest section 1.2): the opening snapshot of
  * a fresh run; per round the round prompt with its `model.ready` snapshot and
- * `round.begin`; per response cycle the invoker's `attempt` / `identified` /
- * `response` rows, then `response.processed` with the snapshot that either
- * admits a continuation or moves to `output.ready`; `output.pending` before
- * any file write; `round.end` with the snapshot of the next round or of the
- * finished run; and the `halted` step at every exit that ends the run.
+ * `round.begin`; the invoker's `attempt` / `identified` / `response` rows,
+ * then `response.processed` with the `output.pending` snapshot, committed
+ * before any file write, and `output.ready`; `round.end` with the snapshot of
+ * the next round or of the finished run; and the `halted` step at every exit
+ * that ends the run.
+ *
+ * A round is one response. One cut off by the output limit is not continued:
+ * its text is the round's output, processed as far as it got, with a warning
+ * on the transcript.
  *
  * A turn the provider refused for exceeding its context window is recovered
- * once per round: the history is compacted (`model.compaction`) and the cycle
- * continues against it. A second overflow in the same round stops, and so does
- * a compaction that shortened nothing, because the same history would overflow
- * again.
+ * once per round: the history is compacted (`model.compaction`) and the
+ * round's request is issued again against it. A second overflow in the same
+ * round stops, and so does a compaction that shortened nothing, because the
+ * same history would overflow again.
  *
  * Reflection dispatches no tools: a turn advertises none, so a response never
  * carries a local call and the assistant message enters history with its
@@ -64,10 +68,8 @@ import { getTeXCountStats } from '@latex/texcount';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { LanguageModel } from '@platform/languageModel';
 import {
-  WORKFLOW_OUTPUT_BASENAME,
   WORKFLOW_RAW_OUTPUT_EXT,
   workflowOutputPath,
-  workflowOutputRoundDir,
 } from '@shared/constants/workflowOutput';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import {
@@ -93,7 +95,6 @@ import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { pathToLocationIn } from '@utils/files/fileLocation';
-import { absentReason } from '@utils/files/fsEntryExists';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -125,12 +126,8 @@ import type { HttpClient } from 'effect/unstable/http';
 /** The services a round prepares, compiles and diffs on. */
 type RoundServices = FileSystem.FileSystem | WorkspaceFs | ChildProcessSpawner;
 
-// Reflection owns conversation limits and document completion, not the provider.
-/** Length for preview slices of tool output and responses. */
+/** Length for the debug preview slices of a response. */
 const K_SLICE = 200;
-const CONTINUE_LIMIT = 10;
-const INPUT_TOKEN_LIMIT = 1500000;
-const OUTPUT_TOKEN_LIMIT_FACTOR = 2.5;
 
 interface ReflectionStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
@@ -307,12 +304,11 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     state.lastError === null && state.round + 1 < totalRounds;
 
   /**
-   * A committed response's text as the round writes it, and whether it ended
-   * the turn: a stop with text, or text that closes the documents. The turn
+   * A committed response's text as the round writes it, and whether its
+   * output is extracted: text that stopped, was cut off by the output limit
+   * (`length`, extracted as far as it got), or closes the documents. The turn
    * sends no stop sequence — the Google, OpenAI Chat and OpenAI Responses
-   * protocols refuse one — so the closing tag stays in the text, and a model
-   * that writes it and is then cut off (`length`) has still finished: the
-   * continuation check stops on the same tag, so the output must be processed.
+   * protocols refuse one — so the closing tag stays in the text.
    */
   const responseOf = (turn: NonNullable<RunState['lastTurn']>) =>
     Effect.map(
@@ -323,7 +319,10 @@ export const runReflection = Effect.fn('reflection.run')(function* (
       (text) => {
         const finish = finishReasonOf(turn);
         const endTurn =
-          text !== '' && (finish === 'stop' || text.includes(OUTPUT_END_TAG));
+          text !== '' &&
+          (finish === 'stop' ||
+            finish === 'length' ||
+            text.includes(OUTPUT_END_TAG));
         return { finish, text, endTurn };
       },
     );
@@ -372,7 +371,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   /** Restore the family state a resumed run continues from. */
   const restore = Effect.fn('reflection.restore')(function* (
     state: RunState,
-  ): Effect.fn.Return<void, Error, FileSystem.FileSystem> {
+  ): Effect.fn.Return<void, Error> {
     const persisted = familyState(state, 'reflection');
     if (persisted === null) {
       return yield* Effect.die(
@@ -385,18 +384,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     flow = { ...persisted, totalRounds };
     workspace = AgentWorkspaceState.fromSnapshot(persisted.workspaceSnapshot);
     outputState.rounds = roundsFromPersisted(state.roundOutputs);
-    // Mid-round, the cycle files hold the text every earlier response cycle
-    // produced; the next connector and continuation prompt read their tail.
-    // `continuationIndex` is folded state, so no directory enumeration is
-    // needed to find them.
-    if (state.phase === 'model.ready' || state.phase === 'model.submitted') {
-      const content = yield* readRawOutput(
-        state.round,
-        state.continuationIndex,
-      );
-      workspace.assembly.accumulatedOutput = content;
-      workspace.assembly.lastResponse = content;
-    }
     logger.debug(
       `Resuming reflection run from round ${state.round}/${totalRounds}`,
     );
@@ -524,211 +511,108 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   });
 
   /**
-   * The raw output of one response cycle, keyed by the folded
-   * `continuationIndex`: a re-entry at the same cycle rewrites the same path
-   * with the same bytes, so the write is idempotent by coordinate and needs
-   * no byte-offset bookkeeping; raw/ is outside extracted round files.
+   * A context-window overflow is recoverable once per round: force the
+   * compaction the history needs, then re-issue the round's request against
+   * it. The compaction replaces the whole history with one summary, so the
+   * round's request (the last user message, since reflection dispatches no
+   * tools) is appended again after it. Returns the state the retried request
+   * is issued from, or `null` when the round stops instead: a second overflow
+   * in the round (the fold records the round of its `context-window`
+   * compaction), or a compaction that shortened nothing, because the same
+   * history would overflow again.
    */
-  const cycleLocationFor = (
-    round: number,
-    continuationIndex: number,
-  ): AgentFileLocation =>
-    fileService.createLocation(
-      `raw/${workflowOutputRoundDir(round)}/${WORKFLOW_OUTPUT_BASENAME}.c${continuationIndex}.${WORKFLOW_RAW_OUTPUT_EXT}`,
-    ) as AgentFileLocation;
-
-  /**
-   * The round's accumulated raw output: its cycle files read back in index
-   * order, cycles `0 .. count - 1`. A cycle that produced no text left no
-   * file; a file the resume finds gone contributes no text, and the round
-   * rebuilds it from the rows that follow. Any other read failure —
-   * permissions, a directory, I/O — still fails rather than quietly
-   * continuing without the earlier responses.
-   */
-  const readRawOutput = (
-    round: number,
-    count: number,
-  ): Effect.Effect<string, Error, FileSystem.FileSystem> =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      let raw = '';
-      for (let index = 0; index < count; index++) {
-        raw += yield* fs
-          .readFileString(cycleLocationFor(round, index).absolutePath)
-          .pipe(Effect.catchIf(absentReason, () => Effect.succeed('')));
-      }
-      return raw;
+  const admitOverflowRetry = Effect.fn('reflection.overflowRetry')(function* (
+    initial: RunState,
+    cell: RunCell,
+  ): Effect.fn.Return<RunState | null, Error> {
+    if (initial.overflowRecoveredAtRound === initial.round) {
+      logger.warn(
+        'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
+      );
+      return null;
+    }
+    const request = initial.messages.findLast(
+      (message) => message.role === 'user',
+    );
+    if (request === undefined) {
+      return yield* Effect.die(
+        new Error('An overflowed round has no request to issue again.'),
+      );
+    }
+    const bound = yield* SynchronizedRef.get(run.model);
+    // The retry pays for a summary first: the compaction row is committed
+    // before the request is appended again, so the retried request is issued
+    // against the compacted history the fold returns.
+    const compacted = yield* cell.adopt(
+      yield* compactIfNeeded(initial, {
+        runId,
+        ledger,
+        logger,
+        bound,
+        stores: session.roots,
+        system: undefined,
+        tools: [],
+        force: 'overflow',
+      }),
+    );
+    if (compacted === initial) {
+      logger.warn(
+        'Model context window exceeded and compaction shortened nothing; stopping to avoid a futile retry.',
+      );
+      return null;
+    }
+    logger.info('Retrying the round after forcing model context compaction', {
+      messageType: MESSAGE_TYPES.PROGRESS_STATUS,
     });
+    return yield* cell.append([
+      appendRow(runId, [request]),
+      snapshot(compacted, {
+        phase: 'model.ready',
+        // A response arrived: the run is no longer failed, and this
+        // snapshot is what records that.
+        runtime: { lastError: null },
+      }),
+      stepRow(runId, compacted, 'response.processed'),
+    ]);
+  });
 
   /**
-   * Process the committed response the state holds: write its text to the
-   * raw output, then commit the next phase, a continuation with its prompt
-   * or `output.ready`, together with `response.processed`.
+   * Process the committed response the state holds and commit the next
+   * phase, the overflow retry or `output.pending`, together with
+   * `response.processed`. A response cut off by the output limit is not
+   * continued: the round's output is what it wrote, with a warning.
    */
   const processResponse = Effect.fn('reflection.processResponse')(function* (
     initial: RunState,
     cell: RunCell,
-  ): Effect.fn.Return<
-    RunState,
-    Error,
-    FileSystem.FileSystem | HttpClient.HttpClient
-  > {
+  ): Effect.fn.Return<RunState, Error> {
     const turn = initial.lastTurn;
     if (turn === null) {
       return yield* Effect.die(
         new Error('A response is processed only after its row and its round.'),
       );
     }
-    const { finish, text, endTurn } = yield* responseOf(turn);
+    const { finish, text } = yield* responseOf(turn);
     logger.debug(`Stop reason: ${finish}`);
     const scratchpad = extractScratchpad(text, SCRATCHPAD_TAG);
     if (scratchpad) {
       logger.info(scratchpad, { messageType: MESSAGE_TYPES.SCRATCHPAD });
     }
-
-    let continueCycle = false;
-    // The state the continuation is issued against: an overflow retry
-    // replaces it with the compacted history the retry needs.
-    let base = initial;
-    // Set when this continuation is the overflow retry rather than a
-    // response that was merely cut off.
-    let retryingAfterCompaction = false;
-    /**
-     * A context-window overflow is recoverable once per round: force the
-     * compaction the history needs and retry the cycle against it. A second
-     * overflow in the round (the fold records the round of its
-     * `context-window` compaction), or a compaction that shortened nothing,
-     * stops, because the same history would overflow again.
-     */
-    const admitOverflowRetry = Effect.fn('reflection.overflowRetry')(
-      function* (): Effect.fn.Return<boolean, Error> {
-        if (base.overflowRecoveredAtRound === base.round) {
-          logger.warn(
-            'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
-          );
-          return false;
-        }
-        const bound = yield* SynchronizedRef.get(run.model);
-        // The retry pays for a summary first: the compaction row is committed
-        // before the continuation prompt, so the retried request is issued
-        // against the compacted history the fold returns.
-        const compacted = yield* cell.adopt(
-          yield* compactIfNeeded(base, {
-            runId,
-            ledger,
-            logger,
-            bound,
-            stores: session.roots,
-            system: undefined,
-            tools: [],
-            force: 'overflow',
-          }),
-        );
-        if (compacted === base) {
-          logger.warn(
-            'Model context window exceeded and compaction shortened nothing; stopping to avoid a futile retry.',
-          );
-          return false;
-        }
-        base = compacted;
-        retryingAfterCompaction = true;
-        return true;
-      },
-    );
     if (text) {
-      const connector =
-        yield* session.responseTextProcessing.connectResponseText(
-          workspace.assembly.lastResponse.slice(-K_SLICE),
-          text.slice(0, K_SLICE),
-        );
-      const fs = yield* FileSystem.FileSystem;
-      const cyclePath = cycleLocationFor(
-        initial.round,
-        initial.continuationIndex,
-      ).absolutePath;
-      yield* fs.makeDirectory(dirname(cyclePath), { recursive: true });
-      yield* fs.writeFileString(
-        cyclePath,
-        workspace.assembly.accumulatedOutput ? connector + text : text,
-      );
-      workspace.assembly.lastResponse = text;
-      workspace.assembly.accumulatedOutput += connector + text;
       logger.debug(`First ${K_SLICE} chars:\n${text.slice(0, K_SLICE)}`);
       logger.debug(`Last ${K_SLICE} chars:\n${text.slice(-K_SLICE)}`);
-
-      const totals = initial.usage;
-      const maxOutputTokens =
-        totals.firstInputTokens > 0
-          ? OUTPUT_TOKEN_LIMIT_FACTOR * totals.firstInputTokens
-          : Number.POSITIVE_INFINITY;
-      const continuationLimitExceeded =
-        initial.continuationIndex > CONTINUE_LIMIT;
-      const inputTokenLimitExceeded =
-        totals.totalInputTokens > INPUT_TOKEN_LIMIT;
-      const encounterDocumentTag = text.includes(OUTPUT_END_TAG);
-      // Warn-only by design: this multiplier has never stopped a run, it
-      // flags one whose output has run away relative to its first input.
-      if (totals.totalOutputTokens > maxOutputTokens) {
-        logger.warn('Output tokens exceed input token multiplier', {
-          data: {
-            maxOutputTokensFactor: OUTPUT_TOKEN_LIMIT_FACTOR,
-            totalOutputTokens: totals.totalOutputTokens,
-            firstInputTokens: totals.firstInputTokens,
-          },
-        });
-      }
-      const shouldStop =
-        encounterDocumentTag ||
-        continuationLimitExceeded ||
-        inputTokenLimitExceeded;
-      if (shouldStop) {
-        logger.debug('StopFlags', {
-          data: {
-            endTurn,
-            encounterDocumentTag,
-            continuationLimitExceeded,
-            inputTokenLimitExceeded,
-          },
-        });
-      } else if (finish === 'context-window-exceeded') {
-        continueCycle = yield* admitOverflowRetry();
-      } else if (finish === 'length') {
-        continueCycle = true;
-      }
-    } else if (finish === 'context-window-exceeded') {
-      continueCycle = yield* admitOverflowRetry();
     }
-
-    if (continueCycle) {
-      const next = initial.continuationIndex + 1;
-      logger.info(`Starting continuation #${next}`, {
-        messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-      });
-      logger.info(
-        retryingAfterCompaction
-          ? 'Retrying after forcing model context compaction'
-          : 'Continuing after hitting the model token limit',
-        { messageType: MESSAGE_TYPES.PROGRESS_STATUS },
+    // A response that closed the documents has finished whatever its finish
+    // reason says; only an open one is retried or reported as cut off.
+    const closed = text.includes(OUTPUT_END_TAG);
+    if (finish === 'context-window-exceeded' && !closed) {
+      const retried = yield* admitOverflowRetry(initial, cell);
+      if (retried !== null) return retried;
+    }
+    if (finish === 'length' && !closed) {
+      logger.warn(
+        `Round ${initial.round + 1} hit the model's output limit, so its output may be incomplete. Raise the model's max output tokens to let it finish.`,
       );
-      const prefillTokens = workspace.assembly.lastResponse.slice(-K_SLICE);
-      const continuationPrompt = `Your response got cut off, because you only have limited response space. Continue responding exactly from where you left off until the very end, marked by ${OUTPUT_END_TAG}. Avoid repeating yourself and avoid starting over. Start your response at the next token after: "${prefillTokens}"`;
-      const progressed = { ...base, continuationIndex: next };
-      return yield* cell.append([
-        appendRow(runId, [
-          {
-            role: 'user',
-            content: [{ kind: 'text', text: continuationPrompt }],
-          },
-        ]),
-        snapshot(base, {
-          phase: 'model.ready',
-          continuationIndex: next,
-          // A response arrived: the run is no longer failed, and this
-          // snapshot is what records that.
-          runtime: { lastError: null },
-        }),
-        stepRow(runId, progressed, 'response.processed'),
-      ]);
     }
     // `output.pending` is committed before any output file is touched, so
     // a re-entry at this phase knows the pipeline may have started.
@@ -901,19 +785,14 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     if (state.lastTurn === null) {
       return yield* Effect.die(new Error('Output needs the round response.'));
     }
-    // Whether the round's last response ended the turn, from the folded
-    // turn: the same rule `processResponse` applied before committing
-    // `output.pending`.
-    const { endTurn } = yield* responseOf(state.lastTurn);
-    // The canonical raw output the pipeline reads is the round's cycle files
-    // concatenated in index order; re-entry rewrites it whole from the same
-    // coordinates.
+    // The round's raw output is its last response's text, from the folded
+    // turn; re-entry rewrites it whole from the same row.
+    const { text, endTurn } = yield* responseOf(state.lastTurn);
     const fs = yield* FileSystem.FileSystem;
-    const raw = yield* readRawOutput(round, state.continuationIndex + 1);
     yield* fs.makeDirectory(dirname(location.absolutePath), {
       recursive: true,
     });
-    yield* fs.writeFileString(location.absolutePath, raw);
+    yield* fs.writeFileString(location.absolutePath, text);
     const result = yield* processOutput(round, location, endTurn).pipe(
       // The pipeline's own steps recover what they can; anything that still
       // reaches here — a failed step or a defect in one — costs the round its
@@ -954,7 +833,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     return produced;
   });
 
-  /** One round inside its trace stage: prompt, response cycles, output. */
+  /** One round inside its trace stage: prompt, response, output. */
   const runRound = Effect.fn('reflection.round')(function* (
     cell: RunCell,
   ): Effect.fn.Return<
