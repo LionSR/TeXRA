@@ -8,7 +8,7 @@ import {
   APPROVAL_BYPASS_KINDS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
-import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
+import type { GoalState, RunId } from '@shared/schemas';
 import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -393,6 +393,7 @@ export class RunHeader extends LitElement {
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
       run.flow,
+      run.category,
     );
 
     return html`
@@ -419,7 +420,7 @@ export class RunHeader extends LitElement {
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
         ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-        ${this.renderProgressBadge(run.conversationProgress, run.flow)}
+        ${this.renderProgressBadge(run)}
         ${
           canGrant
             ? renderAutoApproveRow(
@@ -618,13 +619,11 @@ export class RunHeader extends LitElement {
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 
-  private renderProgressBadge(
-    progress: ConversationProgress | undefined,
-    flow: RunView['flow'],
-  ): TemplateResult | typeof nothing {
-    const content = renderProgressBadgeContent(progress, flow);
+  private renderProgressBadge(run: RunView): TemplateResult | typeof nothing {
+    const { conversationProgress: progress, flow, category } = run;
+    const content = renderProgressBadgeContent(progress, flow, category);
     if (content === nothing) return nothing;
-    const progressTitle = getProgressBadgeTitle(progress, flow);
+    const progressTitle = getProgressBadgeTitle(progress, flow, category);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"

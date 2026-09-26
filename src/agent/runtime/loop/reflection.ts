@@ -173,7 +173,6 @@ export const runReflection = Effect.fn('reflection.run')(function* (
   const openFresh = Effect.fn('reflection.open')(function* (
     opening: RunState,
   ): Effect.fn.Return<RunState, Error> {
-    yield* docs.opening;
     const bound = yield* SynchronizedRef.get(run.model);
     const opened = yield* ledger.appendBatch(runId, null, [
       snapshotRow(runId, opening, {
@@ -237,7 +236,7 @@ export const runReflection = Effect.fn('reflection.run')(function* (
     initial: RunState,
     cell: RunCell,
   ): Effect.fn.Return<RunState | null, Error> {
-    if (initial.overflowRecoveredAtRound === initial.round) {
+    if (initial.overflowRecoveredAt?.round === initial.round) {
       logger.warn(
         'Model context window still exceeded after forced compaction; stopping to avoid a futile retry.',
       );

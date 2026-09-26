@@ -94,11 +94,11 @@ type ToolUseLaunchVariant =
  * invoker, the session's ledger, and the session's rooted filesystems (built
  * from the roots of the session the run is on, fresh or resumed, so code
  * below the launch takes `WorkspaceFs` / `StorageFs` from context rather than
- * from the fiber's ambient roots). The follow-up lease is not here: only
- * the tool-use loop consumes a queue and only its finalizer releases the
- * lease, so building `followUpsLayer` for a workflow run would claim a live
- * consumer nothing ever releases — later submissions would report as
- * delivered live to a run that has ended.
+ * from the fiber's ambient roots). The follow-up lease is not here: only a
+ * tool-use conversation consumes a queue and only its finalizer releases the
+ * lease, so building `followUpsLayer` for a workflow run (whose rounds take
+ * no input) would claim a live consumer nothing ever releases — later
+ * submissions would report as delivered live to a run that has ended.
  */
 function runLayerFor(
   ctx: AgentLaunchContext,
@@ -199,48 +199,48 @@ function launchToolUseRun(
 }
 
 /**
- * Run the reflection loop for a single agent run, fresh or resumed. The
- * host's output finalization runs after the loop's result and may change the
- * verdict; a run that failed keeps its error.
+ * A workflow agent in round mode, or in reflection when its rows are; output
+ * finalization may change the verdict. A child's one turn wraps it all.
  */
-function launchReflectionRun(
+function launchWorkflowRun(
   ctx: AgentLaunchContext,
   options: ExecuteAgentOptions,
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
-  const program = runReflection({ resume: options.resumed === true }).pipe(
-    withCompositionHash,
-    Effect.provide(runLayerFor(ctx, options, undefined)),
-    Effect.flatMap((result) =>
-      Effect.gen(function* () {
-        const flowResult: WorkflowFlowResult = {
-          outcome: result.outcome,
-          output: {
-            category: 'workflow',
-            outputs: roundOutputsToOutputSummaries(result.roundOutputs),
-            compileFailures: roundOutputsToCompileFailureSummaries(
-              result.roundOutputs,
-            ),
-            diffs: [],
-          },
-          runId: ctx.runId,
-          usage: result.usage,
-          ...(result.error ? { error: result.error } : {}),
-          ...(ctx.attachedMemoryMisses?.length
-            ? { memoryMisses: ctx.attachedMemoryMisses }
-            : {}),
-          compositionHash: result.compositionHash,
-        };
-        if (flowResult.error || !options.openWorkflowOutput) return flowResult;
-        const outputOutcome = yield* options.openWorkflowOutput(
-          flowResult,
-          ctx.setting.defaultOutputFiles,
-        );
-        return outputOutcome === undefined
-          ? flowResult
-          : { ...flowResult, outcome: outputOutcome };
-      }),
-    ),
-  );
+  const start = { resume: options.resumed === true };
+  const program = Effect.gen(function* () {
+    const snapshot = yield* ctx.session.ledger.latestSnapshot(ctx.runId);
+    const result = yield* withCompositionHash(
+      snapshot?.payload.family === 'reflection'
+        ? runReflection(start)
+        : runToolUse(start),
+    ).pipe(Effect.provide(runLayerFor(ctx, options, undefined)));
+    const flowResult: WorkflowFlowResult = {
+      outcome: result.outcome,
+      output: {
+        category: 'workflow',
+        outputs: roundOutputsToOutputSummaries(result.roundOutputs),
+        compileFailures: roundOutputsToCompileFailureSummaries(
+          result.roundOutputs,
+        ),
+        diffs: [],
+      },
+      runId: ctx.runId,
+      usage: result.usage,
+      ...(result.error ? { error: result.error } : {}),
+      ...(ctx.attachedMemoryMisses?.length
+        ? { memoryMisses: ctx.attachedMemoryMisses }
+        : {}),
+      compositionHash: result.compositionHash,
+    };
+    if (flowResult.error || !options.openWorkflowOutput) return flowResult;
+    const outputOutcome = yield* options.openWorkflowOutput(
+      flowResult,
+      ctx.setting.defaultOutputFiles,
+    );
+    return outputOutcome === undefined
+      ? flowResult
+      : { ...flowResult, outcome: outputOutcome };
+  });
   return options.turns ? options.turns.turnPermit(program) : program;
 }
 
@@ -478,7 +478,7 @@ export function executeAgent(
                 { kind: 'fresh', onIdle: options.onIdle },
               );
             }
-            return yield* launchReflectionRun(ctx, {
+            return yield* launchWorkflowRun(ctx, {
               ...options,
               parentRunId,
             });

@@ -504,20 +504,11 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
 
   return {
     totalRounds,
-    /** A fresh run's opening. A workflow YAML may still declare `tools:`;
-     *  a documents round advertises none, so the narrowing is stated rather
-     *  than silent. */
-    opening: Effect.sync(() => {
-      if (setting.tools.length === 0) return;
-      const declared = setting.tools.map((tool) => tool.name).join(', ');
-      logger.warn(
-        `The workflow family advertises no tools under this release, so the tools resolved for this run are not offered to the model: ${declared}. Run the agent in the tool-use family if it needs them.`,
-        { messageType: MESSAGE_TYPES.INTERNAL },
-      );
-    }),
-    /** Restore the outputs, and the facts a reflection snapshot carries, of a
-     *  resumed run. The configured total wins over the persisted one, so a
-     *  YAML change (rounds: 2 -> 1) takes effect on resume. */
+    /** Restore the outputs, and the rejection facts, of a resumed run. The
+     *  configured total wins over the persisted one, so a YAML change
+     *  (rounds: 2 -> 1) takes effect on resume. A reflection snapshot carries
+     *  the facts; round mode derives the rejection from the rows: a round
+     *  with compile failures rejects, one whose outputs have none clears. */
     restore: (state: RunState): void => {
       const persisted = familyState(state, 'reflection');
       if (persisted !== null) {
@@ -525,6 +516,12 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
         workspace = AgentWorkspaceState.fromSnapshot(
           persisted.workspaceSnapshot,
         );
+      }
+      for (const round of persisted === null ? state.roundOutputs : []) {
+        if (round.compileFailures.length > 0)
+          flow.unresolvedCompileRejection = true;
+        else if (round.outputs.length > 0)
+          delete flow.unresolvedCompileRejection;
       }
       outputState.rounds = roundsFromPersisted(state.roundOutputs);
     },

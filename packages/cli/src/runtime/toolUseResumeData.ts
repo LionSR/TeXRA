@@ -5,6 +5,7 @@ import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  aggregateId,
   AgentCategory,
   HISTORY_RUN_STATUS,
   isTerminalCompileRejection,
@@ -14,7 +15,8 @@ import {
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { foldRunRows } from '@shared/session/runRows';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
 
@@ -59,7 +61,11 @@ export interface CliRunStanding {
  * into: a workflow that stopped at its round cap on an unresolved compile
  * rejection has a snapshot that only replays the same rejection. The
  * reflection loop writes that marker during the final round, before
- * `finalizeRun` writes the `run.end` row, so the terminal outcomes that prove
+ * `finalizeRun` writes the `run.end` row. A round-mode run (the `toolUse`
+ * family) carries no marker: its snapshot is `halted` with no model failure
+ * and its loop's own `halted` step says FAILED, which only the rejection
+ * leaves (output finalization's verdict is `run.end`'s, not the loop's).
+ * The terminal outcomes that prove
  * `resolveOutcome` already ran — CANCELLED and COMPLETED, neither of which
  * `deriveRunOutcome` can produce over a terminal rejection — skip the read,
  * while FAILED and a missing outcome are read.
@@ -91,16 +97,18 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
       yield* Effect.logWarning(
         `Advertising workflow ${facts.id} as resumable without reading its persisted state: ${decision.cause}`,
       ).pipe(withLogChannel(CHANNEL));
+    } else if (decision.kind !== 'checkpoint') {
+      resumable = false;
+    } else if (decision.snapshot.family === 'reflection') {
+      const { state, runtime } = decision.snapshot;
+      resumable = !isTerminalCompileRejection(state, runtime.round);
     } else {
-      resumable =
-        decision.kind === 'checkpoint' &&
-        !(
-          decision.snapshot.family === 'reflection' &&
-          isTerminalCompileRejection(
-            decision.snapshot.state,
-            decision.snapshot.runtime.round,
-          )
-        );
+      const { runtime } = decision.snapshot;
+      resumable = !(
+        runtime.phase === 'halted' &&
+        runtime.lastError == null &&
+        (yield* loopVerdict(facts.id, session)) === RUN_OUTCOME.FAILED
+      );
     }
   }
   const status =
@@ -109,6 +117,21 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
       : (outcome ?? HISTORY_RUN_STATUS.UNKNOWN);
   return { status, resumable };
 });
+
+/** The outcome the run's loop last halted with, from its rows; a run whose
+ *  rows cannot be read or folded has none, and is offered and refused at
+ *  open time like any unreadable run. */
+const loopVerdict = (id: RunId, session: SessionHandle) =>
+  session.readAggregate(aggregateId('run', id)).pipe(
+    Effect.flatMap((rows) =>
+      Effect.try({ try: () => foldRunRows(rows).outcome, catch: ensureError }),
+    ),
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
+      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+    ),
+  );
 
 /**
  * The model a resume of this run would actually use. A tool-use session that

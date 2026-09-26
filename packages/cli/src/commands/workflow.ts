@@ -8,6 +8,7 @@ import {
   isTerminalCompileRejection,
   RUN_OUTCOME,
   type RunId,
+  type RunOutcome,
 } from '@shared/schemas';
 import type { SessionOpenError } from '@shared/session/database';
 
@@ -324,20 +325,20 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const outputDir = resumeWorkflowOutputDirectory(config);
     const recoveryProcessCwd = tryReadCliCwd();
     const recoveryInputIsDurable = options.recoveryInputIsDurable ?? true;
+    let loopOutcome: RunOutcome | undefined; // handed to output finalization
     const canAdvertiseInterruptedRun = (
       resumability: ResumableCheckpoint,
     ): boolean => {
-      // Only a reflection run reaches here — this is the workflow command.
-      // The two facts the hint turns on sit in different halves of the
-      // snapshot: the model failure is runtime-owned (`runtime.lastError`,
-      // the single durable location, written with the waiting/deny
-      // snapshots), the compile rejection is family state.
+      // A model failure is `runtime.lastError`; a compile rejection is
+      // reflection family state, or a round-mode loop that halted FAILED.
       const { snapshot } = resumability;
-      if (snapshot.family !== 'reflection') return false;
-      return (
-        snapshot.runtime.lastError == null &&
-        !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
-      );
+      if (snapshot.runtime.lastError != null) return false;
+      return snapshot.family === 'reflection'
+        ? !isTerminalCompileRejection(snapshot.state, snapshot.runtime.round)
+        : !(
+            snapshot.runtime.phase === 'halted' &&
+            loopOutcome === RUN_OUTCOME.FAILED
+          );
     };
     const writeResumeHint = (
       runId: RunId,
@@ -358,11 +359,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       Effect.gen(function* () {
         if (!run.ok || !run.outcomePersisted) return;
         const resumability = yield* deriveResumability(runId, session);
-        if (
-          advertisesInterruptedRun(resumability, canAdvertiseInterruptedRun)
-        ) {
+        if (advertisesInterruptedRun(resumability, canAdvertiseInterruptedRun))
           writeResumeHint(runId);
-        }
       });
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
@@ -397,6 +395,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               tryCommitPublication,
             }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
+          loopOutcome = result.outcome;
           let outcome = result.outcome;
           if (Result.isFailure(outputResult)) {
             workflowOutputError = outputResult.failure;

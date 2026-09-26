@@ -186,6 +186,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   only while a run that uses it is open, does not inherit your API-key
   environment variables, and a server that fails to start is named in the
   run's transcript. See the Agent integrations guide.
+- **Workflow agents run on the tool-use loop** — polish, correct,
+  paper2slide and every other workflow agent now run as rounds of the same
+  loop tool-use agents use, instead of a loop of their own. There is no
+  intended user-visible change: the requests, transcript, output files,
+  progress badge and resume behave as before, and a workflow run saved by an
+  earlier build still resumes.
 
 ### Bug Fixes
 

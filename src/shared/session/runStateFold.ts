@@ -188,9 +188,8 @@ export type RunState = RunPosition & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** The round of the last `context-window` compaction: a turn that
-   *  overflowed the window is retried once per round against it. */
-  readonly overflowRecoveredAtRound: number | null;
+  /** Where the last `context-window` compaction (one per round) landed. */
+  readonly overflowRecoveredAt: Pick<RunPosition, 'round' | 'turn'> | null;
   readonly flow: FlowState | null;
 };
 
@@ -273,7 +272,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAt: null,
 });
 
 /**
@@ -628,7 +627,9 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
         ...(p.cause === 'context-window'
-          ? { overflowRecoveredAtRound: current.round }
+          ? {
+              overflowRecoveredAt: { round: current.round, turn: current.turn },
+            }
           : {}),
       });
     }
