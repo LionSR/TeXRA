@@ -1291,16 +1291,19 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           identity: { kind: 'agent', agent: PARENT_AGENT },
           parentRunId: OUTER_RUN_ID,
         });
-        parentFiber = testRuntime().runFork(
-          session.runs.launchRun(
-            PARENT_RUN_ID,
-            prepareAgentDefinition({ config: parentConfig, session }).pipe(
-              Effect.flatMap((definition) =>
-                executeAgent(definition, PARENT_RUN_ID, {
-                  session,
-                  parentRunId: OUTER_RUN_ID,
-                  tools: [launchWorkflowChild],
-                }),
+        parentFiber = yield* Effect.forkChild(
+          withProcessServices(
+            testRuntime(),
+            session.runs.launchRun(
+              PARENT_RUN_ID,
+              prepareAgentDefinition({ config: parentConfig, session }).pipe(
+                Effect.flatMap((definition) =>
+                  executeAgent(definition, PARENT_RUN_ID, {
+                    session,
+                    parentRunId: OUTER_RUN_ID,
+                    tools: [launchWorkflowChild],
+                  }),
+                ),
               ),
             ),
           ),
