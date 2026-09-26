@@ -446,13 +446,10 @@ async function queueSecondAssertionFollowUp(
   instruction = 'Now prove the second assertion.',
 ) {
   const resumed = await testRuntime().runPromise(
-    DelegateAgentTool.call({
-      agent: null,
-      model: null,
-      instruction,
-      memories: [],
-      working_directory: null,
-      execution_id: runId,
+    ExecutionsTool.call({
+      path: `/executions/${runId}`,
+      action: 'send',
+      message: instruction,
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({
@@ -644,7 +641,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
         yield* waitForParentTurns(2);
@@ -722,7 +719,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             resumeRun(runId, {
               session,
               extraFollowUps: [
-                { text: 'Continue after restart.', origin: 'user' },
+                {
+                  text: 'Continue after restart.',
+                  from: { kind: 'user' as const },
+                },
               ],
               executeWorkflow: () =>
                 Effect.fail(new Error('Expected a tool-use child.')),
@@ -745,9 +745,16 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(session.followUps.hasLiveOwner(runId)).toBe(true);
         childTurns.push({ text: 'Recovered result D.' });
         parentTurns.push({ text: 'Parent received recovered result D.' });
-        yield* submitFollowUp(runId, 'Continue in the recovered run.', {
-          session,
-        }).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        yield* submitFollowUp(
+          runId,
+          {
+            text: 'Continue in the recovered run.',
+            from: { kind: 'user' as const },
+          },
+          {
+            session,
+          },
+        ).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
@@ -794,7 +801,10 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             resumeRun(runId, {
               session,
               extraFollowUps: [
-                { text: 'Keep this unconsumed input.', origin: 'user' },
+                {
+                  text: 'Keep this unconsumed input.',
+                  from: { kind: 'user' as const },
+                },
               ],
               executeWorkflow: () =>
                 Effect.fail(new Error('Expected a tool-use child.')),
@@ -832,7 +842,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const resumed = yield* Effect.promise(() =>
           queueSecondAssertionFollowUp(parentContext, runId),
         );
-        expect(resumed.summary).toContain('Follow-up queued');
+        expect(resumed.summary).toContain('Queued message');
 
         // The answerless turn still delivers: its report/result overwrite turn 1's
         // with an explicitly empty response rather than replaying 'Result A.' — and
@@ -1002,7 +1012,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             PARENT_RUN_ID,
             {
               text: report!,
-              origin: 'subagent_result',
+              from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
               deliveryId,
             },
             { session },
@@ -1021,7 +1031,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           PARENT_RUN_ID,
           {
             text: report!,
-            origin: 'subagent_result',
+            from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
             deliveryId: `${deliveryId}:other`,
           },
           { session },

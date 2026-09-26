@@ -94,15 +94,6 @@ export function recordSessionEvents(
   };
 }
 
-/** Every stream whose follow-up queue reports input sent from this call on. */
-export function recordFollowUpsSent(
-  session: Pick<SessionHandle, 'followUps'>,
-): { readonly sent: RunId[] } {
-  const sent: RunId[] = [];
-  session.followUps.onSent((runId) => sent.push(runId));
-  return { sent };
-}
-
 /** A fresh run trace that records every event it emits. */
 export function recordingTrace(): {
   readonly trace: TraceEmitter;

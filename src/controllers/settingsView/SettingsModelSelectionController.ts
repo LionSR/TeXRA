@@ -63,10 +63,6 @@ interface SettingsModelSelectionControllerDeps<R> {
     Error,
     R
   >;
-  getPreferredCopilotRouteModels?: () => Effect.Effect<
-    readonly string[],
-    StateReadFailed
-  >;
   /**
    * Resolve availability-decorated options for the given models, reading the
    * shared availability inputs and finishing them with `modelOptionsFrom` —
@@ -101,8 +97,7 @@ export class SettingsModelSelectionController<R = never> {
         ),
       );
       const preferredModels = new Set(
-        yield* this.deps.getPreferredCopilotRouteModels?.() ??
-          preferredCopilotRouteModels(this.deps.stores.globalState),
+        yield* preferredCopilotRouteModels(this.deps.stores.globalState),
       );
       const models = yield* this.buildSelectionItems(routes, preferredModels);
       return {

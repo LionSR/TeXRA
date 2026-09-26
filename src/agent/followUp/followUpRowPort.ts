@@ -18,6 +18,8 @@ export interface FollowUpRowPort {
   readonly detach: (job: Effect.Effect<void>) => void;
   /** The run's pending follow-ups (`SessionEvents.pendingFollowUps`). */
   readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
+  /** The run's parent as the session view folds it; `null` at top level. */
+  readonly parentOf: (runId: RunId) => RunId | null | undefined;
   /** Every committed row of the run's aggregate. */
   readonly rows: (
     runId: RunId,

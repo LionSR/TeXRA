@@ -28,7 +28,6 @@ const mocks = vi.hoisted(() => ({
   executeAgent: vi.fn(),
   runAgent: vi.fn(),
   request: vi.fn(),
-  notifyFollowUpSent: vi.fn(),
   workspaceGet: vi.fn(),
   globalGet: vi.fn(),
   getRunRecords: vi.fn(),
@@ -157,8 +156,16 @@ import {
 setupPlatform(
   {},
   {
-    globalState: { get: mocks.globalGet, update: () => Effect.void },
-    workspaceState: { get: mocks.workspaceGet, update: () => Effect.void },
+    globalState: {
+      get: mocks.globalGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
+    workspaceState: {
+      get: mocks.workspaceGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
   },
 );
 
@@ -375,7 +382,6 @@ function installSession(overrides: Record<string, unknown> = {}): void {
     },
     requests: { request: mocks.request },
     followUps: {
-      notifySent: mocks.notifyFollowUpSent,
       claimRecovery: vi.fn((runId: RunId) => ({
         runId,
         kind: 'recovery' as const,
@@ -495,7 +501,10 @@ async function retainInterruptedFollowUp(
     .mockReset()
     .mockImplementation(defaultResumeRun)
     .mockReturnValueOnce(Effect.succeed({ failed: 'not_resumable' }));
-  const admission = ctrl.admitInterruptedFollowUp({ text });
+  const admission = ctrl.admitInterruptedFollowUp({
+    from: { kind: 'user' as const },
+    text,
+  });
   expect(admission.kind).toBe('accepted');
   if (admission.kind !== 'accepted') return;
   await expect(awaitAdmission(admission.completion)).resolves.toBe(false);
@@ -506,14 +515,20 @@ async function expectInterruptedRetry(
   expectedTexts: readonly string[],
 ): Promise<void> {
   resumeWithAutoResumeData();
-  const retry = ctrl.admitInterruptedFollowUp({ text: 'Retry.' });
+  const retry = ctrl.admitInterruptedFollowUp({
+    from: { kind: 'user' as const },
+    text: 'Retry.',
+  });
   expect(retry.kind).toBe('accepted');
   if (retry.kind !== 'accepted') return;
   await expect(awaitAdmission(retry.completion)).resolves.toBe(true);
   expect(mocks.resumeRun).toHaveBeenCalledWith(
     'a11111',
     expect.objectContaining({
-      extraFollowUps: expectedTexts.map((text) => ({ text })),
+      extraFollowUps: expectedTexts.map((text) => ({
+        text,
+        from: { kind: 'user' },
+      })),
     }),
   );
 }
@@ -1059,7 +1074,12 @@ describe('createChatSessionController', () => {
 
     expect(session.runId).toBe('aaaaaa');
     expect(session.interruptedRunId).toBeUndefined();
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+    expect(
+      ctrl.admitInterruptedFollowUp({
+        from: { kind: 'user' as const },
+        text: 'Route normally.',
+      }),
+    ).toEqual({
       kind: 'not_interrupted',
     });
   });
@@ -1074,6 +1094,7 @@ describe('createChatSessionController', () => {
       return baseResumeRun!(...args);
     });
     const admission = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
       text: 'Preserve this accepted message.',
     });
     expect(admission.kind).toBe('accepted');
@@ -1088,7 +1109,9 @@ describe('createChatSessionController', () => {
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'aaaaaa',
       expect.objectContaining({
-        extraFollowUps: [{ text: 'Preserve this accepted message.' }],
+        extraFollowUps: [
+          { text: 'Preserve this accepted message.', from: { kind: 'user' } },
+        ],
       }),
     );
   });
@@ -1472,7 +1495,12 @@ describe('createChatSessionController', () => {
     await expect(runTryResume(ctrl, 'a11111' as RunId)).resolves.toBe(true);
 
     expect(session.interruptedRunId).toBeUndefined();
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+    expect(
+      ctrl.admitInterruptedFollowUp({
+        from: { kind: 'user' as const },
+        text: 'Route normally.',
+      }),
+    ).toEqual({
       kind: 'not_interrupted',
     });
   });
@@ -1559,6 +1587,7 @@ describe('createChatSessionController', () => {
     const teardown = pendingRunClaim();
     const { ctrl } = makeInterruptedController(teardown.settled, true);
     const admission = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
       text: 'Transfer this accepted message.',
     });
     expect(admission.kind).toBe('accepted');
@@ -1571,7 +1600,7 @@ describe('createChatSessionController', () => {
     await expect(awaitAdmission(admission.completion)).resolves.toBe(true);
     expect(mocks.followUpSubmit).toHaveBeenCalledWith(
       'a11111',
-      [{ text: 'Transfer this accepted message.' }],
+      [{ text: 'Transfer this accepted message.', from: { kind: 'user' } }],
       'live_owner',
     );
   });
@@ -1584,6 +1613,7 @@ describe('createChatSessionController', () => {
     );
 
     const admission = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
       text: 'Do not drop this message.',
     });
     expect(admission.kind).toBe('accepted');
@@ -1596,7 +1626,9 @@ describe('createChatSessionController', () => {
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'a11111',
       expect.objectContaining({
-        extraFollowUps: [{ text: 'Do not drop this message.' }],
+        extraFollowUps: [
+          { text: 'Do not drop this message.', from: { kind: 'user' } },
+        ],
       }),
     );
     expect(session.stopRequested).toBe(false);
@@ -1609,8 +1641,14 @@ describe('createChatSessionController', () => {
       false,
     );
 
-    const first = ctrl.admitInterruptedFollowUp({ text: 'First message.' });
-    const second = ctrl.admitInterruptedFollowUp({ text: 'Second message.' });
+    const first = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
+      text: 'First message.',
+    });
+    const second = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
+      text: 'Second message.',
+    });
     expect(first.kind).toBe('accepted');
     expect(second.kind).toBe('accepted');
     if (first.kind !== 'accepted' || second.kind !== 'accepted') return;
@@ -1624,8 +1662,8 @@ describe('createChatSessionController', () => {
       'a11111',
       expect.objectContaining({
         extraFollowUps: [
-          { text: 'First message.' },
-          { text: 'Second message.' },
+          { text: 'First message.', from: { kind: 'user' } },
+          { text: 'Second message.', from: { kind: 'user' } },
         ],
       }),
     );
@@ -1651,13 +1689,21 @@ describe('createChatSessionController', () => {
       },
     );
 
-    const first = ctrl.admitInterruptedFollowUp({ text: 'Resume now.' });
+    const first = ctrl.admitInterruptedFollowUp({
+      from: { kind: 'user' as const },
+      text: 'Resume now.',
+    });
     expect(first.kind).toBe('accepted');
     if (first.kind !== 'accepted') return;
     await resumeCalled.promise;
     expect(mocks.resumeRun).toHaveBeenCalledOnce();
 
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Route normally.' })).toEqual({
+    expect(
+      ctrl.admitInterruptedFollowUp({
+        from: { kind: 'user' as const },
+        text: 'Route normally.',
+      }),
+    ).toEqual({
       kind: 'not_interrupted',
     });
     resume.resolve(STARTED);
@@ -1677,7 +1723,12 @@ describe('createChatSessionController', () => {
     await retainInterruptedFollowUp(ctrl, 'Discard me.');
     ctrl.clearInterruptedRecovery();
 
-    expect(ctrl.admitInterruptedFollowUp({ text: 'Fresh chat.' })).toEqual({
+    expect(
+      ctrl.admitInterruptedFollowUp({
+        from: { kind: 'user' as const },
+        text: 'Fresh chat.',
+      }),
+    ).toEqual({
       kind: 'not_interrupted',
     });
   });
@@ -1711,7 +1762,7 @@ describe('createChatSessionController', () => {
     expect(mocks.resumeRun).toHaveBeenCalledWith(
       'aaaaaa',
       expect.objectContaining({
-        extraFollowUps: [{ text: 'First attempt.' }],
+        extraFollowUps: [{ text: 'First attempt.', from: { kind: 'user' } }],
       }),
     );
     await vi.waitFor(() => expect(session.interruptedRunId).toBe('a11111'));

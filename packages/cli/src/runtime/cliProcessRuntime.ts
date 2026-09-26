@@ -87,17 +87,19 @@ const NO_PLATFORM_APP_STATE =
  * answered with the caller's fallback would read as absent state rather than
  * as no store at all.
  */
+const refuseWrite = (key: string) =>
+  Effect.fail(
+    new StateWriteFailed({
+      key,
+      message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
+      cause: undefined,
+    }),
+  );
 const refusingStateStore: StateStore = Object.freeze({
   get: (key: string) =>
     Effect.die(new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`)),
-  update: (key: string) =>
-    Effect.fail(
-      new StateWriteFailed({
-        key,
-        message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
-        cause: undefined,
-      }),
-    ),
+  update: refuseWrite,
+  modify: refuseWrite,
 });
 
 const NO_PLATFORM_GLOBAL_ROOT =
@@ -124,6 +126,7 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 )({
   appendAll: () => refuseGlobalRecord('appendAll'),
   readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
+  updateAppStateKey: () => refuseGlobalRecord('updateAppStateKey'),
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
   readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),

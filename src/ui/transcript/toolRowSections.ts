@@ -278,6 +278,8 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     sections.push(textSection('Action:', `wait (timeout: ${timeout}s)`));
   } else if (action === 'kill') {
     sections.push(textSection('Action:', 'kill'));
+  } else if (action === 'send' && typeof input.message === 'string') {
+    sections.push(textSection('Message:', input.message));
   }
 
   const viewRange = input.view_range;
@@ -342,11 +344,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
-
-  const runId = asString(input.execution_id);
-  if (runId) {
-    sections.push({ kind: 'identifier', label: 'Resume:', value: runId });
-  }
 
   const agent = asString(input.agent);
   const model = asString(input.model);

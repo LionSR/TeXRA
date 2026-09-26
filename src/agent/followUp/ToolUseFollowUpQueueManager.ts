@@ -6,11 +6,11 @@ import { withLogChannel } from '@logger/effectLog';
 import type { RecoveryContinuation } from '@platform/interfaces';
 import {
   aggregateId,
-  type FollowUpContent,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
+import { runRelation } from '@shared/session/runRelation';
 import {
   foldRunRows,
   freshRunRows,
@@ -20,6 +20,7 @@ import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
 import { RunInput } from './RunInput';
+import type { FollowUpSenderInput } from './followUpSender';
 import type { FollowUpRowPort } from './followUpRowPort';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
@@ -30,7 +31,7 @@ export interface FollowUpQueueInput {
   readonly displayText?: string;
   /** Media file paths (e.g. pasted images) attached to this user follow-up. */
   readonly mediaFiles?: readonly string[];
-  readonly origin?: FollowUpContent['origin'];
+  readonly from: FollowUpSenderInput;
   /**
    * Stable logical identity of one delivery its producer may repeat: a
    * child-run result (#9531), an inquiry continuation re-delivered after a
@@ -148,7 +149,6 @@ export class ToolUseFollowUpQueue {
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
-  private readonly sentObservers = new Set<(runId: RunId) => void>();
   /** Leases nobody holds that keep an entry owned while the claim an
    *  admission took for it is released ({@link releaseAdoptedClaim}). */
   private readonly releasing = new WeakSet<FollowUpConsumerLease>();
@@ -165,24 +165,6 @@ export class ToolUseFollowUpQueue {
     return () => {
       this.releaseObservers.delete(observer);
     };
-  }
-
-  /**
-   * Observe input reaching a run's live consumer (a follow-up delivered
-   * live, a compaction request queued for the next model call). An
-   * occurrence, not state: it is what `executions wait` ends its wait on,
-   * and it lives in this process only, never on the session's event plane.
-   */
-  onSent(observer: (runId: RunId) => void): () => void {
-    if (this.disposed) return () => {};
-    this.sentObservers.add(observer);
-    return () => {
-      this.sentObservers.delete(observer);
-    };
-  }
-
-  notifySent(runId: RunId): void {
-    for (const observer of [...this.sentObservers]) observer(runId);
   }
 
   /** Claim a live flow/child consumer. A competing owner is rejected. */
@@ -262,15 +244,6 @@ export class ToolUseFollowUpQueue {
     admission: 'live_owner' | 'recoverable',
     options?: FollowUpSubmitOptions,
   ): Effect.Effect<FollowUpSubmission, Error> {
-    const queued = followUps.map((followUp): QueuedFollowUp => ({
-      followUpId: followUp.deliveryId ?? randomUUID(),
-      content: {
-        text: followUp.text,
-        displayText: followUp.displayText,
-        mediaFiles: followUp.mediaFiles ? [...followUp.mediaFiles] : undefined,
-        origin: followUp.origin ?? 'user',
-      },
-    }));
     const replayable = new Set(
       followUps.flatMap((followUp) =>
         followUp.deliveryId === undefined ? [] : [followUp.deliveryId],
@@ -279,7 +252,7 @@ export class ToolUseFollowUpQueue {
     // A session that has closed takes no admission: its publisher is gone.
     if (this.disposed) return Effect.succeed({ kind: 'refused' });
     return this.port.exclusive((append) =>
-      this.admit(runId, queued, replayable, admission, append, options),
+      this.admit(runId, followUps, replayable, admission, append, options),
     );
   }
 
@@ -385,11 +358,9 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Dispose the session-owned boundary: end every attached queue, release
-   * every adopted claim onto the session publisher, then drop the entry map
-   * and release observers. The session entry's last finalizer settles those
-   * releases before the graph closes. Entry-creating paths refuse to rebuild
-   * afterwards, so a late detached producer cannot leak an entry nobody
-   * will drain.
+   * every adopted claim onto the session publisher, and report each run
+   * released so observers holding the session let go. The session entry's
+   * last finalizer settles the releases; nothing rebuilds after.
    */
   dispose(): void {
     if (this.disposed) return;
@@ -397,6 +368,7 @@ export class ToolUseFollowUpQueue {
     for (const [runId, entry] of this.entries) {
       this.endInput(entry);
       this.releaseAdoptedClaim(runId, entry, () => {});
+      this.notifyReleaseObservers(runId);
     }
     this.entries.clear();
     this.terminalized.clear();
@@ -410,7 +382,7 @@ export class ToolUseFollowUpQueue {
    */
   private admit(
     runId: RunId,
-    followUps: readonly QueuedFollowUp[],
+    followUps: readonly FollowUpQueueInput[],
     replayable: ReadonlySet<string>,
     admission: 'live_owner' | 'recoverable',
     append: Append,
@@ -433,15 +405,27 @@ export class ToolUseFollowUpQueue {
       // the lease; every other admission claims the run before writing.
       const consumerHoldsClaim =
         admitted.owner?.kind === 'flow' || admitted.owner?.kind === 'child';
+      // Stamped inside the admission job, so the parentage a run sender's
+      // relation to the recipient is read from is committed state.
+      const stamped = followUps.map(({ from, ...input }): QueuedFollowUp => ({
+        followUpId: input.deliveryId ?? randomUUID(),
+        content: {
+          text: input.text,
+          displayText: input.displayText,
+          mediaFiles: input.mediaFiles ? [...input.mediaFiles] : undefined,
+          from:
+            from.kind === 'run'
+              ? {
+                  kind: 'run',
+                  runId: from.runId,
+                  relation: runRelation(from.runId, runId, this.port.parentOf),
+                }
+              : from,
+        },
+      }));
       admitted.admitting = true;
       const written = yield* Effect.exit(
-        this.writeRows(
-          runId,
-          followUps,
-          replayable,
-          consumerHoldsClaim,
-          append,
-        ),
+        this.writeRows(runId, stamped, replayable, consumerHoldsClaim, append),
       );
 
       // From here to the returned status, nothing yields until the claim's

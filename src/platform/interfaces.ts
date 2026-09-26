@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `installProcessRuntime()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Effect, FileSystem, Layer } from 'effect';
+import { Context, Data, Effect, FileSystem, Layer, type Result } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
 
 import type { GlobalStorageFs } from './rootedFs';
@@ -109,12 +109,23 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 
 /**
  * Application state read from its authority when the Effect executes.
- * Updates finish after commit. Separate reads and updates are not an atomic
- * read-modify-write operation; defaults apply only to absent keys.
+ * Updates finish after commit; defaults apply only to absent keys. A change
+ * that depends on the current value goes through `modify`, never a `get`
+ * then an `update`: the settings surfaces do not serialize their messages,
+ * and hosts in separate processes share one store.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
+  /**
+   * Read-modify-write of one key as one step at the store's authority:
+   * `change` sees the stored value (`undefined` when absent) and returns the
+   * next one, or refuses with its own error and nothing is written.
+   */
+  modify<T, E = never>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E | StateWriteFailed>;
 }
 
 /**

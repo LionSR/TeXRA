@@ -55,6 +55,7 @@ describe('resolveToolPath path protection', () => {
                   }),
                 ),
               update: (key, value) => workspaceState.update(key, value),
+              modify: (key, change) => workspaceState.modify(key, change),
             },
           },
         },
