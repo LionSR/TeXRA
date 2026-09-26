@@ -231,18 +231,41 @@ const candidates = (
     at: 0,
   }));
 
+type History = readonly z.output<typeof MessageSchema>[];
+
+/**
+ * Histories accepted by `PreparedHistorySchema`. The fold appends by copying
+ * the array and keeping each message object, and the schema's rules are
+ * between neighbours (a calling assistant and its tool group), so a batch
+ * over an accepted history re-checks only from one message before the first
+ * changed one, never starting on a tool group. Re-parsing the whole history
+ * (media base64 included) on every batch was quadratic over a run.
+ */
+const preparedHistories = new WeakSet<History>();
+
 const unprepared = (
   runId: RunId,
-  history: readonly z.output<typeof MessageSchema>[],
+  history: History,
+  previous?: History,
 ): RunLedgerRefused | null => {
+  let start = 0;
+  if (previous !== undefined && preparedHistories.has(previous)) {
+    const shared = Math.min(previous.length, history.length);
+    while (start < shared && previous[start] === history[start]) start += 1;
+    start = Math.max(0, start - 1);
+    if (start > 0 && history[start]?.role === 'tool') start -= 1;
+  }
+  if (PreparedHistorySchema.safeParse(history.slice(start)).success) {
+    preparedHistories.add(history);
+    return null;
+  }
+  // The detail names indices in the whole history, so it is the whole parse's.
   const prepared = PreparedHistorySchema.safeParse(history);
-  return prepared.success
-    ? null
-    : new RunLedgerRefused({
-        reason: 'unprepared-history',
-        runId,
-        detail: prepared.error.message,
-      });
+  return new RunLedgerRefused({
+    reason: 'unprepared-history',
+    runId,
+    detail: prepared.error?.message ?? `history from message ${start}`,
+  });
 };
 
 /** What a lost claim says, from the sequence row that refused the write. */
@@ -428,7 +451,11 @@ export const runLedgerLayer: Layer.Layer<
         rows.some(isMessageBearing) &&
         candidate.success.messages.length > 0
       ) {
-        const refusal = unprepared(run, candidate.success.messages);
+        const refusal = unprepared(
+          run,
+          candidate.success.messages,
+          state?.messages,
+        );
         if (refusal !== null) return yield* refusal;
       }
       const drafts: readonly SessionEventDraft[] = rows;
