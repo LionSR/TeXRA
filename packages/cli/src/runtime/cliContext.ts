@@ -72,7 +72,7 @@ export interface CliContext {
    */
   readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
-  /** The `configWarnings` that `--quiet` does not hide; see `CliStartupConfig`. */
+  /** The config problems `--quiet` does not hide; see `CliStartupConfig`. */
   readonly configDegradations: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;

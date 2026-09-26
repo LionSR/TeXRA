@@ -31,15 +31,11 @@ export function contextFromArgs(
           skillSourcePaths: collectStringFlagValues(rawArgs, 'source', 's'),
         }),
       });
-      for (const warning of context.configWarnings) {
-        // Degradation reaches stderr even under `--quiet` (#11080).
-        if (
-          !context.quietLogs ||
-          context.configDegradations.includes(warning)
-        ) {
-          writeTextStderr(`WARN ${warning}`);
-        }
-      }
+      // Degradation reaches stderr even under `--quiet` (#11080).
+      const printed = context.quietLogs
+        ? context.configDegradations
+        : [...context.configDegradations, ...context.configWarnings];
+      for (const warning of printed) writeTextStderr(`WARN ${warning}`);
       return context;
     }).pipe(
       Effect.provide(Layer.merge(nodeFileServices, processEnvConfigLayer)),

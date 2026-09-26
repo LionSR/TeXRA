@@ -120,12 +120,12 @@ export interface CliStartupConfig {
    * next run reads.
    */
   readonly config: ConfigProvider;
-  /** Every config problem found at open, for the CLI and `texra doctor`. */
+  /** The routine config problems found at open, for the CLI and `texra doctor`. */
   readonly warnings: readonly string[];
   /**
-   * The subset of `warnings` saying the project file could not be used at all
-   * (malformed JSON, not an object, not writable): actionable degradation,
-   * not routine noise, so it is printed even under `--quiet`.
+   * The problems saying the project file could not be used at all (malformed
+   * JSON, not an object, not writable): actionable degradation, not routine
+   * noise, so it is printed even under `--quiet`.
    */
   readonly degradations: readonly string[];
 }
@@ -280,7 +280,6 @@ export function loadCliStartupConfig(
       return {
         config: new JsonConfigProvider(stores),
         warnings: [
-          ...degradations,
           ...configFileWarnings([
             {
               store: stores.workspace,
