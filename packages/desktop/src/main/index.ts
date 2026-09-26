@@ -21,13 +21,9 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { z } from 'zod';
-import { presentAgentFailure } from '@agent/runtime';
+import { presentRunFailure } from '@agent/runtime';
 import { loadAgents, refresh } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
@@ -63,7 +59,7 @@ import {
   type InstructionAction,
 } from '@shared/schemas';
 import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
+import { Cancelled } from '@shared/session/requestErrors';
 import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -1319,18 +1315,7 @@ function createWindow(options: {
             // the failure is presented here and the kickoff settles.
             Effect.catch((error) => {
               if (error instanceof Cancelled) return Effect.void;
-              const primaryError = primaryAgentError(error);
-              return presentAgentFailure(
-                setupSession.interactions,
-                {
-                  kind: classifyAgentError(primaryError),
-                  message:
-                    primaryError instanceof Rejected
-                      ? primaryError.reason
-                      : toErrorMessage(primaryError),
-                },
-                { replayWhenAttached: true },
-              );
+              return presentRunFailure(setupSession.interactions, error);
             }),
           );
         }),
