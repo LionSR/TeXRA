@@ -676,11 +676,12 @@ test('keeps project workbenches alive across selection and releases them on clos
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBoxSync = () => 1;
     });
-    await page
-      .locator(
-        `.shell-project-item:has(.shell-project-row[title="${projectA}"]) .shell-project-close`,
-      )
-      .click();
+    // The row's actions take room only while it is hovered.
+    const itemA = page.locator(
+      `.shell-project-item:has(.shell-project-row[title="${projectA}"])`,
+    );
+    await itemA.hover();
+    await itemA.locator('.shell-project-close').click();
     await expect(
       page.locator(`.shell-project-row[title="${projectA}"]`),
     ).toHaveCount(0);

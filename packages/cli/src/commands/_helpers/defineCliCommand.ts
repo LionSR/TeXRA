@@ -9,6 +9,7 @@ import {
   prePlatformDiagnosticSink,
   writeErrorStderr,
 } from '@cli/runtime/logSinks';
+import type { RunChatInit } from '@cli/chat/tui/runChatTui';
 import type { ParsedGlobalArgs } from '@cli/runtime/globalArgs';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
@@ -25,16 +26,34 @@ type CliCommandRunContext<A extends ArgsDef> = Parameters<
   NonNullable<CommandDef<A>['run']>
 >[0];
 
+/**
+ * What a command's program settles on: the process exit code, or the chat
+ * session it hands the terminal to (`texra setup`'s setup agent, `texra
+ * resume`'s tool-use session). The TUI is not part of the program: `runChat`
+ * installs Ink, its own SIGINT/SIGTERM pair and the teardown it owns, so it
+ * mounts after the program has settled rather than inside a fiber of the
+ * runtime it outlives.
+ */
+type CliCommandOutcome = number | { readonly chat: RunChatInit };
+
 interface DefineCliCommandOptions<A extends ArgsDef, E> {
   readonly meta: CommandDef<A>['meta'];
   readonly args?: A;
+  /**
+   * citty's `setup`, which runs before `run`: an argv refusal that must
+   * precede the context build (and the config warnings it prints) throws
+   * `CliUsageError` here.
+   */
+  readonly setup?: CommandDef<A>['setup'];
   /**
    * Core handler. Receives the already-built `CliContext` (with config
    * warnings surfaced by `contextFromArgs`) and citty's run context, and
    * returns the command as the program it is: one Effect ending in the
    * process exit code, which this helper runs on the process runtime below.
    * The value it settles on is forwarded to `setExitCode`, so a handler
-   * reduces to "do the work, return a code".
+   * reduces to "do the work, return a code" — or, for a command that ends in
+   * the chat TUI, "do the work, name the session", which this helper mounts
+   * once the program has settled.
    *
    * It is called to BUILD that program, before the runtime is installed. A
    * command that can refuse its arguments without the runtime refuses HERE,
@@ -47,7 +66,7 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
   readonly run: (
     context: CliContext,
     ctx: CliCommandRunContext<A>,
-  ) => Effect.Effect<number, E, ProcessServices>;
+  ) => Effect.Effect<CliCommandOutcome, E, ProcessServices>;
   /**
    * Set by the two commands that bring no platform up. Their program still
    * runs on a process runtime, but one installed with `NO_PLATFORM_INSTALL`:
@@ -82,10 +101,12 @@ interface DefineCliCommandOptions<A extends ArgsDef, E> {
  *
  * The runtime install and the run are this helper's, not each command's: a
  * command is one program on the process runtime, and this is the one place
- * the CLI enters it. `texra doctor` is the one command that cannot use this —
- * its report runs before the runtime exists and, when the platform init
- * fails, after that init has disposed the runtime it installed, so it has
- * none to borrow at either end.
+ * the CLI enters it. Two commands cannot use this. `texra doctor`'s report
+ * runs before the runtime exists and, when the platform init fails, after
+ * that init has disposed the runtime it installed, so it has none to borrow
+ * at either end. `texra chat` refuses an unusable terminal and skips its
+ * update check before anything installs a runtime, which this helper does
+ * before the program starts.
  */
 export function defineCliCommand<const A extends ArgsDef, E>(
   options: DefineCliCommandOptions<A, E>,
@@ -93,6 +114,7 @@ export function defineCliCommand<const A extends ArgsDef, E>(
   return defineCommand<A>({
     meta: options.meta,
     args: options.args,
+    setup: options.setup,
     async run(ctx) {
       // citty's `ctx.args` for a generic `ArgsDef` widens past the precise
       // `ParsedGlobalArgs` shape; every command that uses this helper spreads
@@ -137,7 +159,16 @@ export function defineCliCommand<const A extends ArgsDef, E>(
         (error: unknown) => Exit.fail(error),
       );
       if (Exit.isSuccess(exit)) {
-        setExitCode(exit.value);
+        const outcome = exit.value;
+        if (typeof outcome === 'number') {
+          setExitCode(outcome);
+          return;
+        }
+        // The TUI mounts at this Promise edge, after the program has settled:
+        // `runChat` is the interactive host entry and owns Ink, its own signal
+        // handlers and its teardown.
+        const { runChat } = await import('@cli/chat/tui/runChatTui');
+        setExitCode((await runChat(context, outcome.chat)).exitCode);
         return;
       }
       // Ctrl-C or SIGTERM: the platform's shutdown interrupted the command,

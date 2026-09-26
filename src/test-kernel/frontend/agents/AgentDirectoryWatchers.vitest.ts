@@ -1,14 +1,19 @@
 // Third-party imports
+import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it as vitestIt, vi } from 'vitest';
 
+import { withProcessServices } from '@platform/processRuntime';
+import { buildCustomAgentDirMessage } from '@shared/settingsView/handlers/agentSelectionHandlers';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 
+const EXTERNAL_FIRST = '/external/first';
+
 const mocks = vi.hoisted(() => ({
   getAllLocal: vi.fn<() => Promise<unknown[]>>(),
-  selectFolder: vi.fn(() => Effect.succeed<string | null>(null)),
   liveWatchers: new Set<string>(),
 }));
 
@@ -61,10 +66,6 @@ vi.mock('@frontend/ui/errorHandlingUtils', () => ({
   showLoggedMessageWithDocs: vi.fn(() => Effect.void),
 }));
 
-vi.mock('@frontend/ui/dialogs', () => ({
-  selectFolder: mocks.selectFolder,
-}));
-
 const { agentDirectories } =
   await import('@frontend/agents/AgentDirectoryManager');
 
@@ -77,7 +78,6 @@ describe('agent directory watchers', () => {
   beforeEach(() => {
     mocks.liveWatchers.clear();
     mocks.getAllLocal.mockReset();
-    mocks.selectFolder.mockReturnValue(Effect.succeed(null));
     agentDirectories.initialize(
       new FakeStateStore(),
       '/resources',
@@ -85,15 +85,53 @@ describe('agent directory watchers', () => {
     );
   });
 
-  it('builds no watcher once the last subscription is removed mid-rebuild', async () => {
-    const listing = createDeferred<unknown[]>();
-    mocks.getAllLocal.mockReturnValueOnce(listing.promise);
+  it.effect(
+    'reads the custom directory and its reset from the settings state store',
+    () =>
+      Effect.gen(function* () {
+        const globalState = new FakeStateStore();
+        agentDirectories.initialize(globalState, '/resources', testRuntime());
+        yield* globalState.update(
+          GlobalStateKey.CUSTOM_AGENT_DIR,
+          EXTERNAL_FIRST,
+        );
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
+          ),
+        ).toEqual({
+          command: 'updateCustomAgentDir',
+          path: EXTERNAL_FIRST,
+          isDefault: false,
+        });
 
-    const handle = agentDirectories.watchAgentDirectories(() => {});
-    handle.dispose();
-    listing.resolve([{ directory: '/agents/custom', source: 'custom' }]);
-    await settle();
+        yield* globalState.update(GlobalStateKey.CUSTOM_AGENT_DIR, undefined);
+        expect(
+          yield* withProcessServices(
+            testRuntime(),
+            buildCustomAgentDirMessage(globalState, agentDirectories.custom()),
+          ),
+        ).toEqual({
+          command: 'updateCustomAgentDir',
+          path: '/agents/custom',
+          isDefault: true,
+        });
+      }),
+  );
 
-    expect(mocks.liveWatchers.size).toBe(0);
-  });
+  vitestIt(
+    'builds no watcher once the last subscription is removed mid-rebuild',
+    async () => {
+      const listing = createDeferred<unknown[]>();
+      mocks.getAllLocal.mockReturnValueOnce(listing.promise);
+
+      const handle = agentDirectories.watchAgentDirectories(() => {});
+      handle.dispose();
+      listing.resolve([{ directory: '/agents/custom', source: 'custom' }]);
+      await settle();
+
+      expect(mocks.liveWatchers.size).toBe(0);
+    },
+  );
 });

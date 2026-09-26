@@ -125,12 +125,6 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
         });
       }
       switch (part.kind) {
-        case 'file-annotation':
-        case 'url-citation':
-          return yield* new ModelError({
-            kind: 'unsupported',
-            message: 'Responses cannot replay foreign provider annotations.',
-          });
         case 'message': {
           if (part.evidence) {
             if (part.evidence.kind !== 'openai-responses-message') {

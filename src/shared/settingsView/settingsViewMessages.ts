@@ -466,9 +466,6 @@ const UpdateSubscriptionAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
   status: SubscriptionAuthStatusSchema,
 });
-export type UpdateSubscriptionAuthStatusMessage = z.infer<
-  typeof UpdateSubscriptionAuthStatusMessageSchema
->;
 
 const UpdateSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),

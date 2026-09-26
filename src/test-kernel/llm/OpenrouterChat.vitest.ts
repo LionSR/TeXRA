@@ -40,7 +40,12 @@ const TOOLS = ['search', 'fetch'].map((name) => ({
   description: name,
   parameters: { type: 'object', properties: { q: { type: 'string' } } },
 }));
-const IDENTITY = { id: 'generation-1', model: 'returned-model' };
+const IDENTITY = {
+  id: 'generation-1',
+  model: 'returned-model',
+  object: 'chat.completion.chunk',
+  created: 1,
+};
 const DETAILS = [
   {
     type: 'reasoning.text',
@@ -68,45 +73,28 @@ const DETAILS = [
     result: ' raw hosted result ',
   },
 ];
-const FILE = {
-  type: 'file',
-  file: {
-    hash: 'file-hash',
-    name: 'original.pdf',
-    content: [
-      { type: 'text', text: 'Extracted' },
-      { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } },
-    ],
-  },
-};
-const CITATION = {
-  type: 'url_citation',
-  url_citation: {
-    url: 'https://synthetic.invalid/citation',
-    start_index: 0,
-    end_index: 8,
-    content: '',
-  },
-};
 const USAGE = {
   prompt_tokens: 11,
   completion_tokens: 7,
   total_tokens: 18,
   cost: 0,
   is_byok: false,
-  cost_details: { upstream_inference_cost: 0.125 },
+  cost_details: {
+    upstream_inference_cost: 0.125,
+    upstream_inference_prompt_cost: 0.1,
+    upstream_inference_completions_cost: 0.025,
+  },
   prompt_tokens_details: {
     cached_tokens: 3,
     cache_write_tokens: 4,
     audio_tokens: 1,
-    video_tokens: null,
+    video_tokens: 0,
   },
   completion_tokens_details: {
     reasoning_tokens: 5,
     audio_tokens: null,
     accepted_prediction_tokens: 0,
     rejected_prediction_tokens: 1,
-    image_tokens: 2,
   },
   server_tool_use_details: {
     tool_calls_requested: 1,
@@ -118,15 +106,17 @@ const USAGE = {
 function frame(delta: object = {}, finishReason: string | null = null): object {
   return {
     ...IDENTITY,
-    choices: [
-      {
-        index: 0,
-        delta,
-        finish_reason: finishReason,
-        native_finish_reason: null,
-      },
-    ],
+    choices: [{ index: 0, delta, finish_reason: finishReason }],
   };
+}
+/** A chunk with the envelope the SDK requires and no choice. */
+function receipt(fields: object): object {
+  return { ...IDENTITY, choices: [], ...fields };
+}
+/** The SDK hands its fetcher one `Request`. */
+function sentRequest(input: Parameters<typeof globalThis.fetch>[0]): Request {
+  assert(input instanceof Request);
+  return input;
 }
 function sse(...frames: object[]): string {
   return (
@@ -138,7 +128,8 @@ function response(body: BodyInit, status = 200): Response {
   return new Response(body, {
     status,
     headers: {
-      'Content-Type': 'text/event-stream',
+      // An HTTP rejection is JSON, so the SDK's typed error schemas parse it.
+      'Content-Type': status === 200 ? 'text/event-stream' : 'application/json',
       'X-Request-ID': 'request-1',
     },
   });
@@ -148,9 +139,9 @@ function call(index: number, args: string, metadata = true): object {
     index,
     ...(metadata
       ? { id: `call-${index}`, ...(index === 0 ? { type: 'function' } : {}) }
-      : { id: null }),
+      : {}),
     function: {
-      ...(metadata ? { name: TOOLS[index].name } : { name: null }),
+      ...(metadata ? { name: TOOLS[index].name } : {}),
       arguments: args,
     },
   };
@@ -175,28 +166,32 @@ function errors(exit: Exit.Exit<unknown, ModelError>) {
 
 describe('native OpenRouter Chat', () => {
   it.effect(
-    'preserves ordered media, complete reasoning, annotations, receipt and tool settlement through rehydrated replay',
+    'preserves ordered media, complete reasoning, receipt and tool settlement through rehydrated replay',
     () =>
       Effect.gen(function* () {
         const sent: Record<string, any>[] = [];
-        const fetch = vi.fn<typeof globalThis.fetch>(async (url, init) => {
-          expect(url).toBe('https://synthetic.invalid/api/v1/chat/completions');
-          expect(new Headers(init?.headers).get('Authorization')).toBe(
+        const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+          const request = sentRequest(input);
+          expect(request.url).toBe(
+            'https://synthetic.invalid/api/v1/chat/completions',
+          );
+          expect(request.headers.get('Authorization')).toBe(
             'Bearer selected-key',
           );
-          sent.push(JSON.parse(String(init?.body)));
+          expect(request.headers.get('X-Title')).toBe('TeXRA.ai');
+          sent.push(await request.json());
           if (sent.length === 2)
             return response(sse(frame({ content: 'Done.' }, 'stop')));
           return response(
             sse(
-              frame({ reasoning: null, reasoning_details: null }),
+              frame({ reasoning: null }),
               frame({ reasoning: '', reasoning_details: [] }),
               frame({
                 reasoning: 'plain',
                 reasoning_details: DETAILS.slice(0, 2),
               }),
               frame({ reasoning: null, reasoning_details: DETAILS.slice(2) }),
-              frame({ content: 'Search now.', annotations: [FILE, CITATION] }),
+              frame({ content: 'Search now.' }),
               frame({ tool_calls: [call(1, '{"q":'), call(0, '{')] }),
               frame({
                 tool_calls: [
@@ -204,28 +199,13 @@ describe('native OpenRouter Chat', () => {
                   call(1, '"b"}', false),
                 ],
               }),
+              frame({}, 'tool_calls'),
               {
-                choices: [
-                  {
-                    index: 0,
-                    finish_reason: 'tool_calls',
-                    native_finish_reason: 'tool_use',
-                  },
-                ],
-              },
-              {
-                choices: [
-                  {
-                    index: 0,
-                    delta: {},
-                    finish_reason: 'tool_calls',
-                    native_finish_reason: 'tool_use',
-                  },
-                ],
+                ...frame({}, 'tool_calls'),
                 usage: USAGE,
                 service_tier: 'standard',
               },
-              { choices: [], usage: USAGE },
+              receipt({ usage: USAGE }),
             ),
           );
         });
@@ -280,10 +260,6 @@ describe('native OpenRouter Chat', () => {
           providerResponseId: 'generation-1',
           returnedModel: 'returned-model',
           finishReason: 'tool-calls',
-          finishEvidence: {
-            kind: 'openrouter',
-            nativeFinishReason: 'tool_use',
-          },
           usage: {
             inputTokens: 11,
             cachedInputTokens: 3,
@@ -304,9 +280,8 @@ describe('native OpenRouter Chat', () => {
           'message',
           'local-call',
           'local-call',
-          'file-annotation',
-          'url-citation',
         ]);
+        expect(result).not.toHaveProperty('finishEvidence');
         expect(result.content[0]).toMatchObject({
           kind: 'reasoning',
           summary: [],
@@ -378,7 +353,6 @@ describe('native OpenRouter Chat', () => {
           content: 'Search now.',
           reasoning: 'plain',
           reasoning_details: DETAILS,
-          annotations: [FILE, CITATION],
           tool_calls: [
             {
               id: 'call-0',
@@ -394,10 +368,10 @@ describe('native OpenRouter Chat', () => {
           { role: 'tool', tool_call_id: 'call-0', content: 'A' },
           { role: 'tool', tool_call_id: 'call-1', content: 'Error: B' },
         ]);
+        expect(sent[1].messages[2]).not.toHaveProperty('annotations');
         for (const order of [
-          [1, 0, 2, 3, 4, 5],
-          [0, 2, 1, 3, 4, 5],
-          [0, 1, 4, 2, 3, 5],
+          [1, 0, 2, 3],
+          [0, 2, 1, 3],
         ]) {
           const exit = yield* Effect.exit(
             model.prepareTurn({
@@ -422,7 +396,6 @@ describe('native OpenRouter Chat', () => {
     ['absent', {}, {}],
     ['null plain', { reasoning: null }, { reasoning: null }],
     ['empty plain', { reasoning: '' }, { reasoning: '' }],
-    ['null details', { reasoning_details: null }, { reasoning_details: null }],
     ['empty details', { reasoning_details: [] }, { reasoning_details: [] }],
     [
       'both empty',
@@ -434,8 +407,8 @@ describe('native OpenRouter Chat', () => {
     ([_, delta, expected]) =>
       Effect.gen(function* () {
         const bodies: any[] = [];
-        const fetch = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
-          bodies.push(JSON.parse(String(init?.body)));
+        const fetch = vi.fn<typeof globalThis.fetch>(async (input) => {
+          bodies.push(await sentRequest(input).json());
           return response(sse(frame(delta), frame({}, 'stop')));
         });
         const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
@@ -463,27 +436,21 @@ describe('native OpenRouter Chat', () => {
   );
 
   it.effect(
-    'accepts identity-free terminal accounting, repeated terminal reasons and a DONE sharing its byte chunk with later data',
+    'accepts a usage-only receipt, repeated terminal reasons and a DONE sharing its byte chunk with later data',
     () =>
       Effect.gen(function* () {
         const wire =
           ': keep-alive\r\nretry: 1\r\n\r\n' +
-          sse(
-            frame({ content: 'α\nβ' }),
-            {
-              choices: [{ finish_reason: 'stop', native_finish_reason: null }],
+          sse(frame({ content: 'α\nβ' }), frame({}, 'stop'), {
+            ...frame({}, 'stop'),
+            usage: {
+              prompt_tokens: 0,
+              completion_tokens: 0,
+              total_tokens: 0,
+              cost: 0,
+              is_byok: true,
             },
-            {
-              choices: [{ finish_reason: 'stop' }],
-              usage: {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0,
-                cost: 0,
-                is_byok: true,
-              },
-            },
-          ) +
+          }) +
           'data: {"error":{"message":"must not be consumed"}}\n\n';
         const encoded = new TextEncoder().encode(wire);
         const body = new ReadableStream<Uint8Array>({
@@ -509,13 +476,8 @@ describe('native OpenRouter Chat', () => {
           totalTokens: 0,
           providerUsage: { cost: 0, isByok: true },
         });
-        assert(result.providerResponseId !== null);
-        expect(result.finishEvidence).toEqual({
-          kind: 'openrouter',
-          nativeFinishReason: null,
-        });
+        expect(result.providerResponseId).toBe('generation-1');
         expect(fetch).toHaveBeenCalledTimes(1);
-        expect(body.locked).toBe(false);
       }),
   );
 
@@ -636,10 +598,18 @@ describe('native OpenRouter Chat', () => {
     ],
     ['wrong finish', [frame({ tool_calls: [call(0, '{}')] }, 'stop')]],
     [
-      'content before identity',
+      'content without an identity',
       [
         {
-          choices: [{ delta: { content: 'premature' }, finish_reason: 'stop' }],
+          object: 'chat.completion.chunk',
+          created: 1,
+          choices: [
+            {
+              index: 0,
+              delta: { content: 'premature' },
+              finish_reason: 'stop',
+            },
+          ],
         },
       ],
     ],
@@ -652,8 +622,8 @@ describe('native OpenRouter Chat', () => {
       'contradictory usage',
       [
         frame({}, 'stop'),
-        { choices: [], usage: USAGE },
-        { choices: [], usage: { ...USAGE, cost: 3 } },
+        receipt({ usage: USAGE }),
+        receipt({ usage: { ...USAGE, cost: 3 } }),
       ],
     ],
     [
@@ -674,20 +644,7 @@ describe('native OpenRouter Chat', () => {
         ),
       ],
     ],
-    [
-      'unsupported returned image',
-      [frame({ images: [{ image_url: { url: 'x' } }] }, 'stop')],
-    ],
-    [
-      'changed file hash content',
-      [
-        frame({ annotations: [FILE] }),
-        frame(
-          { annotations: [{ type: 'file', file: { hash: 'file-hash' } }] },
-          'stop',
-        ),
-      ],
-    ],
+    ['unknown finish', [frame({ content: 'x' }, 'end_turn')]],
     ['missing finish', [frame({ content: 'partial' })]],
   ] as const)('fails %s without producing a completed result', ([_, frames]) =>
     Effect.gen(function* () {
@@ -707,26 +664,28 @@ describe('native OpenRouter Chat', () => {
     }),
   );
 
-  it.effect.each([401, 429, 200])(
-    'preserves HTTP %s or in-band failure, original code and PDF evidence',
-    (status) =>
+  it.effect.each([
+    [401, 401],
+    [429, 429],
+    [503, 503],
+    [503, 'overloaded'],
+    [200, 502],
+  ] as const)(
+    'preserves HTTP %s or in-band failure and its original code, without an SDK retry',
+    ([status, code]) =>
       Effect.gen(function* () {
-        const error = {
-          code: status === 200 ? 'server_error' : status,
-          message: 'Provider failed',
-          metadata: { file_annotations: [FILE] },
-        };
+        const error = { code, message: 'Provider failed' };
         const wire =
           status === 200
             ? sse(frame({ content: 'partial' }), {
-                ...IDENTITY,
+                ...frame({}, 'error'),
                 error,
-                choices: [{ finish_reason: 'error' }],
               })
             : JSON.stringify({ error });
         const fetch = vi.fn<typeof globalThis.fetch>(async () =>
           response(wire, status),
         );
+        // A 5XX that the SDK's default backoff would retry for up to an hour.
         const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
         const exit = yield* Effect.exit(
           Effect.gen(function* () {
@@ -741,35 +700,22 @@ describe('native OpenRouter Chat', () => {
           message: 'Provider failed',
           requestId: 'request-1',
           cause: error,
-          providerEvidence: {
-            kind: 'openrouter',
-            origin: { protocol: 'openrouter-chat' },
-            fileAnnotations: [{ kind: 'file-annotation', hash: 'file-hash' }],
-          },
         });
         if (status === 200) expect(failure.responseId).toBe('generation-1');
-        expect(failure.providerEvidence?.origin).toEqual({
-          protocol: 'openrouter-chat',
-          codecVersion: 1,
-          requestedModel: CONFIG.requestedModel,
-          deployment: CONFIG.deployment,
-        });
+        else expect(failure.status).toBe(status);
+        expect(failure).not.toHaveProperty('providerEvidence');
         expect(fetch).toHaveBeenCalledTimes(1);
       }),
   );
 
-  it.effect.each(['missing DONE', 'invalid JSON', 'connection'] as const)(
+  it.effect.each(['invalid JSON', 'connection'] as const)(
     'classifies %s without retry',
     (variant) =>
       Effect.gen(function* () {
         const cause = new Error('Disconnected');
         const fetch = vi.fn<typeof globalThis.fetch>(async () => {
           if (variant === 'connection') throw cause;
-          return response(
-            variant === 'invalid JSON'
-              ? 'data: {broken}\n\n'
-              : `data: ${JSON.stringify(frame({ content: 'partial' }, 'stop'))}\n\n`,
-          );
+          return response('data: {broken}\n\n');
         });
         const model = openrouterChatModel(CONFIG, { apiKey: 'key', fetch });
         const exit = yield* Effect.exit(
@@ -796,7 +742,8 @@ describe('native OpenRouter Chat', () => {
         let cancelled = false;
         const progressed = yield* Deferred.make<void>();
         const cleanup = new Error('Distinct cleanup');
-        const fetch = vi.fn<typeof globalThis.fetch>((_url, init) => {
+        const fetch = vi.fn<typeof globalThis.fetch>((input, init) => {
+          sentRequest(input);
           signal = init?.signal ?? undefined;
           assert(signal);
           if (stage === 'headers')
@@ -874,16 +821,13 @@ describe('native OpenRouter Chat', () => {
                 Cause.isDieReason(reason) && reason.defect === cleanup,
             ),
           ).toBe(true);
-        if (stage !== 'headers') {
-          expect(cancelled).toBe(true);
-          expect(body?.locked).toBe(false);
-        }
+        if (stage !== 'headers') expect(cancelled).toBe(true);
         expect(fetch).toHaveBeenCalledTimes(1);
       }),
   );
 
   it.effect(
-    'preserves the original malformed frame and a distinct reader cleanup defect',
+    'fails a malformed frame once, without its repeat on reader cleanup as a defect',
     () =>
       Effect.gen(function* () {
         const cleanup = new Error('Cancellation failed');
@@ -916,12 +860,7 @@ describe('native OpenRouter Chat', () => {
           requestId: 'request-1',
         });
         assert(Exit.isFailure(exit));
-        expect(
-          exit.cause.reasons.some(
-            (reason) => Cause.isDieReason(reason) && reason.defect === cleanup,
-          ),
-        ).toBe(true);
-        expect(body.locked).toBe(false);
+        expect(exit.cause.reasons.some(Cause.isDieReason)).toBe(false);
       }),
   );
 });

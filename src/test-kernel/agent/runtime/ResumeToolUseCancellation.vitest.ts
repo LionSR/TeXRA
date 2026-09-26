@@ -40,15 +40,19 @@ vi.mock('@agent/runtime/loop/toolUse', () => ({
 
 // The per-run services the lane provides are built and exercised by the loop
 // suites. Here only the layer's *input* matters: the tools the lane hands the
-// run and the callbacks it wires, so the layer itself is empty and its input
-// is captured.
+// run and the callbacks it wires, so the layer carries only the composition
+// the launch reads back for its result, and its input is captured.
 vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
   const { Layer } = await import('effect');
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/run/AgentRun')>();
   return {
-    ...(await importOriginal<typeof import('@agent/runtime/run/AgentRun')>()),
+    ...actual,
     agentRunLayer: (...args: unknown[]) => {
       mocks.agentRunLayer(...args);
-      return Layer.empty;
+      return Layer.succeed(actual.AgentRun)({
+        composition: { key: { hash: 'test-composition' } },
+      } as never);
     },
   };
 });

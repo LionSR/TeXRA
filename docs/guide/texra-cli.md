@@ -118,8 +118,14 @@ include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
-Final run result objects report their terminal state through `outcome` and
-name the run through `runId`.
+Final run result objects report their terminal state through `outcome` and name
+the run through `runId`. A `texra run` result also records what the run ran
+with: `compositionHash` names the tool composition the run pinned, and `plugins`
+lists the enabled plugins installed when it started or resumed (`name`,
+`source`, and for a fetched plugin its `ref` and pinned `commit`). Two runs with
+the same hash and plugin list ran with the same tools and plugin skills, which
+is what a script comparing agent or prompt variants needs to know. A run stopped
+before its loop returned carries no `compositionHash`.
 
 ### NDJSON contract, version 2
 

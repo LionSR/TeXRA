@@ -43,10 +43,6 @@ interface AgentFileHandlers {
   ): SettingsActionEffect<void>;
 }
 
-/** The four commands these handlers answer — the key each host reports a
- *  failure under. */
-export type AgentFileCommand = keyof AgentFileHandlers;
-
 interface SettingsAgentActionsOptions {
   readonly findAgent: (
     source: AgentSource,
@@ -242,12 +238,3 @@ export function createSettingsAgentActions(
       }),
   };
 }
-
-/** What each host reports when one of the four actions fails — kept beside
- *  the handlers so both hosts report the same sentence. */
-export const FAILURE_MESSAGES: Readonly<Record<AgentFileCommand, string>> = {
-  openAgentYaml: 'Failed to open agent YAML file',
-  customizeAgent: 'Failed to create custom agent copy',
-  deleteCustomAgent: 'Failed to delete custom agent',
-  revealAgentFile: 'Failed to reveal agent file',
-};

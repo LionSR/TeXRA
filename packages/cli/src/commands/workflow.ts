@@ -434,10 +434,10 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       );
     }
 
-    // Output copying occurs while the run is still interruptible. Rebuild its
-    // envelope from the lifecycle-resolved verdict so a signal that lands during
-    // the copy cannot leave a completed presentation beside a cancelled run.
-    workflowResult = { ...workflowResult, outcome: result.outcome };
+    // Copying runs while the run is interruptible, so the envelope takes the
+    // lifecycle-resolved verdict (a signal during the copy must not leave a
+    // completed presentation) and the invocation's own fields, its plugins.
+    workflowResult = { ...result, ...workflowResult, outcome: result.outcome };
 
     emitCliResult(runContext, {
       json: workflowResult,

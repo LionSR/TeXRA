@@ -1032,13 +1032,13 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_WORKFLOW_SCRIPT_DISABLED: '1',
     },
-    keys: [...CONFIG_TOOLS_FORM_KEYS, '4'],
+    keys: [...CONFIG_TOOLS_FORM_KEYS, '5'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Tools',
       'Multi-Agent Workflow — enabled · detected · Ready',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
     ],
   },
   {
@@ -1272,9 +1272,9 @@ const SCENARIOS = [
     expect: [
       '/config · Tools',
       'Toggle external integrations',
-      '+1 earlier, +5 more',
+      'Goal Mode — +7 more',
       '↑/↓ navigate',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
       'Esc close',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],

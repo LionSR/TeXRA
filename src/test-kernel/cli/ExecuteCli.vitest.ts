@@ -12,6 +12,7 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -1357,6 +1358,77 @@ describe('executeCliConfig', () => {
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
         expect(mocks.writeTextStderrAndWait).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'records each installed plugin by source and pinned commit in the CLI result',
+    () =>
+      Effect.gen(function* () {
+        const commit = 'a'.repeat(40);
+        yield* testDefaultSession().roots.globalState.update(
+          GlobalStateKey.INSTALLED_PLUGINS,
+          [
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+              path: '/home/me/.texra/plugins/notes',
+              skills: ['/home/me/.texra/plugins/notes/skills'],
+            },
+          ],
+        );
+        const { AgentCategory } = yield* Effect.promise(
+          () => import('@shared/schemas'),
+        );
+        const { executeCliToolUseConfig } =
+          yield* Effect.promise(loadExecuteCli);
+        mocks.runAgent.mockResolvedValueOnce({
+          outcome: 'completed',
+          output: {
+            category: AgentCategory.ToolUse,
+            response: 'Done.',
+            files: [],
+          },
+          runId: 'exec-1',
+        });
+        mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+          outcome: 'completed',
+          outcomePersisted: true,
+        });
+        const result = yield* executeCliToolUseConfig(
+          toolUseConfig(),
+          cliContext(),
+          { stopAfterCycle: true },
+        );
+
+        expect(result).toMatchObject({
+          ok: true,
+          exitCode: 0,
+          result: {
+            outcome: 'completed',
+            workingDirectory: '/tmp/project',
+            output: { response: 'Done.' },
+          },
+        });
+        if (result.ok) {
+          // The result names each installed plugin by where it came from and
+          // its pinned commit, never by the local checkout it was read from.
+          expect(result.result.plugins).toEqual([
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+            },
+          ]);
+          expect(Object.keys(result.result)).toEqual([
+            'outcome',
+            'output',
+            'runId',
+            'plugins',
+            'workingDirectory',
+          ]);
+        }
       }),
   );
 });

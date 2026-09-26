@@ -110,7 +110,7 @@ interface ChatResult {
   exitCode: number;
 }
 
-interface RunChatInit {
+export interface RunChatInit {
   /** `--agent` override from the CLI; falls through `resolveChatDefaults`. */
   readonly agentOverride?: string;
   /** `--model` override from the CLI; falls through `resolveChatDefaults`. */

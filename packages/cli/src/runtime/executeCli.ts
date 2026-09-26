@@ -47,6 +47,8 @@ import { createCliRuntimeHost } from './cliPresentationHost';
 import { CliExitCode } from './exitCodes';
 import { writeTextStderr } from './logSinks';
 import {
+  type CliRunResult,
+  readCliPluginPins,
   readCliRunOutcomeState,
   runOutcomeExitCode,
   type ExecuteAgentResult,
@@ -109,10 +111,10 @@ interface CliExecuteOptions {
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
   C extends AgentCategory
-    ? ExecuteAgentResult & {
+    ? CliRunResult & {
         readonly output: Extract<RunEndOutput, { category: C }>;
       }
-    : ExecuteAgentResult;
+    : CliRunResult;
 
 export interface CliConfigExecuteOptions<
   C extends AgentCategory | undefined = undefined,
@@ -165,6 +167,7 @@ export function executeCliConfig<
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
+    const plugins = yield* readCliPluginPins((yield* options.session).roots);
     const request: RunAgentRequest & { readonly runId: RunId } = resumedRunId
       ? { kind: 'resume', ...validation.request, runId }
       : { kind: 'fresh', ...validation.request, runId };
@@ -192,7 +195,7 @@ export function executeCliConfig<
       ok: true as const,
       runId,
       outcomePersisted: run.outcomePersisted,
-      result: result as ExecuteAgentResultForCategory<C>,
+      result: { ...(result as ExecuteAgentResultForCategory<C>), plugins },
     };
   }).pipe(
     Effect.catchCause((cause) => Effect.fail(ensureError(Cause.squash(cause)))),
