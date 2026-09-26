@@ -39,7 +39,7 @@ script's contract is `async`:
   per-call settlement back into the realm (`settleHostPromise`, `:508`), and
   the async bridge wrappers in `BRIDGE_PRELUDE` (`:153`).
 - A failed call resolves to `null` and a skip to the string
-  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:718`, `:733`), so every
+  `'__WORKFLOW_SKIPPED__'` (`runWorkflowScript.ts:733`, `:718`), so every
   script filters two sentinels before synthesis (`WorkflowScriptTool.ts:666`).
 - Concurrency, retry and timeout policy the script wants is written by hand
   in the script, if at all; the host offers one semaphore.
