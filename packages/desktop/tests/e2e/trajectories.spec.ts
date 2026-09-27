@@ -184,9 +184,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     await setSettingsTab(launched, tab);
   }
   // The chrome must still be alive after the burst.
-  await expect(
-    launched.page.locator('.shell-project-name'),
-  ).toBeVisible();
+  await expect(launched.page.locator('.shell-project-name')).toBeVisible();
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
 });
 
