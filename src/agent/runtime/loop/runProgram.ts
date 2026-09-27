@@ -196,17 +196,12 @@ export type RunExit = {
 };
 
 /**
- * The one verdict: the body's own value when it returned. Any interrupt in
- * a failure cause is a stop, even when a finalizer then failed
- * (`Interrupt` + `Die`): the run lifecycle already reports that run
- * `CANCELLED`, so the halt row agrees.
+ * The one verdict of a failure cause. Any interrupt in it is a stop, even
+ * when a finalizer then failed (`Interrupt` + `Die`): the run lifecycle
+ * already reports that run `CANCELLED`, so every terminal row agrees.
  */
-const runVerdict = (exit: Exit.Exit<RunExit, Error>): RunOutcome | null =>
-  Exit.match(exit, {
-    onSuccess: (value) => value.outcome,
-    onFailure: (cause) =>
-      Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED,
-  });
+const failureOutcome = (cause: Cause.Cause<unknown>): RunOutcome =>
+  Cause.hasInterrupts(cause) ? RUN_OUTCOME.CANCELLED : RUN_OUTCOME.FAILED;
 
 /**
  * The exit protocol, as the release arm of the run's acquireUseRelease: the
@@ -225,7 +220,11 @@ export const settleRun =
   (
     exit: Exit.Exit<RunExit, Error>,
   ): Effect.Effect<void, DatabaseWriteFailed, Runs> => {
-    const outcome = runVerdict(exit);
+    // The body's own value when it returned.
+    const outcome = Exit.match(exit, {
+      onSuccess: (value) => value.outcome,
+      onFailure: failureOutcome,
+    });
     const halt =
       outcome === null
         ? Effect.void
@@ -291,10 +290,7 @@ export const stagedBy =
           stage.end(
             Exit.match(exit, {
               onSuccess: outcomeOf,
-              onFailure: (cause) =>
-                Cause.hasInterrupts(cause)
-                  ? RUN_OUTCOME.CANCELLED
-                  : RUN_OUTCOME.FAILED,
+              onFailure: failureOutcome,
             }),
           ),
         ),
