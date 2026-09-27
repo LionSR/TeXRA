@@ -60,6 +60,8 @@ import './components/RunTabs';
 import './components/RunConversation';
 import './components/SessionBanners';
 import './components/SessionComposer';
+import './components/NewTaskHero';
+import './components/LaunchAttachments';
 import './components/SessionDrawer';
 import './components/ToolsSheet';
 import './components/FileSelectGroup';
@@ -356,6 +358,7 @@ export class ProgressApp extends LitElement {
           <wa-input
             size="s"
             placeholder="Filter sessions"
+            aria-label="Filter sessions"
             .value=${live(surface.search)}
             @input=${this.handleSearchInput}
           >
@@ -371,7 +374,7 @@ export class ProgressApp extends LitElement {
    *  pending, else the project starter while the folder has no LaTeX
    *  files, else the prompt. Without a credential the welcome card
    *  replaces the whole state (see below). */
-  private renderHero(host: HostSnapshot): TemplateResult {
+  private renderHero(host: HostSnapshot, surface: Surface): TemplateResult {
     if (host.onboarding === 'setup') {
       return html`<section class="hero" aria-labelledby="shell-hero-title">
         <div class="hero-mark" aria-hidden="true">${waIcon('rocket')}</div>
@@ -399,16 +402,10 @@ export class ProgressApp extends LitElement {
     if (host.banners.gettingStarted) {
       return html`<getting-started-banner></getting-started-banner>`;
     }
-    return html`<section class="hero" aria-labelledby="shell-hero-title">
-      <div class="hero-mark" aria-hidden="true">
-        ${waIcon('wand-magic-sparkles')}
-      </div>
-      <h1 id="shell-hero-title">What are you working on?</h1>
-      <p>
-        ${host.project.name}. Describe the outcome you want: a polish, a review,
-        a literature pass, a proof check.
-      </p>
-    </section>`;
+    return html`<new-task-hero
+      .projectName=${host.project.name}
+      .instruction=${surface.launch.instruction}
+    ></new-task-hero>`;
   }
 
   private renderEmptyState(
@@ -426,13 +423,10 @@ export class ProgressApp extends LitElement {
       `;
     }
     const { launch } = surface;
-    // Only a document pass reads Input and Context; an interactive agent
-    // gets the instruction and its attachments, so it shows only those.
+    // Only a document pass reads Input and Context, so only it gets the file
+    // section; an interactive task attaches through the composer alone.
     const documentPass = launch.sessionType === 'workflow';
-    const fileGroups = documentPass
-      ? FILE_SELECT_CONFIGS
-      : FILE_SELECT_CONFIGS.filter((config) => config.type === 'media');
-    const selectedFiles = fileGroups.flatMap(
+    const selectedFiles = FILE_SELECT_CONFIGS.flatMap(
       (config) => launch[LAUNCH_FILE_LISTS[config.type]],
     );
     const { rollup } = view;
@@ -440,36 +434,37 @@ export class ProgressApp extends LitElement {
     return html`
       <div class="empty">
         <div class="hero-wrap">
-          ${this.renderHero(host)}
-          <!-- A document pass cannot run without an input file, so picking
-            one opens the file groups. -->
-          <wa-details class="context" ?open=${documentPass}>
-            <span slot="summary" class="context-summary"
-              >${waIcon('file-circle-plus')}
-              ${documentPass ? 'Documents and attachments' : 'Attachments'}
-              <span class="context-files"
-                >${
-                  selectedFiles.length === 0
-                    ? 'Add files'
-                    : selectedFiles.map(getBasename).join(', ')
-                }</span
-              ></span
-            >
-            <div class="context-body">
-              ${repeat(
-                fileGroups,
-                (config) => config.type,
-                (config) => html`
-                  <file-select-group
-                    .config=${config}
-                    .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
-                    .checkboxValues=${launch}
-                    .sessionType=${launch.sessionType}
-                  ></file-select-group>
-                `,
-              )}
-            </div>
-          </wa-details>
+          ${this.renderHero(host, surface)}
+          ${
+            documentPass
+              ? html`<wa-details class="context" open>
+                  <span slot="summary" class="context-summary"
+                    >${waIcon('file-circle-plus')} Documents and attachments
+                    <span class="context-files"
+                      >${
+                        selectedFiles.length === 0
+                          ? 'Add files'
+                          : selectedFiles.map(getBasename).join(', ')
+                      }</span
+                    ></span
+                  >
+                  <div class="context-body">
+                    ${repeat(
+                      FILE_SELECT_CONFIGS,
+                      (config) => config.type,
+                      (config) => html`
+                        <file-select-group
+                          .config=${config}
+                          .files=${launch[LAUNCH_FILE_LISTS[config.type]]}
+                          .checkboxValues=${launch}
+                          .sessionType=${launch.sessionType}
+                        ></file-select-group>
+                      `,
+                    )}
+                  </div>
+                </wa-details>`
+              : nothing
+          }
         </div>
         ${
           activeNow
@@ -489,13 +484,15 @@ export class ProgressApp extends LitElement {
           .banners=${host.banners}
           .sessionType=${launch.sessionType}
         ></session-banners>
-        <session-composer
-          class="launch-composer"
-          .view=${view}
-          .surface=${surface}
-          .run=${null}
-          .host=${host}
-        ></session-composer>
+        <launch-attachments .files=${documentPass ? [] : launch.mediaFiles}
+          ><session-composer
+            class="launch-composer"
+            .view=${view}
+            .surface=${surface}
+            .run=${null}
+            .host=${host}
+          ></session-composer
+        ></launch-attachments>
       </div>
     `;
   }

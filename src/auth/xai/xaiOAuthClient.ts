@@ -1,23 +1,21 @@
 /**
  * Network calls against xAI's auth endpoints for the Grok OAuth flow.
  *
- * Token grants share a declarative {@link OAuthFormEndpoint} and the shared
- * grant programs; the RFC 8628 device form posts are the flow's own. Every
- * export is an Effect program: the device-login flow runs them on one fiber
- * and the session coordinator runs the grants at its Promise boundary.
+ * The RFC 8628 device form posts; the token grants run over the policy's form
+ * endpoint in the shared coordinator. Every export is an Effect program the
+ * device-login flow runs on one fiber.
  */
 // Third-party imports
 import { Data, Effect } from 'effect';
 
 // Local imports
 import { isObject } from '@utils/core';
+import { ensureError } from '@utils/errors/errorMessage';
 
-import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
 import {
-  exchangeAuthorizationCode as exchangeFormAuthorizationCode,
-  refreshOAuthTokens,
-  type OAuthFormEndpoint,
-} from '../oauth/formTokenClient';
+  DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
+} from '../oauth/deviceAuthorization';
 import {
   OAuthHttpError,
   oauthHttpError,
@@ -32,11 +30,7 @@ import {
   XAI_SCOPE,
   XAI_TOKEN_URL,
 } from './xaiConstants';
-import {
-  XaiDeviceCodeSchema,
-  XaiTokenResponseSchema,
-  type XaiTokenResponse,
-} from './xaiSessionTypes';
+import { XaiDeviceCodeSchema, XaiTokenResponseSchema } from './xaiSessionTypes';
 
 const REQUEST_TIMEOUT_MS = 30_000;
 
@@ -44,14 +38,6 @@ const FORM_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
   Accept: 'application/json',
 } as const;
-
-/** Declarative xAI form OAuth endpoint (token grants). */
-const XAI_FORM_ENDPOINT: OAuthFormEndpoint<XaiTokenResponse> = {
-  tokenUrl: XAI_TOKEN_URL,
-  clientId: XAI_CLIENT_ID,
-  tokenResponseSchema: XaiTokenResponseSchema,
-  requestTimeoutMs: REQUEST_TIMEOUT_MS,
-};
 
 /** The user refused the device authorization (terminal, re-auth required). */
 export class DeviceAuthorizationDenied extends Data.TaggedError(
@@ -66,18 +52,6 @@ export class DeviceCodeExpired extends Data.TaggedError('DeviceCodeExpired')<{
   readonly message: string;
   readonly status: number;
 }> {}
-
-export const exchangeAuthorizationCode = Effect.fn(
-  'xaiOAuthClient.exchangeAuthorizationCode',
-)(function* (params: { code: string; verifier: string; redirectUri: string }) {
-  return yield* exchangeFormAuthorizationCode(XAI_FORM_ENDPOINT, params);
-});
-
-export const refreshTokens = Effect.fn('xaiOAuthClient.refreshTokens')(
-  function* (refreshToken: string) {
-    return yield* refreshOAuthTokens(XAI_FORM_ENDPOINT, refreshToken);
-  },
-);
 
 function postForm(url: string, body: URLSearchParams) {
   return postOAuth({
@@ -114,9 +88,10 @@ export const requestDeviceCode = Effect.fn('xaiOAuthClient.requestDeviceCode')(
 const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
   text: string,
 ) {
-  const raw = yield* Effect.try((): unknown => JSON.parse(text)).pipe(
-    Effect.orElseSucceed((): unknown => ({})),
-  );
+  const raw = yield* Effect.try({
+    try: (): unknown => JSON.parse(text),
+    catch: ensureError,
+  }).pipe(Effect.orElseSucceed((): unknown => ({})));
   const body: Record<string, unknown> = isObject(raw) ? raw : {};
   return body;
 });
@@ -124,7 +99,8 @@ const readErrorBody = Effect.fn('xaiOAuthClient.readErrorBody')(function* (
 /**
  * Poll once for the device authorization result. Succeeds with tokens, or
  * fails with {@link DeviceAuthorizationPending} while the user has not yet
- * approved (a network blip mid-poll is also pending so the loop keeps trying).
+ * approved. A network blip mid-poll is {@link DeviceAuthorizationTransient},
+ * which the shared poll retries a few times before failing with it.
  * Terminal device errors are {@link DeviceAuthorizationDenied} and
  * {@link DeviceCodeExpired}.
  */
@@ -138,8 +114,8 @@ export const pollDeviceToken = Effect.fn('xaiOAuthClient.pollDeviceToken')(
         device_code: deviceCode,
       }),
     ).pipe(
-      Effect.catchTag('OAuthNetworkError', () =>
-        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      Effect.catchTag('OAuthNetworkError', (error) =>
+        Effect.fail(new DeviceAuthorizationTransient({ error })),
       ),
     );
 

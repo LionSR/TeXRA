@@ -287,7 +287,10 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
       borderStyle="single"
       color={COLOR_SUCCESS}
       width={columns}
-      title="Agent asks:"
+      // The question's own chip, as the other hosts show it: an agent's
+      // question names its topic, the run's own question (did an interrupted
+      // call run?) says so, and no heading claims the agent asked.
+      title={props.question.header ?? 'Question'}
       footer={<KeyHints hints={props.hints} confirmCancel={false} />}
       footerMarginTop={compact ? 0 : 1}
     >

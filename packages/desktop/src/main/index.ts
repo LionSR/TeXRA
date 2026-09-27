@@ -21,17 +21,12 @@ import {
   SubscriptionRef,
 } from 'effect';
 import { z } from 'zod';
-import { presentAgentFailure } from '@agent/runtime';
+import { closeAllSessions, presentRunFailure } from '@agent/runtime';
 import { loadAgents, refresh } from '@agent/index';
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
-import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   SessionBridge,
   type AttachedPort,
@@ -62,17 +57,9 @@ import {
   type RunId,
   type InstructionAction,
 } from '@shared/schemas';
-import { normalizePlatform } from '@shared/constants/latexToolchain';
-import { Cancelled, Rejected } from '@shared/session/requestErrors';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
+import { Cancelled } from '@shared/session/requestErrors';
 import { refreshToolAvailability } from '@tools/toolAvailability';
-import { killActiveRecording } from '@tools/media/audio';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
@@ -137,7 +124,6 @@ import {
   type DesktopSettingsIpc,
   type DesktopSettingsIpcOptions,
 } from './desktopSettingsIpc.js';
-import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
 import {
   createDesktopShellActions,
@@ -1138,41 +1124,18 @@ function createWindow(options: {
         SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(runId)
           ?.label,
       stateSettingApplied: () => Effect.void,
-    };
-    const toolingSettingsController =
-      new DefaultDesktopToolingSettingsController({
-        onError: reportAsyncError,
-        globalState: options.globalState,
-        config: project.roots.config,
-        workspaceRoot: project.roots.workspace,
-        runtime,
-        renderer: {
-          postToRenderer: postForActiveProject,
-        },
-        commands: {
-          run: async (command: string) => {
-            if (projectBindings.get(project.key) !== documentBinding) return;
-            postToRendererIfAlive({
-              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-              session: project.key,
-              initialCommand: command,
-            });
-          },
-        },
-        latexToolingController: new LatexToolingController({
-          checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-          findPath: findToolInCommonPaths,
-          detectPackageManager,
-          getPlatform: () => normalizePlatform(process.platform),
-          // Extension hosting is deliberately unavailable in TeXRA Desktop.
-          isLatexWorkshopInstalled: () => false,
-          getRecommendedStatus: () => ({
-            outDir: true,
-            autoRevealExclude: true,
-          }),
-          onDetectionError: reportBackgroundError,
+      runInTerminal: (_name, command) =>
+        Effect.sync(() => {
+          if (projectBindings.get(project.key) !== documentBinding) return;
+          postToRendererIfAlive({
+            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+            session: project.key,
+            initialCommand: command,
+          });
         }),
-      });
+      // There is no editor whose settings the LaTeX page could recommend.
+      latexRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
+    };
     settingsIpcRef.current = runtime.runSync(
       createDesktopSettingsIpc({
         bindings: settingsBindings,
@@ -1187,7 +1150,6 @@ function createWindow(options: {
           signIn,
           signOut: () => desktopAuth.signOut(),
         },
-        toolingSettingsController,
         session: project.session,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,
@@ -1320,18 +1282,7 @@ function createWindow(options: {
             // the failure is presented here and the kickoff settles.
             Effect.catch((error) => {
               if (error instanceof Cancelled) return Effect.void;
-              const primaryError = primaryAgentError(error);
-              return presentAgentFailure(
-                setupSession.interactions,
-                {
-                  kind: classifyAgentError(primaryError),
-                  message:
-                    primaryError instanceof Rejected
-                      ? primaryError.reason
-                      : toErrorMessage(primaryError),
-                },
-                { replayWhenAttached: true },
-              );
+              return presentRunFailure(setupSession.interactions, error);
             }),
           );
         }),
@@ -1474,8 +1425,9 @@ function createWindow(options: {
       return binding.workspace.handleMessage(message);
     },
     disposeRendererResources() {
-      // Navigation destroys the document, including its request correlations
-      // and recording ownership. Replace its ports while retaining sessions.
+      // Navigation destroys the document's request correlations (an open prompt
+      // answers undefined) and recording ownership: new ports, same sessions.
+      promptController.dispose();
       for (const binding of projectBindings.values()) {
         binding.dispose();
       }
@@ -1663,30 +1615,50 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
       });
       // The shutdown handlers, the startup program, and every surface they
       // wire run on the process runtime the platform builds.
-      const { lifecycle, runtime, processScope, initialize } =
+      const { runtime, processScope, initialize } =
         yield* initializeElectronPlatform(moduleDirname, processResumeOwner);
-      registerRuntimeShutdownHandlers(lifecycle, {
-        beforeAgentShutdown: [Effect.sync(() => processResumeOwner.disable())],
-        afterAgentShutdown: [killActiveRecording()],
-        // Agent shutdown runs first so its final events enter the
-        // process-owned stores. Flush in BEFORE so persistence cannot be
-        // delayed by a later ON-phase language-service disposal.
-        flushArtifacts: Effect.suspend(
-          () => projects?.flushArtifacts() ?? Effect.void,
-        ),
-        // The external-editor patch directories recorded by every window's
-        // diff host are removed here, once, while the process is still alive.
-        afterFlushArtifacts: [
-          withProcessServices(runtime, removeExternalDiffPatchDirs),
-        ],
-        // Every project's session, most recently opened first, released
-        // before the runtime they run on goes (or, before the registry
-        // opened, the fallback project's scope it would own).
-        releaseSessions: Effect.suspend(
+      // The process's shutdown is this scope's close. Its finalizers run in
+      // the reverse of their registration: the resume owner stops taking
+      // resumes, every session closes (its runs stopped and settled, its
+      // artifacts flushed), the recording stops, the external-editor patch
+      // directories every window's diff host recorded are removed, every
+      // project is released (or, before the registry opened, the fallback
+      // project's scope), and the runtime goes last.
+      const shutdownScope = Scope.makeUnsafe();
+      const shutdown = yield* Effect.cached(
+        Scope.close(shutdownScope, Exit.void),
+      );
+      const reported = (what: string, step: Effect.Effect<void, Error>) =>
+        step.pipe(
+          Effect.catchCause((cause) =>
+            Effect.sync(() =>
+              console.error(`Shutdown: ${what} failed`, Cause.squash(cause)),
+            ),
+          ),
+        );
+      yield* Scope.addFinalizer(shutdownScope, disposeProcessRuntime(runtime));
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        Effect.suspend(
           () => projects?.dispose() ?? Scope.close(processScope, Exit.void),
         ),
-        disposeRuntime: disposeProcessRuntime(runtime),
-      });
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported(
+          'removing the external-editor patch directories',
+          withProcessServices(runtime, removeExternalDiffPatchDirs),
+        ),
+      );
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        reported('stopping the active recording', hostDraftRequests.shutdown),
+      );
+      yield* Scope.addFinalizer(shutdownScope, closeAllSessions());
+      yield* Scope.addFinalizer(
+        shutdownScope,
+        Effect.sync(() => processResumeOwner.disable()),
+      );
 
       // Until the initial window is fully wired, any startup failure (platform
       // init included) runs the shutdown an ordinary application exit does.
@@ -1740,7 +1712,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             installDesktopBeforeQuitWiring({
               app,
               getMainWindow: () => mainWindow,
-              lifecycle,
+              shutdown,
               continueAfterWindowClose: (continueQuit) => {
                 continueQuitAfterWindowClose = continueQuit;
               },
@@ -1813,7 +1785,7 @@ if (protocolLifecycle.ownsSingleInstanceLock) {
             );
           }
         }),
-      ).pipe(Effect.onError(() => lifecycle.runShutdown));
+      ).pipe(Effect.onError(() => shutdown));
     }).pipe(
       Effect.catchCause((cause) =>
         Effect.sync(() => reportFatalStartupError(Cause.squash(cause))),

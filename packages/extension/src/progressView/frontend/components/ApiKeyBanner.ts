@@ -6,6 +6,7 @@ import { SessionUiEvents } from '@shared/session/uiEvents';
 import { designTokens, commonViewStyles, bannerStyles } from '@ui/styles';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 import { renderWarningBanner } from '@ui/wa/bannerFrame';
+import { ONBOARDING_CHOICE_CHATGPT } from '@ui/copy/onboarding';
 
 @customElement('api-key-banner')
 export class ApiKeyBanner extends LitElement {
@@ -15,13 +16,33 @@ export class ApiKeyBanner extends LitElement {
     this.dispatchEvent(SessionUiEvents.host({ kind: 'apiKeyBanner', action }));
   }
 
+  /** The same host action as the welcome card's first choice, so a user
+   *  who skipped onboarding is offered both ways to connect, not only one. */
+  private signInChatGpt(): void {
+    this.dispatchEvent(
+      SessionUiEvents.host({ kind: 'onboarding', action: 'signInChatGpt' }),
+    );
+  }
+
   override render(): TemplateResult {
     return renderWarningBanner({
       id: 'apiKeyBanner',
       role: 'alert',
       body: html`
-        <span>TeXRA requires an API key to run.</span>
+        <span
+          >Connect a model to start: sign in with ChatGPT or add an API
+          key.</span
+        >
         <div class="actions">
+          <wa-button
+            id="apiKeyBannerChatGptButton"
+            appearance="plain"
+            size="s"
+            @click=${() => this.signInChatGpt()}
+          >
+            ${waIcon('right-to-bracket', { slot: 'start' })}
+            ${ONBOARDING_CHOICE_CHATGPT.label}
+          </wa-button>
           <wa-button
             id="apiKeyBannerButton"
             appearance="plain"
@@ -40,8 +61,8 @@ export class ApiKeyBanner extends LitElement {
           </wa-button>
         </div>
         <span class="hint">
-          Chat subscriptions don't include API access — except Codex models
-          through ChatGPT. For other models, use a provider developer key.
+          A ChatGPT subscription covers OpenAI models. Other chat subscriptions
+          don't include API access; for those models, use a provider key.
         </span>
       `,
     });

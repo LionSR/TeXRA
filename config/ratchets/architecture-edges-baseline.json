@@ -17,7 +17,6 @@
     { "from": "auth", "to": "common", "kind": "value" },
     { "from": "auth", "to": "logger", "kind": "value" },
     { "from": "auth", "to": "platform", "kind": "type-only" },
-    { "from": "auth", "to": "ui", "kind": "value" },
     { "from": "auth", "to": "utils", "kind": "value" },
     { "from": "common", "to": "shared", "kind": "value" },
     { "from": "common", "to": "utils", "kind": "value" },

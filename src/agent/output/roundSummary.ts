@@ -21,7 +21,7 @@ export interface RoundSummary {
   filesToOpen: FileLocation[];
 }
 
-export const summarizeRound = Effect.fn('reflection.summarizeRound')(function* (
+export const summarizeRound = Effect.fn('documents.summarizeRound')(function* (
   state: OutputState,
   deps: OutputDependencies,
   outputFile: FileLocation,

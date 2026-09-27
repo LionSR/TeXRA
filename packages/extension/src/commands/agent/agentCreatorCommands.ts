@@ -13,11 +13,14 @@ import {
   buildCreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces';
+import {
+  AgentDirectories,
+  type AgentDirectoriesPort,
+  type StateStore,
+} from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -159,7 +162,10 @@ function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(session: SessionHandle): AgentCreatorUI {
+function buildVSCodeUI(
+  session: SessionHandle,
+  agentDirectories: AgentDirectoriesPort,
+): AgentCreatorUI {
   return {
     promptAgentName(categoryLabel) {
       return askForInput({
@@ -277,7 +283,8 @@ export function handleCreateAgentWithAI(
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(session), {
+    const ui = buildVSCodeUI(session, yield* AgentDirectories);
+    yield* runAgentCreator(config, category, ui, {
       ...session.roots,
       secrets,
     });

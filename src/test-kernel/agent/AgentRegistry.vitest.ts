@@ -16,7 +16,6 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { registerAgentDirectoryRoots } from '@frontend/setup';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
@@ -29,7 +28,6 @@ import {
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
@@ -144,7 +142,6 @@ function remoteAgentFixture(id: string, name: string, description: string) {
 describe('agent registry', () => {
   const extensionPath = resolve(REPO_ROOT, 'packages/extension');
   const resourcesPath = resolve(extensionPath, 'resources');
-  const globalState = new FakeStateStore();
 
   beforeEach(() => {
     listRemoteAgents.mockImplementation(() =>
@@ -161,31 +158,9 @@ describe('agent registry', () => {
   });
 
   it.effect(
-    'skips root registration when called before agent directory initialization',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          yield* onGlobalStorage(
-            registerAgentDirectoryRoots({
-              extensionPath,
-            } as vscode.ExtensionContext),
-          ),
-        ).toBeUndefined();
-
-        expect(registerExternalRoot).toHaveBeenCalledTimes(1);
-        expect(registerExternalRoot).toHaveBeenCalledWith(
-          resolve(resourcesPath, 'docs', 'agent-creation'),
-          expect.objectContaining({ kind: 'agentDocs', writable: false }),
-        );
-      }),
-  );
-
-  it.effect(
     'registers packaged roots and loads the local catalog in startup order',
     () =>
       Effect.gen(function* () {
-        agentDirectories.initialize(globalState, resourcesPath, testRuntime());
-
         expect(
           yield* onGlobalStorage(
             registerAgentDirectoryRoots({

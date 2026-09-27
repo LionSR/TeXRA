@@ -19,19 +19,15 @@ let foregroundHolders = 0;
 let interruptedWhileHeld = false;
 
 /** Whether a foreground command owns the terminal now; the platform's SIGINT
- *  handler records the interrupt with {@link deferInterrupt} instead of
+ *  handler then leaves the interrupt to `holdInterrupt` below instead of
  *  shutting down. */
 export function terminalForegroundHeld(): boolean {
   return foregroundHolders > 0;
 }
 
-/** Record a SIGINT that arrived while a foreground command owned the terminal. */
-export function deferInterrupt(): void {
-  interruptedWhileHeld = true;
-}
-
-// Present while the terminal is held, so a SIGINT never takes Node's default
-// exit even when no platform handler is installed.
+// Present exactly while the terminal is held: it records the SIGINT, and a
+// SIGINT never takes Node's default exit even when no platform handler is
+// installed.
 const holdInterrupt = (): void => {
   interruptedWhileHeld = true;
 };
@@ -74,10 +70,7 @@ const releaseTerminal = Effect.sync(() => {
 export const runForegroundCommand = Effect.fn('runForegroundCommand')(
   function* (
     command: string | readonly [string, ...string[]],
-    options: {
-      readonly input?: string;
-      readonly env?: Record<string, string | undefined>;
-    } = {},
+    options: { readonly input?: string } = {},
   ): Effect.fn.Return<number, PlatformError, ChildProcessSpawner> {
     const spawner = yield* ChildProcessSpawner;
     const common: ChildProcess.CommandOptions = {
@@ -87,8 +80,6 @@ export const runForegroundCommand = Effect.fn('runForegroundCommand')(
           : Stream.make(new TextEncoder().encode(options.input)),
       stdout: 'inherit',
       stderr: 'inherit',
-      env: options.env,
-      extendEnv: true,
       detached: false,
       forceKillAfter: '5 seconds',
     };

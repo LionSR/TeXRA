@@ -280,7 +280,7 @@ describe('CLI context config defaults', () => {
         expect(context.configDegradations).toEqual([
           expect.stringContaining('.texra/config.json'),
         ]);
-        expect(context.configWarnings).toEqual(context.configDegradations);
+        expect(context.configWarnings).toEqual([]);
       } finally {
         warnSpy.mockRestore();
       }

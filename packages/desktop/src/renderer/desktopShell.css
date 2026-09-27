@@ -157,17 +157,14 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding-left: var(--macos-titlebar-safe-inset);
 }
 
+/* The TeXRA {T} mark (extension/resources/logo-128x128.svg) as a mask, so
+   it takes the brand accent in either theme. */
 .shell-sidebar-logo {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 8px;
-  background: var(--wa-color-text-normal);
-  color: var(--wa-color-surface-default);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.04em;
+  width: 26px;
+  height: 26px;
+  background: var(--wa-color-brand-fill-loud);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23000' stroke-width='4.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5'/%3E%3Cpath d='M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5'/%3E%3C/g%3E%3Cpath d='M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
   -webkit-app-region: no-drag;
 }
 
@@ -209,6 +206,9 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 .shell-sidebar-action::part(base) {
   justify-content: flex-start;
   width: 100%;
+  /* A nav row, not a call to action: the button default is semibold, which
+     made every sidebar row shout at the same volume. */
+  font-weight: var(--font-weight-normal);
   min-height: var(--row-height);
   padding: 0 10px;
 }
@@ -293,7 +293,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 /* The shown project reads as selected; every other row keeps the same
    shape, so nothing about a row moves when the selection does. */
 .shell-project-item.is-active .shell-project-row::part(base) {
-  background: color-mix(in srgb, var(--wa-color-text-normal) 7%, transparent);
+  background: var(--wa-color-brand-fill-quiet);
 }
 
 .shell-project-item.is-active .shell-project-copy strong {
@@ -767,12 +767,6 @@ body[data-desktop-platform='darwin']
 
 .shell-workbench-surface[data-scroll='true'] {
   overflow: auto;
-}
-
-.shell-workbench-surface > settings-app {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .shell-workbench-placeholder {

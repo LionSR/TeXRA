@@ -3,11 +3,12 @@ import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber, Scope, Stream } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { setLogSink } from '@logger/logSink';
-import type {
-  TurnRequest,
-  VscodeLanguageModelConfiguration,
+import {
+  completedTurn,
+  type TurnRequest,
+  type VscodeLanguageModelConfiguration,
 } from '@texra-ai/llm/turn';
+import { setLogSink } from '@logger/logSink';
 
 class LanguageModelTextPart {
   constructor(public readonly value: string) {}
@@ -336,7 +337,9 @@ describe('native editor model', () => {
           });
           if (followUp.mode !== 'foreground')
             throw new Error('Expected foreground input.');
-          expect((yield* model.generateTurn(followUp)).finishReason).toBeNull();
+          expect(
+            (yield* completedTurn(model.streamTurn(followUp))).finishReason,
+          ).toBeNull();
           expect(mocks.selectChatModels).toHaveBeenCalledOnce();
           expect(mocks.selectChatModels).toHaveBeenCalledWith({
             vendor: 'copilot',
@@ -425,7 +428,7 @@ describe('native editor model', () => {
               if (turn.mode !== 'foreground')
                 throw new Error('Expected foreground input.');
               mocks.canSendRequest.mockReturnValue(sendAccess);
-              return yield* model.generateTurn(turn);
+              return yield* completedTurn(model.streamTurn(turn));
             }),
           ),
         );
@@ -456,15 +459,19 @@ describe('native editor model', () => {
         if (turn.mode !== 'foreground' || turn.protocol !== 'vscode-lm')
           throw new Error('Expected editor input.');
         const foreign = yield* Effect.exit(
-          model.generateTurn({
-            ...turn,
-            acquisitionId: '11111111-1111-4111-8111-111111111111',
-          }),
+          completedTurn(
+            model.streamTurn({
+              ...turn,
+              acquisitionId: '11111111-1111-4111-8111-111111111111',
+            }),
+          ),
         );
         expect(Exit.isFailure(foreign)).toBe(true);
         yield* Scope.close(scope, Exit.void);
         expect(
-          Exit.isFailure(yield* Effect.exit(model.generateTurn(turn))),
+          Exit.isFailure(
+            yield* Effect.exit(completedTurn(model.streamTurn(turn))),
+          ),
         ).toBe(true);
         expect(
           Exit.isFailure(yield* Effect.exit(model.prepareTurn(nativeRequest))),
@@ -546,7 +553,7 @@ describe('native editor model', () => {
               const turn = yield* model.prepareTurn(nativeRequest);
               if (turn.mode !== 'foreground')
                 throw new Error('Expected foreground input.');
-              return yield* model.generateTurn(turn);
+              return yield* completedTurn(model.streamTurn(turn));
             }),
           ),
         );
@@ -618,7 +625,7 @@ describe('native editor model', () => {
               const turn = yield* model.prepareTurn(nativeRequest);
               if (turn.mode !== 'foreground')
                 throw new Error('Expected foreground input.');
-              return yield* model.generateTurn(turn);
+              return yield* completedTurn(model.streamTurn(turn));
             }),
           ),
         );
@@ -671,7 +678,7 @@ describe('native editor model', () => {
               const turn = yield* model.prepareTurn(nativeRequest);
               if (turn.mode !== 'foreground')
                 throw new Error('Expected foreground input.');
-              return yield* model.generateTurn(turn);
+              return yield* completedTurn(model.streamTurn(turn));
             }),
           ),
         );

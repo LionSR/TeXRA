@@ -1,7 +1,6 @@
 // Local imports - shared schemas
 import type { DocumentFileType } from '@shared/schemas';
 import { SessionUiEvents } from '@shared/session/uiEvents';
-import { tryParseUrl } from '@utils/core';
 
 // Third-party type imports
 import type { ReactiveController, ReactiveControllerHost } from 'lit';
@@ -21,7 +20,7 @@ function decodeFileUri(value: string): string | null {
     return null;
   }
 
-  const url = tryParseUrl(value);
+  const url = URL.parse(value);
   if (!url || url.protocol !== 'file:') return null;
   let pathname: string;
   try {

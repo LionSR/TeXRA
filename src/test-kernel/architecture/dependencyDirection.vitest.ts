@@ -111,7 +111,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // recovers every failure to `undefined`.
   'src/auth/SupabaseAuth.ts': 1,
   // The CLI platform shutdown sequence, which cannot run on the process
-  // runtime for the same reason the SDK entry cannot: `lifecycle.runShutdown`
+  // runtime for the same reason the SDK entry cannot: `cliPlatformShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes
   // run, and a teardown path must not depend on the runtime it is tearing
   // down. The init itself is a program now, so the failed-init disposal is an
@@ -151,8 +151,8 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // context the init hands back.
   'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
-  // lifecycle host and no runtime — the drain it runs is what disposes the
-  // process runtime — so the quit follows the drain on the default runner.
+  // host's shutdown and no runtime — the shutdown it runs is what disposes
+  // the process runtime — so the quit follows it on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
   // which builds the process runtime (its stores and account plane resolve

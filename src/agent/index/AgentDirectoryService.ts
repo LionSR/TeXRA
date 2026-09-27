@@ -19,7 +19,6 @@ import { entryExists } from '@utils/files/fsEntryExists';
 import {
   BUILTIN_WORKFLOW_AGENTS_DIR,
   BUILTIN_TOOL_USE_AGENTS_DIR,
-  builtInToolUseRoots,
 } from './BundledAgentDirectories';
 
 interface CustomAgentDirectoryStore {
@@ -27,12 +26,6 @@ interface CustomAgentDirectoryStore {
 }
 
 type AgentDirectoryDocsId = 'custom-agents';
-
-/** A local agent directory paired with the source it represents. */
-export interface AgentDirectoryEntry {
-  directory: string;
-  source: AgentSource;
-}
 
 interface AgentDirectoryIssueReporter {
   report(message: string, docsId: AgentDirectoryDocsId): Effect.Effect<void>;
@@ -91,29 +84,6 @@ export class AgentDirectoryService {
       ),
       Effect.map((resolved) => resolved != null),
     );
-  }
-
-  getAllLocal(): Effect.Effect<
-    AgentDirectoryEntry[],
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.gen({ self: this }, function* () {
-      const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
-        [this.custom(), this.builtIn(), this.builtInToolUse()],
-        { concurrency: 'unbounded' },
-      );
-
-      const entries: AgentDirectoryEntry[] = [
-        { directory: customDir, source: 'custom' },
-        { directory: builtInDir, source: 'builtInWorkflow' },
-        ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
-          directory,
-          source: 'builtInToolUse' as const,
-        })),
-      ];
-      return entries;
-    });
   }
 
   /** The custom directory setting, trimmed; empty when none is configured. */

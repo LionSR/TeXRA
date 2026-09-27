@@ -47,8 +47,6 @@ import {
   GITHUB_POLL_INTERVAL_MS,
 } from './prSubscriptionConstants';
 import { GitHubSubscriptions } from './subscriptionBindings';
-import { SharedIssuePollingSource } from './IssuePollingSource';
-import { SharedPRPollingSource } from './PRPollingSource';
 import { parseGitHubSlug } from './githubSlug';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { GhIssue } from './prTypes';
@@ -266,8 +264,8 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   // own /issues/N → /pull/N redirect behavior on github.com.
   const issueSlug = issueRef(slugOf(target), target.issueNumber);
   const prSlug = prRef(slugOf(target), target.issueNumber);
-  const knownPR = SharedPRPollingSource.has(prSlug);
-  const knownIssue = !knownPR && SharedIssuePollingSource.has(issueSlug);
+  const knownPR = subscriptions.pr.source.has(prSlug);
+  const knownIssue = !knownPR && subscriptions.issue.source.has(issueSlug);
   const isPR =
     knownPR ||
     (!knownIssue &&

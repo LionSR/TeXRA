@@ -78,7 +78,6 @@ export type RunPosition = {
   readonly outcome: RunOutcome | null;
   readonly round: number;
   readonly turn: number;
-  readonly continuationIndex: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
   /** Complete output collection from the newest `output.produced` row. */
@@ -127,7 +126,6 @@ export const freshRunPosition = (): RunPosition => ({
   outcome: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   requests: byId([]),
   roundOutputs: [],
 });
@@ -188,21 +186,8 @@ export function applyRunRow(
     case 'flow.step': {
       const p = row.payload;
       const rows = current ?? freshRunRows();
-      if (rows.family !== null && rows.family !== p.family) {
-        return { kind: 'contradiction', detail: 'a step of another family' };
-      }
-      // A continuation counts within its round: a reflection round opens at
-      // continuation 0, so the index is monotone only while the round holds.
-      const round = p.round ?? rows.round;
-      const coordinates = [
-        ['round', p.round],
-        ['turn', p.turn],
-        [
-          'continuationIndex',
-          round === rows.round ? p.continuationIndex : null,
-        ],
-      ] as const;
-      for (const [name, value] of coordinates) {
+      for (const name of ['round', 'turn'] as const) {
+        const value = p[name];
         if (value != null && value < rows[name]) {
           return {
             kind: 'contradiction',
@@ -213,9 +198,8 @@ export function applyRunRow(
       return applied({
         family: p.family,
         step: p.step,
-        round,
+        round: p.round ?? rows.round,
         turn: p.turn ?? rows.turn,
-        continuationIndex: p.continuationIndex ?? rows.continuationIndex,
         outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
     }

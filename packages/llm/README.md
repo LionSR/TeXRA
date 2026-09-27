@@ -19,11 +19,11 @@ and fails only with `ModelError`.
 ```ts
 prepareTurn(request) -> ResolvedTurn // freeze the binding and the controls
 streamTurn(turn)     -> Stream<TurnEvent>
-generateTurn(turn)   -> Effect<TurnResult>
 ```
 
-`generateTurn` is a fold over `streamTurn`'s events (`completedTurn`), so the
-streaming and non-streaming paths cannot diverge. Preparation is where a
+A caller that wants only the result folds the stream with
+`completedTurn(model.streamTurn(turn))`; there is no separate non-streaming
+member, so the two paths cannot diverge. Preparation is where a
 request is admitted or rejected: an unsupported control, an unrepresentable
 history or an unsupported media part fails there, before transport. Execution
 never rewrites an admitted request.
@@ -73,7 +73,7 @@ retired acquisition rather than silently selecting a replacement.
 
 `src/agent/runtime/run/modelBinding.ts` binds a route to a `Model`, and
 `src/agent/runtime/ModelInvoker.ts` is the one service that calls it — every
-route, helper, tool-use and reflection turn included. Retry has two owners
+route, helper, tool-use turn and workflow round included. Retry has two owners
 inside `ModelInvoker` (an automatic route-scoped batch under the session's
 `ModelRetryGate`, and a durable human permit); none of it is in this package.
 

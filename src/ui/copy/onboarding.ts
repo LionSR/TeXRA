@@ -17,6 +17,12 @@ import { OWN_API_KEYS } from './modelAccess';
 
 export const ONBOARDING_CARD_TITLE = 'Welcome to TeXRA';
 
+/**
+ * What TeXRA is, in one line, wherever a first impression forms: a capable
+ * theorist, and one that works with you rather than around you.
+ */
+export const TEXRA_TAGLINE = 'Your AI theorist. It proposes; you decide.';
+
 /** State 0 choice 1. */
 export const ONBOARDING_CHOICE_CHATGPT = {
   label: 'Use ChatGPT subscription',

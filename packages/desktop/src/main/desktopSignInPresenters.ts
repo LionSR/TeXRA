@@ -1,6 +1,6 @@
 import { type BrowserWindow, clipboard, dialog } from 'electron';
 import { Effect } from 'effect';
-import type { SubscriptionDeviceCodePrompt } from '@controllers/modelAccess/subscriptionProviders';
+import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
 import { ensureError } from '@utils/errors/errorMessage';
 
 /** A synchronous clipboard throw is a typed failure, so it reaches the

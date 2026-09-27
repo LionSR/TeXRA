@@ -37,12 +37,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import type {
-  AgentDirectories,
-  AgentResume,
-  AppState,
-  Lifecycle,
-} from './interfaces';
+import type { AgentDirectories, AgentResume, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
@@ -82,7 +77,6 @@ export type ProcessServices =
   | LanguageModel
   | AgentResume
   | AgentDirectories
-  | Lifecycle
   | SetupPlatform
   | AgentEngine
   | LeanLanguageServices

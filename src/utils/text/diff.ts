@@ -1,11 +1,10 @@
 /**
  * diff-match-patch helpers.
  *
- * dmp is a metric and fuzzy-patch library here, not a text pipeline: every
+ * dmp is a metric library here, not a text pipeline: every
  * diff a user or a model reads comes from `@utils/text/unifiedDiff`. What
  * survives here is what dmp does that jsdiff does not — a Levenshtein
- * distance, a cheap line-change count for run bookkeeping, and fuzzy patch
- * application against a file that moved under us.
+ * distance and a cheap line-change count for run bookkeeping.
  */
 
 // Third-party imports
@@ -17,11 +16,6 @@ import { countLines } from './stringUtils';
 interface DiffLineChanges {
   added: number;
   removed: number;
-}
-
-interface PatchApplyResult {
-  content: string;
-  results: boolean[];
 }
 
 /**
@@ -57,21 +51,4 @@ export function diffLineChanges(
     }
   }
   return { added, removed };
-}
-
-/**
- * Apply the patch from oldText to newText onto a target string.
- *
- * dmp's fuzzy `patch_apply` is the point: the target is the current file,
- * which may have moved since the edit was proposed.
- */
-export function applyPatchToText(
-  oldText: string,
-  newText: string,
-  targetText: string,
-): PatchApplyResult {
-  const dmp = new diff_match_patch();
-  const patches = dmp.patch_make(oldText, newText);
-  const [content, results] = dmp.patch_apply(patches, targetText);
-  return { content, results };
 }

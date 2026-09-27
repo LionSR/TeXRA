@@ -13,7 +13,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { retrieveSessionResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -46,11 +45,10 @@ const COMPATIBILITY_KEY: ModelCompatibilityKey = 'OpenAIResponse';
 const runtimeOf = (
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null,
-): Extract<FlowSnapshotPayload, { family: 'toolUse' }>['runtime'] => ({
+): FlowSnapshotPayload['runtime'] => ({
   phase: 'initial',
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId,
   modelCompatibilityKey: compatibilityKey,
   lastError: null,
@@ -65,17 +63,6 @@ function toolUseSnapshot(
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
     state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
-  };
-}
-
-function reflectionSnapshot(modelId: string): FlowSnapshotPayload {
-  return {
-    family: 'reflection',
-    runtime: runtimeOf(modelId, COMPATIBILITY_KEY),
-    state: {
-      totalRounds: 2,
-      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    },
   };
 }
 
@@ -134,30 +121,14 @@ describe('retrieveSessionResumeData', () => {
     }),
   );
 
-  it.effect('retrieves a workflow run from its reflection snapshot', () =>
+  it.effect('retrieves a workflow run as a workflow resume', () =>
     Effect.gen(function* () {
       const runId = 'ab0003' as RunId;
-      yield* openRun(runId, reflectionSnapshot('gpt54'));
+      yield* openRun(runId, toolUseSnapshot('gpt54'));
 
       expect(
         yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
       ).toMatchObject({ type: 'workflow', runId });
-    }),
-  );
-
-  // A family the launch config contradicts is corruption, never a silent
-  // "nothing to resume": the caller must be able to tell the two apart.
-  it.effect('refuses a tool-use launch onto a reflection run', () =>
-    Effect.gen(function* () {
-      const runId = 'ab0004' as RunId;
-      yield* openRun(runId, reflectionSnapshot('gpt54'));
-
-      const error = yield* Effect.flip(
-        retrieveSessionResumeData(runId, CONFIG, session),
-      );
-      expect(error.message).toContain(
-        `Run ${runId} is configured as toolUse but its snapshot is a reflection run.`,
-      );
     }),
   );
 

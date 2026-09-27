@@ -76,11 +76,10 @@ export class DesktopPromptController implements DesktopPromptIpc {
     }
   }
 
-  private settle(requestId: string, value: string | undefined): boolean {
+  private settle(requestId: string, value: string | undefined): void {
     const pending = this.pending.get(requestId);
-    if (!pending) return false;
+    if (!pending) return;
     this.pending.delete(requestId);
     pending(value);
-    return true;
   }
 }

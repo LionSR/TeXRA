@@ -24,9 +24,13 @@ import {
   AGENT_SKILLS_CONFIG_KEY,
 } from '@shared/schemas';
 import type { ModelOptionData } from '@shared/schemas';
-import type { DerivedSettingsSnapshot } from '@shared/settingsView/settingsViewMessages';
+import {
+  DEFAULT_LATEX_SETTINGS_STATUS,
+  type DerivedSettingsSnapshot,
+} from '@shared/settingsView/settingsViewMessages';
 import { DEFAULT_HELPER_MODEL } from '@shared/constants/providers';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -38,7 +42,6 @@ import { createTestSession } from '@test/support/sessionTestUtils';
 
 import {
   commandOf,
-  createStubDesktopToolingSettingsController,
   createStubSettingsBindings,
 } from './desktopSettingsTestSupport';
 
@@ -46,6 +49,24 @@ const readModelAvailabilityInputs = vi.hoisted(() =>
   vi.fn((_stores: ModelOptionStores, models: readonly string[] = []) =>
     Effect.succeed(models.map((model) => ({ value: model, label: model }))),
   ),
+);
+
+// The Tools and LaTeX pages read the probe cache and spawn the LaTeX probes;
+// an empty cache and a fixed status keep the suite off the machine's tools.
+vi.mock('@tools/toolAvailability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/toolAvailability')>()),
+  getLastCheckResults: () => [],
+  refreshToolAvailability: () => Effect.void,
+}));
+vi.mock(
+  '@controllers/settingsView/LatexToolingController',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@controllers/settingsView/LatexToolingController')
+    >()),
+    detectLatexSettingsStatus: () =>
+      Effect.succeed(DEFAULT_LATEX_SETTINGS_STATUS),
+  }),
 );
 
 vi.mock('@model/computeModelOptions', async (importOriginal) => ({
@@ -70,7 +91,6 @@ interface SettingsFixtureOverrides {
   workspaceState?: StateStore;
   config?: ConfigProvider;
   bindings?: Partial<Bindings>;
-  toolingSettingsController?: DesktopSettingsIpcOptions['toolingSettingsController'];
   postToRenderer?: (message: RendererMessage) => void;
 }
 
@@ -98,7 +118,7 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
   });
   // One root holds one session: released at test end, or the next fixture
   // over this root would get this test's session and its workspace state.
-  onTestFinished(() => Effect.runPromise(session.dispose()));
+  onTestFinished(() => Effect.runPromise(closeSessionOf(session)));
   // The IPC subscribes to the process app-signal bus, so a fixture whose
   // scope stayed open would keep reacting to later tests' emits.
   const scope = Scope.makeUnsafe();
@@ -119,9 +139,6 @@ function createSettingsFixture(overrides: SettingsFixtureOverrides = {}) {
         presentSubscriptionDeviceCode: () => Effect.void,
       },
       auth: { signIn: () => Effect.void, signOut: () => Effect.void },
-      toolingSettingsController:
-        overrides.toolingSettingsController ??
-        createStubDesktopToolingSettingsController(),
       secrets: new FakeSecrets(),
       resourcesPath: '/resources',
       session,
@@ -422,7 +439,7 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(showInfoMessage).toHaveBeenCalledWith(
-      'Desktop cannot host VS Code extensions.',
+      'TeXRA Desktop runs standalone and cannot host VS Code extensions.',
     );
     expect(showErrorMessage).not.toHaveBeenCalled();
   });
@@ -544,19 +561,13 @@ describe('desktop settings IPC', () => {
     }),
   );
 
-  it('delegates domain startup and posts approval settings on readiness', async () => {
+  it('posts the Tools and LaTeX pages and approval settings on readiness', async () => {
     const workspaceState = new FakeStateStore({
       [WorkspaceStateKey.CODEX_SANDBOX_MODE]: 'danger-full-access',
     });
     const config = new FakeScopedConfigProvider();
     config.seedWorkspace('texra.toolUse.requireBashApproval', false);
-    const postToolingStartupData = vi.fn(() => Effect.void);
-    const toolingSettingsController =
-      createStubDesktopToolingSettingsController({
-        postStartupData: postToolingStartupData,
-      });
     const { settings, posted } = createCapturedSettingsFixture({
-      toolingSettingsController,
       workspaceState,
       config,
     });
@@ -570,7 +581,15 @@ describe('desktop settings IPC', () => {
     await flushAsyncWork();
 
     expect(latexSnapshotCount(posted)).toBe(1);
-    expect(postToolingStartupData).toHaveBeenCalledOnce();
+    expect(
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS),
+    ).toEqual({
+      command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
+      settings: DEFAULT_LATEX_SETTINGS_STATUS,
+    });
+    expect(
+      findPosted(posted, SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD),
+    ).toMatchObject({ command: SETTINGS_VIEW_COMMANDS.UPDATE_TOOL_DASHBOARD });
 
     expect(findSnapshot(posted, 'approval')).toMatchObject({
       command: SETTINGS_VIEW_COMMANDS.UPDATE_SETTINGS_SNAPSHOT,

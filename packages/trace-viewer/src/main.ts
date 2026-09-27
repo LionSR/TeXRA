@@ -46,7 +46,10 @@ function renderLoadError(err: unknown): void {
  *  advances included, so reading them all would label a tool-use turn with
  *  the round and cycle it never left. */
 function stepLabel(step: TraceStep): string {
-  const where = formatFlowPositionLabel(flowPosition(step.payload));
+  const where = formatFlowPositionLabel(
+    // A step names its family, not its run's category: the raw coordinate.
+    flowPosition(step.payload, undefined),
+  );
   return `${step.payload.family} ${step.payload.step}${where ? ` (${where})` : ''}`;
 }
 

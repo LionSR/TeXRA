@@ -187,6 +187,19 @@
   font-weight: var(--wa-font-weight-bold, bold);
 }
 
+/* With no entries the empty state is the pane's only child: span both rows. */
+.desktop-review-pane > .desktop-review-empty {
+  grid-row: 1 / -1;
+  padding: var(--wa-space-l);
+  text-align: center;
+}
+
+.desktop-review-empty .empty-state-body {
+  margin: 0;
+  max-width: 36ch;
+  font-size: var(--font-size-sm);
+}
+
 .desktop-review-no-results {
   min-height: 96px;
   font-size: var(--font-size-sm);

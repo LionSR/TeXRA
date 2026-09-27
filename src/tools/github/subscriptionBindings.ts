@@ -1,4 +1,4 @@
-import { Context } from 'effect';
+import { Context, type Effect } from 'effect';
 
 import type { IssueKey } from './IssuePollingSource';
 import type { PRSubscribeInput } from './PRPollingSource';
@@ -23,5 +23,9 @@ export class GitHubSubscriptions extends Context.Service<
     readonly pr: RunSubscriptionRegistry<string, PRSubscribeInput>;
     readonly repo: RunSubscriptionRegistry<RepoKey, RepoSubscribeInput>;
     readonly issue: RunSubscriptionRegistry<string, IssueKey>;
+    /** Stop every source polling and drain the deliveries they admitted,
+     *  within the close budget: what a process shutdown runs before it
+     *  closes the sessions those deliveries reach. */
+    readonly drainDeliveries: Effect.Effect<void>;
   }
 >()('@texra/tools/GitHubSubscriptions') {}

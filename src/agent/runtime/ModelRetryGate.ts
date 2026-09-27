@@ -1,4 +1,13 @@
-import { Cause, Clock, Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import {
+  Cause,
+  Clock,
+  Deferred,
+  Effect,
+  Exit,
+  Fiber,
+  Random,
+  Scope,
+} from 'effect';
 
 import { jitteredExponentialBackoffMs } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -298,6 +307,7 @@ export class ModelRetryGate {
             baseBackoffMs,
             state.failures,
             MAX_BACKOFF_MS,
+            yield* Random.next,
           ),
           failure.retryAfterMs ?? 0,
         );

@@ -18,11 +18,7 @@
  */
 import { Effect, Layer, Semaphore, type Context, type Scope } from 'effect';
 
-import {
-  closeSession as closeOwnedSession,
-  installedProcessRuntime,
-  listSessions as listOwnedSessions,
-} from '@agent/runtime';
+import { closeAllSessions, installedProcessRuntime } from '@agent/runtime';
 import { unavailableSupabaseAuth } from '@auth/SupabaseAuth';
 import { SignInFailed } from '@common/errors/signInFailed';
 import {
@@ -35,7 +31,6 @@ import {
   AgentDirectories,
   type AgentDirectoriesPort,
   type AgentResumePort,
-  type LifecycleHost,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -58,8 +53,6 @@ import type { Sessions } from './sessions.js';
  * embedder supplying its own names its workspace roots beside them.
  */
 export interface AgentPlatform {
-  /** The shutdown lifecycle this process's `Lifecycle` service serves. */
-  readonly lifecycle: LifecycleHost;
   /** The agent directories this process's `AgentDirectories` service serves. */
   readonly agentDirectories: AgentDirectoriesPort;
   /** Surfaces a tool-missing error to the embedder, served as
@@ -223,7 +216,6 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     languageModel: platform.languageModel,
     agentResume: platform.agentResume,
     agentDirectories: AgentDirectories.layer(platform.agentDirectories),
-    lifecycle: platform.lifecycle,
     toolMissingReporter: platform.toolMissingHandler,
     setup: PACKAGE_SETUP,
   };
@@ -264,28 +256,11 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
       holds -= 1;
       if (holds > 0) return Effect.void;
       composedWith = undefined;
-      return closeOwnedSessions().pipe(
+      return Effect.asVoid(closeAllSessions()).pipe(
         // The runtime is this composition's own local, not a read of what is
         // installed now.
         Effect.ensuring(disposeProcessRuntime(heldRuntime)),
       );
     }),
   };
-}
-
-/** Every session the owner still holds, closed together: a root some
- *  composition opened of its own settles its runs and flushes its artifacts
- *  exactly as the runtime's own root does, rather than going down with the
- *  runtime unwritten. Each close is uninterruptible and spends the shutdown
- *  deadline from the moment it starts, so starting them all at once is what
- *  settles the process under one deadline (#12804); one at a time, N sessions
- *  would take N deadlines. */
-function closeOwnedSessions(): Effect.Effect<void> {
-  return Effect.flatMap(listOwnedSessions(), (open) =>
-    Effect.forEach(
-      open,
-      (session) => closeOwnedSession(session.roots.storage),
-      { concurrency: 'unbounded', discard: true },
-    ),
-  );
 }

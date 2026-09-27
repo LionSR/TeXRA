@@ -3,20 +3,11 @@ import type { ConfigProvider } from '@platform/interfaces';
 import replacementEngine, {
   logReplacementDiagnostics,
 } from '@replacement/engine';
-import type { HttpClient } from 'effect/unstable/http';
-
 type ResponseTextPostProcessor = (text: string) => string;
 
-/** How two adjacent pieces of continued response text are joined. */
-export type ResponseTextConnector = (
-  previous: string,
-  next: string,
-) => Effect.Effect<string, never, HttpClient.HttpClient>;
-
 /**
- * Latex-owned policy contract for provider-output cleanup and joining
- * continued responses. The agent runtime supplies only the connector
- * strategy; latex owns the type and the TeXRA-specific factory.
+ * Latex-owned policy contract for provider-output cleanup; latex owns the
+ * type and the TeXRA-specific factory.
  */
 export interface ResponseTextProcessing {
   readonly normalizeResponseText: ResponseTextPostProcessor;
@@ -29,13 +20,10 @@ export interface ResponseTextProcessing {
     text: string,
     config: ConfigProvider,
   ) => Effect.Effect<string>;
-  readonly connectResponseText: ResponseTextConnector;
 }
 
 /** Create TeXRA's LaTeX-aware provider-output policy, injected by hosts. */
-export function createTexraResponseTextProcessing(
-  connectResponseText: ResponseTextConnector,
-): ResponseTextProcessing {
+export function createTexraResponseTextProcessing(): ResponseTextProcessing {
   return Object.freeze<ResponseTextProcessing>({
     normalizeResponseText: (text) => text.trim(),
     postProcessResponse: (text, config) =>
@@ -47,6 +35,5 @@ export function createTexraResponseTextProcessing(
           Effect.as(replaced.text),
         );
       }),
-    connectResponseText,
   });
 }

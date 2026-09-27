@@ -120,7 +120,7 @@ function toWorkspaceOrigin(
  *  otherwise the mapping's base locations still point at the overwritten
  *  files. */
 export const computeOutputDiffStats = Effect.fn(
-  'reflection.computeOutputDiffStats',
+  'documents.computeOutputDiffStats',
 )(function* (
   state: OutputState,
   /** The run's workspace root, which a snapshot's lineage re-resolves to. */

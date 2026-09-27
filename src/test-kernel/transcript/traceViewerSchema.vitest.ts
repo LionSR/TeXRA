@@ -16,6 +16,7 @@ import {
   type RunId,
   AgentCategory,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -71,7 +72,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
       ]);
       yield* session.settlePublications();
       const result = yield* assembleTrace(runId, session);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
       expect(result.status).toBe('ok');
       if (result.status !== 'ok') return;
 

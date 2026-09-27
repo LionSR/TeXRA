@@ -1,5 +1,9 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type { ConversationProgress, RunFlow } from '@shared/schemas';
+import type {
+  AgentCategory,
+  ConversationProgress,
+  RunFlow,
+} from '@shared/schemas';
 import {
   flowPosition,
   formatFlowPositionTitle,
@@ -8,15 +12,16 @@ import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
  * The run header's progress chip, in words: "3 tool calls", or "Round 2 ·
- * 3 tool calls" for a reflection run. A tool-use turn number stays in the
+ * 3 tool calls" for a workflow run. A tool-use turn number stays in the
  * tooltip ({@link getProgressBadgeTitle}): the conversation already shows
  * the turns. Used by RunHeader.
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
   flow: RunFlow | null,
+  category: AgentCategory,
 ): TemplateResult | typeof nothing {
-  const position = flowPosition(flow);
+  const position = flowPosition(flow, category);
   const tools = progress?.toolCallCount ?? 0;
   const label = [
     position?.kind === 'round' ? formatFlowPositionTitle(position) : undefined,
@@ -31,9 +36,10 @@ export function renderProgressBadgeContent(
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
   flow: RunFlow | null,
+  category: AgentCategory,
 ): string | undefined {
   const parts: string[] = [];
-  const flowTitle = formatFlowPositionTitle(flowPosition(flow));
+  const flowTitle = formatFlowPositionTitle(flowPosition(flow, category));
   if (flowTitle) {
     parts.push(flowTitle);
   }

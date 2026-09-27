@@ -6,6 +6,7 @@ import type {
 import {
   formatTeamUnavailableMessage,
   formatUnknownTeamMessage,
+  missingMemberNames,
   teamAvailabilityPrompt,
   type TeamAvailabilityPrompt,
 } from '@common/teams/TeamPlan';
@@ -105,7 +106,7 @@ export function applySettingsTeamRoster<R = never>(
           ),
         );
 
-        const unresolvedCount = result.resolution.unresolvedNames.length;
+        const unresolvedCount = missingMemberNames(result.resolution).length;
         yield* options.presentation.showInfoMessage(
           unresolvedCount === 0
             ? `Applied "${result.preset.name}" team`

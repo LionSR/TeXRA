@@ -10,7 +10,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { getRunRecords } from '@agent/storage/runRecords';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
@@ -29,7 +28,7 @@ const mocks = vi.hoisted(() => ({
   assertOutputFileAvailable: vi.fn(),
   executeCliWorkflowConfig: vi.fn(),
   initCliPlatform: vi.fn(),
-  resolveCliLaunchAgent: vi.fn(),
+  resolveCliResumeAgent: vi.fn(),
   writeTextStderr: vi.fn(),
 }));
 
@@ -46,7 +45,7 @@ vi.mock('@cli/runtime/logSinks', async (importOriginal) => ({
 }));
 
 vi.mock('@cli/runtime/agents', () => ({
-  resolveCliLaunchAgent: mocks.resolveCliLaunchAgent,
+  resolveCliResumeAgent: mocks.resolveCliResumeAgent,
 }));
 
 vi.mock('@cli/commands/workflow', () => ({
@@ -84,7 +83,6 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     phase: 'initial',
     round: 0,
     turn: 0,
-    continuationIndex: 0,
     modelId: 'gpt54',
     modelCompatibilityKey: null,
     lastError: null,
@@ -95,28 +93,24 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
 
 /**
  * The checkpoint a workflow run's aggregate carries. The real
- * `retrieveSessionResumeData` reads it: the family must match the config's
- * category, and the runtime's model fields are what the resumed launch pins.
+ * `retrieveSessionResumeData` reads it: the runtime's model fields are what
+ * the resumed launch pins.
  */
 const workflowSnapshot = (
   modelId: string,
   modelCompatibilityKey: FlowSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
 ): FlowSnapshotPayload => ({
-  family: 'reflection',
+  family: 'toolUse',
   runtime: {
     phase: 'initial',
     round: 0,
     turn: 0,
-    continuationIndex: 0,
     modelId,
     modelCompatibilityKey,
     lastError: null,
     declinedRoutes: [],
   },
-  state: {
-    totalRounds: 4,
-    workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-  },
+  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
 });
 
 /** The session the seeded run lives in, as the command resolves it. */
@@ -173,8 +167,9 @@ async function seedRunRecord(seed: {
     );
   }
   // Seeding wrote the run's rows, which claimed its aggregate. A run waiting
-  // to be resumed is one nobody holds, so the seed gives the claim back.
-  await Effect.runPromise(session.releaseClaims(aggregateId('run', RUN_ID)));
+  // to be resumed is one nobody holds, so the seed gives the claim back: a
+  // hold taken and let go releases it.
+  await Effect.runPromise(Effect.scoped(session.holdRunClaim(RUN_ID)));
 }
 
 function cliContext(overrides: Partial<CliContext> = {}): CliContext {
@@ -204,7 +199,7 @@ describe('runResumeCommand', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await seedRunRecord({ config: TOOL_USE_CONFIG });
-    mocks.resolveCliLaunchAgent.mockReturnValue(
+    mocks.resolveCliResumeAgent.mockReturnValue(
       Effect.succeed({
         name: 'correct',
         category: AgentCategory.Workflow,
@@ -255,10 +250,9 @@ describe('runResumeCommand', () => {
         modelCompatibilityKey: 'Anthropic',
       }),
     );
-    expect(mocks.resolveCliLaunchAgent).toHaveBeenCalledWith(
+    expect(mocks.resolveCliResumeAgent).toHaveBeenCalledWith(
       expect.anything(),
       'correct',
-      'workflowResume',
     );
   });
 
@@ -360,14 +354,9 @@ describe('runResumeCommand', () => {
 
   it.effect('reports a live run instead of failing silently', () =>
     Effect.gen(function* () {
-      yield* seededSession.acquireClaims(aggregateId('run', RUN_ID));
-      // The claim is handed back whatever the resume probe does below: the
-      // scope close is the `finally` the async body used.
-      yield* Effect.addFinalizer(() =>
-        seededSession
-          .releaseClaims(aggregateId('run', RUN_ID))
-          .pipe(Effect.orDie),
-      );
+      // The case's hold on the run's claim, handed back whatever the resume
+      // probe does below: the test's scope close releases it.
+      yield* seededSession.holdRunClaim(RUN_ID);
 
       // The command's program runs on the runtime its boundary holds, which
       // the `run` helper stands in for.

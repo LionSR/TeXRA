@@ -137,17 +137,3 @@ export class CliSecrets implements PlatformSecrets {
 export function cliSecretsPath(storageRoot: string): string {
   return path.join(storageRoot, 'secrets.json');
 }
-
-let cliSecrets: CliSecrets | undefined;
-
-/**
- * The one secret store of this process, over the storage root the first
- * caller names: a later caller that names another root gets that
- * same store rather than a second view over a different file. Nothing here
- * is bound to a process runtime, so a runtime that replaced a disposed one
- * (an init retried after its failure disposed the first) keeps this store.
- */
-export function getCliSecrets(storageRoot: string): CliSecrets {
-  cliSecrets ??= new CliSecrets(cliSecretsPath(storageRoot));
-  return cliSecrets;
-}

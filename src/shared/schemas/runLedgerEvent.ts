@@ -31,7 +31,6 @@ import { RunOutcomeSchema } from './run';
 import {
   ModelCompatibilityKeySchema,
   NormalizedUsageSchema,
-  ReflectionSnapshotStateSchema,
   ToolUseSnapshotStateSchema,
 } from './runFlowState';
 import {
@@ -43,7 +42,7 @@ import { DeclinableUsageRouteSchema } from './usage';
 
 /* ------------------------------------------------------------------ ids */
 
-const RunFamilySchema = z.enum(['toolUse', 'reflection']);
+const RunFamilySchema = z.enum(['toolUse']);
 export type RunFamily = z.infer<typeof RunFamilySchema>;
 
 /**
@@ -71,15 +70,11 @@ const CallIdSchema = z.string().min(1);
 /* ------------------------------------------------------------- flow.step */
 
 const FlowStepSchema = z.enum([
-  'round.begin',
-  'round.end',
   'turn.ready',
   'turn.begin',
   'turn.end',
   'response.ready',
-  'response.processed',
   'results.ready',
-  'output.ready',
   'waiting',
   'halted',
 ]);
@@ -92,10 +87,6 @@ export const RunFlowSchema = z.strictObject({
   step: FlowStepSchema,
   round: z.int().nonnegative().nullish(),
   turn: z.int().nonnegative().nullish(),
-  /** Reflection's within-round response-cycle index. Not `continuation`:
-   *  the package's `Continuation` anchor lives in the same `RunState`, and
-   *  two fields one word apart is a live foot-gun. */
-  continuationIndex: z.int().nonnegative().nullish(),
 });
 export type RunFlow = z.infer<typeof RunFlowSchema>;
 
@@ -271,23 +262,18 @@ export const ModelMessagePayloadSchema = z
 /* ------------------------------------------------------- model.compaction */
 
 /**
- * The only row that shortens history. `keepPrefix` exists so a reflection
- * round-open does not re-store the entire conversation, media inlined as
- * base64, once per round. Nothing here checks that the resulting history is
- * preparable: that check is the ledger's, at the write boundary and on cold
- * load (D11), because a payload cannot see the prefix it keeps.
+ * The only row that shortens history. `keepPrefix` exists so a compaction
+ * that keeps the head of the history (a model switch keeps all of it) does
+ * not re-store the conversation, media inlined as base64. Nothing here
+ * checks that the resulting history is preparable: that check is the
+ * ledger's, at the write boundary and on cold load (D11), because a payload
+ * cannot see the prefix it keeps.
  */
 export const ModelCompactionPayloadSchema = z
   .strictObject({
     keepPrefix: z.int().nonnegative(),
     messages: z.array(MessageSchema).readonly(),
-    cause: z.enum([
-      'handler-replacement',
-      'round-open',
-      'context-limit',
-      'context-window',
-      'model-switch',
-    ]),
+    cause: z.enum(['context-limit', 'context-window', 'model-switch']),
     continuation: ContinuationSchema.nullable(),
     continuationDropped: z
       .enum(['history-replaced', 'protocol-has-no-continuation'])
@@ -471,11 +457,9 @@ export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 /** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). */
 const RunLoopPhaseSchema = z.enum([
   'initial',
-  'round.ready',
   'model.ready',
   'model.submitted',
   'results.ready',
-  'output.pending',
   'waiting',
   'halted',
 ]);
@@ -510,7 +494,6 @@ const SnapshotRuntimeSchema = z.strictObject({
   phase: RunLoopPhaseSchema,
   round: z.int().nonnegative(),
   turn: z.int().nonnegative(),
-  continuationIndex: z.int().nonnegative(),
   modelId: z.string().min(1),
   modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /**
@@ -532,22 +515,9 @@ export type SnapshotRuntime = z.infer<typeof SnapshotRuntimeSchema>;
 /** A snapshot restates nothing the rows carry (single-owner note, 3.3): the
  *  pending response, its intents and their approval bindings are folded from
  *  `model.message`, `tool.intent` and `tool.binding`. */
-const SnapshotArmFields = {
+export const FlowSnapshotPayloadSchema = z.strictObject({
+  family: RunFamilySchema,
   runtime: SnapshotRuntimeSchema,
-};
-
-export const FlowSnapshotPayloadSchema = z.discriminatedUnion('family', [
-  z.strictObject({
-    family: z.literal('toolUse'),
-    ...SnapshotArmFields,
-    /** The non-message fields of `ToolUseRunSharedSchema`. */
-    state: ToolUseSnapshotStateSchema,
-  }),
-  z.strictObject({
-    family: z.literal('reflection'),
-    ...SnapshotArmFields,
-    /** The non-message fields of `ReflectionFlowStateSchema`. */
-    state: ReflectionSnapshotStateSchema,
-  }),
-]);
+  state: ToolUseSnapshotStateSchema,
+});
 export type FlowSnapshotPayload = z.infer<typeof FlowSnapshotPayloadSchema>;

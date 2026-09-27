@@ -18,7 +18,6 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from '@tools/claudeAgentImport';
-import { hasClaudeCodeOauthToken } from '@tools/claudeAgentConfig';
 import {
   getGitHubToken,
   GITHUB_TOKEN_STORAGE_KEY,
@@ -33,11 +32,11 @@ import {
 import { SetupPlatform } from '@tools/setup/platform';
 import {
   prerequisitesChecks,
-  probeSdkBinaryAvailable,
   probeSdkBinaryStatus,
   probeZoteroBbt,
   probeZoteroConnector,
   zoteroProbePort,
+  type SdkBinaryStatus,
   type ToolAvailabilityChecks,
 } from '@tools/toolProbes';
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
@@ -132,27 +131,28 @@ export const LEAN4_AVAILABILITY = prerequisitesChecks({
       ? `${formatResultCount(activeCount, 'server')} active`
       : undefined;
   },
-  detailCheck: (prerequisites) => {
-    const { extensionAvailable, lakeAvailable, requiresExtension } =
-      prerequisites;
-    const lines: string[] = [];
-    if (extensionAvailable) {
-      lines.push('VS Code Lean 4 extension installed.');
-    }
-    if (lakeAvailable && !requiresExtension) {
-      lines.push('Direct LSP mode available (`lake` on PATH).');
-    }
-    if (!leanReady(prerequisites)) {
-      lines.push(
-        requiresExtension
-          ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
-          : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
-      );
-    }
-    lines.push('');
-    lines.push(summarizeLeanServers(prerequisites.servers));
-    return lines.join('\n');
-  },
+  detailCheck: (prerequisites) =>
+    Effect.sync(() => {
+      const { extensionAvailable, lakeAvailable, requiresExtension } =
+        prerequisites;
+      const lines: string[] = [];
+      if (extensionAvailable) {
+        lines.push('VS Code Lean 4 extension installed.');
+      }
+      if (lakeAvailable && !requiresExtension) {
+        lines.push('Direct LSP mode available (`lake` on PATH).');
+      }
+      if (!leanReady(prerequisites)) {
+        lines.push(
+          requiresExtension
+            ? 'The VS Code build drives Lean through the leanprover.lean4 extension; install it to enable Lean tools. `lake` on PATH alone is not enough here.'
+            : 'No `lake` binary was detected. Install elan and make sure `lake` is on PATH to enable Lean tools.',
+        );
+      }
+      lines.push('');
+      lines.push(summarizeLeanServers(prerequisites.servers));
+      return lines.join('\n');
+    }),
 });
 
 const getGitHubPRPrerequisites = Effect.fn('getGitHubPRPrerequisites')(
@@ -183,57 +183,70 @@ export const GITHUB_AVAILABILITY: ToolAvailabilityChecks = {
       if (!tokenPresent && inGitRepo) return 'Needs token';
       return 'Needs setup';
     },
-    detailCheck: ({ tokenPresent, inGitRepo }) => {
-      if (tokenPresent && inGitRepo) {
-        return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
-      }
-      if (!tokenPresent && !inGitRepo) {
-        return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.';
-      }
-      if (!tokenPresent) {
-        return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.';
-      }
-      return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
-    },
+    detailCheck: ({ tokenPresent, inGitRepo }) =>
+      Effect.sync(() => {
+        if (tokenPresent && inGitRepo) {
+          return 'GitHub token detected and workspace is a git repo. Ready to subscribe to PR activity.';
+        }
+        if (!tokenPresent && !inGitRepo) {
+          return 'Open a git-tracked folder, or run git init and add a github.com remote. Then set a token in /config → GitHub token or Settings → General.';
+        }
+        if (!tokenPresent) {
+          return 'This workspace is a git repo. Set a GitHub personal access token in /config → GitHub token or Settings → General to enable PR activity subscriptions.';
+        }
+        return 'GitHub token is set. Open a git-tracked folder, or run git init and add a github.com remote, to use PR activity subscriptions.';
+      }),
   }),
 };
 
-export const CODEX_AVAILABILITY: ToolAvailabilityChecks = {
-  check: () => probeSdkBinaryAvailable(importCodexClass, findCodexBinaryPath),
-  detailCheck: Effect.fn('pluginAvailability.codexDetail')(function* () {
-    const status = yield* probeSdkBinaryStatus({
-      importSdk: importCodexClass,
-      findBinary: findCodexBinaryPath,
-      missingPackageMessage:
-        '@openai/codex-sdk not found. Install with: npm install -g @openai/codex',
-      importFailedLabel: 'Codex SDK import failed',
-      classifyImportError: (msg) =>
-        msg.includes('Unsupported platform')
-          ? `Platform not supported: ${msg}`
-          : undefined,
-      binaryNotFoundMessage:
-        'Codex SDK loaded but native binary not found. ' +
-        'Install with: npm install -g @openai/codex',
-    });
-    if (!status.ok) return status.message;
-    return `Codex CLI ready. Binary: ${status.binaryPath}`;
-  }),
+// The SDK import and binary lookup run once, as the shared probe; a lookup
+// that errors (EACCES, EMFILE) stays on the error channel, so the dashboard
+// reports the check as failed rather than the tool as not installed.
+const CODEX_SDK_PROBE = {
+  importSdk: importCodexClass,
+  findBinary: findCodexBinaryPath,
+  missingPackageMessage:
+    '@openai/codex-sdk not found. Install with: npm install -g @openai/codex',
+  importFailedLabel: 'Codex SDK import failed',
+  classifyImportError: (msg: string) =>
+    msg.includes('Unsupported platform')
+      ? `Platform not supported: ${msg}`
+      : undefined,
+  binaryNotFoundMessage:
+    'Codex SDK loaded but native binary not found. ' +
+    'Install with: npm install -g @openai/codex',
 };
 
-export const CLAUDE_CODE_AVAILABILITY: ToolAvailabilityChecks = {
-  check: () =>
-    probeSdkBinaryAvailable(importClaudeAgentSdk, findClaudeBinaryPath),
-  detailCheck: Effect.fn('pluginAvailability.claudeAgentDetail')(function* () {
-    const status = yield* probeSdkBinaryStatus({
-      importSdk: importClaudeAgentSdk,
-      findBinary: findClaudeBinaryPath,
-      missingPackageMessage:
-        '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk',
-      importFailedLabel: 'Claude Code SDK import failed',
-      binaryNotFoundMessage:
-        'Claude Code SDK loaded but native `claude` binary not found. ' +
-        'Install via: npm install -g @anthropic-ai/claude-code',
-    });
+const CLAUDE_CODE_SDK_PROBE = {
+  importSdk: importClaudeAgentSdk,
+  findBinary: findClaudeBinaryPath,
+  missingPackageMessage:
+    '@anthropic-ai/claude-agent-sdk not found. Reinstall TeXRA or run: npm install @anthropic-ai/claude-agent-sdk',
+  importFailedLabel: 'Claude Code SDK import failed',
+  binaryNotFoundMessage:
+    'Claude Code SDK loaded but native `claude` binary not found. ' +
+    'Install via: npm install -g @anthropic-ai/claude-code',
+};
+
+export const CODEX_AVAILABILITY = prerequisitesChecks({
+  probe: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
+  fallback: () => probeSdkBinaryStatus(CODEX_SDK_PROBE),
+  check: (status) => status.ok,
+  detailCheck: (status) =>
+    Effect.succeed(
+      status.ok
+        ? `Codex CLI ready. Binary: ${status.binaryPath}`
+        : status.message,
+    ),
+});
+
+export const CLAUDE_CODE_AVAILABILITY = prerequisitesChecks({
+  probe: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
+  fallback: () => probeSdkBinaryStatus(CLAUDE_CODE_SDK_PROBE),
+  check: (status) => status.ok,
+  detailCheck: Effect.fn('pluginAvailability.claudeAgentDetail')(function* (
+    status: SdkBinaryStatus,
+  ) {
     if (!status.ok) return status.message;
     const claudePath = status.binaryPath;
 
@@ -252,7 +265,8 @@ export const CLAUDE_CODE_AVAILABILITY: ToolAvailabilityChecks = {
         ),
       ),
     );
-    const hasOauthToken = hasClaudeCodeOauthToken();
+    const hasOauthToken =
+      (yield* envVar('CLAUDE_CODE_OAUTH_TOKEN')) !== undefined;
     const authBits: string[] = [];
     if (keyOrigin === 'secret') {
       authBits.push(`${anthropicApiKeyEnv} (TeXRA Settings)`);
@@ -268,4 +282,4 @@ export const CLAUDE_CODE_AVAILABILITY: ToolAvailabilityChecks = {
 
     return `Claude CLI ready. Binary: ${claudePath}. ${authNote}`;
   }),
-};
+});

@@ -136,7 +136,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
   // prettier-ignore
   const timerTemplate = model.isInProgress ? html`<tool-timer .startTime=${row.timestamp} .timeoutMs=${toolTimeoutMs ?? 0}></tool-timer>` : nothing;
 
-  // Delegation row extra: "Copy to new task" loads the subagent's agent,
+  // Delegation row extra: "Edit as new task" loads the subagent's agent,
   // model, instruction and files into the launcher (shown in summary row)
   const isProposalBearingDelegation = Object.hasOwn(
     DELEGATION_TOOL_CATEGORY,
@@ -159,7 +159,7 @@ export function formatToolUseTemplate(row: ToolRow): FormatResult {
       : 'agent, model and instruction';
   // prettier-ignore
   const setupButton = proposal
-    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's ${copied} into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Copy to new task</button>`
+    ? html`<button type="button" class="proposal-restore-link proposal-banner-setup" title="Copy this subagent's ${copied} into a new task" @click=${(event: Event) => { event.preventDefault(); event.currentTarget?.dispatchEvent(SessionUiEvents.host({ kind: 'restoreProposalConfig', proposal })); }} @keydown=${stopSummaryToggleKeydown}>${waIcon('reply')} Edit as new task</button>`
     : nothing;
   // prettier-ignore
   const extraContent = html`${timerTemplate}${setupButton}`;

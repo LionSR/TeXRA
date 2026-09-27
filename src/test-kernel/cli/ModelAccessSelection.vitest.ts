@@ -74,14 +74,19 @@ vi.mock('@auth/xai', () => ({
     account?.email ?? 'your Grok account',
 }));
 
-vi.mock('@model/codex/codexSubscription', () => ({
-  isPreferCodexSubscription: mocks.isPreferCodexSubscription,
-  setPreferCodexSubscription: mocks.setPreferCodexSubscription,
-}));
-
-vi.mock('@model/xai/xaiSubscription', () => ({
-  isPreferXaiSubscription: mocks.isPreferXaiSubscription,
-  setPreferXaiSubscription: mocks.setPreferXaiSubscription,
+vi.mock('@model/subscriptionAccess', () => ({
+  isPreferSubscription: (provider: string, stores: unknown) =>
+    provider === 'chatgpt'
+      ? mocks.isPreferCodexSubscription(stores)
+      : mocks.isPreferXaiSubscription(stores),
+  setPreferSubscription: (
+    provider: string,
+    stores: unknown,
+    enabled: boolean,
+  ) =>
+    provider === 'chatgpt'
+      ? mocks.setPreferCodexSubscription(stores, enabled)
+      : mocks.setPreferXaiSubscription(stores, enabled),
 }));
 
 vi.mock('@model/apiProviders', () => {

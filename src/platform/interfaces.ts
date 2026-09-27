@@ -2,7 +2,7 @@
  * Platform port contracts — the host-neutral interfaces a host wires into
  * `installProcessRuntime()`. Formerly one file per port under `interfaces/`.
  */
-import { Context, Data, Effect, FileSystem, Layer } from 'effect';
+import { Context, Data, Effect, FileSystem, Layer, type Result } from 'effect';
 import type { AgentSource, RunId } from '@shared/schemas';
 
 import type { GlobalStorageFs } from './rootedFs';
@@ -109,12 +109,23 @@ export class StateWriteFailed extends Data.TaggedError('StateWriteFailed')<{
 
 /**
  * Application state read from its authority when the Effect executes.
- * Updates finish after commit. Separate reads and updates are not an atomic
- * read-modify-write operation; defaults apply only to absent keys.
+ * Updates finish after commit; defaults apply only to absent keys. A change
+ * that depends on the current value goes through `modify`, never a `get`
+ * then an `update`: the settings surfaces do not serialize their messages,
+ * and hosts in separate processes share one store.
  */
 export interface StateStore {
   get<T>(key: string, defaultValue?: T): Effect.Effect<T, StateReadFailed>;
   update(key: string, value: unknown): Effect.Effect<void, StateWriteFailed>;
+  /**
+   * Read-modify-write of one key as one step at the store's authority:
+   * `change` sees the stored value (`undefined` when absent) and returns the
+   * next one, or refuses with its own error and nothing is written.
+   */
+  modify<T, E = never>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E | StateWriteFailed>;
 }
 
 /**
@@ -127,75 +138,6 @@ export class AppState extends Context.Service<AppState, StateStore>()(
 ) {
   static layer(store: StateStore): Layer.Layer<AppState> {
     return Layer.succeed(AppState)(store);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Lifecycle
-// ---------------------------------------------------------------------------
-
-/**
- * The drain's three phases, in order, each with its own deadline budget.
- * `RELEASE` follows every `ON` handler, whenever it was registered: it is
- * where the process's sessions and then its runtime are released, so no
- * handler can run on a runtime already gone.
- */
-export const SHUTDOWN_PHASE = {
-  BEFORE: 'beforeShutdown',
-  ON: 'onShutdown',
-  RELEASE: 'releaseProcess',
-} as const;
-
-export type ShutdownPhase =
-  (typeof SHUTDOWN_PHASE)[keyof typeof SHUTDOWN_PHASE];
-
-/**
- * One registered shutdown handler: the program the drain runs at its phase,
- * not a callback it calls. A failure is reported to the drain's `onError`,
- * which is why the channel is any `Error` here: the drain is the boundary
- * that reports it, and no caller of `runShutdown` adopts it.
- */
-export type ShutdownHandler = Effect.Effect<void, Error>;
-
-export interface LifecycleHost {
-  /**
-   * Register a shutdown handler. The phase's join-with-deadline is fiber
-   * interruption: a handler still running at the deadline is interrupted and
-   * the drain advances past it, so a handler that can be safely cut short
-   * needs nothing of its own, and one whose work must outlast the deadline
-   * says so with `Effect.uninterruptible`.
-   */
-  onShutdown(phase: ShutdownPhase, handler: ShutdownHandler): Disposable;
-  /**
-   * Drain the phases, once: concurrent callers join the drain in flight
-   * rather than starting a second one.
-   */
-  readonly runShutdown: Effect.Effect<void>;
-  /**
-   * True from the moment `runShutdown` is first run. Each phase drains
-   * exactly once and the drain is cached, so a handler registered from here
-   * on is never run: a caller whose cleanup depends on this path must read
-   * this before taking a resource it would register here.
-   */
-  readonly shutdownRan: boolean;
-}
-
-/**
- * The process's shutdown lifecycle as an Effect service
- * (`@texra/platform/Lifecycle`), provided once by the composition root through
- * `installProcessRuntime`. The shape is the host itself: a program that
- * registers a shutdown handler or drains the phases yields this rather than
- * reading whichever lifecycle the process platform happens to hold.
- *
- * `layer` takes the host itself, for the same reason `Secrets.layer` does:
- * every root builds its lifecycle before it installs the runtime that serves
- * it, so the service is the value the root already holds.
- */
-export class Lifecycle extends Context.Service<Lifecycle, LifecycleHost>()(
-  '@texra/platform/Lifecycle',
-) {
-  static layer(lifecycle: LifecycleHost): Layer.Layer<Lifecycle> {
-    return Layer.succeed(Lifecycle)(lifecycle);
   }
 }
 

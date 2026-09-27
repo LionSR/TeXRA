@@ -29,6 +29,7 @@ import {
 } from '@utils/text/stringUtils';
 
 import { CliUsageError, type CliContext } from './cliContext';
+import { writeTextStderr } from './logSinks';
 import { type CliRunResult } from './terminalStatus';
 import { STDIN_WORKFLOW_INPUT_BASENAME } from './workflowInputs';
 import type { z } from 'zod';
@@ -44,76 +45,109 @@ const notADirectory = (error: PlatformError.PlatformError): boolean =>
   error.reason._tag === 'BadResource' &&
   isNotADirectoryError(error.reason.cause);
 
-/** The user named a path this process may not create or read through. */
-function permissionUsageError(
-  target: string,
-  flagLabel: OutputFlag,
-): CliUsageError {
-  return new CliUsageError(
-    `${flagLabel} is not writable (permission denied): ${target}`,
-  );
-}
-
-function parentFileUsageError(
-  target: string,
-  flagLabel: OutputFlag,
-): CliUsageError {
-  return new CliUsageError(
-    flagLabel === '--output-dir'
-      ? `--output-dir is not a directory (a parent path component is a file): ${target}`
-      : `--output: a parent path component is a file: ${target}`,
-  );
+/** The errno a platform error carries, when the host reported one. */
+function errnoCode(error: PlatformError.PlatformError): string | undefined {
+  const { cause } = error.reason;
+  return cause instanceof Error &&
+    'code' in cause &&
+    typeof cause.code === 'string'
+    ? cause.code
+    : undefined;
 }
 
 /**
- * Probe `target` and materialize the directory that the eventual output write
- * requires. Using the same recursive mkdir operation as the writer avoids
- * platform-specific ancestor traversal: it handles missing depth, Windows
- * ENOENT-through-file behavior, and symlink resolution natively. The Path
- * service serves dirname so tests can supply NodePath.layerWin32; at runtime
- * NodePath.layer is node:path, so it agrees with joinCwdRelative.
+ * The usage error a filesystem failure on a user-supplied output path maps
+ * to: the user named a path this process may not create or write, which is
+ * not a TeXRA defect. Any other failure stays as it is and reads as a bug.
  */
-const probeOutputPath = Effect.fn('probeOutputPath')(function* (
+function outputPathError(
   target: string,
   flagLabel: OutputFlag,
-): Effect.fn.Return<
-  FileSystem.File.Info | null,
-  CliUsageError | PlatformError.PlatformError,
-  FileSystem.FileSystem | Path.Path
-> {
-  const fs = yield* FileSystem.FileSystem;
-  const pathService = yield* Path.Path;
-  return yield* fs.stat(target).pipe(
-    Effect.catch((error: PlatformError.PlatformError) => {
-      if (notADirectory(error)) {
-        return Effect.fail(parentFileUsageError(target, flagLabel));
-      }
-      if (error.reason._tag === 'PermissionDenied') {
-        return Effect.fail(permissionUsageError(target, flagLabel));
-      }
-      if (error.reason._tag !== 'NotFound') return Effect.fail(error);
-      const requiredDirectory =
-        flagLabel === '--output-dir' ? target : pathService.dirname(target);
-      return fs.makeDirectory(requiredDirectory, { recursive: true }).pipe(
-        Effect.mapError((cause) => {
-          if (notADirectory(cause) || cause.reason._tag === 'AlreadyExists') {
-            return parentFileUsageError(target, flagLabel);
-          }
-          if (cause.reason._tag === 'PermissionDenied') {
-            return permissionUsageError(target, flagLabel);
-          }
-          if (cause.reason._tag !== 'NotFound') return cause;
-          return new CliUsageError(
-            flagLabel === '--output-dir'
-              ? `--output-dir cannot be created: ${target}`
-              : `--output parent directory cannot be created: ${target}`,
-          );
-        }),
-        Effect.as(null),
+  error: PlatformError.PlatformError,
+): CliUsageError | PlatformError.PlatformError {
+  if (notADirectory(error) || error.reason._tag === 'AlreadyExists') {
+    return new CliUsageError(
+      flagLabel === '--output-dir'
+        ? `--output-dir is not a directory (a parent path component is a file): ${target}`
+        : `--output: a parent path component is a file: ${target}`,
+    );
+  }
+  const code = errnoCode(error);
+  if (code === 'EROFS') {
+    return new CliUsageError(
+      `${flagLabel} is not writable (read-only file system): ${target}`,
+    );
+  }
+  if (error.reason._tag === 'PermissionDenied' || code === 'EPERM') {
+    return new CliUsageError(
+      `${flagLabel} is not writable (permission denied): ${target}`,
+    );
+  }
+  if (error.reason._tag === 'NotFound') {
+    return new CliUsageError(
+      flagLabel === '--output-dir'
+        ? `--output-dir cannot be created: ${target}`
+        : `--output parent directory cannot be created: ${target}`,
+    );
+  }
+  return error;
+}
+
+/**
+ * Probe `target`, materialize the directory that the eventual output write
+ * requires, and check that the write will be allowed, so a path the run
+ * cannot write fails before the model is billed. Using the same recursive
+ * mkdir operation as the writer avoids platform-specific ancestor traversal:
+ * it handles missing depth, Windows ENOENT-through-file behavior, and symlink
+ * resolution natively. The Path service serves dirname so tests can supply
+ * NodePath.layerWin32; at runtime NodePath.layer is node:path, so it agrees
+ * with joinCwdRelative.
+ */
+const probeOutputPath = Effect.fn('probeOutputPath')(
+  function* (
+    target: string,
+    flagLabel: OutputFlag,
+  ): Effect.fn.Return<
+    FileSystem.File.Info | null,
+    PlatformError.PlatformError,
+    FileSystem.FileSystem | Path.Path
+  > {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* Path.Path;
+    const requiredDirectory =
+      flagLabel === '--output-dir' ? target : pathService.dirname(target);
+    const stats = yield* fs
+      .stat(target)
+      .pipe(
+        Effect.catchReason('PlatformError', 'NotFound', () =>
+          Effect.succeed(null),
+        ),
       );
-    }),
-  );
-});
+    if (stats === null) {
+      yield* fs.makeDirectory(requiredDirectory, { recursive: true });
+    }
+    // A target of the wrong kind (a file for --output-dir, a directory for
+    // --output) is the caller's report, which names the real problem; a
+    // writability answer about it would not.
+    if (
+      stats !== null &&
+      (stats.type === 'Directory') !== (flagLabel === '--output-dir')
+    ) {
+      return stats;
+    }
+    // An existing --output file is overwritten in place; anything else is
+    // written into the required directory.
+    yield* fs.access(
+      stats !== null && flagLabel === '--output' ? target : requiredDirectory,
+      { writable: true },
+    );
+    return stats;
+  },
+  (effect, target, flagLabel) =>
+    Effect.mapError(effect, (error) =>
+      outputPathError(target, flagLabel, error),
+    ),
+);
 
 export { probeOutputPath as probeOutputPathForTests };
 
@@ -261,11 +295,18 @@ export function inputDerivedOutputFiles(
 function copyOutputFile(
   source: string,
   targetPath: string,
-): Effect.Effect<void, PlatformError.PlatformError, FileSystem.FileSystem> {
+  flagLabel: OutputFlag,
+): Effect.Effect<
+  void,
+  CliUsageError | PlatformError.PlatformError,
+  FileSystem.FileSystem
+> {
   return FileSystem.FileSystem.use((fs) =>
     fs
       .makeDirectory(path.dirname(targetPath), { recursive: true })
       .pipe(Effect.andThen(fs.copyFile(source, targetPath))),
+  ).pipe(
+    Effect.mapError((error) => outputPathError(targetPath, flagLabel, error)),
   );
 }
 
@@ -290,6 +331,22 @@ export function resolveWorkflowOutput(
       workingDirectory: context.cwd,
       runDirectory,
     };
+    // A rejected compile fails the run without an error to present, so the
+    // status line alone would end on a bare "Error": name the documents the
+    // last round failed to compile and where their logs are.
+    if (result.outcome === RUN_OUTCOME.FAILED && !result.error) {
+      const failures = result.output.compileFailures;
+      // A failure with neither an error nor a compile failure has nothing
+      // more to name than the status line already says.
+      if (failures.length === 0) return baseResult;
+      const lastRound = Math.max(...failures.map((failure) => failure.round));
+      for (const failure of failures) {
+        if (failure.round !== lastRound) continue;
+        writeTextStderr(
+          `LaTeX compile failed for ${failure.displayName} (round ${failure.round + 1}); log: ${failure.logAbsolutePath}`,
+        );
+      }
+    }
     // Only completed runs may publish to user-requested destinations. Partial or
     // rejected artifacts remain inspectable in run storage through baseResult.
     if (result.outcome !== RUN_OUTCOME.COMPLETED) return baseResult;
@@ -332,7 +389,7 @@ export function resolveWorkflowOutput(
       const copiedOutputs: string[] = [];
       for (const [relativePath, output] of outputsByRelativePath) {
         const targetPath = path.join(targetRoot, relativePath);
-        yield* copyOutputFile(output.absolutePath, targetPath);
+        yield* copyOutputFile(output.absolutePath, targetPath, '--output-dir');
         copiedOutputs.push(targetPath);
       }
 
@@ -357,7 +414,7 @@ export function resolveWorkflowOutput(
 
     const targetPath = joinCwdRelative(outputFile, context.cwd);
     if (path.resolve(finalOutput.absolutePath) !== path.resolve(targetPath)) {
-      yield* copyOutputFile(finalOutput.absolutePath, targetPath);
+      yield* copyOutputFile(finalOutput.absolutePath, targetPath, '--output');
     }
 
     return { ...baseResult, copiedOutput: targetPath };

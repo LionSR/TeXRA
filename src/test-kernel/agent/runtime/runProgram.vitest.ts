@@ -23,7 +23,6 @@ describe('settleRun', () => {
           phase: RUN_PHASE.RUNNING,
           round: 2,
           turn: 3,
-          continuationIndex: 1,
         } as unknown as RunState;
         const exit = Exit.succeed({ state, outcome: RUN_OUTCOME.COMPLETED });
         const warn = vi.fn();

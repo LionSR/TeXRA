@@ -19,7 +19,6 @@ import {
   getProviderEndpoint,
   useChinaRegion,
 } from '@utils/config/providerConfig';
-import { tryParseUrl } from '@utils/core';
 import type { ModelConfig } from 'llm-zoo';
 
 import type { ModelRoute } from './modelRoute';
@@ -31,7 +30,7 @@ function normalizeProviderEndpoint(input: string): string {
   if (!input) return '';
 
   const withProtocol = input.includes('://') ? input : `https://${input}`;
-  const parsed = tryParseUrl(withProtocol);
+  const parsed = URL.parse(withProtocol);
   if (!parsed) return input.replace(/^https?:\/\//, '').replace(/\/+$/, '');
   return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
@@ -56,8 +55,10 @@ export function resolveRouteEndpoint(
     if (customUrl) return `https://${normalizeProviderEndpoint(customUrl)}`;
     const baseUrl = findModelProviderPlugin(config.provider)?.baseUrl;
     if (baseUrl == null) {
-      throw new Error(
-        `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+      return yield* Effect.die(
+        new Error(
+          `Model ${config.name} has no HTTP endpoint for provider ${config.provider}.`,
+        ),
       );
     }
     if (typeof baseUrl === 'string') return baseUrl;

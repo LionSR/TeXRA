@@ -162,14 +162,14 @@ The public API must distinguish foreground execution from accepted background
 work. Proposed operation names are illustrative; their ordering and ownership
 are the contract.
 
-| Operation                                         | Contract                                                                                                                                                                |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `prepareTurn(request)`                            | Produces resolved input without external I/O as specified above.                                                                                                        |
-| `streamTurn(resolvedForegroundTurn)`              | Runs one foreground attempt and emits normalized progress plus one authoritative completed result. It never executes local tools or starts another generation.          |
-| `generateTurn(resolvedForegroundTurn)`            | Collects the same execution/normalization path to one result; it is not another provider implementation or a second subscription to the stream.                         |
-| `submitBackground(resolvedBackgroundTurn)`        | Returns `Completed(TurnResult)` or `Accepted(RemoteOperation)`. Returning an accepted handle ends this operation; it does not continue into a hidden poll loop.         |
-| `observeBackground(operation, observationPolicy)` | Retrieves/observes that accepted operation under the caller's deadline and emits normalized progress and a terminal outcome. It never creates a replacement generation. |
-| `cancelBackground(operation)`                     | Reports the provider's cancellation evidence. Request submission, acknowledged cancellation and already-completed work remain distinct outcomes.                        |
+| Operation                                           | Contract                                                                                                                                                                    |
+| --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `prepareTurn(request)`                              | Produces resolved input without external I/O as specified above.                                                                                                            |
+| `streamTurn(resolvedForegroundTurn)`                | Runs one foreground attempt and emits normalized progress plus one authoritative completed result. It never executes local tools or starts another generation.              |
+| `completedTurn(streamTurn(resolvedForegroundTurn))` | Collects the same execution/normalization path to one result; it is a fold over the stream, not a `Model` member, another provider implementation or a second subscription. |
+| `submitBackground(resolvedBackgroundTurn)`          | Returns `Completed(TurnResult)` or `Accepted(RemoteOperation)`. Returning an accepted handle ends this operation; it does not continue into a hidden poll loop.             |
+| `observeBackground(operation, observationPolicy)`   | Retrieves/observes that accepted operation under the caller's deadline and emits normalized progress and a terminal outcome. It never creates a replacement generation.     |
+| `cancelBackground(operation)`                       | Reports the provider's cancellation evidence. Request submission, acknowledged cancellation and already-completed work remain distinct outcomes.                            |
 
 The durable caller commits its generation admission before calling either
 foreground execution or background submission. For `Accepted`, it commits the

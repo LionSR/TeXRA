@@ -14,7 +14,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -43,11 +43,11 @@ import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const CHANNEL = 'PlanTool';
 
-function formatGoalView(goal: Goal): string {
+function formatGoalView(goal: Goal, nowMs: number): string {
   return [
     `Goal: ${goal.goalId}`,
     `Status: ${goal.status}`,
-    `Time elapsed: ${formatCompactDuration(goalElapsedMs(goal))}`,
+    `Time elapsed: ${formatCompactDuration(goalElapsedMs(goal, nowMs))}`,
   ].join('\n');
 }
 
@@ -135,7 +135,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
           `new objective.\n\n` +
-          `${formatGoalView(active)}\n\n` +
+          `${formatGoalView(active, yield* Clock.currentTimeMillis)}\n\n` +
           `Discipline:\n` +
           `- Drop work that only served the previous objective.\n` +
           `- Track concrete steps with the todo tool as you work.\n` +
@@ -342,14 +342,14 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   }
   if (goal.status !== 'active') {
     return executed(
-      `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
+      `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal, yield* Clock.currentTimeMillis)}`,
       `Goal already ${goal.status}: pause is a no-op.`,
     );
   }
   const updated = (yield* pauseGoal(ports.run.session, runId)) ?? goal;
   setGoalSessionAutoApproval(ports.run.session, runId, false);
   return executed(
-    `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
+    `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
   );
 });

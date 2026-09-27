@@ -27,6 +27,8 @@ vi.mock('@cli/runtime/browser', () => ({
 
 const { signInCliSubscription } =
   await import('@cli/runtime/subscriptionLogin');
+type CliSubscriptionLoginOptions =
+  import('@cli/runtime/subscriptionLogin').CliSubscriptionLoginOptions;
 
 // What the host root provides the flow.
 const signInServices = Layer.mergeAll(
@@ -38,7 +40,7 @@ const signInServices = Layer.mergeAll(
 /** Run the program as the login command does, on the test's own fiber. */
 const signInCliChatGpt = (
   init: { device: boolean; noBrowser: boolean },
-  options: { writeProgress: (message: string) => void },
+  options: CliSubscriptionLoginOptions,
 ) =>
   signInCliSubscription('chatgpt', init, options).pipe(
     Effect.provide(signInServices),
@@ -66,7 +68,13 @@ const runSignIn = (url: string, noBrowser = false) =>
     const progress: string[] = [];
     yield* signInCliChatGpt(
       { device: false, noBrowser },
-      { writeProgress: (message) => progress.push(message) },
+      // Only the instructions are copyable: a panel that shows its latest
+      // status line keeps the copyable URL on screen beneath it.
+      {
+        writeProgress: (message, options) => {
+          progress.push(options?.copyable ? `[copyable] ${message}` : message);
+        },
+      },
     );
     return progress;
   });
@@ -85,9 +93,9 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
       );
 
       expect(progress).toEqual([
-        'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
+        '[copyable] ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=2',
         'Browser launch in progress...',
-        'Automatic browser launch failed; open the sign-in URL above.',
+        'Automatic browser launch failed; open the sign-in URL above. Over SSH or in a container, forward the callback port to open it from your local browser.',
       ]);
     }),
   );
@@ -103,7 +111,8 @@ describe('signInCliSubscription (ChatGPT) browser choice', () => {
 
         expect(mocks.tryOpenBrowser).not.toHaveBeenCalled();
         expect(progress).toEqual([
-          'ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
+          '[copyable] ChatGPT sign-in URL:\nhttps://auth.openai.com/authorize?x=3',
+          'Over SSH or in a container, forward the callback port to open it from your local browser.',
         ]);
       }),
   );

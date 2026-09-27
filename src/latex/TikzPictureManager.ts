@@ -149,7 +149,6 @@ const compile = Effect.fn('TikzPictureManager.compile')(function* (
         suffix,
       );
       const compiled = yield* compileLatex2Pdf(texLocation, roots, {
-        channel: CHANNEL,
         compiler: 'pdflatex',
       });
       if (!compiled.ok) {

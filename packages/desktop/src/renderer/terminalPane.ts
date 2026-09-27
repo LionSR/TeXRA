@@ -40,6 +40,9 @@ interface TerminalPane {
   reportError(sessionId: string, message: string): void;
   /** Re-fits the active terminal; call after the pane becomes visible. */
   layout(): void;
+  /** Re-reads the colors from the document after the host theme changed;
+   *  an open terminal would otherwise keep the palette it was created in. */
+  refreshTheme(): void;
   dispose(sessionId: string): void;
   disposeAll(): void;
 }
@@ -139,6 +142,12 @@ export function createTerminalPane(
 
   return {
     element,
+
+    refreshTheme() {
+      const { theme } = resolveXtermTheme(document.body);
+      for (const { terminal } of sessions.values())
+        terminal.options.theme = theme;
+    },
 
     activate(sessionId, { focus = true }: { focus?: boolean } = {}) {
       const session = sessions.get(sessionId) ?? createSession(sessionId);

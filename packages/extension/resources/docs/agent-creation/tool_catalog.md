@@ -93,9 +93,10 @@ recommended groups at the bottom are a good starting point.
   Script" switch in Settings → Tools (off by default for new installs), which
   disables the tool for every agent regardless of its configured tool list.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
-  `model`, and `instruction` for a fresh run, or `execution_id` +
-  `instruction` to resume a WAITING subagent.
-- `executions` — view execution history and manage running executions.
+  `model`, and `instruction`.
+- `executions` — view execution history and manage running executions;
+  `action: "send"` on `/executions/<id>` messages another run, such as a
+  follow-up to a WAITING subagent.
 - `accept_run_files` — accept output files from a completed execution.
 
 ## External coding agents

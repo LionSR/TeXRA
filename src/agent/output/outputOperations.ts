@@ -31,8 +31,8 @@ interface RecoverOptions<T, R> {
  *
  * Defects and interruption deliberately pass straight through: a bug in this
  * pipeline is not a recoverable output failure, and a cancelled run is not a
- * skipped step. The one broad recovery left is the reflection loop's own
- * `fallbackOutput`, which owns what a failed output round reports.
+ * skipped step. The one broad recovery left is the documents plugin's own
+ * fallback, which owns what a failed output round reports.
  */
 export const recoverOutputFailure =
   <T, R2 = never>(options: RecoverOptions<T, R2>) =>

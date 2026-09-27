@@ -1,8 +1,9 @@
-import { Cause, Deferred, Effect, Result } from 'effect';
+import { Cause, Deferred, Effect, Exit, Result, Scope } from 'effect';
 
 import {
   attachTerminalResultToast,
   runAgent,
+  SESSION_CLOSE_DEADLINE_MS,
   type SessionHandle,
   trackTerminalResultPresentation,
   validateRunRequest,
@@ -14,7 +15,6 @@ import { deriveResumability, finalizeRun } from '@agent/storage';
 import { AgentError } from '@common/errors';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
-import { SHUTDOWN_PHASE, type LifecycleHost } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -36,8 +36,8 @@ import { cliToolUseApprovalOptions } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
   advertisesInterruptedRun,
+  type CheckpointRefinement,
   formatInterruptedResumeHint,
-  type ResumableCheckpoint,
   tryReadCliCwd,
   writeInterruptedResumeHint,
 } from './interruptedResumeHint';
@@ -75,13 +75,13 @@ interface CliExecuteOptions {
   /** The process session the run executes under: `initCliPlatform`'s one
    *  memoized open, threaded from the command that holds its services. */
   readonly session: Effect.Effect<SessionHandle, SessionOpenError>;
-  /** The process runtime, from the same services: the shutdown handler the
-   *  lifecycle host calls is Promise-shaped, so it runs its programs on
-   *  this. */
+  /** The process runtime, from the same services: the shutdown step below
+   *  runs on the process's shutdown fiber, so it runs its programs on this. */
   readonly runtime: ProcessRuntime;
-  /** The host's shutdown registry, from the same services: the run's
-   *  shutdown-status handler registers here. */
-  readonly lifecycle: LifecycleHost;
+  /** The process's shutdown scope, from the same services: the run's
+   *  shutdown-status step is a finalizer of a child scope of it, so it runs
+   *  before the sessions close. */
+  readonly shutdownScope: Scope.Scope;
   /** Forwarded to `runAgent`. Derived by `executeCliConfig` from
    *  `expectedCategory`, never set by a command handler. */
   readonly enforceCategory?: boolean;
@@ -96,9 +96,7 @@ interface CliExecuteOptions {
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
-  readonly canAdvertiseInterruptedRun?: (
-    resumability: ResumableCheckpoint,
-  ) => boolean;
+  readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
   /** The agent boundary the request runs through. Composition leaves it
    *  unset and gets the agent runtime's own; a test harness injects its
    *  stand-ins here rather than mocking agent modules. */
@@ -267,7 +265,7 @@ export function executeCliToolUseConfig(
  */
 export function executeCliRequest(
   // The run id is decided before launch: a shutdown stops the launch through
-  // the session's registry under it (`runs.kill`), which `runAgent` tracks
+  // the session's registry under it (`runs.stop`), which `runAgent` tracks
   // (or attaches to a parked predecessor) before the first resume lineage
   // read, so this kill has a target from that first await on.
   request: RunAgentRequest & { readonly runId: RunId },
@@ -379,8 +377,8 @@ export function executeCliRequest(
     };
     const shutdownStatusFinalized = yield* Effect.cached(
       Effect.gen(function* () {
-        // Both call sites run after runAgent has already published (or failed to
-        // publish) the lease, so the plain variable is the settled answer.
+        // Both call sites run after runAgent has taken (or failed to take)
+        // the run's claim, so the plain variable is the settled answer.
         const runId = ownedRunId;
         if (!runId) return false;
         const onFinalized = options.onInterruptedRunFinalized;
@@ -390,21 +388,18 @@ export function executeCliRequest(
             outcome: RUN_OUTCOME.CANCELLED,
             report: reportShutdownFinalizationFailure,
           })).ok;
-          yield* session.releaseRunLease(runId);
+          yield* session.commitRunEnd(runId);
           const resumability = terminalStatusPersisted
             ? yield* agentRuns.resumability(runId, session)
             : undefined;
-          // The lease was released just above, so the checkpoint alone decides
-          // whether the recovery notice is usable.
+          // The run's ending committed just above, so the checkpoint alone
+          // decides whether the recovery notice is usable.
           if (onFinalized !== undefined) {
-            const advertise = yield* Effect.try({
-              try: () =>
-                advertisesInterruptedRun(
-                  resumability,
-                  options.canAdvertiseInterruptedRun,
-                ),
-              catch: ensureError,
-            });
+            const advertise = yield* advertisesInterruptedRun(
+              runId,
+              resumability,
+              options.canAdvertiseInterruptedRun,
+            );
             if (advertise) {
               yield* Deferred.succeed(recoveryNoticeStarted, undefined);
               yield* Effect.tryPromise({
@@ -441,8 +436,7 @@ export function executeCliRequest(
         ? shutdownStatusFinalized
         : Effect.succeed(false),
     );
-    const disposeShutdownStatus = options.lifecycle.onShutdown(
-      SHUTDOWN_PHASE.BEFORE,
+    const shutdownStatus = Effect.suspend(() =>
       Effect.gen(function* () {
         shutdownRequested = true;
         // Paired with tryCommitWorkflowOutputPublication: keep this read of
@@ -454,7 +448,7 @@ export function executeCliRequest(
         // stop waits for the sever to interrupt.
         const stop =
           launchVerdict.kind !== 'published'
-            ? session.runs.kill(launchRunId, {
+            ? session.runs.stop(launchRunId, {
                 detachActiveChildren: false,
               })
             : undefined;
@@ -482,17 +476,18 @@ export function executeCliRequest(
               // when checkpoint inspection itself is unavailable.
               advertisesCheckpoint =
                 Result.isSuccess(inspection) &&
-                advertisesInterruptedRun(
+                (yield* advertisesInterruptedRun(
+                  interruptedRunId,
                   inspection.success,
                   options.canAdvertiseInterruptedRun,
-                );
+                ).pipe(Effect.orElseSucceed(() => false)));
             }
             // Earlier shutdown handlers interrupt the live agent sessions. Wait
-            // for runAgent to finish unwinding before the final drain releases
-            // ownership, so no transcript or checkpoint writer can race the
-            // lease release. The lifecycle host's phase deadline bounds this
-            // wait by interrupting it. Once durable resumability and lease
-            // availability have been established, however, keep shutdown alive
+            // for runAgent to finish unwinding before the final drain commits
+            // the run's ending, so no transcript or checkpoint writer can race
+            // it. This step's deadline bounds this wait by interrupting it.
+            // Once durable resumability has been established, however, keep
+            // shutdown alive
             // until the promised recovery notice has been flushed — that wait
             // is uninterruptible precisely because it outranks the deadline.
             if (advertisesCheckpoint && options.onInterruptedRunFinalized) {
@@ -522,6 +517,29 @@ export function executeCliRequest(
         );
       }),
     );
+    // Registered only once `shutdownStatus` exists: a shutdown scope already
+    // closing runs this finalizer at once. A child of the process's shutdown
+    // scope, so a shutdown runs this step
+    // before it closes the sessions; closed with the step disarmed once the
+    // run has settled here, so a completed run leaves nothing behind.
+    const shutdownStatusScope = yield* Scope.fork(options.shutdownScope);
+    let shutdownStatusArmed = true;
+    yield* Scope.addFinalizer(
+      shutdownStatusScope,
+      Effect.suspend(() =>
+        shutdownStatusArmed ? shutdownStatus : Effect.void,
+      ).pipe(
+        // The step's one deadline: the same budget a session close spends,
+        // so a run that never unwinds cannot hold SIGTERM open. Its
+        // uninterruptible wait for a promised recovery notice still finishes.
+        Effect.timeoutOption(SESSION_CLOSE_DEADLINE_MS),
+        Effect.catchCause((cause) =>
+          Effect.logError("The run's shutdown step failed").pipe(
+            Effect.annotateLogs({ data: Cause.squash(cause) }),
+          ),
+        ),
+      ),
+    );
     const openWorkflowOutput = options.openWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>
       agentRuns.launch(request, {
@@ -537,7 +555,7 @@ export function executeCliRequest(
                   tryCommitWorkflowOutputPublication,
                 ),
         modelCompatibilityKey: options.modelCompatibilityKey,
-        beforeLeaseRelease: () =>
+        beforeRunEnd: () =>
           Effect.gen(function* () {
             const handled = yield* finalizeShutdownStatus;
             if (
@@ -550,7 +568,7 @@ export function executeCliRequest(
             }
             return handled;
           }),
-        onRunLeaseAcquired: (runId) => {
+        onRunClaimed: (runId) => {
           ownedRunId = runId;
         },
         stopAfterCycle: options.stopAfterCycle,
@@ -609,7 +627,8 @@ export function executeCliRequest(
       }
     }
 
-    disposeShutdownStatus.dispose();
+    shutdownStatusArmed = false;
+    yield* Scope.close(shutdownStatusScope, Exit.void);
     const cleanupFailures: unknown[] = [];
     const finalization = yield* Effect.result(
       Effect.gen(function* () {
@@ -638,16 +657,16 @@ export function executeCliRequest(
         cleanupFailures,
         'CLI run cleanup encountered multiple failures',
       );
-      if (primaryRunFailure) {
-        throw aggregateError(
-          [primaryRunFailure.error, cleanupFailure],
-          'CLI run failed and its final artifacts could not be persisted',
-        );
-      }
-      throw cleanupFailure;
+      return yield* Effect.die(
+        primaryRunFailure
+          ? aggregateError(
+              [primaryRunFailure.error, cleanupFailure],
+              'CLI run failed and its final artifacts could not be persisted',
+            )
+          : cleanupFailure,
+      );
     }
-    if (primaryRunFailure) throw primaryRunFailure.error;
-
+    if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
     if (!runResult.ok) {
       return {
         ok: false as const,

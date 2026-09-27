@@ -10,8 +10,11 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { launchApprovalOptions } from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { RUN_OUTCOME, type RunId } from '@shared/schemas';
+import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   fakeProcessServices,
   setupPlatform,
@@ -48,19 +51,29 @@ function runFlow(...args: Parameters<typeof runFlowWithLifecycle<never>>) {
  * finalizer writes is the run's one terminal fact, and `onResult` is how the
  * runtime hands it to in-process consumers.
  */
-function setupResultCase(session?: SessionHandle): {
+function setupResultCase(owner?: {
+  session: SessionHandle;
+  parentRunId: RunId;
+}): {
   logger: TraceEmitter;
   results: ResultEvent[];
   ctx: AgentLaunchContext;
 } {
-  const logger = new TraceEmitter();
   const n = counter++;
   const runId = `e${n.toString(16).padStart(5, '0')}` as RunId;
+  // A caller-owned session gets the run's existence fact with the parent
+  // edge it is exercising, then hears the run's trace, as a launched run's
+  // session does.
+  const session = owner?.session;
+  if (owner) {
+    publishTestRunStart(owner.session, runId, { parent: owner.parentRunId });
+  }
+  const logger = owner
+    ? new TraceEmitter((event) => owner.session.publishRunEvent(runId, event))
+    : new TraceEmitter();
   const ctx = createTestLaunchContext({ runId, logger, session });
   const runSession = ctx.session;
-  // A caller that owns the session publishes the existence fact itself, with
-  // the parent edge it is exercising.
-  if (!session) publishTestRunStart(runSession, runId);
+  if (!owner) publishTestRunStart(runSession, runId);
   const results: ResultEvent[] = [];
   runSession.onResult((event) =>
     Effect.sync(() => {
@@ -141,6 +154,34 @@ describe('terminal result event', () => {
     }),
   );
 
+  // The launch-time approval choice rides on onRun: it must be in force
+  // before the run's first step, or an approval could open ahead of it.
+  it.effect('an Auto-approve launch is bypassed before the run starts', () =>
+    Effect.gen(function* () {
+      const { ctx } = setupResultCase();
+      const { approvals } = ctx.session;
+      const launch = LaunchSurfaceSchema.parse({ approval: 'autoApprove' });
+      let atFirstStep: ReturnType<typeof approvals.bypassesFor> | undefined;
+      yield* runFlow(
+        ctx,
+        () =>
+          Effect.sync(() => {
+            atFirstStep = approvals.bypassesFor(ctx.runId);
+            return completedRun(ctx);
+          }),
+        launchApprovalOptions(
+          { kind: 'launch', launch, instruction: '' },
+          approvals,
+        ),
+      );
+      expect(atFirstStep).toEqual({
+        bash: true,
+        toolEdit: true,
+        superYolo: true,
+      });
+    }),
+  );
+
   it.effect(
     'emits the failed result even if ending the parent stage throws',
     () =>
@@ -188,12 +229,8 @@ describe('terminal result event', () => {
     Effect.gen(function* () {
       const session = createTestSession();
       const onResult = vi.fn((_event: ResultEvent) => Effect.void);
-      const { logger, ctx } = setupResultCase(session);
       const parentRunId = publishTestRunStart(session);
-      publishTestRunStart(session, ctx.runId, {
-        parent: parentRunId,
-      });
-      const detach = session.attachRunTrace(logger, ctx.runId);
+      const { logger, ctx } = setupResultCase({ session, parentRunId });
       session.onResult(onResult);
       try {
         yield* runFlow(ctx, () => Effect.succeed(completedRun(ctx)), {
@@ -207,8 +244,8 @@ describe('terminal result event', () => {
           outcome: 'completed',
         });
       } finally {
-        detach();
-        yield* session.dispose();
+        logger.close();
+        yield* closeSessionOf(session);
       }
     }),
   );

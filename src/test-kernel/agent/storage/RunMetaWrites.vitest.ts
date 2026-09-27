@@ -98,12 +98,9 @@ describe('run metadata updates', () => {
           snapshotRow(id, opening, {
             phase: 'initial',
             state: {
-              family: 'toolUse',
-              state: {
-                stateSlices: null,
-                offeredTools: [],
-                toolsetHash: '0'.repeat(64),
-              },
+              stateSlices: null,
+              offeredTools: [],
+              toolsetHash: '0'.repeat(64),
             },
           }),
         ]);

@@ -387,8 +387,7 @@ export function incrementalStaticTranscriptEntries(
     key: readonly [number, number];
   }> = [];
   let scannedIndex = start;
-  for (let index = 0; index < suffix.length; index += 1) {
-    const entry = suffix[index]!;
+  for (const [index, entry] of suffix.entries()) {
     if (!isFinalizedTranscriptRow(start + index, settledRows)) {
       break;
     }

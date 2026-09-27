@@ -185,12 +185,6 @@
       "file": "packages/cli/src/chat/tui/render/ansiMarkdown.ts",
       "category": "production-dead",
       "kind": "exports",
-      "name": "_ansiMarkdownStatsForTests"
-    },
-    {
-      "file": "packages/cli/src/chat/tui/render/ansiMarkdown.ts",
-      "category": "production-dead",
-      "kind": "exports",
       "name": "_resetAnsiMarkdownForTests"
     },
     {
@@ -272,22 +266,10 @@
       "name": "runHeadlessAgent"
     },
     {
-      "file": "packages/cli/src/runtime/apiStatus.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "formatPersonalApiKeysLine"
-    },
-    {
       "file": "packages/cli/src/runtime/cliContext.ts",
       "category": "production-dead",
       "kind": "exports",
       "name": "resolveStreamColor"
-    },
-    {
-      "file": "packages/cli/src/runtime/cliSecrets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cliSecretsPath"
     },
     {
       "file": "packages/cli/src/runtime/doctor.ts",
@@ -578,24 +560,6 @@
       "name": "STATE_SETTINGS"
     },
     {
-      "file": "src/shared/subagentFollowup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "stripOrchestratorFollowup"
-    },
-    {
-      "file": "src/shared/subagentFollowup.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "summarizeSubagentFollowup"
-    },
-    {
-      "file": "src/shared/utils/dispatcher.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "assertSupported"
-    },
-    {
       "file": "src/tools/claudeAgent.ts",
       "category": "production-dead",
       "kind": "exports",
@@ -610,20 +574,8 @@
     {
       "file": "src/tools/github/PRPollingSource.ts",
       "category": "production-dead",
-      "kind": "exports",
-      "name": "PRPollingSource"
-    },
-    {
-      "file": "src/tools/github/PRPollingSource.ts",
-      "category": "production-dead",
       "kind": "types",
       "name": "PRCurrentShaState"
-    },
-    {
-      "file": "src/tools/github/PRPollingSource.ts",
-      "category": "production-dead",
-      "kind": "types",
-      "name": "PRSubscriptionState"
     },
     {
       "file": "src/tools/github/githubSubscriptionTool.ts",

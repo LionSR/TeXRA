@@ -1,114 +1,93 @@
 import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { describe, expect } from 'vitest';
+import { Effect, Layer } from 'effect';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import {
+  detectLatexSettingsStatus,
+  isAllowedLatexInstallCommand,
+} from '@controllers/settingsView/LatexToolingController';
 import { DEFAULT_LATEX_SETTINGS_STATUS } from '@shared/settingsView/settingsViewMessages';
 import {
   HOMEBREW_INSTALL_COMMAND,
-  type OSPlatform,
+  normalizePlatform,
 } from '@shared/constants/latexToolchain';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
+import { SetupPlatform } from '@tools/setup/platform';
 
-/** The controller's deps and probe-tool names are file-local; derive them. */
-type LatexToolingControllerDeps = ConstructorParameters<
-  typeof LatexToolingController
->[0];
-type LatexPathTool = Parameters<LatexToolingControllerDeps['findPath']>[0];
+/** The probes the status reads, doubled so no tool is spawned. */
+const probes = vi.hoisted(() => ({
+  installed: new Set<string>(),
+  checkToolInstalled: vi.fn<(tool: string) => boolean>(),
+}));
 
-const INSTALLED_TOOLS = {
-  pdflatex: false,
-  latexmk: false,
-  latexdiff: false,
-  latexindent: false,
-  perl: false,
-  texcount: false,
-  gs: false,
-  gm: false,
-  magick: false,
-};
+vi.mock('@utils/system/toolUtils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/toolUtils')>()),
+  checkToolInstalled: (tool: string) =>
+    Effect.sync(() => probes.checkToolInstalled(tool)),
+  detectPackageManager: () => null,
+}));
+vi.mock('@utils/system/binaryResolver', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@utils/system/binaryResolver')>()),
+  findToolInCommonPaths: () => Effect.succeed(null),
+}));
 
-function createController(
-  options?: Partial<{
-    installedTools: Partial<Record<keyof typeof INSTALLED_TOOLS, boolean>>;
-    paths: Partial<Record<LatexPathTool, string | null>>;
-    platform: OSPlatform;
-    packageManager: 'brew' | 'apt' | 'scoop' | null;
-    extensionInstalled: boolean;
-    outDir: boolean;
-    autoRevealExclude: boolean;
-    onDetectionError: (error: unknown) => void;
-  }>,
-): LatexToolingController {
-  const installedTools = {
-    ...INSTALLED_TOOLS,
-    ...options?.installedTools,
-  };
-  const paths = options?.paths ?? {};
-  const deps: LatexToolingControllerDeps = {
-    checkToolInstalled: (tool) => Effect.succeed(installedTools[tool]),
-    findPath: (tool) => Effect.succeed(paths[tool] ?? null),
-    detectPackageManager: () => options?.packageManager ?? null,
-    getPlatform: () => options?.platform ?? 'linux',
-    isLatexWorkshopInstalled: () => options?.extensionInstalled ?? false,
-    getRecommendedStatus: () => ({
-      outDir: options?.outDir ?? false,
-      autoRevealExclude: options?.autoRevealExclude ?? false,
-    }),
-    onDetectionError: options?.onDetectionError,
-  };
-  return new LatexToolingController(deps);
-}
+/** A host with no extension surface; the spawner is mocked out above. */
+const layer = Layer.merge(
+  nodeSpawnerLayer,
+  SetupPlatform.layer({
+    host: 'desktop',
+    signIn: () => Effect.succeed(false),
+  }),
+);
 
 describe('LatexToolingController', () => {
+  beforeEach(() => {
+    probes.installed.clear();
+    probes.checkToolInstalled.mockImplementation((tool) =>
+      probes.installed.has(tool),
+    );
+  });
+
   it.effect(
     'keeps compound dependency flags false until every required tool is present',
     () =>
       Effect.gen(function* () {
-        const status = yield* createController({
-          installedTools: {
-            pdflatex: true,
-            latexindent: true,
-            gs: true,
-          },
-        }).detectStatus();
+        for (const tool of ['pdflatex', 'latexindent', 'gs']) {
+          probes.installed.add(tool);
+        }
+        const status = yield* detectLatexSettingsStatus({
+          outDir: false,
+          autoRevealExclude: false,
+        });
 
         expect(status.texDistributionInstalled).toBe(true);
         expect(status.latexindentInstalled).toBe(false);
         expect(status.imageProcessingInstalled).toBe(false);
-      }).pipe(Effect.provide(nodeSpawnerLayer)),
+        // No extension surface on this host.
+        expect(status.latexWorkshopInstalled).toBe(false);
+      }).pipe(Effect.provide(layer)),
   );
 
   it.effect('falls back to defaults when detection fails', () =>
     Effect.gen(function* () {
-      const errors: unknown[] = [];
-      const controller = new LatexToolingController({
-        checkToolInstalled: () =>
-          Effect.sync(() => {
-            throw new Error('probe failed');
-          }),
-        findPath: () => Effect.succeed(null),
-        detectPackageManager: () => 'apt',
-        getPlatform: () => 'win32',
-        isLatexWorkshopInstalled: () => true,
-        getRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
-        onDetectionError: (error) => errors.push(error),
+      probes.checkToolInstalled.mockImplementation(() => {
+        throw new Error('probe failed');
       });
 
-      expect(yield* controller.detectStatus()).toStrictEqual({
+      expect(
+        yield* detectLatexSettingsStatus({
+          outDir: true,
+          autoRevealExclude: true,
+        }),
+      ).toStrictEqual({
         ...DEFAULT_LATEX_SETTINGS_STATUS,
-        platform: 'win32',
+        platform: normalizePlatform(process.platform),
       });
-      expect(errors).toHaveLength(1);
-    }).pipe(Effect.provide(nodeSpawnerLayer)),
+    }).pipe(Effect.provide(layer)),
   );
 
   it('allowlists structured install commands only', () => {
-    const controller = createController();
-
-    expect(controller.isAllowedInstallCommand(HOMEBREW_INSTALL_COMMAND)).toBe(
-      true,
-    );
-    expect(controller.isAllowedInstallCommand('rm -rf ~/.texra')).toBe(false);
+    expect(isAllowedLatexInstallCommand(HOMEBREW_INSTALL_COMMAND)).toBe(true);
+    expect(isAllowedLatexInstallCommand('rm -rf ~/.texra')).toBe(false);
   });
 });

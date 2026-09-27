@@ -1,5 +1,5 @@
 // Third-party imports
-import { structuredPatch, type StructuredPatchHunk } from 'diff';
+import { diffLines, structuredPatch, type StructuredPatchHunk } from 'diff';
 import { Effect } from 'effect';
 
 // Local imports - common
@@ -31,6 +31,115 @@ function toLines(text: string): string[] {
 export interface DiffHunks {
   readonly hunks: StructuredPatchHunk[];
   readonly timeout: string | undefined;
+}
+
+/** Lines with their terminators, so a missing final newline is a change. */
+function toTerminatedLines(text: string): string[] {
+  return text.match(/[^\n]*\n|[^\n]+$/g) ?? [];
+}
+
+/** One changed region of a base text: base lines `[start, end)` replaced. */
+interface Replacement {
+  readonly start: number;
+  readonly end: number;
+  readonly lines: readonly string[];
+}
+
+/**
+ * The regions `next` changes in `base`, aligned by the line diff every
+ * rendered diff uses, or `undefined` past its bound.
+ */
+function replacementsOf(base: string, next: string): Replacement[] | undefined {
+  const changes = diffLines(base, next, { timeout: DIFF_TIMEOUT_MS });
+  if (changes === undefined) return undefined;
+  const replacements: Replacement[] = [];
+  let at = 0;
+  let open: { start: number; end: number; lines: string[] } | undefined;
+  for (const change of changes) {
+    if (!change.added && !change.removed) {
+      if (open) replacements.push(open);
+      open = undefined;
+      at += change.count;
+      continue;
+    }
+    open ??= { start: at, end: at, lines: [] };
+    if (change.removed) {
+      at += change.count;
+      open.end = at;
+    } else {
+      open.lines.push(...toTerminatedLines(change.value));
+    }
+  }
+  if (open) replacements.push(open);
+  return replacements;
+}
+
+/**
+ * The base span a region could occupy under any equally good alignment:
+ * it slides across a neighbouring line equal to the line it would wrap
+ * around, on each side it removes and on each side it adds.
+ */
+function slideSpan(
+  base: readonly string[],
+  { start, end, lines }: Replacement,
+): { readonly start: number; readonly end: number } {
+  const removes = end > start;
+  const adds = lines.length > 0;
+  let left = 0;
+  while (
+    start - left > 0 &&
+    (!removes || base[start - left - 1] === base[end - left - 1]) &&
+    (!adds ||
+      base[start - left - 1] ===
+        lines[lines.length - 1 - (left % lines.length)])
+  ) {
+    left += 1;
+  }
+  let right = 0;
+  while (
+    end + right < base.length &&
+    (!removes || base[end + right] === base[start + right]) &&
+    (!adds || base[end + right] === lines[right % lines.length])
+  ) {
+    right += 1;
+  }
+  return { start: start - left, end: end + right };
+}
+
+/**
+ * The edit from `oldText` to `newText` applied onto `targetText`, a version
+ * of the file that moved on meanwhile, or `undefined` when it does not apply.
+ * A three-way merge by position in `oldText`: both sides' changed regions
+ * are located there, and a conflict is any pair that overlaps or touches
+ * under some placement either region could equally have had, so neither an
+ * ambiguous alignment nor a duplicate of the edited lines elsewhere can move
+ * the edit. A diff that runs past {@link DIFF_TIMEOUT_MS} is a conflict too.
+ */
+export function mergeEditOnto(
+  oldText: string,
+  newText: string,
+  targetText: string,
+): string | undefined {
+  const base = toTerminatedLines(oldText);
+  const ours = replacementsOf(oldText, newText);
+  const theirs = replacementsOf(oldText, targetText);
+  if (ours === undefined || theirs === undefined) return undefined;
+  const oursSpans = ours.map((mine) => slideSpan(base, mine));
+  const clash = theirs.some((other) => {
+    const span = slideSpan(base, other);
+    return oursSpans.some(
+      (mine) => mine.start <= span.end && span.start <= mine.end,
+    );
+  });
+  if (clash) return undefined;
+  const merged: string[] = [];
+  let at = 0;
+  for (const change of [...ours, ...theirs].sort((a, b) => a.start - b.start)) {
+    merged.push(...base.slice(at, change.start), ...change.lines);
+    at = change.end;
+  }
+  merged.push(...base.slice(at));
+  return merged.join('');
 }
 
 /**

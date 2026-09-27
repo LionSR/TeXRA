@@ -51,8 +51,8 @@ fifth — hosted tools — by ruling rather than implementation.
 `packages/llm` is a pure workspace package (19 files, about 10.75k lines): zero
 `platform()`, zero `Effect.run*`, zero `AbortController`; dependencies are the
 provider SDKs, `ws`, and `effect`/`zod` as peers. The `Model` contract is
-`prepareTurn`, then `streamTurn` or `generateTurn`, where `generateTurn` is a
-fold over the stream so the two cannot diverge. Twelve protocols through six
+`prepareTurn`, then `streamTurn`; a caller that wants only the result folds
+the stream with `completedTurn`, so there is no second path to diverge. Twelve protocols through six
 factories plus the VS Code language-model host. Retry and pricing sit in the
 runtime. The model-handler hierarchy has zero references (#12320); every
 route, helper, tool-use and reflection call goes through `ModelInvoker`.

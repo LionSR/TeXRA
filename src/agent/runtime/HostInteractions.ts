@@ -1,8 +1,7 @@
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { throwAggregated } from '@utils/core';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
@@ -295,35 +294,30 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   /**
-   * Dispose every attachment, newest first. Every host is disposed even when
-   * an earlier one fails, and every failure is reported: the program ends by
-   * raising them as one aggregate, which the session's teardown collects
-   * beside its other owners' — never all but the first, as the `firstError`
-   * this replaced did.
+   * Dispose every attachment, newest first. Each host's dispose is a scope
+   * finalizer, so every host is disposed even when an earlier one fails, and
+   * every failure is its own reason in the defect the close raises, which the
+   * session's teardown collects beside its other owners'.
    */
   dispose(): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
       this.disposed = true;
-      const pending = this.attachments.toReversed().filter((attachment) => {
+      const pending = this.attachments.filter((attachment) => {
         if (attachment.disposed) return false;
         attachment.disposed = true;
         return true;
       });
       this.attachments.length = 0;
       this.pendingPresentationReplays.length = 0;
-      return Effect.forEach(pending, (attachment) =>
-        Effect.exit(Effect.sync(() => attachment.interactions.dispose?.())),
-      ).pipe(
-        Effect.flatMap((exits) =>
-          Effect.sync(() => {
-            throwAggregated(
-              exits.flatMap((exit) =>
-                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-              ),
-              'Host interaction attachments failed to dispose',
-            );
-          }),
+      return Effect.scoped(
+        Effect.forEach(
+          pending,
+          (attachment) =>
+            Effect.addFinalizer(() =>
+              Effect.sync(() => attachment.interactions.dispose?.()),
+            ),
+          { discard: true },
         ),
       );
     });

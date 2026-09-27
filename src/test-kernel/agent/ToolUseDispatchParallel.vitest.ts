@@ -53,7 +53,6 @@ import { makeRunCell } from '@agent/runtime/loop/runProgram';
 import { dispatchPendingResponse } from '@agent/runtime/loop/toolUseDispatch';
 import {
   appendRow,
-  familyState,
   rowAggregate,
   snapshotRow,
   type ToolUseFlowState,
@@ -75,6 +74,7 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -174,7 +174,6 @@ function boundModel(): BoundModel {
   const model: Model = {
     prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
     streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
-    generateTurn: () => Effect.die(new Error('dispatch issues no turn')),
   };
   return {
     modelId: 'gpt54',
@@ -210,7 +209,6 @@ const freshState = (): RunState => ({
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -226,7 +224,7 @@ const freshState = (): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
 });
 
 const INVOCATION = {
@@ -344,12 +342,9 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: options.stateSlices ?? null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: options.stateSlices ?? null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);
@@ -480,7 +475,7 @@ describe('tool-use dispatch', () => {
       const saved = yield* kit.session.ledger.load(kit.runId);
       expect(Object.keys(saved?.pendingResponse?.settled ?? {})).toEqual([]);
       expect(saved?.pendingResponse).not.toBeNull();
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -514,7 +509,7 @@ describe('tool-use dispatch', () => {
       expect(delivered?.text).toMatch(
         /malformed_attachment: Tool returned an invalid result/i,
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -547,7 +542,7 @@ describe('tool-use dispatch', () => {
       const [delivered] = deliveredResults(state);
       expect(delivered?.status).toBe('error');
       expect(delivered?.text).toMatch(/Invalid input/);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -585,7 +580,7 @@ describe('tool-use dispatch', () => {
 
       expect(observedInstruction).toBe('Do not use files or external tools.');
       expect(observedTrace).toBe(noopTrace);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -612,9 +607,8 @@ describe('tool-use dispatch', () => {
             return { status: 'executed', output: 'ok' };
           }),
         } as ITool;
-        const trace = new TraceEmitter();
         const events: AgentEvent[] = [];
-        trace.subscribe((event) => events.push(event));
+        const trace = new TraceEmitter((event) => events.push(event));
         const kit = yield* openDispatch({
           tools: { delegate },
           calls: [makeCall('c1', 'delegate', {})],
@@ -640,7 +634,7 @@ describe('tool-use dispatch', () => {
               ),
           ),
         ).toHaveLength(1);
-        yield* kit.session.dispose();
+        yield* closeSessionOf(kit.session);
       }),
   );
 
@@ -668,7 +662,7 @@ describe('tool-use dispatch', () => {
       expect(deliveredResults(state)[0]?.text).toContain(
         'grep:{"pattern":"a"}',
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -698,7 +692,7 @@ describe('tool-use dispatch', () => {
         'start read_file:{"n":3}',
         'end read_file:{"n":3}',
       ]);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -731,7 +725,7 @@ describe('tool-use dispatch', () => {
       expect(delivered[1]?.text).toContain(
         'an earlier tool call ended the turn',
       );
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -755,7 +749,7 @@ describe('tool-use dispatch', () => {
         const delivered = deliveredResults(state);
         expect(delivered[1]?.status).toBe('success');
         expect(delivered[1]?.text).toBe(delivered[0]?.text);
-        yield* kit.session.dispose();
+        yield* closeSessionOf(kit.session);
       }),
   );
 
@@ -815,7 +809,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = familyState(folded!, 'toolUse')?.stateSlices;
+      const slices = folded!.flow?.state.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);
@@ -831,7 +825,7 @@ describe('tool-use dispatch', () => {
       );
       expect(types.filter((type) => type === 'tool.start')).toHaveLength(1);
       expect(types.filter((type) => type === 'tool.end')).toHaveLength(1);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -885,7 +879,7 @@ describe('tool-use dispatch', () => {
         pending?.calls.find((fact) => fact.callId === 'c3')?.duplicateOf,
       ).toBe('c1');
       expect(countStarts(probe, 'grep')).toBe(1);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -911,7 +905,7 @@ describe('tool-use dispatch', () => {
       // model stale contents.
       expect(countStarts(probe, 'read_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -936,7 +930,7 @@ describe('tool-use dispatch', () => {
       // plausible restore — it must execute, not be swallowed as a glitch.
       expect(countStarts(probe, 'write_file')).toBe(2);
       expect(deliveredResults(state)[2]?.status).toBe('success');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -959,7 +953,7 @@ describe('tool-use dispatch', () => {
       // Accidental re-emissions get the primary's result, not an error.
       expect(delivered[1]?.status).toBe('success');
       expect(delivered[1]?.text).toBe(delivered[0]?.text);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -1025,7 +1019,7 @@ describe('tool-use dispatch', () => {
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },
           { kind: 'document', mimeType: 'application/pdf', base64: pdf },
         ]);
-        yield* kit.session.dispose();
+        yield* closeSessionOf(kit.session);
       }),
   );
 
@@ -1083,7 +1077,7 @@ describe('tool-use dispatch', () => {
         expect.stringContaining('"a.pdf", "b.pdf", "c.pdf", "d.pdf", "e.pdf"'),
       ]);
       expect(outcome.state.messages.at(-1)?.role).toBe('tool');
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 
@@ -1132,7 +1126,7 @@ describe('tool-use dispatch', () => {
       expect(group.results[0]?.content.slice(1)).toStrictEqual([
         { kind: 'document', mimeType: 'application/pdf', base64: pdf },
       ]);
-      yield* kit.session.dispose();
+      yield* closeSessionOf(kit.session);
     }),
   );
 });

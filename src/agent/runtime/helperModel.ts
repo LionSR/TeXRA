@@ -8,6 +8,7 @@
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { Data, Effect, Schedule, type Scope } from 'effect';
+import { completedTurn } from '@texra-ai/llm/turn';
 
 import {
   modelUnavailableReasonFrom,
@@ -100,7 +101,7 @@ export const helperCompletion = Effect.fn('helperCompletion')(function* (
       new Error('A helper turn prepared as background work.'),
     );
   }
-  const turn = yield* bound.model.generateTurn(resolved).pipe(
+  const turn = yield* completedTurn(bound.model.streamTurn(resolved)).pipe(
     Effect.retry({
       schedule: HELPER_RETRY,
       times: HELPER_RETRIES,

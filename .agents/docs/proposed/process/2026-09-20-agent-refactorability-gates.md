@@ -105,7 +105,7 @@ Changes:
 `desktop/main/index.ts` 2 074, `turn.ts` 2 063, `sessionFold.ts` 1 983).
 Add a shrink-only per-file line budget, the same mechanism as the other
 ratchets. The `unknown` error-channel ratchet is specified in the
-[Effect adoption](../simplification/2026-09-20-effect-facility-adoption.md)
+[Effect adoption](../../implemented/simplification/2026-09-20-effect-facility-adoption.md)
 note.
 
 ## 5. Apparatus

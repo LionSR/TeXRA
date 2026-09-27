@@ -212,7 +212,7 @@ A runnable version of this program against a packed tarball is in
 ## The platform
 
 Every run needs an `AgentPlatform`: the process services the package
-composes (the shutdown lifecycle, the agent directories, secrets, the resume
+composes (the agent directories, secrets, the resume
 and language-model ports, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the

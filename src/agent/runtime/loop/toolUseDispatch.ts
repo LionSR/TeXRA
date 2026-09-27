@@ -42,6 +42,7 @@ import {
 } from '@shared/schemas';
 import { JsonValueSchema } from '@shared/schemas';
 import { findStorageRefusal } from '@shared/session/runLedger';
+import { deriveToolInputPreview } from '@shared/tools/toolInputPreview';
 import {
   type RunLedgerDraft,
   type RunState,
@@ -64,7 +65,6 @@ import {
   appendRow,
   bindingRow,
   displayRow,
-  familyState,
   redactedForFact,
   rowAggregate,
   snapshotRow,
@@ -244,10 +244,12 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Dispatch every unsettled call of the pending response, then deliver. */
+/** Dispatch every unsettled call of the pending response, then deliver,
+ *  with the `joined` rows committed after the tool group. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   turn: TurnContext,
+  joined: readonly RunLedgerDraft[] = [],
 ): Effect.fn.Return<
   DispatchOutcome,
   InvokeError,
@@ -279,8 +281,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    const flow = familyState(state, 'toolUse');
-    if (flow === null || flow.stateSlices === null) return [];
+    if (state.flow?.state.stateSlices == null) return [];
     return [
       {
         op: 'set',
@@ -591,6 +592,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const decideOutcomeUnknown = Effect.fn('toolUse.outcomeUnknown')(function* (
     fact: DispatchFacts,
     call: LocalCall,
+    input: unknown,
     intent: {
       readonly attempt: number;
       readonly approvalRequestId: string | null;
@@ -632,6 +634,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         ? intent.approvalRequestId
         : null;
     const requestId = standing ?? `tool-outcome-${generateShortId()}`;
+    const preview = deriveToolInputPreview(fact.toolName, input);
     const request = {
       requestId,
       allowBypass: false,
@@ -639,7 +642,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       questions: [
         {
           question,
-          header: 'Tool',
+          header: 'Tool outcome',
           options: [
             { label: rerunOption, description: 'Execute the call once more.' },
             {
@@ -649,7 +652,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
           ],
         },
       ],
-      context: call.argumentsText,
+      context: preview ? `${fact.toolName}: ${preview}` : fact.toolName,
     };
     // A request row is committed whenever no live request stands: the call
     // never raised one, or the one it raised was retired without a decision
@@ -752,10 +755,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     }
     const intent = current.pendingIntents[fact.callId];
     if (intent !== undefined) {
-      const decision = yield* decideOutcomeUnknown(fact, call, intent);
+      const input = parseCallArguments(call, logger);
+      const decision = yield* decideOutcomeUnknown(fact, call, input, intent);
       if (decision === 'skip') {
         // The skip closes the card the interrupted attempt opened.
-        const input = parseCallArguments(call, logger);
         yield* settle(
           fact,
           intent.attempt,
@@ -943,8 +946,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = familyState(settledState, 'toolUse');
-  if (flow === null) {
+  const flow = settledState.flow?.state;
+  if (flow === undefined) {
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   }
   const stateSlices =
@@ -958,9 +961,10 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         };
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
+    ...joined,
     snapshotRow(runId, state, {
       phase: 'results.ready',
-      state: { family: 'toolUse', state: { ...flow, stateSlices } },
+      state: { ...flow, stateSlices },
     }),
     stepRow(runId, state, 'results.ready'),
   ]);

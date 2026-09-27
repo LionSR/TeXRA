@@ -27,7 +27,10 @@ import {
   attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
@@ -54,7 +57,6 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -67,10 +69,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
+import {
+  AgentDirectories,
+  type StateStore,
+  type StateReadFailed,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -284,7 +287,7 @@ export function createExtensionHostRequests(
       mergeFile: (baseFile, editedFile) =>
         runCommand('texra.merge', baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        runCommand('texra.latexdiff', baseFile, editedFile),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -421,9 +424,10 @@ export function createExtensionHostRequests(
         session.roots.workspaceState,
         session.roots.storage,
       );
-      yield* runValidated(prepared).pipe(
-        Effect.mapError((cause) => hostFailure('runValidated', cause)),
-      );
+      yield* runValidated(
+        prepared,
+        launchApprovalOptions(request, session.approvals),
+      ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
     });
   }
 
@@ -585,9 +589,7 @@ export function createExtensionHostRequests(
     openPath: (file, line) => commandVerb('texra.openFile', file, line),
     openLabel: (label) =>
       Effect.map(
-        runCommand<boolean>('texra.openLabel', label, {
-          notifyNotFound: false,
-        }),
+        runCommand<boolean>('texra.openLabel', label),
         (opened) => opened === true,
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
@@ -597,19 +599,7 @@ export function createExtensionHostRequests(
     runWorkflowFileOperation: (operation, request) =>
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      action === 'latexdiffvc'
-        ? commandVerb('texra.latexdiffvc', undefined, baseFile, commit)
-        : commandVerb(
-            `texra.${action}`,
-            undefined,
-            baseFile,
-            commit,
-            action === 'cleanLatexdiffvc',
-          ),
-    mergeFiles: (baseFile, editedFile) =>
-      commandVerb('texra.merge', baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
+      commandVerb(`texra.${action}`, baseFile, commit),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');
@@ -635,7 +625,7 @@ export function createExtensionHostRequests(
         sessionType === 'toolUse' ? 'toolUse' : undefined,
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const dir = yield* agentDirectories.custom();
+      const dir = yield* (yield* AgentDirectories).custom();
       if (dir) {
         yield* fromHost('revealFileInOS', () =>
           vscode.commands.executeCommand(

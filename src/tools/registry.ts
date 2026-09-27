@@ -138,6 +138,7 @@ const PLUGIN_TOOLS = {
     accept_run_files: AcceptRunFilesTool,
   },
   goal: { plan: PlanTool },
+  documents: {},
   texcount: { texcount: TexcountTool },
   wolfram: { wolfram: WolframTool },
   zotero: {

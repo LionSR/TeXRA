@@ -1,4 +1,4 @@
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 import { MODEL_CONFIGS, type ModelConfig } from 'llm-zoo';
 /**
  * Copilot routing: the per-model preference for serving a canonical base
@@ -126,13 +126,15 @@ export const discoverCopilotRoutes = Effect.fn(
  * preference for one could never resolve to a route; it drops out at read.
  */
 export function preferredCopilotRouteModels(state: Pick<StateStore, 'get'>) {
-  return Effect.gen(function* () {
-    return (yield* state.get<readonly string[]>(
-      GlobalStateKey.COPILOT_ROUTE_MODELS,
-      [],
-    )).filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
-  });
+  return Effect.map(
+    state.get<readonly string[]>(GlobalStateKey.COPILOT_ROUTE_MODELS, []),
+    liveRouteModels,
+  );
 }
+
+/** A stored preference list without the models that left the catalog. */
+const liveRouteModels = (stored: readonly string[]) =>
+  stored.filter((model) => !isRetiredModel(model) && !isDeprecatedModel(model));
 
 /** Whether the user prefers the Copilot route for this canonical base model. */
 export function prefersCopilotRoute(
@@ -150,13 +152,16 @@ export function setCopilotRoutePreference(
   preferred: boolean,
   state: StateStore,
 ) {
-  return Effect.gen(function* () {
-    const current = yield* preferredCopilotRouteModels(state);
-    const next = preferred
-      ? [...new Set([...current, model])]
-      : current.filter((entry) => entry !== model);
-    return yield* state.update(GlobalStateKey.COPILOT_ROUTE_MODELS, next);
-  });
+  return state
+    .modify(GlobalStateKey.COPILOT_ROUTE_MODELS, (stored) => {
+      const current = liveRouteModels((stored as string[] | undefined) ?? []);
+      return Result.succeed(
+        preferred
+          ? [...new Set([...current, model])]
+          : current.filter((entry) => entry !== model),
+      );
+    })
+    .pipe(Effect.asVoid);
 }
 
 /**

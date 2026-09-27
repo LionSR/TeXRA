@@ -1,9 +1,6 @@
 // Local imports - tools
-import {
-  createBasePollState,
-  DedupedResource,
-  MAX_SEEN_IDS,
-} from '@tools/github/PollingSourceBase';
+import { createBasePollState } from '@tools/github/PollingSourceBase';
+import { DedupedResource, MAX_SEEN_IDS } from '@tools/github/pollingDedup';
 import type {
   PRCurrentShaState,
   PRSubscriptionState,
@@ -49,7 +46,7 @@ export function createPRSubscriptionState(
   return {
     pr: { owner: 'owner', repo: 'repo', pullNumber: 7 },
     slug: 'owner/repo',
-    ...createBasePollState(),
+    ...createBasePollState(0),
     initialized: true,
     issueComments: dedupedById<GhIssueComment>(),
     reviewComments: dedupedById<GhReviewComment>(),

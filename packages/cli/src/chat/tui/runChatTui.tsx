@@ -90,7 +90,10 @@ import {
 } from './state/sessionView';
 import { notifyStaticTranscriptErased } from './state/staticTranscriptRepaint';
 import { discoverTerminalCapabilities } from './state/terminalCapabilities';
-import { appendLocalAssistantTranscript } from './state/transcript';
+import {
+  appendLocalAssistantTranscript,
+  paintedRunIds,
+} from './state/transcript';
 import { openCliSlashCommandForm } from './commands/slashForms';
 import {
   checkModelConnection,
@@ -169,7 +172,11 @@ export async function runChat(
   // One startup program; an early exit is its `exitCode` arm.
   const startup = await runtime.runPromise(
     Effect.gen(function* () {
-      const services = yield* initCliPlatform({ ...context, quietLogs: true });
+      const services = yield* initCliPlatform({
+        ...context,
+        quietLogs: true,
+        presentsStoreMovedAside: true,
+      });
       const runtimeSession = yield* services.session;
       runtimeSession.setApprovalPolicy(context.approvalPolicy);
       // Without a usable credential the chat still opens: the "Connect a
@@ -319,13 +326,11 @@ export async function runChat(
 
   const disposables = new DisposableStore();
   // The one session state the TUI renders (PRD 10.1): the session's fold
-  // bridged into a signal, with every stream's transcript tier subscribed
-  // for this surface. The TUI shows the whole session, so its subscription
-  // set is the view's stream set. Bound before anything reads the view:
-  // the terminal title below derives its attention state from it on
-  // install.
+  // bridged into a signal, its transcript tier subscribed for the runs this
+  // terminal paints. Bound before anything reads the view: the terminal
+  // title below derives its attention state from it on install.
   const session = new TuiSession((runId) =>
-    runtimeSession.runs.getToolUseFlowContext(runId),
+    runtimeSession.runs.getHandle(runId)?.getToolUseFlow(),
   );
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
@@ -351,7 +356,7 @@ export async function runChat(
   disposables.add(subscribeCliCredentialChanges(runtime));
   let subscribedRuns = '';
   const syncTranscriptSubscriptions = (): void => {
-    const ids = [...currentView().runs.keys()];
+    const ids = paintedRunIds.get();
     const key = ids.join('\0');
     if (key === subscribedRuns) return;
     subscribedRuns = key;
@@ -363,7 +368,7 @@ export async function runChat(
     );
   };
   disposables.add(
-    subscribeToSignalChanges([sessionView()], syncTranscriptSubscriptions),
+    subscribeToSignalChanges([paintedRunIds], syncTranscriptSubscriptions),
   );
   syncTranscriptSubscriptions();
 
@@ -538,7 +543,6 @@ export async function runChat(
   const exitController = createSessionExitController({
     ink,
     session,
-    lifecycle: services.lifecycle,
     commandName: context.commandName,
     cwd: context.cwd,
     disposables,

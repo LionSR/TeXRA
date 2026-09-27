@@ -69,7 +69,7 @@ function childRow(child: RunView) {
 export const attachCliSessionProgressProjection = Effect.fn(
   'attachCliSessionProgressProjection',
 )(function* (
-  session: Pick<SessionHandle, 'events' | 'now' | 'view'>,
+  session: Pick<SessionHandle, 'events' | 'now' | 'view' | 'viewChanges'>,
   writeRecord: CliNdjsonProgressRecordWriter = writeNdjsonStdout,
 ) {
   // A `debug`-level `log` row is a diagnostic, not progress: it reaches the
@@ -165,9 +165,7 @@ export const attachCliSessionProgressProjection = Effect.fn(
     ),
     // The roster's own source: the fold, whose every level is a candidate.
     yield* fork(
-      Stream.runForEach(SubscriptionRef.changes(session.view), () =>
-        Effect.sync(emitRosters),
-      ),
+      Stream.runForEach(session.viewChanges, () => Effect.sync(emitRosters)),
     ),
   ];
 

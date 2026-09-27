@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Result, Scope } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -22,14 +22,12 @@ import {
   type ConfigProvider,
   type ConfigTarget,
   ConfigWriteFailed,
-  type LifecycleHost,
   type StateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { getCoreSettingDefault } from '@shared/state/stateSettings';
 import type { SetupPlatformShape } from '@tools/setup/platform';
 
@@ -241,13 +239,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     target: ConfigTarget | undefined;
   }> = [];
 
-  /**
-   * When set, `update()` calls targeting this scope throw instead of
-   * applying -- simulates a persistence failure (e.g. VS Code rejecting the
-   * write) so tests can assert on partial-migration recovery behavior.
-   */
-  failUpdatesForTarget?: ConfigTarget;
-
   get<T>(key: string, defaultValue?: T): T {
     if (this.workspaceFolderValues.has(key))
       return this.workspaceFolderValues.get(key) as T;
@@ -263,17 +254,6 @@ export class FakeScopedConfigProvider implements ConfigProvider {
     value: T,
     target?: ConfigTarget,
   ): Effect.Effect<void, ConfigWriteFailed> {
-    if (target !== undefined && target === this.failUpdatesForTarget) {
-      const message = `simulated ${target}-scope update failure for ${key}`;
-      return Effect.fail(
-        new ConfigWriteFailed({
-          key,
-          target,
-          message,
-          cause: new Error(message),
-        }),
-      );
-    }
     return Effect.sync(() => {
       this.updateCalls.push({ key, value, target });
       if (target === undefined) {
@@ -362,6 +342,19 @@ export class FakeStateStore implements StateStore {
       }
     });
   }
+
+  modify<T, E>(
+    key: string,
+    change: (current: unknown) => Result.Result<T, E>,
+  ): Effect.Effect<T, E> {
+    return Effect.suspend(() => {
+      const result = change(this.values.get(key));
+      if (Result.isFailure(result)) return Effect.fail(result.failure);
+      if (result.success === undefined) this.values.delete(key);
+      else this.values.set(key, result.success);
+      return Effect.succeed(result.success);
+    });
+  }
 }
 
 export class FakeSecrets implements PlatformSecrets {
@@ -436,10 +429,12 @@ export interface FakePlatformOptions {
   globalStoragePath?: string;
 }
 
-/** The two process ports a fake host serves as `Lifecycle` and
+/** A fake host's shutdown scope and the port it serves as
  *  `AgentDirectories`, held per host because hosts change per test. */
 export interface FakeProcessPorts {
-  readonly lifecycle: LifecycleHost;
+  /** The host's shutdown: a command that must act before its sessions close
+   *  registers in a child scope of this; closing it is the shutdown. */
+  readonly shutdownScope: Scope.Closeable;
   readonly agentDirectories: AgentDirectoriesPort;
 }
 
@@ -498,7 +493,7 @@ export function createFakePlatform(
 ): FakeProcessPorts {
   seedFakeRoot(options.files ?? {});
   return {
-    lifecycle: createLifecycleHost(),
+    shutdownScope: Scope.makeUnsafe(),
     agentDirectories: FAKE_AGENT_DIRECTORIES,
     ...overrides,
   };

@@ -36,8 +36,10 @@ import type {
 import { RunEndSchema, tallyWorkflowCalls } from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { onAbort } from '@utils/core';
+import { isPathWithin } from '@utils/core/pathCore';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
@@ -174,9 +176,20 @@ export function createWorkflowScriptStrategy(
   };
   let settledCostUsd = 0;
   // A delivered file reads as the workspace file it replaces, not the
-  // run-storage copy that carries it.
-  const workspacePath = (path: string): string =>
-    workspaceRelativePath(params.session.roots.workspace, path);
+  // run-storage copy that carries it. Its diff base can itself be run
+  // storage (the child's `original/` snapshot of the input), and then the
+  // output's round-relative name is the workspace path.
+  const deliveredPath = (output: {
+    readonly relativePath: string;
+    readonly originalPath: string | null;
+  }): string =>
+    output.originalPath === null ||
+    isPathWithin(params.session.roots.storage, output.originalPath)
+      ? stripWorkflowRoundDir(output.relativePath)
+      : workspaceRelativePath(
+          params.session.roots.workspace,
+          output.originalPath,
+        );
 
   const settleSummary = (
     run: {
@@ -206,10 +219,7 @@ export function createWorkflowScriptStrategy(
         }
         if (parsed.data.output.category === 'workflow') {
           for (const output of parsed.data.output.outputs) {
-            const path =
-              output.originalPath === null
-                ? output.relativePath
-                : workspacePath(output.originalPath);
+            const path = deliveredPath(output);
             summaryFiles.set(path, {
               path,
               added: output.added,

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -79,7 +79,7 @@ export interface ChildRunPorts {
  * Agent-CLI presentation and finalization. Native engines own their run
  * handle and terminal finalization and omit this port.
  */
-interface ChildRunPort {
+export interface ChildRunPort {
   readonly logger: AgentTrace;
   /** Show the handle to stops, once the loop has reserved their target. */
   track(): void;
@@ -352,7 +352,7 @@ function attemptTurn<TTurn, R, RTurn>(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
         // The turn summary (duration + token usage) on the child stream.
-        const wallTimeMs = Date.now() - startedAt;
+        const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loopLog(
           trace,
           'info',
@@ -582,7 +582,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   );
   const followUp: FollowUpQueueInput = {
     text: msg,
-    origin: 'subagent_result',
+    from: { kind: 'run', runId },
     deliveryId: turnDeliveryId(runId, turnKey, params.consumed),
   };
   let pending: PendingChildDelivery | undefined;
@@ -708,11 +708,11 @@ function onceAborted<A, E>(
 
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
- * interruption records the terminal outcome and releases the run's claim
- * before propagating the original cause. Post-handoff work stays outside
+ * interruption records the terminal outcome, commits the run's ending and
+ * releases its claim before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
-export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
+export function runWithLaunchGuard<A, E, R>(
   session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
@@ -729,7 +729,17 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
               : RUN_OUTCOME.FAILED,
           }),
         );
-        const released = yield* Effect.exit(session.releaseRunLease(runId));
+        // The run's ending, then its birth claim: a hold taken and let go at
+        // once releases it, since no driver ever took one.
+        const released = yield* Effect.exit(
+          session
+            .commitRunEnd(runId)
+            .pipe(
+              Effect.ensuring(
+                Effect.scoped(Effect.ignore(session.holdRunClaim(runId))),
+              ),
+            ),
+        );
         const failures: unknown[] = [];
         if (Exit.isFailure(finalized))
           failures.push(Cause.squash(finalized.cause));
@@ -908,7 +918,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 targetRunId,
                 {
                   text: formatSubagentProgress(runId, agentName, update),
-                  origin: 'subagent_result',
+                  from: { kind: 'run', runId },
                 },
                 'live_owner',
               ),
@@ -950,16 +960,27 @@ export function startChildRunLoop<TTurn, R = never>(
           };
 
     let runStarted = false;
+    // The loop's hold on the child's claim for the child's whole life: its
+    // birth claim, or — for a recovered child — the claim taken over after
+    // its prior owner is proved dead. Released once the child's ending has
+    // committed and before its final delivery, which the parent may answer
+    // at once by reading the child.
+    let releaseClaim: Effect.Effect<void> = Effect.void;
     const run = Effect.gen(function* () {
       runStarted = true;
+      releaseClaim = yield* runSession.acquireClaims(
+        aggregateId('run', runId),
+        {
+          ends: true,
+        },
+      );
       let turnIndex = 0;
       let result: TTurn | undefined;
       yield* Effect.scoped(
         Effect.gen(function* () {
           if (params.queueLease) {
-            // Only this lane's driver can adopt recovery; its terminal
-            // cleanup releases the DB claim after final delivery preparation.
-            yield* runSession.acquireClaims(aggregateId('run', runId));
+            // Only this lane's driver can adopt recovery, under the claim
+            // the loop took above.
             queueLease = runSession.followUps.claimChildRun(
               runId,
               params.queueLease,
@@ -1006,10 +1027,10 @@ export function startChildRunLoop<TTurn, R = never>(
             ),
           );
           let consumed: readonly QueuedFollowUp[] = [];
-          let turnStartedAt = Date.now();
+          let turnStart = yield* Clock.currentTimeMillis;
           const beginTurn = Effect.gen(function* () {
             turnIndex += 1;
-            turnStartedAt = Date.now();
+            turnStart = yield* Clock.currentTimeMillis;
             const turnKey = { key: attemptId, index: turnIndex };
             yield* emitTurnDiagnostic(trace, 'turn.accepted', {
               runId,
@@ -1026,7 +1047,7 @@ export function startChildRunLoop<TTurn, R = never>(
           ) =>
             Effect.gen(function* () {
               const turnKey = { key: attemptId, index: turnIndex };
-              const wallTimeMs = Date.now() - turnStartedAt;
+              const wallTimeMs = (yield* Clock.currentTimeMillis) - turnStart;
               const turnFailed = err != null || turnIsError;
 
               if (turn != null) {
@@ -1124,7 +1145,7 @@ export function startChildRunLoop<TTurn, R = never>(
               strategy.continuous ? () => launchNative : gateTurn(runner),
               loop,
               trace,
-              turnStartedAt,
+              turnStart,
             );
             if (attempt.kind === 'interrupted') break;
             const turn = attempt.kind === 'completed' ? attempt.turn : null;
@@ -1199,7 +1220,7 @@ export function startChildRunLoop<TTurn, R = never>(
             yield* commitPark(runSession, runId, 'resumed');
             consumed = taken;
             const prompts: readonly FollowUpContent[] = batch.synthetic
-              ? [{ text: batch.text, origin: 'user' }]
+              ? [{ text: batch.text, from: { kind: 'user' } }]
               : taken.map((followUp) => followUp.content);
             runner = (signal) => nextRunTurn(prompts, ports, signal);
           }
@@ -1288,9 +1309,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 }
               }),
             );
-            const released = yield* Effect.exit(
-              runSession.releaseRunLease(runId),
-            );
+            const released = yield* Effect.exit(runSession.commitRunEnd(runId));
             if (Exit.isFailure(released)) {
               yield* loopLog(
                 trace,
@@ -1300,6 +1319,7 @@ export function startChildRunLoop<TTurn, R = never>(
               );
             }
             // The parent may immediately read this child; release its claim first.
+            yield* releaseClaim;
             const delivery = yield* Effect.exit(
               submitPendingDelivery(pendingDelivery, runSession, runId, trace),
             );

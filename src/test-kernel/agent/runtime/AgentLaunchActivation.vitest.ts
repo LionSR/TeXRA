@@ -55,6 +55,7 @@ import {
   AgentCategory,
   type SessionEvent,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -175,7 +176,7 @@ const captureStartedLaunch = Effect.fn(function* (
           end: ends[0],
         } satisfies StartedLaunch;
       }),
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 });
 
@@ -329,7 +330,7 @@ describe('native agent launch activation', () => {
         mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
 
         const session = createTestSession();
-        yield* Effect.addFinalizer(() => session.dispose());
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
         const described = AgentConfigSchema.parse({
           agent: 'chat',
           model: 'gpt55',

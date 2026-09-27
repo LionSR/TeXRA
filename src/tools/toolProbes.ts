@@ -247,26 +247,8 @@ function wslInstallHint(): string {
   return isWSL ? ' (run this inside WSL, not on the Windows side)' : '';
 }
 
-/**
- * Availability check shared by the SDK-backed CLI integrations (Codex, Claude
- * Code): present when its SDK imports and the native binary resolves.
- */
-export function probeSdkBinaryAvailable(
-  importSdk: () => Effect.Effect<unknown, Error>,
-  findBinary: () => Effect.Effect<
-    string | undefined,
-    Error,
-    ChildProcessSpawner
-  >,
-): Effect.Effect<boolean, never, ChildProcessSpawner> {
-  return Effect.gen(function* () {
-    yield* importProbedSdk(importSdk);
-    return (yield* findProbedBinary(findBinary)) != null;
-  }).pipe(Effect.catch(() => Effect.succeed(false)));
-}
-
 /** Resolved status of an SDK-backed CLI integration for the dashboard. */
-type SdkBinaryStatus =
+export type SdkBinaryStatus =
   { ok: false; message: string } | { ok: true; binaryPath: string };
 
 /**
@@ -327,7 +309,8 @@ export function probeSdkBinaryStatus(config: {
  * once, here, in `resolve`: a cache miss re-derives it via the entry's own
  * `fallback`, and a hit is cast back to `T`, safe because the value only ever
  * originated from this entry's own `probe`. `check`/`statusLabel`/`detailCheck`
- * then receive the resolved `T` directly and stay pure functions of it.
+ * then receive the resolved `T` directly; `detailCheck` is an Effect so a
+ * detail may read a service (the Claude Code entry reads Secrets).
  */
 export function prerequisitesChecks<T>(config: {
   probe: (
@@ -339,8 +322,10 @@ export function prerequisitesChecks<T>(config: {
    */
   fallback: () => Effect.Effect<T, ToolProbeError, ToolProbeServices>;
   check: (prereqs: T) => boolean;
-  statusLabel: (prereqs: T) => string | undefined;
-  detailCheck: (prereqs: T) => string | undefined;
+  statusLabel?: (prereqs: T) => string | undefined;
+  detailCheck: (
+    prereqs: T,
+  ) => Effect.Effect<string | undefined, ToolProbeError, ToolProbeServices>;
 }): ToolAvailabilityChecks {
   const { probe, fallback, check, statusLabel, detailCheck } = config;
   const resolve = (
@@ -350,8 +335,12 @@ export function prerequisitesChecks<T>(config: {
   return {
     probe,
     check: (probeResult) => Effect.map(resolve(probeResult), check),
-    statusLabel: (probeResult) => Effect.map(resolve(probeResult), statusLabel),
-    detailCheck: (probeResult) => Effect.map(resolve(probeResult), detailCheck),
+    ...(statusLabel && {
+      statusLabel: (probeResult: unknown) =>
+        Effect.map(resolve(probeResult), statusLabel),
+    }),
+    detailCheck: (probeResult) =>
+      Effect.flatMap(resolve(probeResult), detailCheck),
   };
 }
 

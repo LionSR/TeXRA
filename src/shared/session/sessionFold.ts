@@ -596,10 +596,16 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   for (const childId of run.childIds) {
     const child = view.runs.get(childId);
     if (!child) continue;
+    // A held child parked between turns, nothing asked of the user, has
+    // delivered its turn: it counts as finished, not running.
+    const idle =
+      child.status === RUN_PHASE.WAITING && child.group === 'running';
     rollup.total += 1 + child.rollup.total;
-    rollup.running += (isLiveRun(child) ? 1 : 0) + child.rollup.running;
+    rollup.running +=
+      (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
     rollup.finished +=
-      (isTerminalOutcomePhase(child.status) ? 1 : 0) + child.rollup.finished;
+      (isTerminalOutcomePhase(child.status) || idle ? 1 : 0) +
+      child.rollup.finished;
     if (child.approval !== 'none') descendantWaiting = true;
     if (child.forceExpanded) descendantNeedsUser = true;
   }
@@ -1033,9 +1039,9 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, projected from the slice the rows folded
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
-  const { family, step, round, turn, continuationIndex } = rows;
+  const { family, step, round, turn } = rows;
   if (family === null || step === null) return run;
-  const flow = { family, step, round, turn, continuationIndex };
+  const flow = { family, step, round, turn };
   const phase = phaseMoveOf(row);
   return phase === null
     ? { ...run, flow }

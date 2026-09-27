@@ -30,8 +30,9 @@ import { MANIFEST } from '@tools/pluginManifest';
 export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
-  /** The registered tools this plugin provides; `@tools/registry` checks them. */
-  readonly toolNames: readonly [string, ...string[]];
+  /** The registered tools this plugin provides; `@tools/registry` checks
+   *  them. Empty only for a plugin that contributes a continuation policy. */
+  readonly toolNames: readonly [string, ...string[]] | readonly [];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -55,7 +56,7 @@ export interface ToolPlugin {
   /** Tools of this plugin offered to every tool-use agent, declared or not,
    *  while the plugin is on and a boolean catalog setting is on: tool name to
    *  setting key, or `true` for no setting but the plugin's own switch. An
-   *  injected tool still passes the host and approval gates; reflection
+   *  injected tool still passes the host and approval gates; workflow
    *  runs get none. */
   readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install

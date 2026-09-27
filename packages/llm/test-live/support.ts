@@ -35,7 +35,7 @@ import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports - the package under test
-import { assistantMessageFromResult } from '../src/turn.js';
+import { assistantMessageFromResult, completedTurn } from '../src/turn.js';
 import type {
   Continuation,
   Model,
@@ -108,7 +108,7 @@ const completeTurn = (model: Model, request: TurnRequest) =>
   Effect.gen(function* () {
     const turn = yield* model.prepareTurn(request);
     assert(turn.mode === 'foreground');
-    const result = yield* model.generateTurn(turn);
+    const result = yield* completedTurn(model.streamTurn(turn));
     assert(result.kind === 'http');
     return result;
   });

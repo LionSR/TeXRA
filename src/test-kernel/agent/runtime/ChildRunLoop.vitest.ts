@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
   finalizeRun: vi.fn(),
   submitFollowUp: vi.fn(),
   persistChildRunDelivery: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(
+  commitRunEndAfterArtifacts: vi.fn(
     async (_session: unknown, _runId: RunId) => {},
   ),
 }));
@@ -84,6 +84,7 @@ import {
   CHILD_RUN_CONCURRENCY_BUDGET_SETTING,
 } from '@shared/schemas';
 import { DatabaseNotOwner } from '@shared/session/database';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   createProcessSession,
@@ -306,7 +307,7 @@ const startLoop = (
 /** The host's stop gesture on a child run: kill it, and settle the stop. */
 const stopChildRun = (runId: RunId): Effect.Effect<void, Error> =>
   Effect.gen(function* () {
-    const stop = session.runs.kill(runId);
+    const stop = session.runs.stop(runId);
     expect(stop.accepted()).toBe(true);
     yield* stop.settlement;
   });
@@ -318,8 +319,8 @@ beforeEach(async () => {
   vi.clearAllMocks();
   // The loop's terminal drain is the session's one exit choreography; the
   // suite observes it through the same (session, runId) spy as before.
-  vi.spyOn(session, 'releaseRunLease').mockImplementation((runId) =>
-    Effect.promise(() => mocks.releaseRunLeaseAfterArtifacts(session, runId)),
+  vi.spyOn(session, 'commitRunEnd').mockImplementation((runId) =>
+    Effect.promise(() => mocks.commitRunEndAfterArtifacts(session, runId)),
   );
   mocks.finalizeRun.mockReturnValue(Effect.succeed({ ok: true }));
   mocks.submitFollowUp.mockReturnValue(Effect.succeed({ status: 'sent' }));
@@ -328,7 +329,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   for (const runId of trackedRunIds) {
-    session.runs.untrack(runId);
+    untrackRun(session.runs, runId);
   }
   trackedRunIds.clear();
 });
@@ -345,7 +346,7 @@ describe('childRunLoop E2E fixtures', () => {
         const launch = vi.fn(() =>
           Effect.fail(new Error('Engine startup failed')),
         );
-        let stop: ReturnType<typeof session.runs.kill> | undefined;
+        let stop: ReturnType<typeof session.runs.stop> | undefined;
         // The stop lands inside loop setup, after the queue claim and before
         // the launch.
         const claimChildRun = session.followUps.claimChildRun.bind(
@@ -356,7 +357,7 @@ describe('childRunLoop E2E fixtures', () => {
           .mockImplementationOnce((id) => {
             const lease = claimChildRun(id);
             if (outcome === RUN_OUTCOME.CANCELLED)
-              stop = session.runs.kill(runId);
+              stop = session.runs.stop(runId);
             return lease;
           });
         const loop = yield* startLoop(runId, {
@@ -383,7 +384,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(rows.filter((row) => row.type === 'run.end')).toMatchObject([
           { outcome },
         ]);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -476,8 +477,6 @@ describe('childRunLoop E2E fixtures', () => {
         // listener is not guaranteed to observe.
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -542,13 +541,13 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         // Interrupt the loop through its parent lineage: no turn handle is
         // tracked in this fixture, so the stop reaches the loop via its
         // child activation.
         const stopping = yield* Effect.forkChild(
-          session.runs.stopAgentRun(PARENT_RUN_ID),
+          session.runs.stop(PARENT_RUN_ID).settlement,
           { startImmediately: true },
         );
         yield* rejectTurn(1, createAbortError());
@@ -564,7 +563,7 @@ describe('childRunLoop E2E fixtures', () => {
           active: { key: expect.any(String), index: 1 },
           lastCompleted: null,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledWith(
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledWith(
           session,
           runId,
         );
@@ -601,8 +600,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep a background child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -615,24 +612,30 @@ describe('childRunLoop E2E fixtures', () => {
         try {
           yield* foldParentPhase(true);
           expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'active parent', {
-              session,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              { text: 'active parent', from: { kind: 'user' as const } },
+              {
+                session,
+              },
+            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toEqual({ status: 'queued', wake: 'failed' });
 
           yield* foldParentPhase(false);
-          const userAdmission = vi.fn();
-          expect(
-            yield* realSubmitFollowUp(PARENT_RUN_ID, 'restore me', {
-              session,
-              onAdmitted: userAdmission,
-            }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
-          ).toMatchObject({ status: 'failed' });
-          expect(userAdmission).toHaveBeenCalledWith(false);
           expect(
             yield* realSubmitFollowUp(
               PARENT_RUN_ID,
-              { text: 'late child result', origin: 'subagent_result' },
+              { text: 'restore me', from: { kind: 'user' as const } },
+              { session },
+            ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+          ).toMatchObject({ status: 'failed' });
+          expect(
+            yield* realSubmitFollowUp(
+              PARENT_RUN_ID,
+              {
+                text: 'late child result',
+                from: { kind: 'run' as const, runId: 'c41dc41dc41d' as RunId },
+              },
               { session },
             ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
           ).toMatchObject({ status: 'failed' });
@@ -646,9 +649,16 @@ describe('childRunLoop E2E fixtures', () => {
           });
           try {
             expect(
-              yield* realSubmitFollowUp(PARENT_RUN_ID, 'native child result', {
-                session,
-              }).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
+              yield* realSubmitFollowUp(
+                PARENT_RUN_ID,
+                {
+                  text: 'native child result',
+                  from: { kind: 'user' as const },
+                },
+                {
+                  session,
+                },
+              ).pipe(Effect.provideService(AgentResume, { tryResumeRun })),
             ).toEqual({ status: 'queued', wake: 'failed' });
           } finally {
             releaseNativeChild();
@@ -674,7 +684,7 @@ describe('childRunLoop E2E fixtures', () => {
             value: 'done',
           });
           yield* Deferred.await(formatStarted);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           notifyProgress({ kind: 'started' });
           yield* Deferred.succeed(formattedDelivery, 'delivered:done');
           yield* Fiber.join(loop);
@@ -683,7 +693,7 @@ describe('childRunLoop E2E fixtures', () => {
           expect(mocks.submitFollowUp).not.toHaveBeenCalled();
         } finally {
           session.followUps.terminalize(PARENT_RUN_ID);
-          yield* session.runs.detachActiveChildren(PARENT_RUN_ID);
+          yield* session.runs['detachActiveChildren'](PARENT_RUN_ID);
           yield* Deferred.succeed<FakeTurn, Error>(turn, {
             kind: 'terminal',
             value: 'done',
@@ -868,7 +878,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'keep going', origin: 'user' },
+            { text: 'keep going', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -904,8 +914,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -928,7 +936,7 @@ describe('childRunLoop E2E fixtures', () => {
 
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -951,8 +959,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -961,7 +967,7 @@ describe('childRunLoop E2E fixtures', () => {
         yield* resolveTurn(1, { kind: 'interim', value: 'first' });
         yield* session.followUps.submit(
           runId,
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
           'live_owner',
         );
         yield* turnStarted(2);
@@ -989,8 +995,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1063,8 +1067,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1144,7 +1146,7 @@ describe('childRunLoop E2E fixtures', () => {
         // the terminal it would interrupt is uninterruptible: the delivery
         // completes exactly once and the queue releases — there is no live
         // continuation the stop could tear down.
-        const stop = session.runs.kill(runId);
+        const stop = session.runs.stop(runId);
         expect(stop.accepted()).toBe(true);
 
         yield* Deferred.succeed(deliveryGate, undefined);
@@ -1175,8 +1177,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Finalize before the wake',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1233,7 +1233,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'resume please', origin: 'user' },
+            { text: 'resume please', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });
@@ -1286,8 +1286,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Fail a turn, then take an interrupt',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1298,7 +1296,7 @@ describe('childRunLoop E2E fixtures', () => {
         // for the test to run once the loop is done.
         const stopSettlements: Effect.Effect<void, Error>[] = [];
         const interruptAfterFailure = vi.fn(() => {
-          stopSettlements.push(session.runs.kill(runId).settlement);
+          stopSettlements.push(session.runs.stop(runId).settlement);
         });
 
         const loop = yield* startLoop(runId, strategy, {
@@ -1369,8 +1367,6 @@ describe('childRunLoop E2E fixtures', () => {
             PARENT_RUN_ID,
             {
               run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-              userFollowUpSupport: 'terminalBacked',
-              description: 'Wait for a budget slot',
               config: childRunConfig,
             },
           ).pipe(Effect.provideService(Runs, session.runs));
@@ -1457,7 +1453,7 @@ describe('childRunLoop E2E fixtures', () => {
         expect(
           yield* session.followUps.submit(
             runId,
-            { text: 'go on', origin: 'user' },
+            { text: 'go on', from: { kind: 'user' as const } },
             'live_owner',
           ),
         ).toEqual({ kind: 'queued' });

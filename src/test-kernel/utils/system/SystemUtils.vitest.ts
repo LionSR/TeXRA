@@ -3,11 +3,13 @@
 
 // Node imports
 import { strict as assert } from 'node:assert';
-import { existsSync, readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Third-party imports
 import { it } from '@effect/vitest';
+import { build } from 'esbuild';
 import {
   Effect,
   Exit,
@@ -89,7 +91,7 @@ async function waitForPublishedPid(pidFile: string): Promise<number> {
       return Number.isInteger(pid) && pid > 0;
     },
     {
-      timeoutMs: 1000,
+      timeoutMs: 10_000,
       intervalMs: 20,
       timeoutMessage: `Timed out waiting for a pid in ${pidFile}`,
     },
@@ -343,6 +345,64 @@ describe('executeCommand', () => {
         yield* Effect.promise(() => waitForProcessExit(childPid));
       }).pipe(Effect.provide(nodeSpawnerLayer)),
     PROCESS_EXIT_TEST_TIMEOUT_MS,
+  );
+
+  it.live(
+    'ends a shell command with its host when the host is SIGKILLed',
+    () =>
+      Effect.gen(function* () {
+        if (process.platform === 'win32') return;
+
+        // A host process that starts one timed shell through the production
+        // spawner and holds it; a SIGKILL runs none of its finalizers.
+        const dir = yield* Effect.promise(() =>
+          makeTempDir('texra-exec-lifeline-', tempDirs),
+        );
+        const pidFile = join(dir, 'shell.pid');
+        const entry = join(dir, 'host.ts');
+        writeFileSync(
+          entry,
+          [
+            "import { Effect } from 'effect';",
+            "import { nodePlatformServices } from '@platform/defaults/nodePlatform';",
+            "import { executeCommand } from '@utils/system/execUtils';",
+            'Effect.runFork(',
+            '  executeCommand(\'echo $$ > "$PID_FILE"; sleep 30 && touch marker\', {',
+            '    cwd: process.cwd(),',
+            '    settings: undefined,',
+            '    timeout: 60_000,',
+            '    env: { PID_FILE: process.env.PID_FILE! },',
+            '  }).pipe(Effect.provide(nodePlatformServices)),',
+            ');',
+          ].join('\n'),
+        );
+        yield* Effect.promise(() =>
+          build({
+            entryPoints: [entry],
+            outfile: join(dir, 'host.cjs'),
+            bundle: true,
+            // CommonJS: bundled dependencies `require` Node built-ins.
+            format: 'cjs',
+            platform: 'node',
+            logLevel: 'silent',
+            tsconfig: join(WORKSPACE, 'tsconfig.json'),
+            nodePaths: [join(WORKSPACE, 'node_modules')],
+          }),
+        );
+        const host = spawn(process.execPath, [join(dir, 'host.cjs')], {
+          cwd: dir,
+          env: { ...process.env, PID_FILE: pidFile },
+          stdio: 'ignore',
+        });
+        // The shell leads its own process group, so its pid is the group id.
+        const group = yield* Effect.promise(() => waitForPublishedPid(pidFile));
+
+        host.kill('SIGKILL');
+        yield* Effect.promise(() => waitForProcessExit(-group));
+        assert.equal(existsSync(join(dir, 'marker')), false);
+      }),
+    // The bundle build comes on top of the process-exit budget.
+    2 * PROCESS_EXIT_TEST_TIMEOUT_MS,
   );
 
   it.live(

@@ -112,7 +112,9 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const flowLabel = formatFlowPositionLabel(flowPosition(run.flow));
+  const flowLabel = formatFlowPositionLabel(
+    flowPosition(run.flow, run.category),
+  );
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({

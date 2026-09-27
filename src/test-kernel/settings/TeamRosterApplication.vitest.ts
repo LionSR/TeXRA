@@ -21,19 +21,13 @@ const preset: AgentModePreset = {
 };
 
 const unresolved = {
-  keys: {
-    workflow: [],
-    toolUse: [],
-  },
-  unresolvedNames: ['orchestrator'],
+  agentKeys: { workflow: [], toolUse: [] },
+  missingAgents: { workflow: [], toolUse: ['orchestrator'] },
 };
 
 const resolved = {
-  keys: {
-    workflow: [],
-    toolUse: ['remote:orchestrator'],
-  },
-  unresolvedNames: [],
+  agentKeys: { workflow: [], toolUse: ['remote:orchestrator'] },
+  missingAgents: { workflow: [], toolUse: [] },
 };
 
 function makeDeps(

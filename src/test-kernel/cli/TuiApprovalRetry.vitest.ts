@@ -16,9 +16,19 @@ const mocks = vi.hoisted(() => ({
   setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
 }));
 
-vi.mock('@model/codex/codexSubscription', () => ({
-  isPreferCodexSubscription: () => mocks.preferSubscription,
-}));
+vi.mock('@model/subscriptionAccess', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@model/subscriptionAccess')>();
+  return {
+    ...actual,
+    isPreferSubscription: (
+      ...args: Parameters<typeof actual.isPreferSubscription>
+    ) =>
+      args[0] === 'chatgpt'
+        ? mocks.preferSubscription
+        : actual.isPreferSubscription(...args),
+  };
+});
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,
@@ -68,6 +78,7 @@ import {
   APPROVE_SESSION_ACTION,
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { createTuiCliContext } from '@test/cli/fixtures/cliContext';
@@ -374,7 +385,7 @@ describe('TUI request decisions', () => {
         session.setApprovalPolicy('yolo');
         expect(yield* Fiber.join(pending)).toEqual({ action: 'approve' });
         yield* waitForNoApproval();
-        session.runs.untrack(runId);
+        untrackRun(session.runs, runId);
       }),
   );
 

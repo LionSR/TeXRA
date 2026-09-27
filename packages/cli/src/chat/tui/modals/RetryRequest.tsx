@@ -20,15 +20,6 @@ interface RetryRequestProps {
 const RETRY_REQUEST_TITLE = 'Retry the failed call?';
 const RETRY_REQUEST_HIDDEN_NOUN = 'error rows';
 
-/** Wrapped row count of the guidance line, used to budget the error body. */
-function retryGuidanceRows(
-  guidance: string | undefined,
-  width: number,
-): number {
-  if (!guidance) return 0;
-  return wrappedRowCount(guidance, width);
-}
-
 export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const { columns } = useWindowSize();
   const { data } = props.payload;
@@ -58,7 +49,9 @@ export function RetryRequest(props: RetryRequestProps): React.JSX.Element {
   const maxSubjectRows = scrollableModalTextRowsBudget({
     availableRows: props.availableRows,
     columns,
-    extraFixedRows: retryGuidanceRows(guidanceText, contentWidth),
+    extraFixedRows: guidanceText
+      ? wrappedRowCount(guidanceText, contentWidth)
+      : 0,
     title: RETRY_REQUEST_TITLE,
   });
 

@@ -342,12 +342,11 @@ beforeEach(async () => {
       path: `/agents/${name}.yaml`,
     });
   });
-  mocks.createChildRun.mockImplementation((_session: unknown, runId: RunId) =>
+  mocks.createChildRun.mockImplementation(() =>
     Effect.sync(() => {
       const logger = new TraceEmitter();
       vi.spyOn(logger, 'error').mockImplementation(mocks.childLoggerError);
       return {
-        childRunId: runId,
         logger,
         waitForInput: vi.fn(),
         beginTurn: vi.fn(),
@@ -943,7 +942,6 @@ describe('WorkflowScriptTool', () => {
                 mocks.childLoggerError,
               );
               return {
-                childRunId,
                 logger,
                 waitForInput: vi.fn(),
                 beginTurn: vi.fn(),

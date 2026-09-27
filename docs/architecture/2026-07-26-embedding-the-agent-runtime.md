@@ -34,13 +34,13 @@ services the shipped Node hosts pass to `installProcessRuntime` are a
 shipped-feature choice; the raw loop only needs some `LeanLanguageServices`
 layer there.
 
-### Step 1 — `installProcessRuntime({ lifecycle, agentDirectories, … })`
+### Step 1 — `installProcessRuntime({ agentDirectories, … })`
 
 There is no `createNodePlatform` factory and no process-wide platform object
 any more: the `Platform` module was deleted (#13060). Every process fact has
 one of two owners, and an embedder supplies each one there:
 
-- **Process services** (the shutdown `lifecycle`, the `agentDirectories` port,
+- **Process services** (the `agentDirectories` port,
   the optional `toolMissingReporter`, the filesystem, `Path`, secrets,
   application state, the resume port, the editor language-model bridge) are
   Effect services provided once per process by `installProcessRuntime`
@@ -185,7 +185,6 @@ runtime packages named `@controllers/session/sessionLayer`,
 ```ts
 import { Effect, Fiber, Stream } from 'effect';
 import { AgentDirectories } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import { AgentDirectoryService } from '@agent/index';
@@ -198,9 +197,8 @@ import { runAgent } from '@agent/runtime/runAgent';
 import { validateRunRequest } from '@agent/core/state/runRequests';
 import { AgentCategory } from '@shared/schemas/agent';
 
-// Step 1 — the process services: lifecycle, agent directories, filesystem,
-// secrets, application state, and the rest.
-const lifecycle = createLifecycleHost();
+// Step 1 — the process services: agent directories, filesystem, secrets,
+// application state, and the rest.
 const agentDirectories = new AgentDirectoryService({
   channel: 'my-embedder',
   resourcesPath, // dir containing agents/, tool_use_agents/, skills/
@@ -210,7 +208,6 @@ const runtime = installProcessRuntime({
   processStart: nodeProcesses.selfIdentity(),
   globalStorage,
   secrets,
-  lifecycle,
   agentDirectories: AgentDirectories.layer(agentDirectories),
   appState: globalState,
   /* …the other process services… */
@@ -524,9 +521,9 @@ and from a terminal prompt otherwise
 
 ### What ends a wait without a decision
 
-Interrupting the run through a retained `AgentRunHandle`
-(`RunAgentOptions.onRun`; `src/agent/runtime/RunHandle.ts:49`) ends the
-run, and the fold drops a closed run's open requests with it
+Stopping the run (`session.runs.stop(runId)`, with the id
+`RunAgentOptions.onRun` hands over; `src/agent/runtime/runRegistry.ts`) ends
+the run, and the fold drops a closed run's open requests with it
 (`src/shared/session/sessionFold.ts:1858-1860`). That is
 the cancellation path, not a substitute for answering a run that should
 continue.
@@ -585,7 +582,7 @@ following classification makes that distinction.
 
 - **`:275-282` — `installCliProcessRuntime(...)`:** Required. The one process
   runtime (`packages/cli/src/runtime/cliProcessRuntime.ts:251`), which also
-  builds the lifecycle host and the agent-directories port
+  builds the agent-directories port
   (`:246-250`). Its `lean: directLeanLanguageServices()` (`:298`) is
   shipped-feature parity, not a raw-loop requirement; an embedder may pass
   another layer. The `memory` and `plan` injections are manifest data
@@ -609,12 +606,16 @@ following classification makes that distinction.
   with the LaTeX response-text connector as its `responseTextProcessing`, so a
   command that needs no session never opens one. An embedder calls
   `initializeDefaultSession` directly (§1, Prerequisite A).
-- **`:386-398` — `registerRuntimeShutdownHandlers(lifecycle, …)`:** Drains
-  agent-spawned OS children, flushes session publications, and disposes the
-  runtime on shutdown. Recommended for any long-lived process that runs `bash`
-  tools; its hook record names CLI-owned resources.
-- **`:403-405` — `installCliShutdownSignalHandlers(lifecycle)`:** SIGINT/SIGTERM
-  handling for a terminal process.
+- **The shutdown scope (`initCliPlatform`):** The process's shutdown is one
+  scope's close. Its finalizers run in reverse of registration: every
+  session closes (`closeAllSessions`, which stops and settles its runs,
+  killing agent-spawned OS children with them, and flushes its artifacts),
+  then the project scope with a final NDJSON flush, then the runtime.
+  Recommended for any long-lived process that runs `bash` tools; an embedder
+  holds the same order in its own scope, closing sessions before it disposes
+  the runtime.
+- **`installCliShutdownSignalHandlers()`:** SIGINT/SIGTERM handling for a
+  terminal process, which closes that scope.
 
 ### Cross-check against desktop
 

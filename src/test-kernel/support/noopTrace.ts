@@ -31,24 +31,16 @@ class NoopStreamHandle implements StreamHandle {
 
 export const noopTrace: AgentTrace = {
   emit: NOOP,
-  subscribe: () => NOOP,
 
   debug: NOOP,
   info: NOOP,
   warn: NOOP,
   error: NOOP,
 
-  usage: NOOP,
-  contextState: NOOP,
-  toolStart: NOOP,
-  toolEnd: NOOP,
-  domain: NOOP,
-  responseFinalized: NOOP,
-
-  openStage(_label, options) {
-    return new NoopStageHandle(options?.id ?? generateShortId());
+  openStage() {
+    return new NoopStageHandle(generateShortId());
   },
-  openRun(_kind, options) {
-    return new NoopStreamHandle(options?.id ?? generateShortId());
+  openRun() {
+    return new NoopStreamHandle(generateShortId());
   },
 };

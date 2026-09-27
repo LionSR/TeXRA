@@ -24,7 +24,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import {
@@ -46,6 +45,7 @@ import { TraceEmitter } from '@agent/trace';
 import type { RunCell } from '@agent/runtime/loop/runProgram';
 import {
   AgentCategory,
+  emptyRunEndOutput,
   EMPTY_RUN_USAGE_TOTALS,
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -58,6 +58,8 @@ import {
 } from '@shared/session/database';
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { formatSubagentProgress } from '@shared/subagentFollowup';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -69,6 +71,7 @@ import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
   createProcessSession,
   publishTestRunStart,
+  queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { CompositionKey, type PinnedComposition } from '@tools/compositions';
 import { releaseRunResources } from '@tools/approval';
@@ -285,7 +288,7 @@ function agentRunTestLayer(init: LoopInit) {
       });
       init.session.runs.track(handle);
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => init.session.runs.untrack(handle.runId)),
+        Effect.sync(() => untrackRun(init.session.runs, handle.runId)),
       );
       return {
         runId: init.runId,
@@ -346,7 +349,6 @@ function loopProgram(
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer({
           run: { runId: init.runId, session: init.session, toolPolicy: {} },
         }),
@@ -463,7 +465,6 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       phase: null,
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'test-model',
       modelCompatibilityKey: 'DeepSeek',
       lastError: null,
@@ -479,7 +480,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       usage: EMPTY_RUN_USAGE_TOTALS,
       flow: null,
       roundOutputs: [],
-      overflowRecoveredAtRound: null,
+      overflowRecoveredAtTurn: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -489,12 +490,9 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         phase: 'model.ready',
         turn: 1,
         state: {
-          family: 'toolUse',
-          state: {
-            stateSlices: null,
-            offeredTools: [],
-            toolsetHash: '0'.repeat(64),
-          },
+          stateSlices: null,
+          offeredTools: [],
+          toolsetHash: '0'.repeat(64),
         },
       }),
     ]);
@@ -558,7 +556,9 @@ describe('a parked child run', () => {
         const session = quietSession();
         const runId = startedRun(session);
         if (queued) {
-          yield* enqueue(session, runId, [{ text: 'later', origin: 'user' }]);
+          yield* enqueue(session, runId, [
+            { text: 'later', from: { kind: 'user' as const } },
+          ]);
         }
 
         const { fiber, park, requests } = yield* forkLoop({
@@ -597,7 +597,7 @@ describe('a parked child run', () => {
           type: 'followup.queued' as const,
           aggregateId: rowAggregate(runId),
           followUpId: 'follow-up-1',
-          content: { text: asked, origin: 'user' as const },
+          content: { text: asked, from: { kind: 'user' as const } },
         };
         session.publish([queued]);
         yield* session.settlePublications();
@@ -612,7 +612,9 @@ describe('a parked child run', () => {
         yield* resumed.park(1);
         const resumedState = yield* session.ledger.load(runId);
         expect(userTexts(resumedState)).toContain(asked);
-        expect(session.pendingFollowUps(runId)).toEqual([]);
+        expect(session.events.pendingFollowUps(rowAggregate(runId))).toEqual(
+          [],
+        );
         yield* Fiber.interrupt(resumed.fiber);
 
         // A producer that replays the delivery after a restart writes the
@@ -663,7 +665,7 @@ describe('a parked root run', () => {
         const runId = startedRun(session);
         const onIdle = vi.fn();
         yield* enqueue(session, runId, [
-          { text: 'keep going', origin: 'user' },
+          { text: 'keep going', from: { kind: 'user' as const } },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -787,7 +789,9 @@ describe('a parked root run', () => {
         script: [textTurn('first'), textTurn('second')],
       });
       yield* park(0);
-      yield* enqueue(session, runId, [{ text: 'carry on', origin: 'user' }]);
+      yield* enqueue(session, runId, [
+        { text: 'carry on', from: { kind: 'user' as const } },
+      ]);
       yield* park(1);
       yield* Fiber.interrupt(fiber);
 
@@ -802,6 +806,58 @@ describe('a parked root run', () => {
       expect(steps.slice(parked + 1).some((step) => step !== 'waiting')).toBe(
         true,
       );
+    }),
+  );
+
+  it.effect('restores its park when a resume consumes only stale notices', () =>
+    Effect.gen(function* () {
+      const session = quietSession();
+      const runId = startedRun(session);
+      const first = yield* forkLoop({
+        runId,
+        session,
+        script: [textTurn('first')],
+      });
+      yield* first.park(0);
+      yield* Fiber.interrupt(first.fiber);
+
+      // Only an ended child's progress notice is queued: consuming it starts
+      // no turn, so the resume must still write the park it cleared.
+      const child = publishTestRunStart(session, generateRunId(), {
+        parent: runId,
+      });
+      session.publish([
+        {
+          type: 'run.end',
+          aggregateId: rowAggregate(child),
+          outcome: RUN_OUTCOME.CANCELLED,
+          output: emptyRunEndOutput('toolUse'),
+        },
+      ]);
+      yield* enqueue(session, runId, [
+        {
+          text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+          from: { kind: 'run' as const, runId: child },
+        },
+      ]);
+      const recorded = recordSessionEvents(session);
+
+      const resumed = yield* forkLoop({
+        runId,
+        session,
+        resume: true,
+        script: [textTurn('never reached'), textTurn('never reached')],
+      });
+      yield* resumed.park(1);
+      yield* Fiber.interrupt(resumed.fiber);
+
+      const steps = eventsOfType(
+        yield* Effect.promise(() => recorded.read()),
+        'flow.step',
+      ).map((event) => event.payload.step);
+      // The interrupt that ends the test writes its own halt last.
+      expect(steps.slice(0, -1)).toContain('waiting');
+      expect(resumed.requests).toHaveLength(0);
     }),
   );
 
@@ -844,14 +900,37 @@ describe('the batch a parked run consumes', () => {
       Effect.gen(function* () {
         const session = quietSession();
         const runId = startedRun(session);
+        const reporter = publishTestRunStart(session, undefined, {
+          parent: runId,
+        });
         const logger = new TraceEmitter();
         const info = vi.spyOn(logger, 'info');
+        // A progress notice whose child has since ended is consumed, never
+        // delivered: the model and the transcript see only live items.
+        const child = publishTestRunStart(session, generateRunId(), {
+          parent: runId,
+        });
+        session.publish([
+          {
+            type: 'run.end',
+            aggregateId: rowAggregate(child),
+            outcome: RUN_OUTCOME.CANCELLED,
+            output: emptyRunEndOutput('toolUse'),
+          },
+        ]);
         yield* enqueue(session, runId, [
           {
-            text: '<subagent-result>done</subagent-result>',
-            origin: 'subagent_result',
+            text: formatSubagentProgress(child, 'coder', { kind: 'started' }),
+            from: { kind: 'run' as const, runId: child },
           },
-          { text: 'please revise the theorem', origin: 'user' },
+          {
+            text: '<subagent-result>done</subagent-result>',
+            from: { kind: 'run' as const, runId: reporter },
+          },
+          {
+            text: 'please revise the theorem',
+            from: { kind: 'user' as const },
+          },
         ]);
 
         const { fiber, park } = yield* forkLoop({
@@ -885,6 +964,11 @@ describe('the batch a parked run consumes', () => {
         expect(info).toHaveBeenCalledWith('please revise the theorem', {
           messageType: MESSAGE_TYPES.USER_MESSAGE,
         });
+        expect(info).not.toHaveBeenCalledWith(
+          '⟳ coder · started',
+          expect.anything(),
+        );
+        expect(yield* queuedFollowUps(session, runId)).toEqual([]);
       }),
   );
 
@@ -917,6 +1001,7 @@ describe('the batch a parked run consumes', () => {
       const escaped = JSON.stringify(summary).replaceAll('"', '&quot;');
       const session = quietSession();
       const runId = startedRun(session);
+      const child = publishTestRunStart(session, undefined, { parent: runId });
       const logger = new TraceEmitter();
       const info = vi.spyOn(logger, 'info');
       yield* enqueue(session, runId, [
@@ -927,7 +1012,7 @@ describe('the batch a parked run consumes', () => {
             `<workflow-summary>${escaped}</workflow-summary>`,
             '</workflow-script-result>',
           ].join('\n'),
-          origin: 'subagent_result',
+          from: { kind: 'run' as const, runId: child },
         },
       ]);
 
@@ -960,7 +1045,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'please inspect this figure',
             mediaFiles: ['/tmp/texra-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -1001,7 +1086,7 @@ describe('the batch a parked run consumes', () => {
           {
             text: 'use this diagram',
             mediaFiles: ['/tmp/texra-unreadable-figure.png'],
-            origin: 'user',
+            from: { kind: 'user' as const },
           },
         ]);
 
@@ -1021,7 +1106,9 @@ describe('the batch a parked run consumes', () => {
           expect.objectContaining({ messageType: expect.any(String) }),
         );
         expect(
-          session.pendingFollowUps(runId).map((f) => f.content.text),
+          session.events
+            .pendingFollowUps(rowAggregate(runId))
+            .map((f) => f.content.text),
         ).toEqual(['use this diagram']);
       }),
   );
@@ -1068,7 +1155,7 @@ describe('an active goal at the wait', () => {
       const runId = startedRun(session);
       yield* startGoal(session, runId, 'Keep going autonomously.');
       yield* enqueue(session, runId, [
-        { text: 'user correction', origin: 'user' },
+        { text: 'user correction', from: { kind: 'user' as const } },
       ]);
 
       try {
@@ -1156,7 +1243,7 @@ describe('an active goal at the wait', () => {
           });
           const recorded = recordSessionEvents(session);
           yield* enqueue(session, runId, [
-            { text: 'try the other lemma', origin: 'user' },
+            { text: 'try the other lemma', from: { kind: 'user' as const } },
           ]);
 
           const recovered = yield* forkLoop({

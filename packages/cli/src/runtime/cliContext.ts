@@ -19,6 +19,7 @@ import {
   CLI_OUTPUT_FORMAT_CONFIG_KEY,
   type CliOutputFormat,
 } from '@shared/schemas';
+import { DatabaseOpenFailed } from '@shared/session/database';
 import type { SkillSourceOptions } from '@skills/skillSources';
 import { readConfigSettingFrom } from '@utils/config/platformSettings';
 import { absentReason } from '@utils/files/fsEntryExists';
@@ -72,7 +73,7 @@ export interface CliContext {
    */
   readonly config: ConfigProvider;
   readonly configWarnings: readonly string[];
-  /** The `configWarnings` that `--quiet` does not hide; see `CliStartupConfig`. */
+  /** The config problems `--quiet` does not hide; see `CliStartupConfig`. */
   readonly configDegradations: readonly string[];
   readonly envAgent?: string;
   readonly envModel?: string;
@@ -170,10 +171,6 @@ export function cliEnvValue(key: string): string | undefined {
   return process.env[key];
 }
 
-export function readCliEnv(): Record<string, string | undefined> {
-  return { ...process.env };
-}
-
 export async function readCliStdinText(): Promise<string> {
   process.stdin.setEncoding('utf8');
   const chunks: string[] = [];
@@ -263,14 +260,22 @@ export function readCliBugsUrl(): Promise<string | undefined> {
 /**
  * The follow-up line appended to the top-level crash message pointing users at
  * the issue tracker. Returns `undefined` for usage errors (so the exit-2 path
- * stays clean) or when no tracker URL is configured — only an UNEXPECTED crash
- * with a known `bugs.url` gets the report prompt.
+ * stays clean), for a store this process could not open (a remote mount, a
+ * store a newer build wrote: the message says what to do), or when no tracker
+ * URL is configured — only an UNEXPECTED crash with a known `bugs.url` gets
+ * the report prompt.
  */
 export function formatCrashReportLine(
   error: unknown,
   bugsUrl: string | undefined,
 ): string | undefined {
-  if (error instanceof CliUsageError || !bugsUrl) return undefined;
+  if (
+    error instanceof CliUsageError ||
+    error instanceof DatabaseOpenFailed ||
+    !bugsUrl
+  ) {
+    return undefined;
+  }
   return `This looks like a bug — please report it at ${bugsUrl} (include the command and the message above).`;
 }
 

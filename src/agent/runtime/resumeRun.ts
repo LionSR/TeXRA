@@ -29,12 +29,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
-import {
-  claimStanding,
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { claimStanding, heldElsewhereBy } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { foldRunRows } from '@shared/session/runRows';
 import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
@@ -49,7 +44,7 @@ import {
 import { classifyRun } from './runClassification';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
-import { RunLive } from './runRoster';
+import { RunLive } from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -326,12 +321,7 @@ function refusalFor(
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
-  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
-  const holder =
-    refusal instanceof DatabaseClaimRefused ||
-    (refusal instanceof DatabaseNotOwner && !refusal.closed)
-      ? refusal.ownerId
-      : null;
+  const holder = heldElsewhereBy(error);
   if (holder !== null) {
     return session
       .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
@@ -422,8 +412,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         },
       };
       const onIdle = (): void => {
-        if (!session.pendingFollowUps(runId).some(isAdmitted))
-          Deferred.doneUnsafe(idle, Effect.void);
+        const pending = session.events.pendingFollowUps(
+          aggregateId('run', runId),
+        );
+        if (!pending.some(isAdmitted)) Deferred.doneUnsafe(idle, Effect.void);
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;

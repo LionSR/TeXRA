@@ -20,6 +20,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
+  Clock,
   Context,
   Data,
   Effect,
@@ -152,7 +153,7 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 export interface InvokeRequest {
   readonly system: string | undefined;
-  /** The tools this turn advertises; a reflection turn advertises none. */
+  /** The tools this turn advertises; a workflow round advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
   /** The turn's round ordinal, for debug file naming. */
@@ -252,7 +253,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         details: Record<string, unknown> = {},
       ): void => {
-        logger.domain({
+        logger.emit({
+          type: 'domain',
           key: 'modelRetryLifecycle',
           data: {
             kind: 'model_retry_lifecycle',
@@ -466,7 +468,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           });
           return yield* failAttempt(cause, bound, completed.streamedText);
         }
-        const responseTimeMs = Date.now() - started;
+        const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
         const turn = completed.value;
         if (turn === null) {
           trace.thinking.finalize(undefined);
@@ -492,12 +494,9 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-        if (
-          usage !== null &&
-          usage.inputTokens > 0 &&
-          bound.contextWindow > 0
-        ) {
-          logger.contextState({
+        if (usage && usage.inputTokens > 0 && bound.contextWindow > 0) {
+          logger.emit({
+            type: 'context.state',
             inputTokens: usage.inputTokens,
             contextWindow: bound.contextWindow,
           });
@@ -571,7 +570,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           completed.value = submission.result;
           return;
         }
-        const deadlineAtMs = Date.now() + BACKGROUND_MAX_DURATION_MS;
+        const deadlineAtMs =
+          (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
         yield* cell.append([
           {
             type: 'model.message',
@@ -712,7 +712,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           },
         ]);
         const trace = openTrace();
-        const started = Date.now();
+        const started = yield* Clock.currentTimeMillis;
         const completed: AttemptOutcome = { value: null, streamedText: '' };
         const onEvent = eventSink(invocation, cell, trace, completed);
         const streamed = yield* Effect.exit(
@@ -806,7 +806,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             resumed: true,
           });
           const trace = openTrace();
-          const started = Date.now();
+          const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
           const streamed = yield* Effect.exit(
             Stream.runForEach(

@@ -8,7 +8,7 @@ import {
   APPROVAL_BYPASS_KINDS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
-import type { ConversationProgress, GoalState, RunId } from '@shared/schemas';
+import type { GoalState, RunId } from '@shared/schemas';
 import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -43,6 +43,14 @@ import {
   renderProgressBadgeContent,
   getProgressBadgeTitle,
 } from '../formatters/progressBadgeFormatter';
+import {
+  autoApproveStyles,
+  renderAutoApproveMenu,
+  renderAutoApproveRow,
+  WideHeaderController,
+} from './autoApproveSwitches';
+import type WaDropdownItem from '@awesome.me/webawesome/dist/components/dropdown-item/dropdown-item.js';
+import type { WaSelectEvent } from '@awesome.me/webawesome/dist/events/events.js';
 
 /** A window-level item the shell appends to the run's menu: pop out,
  *  LaTeXDiffs, figures. */
@@ -55,6 +63,7 @@ export interface HeaderMenuItem {
 
 const ACTIVE_STATE_ACTIONS = [
   ELEMENT_IDS.STOP_STREAM_BTN,
+  ELEMENT_IDS.AUTO_APPROVE,
   ELEMENT_IDS.COMPACT_RESPONSE_BTN,
   ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
   ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
@@ -115,14 +124,6 @@ const NATIVE_AGENT_ONLY_ACTIONS = new Set([
 
 /** The menu value of the delete item, which asks before it acts. */
 const DELETE_SESSION = 'deleteSession';
-
-/** What an active run grant approves, as the approval card names it
- *  ("Approve all edits in this run"). Agent work covers the other two. */
-const BYPASS_NOUN: Record<ApprovalBypassKind, string> = {
-  superYolo: 'agent work',
-  toolEdit: 'edits',
-  bash: 'commands',
-};
 
 /** The status dot's hue per tone (G4: the fold spells the tone). */
 const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
@@ -218,15 +219,8 @@ export class RunHeader extends LitElement {
         font-size: var(--font-size-xs);
       }
 
-      /* An active run grant reads as a warning, as the CLI's badge does. */
-      .goal-chip,
-      .bypass-chip {
+      .goal-chip {
         flex-shrink: 0;
-      }
-      .bypass-chip::part(base) {
-        color: var(--color-warning);
-        border-color: color-mix(in srgb, var(--color-warning) 40%, transparent);
-        background: color-mix(in srgb, var(--color-warning) 12%, transparent);
       }
 
       .menu-status {
@@ -303,33 +297,28 @@ export class RunHeader extends LitElement {
         font-variant-numeric: tabular-nums;
       }
 
-      .bypass-chip-short {
-        display: none;
-      }
-
       /* A narrow row keeps the title: the status word and the tool-call
-         count move into the menu's status line, the chip to one word. */
+         count move into the menu's status line. */
       @container (max-width: 640px) {
         .status-label,
-        wa-tag.progress-badge,
-        .bypass-chip-label {
+        wa-tag.progress-badge {
           display: none;
-        }
-        .bypass-chip-short {
-          display: inline;
         }
       }
     `,
+    autoApproveStyles,
   ];
 
   @property({ attribute: false }) run: RunView | null = null;
-  /** For the per-run policy snapshot behind the grant chip. */
+  /** For the per-run policy snapshot behind the auto-approve switches. */
   @property({ attribute: false }) view: SessionView | null = null;
   /** The shell's window items, after the run's actions in its menu. */
   @property({ attribute: false }) menuItems: readonly HeaderMenuItem[] = [];
 
   /** The delete item was chosen; the row asks before it acts. */
   @state() private confirmingDelete: RunId | null = null;
+
+  private readonly width = new WideHeaderController(this);
 
   private readonly copyRunContext = new CopyButtonController(this, {
     successTitle: 'Copied!',
@@ -364,9 +353,23 @@ export class RunHeader extends LitElement {
     }
   }
 
-  private activeBypasses(run: RunView): ApprovalBypassKind[] {
-    const bypasses = this.view?.policy.get(run.id)?.bypasses;
-    return APPROVAL_BYPASS_KINDS.filter((kind) => bypasses?.[kind] === true);
+  /** Whether a run grant is on, per the run's policy snapshot. */
+  private grantActive(run: RunView, kind: ApprovalBypassKind): boolean {
+    return this.view?.policy.get(run.id)?.bypasses[kind] === true;
+  }
+
+  /** Set or clear one run grant, as an approval card's grant does. */
+  private setGrant(
+    run: RunView,
+    bypass: ApprovalBypassKind,
+    enabled: boolean,
+  ): void {
+    this.dispatchEvent(
+      SessionUiEvents.runtime({
+        kind: 'policy.set',
+        change: { field: 'bypass', runId: run.id, bypass, enabled },
+      }),
+    );
   }
 
   override render(): TemplateResult | typeof nothing {
@@ -381,9 +384,16 @@ export class RunHeader extends LitElement {
       run.category === 'toolUse' ? run.goal : { active: false };
     const enabled = enabledRunActions(run, displayKey);
     const canStop = enabled?.has(ELEMENT_IDS.STOP_STREAM_BTN) === true;
+    // A run grant means something only on a live tool-use run this window
+    // holds: read-only, interrupted and ended runs take none.
+    const canGrant =
+      enabled?.has(ELEMENT_IDS.AUTO_APPROVE) === true &&
+      run.category === 'toolUse' &&
+      run.identity.kind === 'agent';
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
       run.flow,
+      run.category,
     );
 
     return html`
@@ -393,9 +403,7 @@ export class RunHeader extends LitElement {
         <h1 id=${ELEMENT_IDS.ACTIVE_RUN_NAME} data-run=${run.id}>
           ${run.description || run.label}
         </h1>
-        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}
-          >${run.label} · ${run.id}</wa-tooltip
-        >
+        <wa-tooltip for=${ELEMENT_IDS.ACTIVE_RUN_NAME}>${run.label}</wa-tooltip>
         <span
           id=${ELEMENT_IDS.STATUS_INDICATOR}
           role="img"
@@ -410,8 +418,16 @@ export class RunHeader extends LitElement {
         </wa-tooltip>
         <span class="status-label" aria-hidden="true">${statusLabel}</span>
         ${this.renderRunElapsed(run)} ${this.renderGoalChip(goal)}
-        ${this.renderProgressBadge(run.conversationProgress, run.flow)}
-        ${this.renderBypassChip(run)}
+        ${this.renderProgressBadge(run)}
+        ${
+          canGrant
+            ? renderAutoApproveRow(
+                this.width.wide,
+                (kind) => this.grantActive(run, kind),
+                (kind, on) => this.setGrant(run, kind, on),
+              )
+            : nothing
+        }
         ${
           canStop
             ? renderIconActionButton({
@@ -431,7 +447,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, enabled, statusLabel, progressTitle)}
+        ${this.renderMenu(run, enabled, statusLabel, progressTitle, canGrant)}
       </div>
       ${this.confirmingDelete === run.id ? this.renderDeleteConfirm(run) : nothing}
     `;
@@ -442,6 +458,7 @@ export class RunHeader extends LitElement {
     enabled: ReadonlySet<string> | undefined,
     statusLabel: string,
     progressTitle: string | undefined,
+    canGrant: boolean,
   ): TemplateResult {
     // An agent run takes its category's actions; a process or a workflow
     // container takes the neutral ones. Resume and Run again reach the
@@ -463,16 +480,27 @@ export class RunHeader extends LitElement {
     return html`
       <wa-dropdown
         placement="bottom-end"
-        @wa-select=${(event: Event) => {
-          const value = (event as CustomEvent<{ item?: { value?: unknown } }>)
-            .detail?.item?.value;
+        @wa-select=${(event: WaSelectEvent) => {
+          const { item } = event.detail;
+          if (item.localName !== 'wa-dropdown-item') return;
+          const { value, checked, dataset } = item as WaDropdownItem;
+          const bypass = APPROVAL_BYPASS_KINDS.find(
+            (kind) => kind === dataset.bypass,
+          );
+          if (bypass) {
+            // A switch keeps the menu open, so a second one is one click away.
+            event.preventDefault();
+            this.setGrant(run, bypass, checked);
+            return;
+          }
           if (value === DELETE_SESSION) {
             this.confirmingDelete = run.id;
             return;
           }
           const action = actions.find((candidate) => candidate.id === value);
           if (action) this.dispatchAction(action, run);
-          else this.menuItems.find((item) => item.value === value)?.activate();
+          else
+            this.menuItems.find((entry) => entry.value === value)?.activate();
         }}
       >
         <wa-button
@@ -489,6 +517,11 @@ export class RunHeader extends LitElement {
         <div class="menu-status">
           ${statusLabel}${progressTitle ? ` · ${progressTitle}` : ''}
         </div>
+        ${
+          canGrant && !this.width.wide
+            ? renderAutoApproveMenu((kind) => this.grantActive(run, kind))
+            : nothing
+        }
         ${repeat(
           actions,
           (action) => action.id,
@@ -560,41 +593,6 @@ export class RunHeader extends LitElement {
     </wa-callout>`;
   }
 
-  /** A run grant is shown here, never granted; a click revokes it. */
-  private renderBypassChip(run: RunView): TemplateResult | typeof nothing {
-    const active = this.activeBypasses(run);
-    if (active.length === 0) return nothing;
-    const nouns = active.includes('superYolo')
-      ? BYPASS_NOUN.superYolo
-      : active.map((kind) => BYPASS_NOUN[kind]).join(' and ');
-    const revoke = (): void => {
-      for (const bypass of active) {
-        this.dispatchEvent(
-          SessionUiEvents.runtime({
-            kind: 'policy.set',
-            change: { field: 'bypass', runId: run.id, bypass, enabled: false },
-          }),
-        );
-      }
-    };
-    return html`<wa-button
-        id=${ELEMENT_IDS.BYPASS_CHIP}
-        class="bypass-chip"
-        appearance="outlined"
-        size="s"
-        pill
-        aria-label=${`Auto-approving ${nouns}. Ask again`}
-        @click=${revoke}
-        >${waIcon('check-double', { slot: 'start' })}<span
-          class="bypass-chip-label"
-          >Auto-approving ${nouns}</span
-        ><span class="bypass-chip-short">Auto</span></wa-button
-      >
-      <wa-tooltip for=${ELEMENT_IDS.BYPASS_CHIP}
-        >Approve all ${nouns} in this run is on. Click to ask again.</wa-tooltip
-      >`;
-  }
-
   private renderGoalChip(goal: GoalState): TemplateResult | typeof nothing {
     if (!goal.active) return nothing;
     const isPaused = goal.status === 'paused';
@@ -619,13 +617,11 @@ export class RunHeader extends LitElement {
     return html`<tool-timer .startTime=${run.runStartedAt}></tool-timer>`;
   }
 
-  private renderProgressBadge(
-    progress: ConversationProgress | undefined,
-    flow: RunView['flow'],
-  ): TemplateResult | typeof nothing {
-    const content = renderProgressBadgeContent(progress, flow);
+  private renderProgressBadge(run: RunView): TemplateResult | typeof nothing {
+    const { conversationProgress: progress, flow, category } = run;
+    const content = renderProgressBadgeContent(progress, flow, category);
     if (content === nothing) return nothing;
-    const progressTitle = getProgressBadgeTitle(progress, flow);
+    const progressTitle = getProgressBadgeTitle(progress, flow, category);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"
@@ -647,7 +643,7 @@ export class RunHeader extends LitElement {
    *  run. Laid out nearest-first in the DOM (see the styles). */
   private renderAncestors(run: RunView): TemplateResult | typeof nothing {
     if (run.ancestors.length === 0) return nothing;
-    const nearestFirst = [...run.ancestors].reverse();
+    const nearestFirst = run.ancestors.toReversed();
     return html`
       <nav class="ancestors" aria-label="Parent sessions">
         ${repeat(
@@ -667,7 +663,7 @@ export class RunHeader extends LitElement {
               <span class="ancestor-label">${ancestor.label}</span>
             </button>
             <wa-tooltip for=${`ancestor-${index}`}
-              >Go to ${ancestor.label} · ${ancestor.id}</wa-tooltip
+              >Go to ${ancestor.label}</wa-tooltip
             >
           `,
         )}

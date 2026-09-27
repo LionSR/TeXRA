@@ -8,7 +8,7 @@ import { Cause, Data, Effect, Exit, Layer, Scope } from 'effect';
 // Local imports
 import { loadAgents } from '@agent/index';
 import {
-  createAgentResponseTextConnector,
+  closeAllSessions,
   initializeDefaultSession,
   teardownDefaultSession,
   tryDefaultSession,
@@ -40,20 +40,19 @@ import {
 } from '@controllers/session/appStateStore';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { fromHost } from '@controllers/session/hostCallFailure';
-import { emitAppSignal } from '@eventBus/AppSignals';
+import { emitAppSignal, onAppSignal } from '@eventBus/AppSignals';
 import { vscodeToolMissingReporter } from '@frontend/system/commandUtils';
 import { installUnhandledRejectionSurface } from '@frontend/system/unhandledRejectionSurface';
-import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
 import { acquireVscodeLanguageModel } from '@frontend/lm/acquireVscodeLanguageModel';
 import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
-import { subscribeStatusBarSessionEvents } from '@frontend/statusBar/statusBarSessionEvents';
+import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
+import { agentDirectoriesLayer } from '@frontend/agents/AgentDirectoryManager';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -98,7 +97,6 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { StorageFs, withSessionFs } from '@platform/rootedFs';
@@ -111,12 +109,10 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
-import { registerRuntimeShutdownHandlers } from '@tools/agentCliSessionStores';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
-import { killActiveRecording } from '@tools/media/audio';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
-import { sessionStoreClearedMessage } from '@ui/copy/sessionStore';
+import { sessionStoreMovedAsideMessage } from '@ui/copy/sessionStore';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -186,10 +182,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     ),
   );
   const authReadiness: AuthReadinessGate = { uriHandlerInstalled: false };
-  // Built on every activate(): the drain trips an internal idempotency flag,
-  // so a lifecycle kept from an earlier activate() in the same process would
-  // silently swallow the handlers this one registers.
-  const lifecycle = createLifecycleHost();
   // A construction failure degrades to the unavailable plane instead of
   // failing activation: registration below records and reports the error, and
   // every probe answers signed-out.
@@ -242,8 +234,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
-    agentDirectories: AgentDirectories.layer(agentDirectories),
-    lifecycle,
+    agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
@@ -272,24 +263,21 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // The Output channel owns filtering, so emit every level.
     minimumLogLevel: 'Trace',
   });
+  // The activation scope's finalizers are this host's shutdown, run in the
+  // reverse of their registration: every session closes first (registered
+  // at the end of activation), then the host's own resources, then the
+  // project scope, and the runtime last of all. The status-bar refresh and
+  // the app-signal listeners are fibers of this scope, so they end before
+  // any of those; `statusBarItem` is owned solely by `context.subscriptions`
+  // (see the push near the end of activation), matching the setup pill.
+  yield* Effect.addFinalizer(() => disposeProcessRuntime(runtime));
   const projectScope = yield* Scope.make();
-  // `disposeStatusListener` and `statusBarItem` are owned solely by
-  // `context.subscriptions` (see the push near the end of activation),
-  // matching the setup pill. Registering them here too would
-  // double-dispose. The session is initialized on the workspace path only;
-  // the credential-only path has none to flush or release.
-  registerRuntimeShutdownHandlers(lifecycle, {
-    afterAgentShutdown: [killActiveRecording()],
-    flushArtifacts: Effect.suspend(
-      () => tryDefaultSession()?.settlePublications() ?? Effect.void,
-    ),
-    afterRunSettlement: [Effect.sync(() => disposeDiffRefresh())],
-    releaseSessions: teardownDefaultSession().pipe(
+  yield* Effect.addFinalizer(() =>
+    teardownDefaultSession().pipe(
       Effect.ensuring(Scope.close(projectScope, Exit.void)),
     ),
-    disposeRuntime: disposeProcessRuntime(runtime),
-  });
-  yield* Effect.addFinalizer(() => lifecycle.runShutdown);
+  );
+  yield* Effect.addFinalizer(() => Effect.sync(() => disposeDiffRefresh()));
   return yield* withProcessServices(
     runtime,
     Effect.gen(function* () {
@@ -328,19 +316,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // Everything this process installs once after its roots exist, in the
       // order the shared bootstrap owns for all three hosts.
       yield* bootstrapHost({
-        host: 'vscode',
         roots,
-        secrets,
         skills: {
           resourcesPath: path.join(context.extensionPath, 'resources'),
         },
       });
-      // After the runtime, which the manager settles its watcher rebuilds on.
-      agentDirectories.initialize(
-        globalState,
-        path.join(context.extensionPath, 'resources'),
-        runtime,
-      );
       yield* registerSupabaseAuth(
         context,
         secrets,
@@ -586,10 +566,20 @@ const activateExtension = Effect.fn('activateExtension')(function* (
   // The host entry holds the process runtime in a local and threads it to the
   // surfaces registered below, so code under `activate` settles its Effects on
   // the runtime it was handed instead of reading the global back.
+  // The activation scope carries the shutdown: the workspace activation
+  // registers its own finalizers there.
+  const activationScope = yield* Scope.Scope;
   yield* withProcessServices(
     runtime,
-    activateWorkspace(context, languageModel, secrets, runtime, roots),
+    activateWorkspace(context, languageModel, secrets, runtime, roots).pipe(
+      Effect.provideService(Scope.Scope, activationScope),
+    ),
   );
+  // Off the activation tick: extendEnvPath() runs synchronous glob probes.
+  yield* withProcessServices(
+    runtime,
+    initializeLatexSupport(roots.globalState),
+  ).pipe(Effect.delay('0 millis'), Effect.forkScoped);
 });
 
 /** The workspace path's activation, over the process runtime it just built. */
@@ -613,13 +603,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
   );
   const runtimeSession = yield* initializeDefaultSession({
     roots,
-    responseTextProcessing: createTexraResponseTextProcessing(
-      createAgentResponseTextConnector({ ...roots, secrets }, languageModel),
-    ),
+    responseTextProcessing: createTexraResponseTextProcessing(),
   });
-  if (runtimeSession.storeCleared) {
+  if (runtimeSession.storeMovedAside) {
     void vscode.window.showWarningMessage(
-      sessionStoreClearedMessage(runtimeSession.storeCleared),
+      sessionStoreMovedAsideMessage(runtimeSession.storeMovedAside),
     );
   }
   runtimeSession.setApprovalPolicy(
@@ -691,12 +679,11 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     progressViewProvider.initialize(),
     Effect.logInfo('TeXRA extension activated'),
   ).pipe(withLogChannel(EXTENSION_CHANNEL));
+  // Registered last, so the first thing the activation scope's close runs:
+  // every session stops and settles its runs before the view and the host
+  // resources registered above tear down around them.
+  yield* Effect.addFinalizer(() => Effect.asVoid(closeAllSessions()));
 
-  // Deferred off the activation tick: extendEnvPath() inside performs
-  // synchronous glob probes of TeX install directories, which would
-  // otherwise block activation on slow disks. (Never rejects — the body is
-  // fully wrapped in try/catch.)
-  setTimeout(() => void initializeLatexSupport(globalState, runtime), 0);
   registerCommands(
     context,
     globalState,
@@ -706,7 +693,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     runtimeSession,
   );
   registerWalkthroughWorkspaceAction(context, true, runtime);
-  registerFileDecorations(context, runtime, runtimeSession);
+  yield* registerFileDecorations(context, runtimeSession);
 
   // VS Code's event emitters don't await async listeners, so we funnel
   // fire-and-forget async work through this program, which logs a failed
@@ -741,10 +728,10 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
       runtime.runFork(refreshToolAvailabilityLogged('workspace folder change'));
     }),
   );
-  const gitHubAuthListener = subscribeAppSignal(
-    runtime,
-    'githubTokenInvalid',
-    ({ message }) => {
+  // Activation-lifetime listeners run in the activation scope, which ends
+  // them when the extension deactivates.
+  yield* Effect.forkScoped(
+    onAppSignal('githubTokenInvalid', ({ message }) => {
       const rejected = gitHubTokenRejectedMessage(message);
       void vscode.window
         .showErrorMessage(rejected, 'Open Git settings')
@@ -753,9 +740,9 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
             void vscode.commands.executeCommand('texra.showGitSettings');
           }
         });
-    },
+    }),
+    { startImmediately: true },
   );
-  context.subscriptions.push(gitHubAuthListener);
   yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
   yield* registerLanguageModelTools(context, runtime, runtimeSession);
   registerInlineComments(context);
@@ -824,33 +811,32 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     statusBarItem.show();
   };
 
-  const disposeStatusListener = subscribeStatusBarSessionEvents({
-    session: runtimeSession,
-    tracker: statusBarUsageTracker,
-    onStatusChanged: () => {
-      updateStatusBarTooltip();
-      updateStatusBarText();
-    },
-    // The snapshot store accumulates the per-round deltas; the tracker
-    // projects the running runs' totals from it on each refresh.
-    onUsageChanged: updateStatusBarTooltip,
-    runtime,
-  });
+  yield* Effect.forkScoped(
+    refreshStatusBarOnViewChanges({
+      session: runtimeSession,
+      tracker: statusBarUsageTracker,
+      onStatusChanged: () => {
+        updateStatusBarTooltip();
+        updateStatusBarText();
+      },
+      // The snapshot store accumulates the per-round deltas; the tracker
+      // projects the running runs' totals from it on each refresh.
+      onUsageChanged: updateStatusBarTooltip,
+    }),
+    { startImmediately: true },
+  );
   // Paint the policy line immediately; otherwise the tooltip shows the
   // generic "Show TeXRA Tasks" text until the first status/usage event.
   updateStatusBarTooltip();
   // Approval-policy setting updates emit on this signal; the subscription
   // here is what makes the refresh reachable, so a missed subscribe is a
   // missing behavior rather than a silent no-op.
-  const approvalPolicyTooltipRefresh = subscribeAppSignal(
-    runtime,
-    'approvalPolicyChanged',
-    updateStatusBarTooltip,
+  yield* Effect.forkScoped(
+    onAppSignal('approvalPolicyChanged', updateStatusBarTooltip),
+    { startImmediately: true },
   );
 
   context.subscriptions.push(
-    { dispose: disposeStatusListener },
-    approvalPolicyTooltipRefresh,
     statusBarItem,
     // Registered here rather than through the shared command registry because
     // the handler closes over this activation's status-bar refresh queue.

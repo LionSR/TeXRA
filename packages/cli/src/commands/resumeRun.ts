@@ -24,7 +24,7 @@ import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
 import { cliErrorMessage, writeTextStderr } from '../runtime/logSinks';
 import { buildHeadlessRunContext } from '../runtime/runModel';
-import { resolveCliLaunchAgent } from '../runtime/agents';
+import { resolveCliResumeAgent } from '../runtime/agents';
 import {
   assertOutputDirAvailable,
   assertOutputFileAvailable,
@@ -39,6 +39,17 @@ import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
 function loadFailureMessage(id: RunId, error: unknown): string {
   return `Could not load session ${id}: ${cliErrorMessage(error)}`;
+}
+
+/** Report a failed resume step: a usage refusal names itself, any other
+ *  failure reads as a session that could not load. */
+function resumeFailureExit(id: RunId, error: unknown): number {
+  if (error instanceof CliUsageError) {
+    writeTextStderr(error.message);
+    return CliExitCode.Usage;
+  }
+  writeTextStderr(loadFailureMessage(id, error));
+  return CliExitCode.AgentError;
 }
 
 /** Every recorded input and context file is still there: an absent path
@@ -149,23 +160,14 @@ export function runResumeCommand(context: CliContext, id: RunId) {
     // The launch pinned the resolved source on the record, so resume checks
     // that exact entry rather than re-resolving the bare name.
     const agent = yield* Effect.result(
-      resolveCliLaunchAgent(
+      resolveCliResumeAgent(
         stores,
         config.agentSource
           ? agentKey(config.agentSource, agentName(config.agent))
           : config.agent,
-        'workflowResume',
       ),
     );
-    if (Result.isFailure(agent)) {
-      const error = agent.failure;
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
-    }
+    if (Result.isFailure(agent)) return resumeFailureExit(id, agent.failure);
 
     let exitCode: number = CliExitCode.Usage;
     const resumed = yield* Effect.result(
@@ -200,7 +202,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
               {
                 session: stores.session,
                 runtime: stores.runtime,
-                lifecycle: stores.lifecycle,
+                shutdownScope: stores.shutdownScope,
                 runId,
                 modelCompatibilityKey,
                 recoveryInputIsDurable,
@@ -213,14 +215,7 @@ export function runResumeCommand(context: CliContext, id: RunId) {
       if ('started' in resumed.success) return exitCode;
       writeTextStderr(describeFollowUpFailure(resumed.success.failed));
       return CliExitCode.Usage;
-    } else {
-      const error = resumed.failure;
-      if (error instanceof CliUsageError) {
-        writeTextStderr(error.message);
-        return CliExitCode.Usage;
-      }
-      writeTextStderr(loadFailureMessage(id, error));
-      return CliExitCode.AgentError;
     }
+    return resumeFailureExit(id, resumed.failure);
   });
 }

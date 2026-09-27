@@ -60,12 +60,6 @@ export const WORKBENCH_KIND_META = {
     label: 'Review',
     singleton: true,
   },
-  settings: {
-    defaultPlacement: 'right',
-    icon: 'gear',
-    label: 'Settings',
-    singleton: true,
-  },
   logs: {
     defaultPlacement: 'right',
     icon: 'file-lines',
@@ -201,7 +195,7 @@ export interface OpenWorkbenchTabRequest {
 /**
  * Opens a workbench surface or focuses its existing tab.
  *
- * Browser/settings/logs are singletons because they represent one host-owned
+ * Browser/logs are singletons because they represent one host-owned
  * surface. Editors are keyed by file, and terminals intentionally create a new
  * session each time.
  */

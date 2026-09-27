@@ -158,9 +158,10 @@ const RunViewCommonSchema = z.object({
   ancestors: z.array(z.object({ id: RunIdSchema, label: z.string() })),
   /** `runOrdering` rule. */
   childIds: z.array(RunIdSchema),
-  /** Descendants by status; `running` counts the live ones (`isLiveRun`).
-   *  No separate waiting or interrupted count: both force expansion, so a
-   *  collapsed parent never hides a row that needs the user. */
+  /** Descendants by status: `running` counts the live ones (`isLiveRun`)
+   *  still working a turn, `finished` the ended ones and those parked idle
+   *  between turns. No separate waiting or interrupted count: both force
+   *  expansion, so a collapsed parent never hides a row that needs the user. */
   rollup: z.object({
     total: z.int().nonnegative(),
     running: z.int().nonnegative(),

@@ -34,6 +34,7 @@ import {
 } from '@agent/trace';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
+import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import type { AgentResume } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
@@ -74,7 +75,6 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { type ChildRun } from './delegation/childRun';
 import { claudeAgentSessionsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
@@ -405,7 +405,7 @@ function extractToolErrorMessage(content: unknown): string | undefined {
 // ============================================================================
 
 function buildClaudeAgentLaunch(params: {
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   initialPrompt: string;
   model: string;
@@ -571,7 +571,7 @@ export const ClaudeAgentTool = defineTool({
     'Requires the Claude Code CLI (auto-installed with @anthropic-ai/claude-agent-sdk, or via `npm install -g @anthropic-ai/claude-code`). ' +
     'Auth: ANTHROPIC_API_KEY (via TeXRA Settings → API Keys or env var), CLAUDE_CODE_OAUTH_TOKEN (`claude setup-token`), or `claude login` OAuth session. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the session_id). ' +
-    'Pass session_id on a later call to send a follow-up to an existing session, like delegate_agent(execution_id=…). ' +
+    'Pass session_id on a later call to send a follow-up to an existing session, like executions send to a delegate_agent subagent. ' +
     'Set fork_session to branch from that session while leaving the original unchanged. Choose claude_code for coding tasks that benefit from a separate Anthropic Claude Code agent. It runs in its own workspace with independent file editing, search, and shell access, async and multi-turn like delegate_agent. codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
   schema: ClaudeAgentInputSchema,
   guard: {

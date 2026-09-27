@@ -1,10 +1,7 @@
 import { Cause, Effect } from 'effect';
 
-import type { AgentRosterStores } from '@agent/index';
-import {
-  checkCliAgentLaunch,
-  resolveCliAgentInCategory,
-} from '@cli/runtime/agents';
+import { resolveAgentForLaunch, type AgentRosterStores } from '@agent/index';
+import { checkCliAgentLaunch } from '@cli/runtime/agents';
 import { CliUsageError } from '@cli/runtime/cliContext';
 import { readCliMultiAgentPresetName } from '@cli/runtime/multiAgentPresets';
 import { setCliHelperModel } from '@cli/runtime/initPlatform';
@@ -43,11 +40,7 @@ export function resolveChatToolUseAgent(
     return yield* checkCliAgentLaunch(
       stores,
       agentName,
-      yield* resolveCliAgentInCategory(
-        stores,
-        agentName,
-        AgentCategory.ToolUse,
-      ),
+      yield* resolveAgentForLaunch(stores, AgentCategory.ToolUse, agentName),
       'chat',
     );
   });

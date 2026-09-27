@@ -211,8 +211,7 @@ export class AgentWorkspaceState {
 
   /**
    * Create an empty snapshot without instantiating a full class.
-   * Use at initialization sites that only need the serializable shape
-   * (e.g., constructing initial ReflectionFlowShared).
+   * Use at initialization sites that only need the serializable shape.
    */
   static emptySnapshot(): AgentWorkspaceSnapshot {
     return AgentWorkspaceStateSnapshotSchema.parse({ workPlan: {} });
@@ -223,7 +222,7 @@ export class AgentWorkspaceState {
    * point for every caller, because there is one supported persisted format.
    *
    * A persisted snapshot hydrates where a loop reads it off the run's latest
-   * `flow.snapshot` (`@agent/runtime/loop/toolUse`, `@agent/runtime/loop/reflection`);
+   * `flow.snapshot` (`@agent/runtime/loop/toolUse`);
    * a loop re-deriving state from `toSnapshot()` output produced this run
    * runs the same parse.
    */

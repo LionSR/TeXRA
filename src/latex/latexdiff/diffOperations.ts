@@ -1,142 +1,98 @@
 /**
- * Build and execute latexdiff operations from run metadata
- * (`OutputFileInfo` per round).
+ * Host-neutral orchestration for a full latexdiff run.
+ *
+ * Reads the run's recorded round outputs from the session's fold (the
+ * `output.produced` facts, via {@link LatexRunDiscoveryPort.readRunOutputs}),
+ * builds one diff operation per round output (and, when the workspace's
+ * between-rounds setting is on, one per consecutive pair of rounds), and runs
+ * them. That fold is the only source: run storage is never rescanned and no
+ * workspace filename is parsed, so a run with no recorded outputs has no diff
+ * operations. This is the single source of truth shared by every host (VS Code
+ * command, desktop); each host keeps only its own UX (progress chrome,
+ * prompts, result rendering) and calls this with a {@link DiffProgressReporter}.
  */
 
 // Node imports
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, FileSystem } from 'effect';
+import { Effect, type FileSystem, type Path } from 'effect';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
+import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { LatexdiffMathMarkupValue } from '@shared/constants/latexConfig';
-import { getEffectiveDiffBase, roundIndexedEntries } from '@shared/schemas';
-import type { OutputFileInfo, ReadonlyRoundIndexed } from '@shared/schemas';
-import { pathExists } from '@utils/files/fsDurability';
+import {
+  getEffectiveDiffBase,
+  roundIndexedEntries,
+  type FileLocation,
+  type OutputFileInfo,
+  type RunId,
+} from '@shared/schemas';
+import { WorkspaceStateKey } from '@shared/state/stateKeys';
+import { readSettingFrom } from '@utils/config/platformSettings';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
-import { ensureError } from '@utils/errors/errorMessage';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 // Local file imports
+import { LaTeXdiffService } from '../latexdiff';
+import { buildBetweenRoundDiffSuffix } from './diffFileNameManager';
+import type { LatexRunDiscoveryPort } from './runDiscovery';
 import type {
-  DiffOperation,
   DiffProgressReporter,
   DiffRunOutcome,
   DiffRunResult,
-  LatexdiffRuntime,
 } from './types';
+import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-const executeDiffOperations = Effect.fn('latexdiff.executeDiffOperations')(
-  function* (
-    operations: readonly DiffOperation[],
-    mathMarkup: LatexdiffMathMarkupValue | undefined,
-    latexdiff: LatexdiffRuntime,
-    progress: DiffProgressReporter,
-    immediateResults: DiffRunResult[] = [],
-  ): Effect.fn.Return<
-    DiffRunOutcome,
-    Error,
-    FileSystem.FileSystem | ChildProcessSpawner
-  > {
-    const results: DiffRunResult[] = [...immediateResults];
-    // Zero operations never enter the loop, so the bare division is safe.
-    const incrementPct = 100 / operations.length;
+/** One latexdiff call: `suffix` names the diff file it writes. */
+interface DiffOperation {
+  base: FileLocation;
+  revised: FileLocation;
+  description: string;
+  cwd: string;
+  suffix: string;
+}
 
-    // Sequential by design: each latexdiff is a whole TeX run, and the
-    // progress reporter narrates them one at a time.
-    for (const operation of operations) {
-      progress.report({
-        increment: incrementPct,
-        message: `Running ${operation.type} diff for ${operation.description}`,
-      });
-
-      const [baseExists, revisedExists] = yield* Effect.all(
-        [
-          exists(operation.base.absolutePath),
-          exists(operation.revised.absolutePath),
-        ],
-        { concurrency: 2 },
-      );
-
-      if (!baseExists || !revisedExists) {
-        results.push({
-          success: false,
-          message: 'Required files are missing on disk',
-          description: operation.description,
-        });
-        continue;
-      }
-
-      yield* Effect.logDebug(
-        `Running ${operation.type} diff: ${operation.description}`,
-      );
-
-      const diffResult =
-        operation.type === 'round'
-          ? yield* latexdiff.service.runDiffForRound(
-              operation.base,
-              operation.revised,
-              operation.round,
-              mathMarkup,
-              { cwd: operation.cwd },
-            )
-          : yield* latexdiff.service.runDiffBetweenRounds(
-              operation.base,
-              operation.revised,
-              operation.fromRound,
-              operation.toRound,
-              mathMarkup,
-              { cwd: operation.cwd },
-            );
-
-      results.push({ ...diffResult, description: operation.description });
-    }
-
-    return { results };
-  },
-);
-
-/**
- * Whether `absolutePath` exists -- `pathExists`'s reading (the ENOTDIR
- * correction, and a link that resolves to nothing read as absent, since a
- * dangling symlink supplies no input), in this module's error channel.
- */
-const exists = (
-  absolutePath: string,
-): Effect.Effect<boolean, Error, FileSystem.FileSystem> =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    return yield* pathExists(fs, absolutePath).pipe(
-      Effect.mapError(ensureError),
-    );
-  });
-
-export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
+export const runLatexdiffForRun = Effect.fn('runLatexdiffForRun')(
   function* (params: {
-    rounds: ReadonlyRoundIndexed<OutputFileInfo>;
-    /** The calling session's workspace folder, or `undefined` with none open. */
-    workspaceRoot: string | undefined;
-    mathMarkup?: LatexdiffMathMarkupValue;
-    generateBetweenRoundDiffs: boolean;
-    latexdiff: LatexdiffRuntime;
-    progress: DiffProgressReporter;
+    /** The run whose recorded outputs are diffed. */
+    readonly runId: RunId;
+    /**
+     * The calling session's roots: the between-rounds setting is read from
+     * them, the diff service is bound to them, and their workspace folder is
+     * the cwd every diff operation runs in (a diff falls back to its base
+     * file's folder when no folder is open).
+     */
+    readonly roots: WorkspaceRoots;
+    /** Agent-owned read of the run's recorded outputs, injected by hosts. */
+    readonly runDiscovery: LatexRunDiscoveryPort;
+    readonly mathMarkup?: LatexdiffMathMarkupValue;
+    /** Logger channel the diff run reports under (host-specific). */
+    readonly channel: string;
+    readonly progress: DiffProgressReporter;
   }): Effect.fn.Return<
     DiffRunOutcome,
     Error,
-    FileSystem.FileSystem | ChildProcessSpawner
+    FileSystem.FileSystem | Path.Path | ChildProcessSpawner
   > {
-    const {
-      rounds,
-      workspaceRoot,
-      mathMarkup,
-      generateBetweenRoundDiffs,
-      latexdiff,
-      progress,
-    } = params;
+    const { runId, roots, mathMarkup, progress } = params;
+    const rounds = yield* params.runDiscovery.readRunOutputs(runId);
 
-    const immediateResults: DiffRunResult[] = [];
+    // Hosts report an empty outcome as "no diff operations for this run".
+    if (!Object.values(rounds).some((files) => files.length > 0)) {
+      yield* Effect.logWarning(
+        `No recorded outputs for run ${runId}; nothing to diff`,
+      );
+      return { results: [] };
+    }
+
+    const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
+      roots,
+      WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+    );
+    yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
+
+    const results: DiffRunResult[] = [];
     const operations: DiffOperation[] = [];
     const groupedBySource = new Map<
       string,
@@ -150,7 +106,7 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
         const description = `${source} (r${round})`;
 
         if (!base) {
-          immediateResults.push({
+          results.push({
             success: false,
             message: 'Missing base file path',
             description,
@@ -159,12 +115,11 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
         }
 
         operations.push({
-          type: 'round',
           base,
           revised: info.location,
           description,
-          cwd: workspaceRoot ?? path.dirname(base.absolutePath),
-          round,
+          cwd: roots.workspace ?? path.dirname(base.absolutePath),
+          suffix: '_diff',
         });
 
         const group = groupedBySource.get(source) ?? [];
@@ -179,31 +134,44 @@ export const runLatexdiffFromMetadata = Effect.fn('latexdiff.runFromMetadata')(
         for (const [index, current] of group.slice(1).entries()) {
           const previous = group[index];
           const base = previous.info.location;
-          const revised = current.info.location;
-          const description = `${getSafeDocumentRelativePath(current.info.source)} (r${previous.round}→r${current.round})`;
 
           operations.push({
-            type: 'between-rounds',
             base,
-            revised,
-            description,
-            cwd: workspaceRoot ?? path.dirname(base.absolutePath),
-            fromRound: previous.round,
-            toRound: current.round,
+            revised: current.info.location,
+            description: `${getSafeDocumentRelativePath(current.info.source)} (r${previous.round}→r${current.round})`,
+            cwd: roots.workspace ?? path.dirname(base.absolutePath),
+            suffix: buildBetweenRoundDiffSuffix(current.round, previous.round),
           });
         }
       }
     }
 
-    return yield* executeDiffOperations(
-      operations,
-      mathMarkup,
-      latexdiff,
-      progress,
-      immediateResults,
-    );
+    const service = new LaTeXdiffService(params.channel, roots);
+    // Zero operations never enter the loop, so the bare division is safe.
+    const incrementPct = 100 / operations.length;
+
+    // Sequential by design: each latexdiff is a whole TeX run, and the
+    // progress reporter narrates them one at a time.
+    for (const operation of operations) {
+      progress.report({
+        increment: incrementPct,
+        message: `Running diff for ${operation.description}`,
+      });
+
+      const diffResult = yield* service.runDiff(
+        operation.base,
+        operation.revised,
+        operation.suffix,
+        mathMarkup,
+        { cwd: operation.cwd },
+      );
+
+      results.push({ ...diffResult, description: operation.description });
+    }
+
+    return { results };
   },
-  // One channel for the whole run, named once here instead of threaded
-  // through each helper below.
-  (effect, params) => withLogChannel(params.latexdiff.channel)(effect),
+  // One channel for the whole run, so the read and the diff engine below
+  // both land on the caller's channel.
+  (effect, params) => withLogChannel(params.channel)(effect),
 );
