@@ -10,7 +10,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
 import { renderPrompt } from '@utils/prompt';
-import { loadTexraRules } from '@utils/files/rulesUtils';
+import { loadAgentsMd } from '@utils/files/agentsMd';
 import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -70,11 +70,11 @@ The /memories directory is shared with the orchestrator and other subagents. Che
 </subagent_memory_protocol>`;
 
 /**
- * Combine the base system prompt with optional rules from `.texrarules`.
+ * Combine the base system prompt with the project's `AGENTS.md`, if any.
  *
  * @param systemPrompt Base system prompt template
  * @param userVars Variables for template rendering
- * @param workspace The run's workspace root, whose `.texrarules` applies
+ * @param workspace The run's workspace root, whose `AGENTS.md` applies
  * @returns Full system prompt string
  */
 export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
@@ -85,8 +85,8 @@ export const getSystemPromptWithRules = Effect.fn('prompt.systemWithRules')(
   ): Effect.fn.Return<string, Error, FileSystem.FileSystem> {
     const parts = [yield* renderPrompt(systemPrompt, userVars)];
 
-    const rules = yield* loadTexraRules(workspace);
-    if (rules) parts.push(rules);
+    const instructions = yield* loadAgentsMd(workspace);
+    if (instructions) parts.push(instructions);
 
     // Append attached memories (read-only context from orchestrator)
     const attachedMemories = userVars.ATTACHED_MEMORIES;
@@ -124,7 +124,7 @@ export class PromptBuilder {
   constructor(
     private readonly agentPrompt: AgentPrompt,
     private readonly userVars: TemplateVars,
-    /** The run's workspace root, whose `.texrarules` the system prompt gets. */
+    /** The run's workspace root, whose `AGENTS.md` the system prompt gets. */
     private readonly workspace: string | undefined,
     private readonly logger?: AgentTrace,
   ) {}
@@ -206,7 +206,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     userVars: TemplateVars,
     logger: AgentTrace | undefined,
     options: {
-      /** The run's workspace root: its `.texrarules` and `<workspace_info>`. */
+      /** The run's workspace root: its `AGENTS.md` and `<workspace_info>`. */
       workspace: string | undefined;
       /** The same session's setting slots, for the `<workspace_info>` git reads. */
       settings: SettingsStores;

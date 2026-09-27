@@ -70,8 +70,8 @@ function journalKey(
 // (`resolveChildRunConcurrencyBudget`) as `concurrency`, so this value
 // governs no product run.
 const DEFAULT_CONCURRENCY = 4;
-const DEFAULT_TIMEOUT_MS = 10 * 60 * 1000;
-const DEFAULT_MAX_AGENT_CALLS = 200;
+const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
+const DEFAULT_MAX_AGENT_CALLS = 1000;
 const LABEL_EXCERPT_LENGTH = 80;
 
 /** The two statuses a failed attempt can terminalize a call with. */

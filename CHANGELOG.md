@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Project instructions come from `AGENTS.md`; `.texrarules` is no longer
+  read.** Every agent's system prompt gets the `AGENTS.md` at the workspace
+  root, or `~/.texra/AGENTS.md` when the workspace has none, the same file
+  other coding agents read. Rename an existing `.texrarules` to `AGENTS.md`.
 - **`delegate_agent` no longer takes `execution_id`** — send a subagent
   follow-up instructions with the `executions` tool instead (`action: "send"`
   on `/executions/<run id>`). A custom agent whose prompt tells it to resume a
@@ -123,6 +127,13 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Workflow scripts get longer default limits and an orchestration
+  skill** — the whole-run wall clock defaults to 60 minutes
+  (`meta.timeoutMs` up to 24 hours), a run may make 1000 live `agent()`
+  calls, and `all()` takes 4096 items. A script's own code gets 30 seconds of
+  CPU in total, so a loop that never yields stops quickly instead of holding
+  the app until the deadline. The lead reads a new bundled
+  `multi-agent-orchestration` skill for how to shape a run.
 - **Agents can message each other** — any run in a project can send a message
   to any other run with the `executions` tool's `send` action, the way you
   type into another terminal pane: an orchestrator to its subagent, a

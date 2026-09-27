@@ -1,6 +1,6 @@
 ---
 name: multi-agent-orchestration
-description: Shape a delegate_multi_agents workflow script so it is thorough and trustworthy, not just parallel. Use before writing any workflow script, and when deciding between one script, several scripts in sequence, or plain delegate_agent calls. Covers pipeline versus barrier, adversarial verification, referee panels, loop-until-nothing-new sweeps, completeness critics, and what a script should return.
+description: Shape a delegate_multi_agents workflow script so it is thorough and trustworthy, not just parallel. Use before writing any workflow script, and when deciding between one script, several scripts in sequence, or plain delegate_agent calls. Covers multi-step branches versus stage barriers, adversarial verification, referee panels, loop-until-nothing-new sweeps, completeness critics, and what a script should return.
 ---
 
 # Multi-Agent Orchestration
@@ -23,29 +23,66 @@ refute is worth more than three findings nobody checked.
 It is fine to scout first. List the sections, find the claims, or scope the
 diff with ordinary tools, then write the script over that list.
 
-## Primitives, and the traps in them
+## Branches, not stage barriers
 
-- `pipeline(items, stage1, stage2, ...)` is the default for multi-stage work.
-  Each item moves through the stages on its own, so a fast item is already
-  being verified while a slow one is still being read. Each stage receives
-  `(previousResult, originalItem, index)`. A stage that returns `null` ends
-  that item as `null`.
-- `parallel(thunks)` is a barrier. Use it between stages only when the next
-  stage needs every earlier result at once: dedup across all findings, stop
-  early when the total is zero, or compare items against each other. Flatten,
-  map, and filter do not need a barrier. Do them inside a pipeline stage.
-- A failed call and a call the user skipped both resolve to `null`. Filter
-  nulls before combining results. The run log says which were skipped.
+The most common mistake is writing the work stage by stage:
+
+```js
+// Slow: every section waits for the slowest reader before any verifying starts.
+const read = yield * all(sections.map((s) => agent(`Read ${s}`, opts)));
+const checked =
+  yield * all(read.map((r) => agent(`Verify ${r.response}`, opts)));
+```
+
+Give each item its own multi-step branch instead. `all()` accepts a generator
+function as an item, and each branch moves through its steps on its own, so
+one section is already being verified while a slower one is still being read:
+
+```js
+const checked =
+  yield *
+  all(
+    sections.map(
+      (s) =>
+        function* () {
+          const read = yield* agent(`Read ${s}`, opts);
+          return yield* agent(`Verify ${read.response}`, opts);
+        },
+    ),
+  );
+```
+
+Total time drops from "slowest read plus slowest verify" to "slowest single
+section", and agent run times vary a lot. Pass the function, not a call of it.
+
+Keep a barrier, meaning a second `all()` over the first one's results, only
+when the next step needs every earlier result at once: dedup across all
+findings, stop early when the total is zero, or compare items against each
+other. Flatten, map, and filter do not need a barrier.
+
+## Failures and the other traps
+
+- A failed call throws `AgentFailed`, a skipped call throws `Skipped`, and
+  `timeout()` throws `TimedOut`. `all()` is fail-fast: the first failure
+  stops the siblings. For tolerant fan-out, wrap each item in `attempt()` and
+  keep the `_tag === 'Success'` results. Wrapping a whole branch works too:
+  `attempt(function* () { ... })`.
+- `retry(op, { times })` re-runs a failed call or branch; calls the branch
+  already completed replay without running or billing again. A skip is the
+  user's verdict and is not retried.
 - Two calls with the same prompt and options need distinct `id`s. A panel of
   voters on the same question is the usual case: give each voter its own id,
   or better, its own angle (see referee panels below).
-- Without `meta.tasks`, pass `{ phase }` on each call inside `pipeline()`
-  stages. The global `phase()` is shared, and concurrent items race on it.
+- Phases are sequential progress groups: every call belongs to whichever
+  `phase()` is current, and a call naming a different phase fails the run.
+  Branches interleave their steps, so a branched stretch of work is one
+  phase; tell its steps apart with `label` (for example `Find: intro.tex`,
+  `Verify: intro.tex #2`).
 - Structured calls (`schema`) must name a tool-use agent with `agentName` and
-  take no file options. Put the file paths in the prompt; the agent reads
-  them with its own tools.
-- `Date.now()` and `Math.random()` throw, because they would break resume.
-  Vary work by index instead.
+  take no file options. Put file paths in the prompt; the agent reads them
+  with its own tools.
+- Write `yield*`, never `await`. `Date.now()` and `Math.random()` throw,
+  because they would break resume. Vary work by index instead.
 
 ## Patterns
 
@@ -94,7 +131,7 @@ else so ordinary delegation policy applies.
 export const meta = {
   name: 'verify-claims',
   description: 'Find load-bearing claims per section, then try to refute each',
-  phases: ['Find', 'Verify'],
+  phases: ['Review'],
 };
 const CLAIMS = {
   type: 'object',
@@ -124,58 +161,70 @@ const ANGLES = [
   'limiting and special cases',
 ];
 
-async function referee(claim, key) {
-  const votes = await parallel(
-    ANGLES.map(
-      (angle, n) => () =>
-        agent(
-          `Try to refute this claim, focusing on ${angle}. Read the source ` +
-            `before judging. If you cannot confirm the claim, set refuted=true.\n` +
-            `${claim.location}: ${claim.statement}`,
-          {
-            agentName: 'prover',
-            schema: VERDICT,
-            phase: 'Verify',
-            id: `${key}:${n}`,
-          },
+// One claim, three referees with different angles, each allowed to fail.
+function referee(claim, key) {
+  return function* () {
+    const votes = yield* all(
+      ANGLES.map((angle, n) =>
+        attempt(
+          agent(
+            `Try to refute this claim, focusing on ${angle}. Read the source ` +
+              `before judging. If you cannot confirm the claim, set refuted=true.\n` +
+              `${claim.location}: ${claim.statement}`,
+            {
+              agentName: 'prover',
+              schema: VERDICT,
+              id: `${key}:${n}`,
+              label: `Verify: ${key} #${n + 1}`,
+            },
+          ),
         ),
-    ),
-  );
-  const cast = votes
-    .filter((vote) => vote !== null)
-    .map((vote) => vote.structured);
-  const upheld = cast.filter((verdict) => !verdict.refuted).length;
-  return { ...claim, upheld, of: cast.length, verdicts: cast };
+      ),
+    );
+    const cast = votes
+      .filter((vote) => vote._tag === 'Success')
+      .map((vote) => vote.value.structured);
+    const upheld = cast.filter((verdict) => !verdict.refuted).length;
+    return { ...claim, upheld, of: cast.length, verdicts: cast };
+  };
 }
 
-const perSection = await pipeline(
-  args.sections,
-  (path) =>
-    agent(
-      `Read ${path}. List the claims later results depend on. Skip background.`,
-      {
-        agentName: 'review',
-        schema: CLAIMS,
-        phase: 'Find',
-        id: `find:${path}`,
-      },
+// One branch per section: find its claims, then referee each claim.
+phase('Review');
+const perSection =
+  yield *
+  all(
+    args.sections.map((path) =>
+      attempt(function* () {
+        const found = yield* agent(
+          `Read ${path}. List the claims later results depend on. Skip background.`,
+          {
+            agentName: 'review',
+            schema: CLAIMS,
+            id: `find:${path}`,
+            label: `Find: ${path}`,
+          },
+        );
+        return yield* all(
+          found.structured.claims.map((claim, i) =>
+            referee(claim, `verify:${path}:${i}`),
+          ),
+        );
+      }),
     ),
-  (found, path) =>
-    parallel(
-      found.structured.claims.map(
-        (claim, i) => () => referee(claim, `verify:${path}:${i}`),
-      ),
-    ),
+  );
+const checked = perSection
+  .filter((section) => section._tag === 'Success')
+  .flatMap((section) => section.value);
+const unchecked = args.sections.filter(
+  (_, i) => perSection[i]._tag !== 'Success',
 );
-const checked = perSection.filter((section) => section !== null).flat();
-const dropped =
-  args.sections.length - perSection.filter((s) => s !== null).length;
-if (dropped > 0)
-  log(`${dropped} section(s) failed to read and were not checked.`);
+if (unchecked.length > 0)
+  log(`Not checked (failed to read): ${unchecked.join(', ')}`);
 return {
   suspect: checked.filter((claim) => claim.upheld < 2),
   upheld: checked.filter((claim) => claim.upheld >= 2).length,
-  sectionsUnchecked: dropped,
+  unchecked,
 };
 ```
 

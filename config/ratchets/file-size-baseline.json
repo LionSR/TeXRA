@@ -63,7 +63,7 @@
     "src/agent/runtime/runRegistry.ts": 1021,
     "src/agent/runtime/SessionHandle.ts": 1207,
     "src/agent/workflowScript/runWorkflowScript.ts": 860,
-    "src/agent/workflowScript/sandbox.ts": 684,
+    "src/agent/workflowScript/sandbox.ts": 618,
     "src/common/errors/sdkError/providerErrorFormat.ts": 687,
     "src/common/teams/TeamPlan.ts": 508,
     "src/controllers/approval/ToolEditApprovalController.ts": 726,

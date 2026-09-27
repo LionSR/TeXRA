@@ -678,7 +678,7 @@ return yield* agent('Merge the corrected drafts.', {
   inputFiles: correctedFiles,
 })
 
-Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
+Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. Limits: the default whole-run wall clock is 60 minutes (set meta.timeoutMs, 1s to 24h, for longer runs); the script's own code separately gets 30s of CPU in total, and time spent waiting on agents does not count; at most 1000 live agent() calls per run and 4096 items per all(). Patterns: before writing a script, read the multi-agent-orchestration skill's SKILL.md (listed in available_skills) for how to shape a run: multi-step branches instead of stage-by-stage barriers, adversarial verification, referee panels, loop until nothing new, completeness critic.`,
   schema: WorkflowScriptToolInputSchema,
   execute: executeWorkflowScriptTool,
 });
