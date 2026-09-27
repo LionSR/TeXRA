@@ -570,7 +570,11 @@ no `@tools` to `@agent` edges.
   there trust is not stored: every MCP revision starts untrusted on each
   start and is decided by the process's `approvals` mode (default
   `denyAll`), with a `warn` logged once. It never falls back to an in-memory
-  key that would make saved trust look valid. Today's MCP revision is an HMAC under a
+  key that would make saved trust look valid. With no key there is also no
+  safe digest to record, so `run.activate` records such an MCP plugin as
+  `{ id: 'mcp:<name>', revision: 'unkeyed' }`. Attribution by revision is
+  explicitly unavailable in that configuration: no guessable hash is written
+  and nothing is silently omitted. Today's MCP revision is an HMAC under a
   per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
   unguessable and different after every restart, so it stays the in-process
   resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
@@ -1354,8 +1358,11 @@ live entry is notified, and a resumable one is woken by the session-bound
 resume (move 6), which launches through the path move 3 selects
 (`runWithLaunchGuard`), forked into the session scope, with no host port. A
 root workflow run is the exception: its resume needs the host's
-`openWorkflowOutput` (move 3). Only a host-launched root needs it: its
-opening snapshot records that it was launched with a host hook. A root
+`openWorkflowOutput` (move 3). Only a host-launched root needs it. Whether
+the run was launched with a host hook is a birth fact: a `hostHooked` field on
+`run.start`, committed in `commitRegistration`'s batch
+(`SessionHandle.ts:862`). It does not go on a snapshot, because resume reads
+only the latest snapshot and the loop replaces it at every turn and wait. A root
 launched through the SDK has none, presents from facts, and resumes without
 one, so an embedder's workflow input is woken like any other. For a
 host-launched root, the automatic wake takes the hook from the session's
@@ -1494,7 +1501,9 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 - **Refresh reaches runs only at run open.** Runs record the full resolved
   definition (setting and prompt, with its digest) once, in a dedicated
   run-level `run.definition` row, and resume reads it next to the latest
-  snapshot. It does not go on `flow.snapshot`: resume reads only the latest
+  snapshot. That row is committed in the same `commitRegistration` batch as
+  `run.start` (`SessionHandle.ts:862`), so no crash can leave a run that
+  exists without its pinned definition. It does not go on `flow.snapshot`: resume reads only the latest
   snapshot (`AgentRun.ts:263`), and the loop replaces that at every turn and
   wait (`toolUse.ts:405,695`). A pin there would be lost or copied into
   every checkpoint. Resume then runs from the recorded definition, so an edit between a halt and its resume changes neither the
@@ -1651,8 +1660,9 @@ for each child (inference). The host-neutral controllers still carry
   with no aggregate claim, so a host that attaches after the run settled or
   after a restart can always write it, and never takes or releases a live
   run's claim. Adding the family amends the accepted current-value decision.
-  It is deletable, like app-state: `removeRun` deletes the run's row in the
-  same transaction, so checkpoints never outlive their run. An
+  It is deletable, like app-state. `removeRun` deletes the row of every run
+  in `run.removed.runIds` (the whole removed closure, children included) in
+  the same transaction, so checkpoints never outlive their run. An
   attaching host presents only rounds with no checkpoint, so a
   reattached window does not replay rounds already checkpointed and loses no
   outputs produced while no host was attached. A crash between the side
