@@ -146,8 +146,9 @@ move 4).
   sessions still use: `PollingLifetime.drain` closes polling for good
   (`PollingSourceBase.ts:99-137`). Today there is one process-wide delivery
   `FiberSet`, so the per-session drain needs a new primitive first. Deliveries
-  become a `FiberMap` keyed by the target session's root. A session's close
-  unbinds its subscriptions and awaits that key's fibers, and the plugin
+  become one `FiberSet` per target session root, since one session can have
+  several deliveries in flight and a `FiberMap` keeps one fiber per key. A
+  session's close unbinds its subscriptions and awaits its own set, and the plugin
   entry's drain takes an optional session root for this. Until that
   primitive lands, closing one session leaves the process drain untouched,
   and admission to the closed session is refused. Hosts invoke it rather than repeating it (move 4). Plugin
@@ -523,8 +524,11 @@ no `@tools` to `@agent` edges.
   entries; it enters `Composition.loaded`, so one switch hides everything it
   contributes. Third parties never write TypeScript.
 - **The composition is recorded in the log, per activation.** Every
-  activation's opening `flow.snapshot` (the fresh launch and each resume)
-  records the composition it resolved (plugin set, the loaded plugins'
+  activation's `run.activate` row (the fresh launch and each resume) records
+  the composition it resolved. It goes on `run.activate` rather than
+  `flow.snapshot`, because only the tool-use loop writes snapshots
+  (`loop/rows.ts`), and a `codex`, `claude-agent` or `workflow-script`
+  activation never does. The recorded composition is (plugin set, the loaded plugins'
   content digests, preset id), not only `toolsetHash`. Work done after a
   resume is then attributed to the composition that actually ran it, so behaviour can be attributed
   to a plugin revision across restarts. The record is for attribution: a
@@ -1064,7 +1068,10 @@ RunFailure>` contract of the SDK's `Run`. The trace itself stays infallible,
   `sessionPrograms.ts:87`). Past the cap the trace detaches with the same
   warning as today, and a run nobody reads retains nothing once it settles.
   A caller that awaits only `run.result` therefore costs at most the cap.
-- `start` returns `Effect<Run, LaunchError | RunFailure, Scope>`, as
+- `start` returns `Effect<Run, LaunchError | RunFailure, Scope>`, where
+  `LaunchError` gains `PluginNotComposed` (move 2) beside `AgentNotFound` and
+  `ToolsRefused`, so the SDK can branch on it without reading an untyped
+  cause. `start` keeps `RunFailure` as
   `session.start` does today (`sessionPrograms.ts:172`): a failed agent scan,
   launch schema or pre-admission run stays a typed `RunFailure`. The scope bounds only
   the caller's event subscription: closing it detaches that reader, and the
@@ -1348,7 +1355,13 @@ released). When a session opens, it wakes each resumable run that has
 pending input and no live claim, through the same session-bound resume. The
 same scan runs again on two later events. One is a foreign `followup.queued`
 or `followup.released` row arriving through the session's tail. The other is
-a claim held by another process becoming acquirable, when its lease lapses.
+a claim held by another process becoming acquirable. Claim liveness is
+probed, not timed (`leaseOwnerLiveness.ts` compares nothing to a clock), so
+no event marks a foreign owner's death. While pending input is blocked by a
+foreign claim, the session keeps a retry scheduled: an `Effect.repeat` on an
+exponential, capped `Schedule`, forked into the session scope. It probes the
+claim and wakes the run once the claim is acquirable, and it stops when the
+input is consumed or the session closes.
 So input that another process queued before it crashed does not wait on a
 session that was already open. User, GitHub and released child input
 therefore never waits for a manual resume. `'deferred'` admits the row
@@ -1611,6 +1624,12 @@ for each child (inference). The host-neutral controllers still carry
   rounds' files.
 - **Presentation is checkpointed in the log, at least once.** After the host
   presents a round it publishes `output.presented {runId, roundId}`. The
+  row is a session-level fact on the session's own aggregate, as
+  `state.value.set` is, not on the run's aggregate. So a host that attaches
+  after the run settled, or after a restart, needs no run claim to write it,
+  and never takes or releases a live run's claim. (`appendAll` refuses
+  run-aggregate rows from anyone but the claim owner, failing with
+  `DatabaseNotOwner`.) The
   cold listing keeps only the latest row per aggregate and type
   (`listingTypeOf`, `Database.ts:160-191`), so the listing key for this row
   includes `roundId` and every round's checkpoint survives a restart. An
