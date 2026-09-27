@@ -8,11 +8,13 @@
  * request's recorded context, itself a blob, so a long conversation adds one
  * address per request, not a copy of what it sends.
  *
- * `recordedRequest` is the one reading of that record: a resumed background
+ * What is recorded is the turn the bound model prepared, the provider's own
+ * input, so no adapter normalization falls between the record and the wire.
+ * `recordedTurn` is the one reading of that record: a resumed background
  * observation re-prepares the request it admitted from it, never from what
  * current code would render, and in development and CI the invoker checks,
  * before a request leaves the process, that the rows it just committed,
- * read back from the store, rebuild that request exactly.
+ * read back from the store, rebuild that turn exactly.
  */
 import { Effect } from 'effect';
 import stableStringify from 'safe-stable-stringify';
@@ -39,22 +41,31 @@ import { envFlag } from '@utils/system/envFlags';
 import { rowAggregate } from '../loop/rows';
 import type { AgentRunShape } from './AgentRun';
 
-/** The recorded context of one request: everything it sends but its
- *  history and continuation, which the rows below its attempt hold. */
+/**
+ * The recorded context of one request: the turn the bound model prepared,
+ * which is what the provider receives (the adapter owns normalization, such
+ * as a Responses route trimming its instructions or filling required blank
+ * ones), less its history and continuation, which the rows below its
+ * attempt hold.
+ */
 const RecordedRequestSchema = z.strictObject({
   mode: z.enum(['foreground', 'background']),
   system: Sha256Schema.nullable(),
-  tools: z.array(Sha256Schema).nullable(),
-  toolChoice: z
-    .union([z.literal('auto'), z.strictObject({ name: z.string().min(1) })])
-    .nullable(),
-  maxOutputTokens: z.int().positive().nullable(),
-  store: z.boolean().nullable(),
+  tools: z.array(Sha256Schema),
+  /** The resolved controls: tool choice, output limit, storage and every
+   *  other parameter the binding (the attempt's `origin`) sent. */
+  controls: JsonValueSchema,
   /** The resolved agent definition the run was launched with. */
   agent: Sha256Schema,
-  /** The controls the bound model resolved the request to: what the
-   *  binding (the attempt's `origin`) sent beside it. */
-  controls: JsonValueSchema,
+});
+
+/** The controls a re-prepared request restates, where the protocol has them. */
+const RestatedControlsSchema = z.looseObject({
+  toolChoice: z.union([
+    z.literal('auto'),
+    z.strictObject({ name: z.string().min(1) }),
+  ]),
+  maxOutputTokens: z.int().positive().nullish(),
 });
 
 const DeclarationSchema = z.strictObject({
@@ -86,16 +97,15 @@ export function blobRows(
 }
 
 /**
- * The rows of an attempt that sends `sent`, as the bound model resolved it:
- * the blobs the rows do not hold yet, then the `attempt` row, which names
- * the request's recorded context and the binding's origin.
+ * The rows of an attempt that sends `resolved`, the turn the bound model
+ * prepared: the blobs the rows do not hold yet, then the `attempt` row, which
+ * names the request's recorded context and the binding's origin.
  */
 export function attemptRows(
   run: Pick<AgentRunShape, 'runId' | 'config' | 'setting' | 'prompt'>,
   state: RunState,
   invocation: InvocationRef,
   origin: ModelOrigin,
-  sent: TurnRequest,
   resolved: ResolvedTurn,
 ): RunLedgerDraft[] {
   const agent = {
@@ -104,19 +114,16 @@ export function attemptRows(
     prompt: run.prompt,
   };
   const request = {
-    mode: sent.mode ?? 'foreground',
-    system: sent.system === undefined ? null : sha256(sent.system),
-    tools: sent.tools?.map((tool) => sha256(tool)) ?? null,
-    toolChoice: sent.toolChoice ?? null,
-    maxOutputTokens: sent.maxOutputTokens ?? null,
-    store: sent.store ?? null,
-    agent: sha256(agent),
+    mode: resolved.mode,
+    system: resolved.system === undefined ? null : sha256(resolved.system),
+    tools: resolved.tools.map((tool) => sha256(tool)),
     controls: resolved.controls,
+    agent: sha256(agent),
   };
   return [
     ...blobRows(run.runId, state, [
-      ...(sent.system === undefined ? [] : [sent.system]),
-      ...(sent.tools ?? []),
+      ...(resolved.system === undefined ? [] : [resolved.system]),
+      ...resolved.tools,
       agent,
       request,
     ]),
@@ -150,62 +157,73 @@ function blob(state: RunState, digest: string): unknown {
 }
 
 /**
- * The request the open attempt at `state` sent, rebuilt from the rows and
- * their blobs alone: its recorded context, the history the rows fold to, and
- * the continuation it carried when the binding it recorded still matched.
+ * What the open attempt at `state` sent, rebuilt from the rows and their
+ * blobs alone: its recorded context, the history the rows fold to, and the
+ * continuation it carried when the binding it recorded still matched.
  * Throws on a record that cannot rebuild it.
  */
-export function recordedRequest(state: RunState): TurnRequest {
+function recordedTurn(state: RunState) {
   const open = state.openAttempt;
   if (open === null) throw new Error('no open attempt to rebuild');
   const recorded = RecordedRequestSchema.parse(blob(state, open.request));
   blob(state, recorded.agent);
   return {
-    mode: recorded.mode,
-    ...(recorded.system === null
-      ? {}
-      : { system: storedText(state, recorded.system) }),
-    messages: state.messages,
-    ...(recorded.tools === null
-      ? {}
-      : {
-          tools: recorded.tools.map((digest) =>
-            DeclarationSchema.parse(blob(state, digest)),
-          ),
-        }),
-    ...(recorded.toolChoice === null
-      ? {}
-      : { toolChoice: recorded.toolChoice }),
-    ...(recorded.maxOutputTokens === null
-      ? {}
-      : { maxOutputTokens: recorded.maxOutputTokens }),
-    ...(recorded.store === null ? {} : { store: recorded.store }),
-    ...(state.continuation !== null &&
-    sameModelOrigin(state.continuation.origin, open.origin)
-      ? { continuation: state.continuation }
-      : {}),
+    recorded,
+    turn: {
+      mode: recorded.mode,
+      ...(recorded.system === null
+        ? {}
+        : { system: storedText(state, recorded.system) }),
+      messages: state.messages,
+      tools: recorded.tools.map((digest) =>
+        DeclarationSchema.parse(blob(state, digest)),
+      ),
+      controls: recorded.controls,
+      ...(state.continuation !== null &&
+      sameModelOrigin(state.continuation.origin, open.origin)
+        ? { continuation: state.continuation }
+        : {}),
+    },
+  };
+}
+
+/**
+ * The request that prepares again to the turn the open attempt admitted:
+ * its recorded content and controls, never what current code would render.
+ */
+export function recordedRequest(state: RunState): TurnRequest {
+  const { controls, ...content } = recordedTurn(state).turn;
+  const { toolChoice, maxOutputTokens } =
+    RestatedControlsSchema.parse(controls);
+  return {
+    ...content,
+    toolChoice,
+    ...(maxOutputTokens == null ? {} : { maxOutputTokens }),
   };
 }
 
 /** Why the rows at `state` do not rebuild `sent`, or null when they do. */
-function mismatch(state: RunState, sent: TurnRequest): string | null {
-  const open = state.openAttempt;
-  if (open === null) return 'the rows hold no open attempt';
-  const recorded = RecordedRequestSchema.parse(blob(state, open.request));
-  // A tool-use request sends what its step recorded (invariant 7).
+function mismatch(state: RunState, sent: ResolvedTurn): string | null {
+  const { recorded, turn } = recordedTurn(state);
+  // A tool-use request sends the declarations its step recorded
+  // (invariant 7): no adapter rewrites them on the way out.
   if (
     state.offeredTools !== null &&
-    (stableStringify(recorded.tools) !==
-      stableStringify(state.offeredTools.map(({ shown }) => shown)) ||
-      recorded.system !== state.offeredSystem)
+    stableStringify(recorded.tools) !==
+      stableStringify(state.offeredTools.map(({ shown }) => shown))
   )
-    return "the request does not send what its step's tools.offered row records";
-  const rebuilt = recordedRequest(state);
-  const keys = new Set([...Object.keys(rebuilt), ...Object.keys(sent)]);
-  const differ = [...keys].filter(
-    (key) =>
-      stableStringify(rebuilt[key as keyof TurnRequest]) !==
-      stableStringify(sent[key as keyof TurnRequest]),
+    return "the request does not send the tools its step's tools.offered row records";
+  const sentFields: Record<string, unknown> = sent;
+  const rebuilt: Record<string, unknown> = turn;
+  const differ = [
+    'mode',
+    'system',
+    'messages',
+    'tools',
+    'controls',
+    'continuation',
+  ].filter(
+    (key) => stableStringify(rebuilt[key]) !== stableStringify(sentFields[key]),
   );
   return differ.length === 0
     ? null
@@ -214,11 +232,14 @@ function mismatch(state: RunState, sent: TurnRequest): string | null {
 
 /**
  * Development and CI (`TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT`, or under
- * Vitest): read the run back from the store and die, before the request is
- * sent, unless its rows rebuild `sent` exactly.
+ * Vitest): read the run back from the store and die, before the prepared
+ * turn `sent` goes to the provider, unless its rows rebuild it exactly.
  */
 export const checkRecordedRequest = Effect.fn('requestContext.check')(
-  function* (run: Pick<AgentRunShape, 'runId' | 'session'>, sent: TurnRequest) {
+  function* (
+    run: Pick<AgentRunShape, 'runId' | 'session'>,
+    sent: ResolvedTurn,
+  ) {
     const on =
       (yield* envFlag('TEXRA_INTERNAL_VALIDATE_REQUEST_CONTEXT')) ||
       (yield* envFlag('VITEST'));

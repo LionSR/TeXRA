@@ -24,6 +24,7 @@ import {
   type ModelOrigin,
   type ResolvedTurn,
   type TurnEvent,
+  type TurnRequest,
   type TurnResult,
 } from '@texra-ai/llm/turn';
 
@@ -143,12 +144,14 @@ function scriptedOrigin(model: string): HttpOrigin {
   };
 }
 
-function preparedTurn(origin: ModelOrigin): ResolvedTurn {
+/** The request as a Responses route prepares it: what the run records. */
+function preparedTurn(origin: ModelOrigin, request: TurnRequest): ResolvedTurn {
   return ResolvedTurnSchema.parse({
     ...origin,
     mode: 'foreground',
-    messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
-    tools: [],
+    system: request.system,
+    messages: request.messages,
+    tools: request.tools ?? [],
     transport: { kind: 'http' },
     controls: {
       temperature: null,
@@ -249,7 +252,7 @@ function scriptedBoundModel(
         text.includes('<subagent-progress') &&
         !text.includes('<subagent-result');
       observed.push({ model: config.name, messages: request.messages });
-      return Effect.succeed(preparedTurn(origin));
+      return Effect.succeed(preparedTurn(origin, request));
     },
     streamTurn: () =>
       Stream.unwrap(

@@ -623,13 +623,13 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
-        let sent = turnRequestFor(
+        const turnRequest = turnRequestFor(
           state,
           request,
           bound,
           (yield* backgroundRequested(bound)) ? 'background' : 'foreground',
         );
-        let resolved = yield* prepareAttempt(bound, sent);
+        let resolved = yield* prepareAttempt(bound, turnRequest);
         yield* saveDebug(
           state.messages,
           'messages',
@@ -691,8 +691,10 @@ export const modelInvokerLayer = (): Layer.Layer<
               // The clamp is part of the request, so the request is prepared
               // again with it: execution never reapplies defaults over a
               // resolved turn.
-              sent = { ...sent, maxOutputTokens: reduced };
-              resolved = yield* prepareAttempt(bound, sent);
+              resolved = yield* prepareAttempt(bound, {
+                ...turnRequest,
+                maxOutputTokens: reduced,
+              });
             }
           }
         }
@@ -700,12 +702,12 @@ export const modelInvokerLayer = (): Layer.Layer<
           attempt: invocation.attempt,
           delivery: resolved.mode,
         });
-        // The durable fact before the billed request (F1), with the content
-        // it sends, which the rows alone must rebuild.
+        // The durable fact before the billed request (F1), with the prepared
+        // turn it sends, which the rows alone must rebuild.
         yield* cell.append((state) =>
-          attemptRows(run, state, invocation, bound.origin, sent, resolved),
+          attemptRows(run, state, invocation, bound.origin, resolved),
         );
-        yield* checkRecordedRequest(run, sent);
+        yield* checkRecordedRequest(run, resolved);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
         const completed: AttemptOutcome = { value: null, streamedText: '' };
