@@ -2,10 +2,13 @@
 // exactly where texmath's `beg_end` rule would open an environment, plus the
 // shielding pass that swaps each recorded environment for placeholders.
 
+// Third-party imports
 import MarkdownIt, { type StateBlock } from 'markdown-it';
 
+// Local imports - utilities
 import { groupBy } from '@utils/core';
 
+// Local imports - markdown pipeline
 import {
   MARKDOWN_PARSER_OPTIONS,
   type MarkdownItInstance,

@@ -1,6 +1,7 @@
 # Path-segment splitting and basename lookup: two deferred consolidations
 
 Date: 2026-09-27
+Status: proposed
 Origin: scheduled native-method/consolidation sweep (four-domain survey:
 async/timing, hand-rolled data-structure ops, cross-webview duplication,
 string/path utilities). Three call sites of hand-rolled `Map`-bucket grouping
@@ -58,8 +59,11 @@ is the accepted cost of the `BROWSER_SAFE_UTILS` boundary.
 
 `src/shared/monaco/monacoLanguage.ts:20` hand-rolls
 `filePath.replaceAll('\\','/').split('/').at(-1) ?? ''` instead of importing
-`getBasename` from `@utils/core` (browser-safe, behaviorally equivalent,
-including the trailing-slash case). This is a single occurrence, and the
+`getBasename` from `@utils/core` (browser-safe, and equivalent for file
+paths; it differs only on a trailing slash, where `getBasename('/path/to/')`
+returns `'to'` and the hand-rolled split returns `''`, so a directory-shaped
+input such as `'/path/Dockerfile/'` would move from plaintext to
+dockerfile). This is a single occurrence, and the
 file's own header comment states an explicit design intent: it's "kept in
 its own module with no `monaco-editor` import of any kind" so that importing
 it never drags a bundler-visible worker chunk into a build that doesn't use
