@@ -293,15 +293,18 @@ export class Database extends Context.Service<
       readonly AggregateId[],
       DatabaseNotOwner | DatabaseReadFailed | DatabaseWriteFailed
     >;
-    /** C9: recheck the owning tree, acquire its claims, append the tombstone
-     *  and close all dependents in one transaction after liveness proofs.
-     *  The recorded start identifies the lifetime admitted by the caller. */
-    readonly removeRun: (
+    /** C9: read the owning tree and prove its owners reclaimable, then
+     *  answer the one transaction that rechecks that tree, acquires its
+     *  claims, appends the tombstone and closes all dependents. The
+     *  transaction is a publisher job (`SessionEvents.removeRun`), never
+     *  run on its own. The recorded start identifies the lifetime admitted
+     *  by the caller. */
+    readonly prepareRunRemoval: (
       id: AggregateId,
       mode: DeletionMode,
       expectedStartCommit: CommitOrdinal,
     ) => Effect.Effect<
-      readonly SessionEvent[],
+      Effect.Effect<readonly SessionEvent[], DatabaseWriteFailed>,
       DatabaseReadFailed | DatabaseWriteFailed
     >;
     /** C9: claim a closed root, clean its recorded runs, then cascade

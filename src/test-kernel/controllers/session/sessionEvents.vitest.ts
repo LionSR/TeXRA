@@ -420,6 +420,7 @@ describe('session events and view', () => {
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
+        const events = yield* SessionEvents;
         const oldParent = qualifyAggregateId('run', RUN);
         const newParentId = RunIdSchema.parse('aabbccdd1122');
         const newParent = qualifyAggregateId('run', newParentId);
@@ -479,13 +480,13 @@ describe('session events and view', () => {
         expect(
           (yield* db.readAggregate(inquiry, 0)).map((row) => row.seq),
         ).toEqual([1, 2, 3]);
-        yield* db.removeRun(
+        yield* events.removeRun(
           oldParent,
           'single',
           (yield* db.aggregateState([oldParent]))[0]!.startCommit!,
         );
         expect((yield* db.aggregateState([inquiry]))[0]?.closed).toBe(false);
-        yield* db.removeRun(
+        yield* events.removeRun(
           newParent,
           'single',
           (yield* db.aggregateState([newParent]))[0]!.startCommit!,
@@ -497,6 +498,33 @@ describe('session events and view', () => {
           ))._tag,
         ).toBe('Failure');
       }).pipe(Effect.provide(graph([]))),
+  );
+
+  /**
+   * Failure mode: the tombstone commits around the publisher, so its
+   * `run.removed` arm never runs and the removed run keeps its queued
+   * follow-up and open stream in what the publisher tracks.
+   */
+  it.effect('forgets what a removed run left open or queued', () =>
+    Effect.gen(function* () {
+      const events = yield* SessionEvents;
+      const run = qualifyAggregateId('run', RUN);
+      const [start] = yield* events.publish([
+        runStart,
+        {
+          type: 'followup.queued',
+          aggregateId: run,
+          followUpId: 'queued',
+          content: { text: 'deliver me', from: { kind: 'user' } },
+        },
+        { type: 'stream.start', aggregateId: run, id: 's1', kind: 'text' },
+      ]);
+      expect(events.pendingFollowUps(run)).toHaveLength(1);
+      expect(events.openWork(run)).toHaveLength(1);
+      yield* events.removeRun(run, 'single', start!.commit);
+      expect(events.pendingFollowUps(run)).toEqual([]);
+      expect(events.openWork(run)).toEqual([]);
+    }).pipe(Effect.provide(graph([]))),
   );
 
   it.effect('publishes complete replay and finite live batches in order', () =>
@@ -695,7 +723,7 @@ describe('Sessions owner', () => {
         const requests = sessionRequests(
           session,
           createSessionApprovals(),
-          db,
+          { ...db, removeRun: (yield* SessionEvents).removeRun },
           local,
           yield* InquiryRecords,
           { tryResumeRun: () => Effect.succeed(false) },
@@ -1980,7 +2008,9 @@ describe('the C1 event table and the C6 publisher', () => {
           yield* refusesDeletion;
           expect(
             yield* Effect.flip(
-              first.removeRun(root, 'bulk', initial[0]!.commit),
+              Effect.flatten(
+                first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+              ),
             ),
           ).toMatchObject({
             _tag: 'DatabaseWriteFailed',
@@ -1990,7 +2020,9 @@ describe('the C1 event table and the C6 publisher', () => {
         }).pipe(Effect.provide(substrate(storage, OTHER)));
         const committed = [
           ...(yield* first.appendAll([waiting])),
-          ...(yield* first.removeRun(root, 'bulk', initial[0]!.commit)),
+          ...(yield* Effect.flatten(
+            first.prepareRunRemoval(root, 'bulk', initial[0]!.commit),
+          )),
         ];
         expect(committed.at(-1)).toMatchObject({
           type: 'run.removed',
@@ -2078,7 +2110,9 @@ describe('the C1 event table and the C6 publisher', () => {
         const replacement = yield* first.appendAll([runStart]);
         expect(
           (yield* Effect.flip(
-            first.removeRun(root, 'single', initial[0]!.commit),
+            Effect.flatten(
+              first.prepareRunRemoval(root, 'single', initial[0]!.commit),
+            ),
           ))._tag,
         ).toBe('DatabaseWriteFailed');
         expect(yield* first.readAggregate(root, 0)).toEqual(replacement);
@@ -2253,7 +2287,11 @@ describe('the C1 event table and the C6 publisher', () => {
             .startCommit!;
           for (const mode of ['bulk', 'automatic'] as const) {
             expect(
-              yield* Effect.flip(first.removeRun(otherRoot, mode, otherStart)),
+              yield* Effect.flip(
+                Effect.flatten(
+                  first.prepareRunRemoval(otherRoot, mode, otherStart),
+                ),
+              ),
             ).toMatchObject({
               _tag: 'DatabaseWriteFailed',
               cause: { _tag: 'DatabaseClaimRefused', verdict: 'unprovable' },
@@ -2262,7 +2300,9 @@ describe('the C1 event table and the C6 publisher', () => {
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             false,
           );
-          yield* first.removeRun(otherRoot, 'single', otherStart);
+          yield* Effect.flatten(
+            first.prepareRunRemoval(otherRoot, 'single', otherStart),
+          );
           expect((yield* first.aggregateState([otherRoot]))[0]?.closed).toBe(
             true,
           );

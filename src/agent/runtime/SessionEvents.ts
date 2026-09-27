@@ -273,6 +273,18 @@ export const sessionEventsLayer = Layer.effect(
     ) {
       return yield* exclusive((append) => append(events));
     });
+    const removeRun: SessionEventsShape['removeRun'] = Effect.fn(
+      'SessionEvents.removeRun',
+    )(function* (id, mode, expectedStartCommit) {
+      const removal = yield* log.prepareRunRemoval(
+        id,
+        mode,
+        expectedStartCommit,
+      );
+      return yield* exclusive(() =>
+        removal.pipe(Effect.tap((rows) => Effect.sync(() => track(rows)))),
+      );
+    });
     /** Detached jobs still running or queued: what `settle` waits for. Each
      *  completes with the last commit its job appended, so a settler waits
      *  for exactly its cohort. A job's own refusal is logged where it
@@ -350,6 +362,7 @@ export const sessionEventsLayer = Layer.effect(
       publish,
       exclusive,
       detach,
+      removeRun,
       settle,
       openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
       pendingFollowUps: (aggregateId) =>

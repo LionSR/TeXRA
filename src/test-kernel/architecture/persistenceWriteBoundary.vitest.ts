@@ -56,6 +56,29 @@ const SQLITE_IMPORT =
 const EVENT_TABLE_WRITE =
   /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
 
+/** The session publisher: per (process, root), every durable append is a
+ *  job on its one inbox, so commit order is enqueue order (core concepts,
+ *  invariant 1). */
+const PUBLISHER_MODULE = 'src/agent/runtime/SessionEvents.ts';
+
+/** A call of the database's append, or of the run removal whose transaction
+ *  appends the tombstone; never a declaration or a `Pick` key. */
+const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
+
+/**
+ * The files that still append without the publisher, each with the reason it
+ * may. Shrink only: an entry whose file stops appending fails below, and a new
+ * appender is refused. Nothing is added here to make a change pass.
+ */
+const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
+  [DATABASE_MODULE]:
+    'defines appendAll and appendPrepared; its read-modify-append methods run appendPrepared inside their own write transaction, and the run-removal transaction it prepares runs as a publisher job',
+  'src/controllers/session/appStateStore.ts':
+    'project and profile application state: a project store is opened for the project scope with no session, so no publisher exists to route through (current values move to their own authority, move 12)',
+  'packages/desktop/src/main/desktopProjectRecords.ts':
+    'desktop project records on the global database, which holds no session and has no publisher',
+};
+
 function offenders(pattern: RegExp, allowed: readonly string[]): string[] {
   return PRODUCTION_ROOTS.flatMap(productionFilesUnder)
     .filter((file) => !allowed.includes(file))
@@ -98,6 +121,29 @@ describe('persistence write boundary', () => {
         ? undefined
         : `Append through Database.appendAll (${DATABASE_MODULE}); it is the only assigner of seq and commit (contract C6).`,
     ).toEqual([]);
+  });
+
+  it('appends through the session publisher and nowhere else', () => {
+    const allowed = [
+      PUBLISHER_MODULE,
+      ...Object.keys(APPENDS_OUTSIDE_PUBLISHER),
+    ];
+    const found = offenders(APPEND_CALL, allowed);
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : `Append as a job on the session publisher (${PUBLISHER_MODULE}: publish, exclusive, detach); a direct append commits around its inbox and its tracking.`,
+    ).toEqual([]);
+    // Shrink only: an allowance whose file no longer appends goes.
+    const stale = allowed.filter(
+      (file) =>
+        !APPEND_CALL.test(
+          stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
+        ),
+    );
+    expect(stale).toEqual([]);
   });
 
   it('keeps the Database layer itself the writer the ratchet names', () => {

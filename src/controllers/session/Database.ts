@@ -1010,7 +1010,7 @@ export const databaseLayer = (
               }),
             ).pipe(typedRefusal);
           }),
-        removeRun: (id, mode, expectedStartCommit) =>
+        prepareRunRemoval: (id, mode, expectedStartCommit) =>
           Effect.gen(function* () {
             const deletionMode = yield* Effect.try({
               try: () => DeletionModeSchema.parse(mode),
@@ -1039,13 +1039,14 @@ export const databaseLayer = (
               );
             }
             yield* proveReclaimable(observed, deletionMode);
-            const at = yield* Clock.currentTimeMillis;
             const removal = yield* Effect.try({
               try: () =>
                 prepareEventDraft({ type: 'run.removed', aggregateId: id }),
               catch: writeFailed,
             });
-            return yield* transact(
+            // The proofs above run off the publisher's fiber; this
+            // transaction is the job it runs, and it rechecks what they read.
+            return transact(
               Effect.gen(function* () {
                 const current = yield* readDependents(id);
                 const observedById = new Map(
@@ -1071,7 +1072,10 @@ export const databaseLayer = (
                   observed,
                   'Deletion claim changed before acquisition',
                 );
-                return yield* appendPrepared([removal], at);
+                return yield* appendPrepared(
+                  [removal],
+                  yield* Clock.currentTimeMillis,
+                );
               }),
             );
           }),
