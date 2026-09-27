@@ -3,10 +3,16 @@ import { Effect, type Fiber } from 'effect';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { RunHandle, type RunFacts } from '@agent/runtime/RunHandle';
-import { RunRegistry } from '@agent/runtime/runRegistry';
+import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { AgentCategory } from '@shared/schemas';
 import type { RunId, RunIdentity } from '@shared/schemas';
+import { testRuntime } from './testProcessRuntime';
+
+/** A registry's launch door over the harness's process runtime, standing in
+ *  for the session context the session layer forks runs from. */
+export const testRunFork: RunRegistryInit['fork'] = (effect) =>
+  testRuntime().runFork(effect);
 
 /**
  * A live run handle for tests.
@@ -43,6 +49,7 @@ export function testRunRegistry(): RunRegistry {
       Effect.succeed({ ok: true, outcome: input.outcome }),
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
+    fork: testRunFork,
   });
 }
 

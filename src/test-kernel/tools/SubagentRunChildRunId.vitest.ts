@@ -33,13 +33,16 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
     Effect.succeed({ config, setting: { tools: [] } }),
 }));
 
-vi.mock('@agent/runtime/childRunLoop', () => ({
-  startChildRunLoop: mocks.startChildRunLoop,
+vi.mock('@agent/runtime/runLaunchGuard', () => ({
   runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
+      typeof import('@agent/runtime/runLaunchGuard').runWithLaunchGuard
     >
   ) => args[2],
+}));
+
+vi.mock('@agent/runtime/childRunLoop', () => ({
+  startChildRunLoop: mocks.startChildRunLoop,
 }));
 
 vi.mock('@agent/storage', () => ({

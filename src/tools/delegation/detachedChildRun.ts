@@ -1,5 +1,5 @@
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import type { Runs } from '@agent/runtime/runRegistry';
+import type { AgentRunServices, Runs } from '@agent/runtime/runRegistry';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
  *
@@ -16,9 +16,9 @@ import type { Runs } from '@agent/runtime/runRegistry';
 // Third-party imports
 
 // Local imports
+import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   startChildRunLoop,
-  runWithLaunchGuard,
   type ChildRunLoopParams,
   type ChildRunPort,
   type ChildRunStrategy,
@@ -84,7 +84,10 @@ export type DetachedChildRunInput<
  * loop, then attach the completion error trace. Returns the launched loop's
  * completion so in-band callers can await it.
  */
-export function startDetachedChildRunLoop<TTurn, R = never>(
+export function startDetachedChildRunLoop<
+  TTurn,
+  R extends AgentRunServices = never,
+>(
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<
   { completion: Fiber.Fiber<TTurn | undefined, Error> },

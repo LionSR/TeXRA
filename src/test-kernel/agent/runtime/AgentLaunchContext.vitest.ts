@@ -25,6 +25,7 @@ import {
   prepareAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
+import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import { TraceEmitter } from '@agent/trace';
 import { hasErrorPresentationClaimed } from '@common/errors/sdkError/errorMetadata';
 import {
@@ -295,6 +296,7 @@ describe('AgentLaunchContext', () => {
           ),
         );
         publishTestRunStart(session, EXECUTION_ID);
+        yield* session.settlePublications();
         mocks.resolve.mockReturnValueOnce(
           Effect.succeed({ path: '/agents/chat.yaml' }),
         );
@@ -306,17 +308,22 @@ describe('AgentLaunchContext', () => {
         );
 
         const exit = yield* Effect.exit(
-          buildAgentLaunchContext({
-            config: AgentConfigSchema.parse({
-              agent: 'chat',
-              model: 'gpt55',
-              agentCategory: AgentCategory.ToolUse,
-            }),
-            runId: EXECUTION_ID,
+          runWithLaunchGuard(
             session,
-            resumed: true,
-            modelCompatibilityKey: 'OpenAIResponse',
-          }),
+            EXECUTION_ID,
+            buildAgentLaunchContext({
+              config: AgentConfigSchema.parse({
+                agent: 'chat',
+                model: 'gpt55',
+                agentCategory: AgentCategory.ToolUse,
+              }),
+              runId: EXECUTION_ID,
+              session,
+              resumed: true,
+              modelCompatibilityKey: 'OpenAIResponse',
+            }),
+            {},
+          ),
         );
         assert(Exit.isFailure(exit));
         expect(String(Cause.squash(exit.cause))).toContain(
@@ -436,56 +443,54 @@ describe('AgentLaunchContext', () => {
       }),
   );
 
-  it.effect(
-    'compensates a late launch-assembly failure before the trace closes',
-    () =>
-      Effect.gen(function* () {
-        const order: string[] = [];
-        const failure = new Error('user vars unavailable');
-        const postProcessResponse = vi.fn((text: string) =>
-          Effect.succeed(text),
-        );
-        const responseTextProcessing = {
-          normalizeResponseText: (text: string) => text,
-          postProcessResponse,
-        };
-        const session = createTestSession({
-          responseTextProcessing,
+  it.effect('ends a late launch-assembly failure on the launch terminal', () =>
+    Effect.gen(function* () {
+      const order: string[] = [];
+      const failure = new Error('user vars unavailable');
+      const postProcessResponse = vi.fn((text: string) => Effect.succeed(text));
+      const responseTextProcessing = {
+        normalizeResponseText: (text: string) => text,
+        postProcessResponse,
+      };
+      const session = createTestSession({
+        responseTextProcessing,
+      });
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
+      publishTestRunStart(session, EXECUTION_ID);
+      yield* session.settlePublications();
+      const terminalEvents = recordSessionEvents(session);
+      const stage = noopTrace.openStage('Run');
+      const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
+        order.push('stage');
+      });
+      const closeTrace = TraceEmitter.prototype.close;
+      const close = vi
+        .spyOn(TraceEmitter.prototype, 'close')
+        .mockImplementation(function (this: TraceEmitter) {
+          order.push('close');
+          closeTrace.call(this);
         });
-        yield* Effect.addFinalizer(() => closeSessionOf(session));
-        publishTestRunStart(session, EXECUTION_ID);
-        const terminalEvents = recordSessionEvents(session);
-        const stage = noopTrace.openStage('Run');
-        const endStage = vi.spyOn(stage, 'end').mockImplementation(() => {
-          order.push('stage');
-        });
-        const closeTrace = TraceEmitter.prototype.close;
-        let eventsAtClose: ReturnType<typeof terminalEvents.read> | undefined;
-        const close = vi
-          .spyOn(TraceEmitter.prototype, 'close')
-          .mockImplementation(function (this: TraceEmitter) {
-            order.push('close');
-            eventsAtClose ??= terminalEvents.read();
-            closeTrace.call(this);
-          });
-        const openStage = vi
-          .spyOn(TraceEmitter.prototype, 'openStage')
-          .mockReturnValue(stage);
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            openStage.mockRestore();
-            close.mockRestore();
-          }),
-        );
-        mocks.resolve.mockReturnValueOnce(
-          Effect.succeed({ path: '/agents/chat.yaml' }),
-        );
-        mocks.load.mockReturnValueOnce(
-          Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
-        );
-        mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
+      const openStage = vi
+        .spyOn(TraceEmitter.prototype, 'openStage')
+        .mockReturnValue(stage);
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          openStage.mockRestore();
+          close.mockRestore();
+        }),
+      );
+      mocks.resolve.mockReturnValueOnce(
+        Effect.succeed({ path: '/agents/chat.yaml' }),
+      );
+      mocks.load.mockReturnValueOnce(
+        Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+      );
+      mocks.buildVars.mockReturnValueOnce(Effect.fail(failure));
 
-        const error = yield* Effect.flip(
+      const error = yield* Effect.flip(
+        runWithLaunchGuard(
+          session,
+          EXECUTION_ID,
           buildAgentLaunchContext({
             config: AgentConfigSchema.parse({
               agent: 'chat',
@@ -498,27 +503,30 @@ describe('AgentLaunchContext', () => {
             suppressErrorNotification: true,
             modelCompatibilityKey: 'OpenAIResponse',
           }),
-        );
-        expect(error).toBe(failure);
+          {},
+        ),
+      );
+      expect(error).toBe(failure);
 
-        expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
-          workspacePath: session.roots.workspace,
-          storageRoot: session.roots.storage,
-          config: session.roots.config,
-          settings: session.roots,
-          stageId: undefined,
-        });
-        expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
-        expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
-        expect(close).toHaveBeenCalledOnce();
-        expect(yield* Effect.promise(() => eventsAtClose!)).toContainEqual(
-          expect.objectContaining({
-            type: 'run.end',
-            outcome: RUN_OUTCOME.FAILED,
-          }),
-        );
-        // Terminal compensation is committed before the trace is closed.
-        expect(order).toEqual(['stage', 'close']);
-      }),
+      expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
+        workspacePath: session.roots.workspace,
+        storageRoot: session.roots.storage,
+        config: session.roots.config,
+        settings: session.roots,
+        stageId: undefined,
+      });
+      expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);
+      expect(session.runView(EXECUTION_ID)?.status).toBe(RUN_PHASE.FAILED);
+      expect(close).toHaveBeenCalledOnce();
+      // The launch's scope unwinds first (its stage, then its trace); the
+      // launch terminal then ends the run it left open.
+      expect(yield* Effect.promise(() => terminalEvents.read())).toContainEqual(
+        expect.objectContaining({
+          type: 'run.end',
+          outcome: RUN_OUTCOME.FAILED,
+        }),
+      );
+      expect(order).toEqual(['stage', 'close']);
+    }),
   );
 });

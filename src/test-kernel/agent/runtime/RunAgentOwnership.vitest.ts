@@ -82,6 +82,7 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { testRunFork } from '@test/support/runHandleFixtures';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
@@ -182,6 +183,7 @@ function realRunRegistry(): RunRegistry {
       Effect.succeed({ ok: true, outcome: input.outcome })) as never,
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
+    fork: testRunFork,
   });
 }
 
@@ -352,11 +354,13 @@ describe('runAgent run ownership', () => {
       expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
         runId: RUN_ID,
         outcome: RUN_OUTCOME.FAILED,
+        keepExistingOutcome: true,
+        error: { kind: 'unexpected', message: 'launch failed' },
       });
     }),
   );
 
-  it.effect('leaves lifecycle-owned failures to the lifecycle finalizer', () =>
+  it.effect("keeps the lifecycle's own ending of a failed run", () =>
     Effect.gen(function* () {
       const launchError = new Error('flow failed');
       mocks.executeAgent.mockImplementationOnce(
@@ -368,7 +372,10 @@ describe('runAgent run ownership', () => {
 
       expect(yield* Effect.flip(launch())).toBe(launchError);
 
-      expect(mocks.finalizeRun).not.toHaveBeenCalled();
+      expect(mocks.finalizeRun).toHaveBeenCalledWith(
+        SESSION,
+        expect.objectContaining({ keepExistingOutcome: true }),
+      );
       expect(mocks.releaseClaims).toHaveBeenCalledWith(
         qualifyAggregateId('run', RUN_ID),
       );

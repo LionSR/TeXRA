@@ -254,7 +254,10 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   // resume is its whole run, on the same resume path as a conversation.
   if (cancelled()) return REFUSED;
   const launched = yield* Effect.result(
-    resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
+    session.runs.launchRun(
+      runId,
+      resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
+    ),
   );
   if (Result.isFailure(launched)) {
     const refused = yield* refusalFor(launched.failure, session, runId);
@@ -420,11 +423,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;
       if (parentRunId === undefined) {
-        const root = yield* Effect.forkDetach(
-          resumeToolUseFromResumeData(resume, {
-            ...launchOptions,
-            onIdle,
-          }).pipe(Effect.onExit(releaseRecovery)),
+        const root = yield* session.runs.launch(
+          runId,
+          resumeToolUseFromResumeData(resume, { ...launchOptions, onIdle }),
+          Effect.onExit(releaseRecovery),
         );
         rootCompletion = Fiber.join(root).pipe(Effect.map((r) => r.outcome));
         completion = root;

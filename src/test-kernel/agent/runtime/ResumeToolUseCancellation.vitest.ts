@@ -34,6 +34,13 @@ vi.mock('@agent/runtime/AgentRunLifecycle', () => ({
     mocks.runFlowWithLifecycle(...args),
 }));
 
+// The launch terminal's backstop row: the lifecycle this suite stubs owns
+// the run's ending, so the backstop keeps it.
+vi.mock('@agent/storage/runLifecycle', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/storage/runLifecycle')>()),
+  finalizeRun: () => Effect.succeed({ ok: true, outcome: 'completed' }),
+}));
+
 vi.mock('@agent/runtime/loop/toolUse', () => ({
   runToolUse: mocks.runToolUse,
 }));

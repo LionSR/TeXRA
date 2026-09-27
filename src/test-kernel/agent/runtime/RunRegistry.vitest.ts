@@ -31,6 +31,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   admitInterruptibleRun,
+  testRunFork,
   testRunHandle,
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -150,6 +151,7 @@ function createRegistry(
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
+    fork: testRunFork,
     ...options,
   });
   return { events, phases, registry };

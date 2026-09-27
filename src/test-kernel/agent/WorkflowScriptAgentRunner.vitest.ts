@@ -33,6 +33,7 @@ import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { testRunFork } from '@test/support/runHandleFixtures';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
@@ -269,6 +270,7 @@ const fenceRoster = () =>
           (release: Effect.Effect<void>) => release,
         ),
       ),
+    fork: testRunFork,
   });
 let lanes = fenceRoster();
 const runs = {
