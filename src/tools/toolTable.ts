@@ -1,20 +1,20 @@
 /**
- * The process's plugin table: every plugin's tools by plugin id, which each
- * run's offered tools are rebuilt from (`@tools/composition`). The
+ * The process's plugin table: every plugin's tools by plugin id, which the
+ * built-in plugins contribute to the live catalog (`@tools/liveTools`). The
  * `ToolRegistry` service holds it, provided once per process by
- * `installProcessRuntime` from `@tools/registry`, beside the compositions
- * built over it. This module imports no tool, manifest or plugin layer, so
- * a reader of the tag loads none of them.
+ * `installProcessRuntime` from `@tools/registry`, beside the catalog built
+ * over it. This module imports no tool, manifest or plugin layer, so a
+ * reader of the tag loads none of them.
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
- * The resources a plugin owns, as a layer: built when the first open
- * composition that includes the plugin opens, released when the last one
- * closes (`@tools/compositions`). One object per plugin for the life of the
- * process, which is what lets compositions share it. Its services are
+ * The resources a plugin owns, as a layer: built when the first pinned
+ * catalog generation that includes the plugin is pinned, released when the
+ * last one drains (`@tools/liveTools`). One object per plugin for the life
+ * of the process, which is what lets generations share it. Its services are
  * erased in this type (and it may neither fail nor require a service): no
  * plugin declares a layer yet, and the first one that does types its
  * services into the tool contract's requirements.
@@ -30,20 +30,20 @@ export interface LoadedPluginTools {
 
 /**
  * A plugin read from user configuration rather than the manifest (an MCP
- * server): its tools are known only once its resources are up, so the
- * composition that includes it records its `spec`, and the entry built for
- * that composition acquires it (`@tools/compositions`).
+ * server): its tools are known only once its resources are up, so a run
+ * that names it holds its `spec` and revision, and the catalog contributes
+ * its tools while any run holds them (`@tools/liveTools`).
  */
 export interface LoadedPlugin {
   /** Stable id, e.g. `mcp:<server>`. */
   readonly id: string;
-  /** What the composition records and hashes. */
+  /** What the holds are counted by, with the revision. */
   readonly spec: Readonly<Record<string, unknown>>;
   /**
-   * A keyed digest of what the spec leaves out (an MCP server's env values),
-   * which the composition records beside it: a changed revision is a new
-   * composition, built with fresh resources beside the open ones. Keyed
-   * per process, so it reveals nothing about the values it digests.
+   * A keyed digest of what the spec leaves out (an MCP server's env values):
+   * a changed revision is a new hold with fresh resources beside the open
+   * ones. Keyed per process, so it reveals nothing about the values it
+   * digests, and never recorded: an offered tool records its spec's digest.
    */
   readonly revision: string;
   /**

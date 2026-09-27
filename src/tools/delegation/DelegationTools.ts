@@ -116,7 +116,7 @@ export const WorkflowAgentTool = defineTool({
   // asynchronous one settles at once, so its card closes right after opening.
   slow: true,
   // Static base text; the "Available agents:" line is resolved per run at the
-  // resolveAgentTools boundary.
+  // resolveStepTools boundary.
   description: `Delegate to a workflow agent. The agent rewrites every file you list in inputFiles, emitting one revised <document> per input. Use for whole-document operations: proofreading, polishing, applying reviews, adding derivations, merging revisions. For interactive tool use or selective edits, use delegate_agent instead.
 
 Delegations run asynchronously. When subtasks are independent, launch them all in one turn and continue your own work. Each result arrives automatically as a follow-up message.
@@ -216,7 +216,7 @@ export const DelegateAgentTool = defineTool({
   // Card at admission, as for `delegate_workflow` above.
   slow: true,
   // Static base text; the "Available agents:", "Available models:", and "Git
-  // worktree support:" lines are resolved per run at the resolveAgentTools
+  // worktree support:" lines are resolved per run at the resolveStepTools
   // boundary.
   description: `Delegate a task to a new tool-use agent with its own tools (file reading, editing, search, bash). Tool-use agents can create entire documents, make targeted edits, perform research, or run multi-step investigations.
 

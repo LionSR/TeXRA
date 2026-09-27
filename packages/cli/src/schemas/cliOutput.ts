@@ -66,13 +66,11 @@ export type CliPluginPin = z.infer<typeof CliPluginPinSchema>;
 
 /**
  * The provenance an agent run's result carries beside its own fields: the
- * hash of the tool composition the run pinned, and the plugins installed
- * when it started or resumed (skill plugins are not part of the tool composition, so
- * the hash alone does not tell two plugin sets apart). Both are absent on a
- * result that is not a run's.
+ * plugins installed when it started or resumed. Absent on a result that is
+ * not a run's; the tools each step offered are the run's `tools.offered`
+ * rows.
  */
 const runResultPayload = z.looseObject({
-  compositionHash: z.string().optional(),
   plugins: z.array(CliPluginPinSchema).readonly().optional(),
 });
 

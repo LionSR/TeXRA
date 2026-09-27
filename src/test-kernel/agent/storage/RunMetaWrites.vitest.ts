@@ -99,8 +99,6 @@ describe('run metadata updates', () => {
             phase: 'initial',
             state: {
               stateSlices: null,
-              offeredTools: [],
-              toolsetHash: '0'.repeat(64),
             },
           }),
         ]);

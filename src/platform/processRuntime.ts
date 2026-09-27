@@ -32,7 +32,7 @@ import type { UsageLog } from '@shared/usageLog';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
-import type { Compositions } from '@tools/compositions';
+import type { LiveTools } from '@tools/liveTools';
 import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -58,8 +58,8 @@ import type { Secrets } from './secrets';
  * connection between application state and a session graph,
  * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
  * the settings Git tab share, `ToolRegistry`, the plugin table every run's
- * offered tools are rebuilt from, and `Compositions`, the open compositions
- * the runs pin over it.
+ * offered tools are rebuilt from, and `LiveTools`, the live catalog each
+ * run's step pins a generation of.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -84,7 +84,7 @@ export type ProcessServices =
   | UsageLog
   | SupabaseAuth
   | ToolRegistry
-  | Compositions;
+  | LiveTools;
 
 /**
  * The services an agent catalog load reads: the global and filesystem views

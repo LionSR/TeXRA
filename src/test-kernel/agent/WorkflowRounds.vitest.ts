@@ -53,7 +53,7 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
-import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { rootedFsLayer } from '@test/support/fsTestUtils';
@@ -72,7 +72,6 @@ import {
 } from '@test/support/setupPlatform';
 import { FakeStateStore, fakePath } from '@test/support/FakePlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { RunFileService } from '@utils/files/runStorage';
@@ -225,15 +224,6 @@ const unusedModel = new Proxy({} as Model, {
     throw new Error(`The harness model has no ${String(property)}.`);
   },
 });
-
-/** The pinned composition of a workflow run: the documents plugin's rounds. */
-const DOCUMENTS_COMPOSITION = {
-  ...emptyPinnedComposition,
-  key: new CompositionKey('0'.repeat(64), {
-    ...emptyPinnedComposition.key.composition,
-    plugins: ['documents'],
-  }),
-};
 
 function testBoundModel(): BoundModel {
   return {
@@ -426,10 +416,8 @@ function agentRunTestLayer(init: LoopInit) {
         userVarChannels: {},
         initialUserMessageForTranscript: 'Write the document.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry({}),
+        ...testRunTools(hostStores()),
         finalToolName: null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: DOCUMENTS_COMPOSITION,
         structured: { value: undefined },
         model,
         scope,

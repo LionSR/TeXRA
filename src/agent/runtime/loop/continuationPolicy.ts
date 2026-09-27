@@ -14,19 +14,20 @@
  * with an outcome.
  *
  * A policy is a plugin's contribution: the run resolves it once, when the
- * loop is set up, from the plugins its pinned composition holds, so a
- * switched-off plugin and a delegated child's narrowing apply to it as they
- * do to tools. Each policy serves one agent category: goal mode a tool-use
- * conversation, the documents plugin's rounds a workflow agent. With no
- * continuation plugin on for its category, a conversation parks.
+ * loop is set up, from the plugins switched on then, so a switched-off
+ * plugin applies to it as it does to tools. Each policy serves one agent
+ * category: goal mode a tool-use conversation, the documents plugin's
+ * rounds a workflow agent. With no continuation plugin on for its category,
+ * a conversation parks.
  */
 import { Effect } from 'effect';
 
 import { maybeBuildGoalContinuation } from '@agent/goal/maybeBuildGoalContinuation';
 import { AgentCategory, type RunId, type RunOutcome } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
-import type { ToolPluginEntry } from '@tools/plugins';
+import { switchedOffPlugins, type ToolPluginEntry } from '@tools/plugins';
 import { goalOf, pauseGoal, setGoalSessionAutoApproval } from '@tools/goal';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { roundsContinuation, type RoundTurns } from './rounds';
@@ -103,18 +104,22 @@ const PLUGIN_CONTINUATIONS = {
   };
 };
 
-/** The run's policy: that of the first continuation plugin its pinned
- *  composition holds for its category, or null when none is on. */
+/** The run's policy: that of the first continuation plugin switched on for
+ *  its category when the loop is set up, or null when none is on. */
 export function continuationFor(
   run: AgentRunShape,
 ): Effect.Effect<ContinuationPolicy | null, Error, AgentRun> {
-  const id = run.composition.key.composition.plugins.find(
-    (plugin): plugin is keyof typeof PLUGIN_CONTINUATIONS =>
-      Object.hasOwn(PLUGIN_CONTINUATIONS, plugin) &&
-      PLUGIN_CONTINUATIONS[plugin as keyof typeof PLUGIN_CONTINUATIONS]
-        .category === run.config.agentCategory,
-  );
-  return id === undefined
-    ? Effect.succeed(null)
-    : PLUGIN_CONTINUATIONS[id].policy(run);
+  return Effect.flatMap(getDisabledToolIds(run.stores.globalState), (ids) => {
+    const off = switchedOffPlugins(ids);
+    const id = (
+      Object.keys(PLUGIN_CONTINUATIONS) as (keyof typeof PLUGIN_CONTINUATIONS)[]
+    ).find(
+      (plugin) =>
+        PLUGIN_CONTINUATIONS[plugin].category === run.config.agentCategory &&
+        !off.has(plugin),
+    );
+    return id === undefined
+      ? Effect.succeed(null)
+      : PLUGIN_CONTINUATIONS[id].policy(run);
+  });
 }

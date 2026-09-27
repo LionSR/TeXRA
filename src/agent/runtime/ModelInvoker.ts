@@ -504,7 +504,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const responseId = randomUUID();
         const calls = dispatchFactsFor(
           turn,
-          run.tools,
+          (yield* SynchronizedRef.get(run.steps))?.tools.registry,
           logger,
           generateShortId,
         );

@@ -24,6 +24,7 @@ import {
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
+  type OfferedTool,
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
@@ -44,6 +45,7 @@ import {
   type RunPosition,
   type SharedRunRow,
 } from './runRows';
+import { mutate } from './stateOperation';
 import type { z } from 'zod';
 
 /**
@@ -72,6 +74,7 @@ export type RunLedgerDraft = Extract<
       | 'tool.result'
       | 'model.retry'
       | 'flow.snapshot'
+      | 'tools.offered'
       | 'output.produced'
       | 'tool.start'
       | 'tool.end'
@@ -179,6 +182,8 @@ export type RunState = RunPosition & {
    *  in. */
   readonly overflowRecoveredAtTurn: number | null;
   readonly flow: FlowState | null;
+  /** The latest `tools.offered` row's set; `null` before the first. */
+  readonly offeredTools: readonly OfferedTool[] | null;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
@@ -259,6 +264,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   overflowRecoveredAtTurn: null,
+  offeredTools: null,
 });
 
 /**
@@ -299,39 +305,6 @@ const refuse = (
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
-
-/** One state operation over a JSON document, immutably. */
-function mutate(
-  node: unknown,
-  path: readonly string[],
-  op: StateOperation,
-): Result.Result<unknown, string> {
-  if (!isObject(node)) {
-    return Result.fail(`path ${op.path.join('.')} crosses a non-object`);
-  }
-  const [key, ...rest] = path;
-  if (key === undefined) return Result.fail('empty path');
-  if (rest.length > 0) {
-    if (!Object.hasOwn(node, key)) {
-      return Result.fail(`path ${op.path.join('.')} names no ${key}`);
-    }
-    return Result.map(mutate(node[key], rest, op), (child) => ({
-      ...node,
-      [key]: child,
-    }));
-  }
-  switch (op.op) {
-    case 'set':
-      return Result.succeed({ ...node, [key]: op.value });
-    case 'add': {
-      const current = node[key];
-      if (typeof current !== 'number') {
-        return Result.fail(`add targets a non-number ${op.path.join('.')}`);
-      }
-      return Result.succeed({ ...node, [key]: current + op.amount });
-    }
-  }
-}
 
 /**
  * Apply a settlement's operations over the run's mutable slices, `usage` and
@@ -672,6 +645,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ]),
       });
     }
+    case 'tools.offered': // a fresh run's comes in its opening batch
+      return Result.succeed({
+        ...advance(current ?? freshRunState(commit)),
+        offeredTools: row.payload.tools,
+      });
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;

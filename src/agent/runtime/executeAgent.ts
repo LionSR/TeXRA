@@ -10,6 +10,7 @@ import { withLogChannel } from '@logger/effectLog';
 import type { ProcessServices } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 import {
+  type OfferedTool,
   type RunId,
   type RequestEnsureProgressViewPayload,
   type SubagentProgressUpdate,
@@ -21,7 +22,6 @@ import {
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { CompositionKey } from '@tools/compositions';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 
 import {
@@ -47,7 +47,7 @@ import {
   type ResumeData,
 } from './SessionResumeRetrieval';
 import { modelInvokerLayer } from './ModelInvoker';
-import { agentRunLayer, withCompositionHash } from './run/AgentRun';
+import { agentRunLayer } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
 import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { Runs } from './runRegistry';
@@ -179,7 +179,6 @@ function launchToolUseRun(
     },
   }).pipe(
     Effect.map(toResult),
-    withCompositionHash,
     Effect.provide(
       runLayerFor(
         ctx,
@@ -203,7 +202,7 @@ function launchWorkflowRun(
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
   const start = { resume: resumed };
   const program = Effect.gen(function* () {
-    const result = yield* withCompositionHash(runToolUse(start)).pipe(
+    const result = yield* runToolUse(start).pipe(
       Effect.provide(runLayerFor(ctx, options, undefined)),
     );
     const flowResult: WorkflowFlowResult = {
@@ -222,7 +221,6 @@ function launchWorkflowRun(
       ...(ctx.attachedMemoryMisses?.length
         ? { memoryMisses: ctx.attachedMemoryMisses }
         : {}),
-      compositionHash: result.compositionHash,
     };
     if (flowResult.error || !options.publishWorkflowOutput) return flowResult;
     const publication = yield* options.publishWorkflowOutput(
@@ -302,10 +300,11 @@ interface SubagentRunOptions {
   /** Hide tools whose approval prompts cannot be answered in this host mode. */
   approvalPromptsUnavailable?: boolean;
   /**
-   * The composition a fresh delegated child joins: its parent's. A resume
-   * resolves its own under the recorded-toolset rule.
+   * What the parent's step offered when it launched this fresh delegated
+   * child, which the child can only narrow. A resume is held to its own
+   * record instead.
    */
-  composition?: CompositionKey;
+  parentOffered?: readonly OfferedTool[];
   /** Record that this run met an approval-policy denial (see `AgentRun`). */
   onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
   /** Session owning this run's coordination state; run entry points require it. */
@@ -382,7 +381,7 @@ export function executeAgent(
       toolPolicy: {
         approvalPromptsUnavailable: options.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
-        composition: options.composition,
+        parentOffered: options.parentOffered,
       },
     });
     return yield* Effect.gen(function* () {

@@ -78,7 +78,7 @@ import {
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { closeSessionOf } from '@test/support/sessionEnd';
-import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
+import { testRunTools } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -289,10 +289,8 @@ function agentRun(
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools: new MapToolRegistry({}),
+    ...testRunTools(hostStores()),
     finalToolName: null,
-    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -338,6 +336,7 @@ const freshState = (): RunState => ({
   flow: null,
   roundOutputs: [],
   overflowRecoveredAtTurn: null,
+  offeredTools: null,
 });
 
 interface InvokerKit {
@@ -373,8 +372,6 @@ const openRun = Effect.fn('openRun')(function* (
       phase: 'initial',
       state: {
         stateSlices: null,
-        offeredTools: [],
-        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);

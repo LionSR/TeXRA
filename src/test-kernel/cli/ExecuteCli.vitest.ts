@@ -303,7 +303,7 @@ function checkpointSnapshot(): FlowSnapshotPayload {
       lastError: null,
       declinedRoutes: [],
     },
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   };
 }
 

@@ -71,6 +71,7 @@ import {
   stepRow,
   type Message,
 } from './rows';
+import type { StepTools } from './step';
 import type { InvokeError } from '../ModelInvoker';
 import type { Runs } from '../runRegistry';
 import type { RunCell } from './runProgram';
@@ -244,11 +245,13 @@ function settlementContent(
   return [{ kind: 'text', text }, ...media];
 }
 
-/** Dispatch every unsettled call of the pending response, then deliver,
- *  with the `joined` rows committed after the tool group. */
+/** Dispatch every unsettled call of the pending response under `step`'s
+ *  tools (`./step`), then deliver, with the `joined` rows committed after
+ *  the tool group. */
 export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   cell: RunCell,
   turn: TurnContext,
+  step: StepTools,
   joined: readonly RunLedgerDraft[] = [],
 ): Effect.fn.Return<
   DispatchOutcome,
@@ -342,7 +345,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     status: ToolCallStatus,
     result: unknown,
   ): RunLedgerDraft[] => [
-    ...(run.tools.get(fact.toolName)?.slow === true
+    ...(step.registry.get(fact.toolName)?.slow === true
       ? []
       : [cardStart(fact, input)]),
     displayRow(runId, {
@@ -358,7 +361,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     fact: DispatchFacts,
     call: LocalCall,
   ): RunLedgerDraft[] =>
-    run.tools.get(fact.toolName)?.slow === true
+    step.registry.get(fact.toolName)?.slow === true
       ? [cardStart(fact, parseCallArguments(call, logger))]
       : [];
 
@@ -382,7 +385,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ProcessServices | Runs | WorkspaceFs | StorageFs | FileSystem.FileSystem
   > {
     const fs = yield* FileSystem.FileSystem;
-    const tool: ITool | undefined = run.tools.get(fact.toolName);
+    const tool: ITool | undefined = step.registry.get(fact.toolName);
     const parsedInput = parseCallArguments(call, logger);
     const stageId = fact.stageId ?? undefined;
     // A slow tool's card is open: `dispatchCall` committed its `tool.start`
@@ -427,8 +430,6 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     turn.workspace.interactions.recordToolCall();
     let result: ToolResult;
     if (!tool) {
-      // A name the run was not offered, or one it was offered that no longer
-      // resolves on resume: a model-visible error, and the turn continues.
       result = {
         status: 'error',
         error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
@@ -451,9 +452,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               toolCallId: fact.callId,
               hooks: { onToolOutput, recordSubagentCost },
             }),
-            // The services of the run's plugins' layers, from its pinned
-            // composition.
-            Effect.provide(run.composition.services),
+            // The step's plugin layers' services.
+            Effect.provide(step.services),
           ),
         ),
       );

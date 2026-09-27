@@ -12,10 +12,7 @@ import { Runs } from '@agent/runtime/runRegistry';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import type { RunId } from '@shared/schemas';
-import {
-  emptyPinnedComposition,
-  testModelCell,
-} from '@test/support/nativeToolTestLayer';
+import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
@@ -80,6 +77,7 @@ describe('executeSubagent child run launch', () => {
     run: {
       runId: 'parent-exec' as RunId,
       session: { tag: 'parent-session' } as never,
+      steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({ agent: 'chat', model: 'gpt5' }),
       model: testModelCell('gpt5'),
@@ -87,7 +85,6 @@ describe('executeSubagent child run launch', () => {
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },
-      composition: emptyPinnedComposition,
     },
   };
 

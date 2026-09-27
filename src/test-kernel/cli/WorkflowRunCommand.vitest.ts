@@ -346,7 +346,7 @@ function workflowSnapshot(
       declinedRoutes: [],
       ...runtime,
     },
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   };
 }
 
