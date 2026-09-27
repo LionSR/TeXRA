@@ -1853,6 +1853,33 @@ while (true) {}`,
     }),
   );
 
+  it.live('stops guest code at its CPU budget long before the wall clock', () =>
+    Effect.gen(function* () {
+      const startedAt = Date.now();
+      yield* expectEffect(
+        Effect.scoped(
+          Effect.gen(function* () {
+            const realm = yield* openWorkflowRealm(
+              'while (true) {}',
+              sandboxBridge(),
+              {
+                filename: 'spin.workflow.js',
+                shouldInterrupt: () => false,
+                cpuBudgetMs: 30,
+              },
+            );
+            const generator = yield* realm.start(realm.main);
+            return yield* realm.resume(generator, {
+              kind: 'next',
+              value: undefined,
+            });
+          }),
+        ),
+      ).rejects.toThrow(/guest CPU budget/);
+      expect(Date.now() - startedAt).toBeLessThan(1_000);
+    }),
+  );
+
   it.live('rejects malformed args JSON while installing the bridge', () =>
     Effect.gen(function* () {
       yield* expectEffect(

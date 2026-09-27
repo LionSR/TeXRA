@@ -100,6 +100,18 @@ Saved provider keys currently use each host's secure credential mechanism. They
 are not copied through the shared JSON configuration. Environment-variable keys
 are available to any TeXRA host launched with that environment.
 
+## Project instructions (AGENTS.md)
+
+Put standing instructions for a project, such as spelling conventions,
+notation, or how to build the paper, in an `AGENTS.md` file at the workspace
+root. Every agent adds it to its system prompt. When the workspace has no
+`AGENTS.md`, TeXRA uses `~/.texra/AGENTS.md` instead. It is the same file
+Codex and other coding agents read, so one file serves all of them. TeXRA
+reads no other instructions file name; an old `.texrarules` file is ignored,
+so rename it to `AGENTS.md`.
+
+The whole file goes into every prompt, so keep it short.
+
 ## Skills, tools, and privacy
 
 The **Tools** page contains tool availability and approval controls; the skills

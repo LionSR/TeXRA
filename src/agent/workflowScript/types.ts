@@ -45,7 +45,7 @@ export const WorkflowScriptMetaSchema = z
     timeoutMs: z
       .int()
       .min(1_000)
-      .max(60 * 60 * 1000)
+      .max(24 * 60 * 60 * 1000)
       .optional(),
   })
   .superRefine((meta, context) => {
@@ -447,9 +447,9 @@ export interface WorkflowScriptRunOptions<R = never> {
    * body runs, so a host can wire interactive skip/retry to in-flight calls.
    */
   onControl?: (control: WorkflowScriptControl) => void;
-  /** Wall-clock cap for the whole script. Default 10 minutes. */
+  /** Wall-clock cap for the whole script. Default 60 minutes. */
   timeoutMs?: number;
-  /** Lifetime agent() call cap (runaway-loop backstop). Default 200. */
+  /** Lifetime agent() call cap (runaway-loop backstop). Default 1000. */
   maxAgentCalls?: number;
 }
 

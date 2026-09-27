@@ -15,6 +15,8 @@ import { z } from 'zod';
 // Local imports - utilities
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+import { DETERMINISM_PRELUDE } from './determinismPrelude';
+
 export interface SandboxHostBridge {
   /** Sync primitives. Arguments cross as JSON text; results are primitives. */
   syncFns: Record<string, (args: unknown[]) => string | undefined>;
@@ -31,11 +33,20 @@ export interface SandboxOptions {
    * running step with an error the script cannot catch.
    */
   shouldInterrupt: () => boolean;
+  /** Guest CPU budget; defaults to {@link GUEST_CPU_BUDGET_MS}. */
+  cpuBudgetMs?: number;
 }
 
 const QUICKJS_MEMORY_LIMIT_BYTES = 64 * 1024 * 1024;
 const QUICKJS_STACK_LIMIT_BYTES = 1 * 1024 * 1024;
-const MAX_FANOUT = 512;
+const MAX_FANOUT = 4096;
+/**
+ * Total time guest code may run across every step, apart from the wall
+ * clock. Guest code runs on the host thread, so a loop that never yields
+ * would otherwise hold that thread until the whole-run deadline; waiting on
+ * agents is not guest time and never counts.
+ */
+const GUEST_CPU_BUDGET_MS = 30_000;
 
 const getQuickJsModule = memoizePromiseFactory(() =>
   newQuickJSWASMModuleFromVariant(
@@ -165,94 +176,6 @@ export interface WorkflowRealm {
     input: BranchInput,
   ) => Effect.Effect<BranchStep, Error>;
 }
-
-/**
- * Nondeterminism and dynamic-code guards. Journal replay requires stable call
- * order, while workflow scripts have no reason to compile source at runtime.
- */
-const DETERMINISM_PRELUDE = `
-'use strict';
-(() => {
-  const guard = (what, hint) =>
-    function () {
-      throw new Error(
-        what + ' is unavailable in workflow scripts (breaks resume); ' + hint,
-      );
-    };
-  Object.defineProperty(Math, 'random', {
-    value: guard('Math.random()', 'vary prompts by call index instead.'),
-    writable: false,
-    configurable: false,
-  });
-
-  const RealDate = Date;
-  function GuardedDate(...args) {
-    if (args.length === 0) {
-      throw new Error(
-        'new Date() without arguments is unavailable in workflow scripts (breaks resume); pass timestamps in via args.',
-      );
-    }
-    const instance = Reflect.construct(RealDate, args);
-    return new.target ? instance : String(instance);
-  }
-  GuardedDate.prototype = RealDate.prototype;
-  GuardedDate.parse = RealDate.parse;
-  GuardedDate.UTC = RealDate.UTC;
-  Object.defineProperty(GuardedDate, 'now', {
-    value: guard('Date.now()', 'pass timestamps in via args.'),
-    writable: false,
-    configurable: false,
-  });
-  Object.defineProperty(RealDate.prototype, 'constructor', {
-    value: GuardedDate,
-    writable: false,
-    configurable: false,
-  });
-  Object.defineProperty(globalThis, 'Date', {
-    value: GuardedDate,
-    writable: false,
-    configurable: false,
-  });
-
-  Object.defineProperty(globalThis, 'Intl', {
-    value: undefined,
-    writable: false,
-    configurable: false,
-  });
-
-  const dynamicCodeDisabled = function () {
-    throw new TypeError('Dynamic code generation is disallowed in workflow scripts.');
-  };
-  const constructors = [
-    Function,
-    Object.getPrototypeOf(async function () {}).constructor,
-    Object.getPrototypeOf(function* () {}).constructor,
-    Object.getPrototypeOf(async function* () {}).constructor,
-  ];
-  for (const constructor of constructors) {
-    Object.defineProperty(constructor.prototype, 'constructor', {
-      value: dynamicCodeDisabled,
-      writable: false,
-      configurable: false,
-    });
-  }
-  for (const name of ['Function', 'eval']) {
-    Object.defineProperty(globalThis, name, {
-      value: dynamicCodeDisabled,
-      writable: false,
-      configurable: false,
-    });
-  }
-
-  for (const method of ['then', 'catch', 'finally']) {
-    Object.defineProperty(Promise.prototype, method, {
-      value: Promise.prototype[method],
-      writable: false,
-      configurable: false,
-    });
-  }
-})();
-`;
 
 /**
  * The script-facing vocabulary and the step machine. It captures the opaque
@@ -477,13 +400,23 @@ export function openWorkflowRealm(
 ): Effect.Effect<WorkflowRealm, Error, Scope.Scope> {
   return Effect.gen(function* () {
     const quickJs = yield* loadQuickJsModule;
+    const cpuBudgetMs = options.cpuBudgetMs ?? GUEST_CPU_BUDGET_MS;
+    let guestCpuMs = 0;
+    let stepStartedAt: number | undefined;
+    let cpuExhausted = false;
     const runtime = yield* Effect.acquireRelease(
       Effect.try({
         try: () =>
           quickJs.newRuntime({
             memoryLimitBytes: QUICKJS_MEMORY_LIMIT_BYTES,
             maxStackSizeBytes: QUICKJS_STACK_LIMIT_BYTES,
-            interruptHandler: options.shouldInterrupt,
+            interruptHandler: () => {
+              if (options.shouldInterrupt()) return true;
+              if (stepStartedAt === undefined) return false;
+              const used = guestCpuMs + performance.now() - stepStartedAt;
+              cpuExhausted = used >= cpuBudgetMs;
+              return cpuExhausted;
+            },
           }),
         catch: ensureError,
       }),
@@ -552,6 +485,7 @@ export function openWorkflowRealm(
             context.newNumber(id),
             context.newString(payload),
           ];
+          stepStartedAt = performance.now();
           try {
             const handle = context.unwrapResult(
               context.callFunction(step, context.undefined, ...args),
@@ -562,11 +496,17 @@ export function openWorkflowRealm(
               handle.dispose();
             }
           } finally {
+            guestCpuMs += performance.now() - stepStartedAt;
+            stepStartedAt = undefined;
             for (const arg of args) arg.dispose();
           }
         },
         catch: (error) =>
-          new Error(`Workflow script step failed: ${toErrorMessage(error)}`),
+          new Error(
+            cpuExhausted
+              ? `Workflow script ${options.filename} used its ${cpuBudgetMs}ms guest CPU budget; look for a loop that never yields.`
+              : `Workflow script step failed: ${toErrorMessage(error)}`,
+          ),
       }).pipe(
         Effect.flatMap((raw) => {
           const reply = RealmReplySchema.safeParse(raw);

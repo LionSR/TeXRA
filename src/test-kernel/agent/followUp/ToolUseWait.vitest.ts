@@ -1288,7 +1288,7 @@ describe('the host wiring a run attaches', () => {
         const blockedFs = {
           ...processFs,
           exists: (target: string) =>
-            path.basename(target) === '.texrarules'
+            path.basename(target) === 'AGENTS.md'
               ? Deferred.succeed(entered, undefined).pipe(
                   Effect.andThen(Deferred.await(release)),
                   Effect.onInterrupt(() =>
