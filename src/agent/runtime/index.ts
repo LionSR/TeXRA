@@ -87,8 +87,6 @@ export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 
-// RunHandle
-
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';
 
