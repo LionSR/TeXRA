@@ -6,8 +6,10 @@
  * repaints the page and reloads the agent catalog, which lists the plugin's
  * agents; a run picks the change up at its next step.
  */
+// Third-party imports
 import { Effect, Result } from 'effect';
 
+// Local imports - agent runtime
 import { refresh as refreshAgentCatalog } from '@agent/index';
 import {
   installPlugins,
@@ -30,6 +32,7 @@ import type {
 } from '@shared/settingsView/pluginMessages';
 import { safeHomedir } from '@utils/system/platformPaths';
 
+// Local imports - this module's neighbours
 import type {
   SettingsHostBindings,
   SettingsPresentation,

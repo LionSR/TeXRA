@@ -4,20 +4,24 @@
 // runs here: git only fetches, and an install records the plugin disabled
 // until the user enables it and trusts the version it is at (`./pluginTrust`).
 
+// Node imports
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
+// Third-party imports
 import { Effect, Result } from 'effect';
 
-import type { InstalledPlugin } from '@shared/schemas';
+// Local imports - shared contracts and utilities
+import { AgentSourceSchema, type InstalledPlugin } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local imports - plugin install record, reading and git
 import {
   findInstalled,
   modifyInstalled,
-  modifyTrusted,
-  readPluginState,
+  readInstalled,
+  updateInstalled,
   type PluginEnv,
 } from './installRecord';
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
@@ -131,12 +135,29 @@ const nameTaken = (name: string) =>
   });
 
 function claimName(run: InstallRun, name: string) {
+  // A plugin agent is `<plugin>:<name>`, so a plugin named like an agent
+  // source would read as that source's agent.
+  if (AgentSourceSchema.safeParse(name).success)
+    return Effect.fail(
+      new PluginRequestError({
+        message: `A plugin cannot be named "${name}": that name is reserved for TeXRA's own agents (${AgentSourceSchema.options.join(', ')}).`,
+      }),
+    );
   if (run.taken.has(name)) return Effect.fail(nameTaken(name));
   run.taken.add(name);
   return Effect.void;
 }
 
 type InstallFailure = PluginError | PluginRequestError | Error;
+
+/** What a marketplace entry says of a plugin, kept for one with no manifest
+ *  of its own. */
+const standIn = (candidate: Extract<PluginCandidate, { kind: 'dir' }>) => ({
+  ...(candidate.entry?.version ? { version: candidate.entry.version } : {}),
+  ...(candidate.entry?.description
+    ? { description: candidate.entry.description }
+    : {}),
+});
 
 function installFromRoot(
   root: string,
@@ -171,6 +192,7 @@ function installFromRoot(
           source: candidate.dir,
           path: candidate.dir,
           skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
+          ...standIn(candidate),
           enabled: false,
         });
         continue;
@@ -201,6 +223,7 @@ function installFromRoot(
         commit: fetched.commit,
         path: pluginPath,
         skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
+        ...standIn(candidate),
         enabled: false,
       });
     }
@@ -274,7 +297,7 @@ export function installPlugins(
   env: PluginEnv,
 ) {
   return Effect.gen(function* () {
-    const { installed } = yield* readPluginState(env);
+    const installed = yield* readInstalled(env);
     const run: InstallRun = {
       env,
       taken: new Set(installed.map((plugin) => plugin.name)),
@@ -297,28 +320,40 @@ export function installPlugins(
 }
 
 /**
- * Forget a plugin, and the trust given to it, and delete its managed
- * directory. A local plugin is only forgotten; its directory is the user's.
- * The record is written first, so a failed delete leaves an unreferenced
- * directory rather than a record pointing at a half-deleted one. What the
- * plugin wrote to history stays there, kept unread while it is absent.
+ * Forget a plugin, and the trust given to it (one write: the trust is in its
+ * record), then delete its managed directory. A local plugin is only
+ * forgotten; its directory is the user's. A removal whose delete failed is
+ * finished by removing again: with no record left, the leftover managed
+ * directory is deleted. What the plugin wrote to history stays there, kept
+ * unread while it is absent.
  */
 export function removePlugin(name: string, env: PluginEnv) {
   return Effect.gen(function* () {
-    const plugin = yield* modifyInstalled(env, (current) =>
-      Result.map(
-        findInstalled(current, name),
-        (found) =>
-          [current.filter((entry) => entry.name !== name), found] as const,
-      ),
-    );
-    yield* modifyTrusted(env, (current) =>
-      current.filter((entry) => entry.name !== name),
-    );
-    if (plugin.commit !== undefined) {
-      yield* removeDir(path.join(pluginsDir(env), plugin.name));
+    const dir = path.join(pluginsDir(env), name);
+    const plugin = yield* modifyInstalled(env, (current) => {
+      const found = current.find((entry) => entry.name === name);
+      return Result.succeed([
+        current.filter((entry) => entry !== found),
+        found,
+      ] as const);
+    });
+    if (plugin === undefined) {
+      const leftover = yield* fsEffect(() => fs.stat(dir)).pipe(
+        Effect.as(true),
+        Effect.catch(() => Effect.succeed(false)),
+      );
+      if (!leftover)
+        return yield* Effect.fail(
+          new PluginRequestError({
+            message: `No plugin named ${name} is installed, and nothing of it is left to remove.`,
+          }),
+        );
+      yield* removeDir(dir);
+      return { name, path: dir, local: false, leftover: true };
     }
-    return plugin;
+    const local = plugin.commit === undefined;
+    if (!local) yield* removeDir(dir);
+    return { name, path: plugin.path, local, leftover: false };
   });
 }
 
@@ -331,6 +366,8 @@ export function rereadPlugin(
 ): Effect.Effect<ResolvedPlugin, PluginError> {
   return readPlugin(plugin.path, {
     name: plugin.name,
+    version: plugin.version,
+    description: plugin.description,
     skills: plugin.skills.map((skill) => path.relative(plugin.path, skill)),
   });
 }
@@ -353,7 +390,7 @@ export interface PluginUpdate {
  */
 export function updatePlugins(names: readonly string[], env: PluginEnv) {
   return Effect.gen(function* () {
-    const { installed } = yield* readPluginState(env);
+    const installed = yield* readInstalled(env);
     const targets =
       names.length === 0
         ? installed
@@ -385,20 +422,11 @@ export function updatePlugins(names: readonly string[], env: PluginEnv) {
               ),
         ),
       );
-      yield* modifyInstalled(env, (current) =>
-        Result.map(
-          findInstalled(current, plugin.name),
-          (found) =>
-            [
-              current.map((entry) =>
-                entry === found
-                  ? { ...entry, ...(commit ? { commit } : {}), skills }
-                  : entry,
-              ),
-              undefined,
-            ] as const,
-        ),
-      );
+      yield* updateInstalled(env, plugin.name, (found) => ({
+        ...found,
+        ...(commit ? { commit } : {}),
+        skills,
+      }));
       updates.push({ name: plugin.name, from: plugin.commit, to: commit });
     }
     return updates;

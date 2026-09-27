@@ -1,21 +1,18 @@
-// The install record (`texra.plugins.installed`) and the trust decisions
-// (`texra.plugins.trusted`) in the global state every host shares: read and
-// validated whole, and changed only as one read-modify-write at the store's
-// authority, so two hosts changing them at once lose nothing and no lock is
-// taken.
+// The install record (`texra.plugins.installed`) in the global state every
+// host shares, the trust given to each plugin included: read and validated
+// whole, and changed only as one read-modify-write at the store's authority,
+// so two hosts changing it at once lose nothing and no lock is taken.
 
+// Third-party imports
 import { Effect, Result } from 'effect';
 import { z } from 'zod';
 
+// Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  InstalledPluginSchema,
-  PluginTrustSchema,
-  type InstalledPlugin,
-  type PluginTrust,
-} from '@shared/schemas';
+import { InstalledPluginSchema, type InstalledPlugin } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 
+// Local imports - plugin reading
 import { PluginError, PluginRequestError } from './pluginManifest';
 
 /**
@@ -28,62 +25,47 @@ export type PluginEnv = Pick<SettingsStores, 'globalState'> & {
 };
 
 const InstalledPluginsSchema = z.array(InstalledPluginSchema);
-const PluginTrustListSchema = z.array(PluginTrustSchema);
 
-/** One stored list as its schema reads it: absent is empty, anything that
- *  does not validate refuses, so a change never writes over it and loses it. */
-function storedList<T>(key: string, schema: z.ZodType<T[]>, stored: unknown) {
-  if (stored === undefined) return Result.succeed([] as T[]);
-  const parsed = schema.safeParse(stored);
+/** The record as its schema reads it: absent is empty, anything that does
+ *  not validate refuses, so a change never writes over it and loses it. */
+function storedRecord(stored: unknown) {
+  if (stored === undefined) return Result.succeed([] as InstalledPlugin[]);
+  const parsed = InstalledPluginsSchema.safeParse(stored);
   return parsed.success
     ? Result.succeed(parsed.data)
     : Result.fail(
         new PluginError({
-          message: `The stored list ${key} is unreadable: ${z.prettifyError(parsed.error)}`,
+          message: `The installed plugin record (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${z.prettifyError(parsed.error)}`,
         }),
       );
 }
 
-/** The install record and the trust decisions, as one step reads them. */
-export function readPluginState(stores: Pick<SettingsStores, 'globalState'>) {
-  return Effect.gen(function* () {
-    const read = <T>(key: string, schema: z.ZodType<T[]>) =>
-      stores.globalState.get<unknown>(key).pipe(
-        Effect.mapError((error) => new PluginError({ message: error.message })),
-        Effect.flatMap((stored) =>
-          Effect.fromResult(storedList(key, schema, stored)),
-        ),
-      );
-    return {
-      installed: yield* read<InstalledPlugin>(
-        GlobalStateKey.INSTALLED_PLUGINS,
-        InstalledPluginsSchema,
-      ),
-      trusted: yield* read<PluginTrust>(
-        GlobalStateKey.PLUGIN_TRUST,
-        PluginTrustListSchema,
-      ),
-    };
-  });
+/** The install record, as one read. */
+export function readInstalled(stores: Pick<SettingsStores, 'globalState'>) {
+  return stores.globalState.get<unknown>(GlobalStateKey.INSTALLED_PLUGINS).pipe(
+    Effect.mapError((error) => new PluginError({ message: error.message })),
+    Effect.flatMap((stored) => Effect.fromResult(storedRecord(stored))),
+  );
 }
 
 /**
- * Change one stored list as one read-modify-write at the store's authority
+ * Change the record as one read-modify-write at the store's authority
  * (`StateStore.modify`), so two hosts changing it at once never lose each
  * other's change. `change` may refuse, and nothing is written.
  */
-function modifyList<T, A>(
+export function modifyInstalled<A>(
   stores: Pick<SettingsStores, 'globalState'>,
-  key: string,
-  schema: z.ZodType<T[]>,
   change: (
-    current: T[],
-  ) => Result.Result<readonly [T[], A], PluginError | PluginRequestError>,
+    current: InstalledPlugin[],
+  ) => Result.Result<
+    readonly [InstalledPlugin[], A],
+    PluginError | PluginRequestError
+  >,
 ) {
   let answer: A | undefined;
   return stores.globalState
-    .modify(key, (stored) =>
-      Result.flatMap(storedList(key, schema, stored), (current) =>
+    .modify(GlobalStateKey.INSTALLED_PLUGINS, (stored) =>
+      Result.flatMap(storedRecord(stored), (current) =>
         Result.map(change(current), ([next, value]) => {
           answer = value;
           return next;
@@ -99,33 +81,6 @@ function modifyList<T, A>(
       Effect.map(() => answer as A),
     );
 }
-
-export const modifyInstalled = <A>(
-  stores: Pick<SettingsStores, 'globalState'>,
-  change: (
-    current: InstalledPlugin[],
-  ) => Result.Result<
-    readonly [InstalledPlugin[], A],
-    PluginError | PluginRequestError
-  >,
-) =>
-  modifyList(
-    stores,
-    GlobalStateKey.INSTALLED_PLUGINS,
-    InstalledPluginsSchema,
-    change,
-  );
-
-export const modifyTrusted = (
-  stores: Pick<SettingsStores, 'globalState'>,
-  change: (current: PluginTrust[]) => PluginTrust[],
-) =>
-  modifyList(
-    stores,
-    GlobalStateKey.PLUGIN_TRUST,
-    PluginTrustListSchema,
-    (current) => Result.succeed([change(current), undefined] as const),
-  );
 
 /** The recorded plugin named `name`, or a request error naming the rest. */
 export function findInstalled(
@@ -144,3 +99,20 @@ export function findInstalled(
     }),
   );
 }
+
+/** Replace the recorded plugin named `name` with `update(found)`. */
+export const updateInstalled = (
+  stores: Pick<SettingsStores, 'globalState'>,
+  name: string,
+  update: (found: InstalledPlugin) => InstalledPlugin,
+) =>
+  modifyInstalled(stores, (current) =>
+    Result.map(
+      findInstalled(current, name),
+      (found) =>
+        [
+          current.map((entry) => (entry === found ? update(found) : entry)),
+          undefined,
+        ] as const,
+    ),
+  );

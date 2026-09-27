@@ -334,18 +334,23 @@ texra plugin remove paper-protocol
 An installed plugin stays off until you enable it. `texra plugin enable` shows
 what the plugin declares (its skills, commands, agents, and each MCP server's
 command line) and asks you to trust it. The trust covers that version, every
-file in the plugin folder, and the MCP servers' commands. If the version, any
-file in the plugin, or a server's command changes, the plugin loads nothing
-until you enable it again and trust it anew. A command outside the plugin,
-such as `node`, is listed as an external command and trusted by its path,
-size and date, not by its content.
+file in the plugin folder, and the MCP servers' commands, arguments and
+environment values. If any of those change, the plugin loads nothing until you
+enable it again and trust it anew. A program or file outside the plugin that a
+server runs, such as `node`, is listed as external and trusted by its path,
+size and date, not by its content. A plugin cannot be named `custom`,
+`remote`, `plugin`, `builtInWorkflow` or `builtInToolUse`.
 A plugin with hooks or LSP servers runs code of its own and cannot be enabled
 yet; output styles and apps are not loaded.
 
 An enabled, trusted plugin loads under its own name: its skills and commands
 are skills named `<plugin>:<name>`, its agents are tool-use agents named
-`<plugin>:<name>`, and every tool-use run is offered its MCP servers' tools,
-named `mcp__plugin_<plugin>_<server>__<tool>`. Each server runs as its own
+`<plugin>:<name>`, and every top-level tool-use run is offered its MCP servers'
+tools, named `mcp__plugin_<plugin>_<server>__<tool>`. A plugin agent that lists
+`tools` gets only those; one that lists none inherits them: a subagent gets
+every tool its parent was offered, and a top-level run the file, shell and web
+tools plus the installed plugins' tools. A subagent never gets more than its
+parent was offered. Each server runs as its own
 process in the plugin folder, and its tool calls are approved like shell
 commands. Enabling, disabling or changing a plugin reaches a running
 conversation at its next model request, which records the change; a call to a
@@ -354,7 +359,9 @@ history after you disable or remove it.
 
 A fetched plugin lives in `~/.texra/v1/global-storage/plugins/<name>/`, pinned
 to the commit its branch or tag resolved to. `texra plugin update` fetches the
-same branch or tag again and pins the new commit. A local folder is used in
+same branch or tag again and pins the new commit. If removing a plugin could
+not delete its folder, `texra plugin remove` again finishes the job. A local
+folder is used in
 place and is not copied, so edits to it show up at once; removing it only
 forgets it.
 

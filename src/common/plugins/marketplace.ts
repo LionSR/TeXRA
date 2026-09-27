@@ -4,11 +4,14 @@
 // it holds a plugin manifest (`./pluginManifest`), else the plugins its
 // marketplace lists.
 
+// Node imports
 import * as path from 'node:path';
 
+// Third-party imports
 import { Effect } from 'effect';
 import { z } from 'zod';
 
+// Local imports - this module's neighbours
 import {
   ComponentPathsSchema,
   containedPath,

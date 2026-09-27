@@ -131,7 +131,13 @@ describe('loadAgentSettingAndPrompts', () => {
   /** The loader on the process filesystem it reads its definitions through. */
   const loadDefinition = (entry: AgentEntry) =>
     loadAgentSettingAndPrompts(entry).pipe(
-      Effect.provide(Layer.merge(nodePlatformLayer, testHttpClientLayer)),
+      Effect.provide(
+        Layer.mergeAll(
+          nodePlatformLayer,
+          testHttpClientLayer,
+          AppState.layer(new FakeStateStore()),
+        ),
+      ),
     );
 
   beforeAll(async () => {

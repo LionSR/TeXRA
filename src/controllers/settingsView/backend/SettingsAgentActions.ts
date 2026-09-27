@@ -133,6 +133,12 @@ export function createSettingsAgentActions(
 
     customizeAgent: (message) =>
       Effect.gen(function* () {
+        if (message.agentSource === 'plugin') {
+          yield* options.showErrorMessage(
+            `${message.agentName} comes from an installed plugin and has no editable copy; edit the plugin's own agent file instead.`,
+          );
+          return;
+        }
         const entryPath = options.findAgent(
           message.agentSource,
           message.agentName,

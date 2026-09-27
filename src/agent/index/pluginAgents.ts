@@ -5,11 +5,14 @@
  * `plugin` named `<plugin>:<name>`. TeXRA defines no agent format for them;
  * each file is read here, at the boundary, and nowhere else.
  */
+// Node imports
 import * as path from 'node:path';
 
+// Third-party imports
 import { Effect, FileSystem, Result } from 'effect';
 import { z } from 'zod';
 
+// Local imports - common
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { splitFrontmatterFence } from '@common/parsing/frontmatterFence';
 import { parseYamlWith } from '@common/parsing/safeParseYaml';
@@ -19,6 +22,7 @@ import { AgentCategory, AgentNameSchema } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 
+// Local imports - this module's neighbours
 import type { AgentEntry } from './agentEntry';
 
 /** A subagent's frontmatter; `tools` is a comma-separated list or a list. */
@@ -42,9 +46,10 @@ const CLAUDE_CODE_TOOLS: Readonly<Record<string, string>> = {
   TodoWrite: 'todo_write',
 };
 
-/** A subagent that names no tools inherits them in Claude Code: here, the
- *  file, shell and web tools. */
-const DEFAULT_TOOLS = [
+/** What a top-level run of a plugin agent that names no tools inherits,
+ *  beside the installed plugins' tools (a child inherits its parent's
+ *  offered tools instead): the file, shell and web tools. */
+export const PLUGIN_AGENT_DEFAULT_TOOLS = [
   'read_file',
   'write_file',
   'edit_file',
@@ -59,7 +64,9 @@ const DEFAULT_TOOLS = [
 interface PluginAgent {
   readonly name: string;
   readonly description?: string;
-  readonly tools: readonly string[];
+  /** The tools it names, as TeXRA's; `undefined` when it names none and
+   *  inherits them (`AgentRun`). */
+  readonly tools: readonly string[] | undefined;
   readonly systemPrompt: string;
   /** Tools the file names that TeXRA has no counterpart for. */
   readonly dropped: readonly string[];
@@ -101,12 +108,24 @@ export const readPluginAgent = Effect.fn('pluginAgents.read')(function* (
   const mapped = (declared ?? []).map((tool) =>
     tool.startsWith('mcp__') ? tool : CLAUDE_CODE_TOOLS[tool],
   );
+  // Naming only tools TeXRA lacks must not read as naming none, which
+  // would widen the agent to everything it inherits.
+  if (
+    declared !== undefined &&
+    declared.length > 0 &&
+    mapped.every((t) => t === undefined)
+  )
+    return yield* Effect.fail(
+      new Error(
+        `${file} names only tools TeXRA does not have (${declared.join(', ')}).`,
+      ),
+    );
   return {
     name: `${plugin}:${parsed.success.name ?? path.basename(file, '.md')}`,
     description: parsed.success.description,
     tools:
-      declared === undefined
-        ? DEFAULT_TOOLS
+      declared === undefined || declared.length === 0
+        ? undefined
         : [...new Set(mapped.filter((tool) => tool !== undefined))],
     systemPrompt,
     dropped: (declared ?? []).filter((_, index) => mapped[index] === undefined),
@@ -145,7 +164,7 @@ export const scanPluginAgents = Effect.gen(function* () {
         path: file,
         category: AgentCategory.ToolUse,
         description: agent.description,
-        tools: [...agent.tools],
+        tools: agent.tools === undefined ? undefined : [...agent.tools],
       });
     }
   }

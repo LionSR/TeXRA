@@ -144,6 +144,11 @@ const liveToolsLayer = (
       // and each installed plugin's load, by id.
       const builtIns = new Map<string, Scope.Closeable>();
       const installed = new Map<string, InstalledLoad>();
+      // Each step's read of the installed plugins is numbered as it begins,
+      // and only a read newer than the last one applied is applied: a slow
+      // load from an older read never reverts a newer one.
+      let reads = 0;
+      let applied = 0;
       // The catalog's lock: what runs under it is short and uninterruptible,
       // so a cancelled step never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
@@ -246,76 +251,112 @@ const liveToolsLayer = (
         Effect.gen(function* () {
           // Read, and the servers of a plugin that changed started, outside
           // the lock: a slow server does not hold up every run's step.
+          const readId = options?.installed === true ? ++reads : 0;
           const read =
             options?.installed === true
               ? yield* installedReader
               : { plugins: [], warnings: [] };
-          const started = yield* Effect.forEach(
-            read.plugins.filter(
-              (plugin) => installed.get(plugin.id)?.key !== plugin.key,
+          // Loads started here and not yet adopted by the catalog: an
+          // interruption or failure before adoption drops them.
+          const started: InstalledLoad[] = [];
+          const adopted = new Set<InstalledLoad>();
+          const dropUnadopted = Effect.suspend(() =>
+            Effect.forEach(
+              started.filter((load) => !adopted.has(load)),
+              (load) =>
+                Effect.andThen(
+                  Scope.close(load.contribution, Exit.void),
+                  Scope.close(load.holds, Exit.void),
+                ),
+              { discard: true },
             ),
-            holds.loadInstalled,
           );
           const retired: Scope.Closeable[] = [];
           const retire = (load: InstalledLoad) => {
+            adopted.add(load);
             retired.push(load.holds);
             return Scope.close(load.contribution, Exit.void);
           };
-          const pinned = yield* locked(
-            Effect.gen(function* () {
-              if (options?.installed === true) {
-                const wanted = new Set(read.plugins.map(({ id }) => id));
-                for (const load of started) {
-                  const current = installed.get(load.id);
-                  // A concurrent step loaded this key first: keep its load.
-                  if (current?.key === load.key) {
-                    yield* retire(load);
-                    continue;
+          const pinned = yield* Effect.gen(function* () {
+            yield* Effect.forEach(
+              read.plugins.filter(
+                (plugin) => installed.get(plugin.id)?.key !== plugin.key,
+              ),
+              (plugin) =>
+                Effect.map(holds.loadInstalled(plugin), (load) => {
+                  started.push(load);
+                }),
+              { discard: true },
+            );
+            return yield* locked(
+              Effect.gen(function* () {
+                if (options?.installed === true && readId <= applied) {
+                  // A newer read was applied meanwhile: this one is stale.
+                  for (const load of started) yield* retire(load);
+                } else if (options?.installed === true) {
+                  applied = readId;
+                  const wanted = new Set(read.plugins.map(({ id }) => id));
+                  for (const load of started) {
+                    const current = installed.get(load.id);
+                    // A concurrent step loaded this key first: keep its load.
+                    if (current?.key === load.key) {
+                      yield* retire(load);
+                      continue;
+                    }
+                    installed.set(load.id, load);
+                    adopted.add(load);
+                    if (current) yield* retire(current);
                   }
-                  installed.set(load.id, load);
-                  if (current) yield* retire(current);
+                  for (const [id, current] of installed) {
+                    if (wanted.has(id)) continue;
+                    installed.delete(id);
+                    yield* retire(current);
+                  }
                 }
-                for (const [id, current] of installed) {
-                  if (wanted.has(id)) continue;
-                  installed.delete(id);
-                  yield* retire(current);
-                }
-              }
-              yield* reconcile(yield* off);
-              const { generation } = yield* continuations.pin;
-              const pinned = yield* sections.pin;
-              // Every on plugin's process layer, held until the step has
-              // pinned the ones it uses: a flip meanwhile drops none of them.
-              const on = [...builtIns.keys()].filter((id) =>
-                table.processLayers.has(id),
-              );
-              const bridge = yield* Scope.fork(yield* Effect.scope);
-              for (const id of on)
-                yield* RcMap.get(layers, id).pipe(Scope.provide(bridge));
-              const layersFor = (plugins: ReadonlySet<string>) =>
-                Effect.reduce(
-                  on.filter((id) => plugins.has(id)),
-                  () => Context.empty() as Services,
-                  (merged, id) =>
-                    Effect.map(RcMap.get(layers, id), (services) =>
-                      Context.merge(merged, services),
-                    ),
-                ).pipe(Effect.ensuring(Scope.close(bridge, Exit.void)));
-              return {
-                ...(yield* registry.pin),
-                continuations: generation,
-                sections: pinned.generation,
-                layersFor,
-                warnings: [
-                  ...read.warnings,
-                  ...(options?.installed === true
-                    ? [...installed.values()].flatMap((load) => load.failures)
-                    : []),
-                ],
-              };
-            }),
+                yield* reconcile(yield* off);
+                const { generation } = yield* continuations.pin;
+                const pinned = yield* sections.pin;
+                // Every on plugin's process layer, held until the step has
+                // pinned the ones it uses: a flip meanwhile drops none of them.
+                const on = [...builtIns.keys()].filter((id) =>
+                  table.processLayers.has(id),
+                );
+                const bridge = yield* Scope.fork(yield* Effect.scope);
+                for (const id of on)
+                  yield* RcMap.get(layers, id).pipe(Scope.provide(bridge));
+                const layersFor = (plugins: ReadonlySet<string>) =>
+                  Effect.reduce(
+                    on.filter((id) => plugins.has(id)),
+                    () => Context.empty() as Services,
+                    (merged, id) =>
+                      Effect.map(RcMap.get(layers, id), (services) =>
+                        Context.merge(merged, services),
+                      ),
+                  ).pipe(Effect.ensuring(Scope.close(bridge, Exit.void)));
+                return {
+                  ...(yield* registry.pin),
+                  continuations: generation,
+                  sections: pinned.generation,
+                  layersFor,
+                  warnings: [
+                    ...read.warnings,
+                    ...(options?.installed === true
+                      ? [...installed.values()].flatMap((load) => load.failures)
+                      : []),
+                  ],
+                };
+              }),
+            );
+          }).pipe(
+            Effect.onError(() => dropUnadopted),
+            Effect.ensuring(
+              Effect.forEach(
+                retired,
+                (holds) => Scope.close(holds, Exit.void),
+                { discard: true },
+              ),
+            ),
           );
-          for (const holds of retired) yield* Scope.close(holds, Exit.void);
           return pinned;
         });
 

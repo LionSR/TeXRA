@@ -201,21 +201,20 @@ All notable changes to this project will be documented in this file.
   marks no longer look like checkboxes, and plan entries read "planned"
   rather than "declared".
 
-- **Install Claude Code and Codex plugins on every host** — `texra plugin
-install github.com/<owner>/<repo>` (or a local folder, or one plugin of a
-  marketplace with `--plugin <name>`) fetches a plugin and pins its commit;
-  the Skills section of the Agents settings page does the same in VS Code and
-  the desktop app, which now share one install record with the terminal. A
-  plugin stays off until you enable it: enabling shows what it declares and
-  asks you to trust that version, its files and the MCP servers it runs, and
-  a new version or any edit inside the plugin asks again. An enabled plugin's skills
-  and commands load as skills named `<plugin>:<name>`, its agents as tool-use
-  agents `<plugin>:<name>`, and its `.mcp.json` servers' tools are offered to
-  every tool-use run from its next model request. `texra plugin disable`
-  unloads a plugin without removing it; its past runs keep their history. A
-  plugin with hooks or LSP servers runs code of its own and is refused.
-- **The desktop app keeps its application state with the CLI and VS Code** —
-  switches such as the tool plugins' now read the same on all three hosts.
+- **Install Claude Code and Codex plugins in the terminal, VS Code and the
+  desktop app** — install a plugin from GitHub, a git URL or a local folder
+  with `texra plugin install`, or from Settings > Agents > Skills; all three
+  apps see the same installed plugins. A plugin stays off until you turn it
+  on: TeXRA shows what it contains and the programs it will run, and asks you
+  to trust it. A new version, or any change to its files or settings, asks
+  again. Once on, its skills, commands and agents appear under the plugin's
+  name (for example `paper:review`), and its tools are available to your
+  agents, including in a conversation already under way. Turning a plugin off
+  removes its tools and agents without uninstalling it, and past
+  conversations keep what it did. Plugins that run code of their own (hooks)
+  are not supported yet and cannot be turned on.
+- **The desktop app's settings now live alongside the extension and CLI;
+  desktop-only settings reset once.**
 - **Desktop: clearer multiple projects** — each open project in the sidebar
   has one row with a status dot (waiting on you, running, or finished while
   you were elsewhere), a `+` that starts a task in that project, and a `×`

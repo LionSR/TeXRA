@@ -16,6 +16,7 @@ import type {
   AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { PLUGIN_AGENT_DEFAULT_TOOLS } from '@agent/index/pluginAgents';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import {
   declaredToolNames,
@@ -25,6 +26,7 @@ import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
+  AGENT_SOURCE,
   AgentCategory,
   MESSAGE_TYPES,
   DeclinableUsageRouteSchema,
@@ -214,13 +216,29 @@ export const agentRunLayer = (
       // the run's life; the read's problems reach its transcript. A
       // workflow run's rounds offer no tools, so it holds none.
       const workflow = setting.agentCategory === AgentCategory.Workflow;
-      const declared = declaredToolNames(setting.tools);
+      // A plugin agent that names no tools inherits them, as a Claude Code
+      // subagent does: a child every tool its parent's step offered (the
+      // narrow-only rule then keeps exactly those), a top-level run the
+      // standard file, shell and web tools and the installed plugins' tools.
+      const inherits =
+        config.agentSource === AGENT_SOURCE.PLUGIN &&
+        setting.agentCategory === AgentCategory.ToolUse &&
+        setting.tools.length === 0;
+      const parentOffered = ctx.toolPolicy.parentOffered;
+      const tools = inherits
+        ? (
+            parentOffered
+              ?.filter(({ plugin }) => plugin !== 'run')
+              .map(({ name }) => name) ?? PLUGIN_AGENT_DEFAULT_TOOLS
+          ).map((name) => ({ name }))
+        : setting.tools;
+      const declared = declaredToolNames(tools);
       const held = yield* (yield* LiveTools)
         .hold(workflow ? [] : declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: StepToolInputs = {
-        tools: setting.tools,
+        tools,
         approvalPromptsUnavailable:
           ctx.toolPolicy.approvalPromptsUnavailable === true,
         host: processHost(),
@@ -229,11 +247,21 @@ export const agentRunLayer = (
           : (input.tools ?? []),
         // A workflow run injects none: memory and plan are tool-use
         // infrastructure.
-        injectTools: setting.agentCategory === AgentCategory.ToolUse,
+        // A plugin agent that names its tools gets only those.
+        injectTools:
+          setting.agentCategory === AgentCategory.ToolUse &&
+          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
+        // The installed plugins' tools reach a top-level run of any agent but
+        // a plugin agent that names its tools; a child gets what it declares,
+        // narrowed to its parent's.
+        injectInstalled:
+          setting.agentCategory === AgentCategory.ToolUse &&
+          parentOffered === undefined &&
+          (config.agentSource !== AGENT_SOURCE.PLUGIN || inherits),
         stores: ctx.stores,
         workspaceRoot: session.roots.workspace,
         delegationScope: ctx.delegationAgentScope ?? undefined,
-        parentOffered: ctx.toolPolicy.parentOffered,
+        parentOffered,
         held,
       };
       const snapshot = yield* ledger.latestSnapshot(runId);

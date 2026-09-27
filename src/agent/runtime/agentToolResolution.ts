@@ -17,7 +17,8 @@
  *      so is one whose plugin is off (not in the generation).
  *   2. The injected tools not already declared, under the same gates: the
  *      manifest's, and every tool of an installed plugin (its MCP servers'),
- *      which the plugin's enablement offers every tool-use run.
+ *      which the plugin's enablement offers every top-level tool-use run but
+ *      a plugin agent that names its tools.
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
@@ -87,6 +88,9 @@ export interface StepToolInputs {
   readonly runTools: readonly ITool[];
   /** Whether the manifest's injected tools join (step 2). */
   readonly injectTools: boolean;
+  /** Whether the installed plugins' tools join (step 2): a top-level run's,
+   *  unless it is a plugin agent that names its own tools. */
+  readonly injectInstalled: boolean;
   /**
    * The run's stores: the injections' settings, the delegation annotation's
    * worktree opt-in and the delegation roster's model availability read
@@ -196,9 +200,10 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         }
       }
     }
+  }
+  if (input.injectInstalled)
     for (const [name, entry] of generation.entries)
       if (isInstalledPluginId(entry.plugin)) injected.push(name);
-  }
   if (input.parentOffered) {
     const refusal = childToolRefusal(input.parentOffered, input.tools);
     if (refusal !== undefined) return yield* Effect.fail(new Error(refusal));

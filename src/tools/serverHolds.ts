@@ -5,9 +5,11 @@
  * loaded it and the generations that pinned its tools. The last hold to go
  * stops it. Every count changes under the catalog's lock.
  */
+// Third-party imports
 import { Effect, Exit, Scope } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
+// Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { entriesOf, sha256, type ToolEntry } from '@tools/catalogEntries';
 import type { Generation, Registry } from '@tools/liveRegistry';
@@ -75,10 +77,12 @@ export function makeServerHolds(catalog: {
 
   /** Hold a loaded plugin's server: its process and tools, or why it has
    *  none. `own` contributes its tools under its own id while it runs (a
-   *  configured server); an installed plugin contributes them itself. */
-  const holdServer = (plugin: LoadedPlugin, own: boolean) =>
+   *  configured server); an installed plugin contributes them itself, and
+   *  its `load` key (its trust) is part of the hold key, so a re-trusted
+   *  plugin whose files changed starts new processes. */
+  const holdServer = (plugin: LoadedPlugin, own: boolean, load = '') =>
     Effect.gen(function* () {
-      const id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}`;
+      const id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}${load && `#${load}`}`;
       const revision = sha256({ spec: plugin.spec, env: plugin.revision });
       const held = yield* locked(
         Effect.sync(() => {
@@ -91,9 +95,12 @@ export function makeServerHolds(catalog: {
       // Started outside the lock: a slow server does not hold up every
       // run's step. A concurrent hold of the same key keeps the first.
       const serverScope = yield* Scope.fork(scope);
+      // Until it is published, the scope is this call's: a failure or an
+      // interruption before then stops the process it started.
       const answered = yield* plugin.acquire.pipe(
         Effect.provideService(ChildProcessSpawner, spawner),
         Scope.provide(serverScope),
+        Effect.onError(() => Scope.close(serverScope, Exit.void)),
       );
       const open = yield* locked(
         Effect.gen(function* () {
@@ -124,7 +131,7 @@ export function makeServerHolds(catalog: {
           servers.set(id, created);
           return created;
         }),
-      );
+      ).pipe(Effect.onError(() => Scope.close(serverScope, Exit.void)));
       return { id, revision, ...open };
     });
 
@@ -156,11 +163,20 @@ export function makeServerHolds(catalog: {
       Effect.gen(function* () {
         const holds = yield* Scope.fork(scope);
         const contribution = yield* Scope.fork(scope);
+        // Not loaded after all (a failure, an interruption): nothing stays.
+        const drop = Effect.andThen(
+          Scope.close(contribution, Exit.void),
+          Scope.close(holds, Exit.void),
+        );
         const held = yield* Effect.forEach(plugin.servers, (server) =>
-          Effect.acquireRelease(holdServer(server, false), ({ id }) =>
-            release(id),
+          Effect.acquireRelease(
+            holdServer(server, false, plugin.key),
+            ({ id }) => release(id),
           ),
-        ).pipe(Scope.provide(holds));
+        ).pipe(
+          Scope.provide(holds),
+          Effect.onError(() => drop),
+        );
         const conflict = yield* locked(
           contribute(
             plugin.id,
@@ -171,7 +187,7 @@ export function makeServerHolds(catalog: {
             ),
             contribution,
           ),
-        );
+        ).pipe(Effect.onError(() => drop));
         return {
           id: plugin.id,
           key: plugin.key,

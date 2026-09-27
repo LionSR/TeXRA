@@ -6,16 +6,20 @@
 // at the boundary; fields TeXRA does not read are stripped. The marketplace
 // files that list plugins are read by `./marketplace`.
 
+// Node imports
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+// Third-party imports
 import { Data, Effect } from 'effect';
 import { z } from 'zod';
 
+// Local imports - common
 import { isFileNotFoundError } from '@common/errors';
 import { SkillNameSchema } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
+// Local imports - this module's neighbours
 import {
   parseMcpServers,
   ServerNameSchema,
@@ -271,12 +275,16 @@ function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
       (yield* pathExists(path.join(dir, '.mcp.json')))
     )
       files.push('.mcp.json');
+    // Both manifests may name the same file: it is read once.
+    const read = new Set<string>();
     for (const file of files) {
       const resolved = yield* containedPath(dir, file);
       if (resolved === undefined)
         return yield* failPlugin(
           `Plugin ${name} declares MCP servers in "${file}", which does not exist.`,
         );
+      if (read.has(resolved)) continue;
+      read.add(resolved);
       const json = (yield* readJsonFile(resolved, McpFileSchema)) ?? {};
       const inner = McpFileSchema.safeParse(json.mcpServers);
       maps.push({

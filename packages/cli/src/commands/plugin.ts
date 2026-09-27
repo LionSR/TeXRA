@@ -231,18 +231,20 @@ const pluginRemoveCommand = defineCliCommand({
   run: (context, ctx) =>
     withPluginEnv(context, (env) =>
       removePlugin(ctx.args.name, env).pipe(
-        Effect.map((plugin) => {
-          const result = { removed: plugin.name, path: plugin.path };
+        Effect.map((removed) => {
+          const result = { removed: removed.name, path: removed.path };
+          let text = `Removed ${removed.name}.`;
+          if (removed.leftover)
+            text = `${removed.name} was already forgotten; removed its leftover directory ${removed.path}.`;
+          else if (removed.local)
+            text = `Removed ${removed.name}. Its directory ${removed.path} is yours and was left in place.`;
           emitCliResult(context, {
             json: result,
             ndjson: {
               kind: 'result',
               result: { command: 'plugin remove', ...result },
             },
-            text:
-              plugin.commit === undefined
-                ? `Removed ${plugin.name}. Its directory ${plugin.path} is yours and was left in place.`
-                : `Removed ${plugin.name}.`,
+            text,
           });
           return CliExitCode.Success;
         }),

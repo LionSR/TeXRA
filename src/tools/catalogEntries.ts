@@ -3,10 +3,13 @@
  * the identity a step records and a call is checked against, and the digests
  * that identity is made of.
  */
+// Node imports
 import { createHash } from 'node:crypto';
 
+// Third-party imports
 import stableStringify from 'safe-stable-stringify';
 
+// Local imports - agent runtime
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { toolDefinitionsFor } from '@agent/runtime/run/tools';
 import type { Generation } from '@tools/liveRegistry';

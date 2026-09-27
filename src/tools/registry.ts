@@ -11,6 +11,7 @@ import {
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { revisionKey } from '@common/plugins/mcpServers';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { onAppSignal } from '@eventBus/AppSignals';
 import { AppState } from '@platform/interfaces';
@@ -21,11 +22,7 @@ import {
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 import { LiveTools, toolTableLayer } from '@tools/liveTools';
-import {
-  mcpPlugin,
-  mcpPluginLoader,
-  mcpRevisionKey,
-} from '@tools/mcp/mcpConfig';
+import { mcpPlugin, mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import {
   switchedOffPlugins,
   TOOL_PLUGINS,
@@ -340,9 +337,7 @@ export const toolRegistryLayer = (
       const fs = yield* FileSystem.FileSystem;
       const appState = yield* AppState;
       // Resolved once per process, on the first run that declares an MCP tool.
-      const revisionKey = yield* Effect.cached(
-        mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
-      );
+      const envKey = yield* Effect.cached(revisionKey(appState));
       // The installed plugins a step loads: the enabled, trusted ones with
       // MCP servers, keyed by what they would start, and why each other
       // enabled one loads nothing.
@@ -356,7 +351,7 @@ export const toolRegistryLayer = (
           ...withServers.flatMap(({ plugin }) => plugin.warnings),
         ];
         if (withServers.length === 0) return { plugins: [], warnings };
-        const key = yield* Effect.result(revisionKey);
+        const key = yield* Effect.result(envKey);
         if (key._tag === 'Failure')
           return {
             plugins: [],
@@ -391,7 +386,7 @@ export const toolRegistryLayer = (
             ...Object.entries(hostLayers),
           ]),
         },
-        mcpPluginLoader(fs, mcpConfigPath, revisionKey),
+        mcpPluginLoader(fs, mcpConfigPath, envKey),
         // Fail closed: every plugin with a switch stays off until the
         // switches are read, so an unreadable store never enables one.
         switchedOffPlugins(new Set(TOOL_PLUGINS.map(({ id }) => id))),

@@ -89,6 +89,7 @@ export class AgentSelectionPanel extends LitElement {
     AGENT_SOURCE.REMOTE,
     AGENT_SOURCE.BUILT_IN_WORKFLOW,
     AGENT_SOURCE.BUILT_IN_TOOL_USE,
+    AGENT_SOURCE.PLUGIN,
   ];
 
   protected override willUpdate(changed: PropertyValues): void {
@@ -347,7 +348,9 @@ export class AgentSelectionPanel extends LitElement {
         },
       },
       {
-        when: builtIn,
+        // A plugin agent is a Claude Code subagent file, not agent YAML: it
+        // has no editable copy to make.
+        when: builtIn && agent.source !== AGENT_SOURCE.PLUGIN,
         button: {
           icon: 'pencil',
           text: 'Customize',

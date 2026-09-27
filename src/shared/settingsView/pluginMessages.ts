@@ -5,8 +5,10 @@
  * updating and removing all run through `@common/plugins`, the same code
  * `texra plugin` runs, over the same install record.
  */
+// Third-party imports
 import { z } from 'zod';
 
+// Local imports - shared contracts
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { SkillNameSchema } from '@shared/schemas';
 
