@@ -585,6 +585,25 @@ will drift back.
 | Request                | 9; 5 (one behavior per decision)                                                |
 | Host                   | 5; 13                                                                           |
 
+## Decided (owner, 2026-09-27)
+
+- **Names:** History (the append-only rows) and Projection (anything computed
+  from history). Code identifiers are renamed only in PRs that already touch
+  them.
+- **Presets** store the user's selection of switches, not a resolved
+  composition.
+- **Goal mode is paused on resume** until a human re-arms it. Grants may still
+  be rebuilt from rows.
+- **Tool identity** is a digest of the definition **without descriptions**,
+  plus the plugin revision, which keeps #13111. The full text, descriptions
+  included, is recorded in the step's change row, so what the model saw stays
+  complete.
+- **Plugin code, version 1:**
+  - third-party tools and prompts run out of process through MCP;
+  - third-party data comes through installed plugins;
+  - deep slots take in-process code from built-in and trusted plugins only,
+    with trust per content hash.
+
 ## Open
 
 - **Names.** History and Projection, or others. Owner's call.
