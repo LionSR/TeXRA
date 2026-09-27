@@ -50,11 +50,13 @@ import {
   UpdateMemoryPreviewMessageSchema,
 } from './memoryViewMessages';
 import { commandOnly } from './messageFactories';
+import {
+  PluginActionMessageSchema,
+  PluginListItemSchema,
+} from './pluginMessages';
 
-// Re-export the types and values needed by settings consumers from the
-// individual view-message modules so the historical settings surface (single
-// import site) stays intact. Keep this selective: the schemas themselves are
-// deliberately not re-exported here.
+// Re-export what settings consumers need from the view-message modules, so
+// they keep one import site; the schemas themselves stay unexported here.
 export { type MemoryViewItem, type MemoryPreview } from './memoryViewMessages';
 
 export {
@@ -196,9 +198,7 @@ const UpdateSettingsSnapshotMessageSchema = z.discriminatedUnion('snapshot', [
   ...otherDerivedSnapshots.map(snapshotMessage),
 ]);
 
-// ============================================================
-// Agent selection data schema
-// ============================================================
+// ==================== Agent selection data schema ====================
 
 /**
  * Agent selection data for the settings view.
@@ -228,9 +228,7 @@ const UpdateAgentSelectionMessageSchema = z.object({
   customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
 
-// ============================================================
-// Model selection data schema
-// ============================================================
+// ==================== Model selection data schema ====================
 
 /**
  * Display labels for llm-zoo's reasoning efforts, written low → high because
@@ -414,11 +412,12 @@ const UpdateToolDashboardMessageSchema = z.object({
   items: z.array(ToolDashboardItemSchema),
 });
 
-/** Outbound: discovered skill inventory for the consolidated Skills tab. */
+/** Outbound: the Skills tab's skills, their issues and installed plugins. */
 const UpdateSkillsListMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST),
   skills: z.array(SkillDisplayItemSchema),
   issues: z.array(SkillDisplayIssueSchema),
+  plugins: z.array(PluginListItemSchema),
 });
 
 /** Outbound: backend → frontend GitHub token status. */
@@ -806,6 +805,7 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     RecheckToolStatusMessageSchema,
     ToggleToolMessageSchema,
     RunToolCommandMessageSchema,
+    PluginActionMessageSchema,
     // LaTeX settings messages
     ApplyLatexSettingsMessageSchema,
     InstallLatexWorkshopMessageSchema,

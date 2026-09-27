@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 import { ActiveSkillSourceScopeSchema } from './activeSkills';
-import { SkillNameSchema } from './skillName';
+import { QualifiedSkillNameSchema } from './skillName';
 
 /** One discovered skill projected for host settings displays. */
 export const SkillDisplayItemSchema = z.strictObject({
-  name: SkillNameSchema,
+  name: QualifiedSkillNameSchema,
   description: z.string(),
   scope: ActiveSkillSourceScopeSchema,
   label: z.string(),

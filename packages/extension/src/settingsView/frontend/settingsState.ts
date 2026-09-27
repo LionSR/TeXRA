@@ -39,11 +39,11 @@ import {
   type AgentCategory,
   type AgentModePreset,
   type ByCategory,
-  type InstalledPlugin,
   type SkillDisplayIssue,
   type SkillDisplayItem,
   type SubscriptionUsageSnapshots,
 } from '@shared/schemas';
+import type { PluginListItem } from '@shared/settingsView/pluginMessages';
 import { settingsViewSettingByKey } from '@shared/state/stateSettings';
 import {
   DEFAULT_LATEX_SETTINGS_STATUS,
@@ -239,9 +239,7 @@ export const disabledSkills = settingSignal<string[]>(
 export const disabledSkillSources = settingSignal<string[]>(
   WorkspaceStateKey.DISABLED_SKILL_SOURCES,
 );
-export const installedPlugins = settingSignal<InstalledPlugin[]>(
-  GlobalStateKey.INSTALLED_PLUGINS,
-);
+export const installedPlugins = trackedSignal<PluginListItem[]>(() => []);
 export const skillsList = trackedSignal<SkillDisplayItem[]>(() => []);
 export const skillLoadIssues = trackedSignal<SkillDisplayIssue[]>(() => []);
 export const telemetryEnabled = settingSignal<boolean>(TELEMETRY_ENABLED_KEY);

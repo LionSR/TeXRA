@@ -6,7 +6,7 @@ import {
   stripControlCharacters,
 } from '@utils/text/stringUtils';
 
-import { SkillNameSchema } from './skillName';
+import { QualifiedSkillNameSchema } from './skillName';
 
 const ACTIVE_SKILL_DESCRIPTION_MAX_LENGTH = 180;
 const ACTIVE_SKILL_DESCRIPTION_FALLBACK = 'Details available on activation.';
@@ -56,7 +56,7 @@ function sanitizeActiveSkillDescription(description: string): string {
 }
 
 export const ActiveSkillSummarySchema = z.strictObject({
-  name: SkillNameSchema,
+  name: QualifiedSkillNameSchema,
   description: z
     .string()
     .transform(sanitizeActiveSkillDescription)

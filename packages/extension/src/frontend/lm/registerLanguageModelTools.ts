@@ -34,7 +34,8 @@ import type { PluginServices, ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import { LiveTools, type ToolEntry } from '@tools/liveTools';
+import type { ToolEntry } from '@tools/catalogEntries';
+import { LiveTools } from '@tools/liveTools';
 import type { ProcessPluginLayer } from '@tools/toolTable';
 
 // Local imports - language model tools

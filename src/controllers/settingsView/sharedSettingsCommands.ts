@@ -33,6 +33,7 @@ import {
 } from '@controllers/settingsView/settingsHostBindings';
 import { settingsGitCommands } from '@controllers/settingsView/settingsGitCommands';
 import { settingsMemoryCommands } from '@controllers/settingsView/settingsMemoryCommands';
+import { settingsPluginCommands } from '@controllers/settingsView/settingsPluginCommands';
 import { settingsToolCommands } from '@controllers/settingsView/settingsToolCommands';
 import {
   settingsViewProgram,
@@ -101,7 +102,7 @@ interface SettingsViewBodyPorts {
   readonly skillDisplay: HostEffect<
     Omit<
       Extract<SettingsViewOutboundMessage, { command: 'updateSkillsList' }>,
-      'command'
+      'command' | 'plugins'
     >
   >;
   /** The account copy (`src/ui`), which controllers likewise take from
@@ -138,6 +139,12 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const memoryPage = settingsMemoryCommands({ bindings, present });
   const gitPage = settingsGitCommands({ bindings, present, secrets });
   const toolsPage = settingsToolCommands({ host: ports.host, roots, bindings });
+  const pluginsPage = settingsPluginCommands({
+    roots,
+    bindings,
+    present,
+    repaint: Effect.suspend(() => postSkills),
+  });
   const agents = settingsAgentCommands({
     roots,
     resourcesPath: ports.resourcesPath,
@@ -154,10 +161,14 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const postSnapshot = (snapshot: DerivedSettingsSnapshot) =>
     bindings.post(buildSettingsSnapshotMessage(snapshot, roots, ports.host));
   const postSkills = bindings.post(
-    Effect.map(ports.skillDisplay, (result) => ({
-      command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
-      ...result,
-    })),
+    Effect.map(
+      Effect.all([ports.skillDisplay, pluginsPage.list]),
+      ([result, plugins]) => ({
+        command: SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST,
+        ...result,
+        plugins,
+      }),
+    ),
   );
   const postUsage = (forceRefresh: boolean) =>
     bindings.post(
@@ -401,6 +412,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     ...memoryPage.handlers,
     ...gitPage.handlers,
     ...toolsPage.handlers,
+    ...pluginsPage.handlers,
   } satisfies Partial<SettingsArms>;
 
   // ── The boundary every settings program settles on ──

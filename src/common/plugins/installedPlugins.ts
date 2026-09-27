@@ -1,30 +1,33 @@
-// `texra plugin`: fetch a Claude Code or Codex plugin, pin it, and record it
-// in `texra.plugins.installed`, whose skill roots the skill catalog reads.
-// Nothing from a plugin runs: git only fetches, and v1 reads skills alone.
+// Installing Claude Code and Codex plugins: fetch or reference one, pin it,
+// and record it in `texra.plugins.installed`, the one install record the
+// CLI, the extension and the desktop read and write. Nothing from a plugin
+// runs here: git only fetches, and an install records the plugin disabled
+// until the user enables it and trusts the version it is at (`./pluginTrust`).
 
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
-import type { SettingsStores } from '@shared/config/settingsAccess';
 import type { InstalledPlugin } from '@shared/schemas';
-import { GlobalStateKey } from '@shared/state/stateKeys';
-import {
-  inspectSettingFrom,
-  writeSettingTo,
-} from '@utils/config/platformSettings';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { CliUsageError } from './cliContext';
 import {
-  countSkills,
-  PluginError,
-  readPlugin,
-  readPluginCandidates,
-  type PluginCandidate,
-} from './pluginManifest';
+  findInstalled,
+  modifyInstalled,
+  modifyTrusted,
+  readPluginState,
+  type PluginEnv,
+} from './installRecord';
+import { readPluginCandidates, type PluginCandidate } from './marketplace';
 import { checkoutDetached, fetchPinned } from './pluginGit';
+import {
+  PluginError,
+  PluginRequestError,
+  readPlugin,
+  type ResolvedPlugin,
+} from './pluginManifest';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** Where a plugin comes from, as the user named it. */
@@ -32,18 +35,60 @@ export type PluginOrigin =
   | { readonly kind: 'git'; readonly url: string; readonly ref?: string }
   | { readonly kind: 'local'; readonly path: string };
 
-/** The setting slots the record lives in and the managed plugin directory. */
-export interface PluginEnv {
-  readonly stores: SettingsStores;
-  /** `<storage root>/plugins`; each fetched plugin lives in `<name>/` here. */
-  readonly pluginsDir: string;
-}
+/** `<global storage>/plugins`: each fetched plugin lives in `<name>/` here. */
+const pluginsDir = (env: PluginEnv) => path.join(env.globalStorage, 'plugins');
 
 // Remote transports only: a local repository is installed by its path, so a
 // marketplace cannot name `file://` to copy another checkout on this machine.
-export const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
+const GIT_URL = /^(?:(?:https?|ssh|git):\/\/|[\w.-]+@[\w.-]+:)/;
 /** A ref git takes as a plain name: no leading dash, no option smuggling. */
-export const SAFE_REF = /^[\w][\w./-]*$/;
+const SAFE_REF = /^[\w][\w./-]*$/;
+
+const GITHUB_SHORTHAND =
+  /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
+
+/**
+ * Parse a source as a user types it: `github.com/<owner>/<repo>[@ref]`, a
+ * git URL, or a local directory, relative to `cwd`. Refused before anything
+ * runs, so a bad source is the user's mistake to correct. `ref` (the CLI's
+ * `--ref`) applies to git sources only.
+ */
+export function parsePluginOrigin(
+  input: string,
+  cwd: string,
+  ref: string | undefined,
+): Result.Result<PluginOrigin, PluginRequestError> {
+  const refuse = (message: string) =>
+    Result.fail(new PluginRequestError({ message }));
+  const github = GITHUB_SHORTHAND.exec(input);
+  const pinned = github?.[3];
+  if (pinned !== undefined && ref !== undefined)
+    return refuse(
+      `Give the ref once: either ${input} or --ref ${ref}, not both.`,
+    );
+  const gitRef = pinned ?? ref;
+  if (gitRef !== undefined && !SAFE_REF.test(gitRef))
+    return refuse(`"${gitRef}" is not a git branch, tag or commit.`);
+  const pin = gitRef ? { ref: gitRef } : {};
+  if (github)
+    return Result.succeed({
+      kind: 'git',
+      url: `https://github.com/${github[1]}/${github[2]}.git`,
+      ...pin,
+    });
+  if (GIT_URL.test(input))
+    return Result.succeed({ kind: 'git', url: input, ...pin });
+  if (/^[a-z][\w+.-]*:\/\//i.test(input))
+    return refuse(
+      `${input} is not a remote git URL (https, ssh or git). Install a local plugin by its directory path.`,
+    );
+  if (ref !== undefined) return refuse('--ref applies to git sources only.');
+  const expanded =
+    input === '~' || input.startsWith(`~${path.sep}`)
+      ? path.join(os.homedir(), input.slice(1))
+      : input;
+  return Result.succeed({ kind: 'local', path: path.resolve(cwd, expanded) });
+}
 
 const fsEffect = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
@@ -62,34 +107,6 @@ const cleanupDir = (dir: string) =>
     ),
   );
 
-/**
- * The recorded plugins. Every command here rewrites the whole list, so an
- * invalid stored list stops it rather than reading as empty and being lost.
- */
-function readInstalledPlugins(stores: SettingsStores) {
-  return inspectSettingFrom<InstalledPlugin[]>(
-    stores,
-    GlobalStateKey.INSTALLED_PLUGINS,
-  ).pipe(
-    Effect.flatMap((stored) =>
-      stored.kind === 'value'
-        ? Effect.succeed(stored.value)
-        : Effect.fail(
-            new PluginError({
-              message: `The installed plugin list (${GlobalStateKey.INSTALLED_PLUGINS}) is unreadable: ${stored.cause}`,
-            }),
-          ),
-    ),
-  );
-}
-
-function writeInstalledPlugins(
-  stores: SettingsStores,
-  plugins: readonly InstalledPlugin[],
-) {
-  return writeSettingTo(stores, GlobalStateKey.INSTALLED_PLUGINS, plugins);
-}
-
 /** Where the plugins of one fetch came from. */
 type Fetched =
   | { readonly kind: 'local' }
@@ -102,23 +119,24 @@ type Fetched =
 
 interface InstallRun {
   readonly env: PluginEnv;
-  /** Names already recorded or claimed earlier in this install. */
+  /** Names claimed earlier in this install. */
   readonly taken: Set<string>;
   /** Managed directories this install created, removed if it fails. */
   readonly created: string[];
 }
 
+const nameTaken = (name: string) =>
+  new PluginRequestError({
+    message: `A plugin named ${name} is already installed. Update it, or remove it first.`,
+  });
+
 function claimName(run: InstallRun, name: string) {
-  if (run.taken.has(name)) {
-    return Effect.fail(
-      new CliUsageError(
-        `A plugin named ${name} is already installed. Run \`texra plugin update ${name}\`, or remove it first.`,
-      ),
-    );
-  }
+  if (run.taken.has(name)) return Effect.fail(nameTaken(name));
   run.taken.add(name);
   return Effect.void;
 }
+
+type InstallFailure = PluginError | PluginRequestError | Error;
 
 function installFromRoot(
   root: string,
@@ -126,11 +144,7 @@ function installFromRoot(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<
-  InstalledPlugin[],
-  PluginError | CliUsageError | Error,
-  ChildProcessSpawner
-> {
+): Effect.Effect<InstalledPlugin[], InstallFailure, ChildProcessSpawner> {
   return Effect.gen(function* () {
     const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
       root,
@@ -157,13 +171,13 @@ function installFromRoot(
           source: candidate.dir,
           path: candidate.dir,
           skills: plugin.skills.map((skill) => path.join(candidate.dir, skill)),
-          enabled: true,
+          enabled: false,
         });
         continue;
       }
       // Each fetched plugin gets its own managed copy of the checkout, so
       // update and remove act on one plugin without touching another.
-      const dest = path.join(run.env.pluginsDir, plugin.name);
+      const dest = path.join(pluginsDir(run.env), plugin.name);
       // A plain mkdir claims the directory: it fails if anything is there.
       yield* Effect.tryPromise({
         try: () => fs.mkdir(dest),
@@ -187,7 +201,7 @@ function installFromRoot(
         commit: fetched.commit,
         path: pluginPath,
         skills: plugin.skills.map((skill) => path.join(pluginPath, skill)),
-        enabled: true,
+        enabled: false,
       });
     }
     return records;
@@ -199,18 +213,14 @@ function installOrigin(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<
-  InstalledPlugin[],
-  PluginError | CliUsageError | Error,
-  ChildProcessSpawner
-> {
+): Effect.Effect<InstalledPlugin[], InstallFailure, ChildProcessSpawner> {
   if (origin.kind === 'local') {
     return fsEffect(() => fs.realpath(origin.path)).pipe(
       Effect.mapError(
         () =>
-          new CliUsageError(
-            `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
-          ),
+          new PluginRequestError({
+            message: `${origin.path} is not a directory, a git URL, or github.com/<owner>/<repo>.`,
+          }),
       ),
       Effect.flatMap((root) =>
         installFromRoot(root, { kind: 'local' }, only, run, nested),
@@ -233,8 +243,8 @@ function installOrigin(
   // however the install ends, and each plugin is copied out of it.
   return Effect.acquireUseRelease(
     fsEffect(async () => {
-      await fs.mkdir(run.env.pluginsDir, { recursive: true });
-      return fs.mkdtemp(path.join(run.env.pluginsDir, '.staging-'));
+      await fs.mkdir(pluginsDir(run.env), { recursive: true });
+      return fs.mkdtemp(path.join(pluginsDir(run.env), '.staging-'));
     }),
     (staging) =>
       fetchPinned(staging, origin.url, origin.ref).pipe(
@@ -253,8 +263,9 @@ function installOrigin(
 }
 
 /**
- * Install the plugin(s) `origin` offers and record them. The record is
- * written once, after every plugin is in place; a failure removes the managed
+ * Install the plugin(s) `origin` offers and record them, disabled. The
+ * record is written once, after every plugin is in place, and refuses a name
+ * another install recorded meanwhile; a failure removes the managed
  * directories this install created and records nothing.
  */
 export function installPlugins(
@@ -263,7 +274,7 @@ export function installPlugins(
   env: PluginEnv,
 ) {
   return Effect.gen(function* () {
-    const installed = yield* readInstalledPlugins(env.stores);
+    const { installed } = yield* readPluginState(env);
     const run: InstallRun = {
       env,
       taken: new Set(installed.map((plugin) => plugin.name)),
@@ -271,67 +282,43 @@ export function installPlugins(
     };
     return yield* installOrigin(origin, only, run, false).pipe(
       Effect.tap((records) =>
-        writeInstalledPlugins(env.stores, [...installed, ...records]),
+        modifyInstalled(env, (current) => {
+          const clash = records.find((record) =>
+            current.some((plugin) => plugin.name === record.name),
+          );
+          return clash === undefined
+            ? Result.succeed([[...current, ...records], undefined] as const)
+            : Result.fail(nameTaken(clash.name));
+        }),
       ),
       Effect.onError(() => Effect.forEach(run.created, cleanupDir)),
     );
   });
 }
 
-function requireInstalled(installed: readonly InstalledPlugin[], name: string) {
-  const found = installed.find((plugin) => plugin.name === name);
-  if (found) return Effect.succeed(found);
-  const names = installed.map((plugin) => plugin.name);
-  return Effect.fail(
-    new CliUsageError(
-      names.length === 0
-        ? `No plugin named ${name} is installed. No plugins are installed.`
-        : `No plugin named ${name} is installed. Installed: ${names.join(', ')}.`,
-    ),
-  );
-}
-
 /**
- * Forget a plugin and delete its managed directory. A local plugin is only
- * forgotten; its directory is the user's. The record is written first, so a
- * failed delete leaves an unreferenced directory rather than a record
- * pointing at a half-deleted one.
+ * Forget a plugin, and the trust given to it, and delete its managed
+ * directory. A local plugin is only forgotten; its directory is the user's.
+ * The record is written first, so a failed delete leaves an unreferenced
+ * directory rather than a record pointing at a half-deleted one. What the
+ * plugin wrote to history stays there, kept unread while it is absent.
  */
 export function removePlugin(name: string, env: PluginEnv) {
   return Effect.gen(function* () {
-    const installed = yield* readInstalledPlugins(env.stores);
-    const plugin = yield* requireInstalled(installed, name);
-    yield* writeInstalledPlugins(
-      env.stores,
-      installed.filter((entry) => entry.name !== name),
-    );
-    if (plugin.commit !== undefined) {
-      yield* removeDir(path.join(env.pluginsDir, plugin.name));
-    }
-    return plugin;
-  });
-}
-
-/**
- * Switch a recorded plugin on or off. A disabled plugin stays installed and
- * pinned, and contributes nothing: its skills leave the catalog until it is
- * enabled again.
- */
-export function setPluginEnabled(
-  name: string,
-  enabled: boolean,
-  env: PluginEnv,
-) {
-  return Effect.gen(function* () {
-    const installed = yield* readInstalledPlugins(env.stores);
-    const plugin = yield* requireInstalled(installed, name);
-    yield* writeInstalledPlugins(
-      env.stores,
-      installed.map((entry) =>
-        entry.name === name ? { ...entry, enabled } : entry,
+    const plugin = yield* modifyInstalled(env, (current) =>
+      Result.map(
+        findInstalled(current, name),
+        (found) =>
+          [current.filter((entry) => entry.name !== name), found] as const,
       ),
     );
-    return { ...plugin, enabled };
+    yield* modifyTrusted(env, (current) =>
+      current.filter((entry) => entry.name !== name),
+    );
+    if (plugin.commit !== undefined) {
+      yield* removeDir(path.join(pluginsDir(env), plugin.name));
+    }
+    return plugin;
   });
 }
 
@@ -339,7 +326,9 @@ export function setPluginEnabled(
  * Reread a recorded plugin's manifest. Its record stands in for a manifest
  * it never had (a plugin a marketplace entry described).
  */
-function rereadPlugin(plugin: InstalledPlugin) {
+export function rereadPlugin(
+  plugin: InstalledPlugin,
+): Effect.Effect<ResolvedPlugin, PluginError> {
   return readPlugin(plugin.path, {
     name: plugin.name,
     skills: plugin.skills.map((skill) => path.relative(plugin.path, skill)),
@@ -359,20 +348,21 @@ export interface PluginUpdate {
  * its manifest, so a changed `skills` path takes effect. Each plugin is
  * recorded as soon as it is updated, and one whose new commit cannot be read
  * is checked back out at its recorded commit, so the record and the
- * directory never disagree.
+ * directory never disagree. An enabled plugin stays enabled; a new version,
+ * or a change to what it runs, loads only once the user trusts it.
  */
 export function updatePlugins(names: readonly string[], env: PluginEnv) {
   return Effect.gen(function* () {
-    let current = yield* readInstalledPlugins(env.stores);
+    const { installed } = yield* readPluginState(env);
     const targets =
       names.length === 0
-        ? current
+        ? installed
         : yield* Effect.forEach(names, (name) =>
-            requireInstalled(current, name),
+            Effect.fromResult(findInstalled(installed, name)),
           );
     const updates: PluginUpdate[] = [];
     for (const plugin of targets) {
-      const dir = path.join(env.pluginsDir, plugin.name);
+      const dir = path.join(pluginsDir(env), plugin.name);
       const commit =
         plugin.commit === undefined
           ? undefined
@@ -395,51 +385,22 @@ export function updatePlugins(names: readonly string[], env: PluginEnv) {
               ),
         ),
       );
-      const updated = { ...plugin, ...(commit ? { commit } : {}), skills };
-      current = current.map((entry) =>
-        entry.name === plugin.name ? updated : entry,
+      yield* modifyInstalled(env, (current) =>
+        Result.map(
+          findInstalled(current, plugin.name),
+          (found) =>
+            [
+              current.map((entry) =>
+                entry === found
+                  ? { ...entry, ...(commit ? { commit } : {}), skills }
+                  : entry,
+              ),
+              undefined,
+            ] as const,
+        ),
       );
-      yield* writeInstalledPlugins(env.stores, current);
       updates.push({ name: plugin.name, from: plugin.commit, to: commit });
     }
     return updates;
-  });
-}
-
-/** One installed plugin as `texra plugin list` reports it. */
-export interface PluginListing extends InstalledPlugin {
-  readonly version?: string;
-  readonly description?: string;
-  readonly skillCount: number;
-  readonly ignored: readonly string[];
-  /** Why the plugin cannot be read now, when it cannot. */
-  readonly problem?: string;
-}
-
-export function listPlugins(env: PluginEnv) {
-  return Effect.gen(function* () {
-    const installed = yield* readInstalledPlugins(env.stores);
-    return yield* Effect.forEach(installed, (plugin) =>
-      Effect.gen(function* () {
-        const resolved = yield* rereadPlugin(plugin);
-        const counts = yield* Effect.forEach(plugin.skills, countSkills);
-        return {
-          ...plugin,
-          version: resolved.version,
-          description: resolved.description,
-          skillCount: counts.reduce((sum, count) => sum + count, 0),
-          ignored: resolved.ignored,
-        } satisfies PluginListing;
-      }).pipe(
-        Effect.catchTag('PluginError', (error) =>
-          Effect.succeed({
-            ...plugin,
-            skillCount: 0,
-            ignored: [],
-            problem: error.message,
-          } satisfies PluginListing),
-        ),
-      ),
-    );
   });
 }

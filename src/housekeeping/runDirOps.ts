@@ -8,10 +8,7 @@ import { Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import type { RunId, FileOpResult } from '@shared/schemas';
-import {
-  getCleanAgentName,
-  mergeRunDirAndWorkspaceResult,
-} from '@shared/schemas';
+import { agentName, mergeRunDirAndWorkspaceResult } from '@shared/schemas';
 import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 import { copyDereferenced } from '@utils/files/fsDurability';
 import type { RootedFileSystem } from '@utils/files/rootedFileSystem';
@@ -68,7 +65,7 @@ const runPackRunDir = Effect.fn('housekeeping.runPackRunDir')(function* (
     }
 
     const baseName = inputFile ? path.parse(inputFile).name : 'run';
-    const cleanAgent = getCleanAgentName(agent);
+    const cleanAgent = agentName(agent);
     // Include a runId fragment in the destination folder so two packs of
     // the same input+agent+model within the same second (the timestamp's
     // granularity) don't collide and silently merge.

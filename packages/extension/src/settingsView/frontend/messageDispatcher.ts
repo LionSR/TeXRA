@@ -42,6 +42,7 @@ import {
   selectedSections,
   sessionProblem,
   skillLoadIssues,
+  installedPlugins,
   skillsList,
   subscriptionAuth,
   subscriptionUsage,
@@ -125,6 +126,7 @@ export const settingsViewHandlers: SettingsViewOutboundHandlerRegistry = {
   [SETTINGS_VIEW_COMMANDS.UPDATE_SKILLS_LIST]: (data) => {
     skillsList.set(data.skills);
     skillLoadIssues.set(data.issues);
+    installedPlugins.set(data.plugins);
   },
 
   // Catalog-derived settings snapshots.

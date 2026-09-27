@@ -29,6 +29,7 @@ import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
+import { scanPluginAgents } from './pluginAgents';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
@@ -43,15 +44,15 @@ export class AgentCatalogLoadError extends Data.TaggedError(
 }> {}
 
 /**
- * Source priority for lookups (higher priority first). Every source must be
- * listed, not omitted: `deduplicateByName` compares `indexOf`, and an absent
- * source scores `-1`, ranking it first by accident instead of by decision.
- * Bundled outranks remote, so a stale hosted row never shadows a bundled name.
+ * Source priority for lookups, highest first. Every source is listed: an
+ * absent one scores `-1` in `deduplicateByName`'s `indexOf`, ranking first by
+ * accident. Bundled outranks remote: a stale hosted row never shadows it.
  */
 const LOOKUP_PRIORITY: AgentSource[] = [
   'custom',
   'builtInWorkflow',
   'builtInToolUse',
+  'plugin',
   'remote',
 ];
 
@@ -160,25 +161,25 @@ function queueLoad(
       ),
     );
     const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
-    const [customScan, builtInScan, toolUseScan, remoteEntries] =
+    // Only custom-agent scan issues are a product surface; the rest go unused.
+    const [customScan, builtInScan, toolUseScan, pluginAgents, remoteEntries] =
       yield* Effect.all(
         [
           scanDirectory([customDir], 'custom'),
           scanDirectory([builtInDir], 'builtInWorkflow'),
           scanDirectory(toolUseRoots, 'builtInToolUse'),
+          scanPluginAgents,
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
         ],
         { concurrency: 'unbounded' },
       );
-    // Only custom-agent scan issues are a product surface; the rest go unused.
-
-    // Register all entries.
     const allEntries = [
       ...customScan.entries,
       ...builtInScan.entries,
       ...toolUseScan.entries,
+      ...pluginAgents,
       ...remoteEntries,
     ];
 

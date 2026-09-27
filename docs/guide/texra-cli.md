@@ -120,8 +120,9 @@ filesystem copy was written, and report the completed run's canonical
 
 Final run result objects report their terminal state through `outcome` and name
 the run through `runId`. A `texra run` result also records the plugins it ran
-with: `plugins` lists the enabled plugins installed when it started or resumed
-(`name`, `source`, and for a fetched plugin its `ref` and pinned `commit`). The
+with: `plugins` lists the installed plugins that loaded when it started or
+resumed, enabled and trusted (`name`, `source`, and for a fetched plugin its
+`ref` and pinned `commit`). The
 tools a run offered can change between its model requests when a plugin is
 switched on or off; the run records each change in its history.
 
@@ -312,41 +313,59 @@ skill with `/skills` to apply it to your next request.
 
 ### Plugins
 
-TeXRA installs plugins published for Claude Code and Codex and loads their
-skills. It reads the plugin's own manifest, `.claude-plugin/plugin.json` or
-`.codex-plugin/plugin.json`, and takes skills from the plugin's `skills/`
-folder and any `skills` path the manifest declares.
+TeXRA installs plugins published for Claude Code and Codex. It reads the
+plugin's own manifest, `.claude-plugin/plugin.json` or
+`.codex-plugin/plugin.json`, and the folders beside it: skills from `skills/`,
+commands from `commands/`, agents from `agents/`, MCP servers from `.mcp.json`,
+plus any of these paths the manifest declares.
 
 ```bash
 texra plugin install github.com/LionSR/AgenticPublicationProtocol
 texra plugin install github.com/<owner>/<repo>@v1.0.0
 texra plugin install https://example.org/plugins.git --ref main
 texra plugin install ./my-plugin
+texra plugin enable paper-protocol
 texra plugin list
 texra plugin update
+texra plugin disable paper-protocol
 texra plugin remove paper-protocol
 ```
 
-A git source is fetched into `~/.texra/plugins/<name>/` and pinned to the
-commit it resolved to. `texra plugin update` fetches the same branch or tag
-again and pins the new commit. A local folder is used in place and is not
-copied, so edits to it show up at once; removing it only forgets it.
+An installed plugin stays off until you enable it. `texra plugin enable` shows
+what the plugin declares (its skills, commands, agents, and each MCP server's
+command line) and asks you to trust it. The trust covers that version and what
+it runs: the MCP servers' commands, the executables they resolve to, and the
+plugin's own files among their arguments. If the version or any of those
+change, the plugin loads nothing until you enable it again and trust it anew.
+A plugin with hooks or LSP servers runs code of its own and cannot be enabled
+yet; output styles and apps are not loaded.
+
+An enabled, trusted plugin loads under its own name: its skills and commands
+are skills named `<plugin>:<name>`, its agents are tool-use agents named
+`<plugin>:<name>`, and every tool-use run is offered its MCP servers' tools,
+named `mcp__plugin_<plugin>_<server>__<tool>`. Each server runs as its own
+process in the plugin folder, and its tool calls are approved like shell
+commands. Enabling, disabling or changing a plugin reaches a running
+conversation at its next model request, which records the change; a call to a
+tool that has since gone is refused. What a plugin took part in stays in the
+history after you disable or remove it.
+
+A fetched plugin lives in `~/.texra/v1/global-storage/plugins/<name>/`, pinned
+to the commit its branch or tag resolved to. `texra plugin update` fetches the
+same branch or tag again and pins the new commit. A local folder is used in
+place and is not copied, so edits to it show up at once; removing it only
+forgets it.
 
 A repository with a marketplace file (`.claude-plugin/marketplace.json` or
 `.agents/plugins/marketplace.json`) and no plugin manifest of its own installs
 the plugin it lists. When it lists several, name the ones you want with
 `--plugin <name>`, which may be repeated. <!-- guidance-refs-ignore -->
 
-Plugin skills count as user skills: they rank below the skills in
-`~/.texra/skills` and above imported and bundled skills, and the user source
-switch in the Skills settings turns them off with the rest. The VS Code
-extension reads the same install, and its Agents page lists installed plugins under Skills.
-The desktop app keeps its own settings and does not load them yet.
-
-TeXRA loads only skills from a plugin for now. It does not load or run a
-plugin's MCP servers, hooks, commands, agents, LSP servers, output styles or
-apps. `texra plugin list` shows which of these a plugin contains, as
-`ignored`. Nothing in the plugin is executed during install or update.
+The CLI, the VS Code extension and the desktop app share one install record
+and one set of trust decisions. The Skills section of the Agents settings page
+in the extension and the desktop lists installed plugins and installs,
+enables, disables, updates and removes them; enabling there asks for trust in
+a dialog.
 
 ## Shell completion
 

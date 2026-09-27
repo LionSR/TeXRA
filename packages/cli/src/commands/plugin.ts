@@ -1,29 +1,35 @@
-import * as os from 'node:os';
-import * as path from 'node:path';
-
 import { defineCommand } from 'citty';
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
+import {
+  installPlugins,
+  parsePluginOrigin,
+  removePlugin,
+  updatePlugins,
+  type PluginUpdate,
+} from '@common/plugins/installedPlugins';
+import {
+  PluginRequestError,
+  UNLOADED_COMPONENT_LABELS,
+} from '@common/plugins/pluginManifest';
+import {
+  disablePlugin,
+  enablePlugin,
+  listPlugins,
+  type PluginListing,
+  type PluginReview,
+} from '@common/plugins/pluginTrust';
+import type { PluginEnv } from '@common/plugins/installRecord';
 import { withProcessServices } from '@platform/processRuntime';
 
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 import { CliExitCode } from '../runtime/exitCodes';
 import { initCliPlatform } from '../runtime/initPlatform';
-import { writeErrorStderr } from '../runtime/logSinks';
-import { DEFERRED_COMPONENT_LABELS } from '../runtime/pluginManifest';
 import {
-  installPlugins,
-  listPlugins,
-  removePlugin,
-  setPluginEnabled,
-  updatePlugins,
-  GIT_URL,
-  SAFE_REF,
-  type PluginEnv,
-  type PluginListing,
-  type PluginOrigin,
-  type PluginUpdate,
-} from '../runtime/plugins';
+  askCliQuestion,
+  writeErrorStderr,
+  writeTextStderr,
+} from '../runtime/logSinks';
 
 import { defineCliCommand } from './_helpers/defineCliCommand';
 import { withUsageSections } from './_helpers/dispatch';
@@ -31,69 +37,22 @@ import { GLOBAL_ARGS, collectStringFlagValues } from './_helpers/globalArgs';
 import { emitCliResult } from './_helpers/output';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-const GITHUB_SHORTHAND =
-  /^(?:https?:\/\/)?github\.com\/([\w.-]+)\/([\w.-]+?)(?:\.git)?(?:@([^@\s]+))?$/;
-
 /**
- * Parse `<source>`: `github.com/<owner>/<repo>[@ref]`, a git URL, or a local
- * directory. Refused here, before anything runs, so a bad source is a usage
- * error. `--ref` applies to git sources only.
- */
-function parsePluginSource(
-  input: string,
-  cwd: string,
-  ref: string | undefined,
-): PluginOrigin {
-  const github = GITHUB_SHORTHAND.exec(input);
-  const pinned = github?.[3];
-  if (pinned !== undefined && ref !== undefined) {
-    throw new CliUsageError(
-      `Give the ref once: either ${input} or --ref ${ref}, not both.`,
-    );
-  }
-  const gitRef = pinned ?? ref;
-  if (gitRef !== undefined && !SAFE_REF.test(gitRef)) {
-    throw new CliUsageError(`"${gitRef}" is not a git branch, tag or commit.`);
-  }
-  if (github) {
-    return {
-      kind: 'git',
-      url: `https://github.com/${github[1]}/${github[2]}.git`,
-      ...(gitRef ? { ref: gitRef } : {}),
-    };
-  }
-  if (GIT_URL.test(input)) {
-    return { kind: 'git', url: input, ...(gitRef ? { ref: gitRef } : {}) };
-  }
-  if (/^[a-z][\w+.-]*:\/\//i.test(input)) {
-    throw new CliUsageError(
-      `${input} is not a remote git URL (https, ssh or git). Install a local plugin by its directory path.`,
-    );
-  }
-  if (ref !== undefined) {
-    throw new CliUsageError('--ref applies to git sources only.');
-  }
-  const expanded =
-    input === '~' || input.startsWith(`~${path.sep}`)
-      ? path.join(os.homedir(), input.slice(1))
-      : input;
-  return { kind: 'local', path: path.resolve(cwd, expanded) };
-}
-
-/**
- * A mistake in what the user asked (an unknown name, a taken name, a
- * marketplace that needs `--plugin`) exits 2; a plugin or git failure exits 1.
+ * A mistake in what the user asked (an unknown name, a taken name) exits 2;
+ * a plugin or git failure, a declined trust prompt and a refused code plugin
+ * exit 1.
  */
 function pluginExitCode(error: unknown): number {
   writeErrorStderr(error);
-  return error instanceof CliUsageError
+  return error instanceof CliUsageError || error instanceof PluginRequestError
     ? CliExitCode.Usage
     : CliExitCode.AgentError;
 }
 
 /**
- * Open the platform for its setting slots, then run one plugin operation on
- * the runtime it installed, whose spawner git runs on.
+ * Open the platform for its roots (the global state the record lives in and
+ * the global storage the managed plugins live under), then run one plugin
+ * operation on the runtime it installed, whose spawner git runs on.
  */
 function withPluginEnv<A, E>(
   context: CliContext,
@@ -103,15 +62,18 @@ function withPluginEnv<A, E>(
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
     return yield* withProcessServices(
       services.runtime,
-      operation({
-        stores: services.roots,
-        pluginsDir: path.join(context.storageRoot, 'plugins'),
-      }),
+      operation(services.roots),
     );
   });
 }
 
 const shortCommit = (commit: string | undefined) => commit?.slice(0, 12);
+
+function pluginState(plugin: PluginListing): string {
+  if (plugin.code.length > 0) return 'code plugin, cannot be enabled';
+  if (!plugin.enabled) return 'disabled';
+  return plugin.trusted ? 'enabled' : 'enabled, needs trust';
+}
 
 function formatPluginList(plugins: readonly PluginListing[]): string {
   if (plugins.length === 0) {
@@ -120,7 +82,7 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
   return plugins
     .map((plugin) => {
       const header = [
-        plugin.enabled ? plugin.name : `${plugin.name} (disabled)`,
+        `${plugin.name} (${pluginState(plugin)})`,
         plugin.version,
         plugin.commit
           ? `${plugin.source} @ ${shortCommit(plugin.commit)}`
@@ -128,10 +90,13 @@ function formatPluginList(plugins: readonly PluginListing[]): string {
       ]
         .filter(Boolean)
         .join('  ');
-      const detail = plugin.problem
-        ? `  problem: ${plugin.problem}`
-        : `  contains: skills (${plugin.skillCount}); ignored: ${plugin.ignored.length === 0 ? 'none' : plugin.ignored.join(', ')}`;
-      return `${header}\n${detail}`;
+      if (plugin.problem) return `${header}\n  problem: ${plugin.problem}`;
+      const unloaded = [...plugin.code, ...plugin.ignored];
+      return [
+        header,
+        `  contains: skills (${plugin.skillCount}), commands (${plugin.commandCount}), agents (${plugin.agentCount}), MCP servers (${plugin.mcpServers.length === 0 ? 'none' : plugin.mcpServers.join(', ')})`,
+        `  not loaded: ${unloaded.length === 0 ? 'none' : unloaded.join(', ')}`,
+      ].join('\n');
     })
     .join('\n');
 }
@@ -143,6 +108,26 @@ function formatPluginUpdate(update: PluginUpdate): string {
     : `${update.name}: ${shortCommit(update.from)} -> ${shortCommit(update.to)}`;
 }
 
+/** Show what a plugin declares on stderr and ask to trust it, on stdin. An
+ *  answer that is not yes, or no answer at all, declines. */
+const askTrust = (review: PluginReview) => {
+  writeTextStderr(
+    [
+      `Plugin ${review.name}${review.version ? ` ${review.version}` : ''} asks to be trusted:`,
+      ...review.lines.map((line) => `  ${line}`),
+    ].join('\n'),
+  );
+  return askCliQuestion(`Trust ${review.name} and enable it? [y/N] `).pipe(
+    Effect.map((answer) => /^y(es)?$/i.test(answer.trim())),
+    Effect.catch((error) =>
+      Effect.sync(() => {
+        writeTextStderr(`No answer (${error.message}).`);
+        return false;
+      }),
+    ),
+  );
+};
+
 const NAME_ARG = {
   type: 'positional',
   required: true,
@@ -152,7 +137,8 @@ const NAME_ARG = {
 const pluginInstallCommand = defineCliCommand({
   meta: {
     name: 'install',
-    description: 'Install a Claude Code or Codex plugin and load its skills',
+    description:
+      'Install a Claude Code or Codex plugin, disabled until you enable it',
   },
   args: {
     ...GLOBAL_ARGS,
@@ -177,14 +163,16 @@ const pluginInstallCommand = defineCliCommand({
   catchExitCode: pluginExitCode,
   run: (context, ctx) => {
     // Parsed while building, so a bad source refuses before anything opens.
-    const origin = parsePluginSource(
+    const origin = parsePluginOrigin(
       ctx.args.source,
       context.cwd,
       typeof ctx.args.ref === 'string' ? ctx.args.ref : undefined,
     );
+    if (Result.isFailure(origin))
+      throw new CliUsageError(origin.failure.message);
     const only = collectStringFlagValues(ctx.rawArgs, 'plugin');
     return withPluginEnv(context, (env) =>
-      installPlugins(origin, only, env).pipe(
+      installPlugins(origin.success, only, env).pipe(
         Effect.flatMap((added) =>
           listPlugins(env).pipe(
             Effect.map((all) =>
@@ -201,7 +189,7 @@ const pluginInstallCommand = defineCliCommand({
               kind: 'plugin' as const,
               plugin,
             })),
-            text: `Installed:\n${formatPluginList(installed)}`,
+            text: `Installed:\n${formatPluginList(installed)}\nEnable with \`texra plugin enable <name>\`.`,
           });
           return CliExitCode.Success;
         }),
@@ -235,7 +223,8 @@ const pluginListCommand = defineCliCommand({
 const pluginRemoveCommand = defineCliCommand({
   meta: {
     name: 'remove',
-    description: 'Remove an installed plugin and its skills',
+    description:
+      'Remove an installed plugin; what it wrote to history is kept, unread',
   },
   args: { ...GLOBAL_ARGS, name: NAME_ARG },
   catchExitCode: pluginExitCode,
@@ -261,36 +250,67 @@ const pluginRemoveCommand = defineCliCommand({
     ),
 });
 
-function pluginSwitchCommand(enabled: boolean) {
-  const verb = enabled ? 'enable' : 'disable';
-  return defineCliCommand({
-    meta: {
-      name: verb,
-      description: enabled
-        ? 'Enable an installed plugin: its skills load again'
-        : 'Disable an installed plugin without removing it: its skills are hidden',
-    },
-    args: { ...GLOBAL_ARGS, name: NAME_ARG },
-    catchExitCode: pluginExitCode,
-    run: (context, ctx) =>
-      withPluginEnv(context, (env) =>
-        setPluginEnabled(ctx.args.name, enabled, env).pipe(
-          Effect.map((plugin) => {
-            const result = { name: plugin.name, enabled };
-            emitCliResult(context, {
-              json: result,
-              ndjson: {
-                kind: 'result',
-                result: { command: `plugin ${verb}`, ...result },
-              },
-              text: `${enabled ? 'Enabled' : 'Disabled'} ${plugin.name}.`,
-            });
-            return CliExitCode.Success;
-          }),
-        ),
+const pluginEnableCommand = defineCliCommand({
+  meta: {
+    name: 'enable',
+    description:
+      'Enable an installed plugin, asking to trust the version it is at',
+  },
+  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  catchExitCode: pluginExitCode,
+  run: (context, ctx) =>
+    withPluginEnv(context, (env) =>
+      enablePlugin(ctx.args.name, env, askTrust).pipe(
+        Effect.map((outcome) => {
+          const result = {
+            name: ctx.args.name,
+            enabled: outcome === 'enabled',
+          };
+          emitCliResult(context, {
+            json: result,
+            ndjson: {
+              kind: 'result',
+              result: { command: 'plugin enable', ...result },
+            },
+            text:
+              outcome === 'enabled'
+                ? `Enabled ${ctx.args.name}. Open runs load it at their next step.`
+                : `Not enabled: ${ctx.args.name} was not trusted.`,
+          });
+          return outcome === 'enabled'
+            ? CliExitCode.Success
+            : CliExitCode.AgentError;
+        }),
       ),
-  });
-}
+    ),
+});
+
+const pluginDisableCommand = defineCliCommand({
+  meta: {
+    name: 'disable',
+    description:
+      'Disable an installed plugin without removing it: it contributes nothing from the next step',
+  },
+  args: { ...GLOBAL_ARGS, name: NAME_ARG },
+  catchExitCode: pluginExitCode,
+  run: (context, ctx) =>
+    withPluginEnv(context, (env) =>
+      disablePlugin(ctx.args.name, env).pipe(
+        Effect.map(() => {
+          const result = { name: ctx.args.name, enabled: false };
+          emitCliResult(context, {
+            json: result,
+            ndjson: {
+              kind: 'result',
+              result: { command: 'plugin disable', ...result },
+            },
+            text: `Disabled ${ctx.args.name}.`,
+          });
+          return CliExitCode.Success;
+        }),
+      ),
+    ),
+});
 
 const pluginUpdateCommand = defineCliCommand({
   meta: {
@@ -335,15 +355,16 @@ export const pluginCommand = withUsageSections(
   defineCommand({
     meta: {
       name: 'plugin',
-      description: 'Install Claude Code and Codex plugins for their skills',
+      description:
+        'Install Claude Code and Codex plugins: their skills, commands, agents and MCP servers',
     },
     subCommands: {
       install: pluginInstallCommand,
       list: pluginListCommand,
       remove: pluginRemoveCommand,
       update: pluginUpdateCommand,
-      enable: pluginSwitchCommand(true),
-      disable: pluginSwitchCommand(false),
+      enable: pluginEnableCommand,
+      disable: pluginDisableCommand,
     },
   }),
   [
@@ -359,15 +380,19 @@ export const pluginCommand = withUsageSections(
           'texra plugin install github.com/o/market --plugin paper',
           'install one plugin a marketplace lists',
         ],
+        [
+          'texra plugin enable paper-protocol',
+          'review what it declares, trust it, and load it',
+        ],
         ['texra plugin update', 'refetch every installed plugin'],
         [
           'texra plugin disable paper-protocol',
-          'hide a plugin without removing it',
+          'unload a plugin without removing it',
         ],
       ],
     },
     {
-      title: `TeXRA loads a plugin's skills. It does not load or run its ${DEFERRED_COMPONENT_LABELS.join(', ')}.`,
+      title: `TeXRA loads a plugin's skills, commands (as skills) and agents as <plugin>:<name>, and runs its MCP servers. It does not load its ${UNLOADED_COMPONENT_LABELS.join(', ')}; a plugin with hooks or LSP servers runs code and cannot be enabled yet.`,
       rows: [],
     },
   ],

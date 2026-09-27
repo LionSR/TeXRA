@@ -1,4 +1,4 @@
-// The git steps `texra plugin` takes: fetch one pinned commit and check it
+// The git steps a plugin install takes: fetch one pinned commit and check it
 // out detached. git only fetches here; nothing from a plugin runs.
 
 import { Effect, Stream } from 'effect';

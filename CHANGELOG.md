@@ -201,22 +201,21 @@ All notable changes to this project will be documented in this file.
   marks no longer look like checkboxes, and plan entries read "planned"
   rather than "declared".
 
-- **Enable or disable an installed plugin** — `texra plugin disable <name>`
-  hides a plugin's skills without uninstalling it, and
-  `texra plugin enable <name>` brings them back. `texra plugin list` marks a
-  disabled plugin.
-
-- **Install Claude Code and Codex plugins for their skills** — `texra plugin
-install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
-  adds its skills as user skills to TeXRA sessions in the terminal and in
-  VS Code, which share the install. The desktop app does not load them yet.
-  It reads the
-  plugin's own `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`,
-  installs from a marketplace repository with `--plugin <name>`, and uses a
-  local plugin folder in place. `texra plugin list`, `update` and `remove`
-  manage them, and the Skills settings tab lists them. Only skills are loaded
-  for now; a plugin's MCP servers, hooks, commands and agents are listed as
-  ignored and never run.
+- **Install Claude Code and Codex plugins on every host** — `texra plugin
+install github.com/<owner>/<repo>` (or a local folder, or one plugin of a
+  marketplace with `--plugin <name>`) fetches a plugin and pins its commit;
+  the Skills section of the Agents settings page does the same in VS Code and
+  the desktop app, which now share one install record with the terminal. A
+  plugin stays off until you enable it: enabling shows what it declares and
+  asks you to trust that version and the MCP servers it runs, and a new
+  version or a changed server script asks again. An enabled plugin's skills
+  and commands load as skills named `<plugin>:<name>`, its agents as tool-use
+  agents `<plugin>:<name>`, and its `.mcp.json` servers' tools are offered to
+  every tool-use run from its next model request. `texra plugin disable`
+  unloads a plugin without removing it; its past runs keep their history. A
+  plugin with hooks or LSP servers runs code of its own and is refused.
+- **The desktop app keeps its application state with the CLI and VS Code** —
+  switches such as the tool plugins' now read the same on all three hosts.
 - **Desktop: clearer multiple projects** — each open project in the sidebar
   has one row with a status dot (waiting on you, running, or finished while
   you were elsewhere), a `+` that starts a task in that project, and a `×`

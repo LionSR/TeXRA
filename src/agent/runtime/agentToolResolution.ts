@@ -15,7 +15,9 @@
  *      `unavailableHosts`; every such tool when no host was named) or that
  *      is approval-gated while approval prompts are unavailable is withheld;
  *      so is one whose plugin is off (not in the generation).
- *   2. The injected tools not already declared, under the same gates.
+ *   2. The injected tools not already declared, under the same gates: the
+ *      manifest's, and every tool of an installed plugin (its MCP servers'),
+ *      which the plugin's enablement offers every tool-use run.
  *   3. A delegated child keeps only the tools its parent's step offered,
  *      with the same identity: it can only narrow its parent, so a tool its
  *      parent was withheld (a switch, a gate, a host) never reaches it.
@@ -56,11 +58,11 @@ import {
   toolDigests,
   type HeldPlugins,
   type ToolGeneration,
-} from '@tools/liveTools';
+} from '@tools/catalogEntries';
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
 import { getUnavailableToolNamesCached } from '@tools/toolAvailability';
-import { ToolRegistry } from '@tools/toolTable';
+import { isInstalledPluginId, ToolRegistry } from '@tools/toolTable';
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,
@@ -194,6 +196,8 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
         }
       }
     }
+    for (const [name, entry] of generation.entries)
+      if (isInstalledPluginId(entry.plugin)) injected.push(name);
   }
   if (input.parentOffered) {
     const refusal = childToolRefusal(input.parentOffered, input.tools);
@@ -255,6 +259,14 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const server = mcpServerOfToolName(name);
     if (server === undefined) return [name];
     const id = mcpPluginId(server);
+    // An installed plugin's server: its tools are in the generation while
+    // the plugin loads, and why it does not is the step's to report.
+    const installed = [...enabled].flatMap(([toolName, e]) =>
+      isInstalledPluginId(e.plugin) && mcpServerOfToolName(toolName) === server
+        ? [toolName]
+        : [],
+    );
+    if (installed.length > 0) return name.endsWith('__*') ? installed : [name];
     if (!input.held.loaded.has(id)) {
       reportServer(
         server,

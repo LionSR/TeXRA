@@ -6,7 +6,7 @@ import { AgentDirectoryService } from '@agent/index';
 import { createSupabaseAuth, type SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import {
-  openAppStateStore,
+  appStateStoreFromDatabase,
   openProjectStateStore,
 } from '@controllers/session/appStateStore';
 import { installProcessRuntime } from '@controllers/session/sessionLayer';
@@ -31,6 +31,7 @@ import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
+import { GlobalDatabase } from '@shared/session/database';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
@@ -168,10 +169,14 @@ export const initializeElectronPlatform = Effect.fn(
     globalStorage,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
-    // Electron profile state intentionally differs from the shared global DB.
+    // Application state is the one the CLI and the extension keep, in the
+    // shared global database: one install record for plugins and the trust
+    // given to them, and one set of tool switches, across the three hosts.
     appState: Layer.effect(
       AppState,
-      openAppStateStore(resolveGlobalStoragePath(userDataPath)),
+      Effect.map(GlobalDatabase, (database) =>
+        appStateStoreFromDatabase(globalStorage, database),
+      ),
     ),
     auth: supabaseAuth,
     // No editor in this process.

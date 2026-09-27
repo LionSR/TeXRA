@@ -1,4 +1,8 @@
 import '@test/support/sessionGraphTestSetup';
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
@@ -23,6 +27,7 @@ import {
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTempDirPlatform,
+  makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -1355,22 +1360,40 @@ describe('executeCliConfig', () => {
   );
 
   it.effect(
-    'records each installed plugin by source and pinned commit in the CLI result',
+    'records each installed plugin that loads by source and pinned commit in the CLI result',
     () =>
       Effect.gen(function* () {
         const commit = 'a'.repeat(40);
-        yield* testDefaultSession().roots.globalState.update(
-          GlobalStateKey.INSTALLED_PLUGINS,
-          [
-            {
-              name: 'notes',
-              source: 'https://github.com/example/notes.git',
-              commit,
-              path: '/home/me/.texra/plugins/notes',
-              skills: ['/home/me/.texra/plugins/notes/skills'],
-            },
-          ],
+        const pluginDir = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-plugin-', tempDirs),
         );
+        yield* Effect.promise(async () => {
+          await fs.mkdir(path.join(pluginDir, '.claude-plugin'));
+          await fs.writeFile(
+            path.join(pluginDir, '.claude-plugin', 'plugin.json'),
+            JSON.stringify({ name: 'notes', version: '1.0.0' }),
+          );
+        });
+        const plugin = {
+          source: 'https://github.com/example/notes.git',
+          commit,
+          path: pluginDir,
+          skills: [],
+        };
+        const { globalState } = testDefaultSession().roots;
+        yield* globalState.update(GlobalStateKey.INSTALLED_PLUGINS, [
+          { name: 'notes', ...plugin, enabled: true },
+          // Enabled but never trusted: it loads nothing, so it is not named.
+          { name: 'drafts', ...plugin, enabled: true },
+        ]);
+        yield* globalState.update(GlobalStateKey.PLUGIN_TRUST, [
+          {
+            name: 'notes',
+            version: '1.0.0',
+            // A plugin that runs nothing digests its empty list.
+            digest: createHash('sha256').update('[]').digest('hex'),
+          },
+        ]);
         const { AgentCategory } = yield* Effect.promise(
           () => import('@shared/schemas'),
         );

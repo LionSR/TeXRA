@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 import { getAgent } from '@agent/index';
+import { readPluginAgent } from '@agent/index/pluginAgents';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   AgentPromptSchema,
@@ -103,6 +104,25 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];
+  }
+
+  // A plugin agent is its subagent file, read again: it inherits nothing.
+  if (entry.source === 'plugin') {
+    const agent = yield* readPluginAgent(
+      entry.path,
+      entry.name.slice(0, entry.name.indexOf(':')),
+    );
+    return yield* Effect.try({
+      try: () =>
+        [
+          AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            tools: agent.tools,
+          }),
+          AgentPromptSchema.parse({ systemPrompt: agent.systemPrompt }),
+        ] as [AgentSetting, AgentPrompt],
+      catch: ensureError,
+    });
   }
 
   // Mirrors the cycle guard in agentYamlScanner.ts's inheritedDefinitionBlock:

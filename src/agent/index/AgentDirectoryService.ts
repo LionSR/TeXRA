@@ -264,8 +264,10 @@ export function agentSourceDirectory(
       return directories.builtIn();
     case 'builtInToolUse':
       return directories.builtInToolUse();
-    // No local directory: a remote agent lives in Supabase.
+    // No local directory: a remote agent lives in Supabase, and a plugin
+    // agent in its own plugin's directory.
     case 'remote':
+    case 'plugin':
       return Effect.succeed(undefined);
   }
 }

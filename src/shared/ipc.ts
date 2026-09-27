@@ -58,6 +58,8 @@ export const SETTINGS_VIEW_COMMANDS = {
   RECHECK_TOOL_STATUS: 'recheckToolStatus',
   TOGGLE_TOOL: 'toggleTool',
   RUN_TOOL_COMMAND: 'runToolCommand',
+  // Installed plugin actions (install, enable, disable, update, remove)
+  PLUGIN_ACTION: 'pluginAction',
   // GitHub token commands (for PR subscription tool)
   GET_GITHUB_TOKEN_STATUS: 'getGitHubTokenStatus',
   UPDATE_GITHUB_TOKEN_STATUS: 'updateGitHubTokenStatus',

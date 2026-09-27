@@ -94,6 +94,35 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
   readonly warnings: readonly string[];
 }>;
 
+/** The id every installed Claude Code or Codex plugin's contributions
+ *  carry: `plugin:<name>`. */
+export const installedPluginId = (name: string): string => `plugin:${name}`;
+
+/** Whether a catalog entry's plugin is an installed plugin. */
+export const isInstalledPluginId = (plugin: string): boolean =>
+  plugin.startsWith('plugin:');
+
+/**
+ * An installed plugin a step loads while it is enabled and trusted: its MCP
+ * servers, whose tools the catalog contributes under its one id and every
+ * tool-use run is offered (`@tools/liveTools`). `key` changes exactly when
+ * what it would start does, which replaces its servers.
+ */
+export interface InstalledToolPlugin {
+  readonly id: string;
+  readonly key: string;
+  readonly servers: readonly LoadedPlugin[];
+}
+
+/**
+ * The installed plugins that load now, read at each step, and why each
+ * enabled one that does not load is held back.
+ */
+export type InstalledToolReader = Effect.Effect<{
+  readonly plugins: readonly InstalledToolPlugin[];
+  readonly warnings: readonly string[];
+}>;
+
 /**
  * What decides that a parked run of one agent category continues, pinned by
  * each step beside its tools (`@agent/runtime/loop/step`); with none, the run
