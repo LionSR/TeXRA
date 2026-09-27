@@ -102,6 +102,7 @@ import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
 import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
+import type { HistoryQuery } from './historyQuery/HistoryQuery';
 import type { ModelRetryGate } from './ModelRetryGate';
 
 const CHANNEL = 'sessionHandle';
@@ -291,6 +292,8 @@ export class SessionHandle {
    * and waiting calls end with the session rather than through this store.
    */
   readonly modelRetries: ModelRetryGate;
+  /** The history query store (`executions` `query`), closed with the session. */
+  readonly history: HistoryQuery;
   /** Host policy for provider-output cleanup and continuation joining. */
   readonly responseTextProcessing: ResponseTextProcessing;
   /**
@@ -308,7 +311,7 @@ export class SessionHandle {
    */
   constructor(
     init: SessionHandleInit &
-      Pick<SessionHandle, 'modelRetries'> & {
+      Pick<SessionHandle, 'modelRetries' | 'history'> & {
         readonly graph: (session: SessionHandle) => SessionGraph;
       },
   ) {
@@ -342,6 +345,7 @@ export class SessionHandle {
       acquireClaim: (runId) => this.acquireClaims(run(runId)),
     });
     this.modelRetries = init.modelRetries;
+    this.history = init.history;
     this.responseTextProcessing =
       init.responseTextProcessing ?? createNeutralResponseTextProcessing();
     this.workflowControls = new WorkflowControlRegistry();

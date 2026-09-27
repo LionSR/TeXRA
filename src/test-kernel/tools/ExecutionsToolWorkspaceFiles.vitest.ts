@@ -480,7 +480,10 @@ describe('ExecutionsTool', () => {
               path: `/executions/${childRunId}`,
             }),
             ExecutionsTool.call({
-              path: `/executions/${childRunId}/todos`,
+              path: '/executions',
+              action: 'query',
+              sql: 'SELECT content FROM todos WHERE run_id = ?',
+              params: [childRunId],
             }),
           ]).pipe(
             Effect.provide(
@@ -629,14 +632,22 @@ describe('ExecutionsTool', () => {
     ),
   );
 
-  // The advertised /executions/{id}/todos endpoint must resolve a task list
-  // exactly as the completed summary does, from the same committed stream fold.
+  // The history query must resolve a task list exactly as the completed
+  // summary does, from the same committed rows.
   it.live.each([
-    { label: 'completed summary', toolPath: '/executions/abc123' },
-    { label: 'todos endpoint', toolPath: '/executions/abc123/todos' },
+    { label: 'completed summary', input: { path: '/executions/abc123' } },
+    {
+      label: 'history query',
+      input: {
+        path: '/executions',
+        action: 'query',
+        sql: 'SELECT content FROM todos WHERE run_id = ?',
+        params: ['abc123'],
+      },
+    },
   ])(
     'reads completed todos from committed stream events via the $label',
-    ({ toolPath }) =>
+    ({ input }) =>
       Effect.gen(function* () {
         yield* withTempStorage(() =>
           withSession((session) =>
@@ -661,9 +672,7 @@ describe('ExecutionsTool', () => {
               ]);
               yield* session.settlePublications();
               mocks.readConfig.mockResolvedValue(config);
-              const result = yield* ExecutionsTool.call({
-                path: toolPath,
-              }).pipe(
+              const result = yield* ExecutionsTool.call(input).pipe(
                 Effect.provide(
                   nativeToolTestLayer({
                     run: { session: session, runId: runId, toolPolicy: {} },

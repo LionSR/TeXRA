@@ -125,11 +125,33 @@ const SendActionSchema = z.strictObject({
   message: z.string().min(1).describe('The message for the run.'),
 });
 
+// `path` stays required here as on every arm: the provider-facing schema
+// flattens this union and keeps a field required only if every arm requires
+// it (`flattenTopLevelUnion`), so an optional one would loosen all four.
+const QueryActionSchema = z.strictObject({
+  path: PathFieldSchema,
+  action: z
+    .literal('query')
+    .describe(
+      'Run one read-only SQL statement over the run-history views listed in the description (use on /executions).',
+    ),
+  sql: z
+    .string()
+    .min(1)
+    .describe(
+      'One SELECT, WITH, EXPLAIN or VALUES statement; bind values as ?.',
+    ),
+  params: nullishWithDefault(z.array(z.string()), []).describe(
+    'Values for the ? placeholders in sql, in order, bound as text.',
+  ),
+});
+
 const ExecutionsToolActionSchema = z.discriminatedUnion('action', [
   ViewActionSchema,
   WaitActionSchema,
   KillActionSchema,
   SendActionSchema,
+  QueryActionSchema,
 ]);
 
 // A structured-output provider represents an omitted optional field as an

@@ -35,6 +35,11 @@ import {
 const PRODUCTION_ROOTS = [...ALL_HOST_PRODUCTION_ROOTS, 'packages/agent/src'];
 
 const DATABASE_MODULE = 'src/controllers/session/Database.ts';
+/** The history query store's process opens SQLite on its own `:memory:`
+ *  database and never on the session file. It assigns no seq or commit and
+ *  claims nothing, so it is not a second owner of the ordinals this ratchet
+ *  guards; it stays under the write scan like every other file. */
+const HISTORY_QUERY_STORE = 'src/agent/runtime/historyQuery/childSource.ts';
 
 /** Both the official SQLite driver and raw SQLite imports create storage
  * authority. Imports, requires, and dynamic imports obey the same boundary. */
@@ -51,9 +56,9 @@ const SQLITE_IMPORT =
 const EVENT_TABLE_WRITE =
   /\b(?:INSERT(?:\s+OR\s+\w+)?\s+INTO|REPLACE\s+INTO|UPDATE|DELETE\s+FROM|DROP\s+TABLE(?:\s+IF\s+EXISTS)?)\s+(?:"?\w+"?\s*\.\s*)?"?(?:event|event_sequence)"?\b/i;
 
-function offenders(pattern: RegExp): string[] {
+function offenders(pattern: RegExp, allowed: readonly string[]): string[] {
   return PRODUCTION_ROOTS.flatMap(productionFilesUnder)
-    .filter((file) => file !== DATABASE_MODULE)
+    .filter((file) => !allowed.includes(file))
     .filter((file) =>
       pattern.test(
         stripComments(readFileSync(resolve(REPO_ROOT, file), 'utf8')),
@@ -71,7 +76,10 @@ describe('persistence write boundary', () => {
   });
 
   it('opens the substrate in the Database layer and nowhere else', () => {
-    const found = offenders(SQLITE_IMPORT);
+    const found = offenders(SQLITE_IMPORT, [
+      DATABASE_MODULE,
+      HISTORY_QUERY_STORE,
+    ]);
 
     expect(
       found,
@@ -82,7 +90,7 @@ describe('persistence write boundary', () => {
   });
 
   it('writes the C1 tables in the Database layer and nowhere else', () => {
-    const found = offenders(EVENT_TABLE_WRITE);
+    const found = offenders(EVENT_TABLE_WRITE, [DATABASE_MODULE]);
 
     expect(
       found,
@@ -102,5 +110,12 @@ describe('persistence write boundary', () => {
     // file that no longer writes anything.
     expect(SQLITE_IMPORT.test(source)).toBe(true);
     expect(EVENT_TABLE_WRITE.test(source)).toBe(true);
+    expect(
+      SQLITE_IMPORT.test(
+        stripComments(
+          readFileSync(resolve(REPO_ROOT, HISTORY_QUERY_STORE), 'utf8'),
+        ),
+      ),
+    ).toBe(true);
   });
 });

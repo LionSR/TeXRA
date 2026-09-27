@@ -25,6 +25,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { HISTORY_VIEW_SUMMARY } from '@agent/runtime/historyQuery/views';
 import { AgentResume } from '@platform/interfaces';
 import { StorageFs } from '@platform/rootedFs';
 import {
@@ -57,8 +58,6 @@ import {
   childRunViews,
   formatChildLine,
   formatRunStatus,
-  formatTodoHeader,
-  formatTodoSection,
   runDisplayCategory,
   runTodos,
 } from './executionFormatters';
@@ -68,6 +67,7 @@ import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
 import { EXECUTION_PATH_LIST } from './executions/pathCatalog';
+import { queryHistory } from './executions/queryAction';
 import {
   OUTPUT_MAX_LINES,
   OUTPUT_TAIL_LINES,
@@ -189,6 +189,15 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
     );
   }
 
+  if (input.action === 'query') {
+    if (id) {
+      return yield* Effect.fail(
+        new ToolError(`action='query' runs on /executions, not on one run.`),
+      );
+    }
+    return yield* queryHistory(context.session, input.sql, input.params);
+  }
+
   // /executions - list all runs
   if (!id) {
     if (input.action === 'kill' || input.action === 'send') {
@@ -264,14 +273,10 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
       }
       return yield* showConversation(context, runId, input.offset, input.limit);
     }
-    case 'todos':
-      return yield* showTodos(context, runId);
     case 'report':
       return yield* showReport(context, runId);
     case 'result':
       return yield* showResultMeta(context, runId);
-    case 'children':
-      return yield* showChildren(context, runId);
     case 'output':
       return yield* showOutput(context, runId, viewRange);
     case 'files':
@@ -472,29 +477,6 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
   );
 });
 
-/**
- * The same fold `/executions/{id}` reads its task lines from, so this
- * endpoint can never disagree with the summary about which tasks are
- * still pending.
- */
-const showTodos = Effect.fn('ExecutionsTool.showTodos')(function* (
-  context: RunToolContext,
-  runId: RunId,
-) {
-  // A task list is a listing fact (`run.fact` keyed `todos`), so this names
-  // no aggregate: reading a task list never folds a transcript.
-  const run = (yield* context.session.readView([])).runs.get(runId);
-  const todos = run === undefined ? [] : runTodos(run);
-
-  if (todos.length === 0) {
-    return executed(`No task list found for run ${runId}.`);
-  }
-
-  return executed(
-    `${formatTodoHeader(runId, todos)}\n\n${formatTodoSection(todos).join('\n')}`,
-  );
-});
-
 const showReport = Effect.fn('ExecutionsTool.showReport')(function* (
   context: RunToolContext,
   runId: RunId,
@@ -540,23 +522,6 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
   // consumers precisely in the interrupted-turn case it describes.
   const payload = note ? { turnAttribution: note, ...result } : result;
   return executed(JSON.stringify(payload, null, 2));
-});
-
-const showChildren = Effect.fn('ExecutionsTool.showChildren')(function* (
-  context: RunToolContext,
-  runId: RunId,
-) {
-  // Parentage and a child's line are listing facts, so this names no
-  // aggregate: no transcript is folded to list children.
-  const view = yield* context.session.readView([]);
-  const children = childRunViews(view, runId);
-  if (children.length === 0) {
-    return executed(`No child runs found for ${runId}.`);
-  }
-
-  return executed(
-    `Children of ${runId} (${children.length}):\n\n${children.map(formatChildLine).join('\n')}`,
-  );
 });
 
 const showConfig = Effect.fn('ExecutionsTool.showConfig')(function* (
@@ -867,6 +832,8 @@ Use action: "wait" on /executions or /executions/{id} to wait for a status chang
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
 Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it.
+Use action: "query" with sql on /executions to ask any question of this project's run history in one read-only SQLite statement (bind values with ? and params). Children: SELECT * FROM runs WHERE parent_id = ?. Task list: SELECT * FROM todos WHERE run_id = ?. Views:
+${HISTORY_VIEW_SUMMARY}
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
   execute: executeExecutionsTool,
