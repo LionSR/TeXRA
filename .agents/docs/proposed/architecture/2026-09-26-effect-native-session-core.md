@@ -1344,7 +1344,11 @@ command grant is not held at all but computed from the goal and policy rows
 until re-armed (decision 14). `ToolGuard`
 gains `confirm` and `external` kinds beside `bash`, `requiresApproval` goes
 back to filtering only what is offered, and a `toolCall` request kind replaces
-approving MCP calls as shell. `approval.policy` rows follow `state`. It lives
+approving MCP calls as shell. `approval.policy` rows record only the
+policy the user set. Scoped grants never enter a durable row: they live in
+`ApprovalState` alone, so a crash that skips their finalizer leaves nothing
+for recovery to restore, and the cold view never advertises a bypass core
+would not honour. It lives
 in the existing session entry (no new lifetime) and keeps `withPerKeyLane`.
 
 ### PRs
@@ -1443,7 +1447,11 @@ no event marks a foreign owner's death. While pending input is blocked by a
 foreign claim, the session keeps a retry scheduled: an `Effect.repeat` on an
 exponential, capped `Schedule`, forked into the session scope. It probes the
 claim and wakes the run once the claim is acquirable, and it stops when the
-input is consumed or the session closes.
+input is consumed or the session closes. The probe proves death only for an
+owner on the same host: `proveOwnerLiveness` answers `unprovable` for another
+hostname (`leaseOwnerLiveness.ts:44-49`). A project database shared across
+machines therefore needs a cross-host takeover policy, listed under
+[Open for the implementing PR](#open-for-the-implementing-pr).
 So input that another process queued before it crashed does not wait on a
 session that was already open. User, GitHub and released child input
 therefore never waits for a manual resume. `'deferred'` admits the row
@@ -1484,7 +1492,12 @@ no terminal row either, so its resume performs the release. A native child uses 
 separate step. It hands its delivery's `WakeToken` to the job that settles
 the delivery. For a non-finalizing turn that is the `child.turn` `settled`
 job, and for its last turn the `run.end` job. So a crash between settling
-and releasing is impossible. `wake(token)` stays for a producer with no
+and releasing is impossible. That job reads the durable parent edge first. If
+`run.detach` has severed it, the job settles the delivery as unanswered,
+with the reason "parent detached" (move 10's settlement), instead of
+releasing it. A stopped parent is then never resumed by a child it detached,
+matching today's recheck in `submitPendingDelivery`
+(`childRunLoop.ts:654-665`). `wake(token)` stays for a producer with no
 settling row of its own. Either way a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
@@ -1911,6 +1924,10 @@ is chosen in the PR that implements the move:
   has no compare-and-set. The PR picks a cross-window exclusion whose
   ownership is released on process death, or treats that backend as
   non-persistent.
+- **Cross-host claim takeover** (move 10). Claim liveness is a local PID
+  probe, so an owner on another machine is never provably dead. A shared
+  project database needs a lease or heartbeat, or an explicit takeover
+  policy, before automatic wakes can recover input across hosts.
 - **Mechanics below the stated invariants** in moves 10 to 13: lock
   recovery, retry schedules, listing keys. The invariant each states is the
   contract, and the PR proves it against the code.
