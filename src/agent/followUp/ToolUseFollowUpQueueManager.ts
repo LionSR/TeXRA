@@ -50,12 +50,15 @@ interface QueueEntry {
   /** The owner's input, once its consumer attached one. */
   input?: RunInput;
   /**
-   * Follow-ups admitted with a deferred live offer (#8093): durable and
-   * pending on the rows, but not this generation's to take until their
-   * producer re-submits them. Live-only by nature: the generation's end
-   * clears it, and the next generation delivers them from the rows.
+   * Follow-ups durable and pending on the rows but held out of this
+   * generation's takes, keyed by what releases them: `resubmit`, a deferred
+   * live offer (#8093), until its producer re-submits it; `nextInput`, a
+   * `none` offer, until the next follow-up is offered to the consumer, so it
+   * is read with that input and never starts a turn by itself. Live-only by
+   * nature: the generation's end clears it, and the next generation delivers
+   * them from the rows.
    */
-  readonly deferred: Set<string>;
+  readonly deferred: Map<string, 'resubmit' | 'nextInput'>;
   /** The admission job running for this run (at most one: jobs are serial). */
   admitting: boolean;
   /** A release its owner asked for while an admission was running, applied
@@ -112,8 +115,9 @@ interface FollowUpSubmitOptions {
    * wake (#8093) takes this path, then re-submits the same delivery id once
    * finalization completes; the replay check finds the rows durable and
    * pending, and the offer happens then. `immediate` (the default) offers as
-   * soon as the rows commit. `none` admits them for the consumer's next take
-   * without waking it: a notice the run reads at its next turn.
+   * soon as the rows commit. `none` admits them without waking a live
+   * consumer and holds them out of its takes until its next input arrives: a
+   * notice the run reads with its next input, whether it is parked or busy.
    */
   readonly liveOffer?: 'immediate' | 'deferred' | 'none';
 }
@@ -473,20 +477,25 @@ export class ToolUseFollowUpQueue {
       // A deferred offer holds the rows back from a live consumer's input:
       // the caller re-submits once its own ordering allows, and the offer
       // happens then.
+      const liveConsumer =
+        owner?.kind === 'flow' ||
+        owner?.kind === 'child' ||
+        (owner?.kind === 'recovery' && admitted.input !== undefined);
       const liveOfferDeferred =
-        options?.liveOffer === 'deferred' &&
-        (owner?.kind === 'flow' ||
-          owner?.kind === 'child' ||
-          (owner?.kind === 'recovery' && admitted.input !== undefined));
+        options?.liveOffer === 'deferred' && liveConsumer;
       if (current && queued.length > 0) {
         if (owner === undefined && admission === 'recoverable') {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        if (liveOfferDeferred) {
-          for (const { followUpId } of queued)
-            admitted.deferred.add(followUpId);
-        } else if (owner !== undefined && options?.liveOffer !== 'none') {
+        if (liveOfferDeferred || options?.liveOffer === 'none') {
+          // A consumer that is not live takes the rows from the store when
+          // its generation starts, so only a live one needs them held out.
+          const until = liveOfferDeferred ? 'resubmit' : 'nextInput';
+          if (liveConsumer)
+            for (const { followUpId } of queued)
+              admitted.deferred.set(followUpId, until);
+        } else if (owner !== undefined) {
           this.offer(admitted, queued);
         }
       }
@@ -581,10 +590,12 @@ export class ToolUseFollowUpQueue {
     });
   }
 
-  /** The rows are pending for the owner: release any it held back, and
-   *  wake its consumer. */
+  /** The rows are pending for the owner: release any it held back, with
+   *  every row held for its next input, and wake its consumer. */
   private offer(entry: QueueEntry, followUps: readonly QueuedFollowUp[]): void {
     for (const { followUpId } of followUps) entry.deferred.delete(followUpId);
+    for (const [followUpId, until] of entry.deferred)
+      if (until === 'nextInput') entry.deferred.delete(followUpId);
     entry.input?.notify();
   }
 
@@ -682,7 +693,7 @@ export class ToolUseFollowUpQueue {
   }
 
   private createEntry(runId: RunId): QueueEntry {
-    const entry: QueueEntry = { deferred: new Set(), admitting: false };
+    const entry: QueueEntry = { deferred: new Map(), admitting: false };
     this.entries.set(runId, entry);
     return entry;
   }
