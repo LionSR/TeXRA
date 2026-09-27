@@ -618,7 +618,7 @@ in `src/ui`, because webview frontends cannot import `@tools`.
    format fingerprint staying byte-identical; the documents fold slice replaces
    the category discrimination in `RunView`.
 6. `PLUGIN_PROMPT_SECTIONS` with the `memory-workflow` move.
-7. Installed plugins as loaded plugins; the composition on the snapshot;
+7. Installed plugins as loaded plugins; the composition on each `run.activate`;
    presets; trust per hash; then the `setup` tool. Needs owner decisions.
 
 ### Rulings
@@ -757,6 +757,11 @@ ambient defaults:
 ```ts
 export interface TexraProcessOptions {
   readonly agentsDir: string;
+  // bundled skills and plugin agents (hostBootstrap.ts:101 reads
+  // resourcesPath); the agent package ships only dist, so an embedder passes
+  // the resources it has. Omitted: no bundled skills or plugin agents, with
+  // one warn logged. Packaging them with the SDK waits on publication.
+  readonly resourcesPath?: string;
   readonly projectDir?: string; // "project", per AGENTS.md terminology
   readonly storageDir: string; // required: no silent ~/.texra
   readonly mcpConfig?: string | false; // default: `mcp.json` under storageDir; false disables MCP
@@ -1622,18 +1627,19 @@ for each child (inference). The host-neutral controllers still carry
   exist only in the live pipeline. They are added to the fact first, on a
   format bump, so a host opens the right PDF and does not reopen earlier
   rounds' files.
-- **Presentation is checkpointed in the log, at least once.** After the host
-  presents a round it publishes `output.presented {runId, roundId}`. The
-  row is a session-level fact on the session's own aggregate, as
-  `state.value.set` is, not on the run's aggregate. So a host that attaches
-  after the run settled, or after a restart, needs no run claim to write it,
-  and never takes or releases a live run's claim. (`appendAll` refuses
-  run-aggregate rows from anyone but the claim owner, failing with
-  `DatabaseNotOwner`.) The
-  cold listing keeps only the latest row per aggregate and type
-  (`listingTypeOf`, `Database.ts:160-191`), so the listing key for this row
-  includes `roundId` and every round's checkpoint survives a restart. An
-  attaching host presents only facts with no `output.presented` row, so a
+- **Presentation is checkpointed, at least once.** After the host
+  presents a round it records that round as presented. The checkpoint is a
+  current value, not history: a `presentation` family in `CurrentValues`
+  (move 12), keyed `runId/roundId`, rather than an `output.presented` row.
+  A row on the run's aggregate needs the run's claim, and one on the
+  session's aggregate needs the `borrowsClaim` path that move 12 retires
+  (`Database.ts:623-735`). A `CurrentValues` write is one `BEGIN IMMEDIATE`
+  with no aggregate claim, so a host that attaches after the run settled or
+  after a restart can always write it, and never takes or releases a live
+  run's claim. `list('presentation')` returns every round's checkpoint.
+  Adding the family amends the accepted current-value decision. It is a
+  retained family: its rows are never deleted. An
+  attaching host presents only rounds with no checkpoint, so a
   reattached window does not replay rounds already checkpointed and loses no
   outputs produced while no host was attached. A crash between the side
   effect and the checkpoint repeats that one round once. The effects are
@@ -1762,7 +1768,7 @@ Deletion earliest, least churn (the owner's review):
 6. A deterministic composition input (move 2 PR 1), then the per-seam tables:
    `PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`, `PLUGIN_DRIVERS`, plugin-owned arms
    with fold slices.
-7. Installed plugins as loaded plugins, the composition on the snapshot,
+7. Installed plugins as loaded plugins, the composition on each `run.activate`,
    presets and trust, then the `setup` tool. Needs owner decisions.
 8. Anything else (`SessionKernel`, `ProcessLayer`, `SessionPlane`, `RunTrace`,
    and the structural halves of moves 9 to 13) only when a PR shows it deletes
