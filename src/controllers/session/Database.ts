@@ -764,27 +764,41 @@ export const databaseLayer = (
           `SELECT ${EVENT_COLUMNS} FROM event e WHERE e.aggregate_id = ? ORDER BY e.seq DESC LIMIT 1`,
           [id],
         );
+      /** The latest value of one `kind` aggregate, or `undefined` when none
+       *  has been written. */
+      const readStoredValue = <K extends StoredValue['key']>(
+        kind: K,
+        id: string,
+      ) =>
+        latestEventRow(qualifyAggregateId(kind, id)).pipe(
+          Effect.map((row) => (row ? storedValue(row, kind).state : undefined)),
+        );
+      /** Appends `state` as the latest value of its `state.key` aggregate. */
+      const appendStoredValue = (id: string, state: StoredValue) =>
+        Effect.gen(function* () {
+          const draft = {
+            type: 'state.value.set',
+            aggregateId: qualifyAggregateId(state.key, id),
+            state,
+          } as const;
+          const at = yield* Clock.currentTimeMillis;
+          yield* appendPrepared([prepareEventDraft(draft)], at);
+        });
       const readAppStateKey = (key: string) =>
-        latestEventRow(qualifyAggregateId('app-state', key)).pipe(
-          Effect.map((row): JsonValue | undefined => {
-            if (!row) return undefined;
-            const { state } = storedValue(row, 'app-state');
-            return state.value.kind === 'undefined'
+        readStoredValue('app-state', key).pipe(
+          Effect.map((state): JsonValue | undefined =>
+            state === undefined || state.value.kind === 'undefined'
               ? undefined
-              : state.value.value;
-          }),
+              : state.value.value,
+          ),
         );
       const readUpdateCheck = (host: string) =>
-        latestEventRow(qualifyAggregateId('update-check', host)).pipe(
-          Effect.map((r) =>
-            r ? storedValue(r, 'update-check').state.record : null,
-          ),
+        readStoredValue('update-check', host).pipe(
+          Effect.map((state) => (state ? state.record : null)),
         );
       const readInquiryRecord = (id: string) =>
-        latestEventRow(qualifyAggregateId('global-inquiry', id)).pipe(
-          Effect.map((r) =>
-            r ? storedValue(r, 'global-inquiry').state.record : null,
-          ),
+        readStoredValue('global-inquiry', id).pipe(
+          Effect.map((state) => (state ? state.record : null)),
         );
       return {
         observedCommit,
@@ -832,18 +846,10 @@ export const databaseLayer = (
             Effect.gen(function* () {
               const result = change(yield* readAppStateKey(key));
               if (Result.isFailure(result)) return result;
-              const aggregateId = qualifyAggregateId('app-state', key);
-              const state = {
+              yield* appendStoredValue(key, {
                 key: 'app-state',
                 value: result.success,
-              } as const;
-              const set = {
-                type: 'state.value.set',
-                aggregateId,
-                state,
-              } as const;
-              const at = yield* Clock.currentTimeMillis;
-              yield* appendPrepared([prepareEventDraft(set)], at);
+              });
               return result;
             }),
           ),
@@ -862,17 +868,7 @@ export const databaseLayer = (
                     ? change.version
                     : (current?.lastNotifiedVersion ?? null),
               };
-              const at = yield* Clock.currentTimeMillis;
-              yield* appendPrepared(
-                [
-                  prepareEventDraft({
-                    type: 'state.value.set',
-                    aggregateId: qualifyAggregateId('update-check', host),
-                    state: { key: 'update-check', record },
-                  }),
-                ],
-                at,
-              );
+              yield* appendStoredValue(host, { key: 'update-check', record });
             }),
           ),
         readInquiryRecord: (id) => query(readInquiryRecord(id)),
@@ -898,17 +894,10 @@ export const databaseLayer = (
                   return yield* invariant(
                     'An inquiry transition cannot change its thread identity.',
                   );
-                const at = yield* Clock.currentTimeMillis;
-                yield* appendPrepared(
-                  [
-                    prepareEventDraft({
-                      type: 'state.value.set',
-                      aggregateId: qualifyAggregateId('global-inquiry', id),
-                      state: { key: 'global-inquiry', record: result.success },
-                    }),
-                  ],
-                  at,
-                );
+                yield* appendStoredValue(id, {
+                  key: 'global-inquiry',
+                  record: result.success,
+                });
               }
               return result;
             }),
