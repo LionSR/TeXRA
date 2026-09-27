@@ -556,7 +556,14 @@ no `@tools` to `@agent` edges.
   an installed plugin that is its commit or tree hash. An MCP definition can
   carry secrets in `env`, so a plain SHA-256 of it would let anyone holding a
   snapshot or trace check guessed passwords offline. Its digest is instead an
-  HMAC under a key created once and kept in `Secrets`, never in the log. It
+  HMAC under a key created once and kept in `Secrets`, never in the log.
+  The key is provisioned by `Secrets.getOrCreate`, an atomic create-if-absent
+  each persistent backend implements. The CLI's in-process mutation lanes
+  (`cliSecrets.ts:29`) do not serialize across processes, so the file
+  stores implement it with an exclusive create of the key's entry. Two processes that start on an empty store
+  therefore end up with the same key, and neither writes trust under a key
+  that is later overwritten. A backend that cannot create atomically is
+  treated as non-persistent (below). It
   is stable across restarts, changes when a credential changes, and is no
   oracle without the key. The key needs a persistent `Secrets`. The SDK's
   default Node platform refuses `set` (`packages/agent/src/node.ts:29-47`), so
@@ -813,9 +820,9 @@ export const TexraProcess: {
   overwrite each other's setting host, probes, skills and dispatcher.
 - **Stays process-global:** the fetch dispatcher for hosts
   (`'process-global'`), and a plain log writer before and after the runtime.
-- **Not scheduled:** the full `ProcessLayer` graph, the slot-by-slot
-  conversions and a single shutdown chain, until a PR shows each deletes more
-  than it adds.
+- **Not scheduled:** the full `ProcessLayer` graph and the slot-by-slot
+  conversions, until a PR shows each deletes more than it adds. The one
+  shutdown protocol is scheduled (PR 6), because move 2 PR 2 depends on it.
 
 ### PRs
 
@@ -829,6 +836,11 @@ export const TexraProcess: {
    the slots it protects are graph-owned.
 5. The CLI only after measuring its bare-run count
    (`RT-install-cli-process-runtime`).
+6. The core shutdown protocol (stop admission, drain, settle, release) as
+   the session-entry and process-scope finalizer. The four hand-registered
+   host chains call it and are deleted. Move 2 PR 2, which makes GitHub
+   optional and gives it a typed drain, lands after this PR, so the drain
+   always has its caller.
 
 ### Rulings
 
@@ -1176,9 +1188,10 @@ existing run binding:
 - **Helpers with no run.** Draft polish runs before any run exists
   (`hostDraftRequests.ts:104-112`), and `invoke` requires `AgentRun` and a
   `RunCell`. So the invoker keeps a second operation, `helper`, that needs no
-  run: it takes the same process-scoped retry gate and pricing, and records
-  its usage on the session rather than a run ledger. No synthetic run is
-  invented.
+  run. It takes the same process-scoped retry gate and pricing. With no run
+  ledger to append to, a runless call's priced usage goes only to the
+  process usage log (`UsageMonitor`), as helper usage does today. It
+  writes no session fact, and no synthetic run is invented.
 - **Binding lifetime inside `run/modelBinding.ts`.** Each binding gets
   `Scope.fork(run.scope)`, and a swap closes the retired binding's scope.
 - **WebSocket reacquisition.** A transport failure on a WebSocket origin
@@ -1521,11 +1534,13 @@ non-atomically. There are 21 raw `get<T>` casts of persisted state.
 ### Target
 
 ```ts
-// deletion is app-state only (current-value decision). Two overloads, not a
+// deletion is for app-state and presentation only (the current-value
+// decision, amended by move 13). Two overloads, not a
 // conditional type: a conditional distributes over a `Family` union and would
 // admit undefined for a retained family. A caller holding a bare `Family`
 // matches neither overload and must narrow first.
-type RetainedFamily = Exclude<Family, 'app-state'>;
+type DeletableFamily = 'app-state' | 'presentation';
+type RetainedFamily = Exclude<Family, DeletableFamily>;
 export class CurrentValues extends Context.Service<
   CurrentValues,
   {
@@ -1534,12 +1549,10 @@ export class CurrentValues extends Context.Service<
       key: string,
     ): Effect.Effect<Value<F> | undefined, DatabaseReadFailed>;
     // one BEGIN IMMEDIATE each; a malformed row rolls back
-    modify<A>(
-      f: 'app-state',
+    modify<F extends DeletableFamily, A>(
+      f: F,
       key: string,
-      change: (
-        v: Value<'app-state'> | undefined,
-      ) => readonly [A, Value<'app-state'> | undefined],
+      change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
     ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>;
     modify<F extends RetainedFamily, A>(
       f: F,
@@ -1630,15 +1643,16 @@ for each child (inference). The host-neutral controllers still carry
 - **Presentation is checkpointed, at least once.** After the host
   presents a round it records that round as presented. The checkpoint is a
   current value, not history: a `presentation` family in `CurrentValues`
-  (move 12), keyed `runId/roundId`, rather than an `output.presented` row.
+  (move 12), with one row per run, keyed `runId`, holding the set of
+  presented `roundId`s, rather than an `output.presented` row.
   A row on the run's aggregate needs the run's claim, and one on the
   session's aggregate needs the `borrowsClaim` path that move 12 retires
   (`Database.ts:623-735`). A `CurrentValues` write is one `BEGIN IMMEDIATE`
   with no aggregate claim, so a host that attaches after the run settled or
   after a restart can always write it, and never takes or releases a live
-  run's claim. `list('presentation')` returns every round's checkpoint.
-  Adding the family amends the accepted current-value decision. It is a
-  retained family: its rows are never deleted. An
+  run's claim. Adding the family amends the accepted current-value decision.
+  It is deletable, like app-state: `removeRun` deletes the run's row in the
+  same transaction, so checkpoints never outlive their run. An
   attaching host presents only rounds with no checkpoint, so a
   reattached window does not replay rounds already checkpointed and loses no
   outputs produced while no host was attached. A crash between the side
