@@ -233,6 +233,18 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   malformed, failing every retry. The encrypted reasoning is opaque and is no
   longer compared; the item's identity and status still are.
 
+- **Security: setup tools ask before they act, and approving a tool call for
+  the session no longer approves every shell command** — `update_config`,
+  `unset_api_key`, `invoke_command` and `install_vscode_extension` were marked
+  as needing approval but ran without a prompt in the VS Code extension and
+  the desktop app; they now ask under the `ask` policy, run under `yolo`, and
+  are refused under `never`, like shell commands. Approving an MCP tool,
+  `codex`, `claude_code`, `wolfram` or `send_to_terminal` call went through
+  the shell's approval, so "approve commands for session" on one of them
+  approved every later shell command, and an existing shell grant approved
+  them unasked. Those calls now ask each time (the auto-approve policy and
+  "approve all delegated work" still cover them), their prompt no longer
+  offers a session grant, and a shell grant no longer answers them.
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it
   was killed (a force-quit, an out-of-memory kill, or a crash), so it could

@@ -10,6 +10,10 @@ import { it } from '@effect/vitest';
 import { afterEach, describe, expect, vi } from 'vitest';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import type { RequestDecision, RunId } from '@shared/schemas';
+import {
+  APPROVE_SESSION_ACTION,
+  approvalDecisionArms,
+} from '@shared/session/approvalDecision';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -28,7 +32,11 @@ import {
  * request that guard opens: the request is a `request.opened` row the run
  * parks on, answered by the case's own `request.decide`.
  */
-function dispatchWolfram(runId: RunId, code: string) {
+function dispatchWolfram(
+  runId: RunId,
+  code: string,
+  options: { readonly bashBypassed?: boolean } = {},
+) {
   return Effect.gen(function* () {
     const session = yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -38,6 +46,9 @@ function dispatchWolfram(runId: RunId, code: string) {
     );
     publishTestRunStart(session, runId);
     yield* session.settlePublications();
+    if (options.bashBypassed) {
+      session.approvals.bash.bypass.setBypass(runId, true, { silent: true });
+    }
     const requestOpened = yield* Deferred.make<void>();
     const requests = yield* Effect.acquireRelease(
       Effect.sync(() =>
@@ -58,8 +69,10 @@ function dispatchWolfram(runId: RunId, code: string) {
         ),
       ),
     );
-    yield* Deferred.await(requestOpened);
-    const opened = requests.opened[0]!;
+    // A call that ran without asking settles the fiber instead.
+    yield* Effect.raceFirst(Deferred.await(requestOpened), Fiber.await(result));
+    const opened = requests.opened[0];
+    if (!opened) throw new Error('The call ran without opening a request.');
     if (opened.payload.kind !== 'bash') {
       throw new Error(`Expected a bash request, not ${opened.payload.kind}.`);
     }
@@ -106,7 +119,9 @@ describe('WolframTool approval', () => {
         // The exact command the user is asked to approve, not a call back
         // into the same formatter the tool uses to build it.
         command: 'wolframscript -code "1+1"',
-        allowBypass: true,
+        // A per-call prompt: approving it for the session would have been
+        // the run's shell grant.
+        allowBypass: false,
         runId,
       });
 
@@ -121,6 +136,32 @@ describe('WolframTool approval', () => {
         ['-code', '1+1'],
         expect.objectContaining({ timeout: 30000 }),
       );
+    }).pipe(Effect.provide(nativeToolTestLayer())),
+  );
+
+  // Failure modes: the run's command grant lets the call through unasked, the
+  // prompt offers a session grant (which a surface turns into the run's
+  // command bypass), or the shared decision mapping still derives that
+  // bypass from it.
+  it.live('is not approved by a command grant and cannot mint one', () =>
+    Effect.gen(function* () {
+      const execute = vi.spyOn(toolUtils, 'runToolWithCheck');
+      const { result, permission, decide } = yield* dispatchWolfram(
+        'a99f00000003' as RunId,
+        '2+2',
+        { bashBypassed: true },
+      );
+      expect(permission.allowBypass).toBe(false);
+      expect(() =>
+        approvalDecisionArms(
+          { kind: 'bash', data: permission },
+          { action: APPROVE_SESSION_ACTION },
+        ),
+      ).toThrow();
+
+      decide({ action: 'reject' });
+      expect((yield* result).status).toBe('error');
+      expect(execute).not.toHaveBeenCalled();
     }).pipe(Effect.provide(nativeToolTestLayer())),
   );
 

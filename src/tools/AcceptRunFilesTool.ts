@@ -481,7 +481,7 @@ const resolveSourceFile = Effect.fn('AcceptRunFilesTool.resolveSourceFile')(
 
 export const AcceptRunFilesTool = defineTool({
   name: 'accept_run_files',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description: `Accept output files from a completed workflow run into the workspace.
 
 Only workflow subagent results (category="workflow") have output files to
