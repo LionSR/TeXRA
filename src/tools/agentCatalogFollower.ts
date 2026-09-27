@@ -4,18 +4,44 @@
  * to either, written by this process or another sharing the global state
  * (`AppState.changes`), the catalog reloads and every roster view repaints
  * (`agentRosterChanged`). The one path: no writer refreshes it itself.
+ *
+ * The layer also registers the directories of the tool plugins that ship
+ * agents, before its first reload: they sit beside the packaged tool-use
+ * directory (`<resources>/plugins/<id>/agents` next to
+ * `<resources>/tool_use_agents`), so the agent directories it is built over
+ * name them, and no reload can scan without them.
  */
+import * as path from 'node:path';
+
 import { Cause, Effect, Layer, Schedule, Stream } from 'effect';
 
+import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import { refresh as refreshAgentCatalog } from '@agent/index/agentRegistry';
 import { emitAppSignal } from '@eventBus/AppSignals';
-import { AppState } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { TOOL_PLUGINS } from '@tools/plugins';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;
+    const directories = yield* AgentDirectories;
+    // Built before the runtime runs anything, so before any catalog load.
+    const toolUse = yield* Effect.exit(
+      Effect.suspend(() => directories.builtInToolUse()),
+    );
+    if (toolUse._tag === 'Failure')
+      yield* Effect.logError(
+        `The tool plugins' agent directories are not registered, so their agents are not listed: ${toErrorMessage(Cause.squash(toolUse.cause))}`,
+      );
+    else
+      installPluginAgentDirectories(
+        path.dirname(toolUse.value),
+        TOOL_PLUGINS.flatMap((plugin) =>
+          plugin.agents === true ? [plugin.id] : [],
+        ),
+      );
     const reload = Effect.suspend(() => refreshAgentCatalog()).pipe(
       Effect.andThen(
         Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
