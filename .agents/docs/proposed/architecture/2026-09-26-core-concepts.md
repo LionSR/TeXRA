@@ -12,7 +12,10 @@ rest of the architecture is checked against. It does not replace
 [the session-core programme](./2026-09-26-effect-native-session-core.md)
 (#13350, merged), which is the bounded delivery plan and owns no topic.
 Each of that programme's moves fixes the owner of one concept below, and this
-note says which concept each move serves.
+note says which concept each move serves. The owner's 2026-09-27 rulings and
+the PRs merged since (#13364, #13384 to #13387) are folded in; see
+[Decided 2026-09-27](#decided-2026-09-27) and
+[Where main stands](#where-main-stands).
 
 It came from three read-only passes over `main`:
 
@@ -53,7 +56,7 @@ workflow **round** is a turn opened by the round policy.
 | **Session**           | One storage root: its history, publisher, projections, live runs and requests. A conversation is a root run inside it.                                                                                                                                                                                                                                                                                                                                                                                | session: `LayerMap` entry, explicit close (`idleTimeToLive: infinity`)                                                                                                                                                                              | `Sessions` tag over a `LayerMap<SessionKey, Session>`                                                                                                        | `sessionLayer.ts`, `SessionHandle.ts`                                                              |
 | **History**           | Append-only rows per aggregate, in root-wide commit order. One publisher per (process, root). The claim holder is the only appender of an aggregate.                                                                                                                                                                                                                                                                                                                                                  | durable, format-stamped                                                                                                                                                                                                                             | the `SessionEvents` publisher: `Queue` inbox plus one consumer fiber; jobs `publish` / `exclusive` / `detach`; only the publisher holds append               | `SessionEvents.ts`, `sessionEvent.ts`; claims in `Database.ts`                                     |
 | **Projection**        | Anything computed from history. Two named ones: the **run projection** (strict; the resume authority) and the **session view** (tolerant; display only).                                                                                                                                                                                                                                                                                                                                              | run projection: a value per run; view: session                                                                                                                                                                                                      | run projection: the `RunState` value returned by `RunLedger.appendBatch`, never a Ref. View: a `SubscriptionRef` written by one fiber from the row `Stream`. | `runStateFold.ts`, `sessionFold.ts`                                                                |
-| **Run**               | One `run` aggregate with an identity, a parent edge and a driver. It is pinned at open to a composition, an agent definition and a continuation policy. The native driver is the tool-use loop. A child run is a run with a parent edge; lineage (parent) and supervision (owner) are separate facts.                                                                                                                                                                                                 | run: today the scope of the run layer; target `Scope.fork(session)`, closed explicitly (`Scope.close` in `Effect.onExit`) when the run fiber exits; history lasts beyond it                                                                         | a run `Layer` (`AgentRun`, `ModelInvoker`, `RunLedger`) launched through one door, `Runs.launch`, from the session's context                                 | `loop/toolUse.ts`, `loop/rounds.ts`, `run/AgentRun.ts`, `runRegistry.ts`, `childRunLoop.ts`        |
+| **Run**               | One `run` aggregate with an identity and a parent edge. It is opened with an agent definition; its tools and continuation are pinned per step. The native driver, the tool-use loop, moves into core (decided 2026-09-27). A child run is a run with a parent edge; lineage (parent) and supervision (owner) are separate facts. A workflow-script, Codex or Claude child is a tool call of its plugin.                                                                                               | run: today the scope of the run layer; target `Scope.fork(session)`, closed explicitly (`Scope.close` in `Effect.onExit`) when the run fiber exits; history lasts beyond it                                                                         | a run `Layer` (`AgentRun`, `ModelInvoker`, `RunLedger`) launched through one door, `Runs.launch`, from the session's context                                 | `loop/toolUse.ts`, `loop/rounds.ts`, `run/AgentRun.ts`, `runRegistry.ts`, `childRunLoop.ts`        |
 | **Input**             | Every message to a run: user, child report, peer, subscription, or a turn opened by the continuation policy. Each is a `followup.queued` row on the run's aggregate.                                                                                                                                                                                                                                                                                                                                  | row until `followup.consumed`; the in-process inbox lives with the run                                                                                                                                                                              | a value on the run's own entry, passed explicitly; **never a context tag**                                                                                   | `src/agent/followUp/`, `FollowUps.ts` (#13348)                                                     |
 | **Agent**             | A resolved definition (settings, prompt, declared tools, category) from an ordered catalog of sources: bundled, user, remote, `plugin:<id>`.                                                                                                                                                                                                                                                                                                                                                          | catalog: process, rebuilt from empty on refresh; definition: recorded at run open                                                                                                                                                                   | an `AgentCatalog` process service holding a `SubscriptionRef` of resolved agents                                                                             | `agentRegistry.ts`, `agentLoad.ts` (target: one loader)                                            |
 | **Plugin**            | A manifest row plus entries in fixed tables, one per extension point, keyed by plugin id and checked with `satisfies`. One on/off unit (target: today plugin skills are not switch-gated, [`plugin-architecture.md:191`](../../implemented/architecture/2026-09-24-plugin-architecture.md), and bundled agents join unconditionally). Built-in plugins contribute code tables; loaded plugins (MCP, installed Claude Code and Codex plugins) contribute data and composition-lifetime resources only. | a table's value type is its lifetime (rule R4)                                                                                                                                                                                                      | no runtime object and no hooks                                                                                                                               | `src/tools/pluginManifest.ts`, `src/tools/registry.ts`, each seam's owner module                   |
@@ -122,8 +125,9 @@ Five shared primitives make that one mechanism instead of one mechanism per
 pluggable kind. Each is built from Effect v4 primitives the repo already uses:
 `SubscriptionRef`, `RcMap`/`LayerMap`, `Scope`, `FiberSet` and `Queue`. Every
 pluggable kind is data inside them: tools, agents, skills, prompt sections,
-continuation policies, drivers, model providers, MCP servers and event
-schemas.
+continuation policies, model providers, MCP servers and event schemas. Child
+runs are not a pluggable kind: there is no driver table, and the native
+driver moves into core (decided 2026-09-27).
 
 1. **Registry: one generational catalog.**
 
@@ -182,8 +186,11 @@ schemas.
    - Event schemas are a Registry keyed by plugin, type and version. A row
      whose schema is not loaded is kept byte for byte and decoded when the
      plugin returns.
-   - Each plugin migrates its own versions lazily, so one plugin's schema
-     change does not reset the store.
+   - From 1.0, each row kind, plugin-owned kinds included, carries its own
+     schema version, and its migrations are registered with its schema and
+     run lazily at the read boundary. One plugin's schema change then does
+     not reset the store. The whole-store stamp stays only until 1.0
+     (decided 2026-09-27).
    - Projections are Registry entries as well: `init`, `apply` and the slice
      they own.
 4. **Step: the one boundary where change happens and is recorded.**
@@ -193,18 +200,30 @@ schemas.
      the previous step's snapshot (tools, prompt text). This is
      deepseek-harness's recorded change and OpenCode's context epoch in one
      rule.
-   - A tool call checks its tool's identity (definition digest plus plugin
-     revision) against the snapshot that offered it, and a stale call is
-     rejected.
-   - A resumed step re-opens from the recorded snapshot where it can. What is
-     missing leaves the run blocked, not failed.
-   - A preset is a saved selection that feeds the snapshot.
+   - A tool call checks its tool's identity (name, input schema with
+     descriptions stripped, plugin id, plugin revision) against the snapshot
+     that offered it, and a stale call is rejected (#13364).
+   - A resumed step re-opens from the recorded snapshot where it can. A
+     missing or changed tool, a disabled plugin's included, is unavailable
+     at that step, the step records it, and a call settles as
+     `tool_unavailable`. The run is not failed.
+   - A stopped child is paused, not cancelled. The model is told it is paused
+     at N of M and continues it by calling the tool again; it is never
+     resumed on its own.
+   - A preset is a saved selection of switches that feeds the snapshot.
 5. **Trust: capabilities and approval for anything that loads.**
    - Every loaded plugin revision, identified by content hash, needs a trust
      decision through the core request authority, recorded as a row.
    - The decision covers exactly the capabilities in the plugin's `R`.
    - A new hash is a new revision and is untrusted until approved.
-   - An untrusted-by-default plugin can run in a worker or child process.
+   - **Third-party code runs out of process by default (decided
+     2026-09-27).** It runs in a worker or child process and speaks one
+     protocol: a typed Effect RPC schema, the same wire the hosts use. Its
+     capabilities are the `R` its RPC surface is granted.
+   - In-process loading is only for built-in plugins and for plugins the user
+     explicitly trusts at the in-process level.
+   - The loader's security review therefore covers two things: the process
+     boundary and the granted capability set.
 
 Each owner requirement maps onto these primitives:
 
@@ -219,7 +238,7 @@ and each such PR deletes the old per-kind mechanism.
 
 ### What this revises in the plugin architecture
 
-The central primitives reverse four decisions of the
+The central primitives reverse three decisions of the
 [plugin architecture](../../implemented/architecture/2026-09-24-plugin-architecture.md),
 which stays the owner of plugins until the owner confirms this revision. Each
 reversal follows from the owner's 2026-09-27 ruling above (live changes,
@@ -236,11 +255,12 @@ third-party code, flexible writers):
   durable state and no event channel" (`:231-232`, `:252`).
   `History.writer(pluginId)` and `PLUGIN_EVENT_ARMS` give a plugin typed rows
   on the one commit line, never a second channel.
-- **Drivers.** It rules "no hooks and no task kinds" (`:227-229`), and
-  `toolUse.ts` stays the only run program. `PLUGIN_DRIVERS` is not a task
-  kind: a driver is a plugin's contribution to the existing child-run seam
-  (Codex, Claude, workflow script already live in plugins), and the native
-  driver stays core.
+- **Drivers stay as written.** It rules "no hooks and no task kinds"
+  (`:227-229`), and `toolUse.ts` stays the only run program. The earlier
+  proposal of a `PLUGIN_DRIVERS` table is dropped (2026-09-27): a Codex,
+  Claude or workflow-script child is a tool call of its plugin, paused when
+  stopped and continued by the model, and the native driver moves into
+  core.
 
 ## Invariants
 
@@ -307,9 +327,10 @@ third-party code, flexible writers):
      identity check; it does not re-pin a recorded composition. A tool is the same when its definition digest and its
      plugin revision match what was recorded. A changed or missing tool is not
      offered, and a call to it gets `tool_unavailable`.
-   - **Blocked, not failed.** If the run's driver, agent or a required plugin
-     is missing, the resume leaves the run blocked with a recorded reason. It
-     ends only by an explicit stop.
+   - **Blocked, not failed.** A missing plugin makes its tools unavailable at
+     the step, which records it; the model is told and the run goes on. If
+     the run's agent is missing, the resume leaves the run blocked with a
+     recorded reason, and it ends only by an explicit stop.
    - A long conversation sees a change at its next step, recorded as a row.
      Only the step where something changed pays a prompt-cache miss.
 8. **Core decides; hosts present.** Any decision whose result is recorded
@@ -374,8 +395,8 @@ These are meant for AGENTS.md.
     core shutdown protocol (invariant 10), with no hook. A plugin layer that
     required `Sessions` would be a Layer cycle.
   - Session lifetime: `PLUGIN_SESSION_LAYERS`.
-  - Chosen per run at open and changed only at a recorded step boundary:
-    `PLUGIN_CONTINUATIONS` and `PLUGIN_DRIVERS`, plain functions.
+  - Changed only at a recorded step boundary: continuations, on the
+    Registry since #13387.
   - Data: `PLUGIN_EVENT_ARMS`, each arm with its tier and projection slice.
 - **R5. One writer, in code.**
   - Only `sessionEventsLayer` holds append. Build it with
@@ -394,7 +415,10 @@ These are meant for AGENTS.md.
 - **R7. Effect's `unstable/*` modules.**
   - Keep `http`, `sql` with its own `reactivity`, `encoding` and `process`.
     `process` becomes the one spawn path for plugin-owned processes.
-  - Reject `rpc` (Effect Schema, +231 KB minified, +71 KB gzipped, per webview), `eventlog`
+  - `rpc` is the protocol of out-of-process plugins (decided 2026-09-27); the
+    PR that adds it carries the ledger row, and moving a webview onto it
+    must answer the measured +231 KB minified, +71 KB gzipped per webview.
+  - Reject `eventlog`
     (duplicates history), `workflow`/`cluster` (duplicate ledger resume), `ai`
     (`packages/llm` owns the model) and `persistence`.
 - **Other rules.**
@@ -449,6 +473,30 @@ Four dependency cycles exist today and are cut by the programme:
 
 ## Where main stands
 
+Merged since this note (on `main` at `30c8b30`):
+
+- **#13384, one resume path.** Workflow runs resume through the one core
+  path, and the `executeWorkflow` ports are deleted.
+- **#13385, one launch door.** Every run starts through
+  `RunRegistry.launch` on the session's context (rule R2), and ends through
+  one launch terminal, `runLaunchGuard`. `runLaunchDoorRatchet` guards it.
+  Defect 5's cause (a child reading its parent's context) is gone by
+  construction.
+- **#13386, format 23.** Each fact is stored once, and a row's durable
+  identity is `(uid, seq)`, with the writing process recorded as `origin`.
+- **#13364, Registry and Step for tools.** Each step pins a generation and
+  writes `tools.offered` when the offered set changes. Tool identity is name,
+  description-free schema, plugin id and plugin revision. A built-in
+  plugin's revision is the constant `builtin`; an MCP server's is
+  `sha256({spec, envHmac})` under a per-install key. Tool instructions are
+  rendered per step.
+- **#13387, continuations on the Registry.** The step pins and records the
+  continuation, goal mode pauses on resume, and the format is 25.
+
+In flight: paused children, the step-1 defects of the programme, plugin
+services (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`) and plugin-owned
+row kinds.
+
 The audit counts violations per concept against the invariants above, on
 `4311c54176`, **before** #13359 and #13348 merged: Process 12, Session 8,
 History 10, Projection 14, Run 11, Plugin 15, Composition 8, Pin 6,
@@ -470,7 +518,7 @@ behavior rather than structure:
 | 3   | Every approval bypass is lost on resume in a new process, and the resume republishes the in-memory (empty) snapshot over the durable row                                                                                                                                                                                                                                                      | `AgentLaunchContext.ts:378-391`, `SessionHandle.ts:402-406`                                                  | 2         |
 | 4   | Headless runs (`never`, and `ask` with no prompt surface) approve workflow-script proposals in core **without recording a decision**. The approval itself is deliberate: `proposalFlow.ts:192-199` explains that the proposal is a review surface, not the security gate, and bash and edits stay denied downstream. The defect is only the missing `request.opened` / `request.decided` rows | `settleApprovals.ts:69-71`, `approvalPolicy.ts:109-113`, `proposalFlow.ts:192-202`                           | 2, 8      |
 | 5   | A workflow child inherits its parent's follow-up lease (**fixed**: #13348)                                                                                                                                                                                                                                                                                                                    | `toolUse.ts:149-150`                                                                                         | 5         |
-| 6   | The agent definition is re-read live on resume, and resumed tools get no identity check. Re-resolving the composition is the ruled behaviour (ledger 2026-09-23) and is kept                                                                                                                                                                                                                  | `executeAgent.ts:393`, `agentLoad.ts`                                                                        | 7         |
+| 6   | The agent definition is re-read live on resume, and resumed tools get no identity check (**tools fixed**: #13364, a resumed activation's first step offers only recorded tools with the same identity; the definition half stays open). Re-resolving the composition is the ruled behaviour (ledger 2026-09-23) and is kept                                                                   | `executeAgent.ts:393`, `agentLoad.ts`                                                                        | 7         |
 | 7   | `removeRun` and app-state rows append outside the publisher                                                                                                                                                                                                                                                                                                                                   | `Database.ts:1013-1073`, `appStateStore.ts:76`                                                               | 1         |
 | 8   | The composition key depends on a module cache, and the CLI probes only after a credential change, never at startup                                                                                                                                                                                                                                                                            | `toolAvailability.ts:174,344`                                                                                | 7         |
 | 9   | The CLI decides a run's outcome (non-cancelled becomes FAILED) instead of returning a fact for core to decide                                                                                                                                                                                                                                                                                 | `packages/cli/src/commands/workflow.ts:397-400`                                                              | 8         |
@@ -511,7 +559,7 @@ will drift back.
 | 4 One owner                  | a ratchet on module-level `let`, `new Map(` and `new WeakMap(` in `src/**` and `packages/*/src/**` production files, with a scoped baseline per root, shrink only                                                                                                                               |
 | 5 No ambient reads           | a lint rule: `Effect.serviceOption` only on the process-port allowlist; `forkDetach` and `FiberMap.run` banned for launching runs in `src/agent/**`, `src/tools/**` and `packages/*/src/**` (the baseline includes `childRunLoop.ts` and `resumeRun.ts`), except allowlisted foreign boundaries |
 | 6 Plugins                    | the existing `satisfies` tables, plus a test that every contribution kind reads the plugin's switch                                                                                                                                                                                             |
-| 7 Changes at open            | a test that each activation records its offered set on `run.activate`, that resume offers only recorded tools whose digest and plugin revision still match, and that it leaves a run blocked when its driver or agent is missing                                                                |
+| 7 Changes at step boundaries | `stepBoundaryRatchet` (#13364, #13387): only the step pins the catalog and the continuation, syncs switches and writes `tools.offered`; a test that resume offers only recorded tools whose identity still matches, and leaves a run blocked when its agent is missing                          |
 | 8 Core decides               | the existing approval-authority ratchet, extended to bypass writes, to host packages deciding request kinds, and to host-written outcomes (the baseline includes `packages/cli/src/commands/workflow.ts`)                                                                                       |
 | 9 One authority per fact     | a schema test: no `SessionEvent` arm carries a current-value family or a stream chunk, and no current-value family carries a run fact                                                                                                                                                           |
 | 10 One shutdown protocol     | a test that closing a session with a never-settling call returns within `SESSION_CLOSE_DEADLINE_MS` and reports the incomplete cleanup; a ratchet on host-registered shutdown chains (shrink to zero)                                                                                           |
@@ -534,22 +582,44 @@ will drift back.
 ## Open
 
 - **Names.** History and Projection, or others. Owner's call.
-- **Presets.** Recommended: a preset records the user's selection of
-  switches. Availability is resolved when resources are acquired. A
-  composition also carries the agent's tools and probe results, so it is not a
-  preset. deepseek-harness and the joint review agree.
+- **Presets. Decided 2026-09-27:** a preset stores switches. Availability is
+  resolved when resources are acquired. A composition also carries the
+  agent's tools and probe results, so it is not a preset.
 - **Long conversations and mid-run changes. Decided 2026-09-27:** changes
   apply at the next step boundary and are recorded (Step, above). Settings
   read mid-run follow the same rule: they are captured in the step snapshot,
   and a change is recorded.
-- **Code-plugin isolation.** In-process loading with capabilities limited by
-  `R`, or a worker or child process for third-party code by default. That
-  decides the security review of the loader.
+- **Code-plugin isolation. Decided 2026-09-27:** third-party code runs out of
+  process over a typed Effect RPC schema, with capabilities the `R` it is
+  granted (Trust, above).
+- **Goal mode after resume. Decided and done (#13387):** paused until the
+  user re-arms it.
+- **Format policy after 1.0. Decided 2026-09-27:** a version per row kind,
+  plugin-owned kinds included, with migrations registered with the kind's
+  schema and run lazily at the read boundary. The whole-store stamp stays
+  until 1.0.
+- **Tool identity. Decided and done (#13364):** descriptions are not part of
+  it.
 
-- **Goal mode after resume.** Recommended: autonomous continuation does not
-  survive a resume without a human re-arming it, as in deepseek-harness.
-  #13350 move 2 currently keeps the goal's grant across resume.
-- **Format policy after 1.0.** Before users keep sessions across versions,
-  choose per-arm versions with lazy migration (Pico v5 documents) or immutable
-  format generations (deepseek-harness). The whole-store stamp resets
-  everything when any plugin's schema changes.
+## Decided 2026-09-27
+
+The owner delegated these calls and asked for the long-term option each
+time.
+
+1. **A stopped child pauses; the model continues it.** Ctrl-C or a parent
+   stop pauses a workflow-script, Codex or Claude child instead of
+   cancelling it. On resume the model is told the child is paused at N of M.
+   Calling it again replays the journal and skips finished calls, as Claude
+   Code's Workflow tool does with `resumeFromRunId`. A child is never resumed
+   on its own. A disabled plugin shows up as an unavailable tool, which the
+   step records. So `PLUGIN_DRIVERS` and `DriverUnavailable` are dropped,
+   "blocked, not failed" is the step's tool check, and the native driver
+   moves into core.
+2. **Third-party code plugins run out of process by default** (Trust, above).
+3. **Format policy after 1.0: a version per row kind with lazy migration at
+   the read boundary** (History, above). Required once plugins own row
+   kinds, so that one plugin's schema change does not reset everyone's
+   history. Before 1.0, format bumps stay free.
+4. **Goal mode after resume** is paused until the user re-arms it (#13387).
+   Presets store switches. Descriptions are excluded from tool identity
+   (#13364).

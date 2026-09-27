@@ -431,10 +431,11 @@ before the first probe is offered tools that are not installed. The CLI
 practically never probes. It is not a resource leak today, because
 `PLUGIN_LAYERS` is empty. VS Code LM tools bypass compositions.
 
-`documents` is already a manifest plugin (`pluginManifest.ts:154-167`,
-hidden, `continuation: true`) that contributes `roundsContinuation` through
-`PLUGIN_CONTINUATIONS` (`continuationPolicy.ts:88-95`). What leaks is
-`RunView` being discriminated on `AgentCategory` (`sessionView.ts:199-212`).
+Since #13387 a workflow run's rounds are chosen by its category for the
+run's whole life, so the hidden, tool-less `documents` manifest entry and
+`continuationPolicy.ts` are gone, and goal mode is the one continuation on the
+Registry. What still leaks is `RunView` being discriminated on
+`AgentCategory` (`sessionView.ts`).
 
 ### Target: one table per seam
 
@@ -444,16 +445,15 @@ manifest flag that declares the contribution. That keeps "the manifest imports
 no tool implementation" true, which dashboards and webviews rely on, and adds
 no `@tools` to `@agent` edges.
 
-| Table                    | Seam and owner                       | Contributors                                                                      |
-| ------------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
-| `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                 |
-| `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                               |
-| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin              |
-| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions only (Lean, `SetupPlatform` and `InquiryRecords` stay core)  |
-| `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)           |
-| `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                   |
-| `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                |
-| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts` |
+| Table                    | Seam and owner                         | Contributors                                                                      |
+| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------- |
+| `PLUGIN_TOOLS`           | tools (on the Registry, #13364)        | every tool plugin                                                                 |
+| `PLUGIN_CONTINUATIONS`   | continuation (on the Registry, #13387) | `plan` (goal); rounds are chosen by category, not contributed                     |
+| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty)   | none yet: built by `Compositions.pin` and released with the last pin              |
+| `PLUGIN_PROCESS_LAYERS`  | process services                       | GitHub subscriptions only (Lean, `SetupPlatform` and `InquiryRecords` stay core)  |
+| `PLUGIN_SESSION_LAYERS`  | the session entry                      | Codex and Claude handle registries (two real contributors of one shape)           |
+| `PLUGIN_EVENT_ARMS`      | the one closed event schema            | goal, inquiry, workflow checkpoints, documents (`output.produced`)                |
+| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                        | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts` |
 
 - **Process services get their own table.** `PLUGIN_LAYERS` is read only
   while `Compositions.pin` builds a run's entry (`compositions.ts:158-207`),
@@ -475,22 +475,27 @@ no `@tools` to `@agent` edges.
   selected by its plugin set (`TexraProcessOptions.plugins`, move 4), and
   there is no second instance per run.
 
-- **Drivers are contributions, not task kinds.** The Codex, Claude and
-  workflow-script drivers already live in their plugins
-  (`agentCliShared.ts:532`, `workflowScriptStrategy.ts:157`). Resolve a driver
-  from the run's resolved composition. A driver is the one contribution that
-  does not narrow on resume: a run whose driver plugin is off cannot execute
-  at all. Its resume is blocked, not failed. The run stays pending with a
-  recorded reason (`DriverUnavailable`), ends only by an explicit stop, and
-  resumes once the driver is back (as in Pico v5's live registries, §6.4, per
-  #13360). No other driver is substituted. This also deletes `resumeRun`'s `@tools/delegation` import.
-- **Documents stays a plugin.** Its workflow arm of `RunView` becomes the
-  documents plugin's fold slice; the category is the fact that selects which
-  continuation plugin a run gets.
+- **There is no driver table (decided 2026-09-27).** `PLUGIN_DRIVERS` and
+  `DriverUnavailable` are dropped, and the native driver moves into core.
+  A workflow-script, Codex or Claude child is a tool call of its plugin
+  (`workflowScriptStrategy.ts`, `agentCliShared.ts`). Ctrl-C or a parent stop
+  pauses such a child instead of cancelling it. On resume the model is told
+  the child is paused at N of M calls, and calling the tool again replays the
+  child's journal and skips finished calls, as Claude Code's Workflow tool
+  does with `resumeFromRunId`. A child is never resumed on its own. If the
+  child's plugin is disabled, its tool is unavailable at the step, the step
+  records that, and a call settles as `tool_unavailable`. So "blocked, not
+  failed" is the step's tool check and needs no driver-specific state. This
+  also deletes `resumeRun`'s `@tools/delegation` import.
+- **Documents keeps its output plugin, not a continuation.** Its workflow arm
+  of `RunView` becomes the documents plugin's fold slice. The category selects
+  round mode for the run's life (#13387).
 - **Schema arms carry their tier and fold slice in the plugin module**, so a
   new stateful plugin touches one spread line in core. The union stays closed
   and composition-independent: rows always decode and fold whether or not the
-  plugin is switched on. Loaded plugins own no durable state.
+  plugin is switched on. From 1.0, each row kind, a plugin-owned kind
+  included, carries its own schema version and migrates lazily at the read
+  boundary (decided 2026-09-27, below).
 - **Prompt sections are `(ctx) => string` per plugin**, consulted only for
   plugins in the pinned composition. The first draft's
   `(plugins, ctx) => string[]` coupled plugins to each other.
@@ -518,8 +523,9 @@ no `@tools` to `@agent` edges.
   approval-policy rows and the goal rows instead, so the bad state cannot
   exist (this also answers the two grant defects above). Goal mode itself
   does not carry across a resume: it starts paused and runs on only after a
-  human re-arms it, as in deepseek-harness. The grant still comes from rows
-  once it is re-armed. This needs owner confirmation (decision 14).
+  human re-arms it, as in deepseek-harness. **Done in #13387:** a resumed
+  root's first step pauses a goal that was active and revokes its grant, and
+  approving a plan re-arms it.
 - **Installed plugins join the one model instead of being renamed away.** The
   owner has ruled that a plugin is one on/off unit with one install record,
   qualified names and a `plugin:<id>/<name>` agent source, and that no new
@@ -545,7 +551,7 @@ no `@tools` to `@agent` edges.
   recorded tool is offered only while its definition digest and its plugin's
   revision still match what the run recorded. So a plugin disabled, replaced or
   unavailable since the run started narrows the resumed run instead of
-  failing it, except a missing driver, which blocks it (above). Exact historical replay of a plugin revision would need
+  failing it. Exact historical replay of a plugin revision would need
   revision retention, trust and missing-resource rules, and is not proposed.
   Pinning the agent definition is decided separately (decision 10). A child
   shares its parent's resource hold and records its own narrower offered set,
@@ -569,8 +575,10 @@ no `@tools` to `@agent` edges.
   process's plugin set (`TexraProcessOptions.plugins`): process-scoped
   services are composed once at process start. A run whose preset names a
   process plugin the process did not compose fails to open with a typed
-  `PluginNotComposed`, and nothing is dropped silently. Run-pinned
-  contributions (tools, `PLUGIN_LAYERS`) still switch at run open. The plugin note already promised this.
+  `PluginNotComposed`, and nothing is dropped silently. Tools and the
+  continuation switch at the next step (#13364, #13387). A preset stores
+  switches, nothing else (decided 2026-09-27). The plugin note already
+  promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
   an installed plugin it is a digest of the files TeXRA consumes (`skills/`,
@@ -579,46 +587,28 @@ no `@tools` to `@agent` edges.
   (`packages/cli/src/runtime/plugins.ts:183-190`) and rereads the path
   (`:342-346`), so an in-place edit under the same commit would otherwise keep
   the old trust. The `.mcp.json` part uses the keyed digest below, because it
-  can carry secrets. An MCP definition can
-  carry secrets in `env`, so a plain SHA-256 of it would let anyone holding a
-  snapshot or trace check guessed passwords offline. Its digest is instead an
-  HMAC under a key created once and kept in `Secrets`, never in the log.
-  The key is provisioned by `Secrets.getOrCreate`, an atomic create-if-absent
-  each persistent backend implements. The CLI's in-process mutation lanes
-  (`cliSecrets.ts:29`) do not serialize across processes, so the file
-  stores implement it with an exclusive create of the key's entry. VS Code's
-  `SecretStorage` has only separate `get` and `store`
-  (`vscodeSecrets.ts:22-49`). How it provisions atomically is left to the
-  implementing PR ([Open for the implementing PR](#open-for-the-implementing-pr)):
-  a cross-window exclusion whose ownership is released on process death, or
-  treating it as non-persistent. Two processes that start on an empty store
-  therefore end up with the same key, and neither writes trust under a key
-  that is later overwritten. A backend that cannot create atomically is
-  treated as non-persistent (below). It
-  is stable across restarts, changes when a credential changes, and is no
-  oracle without the key. The key needs a persistent `Secrets`. The SDK's
-  default Node platform refuses `set` (`packages/agent/src/node.ts:29-47`), so
-  there trust is not stored: every MCP revision starts untrusted on each
-  start and is decided by the process's `approvals` mode (default
-  `denyAll`), with a `warn` logged once. It never falls back to an in-memory
-  key that would make saved trust look valid. With no key there is also no
-  safe digest to record, so `run.activate` records such an MCP plugin as
-  `{ id: 'mcp:<name>', revision: 'unkeyed' }`. Attribution by revision is
-  explicitly unavailable in that configuration: no guessable hash is written
-  and nothing is silently omitted. An installed plugin that carries a
-  `.mcp.json` is recorded the same way (`revision: 'unkeyed'`). It is never
-  trusted from saved state, and its MCP contribution is decided by the
-  `approvals` mode on every start, like a standalone MCP server. Today's MCP revision is an HMAC under a
-  per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
-  unguessable and different after every restart, so it stays the in-process
-  resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
-  `.texra/mcp.json` trust prompt.
+  can carry secrets. **Landed in #13364:** an MCP server's revision is
+  `sha256({spec, envHmac})`, where `envHmac` is an HMAC of its env values
+  under a per-install random key. The key is created once (create-if-absent
+  through `AppState.modify`), resolved once per process and never recorded.
+  The same env records the same revision across restarts, an edited env
+  records a change, and no env value can be read back or guessed offline from
+  a row. A built-in plugin's revision is the constant `builtin`; each tool's
+  identity covers its own schema, so rewording one tool does not change its
+  siblings. Trust keys on that revision. This also answers the deferred
+  project `.texra/mcp.json` trust prompt.
+- **Third-party code runs out of process (decided 2026-09-27).** A
+  third-party code plugin runs in a worker or child process and speaks one
+  typed Effect RPC schema; its capabilities are the `R` its RPC surface is
+  granted. In-process loading is only for built-in plugins and for plugins
+  the user explicitly trusts at the in-process level. The loader's security
+  review covers the process boundary and the granted capability set. The
+  core-concepts note holds the ruling under Trust.
 - **Self-improvement goes through data.** An approval-gated tool in the
   `setup` plugin installs, enables, trusts and saves presets. A change to
-  run-pinned contributions takes effect at the next run open; enabling a
-  process plugin takes effect at the next process start. In-flight runs keep
-  their pin. Code tables change
-  only by editing the code and restarting.
+  tools or the continuation takes effect at the next step and is recorded
+  (#13364, #13387); enabling a process plugin takes effect at the next
+  process start.
 
 ### Why not the alternatives
 
@@ -635,17 +625,20 @@ no `@tools` to `@agent` edges.
 
 ### Hot-plug semantics
 
-Choose at run open. A switch or preset applies to the next run, plugin
-resources come up and go down by refcount at their own lifetime, and a child
-joins its parent's pin. Swapping inside a running run would rewrite
-`offeredTools`, change the toolset hash and the prompt cache, contradict the
-run-pin ruling (2026-09-23), and contradict SDK §8 ("hot replacement must not
-advertise one implementation and execute another").
+Superseded by the owner's 2026-09-27 ruling and #13364: a change applies at
+the next step boundary and is recorded as a `tools.offered` row, so only the
+step where something changed pays a prompt-cache miss. A tool call is checked
+against the identity (name, description-free schema, plugin id, plugin
+revision) of the snapshot that offered it, which keeps SDK §8 ("hot
+replacement must not advertise one implementation and execute another").
+Plugin layers come up and go down by refcount, and a child may only narrow
+its parent's step.
 
 ### Stays core
 
-The `native` driver and the child-run edge (`child.park`/`child.turn`, the
-session budget), and the approval authority. UI renderers stay a static table
+The native driver, which moves into core (decided 2026-09-27), the child-run
+edge (`child.park`/`child.turn`, the session budget), and the approval
+authority. UI renderers stay a static table
 in `src/ui`, because webview frontends cannot import `@tools`.
 
 ### PRs
@@ -658,7 +651,8 @@ in `src/ui`, because webview frontends cannot import `@tools`.
    `PACKAGE_SETUP`, whose `host` throws.
 3. `PLUGIN_SESSION_LAYERS` for the Codex and Claude registries; the goal grant
    computed from rows, WeakMap deleted.
-4. `PLUGIN_DRIVERS`, resolved from the pinned composition.
+4. Dropped (2026-09-27): no `PLUGIN_DRIVERS`. Paused children replace it
+   (in flight).
 5. `PLUGIN_EVENT_ARMS` with tier and fold slice per module, gated on the
    format fingerprint staying byte-identical; the documents fold slice replaces
    the category discrimination in `RunView`.
@@ -673,8 +667,8 @@ in `src/ui`, because webview frontends cannot import `@tools`.
   plugins own arms, with tier and fold slice, in plugin modules of the one
   closed schema". "Prompt sections are core" becomes "a plugin in the pinned
   composition may contribute one section".
-- **Amend** "no task kinds" in v1 to say a driver for an existing child-run
-  seam is a contribution, not a task kind.
+- **Keep** "no task kinds" in v1 as written: there is no driver table, and a
+  plugin's child is a tool call (2026-09-27).
 - **Amend** one-run-program line 366 for the continuation seam, which already
   moved to `PLUGIN_CONTINUATIONS`.
 - **Keep** the run-pin ruling, the per-session `LayerMap` ruling (no new
@@ -682,6 +676,12 @@ in `src/ui`, because webview frontends cannot import `@tools`.
   formats), and SDK §8 (every contribution point is a typed static table).
 
 ## Move 3: one launch surface
+
+**Landed.** #13384 routes workflow resume through the one core path and
+deletes the `executeWorkflow` ports. #13385 adds the one launch door
+(`RunRegistry.launch`, forking on the session's context) and the one launch
+terminal, `runWithLaunchGuard` in `runLaunchGuard.ts`, guarded by
+`runLaunchDoorRatchet`. The text below is the plan as reviewed.
 
 ### Verdict after review: shrink
 
@@ -728,7 +728,7 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
   host-launched root workflow run, and refuses such a resume without it once
   the run's
   category is loaded, so a finalization failure can never persist as success.
-  Child workflow runs resumed by a driver (`nativeSubagentStrategy`) take no
+  Child workflow runs resumed by the native driver (`nativeSubagentStrategy`) take no
   host hook; their presentation comes from durable facts (move 13).
 - **`runId` leaves `RunRequest`/`ValidatedRunRequest`**, so `runValidated` is
   fresh-only on every host and the desktop's hard-coded `fresh` is correct by
@@ -747,7 +747,7 @@ run, three outside (ownerless stop, session close, CLI SIGINT drain).
 - **The child edge is `ChildRunPort`** (#13359). `runWithLaunchGuard` and the
   child-loop tail build on it, and liveness is read from the aggregate claim
   (`probeChild`, `claimStanding`) alone.
-- Drivers are move 2's `PLUGIN_DRIVERS`. The `Run` handle is move 7's.
+- There is no driver table (move 2, 2026-09-27). The `Run` handle is move 7's.
 
 ### PRs
 
@@ -975,10 +975,14 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
 
 ### Rejected here
 
-- **An RPC library.** `effect/unstable/rpc` requires Effect Schema: +231 KB
-  minified, +71 KB gzipped per webview (measured). PRD §7.6 rules out Effect
-  Schema, a sixth `unstable/*` family would need its own ledger ruling row, and
-  SDK §5 says "do not create an SDK command bus".
+- **An RPC library in this move.** `effect/unstable/rpc` requires Effect
+  Schema: +231 KB minified, +71 KB gzipped per webview (measured). PRD §7.6
+  rules out Effect Schema, a sixth `unstable/*` family would need its own
+  ledger ruling row, and SDK §5 says "do not create an SDK command bus". The
+  2026-09-27 ruling that out-of-process plugins speak a typed Effect RPC
+  schema, the same wire the hosts use, reopens this: the PR that adds the
+  plugin loader carries the ledger row, and moving the host wire onto it has
+  to answer the webview bundle cost measured here.
 - **Merging the settings protocol.** It would add a second dispatcher (ledger
   2026-09-22).
 - **Changing NDJSON.** It is frozen by PRD decision 8.
@@ -1803,26 +1807,29 @@ These were in the first draft and did not survive the checks:
   in SQL. Only session-event appends must go through the publisher. Two paths
   do not: `removeRun` (fixed in the defects) and project app-state rows through
   `appendAll`, which the current-value table removes (move 12).
-- **Documents and child-run drivers as core.** Withdrawn in turn after the
-  owner's review: `documents` is already a plugin, and the Codex, Claude and
-  workflow-script drivers are contributions to an existing seam, not task
-  kinds (move 2). The child-run edge and the `native` driver stay core.
+- **Documents as core.** Withdrawn after the owner's review: `documents` is
+  already a plugin. The child-run edge and the native driver are core; the
+  Codex, Claude and workflow-script children are tool calls of their plugins,
+  with no driver table (move 2, 2026-09-27).
 - **A plugin object with seven optional slots** (the first draft of move 2).
   Replaced by one table per seam.
-- **Mid-run or per-session hot-plug.** Contradicts the run-pin ruling and SDK
-  §8, and would lose per-run narrowing.
+- **Per-session hot-plug.** Mid-run change was later ruled in at step
+  boundaries (2026-09-27, #13364); a per-session swap outside a step would
+  lose per-run narrowing.
 - **A single writer of `run.end`.** A stop with no live fiber and a close past
   its budget have no run scope. The floor is one writing function with two
   callers.
 - **A caller-scoped run.** A run outlives the host request that started it.
-- **An RPC library for the wire**, and **a `Session` context tag now** (see
-  moves 5 and 6).
+- **An RPC library for the wire in move 5**, reopened for plugins by the
+  2026-09-27 Trust ruling, and **a `Session` context tag now** (see moves 5
+  and 6).
 
 ## Decisions for the owner
 
 The owner's two reviews recommend answers to decisions 1 to 13, and the
-alignment with #13360 adds decision 14. All stay open until the owner
-confirms them:
+alignment with #13360 adds decision 14. Decision 14 is decided and done (see
+[Decided 2026-09-27](#decided-2026-09-27)); the rest stay open until the
+owner confirms them:
 
 | Decision                                                      | Review recommendation                                                                                                                                         |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1839,7 +1846,7 @@ confirms them:
 | 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                                                        |
 | 12. One global app-state root on desktop                      | Yes.                                                                                                                                                          |
 | 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                                                   |
-| 14. Goal mode on resume                                       | Starts paused until a human re-arms it (#13360; owner to confirm).                                                                                            |
+| 14. Goal mode on resume                                       | Decided: starts paused until a human re-arms it. Done in #13387.                                                                                              |
 
 1. May static in-tree plugins own durable state as arms of the one closed
    schema? Move 2 assumes yes.
@@ -1882,7 +1889,42 @@ confirms them:
     (move 13 PR 5)?
 14. Does goal mode start paused on resume, continuing only after a human
     re-arms it (#13360's recommendation, as in deepseek-harness), rather than
-    surviving resume?
+    surviving resume? Decided yes; done in #13387.
+
+### Decided 2026-09-27
+
+The owner delegated these calls and asked for the long-term option each time.
+
+- **A stopped child pauses, and the model continues it.** Ctrl-C or a parent
+  stop pauses a workflow-script, Codex or Claude child instead of cancelling
+  it. On resume the model is told the child is paused at N of M. Calling it
+  again replays the child's journal and skips finished calls, as Claude
+  Code's Workflow tool does with `resumeFromRunId`. A child is never resumed
+  on its own. A disabled plugin shows up as an unavailable tool, which the
+  step records. This deletes `PLUGIN_DRIVERS` and `DriverUnavailable` from
+  the plan (move 2): "blocked, not failed" is the step's tool check. The
+  native driver moves into core.
+- **Third-party code plugins run out of process by default.** They run in a
+  worker or child process and speak one typed Effect RPC schema, the same
+  wire the hosts use. In-process loading is for built-in plugins and for
+  plugins the user explicitly trusts at the in-process level. Capabilities
+  are the `R` the plugin's RPC surface is granted. This scopes the loader's
+  security review to the process boundary and the granted capability set,
+  and reopens the RPC rejection in move 5 for this boundary.
+- **Format policy after 1.0: a version per row kind, migrated lazily at the
+  read boundary.** Each row kind, plugin-owned kinds included, carries its own
+  schema version, and its migrations are registered with its schema. The
+  whole-store stamp (`SESSION_EVENT_FORMAT`, 25 today) stays only until 1.0,
+  and format bumps stay free until then. This is required once plugins own
+  row kinds: one plugin's schema change must not reset everyone's history.
+- **Goal mode after resume** (decision 14): paused until the user re-arms it.
+  Done in #13387.
+- **Presets store switches.** A preset is the user's saved selection of
+  switches; availability is resolved when resources are acquired.
+- **Descriptions are not part of tool identity.** Identity is name, input
+  schema with descriptions stripped, plugin id and plugin revision; a
+  description change is recorded through the offered snapshot's `shown`
+  digest and rejects no call. Done in #13364.
 
 ## Suggested order
 
@@ -1895,13 +1937,16 @@ Deletion earliest, least churn (the owner's review):
    separately, and the second survey's defects, run alongside.
 2. The de-duplication cuts on one format bump.
 3. Workflow resume through the tool-use path, with the desktop Resume fix;
-   delete `executeWorkflow` and `runId` from `RunRequest`.
+   delete `executeWorkflow` and `runId` from `RunRequest`. Done (#13384).
 4. Terminal consolidation onto `runWithLaunchGuard`, rebased after #13348.
+   Done (#13385).
 5. Trace and transport lifecycle fixes (move 7 PRs 1–3, move 5 PR 1), and the
    model binding fixes (move 8 PRs 1–3).
-6. A deterministic composition input (move 2 PR 1), then the per-seam tables:
-   `PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`, `PLUGIN_DRIVERS`, plugin-owned arms
-   with fold slices.
+6. The per-seam contributions on the Registry: tools (#13364) and the
+   continuation (#13387) are done. Next are plugin services
+   (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`) and plugin-owned row
+   kinds with fold slices and per-kind versions. Paused children replace the
+   dropped driver table, and the native driver moves into core.
 7. Installed plugins as loaded plugins, the composition on each `run.activate`,
    presets and trust, then the `setup` tool. Needs owner decisions.
 8. Anything else (`SessionKernel`, `ProcessLayer`, `SessionPlane`, `RunTrace`,
@@ -1910,7 +1955,33 @@ Deletion earliest, least churn (the owner's review):
 
 ## What is open
 
-Everything in this note. No move has started.
+Landed on `main` since this note merged:
+
+- #13384: workflow runs resume through the one core path; the
+  `executeWorkflow` ports are deleted (move 3).
+- #13385: one launch door, `RunRegistry.launch` on the session's context, and
+  one launch terminal, `runLaunchGuard` (move 3; rule R2 of the
+  core-concepts note).
+- #13386: format 23. Each fact is stored once (usage on `model.message`,
+  files only in `output.produced`, `run.config` replacing `run.record`); rows
+  have a durable identity `(uid, seq)`, and the writing process is
+  `origin`.
+- #13364: Registry and Step for tools. Each step pins a generation and writes
+  `tools.offered` when the offered set changes. Tool identity is name,
+  description-free schema, plugin id and revision; a built-in revision is the
+  constant `builtin` and an MCP revision is `sha256({spec, envHmac})` under a
+  per-install key. Tool instructions are rendered per step. Format 24.
+- #13387: the continuation lives on the Registry and each step pins and
+  records it; goal mode pauses on resume. Format 25.
+
+In flight:
+
+- paused children (the 2026-09-27 ruling);
+- the defects in step 1 of the suggested order;
+- plugin services (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`);
+- plugin-owned row kinds.
+
+Moves 1, 4 to 13 and the rest of move 2 have not started.
 
 ### Open for the implementing PR
 
@@ -1920,10 +1991,6 @@ is chosen in the PR that implements the move:
 
 - **Presentation consumer id** (move 13). It must be stable across restarts
   and unique across concurrent host processes on one project.
-- **Atomic MCP trust-key provisioning on VS Code** (move 2). `SecretStorage`
-  has no compare-and-set. The PR picks a cross-window exclusion whose
-  ownership is released on process death, or treats that backend as
-  non-persistent.
 - **Cross-host claim takeover** (move 10). Claim liveness is a local PID
   probe, so an owner on another machine is never provably dead. A shared
   project database needs a lease or heartbeat, or an explicit takeover
