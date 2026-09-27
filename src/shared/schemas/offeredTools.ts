@@ -27,8 +27,9 @@ const OfferedToolSchema = z.strictObject({
 export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 
 /**
- * The tools a step offers, in offer order, and the plugin whose continuation
- * decides what the run does when it parks (null: it parks): the whole set,
+ * The tools a step offers, in offer order, the plugin whose continuation
+ * decides what the run does when it parks (null: it parks), and the plugins
+ * whose prompt contributions shape its requests' system text: the whole set,
  * appended at the step whenever it differs from the one the run's previous
  * step recorded. The latest one is what the run was last offered, which a
  * resume and every call are checked against.
@@ -36,6 +37,10 @@ export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 export const ToolsOfferedPayloadSchema = z.strictObject({
   tools: z.array(OfferedToolSchema).readonly(),
   continuation: z.string().min(1).nullable(),
+  /** Sorted plugin ids: the section each adds and the skills it ships in
+   *  the run's catalog, rebuilt from the offered tools and the catalog the
+   *  run recorded at open. */
+  sections: z.array(z.string().min(1)).readonly(),
 });
 
 /** Whether two offered tools are the same tool: a call made to one may run

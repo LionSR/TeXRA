@@ -116,6 +116,7 @@ export const MANIFEST = [
       'accept_run_files',
     ],
     injectedWhen: { memory: GlobalStateKey.MEMORY_ENABLED },
+    promptSection: true,
     name: 'Memory, Tasks & Delegation',
     category: 'workflow',
     keywords: [

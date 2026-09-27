@@ -12,16 +12,19 @@ import {
 } from '@shared/constants/delegationTools';
 import { toolTableLayer } from '@tools/liveTools';
 import { mcpPluginLoader, mcpRevisionKey } from '@tools/mcp/mcpConfig';
-import type {
-  PluginToolName,
-  ToolPluginEntry,
-  ToolPluginId,
+import {
+  TOOL_PLUGINS,
+  type PluginToolName,
+  type ToolPluginEntry,
+  type ToolPluginId,
 } from '@tools/plugins';
 import { goalContinuation } from '@tools/goal/goalContinuation';
+import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import {
   toolTable,
   type Continuation,
   type PluginLayer,
+  type PromptSection,
 } from '@tools/toolTable';
 
 // Local file imports
@@ -208,6 +211,15 @@ const PLUGIN_CONTINUATIONS = {
   ]: Continuation;
 };
 
+/** The prompt section of each plugin whose manifest entry declares one. */
+const PLUGIN_PROMPT_SECTIONS: Readonly<Record<string, PromptSection>> = {
+  'memory-workflow': memoryPromptSection,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly promptSection: true }>['id']
+  ]: PromptSection;
+};
+
 type PluginTools = typeof PLUGIN_TOOLS;
 
 /** Union of all registered tool names. */
@@ -230,15 +242,23 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 >;
 
 /**
- * Every plugin's tools, for readers outside a run (the Tools dashboard, the
- * VS Code language-model tools); a run reads the same table as the
- * `ToolRegistry` service. Flattening cannot overwrite a tool: the manifest
- * rules out a name two plugins share.
+ * Every plugin's tools, continuation and prompt contribution, which the
+ * process serves as the `ToolRegistry` service. Flattening cannot overwrite
+ * a tool: the manifest rules out a name two plugins share.
  */
-export const TOOL_TABLE = toolTable(
+const TOOL_TABLE = toolTable(
   PLUGIN_TOOLS,
   PLUGIN_LAYERS,
   PLUGIN_CONTINUATIONS,
+  // Each plugin's section, and whether it ships skills for the catalog.
+  Object.fromEntries(
+    TOOL_PLUGINS.flatMap(({ id, skills }) => {
+      const section = PLUGIN_PROMPT_SECTIONS[id] ?? null;
+      return section !== null || skills
+        ? [[id, { section, skills: skills === true }]]
+        : [];
+    }),
+  ),
 );
 
 /**

@@ -119,7 +119,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
         ),
       );
 
-      expect(vars.AVAILABLE_SKILLS).toBe('');
+      expect(vars.AVAILABLE_SKILLS).toEqual([]);
       expect(warn).not.toHaveBeenCalled();
       expect(emit).toHaveBeenCalledExactlyOnceWith({
         type: 'skills.snapshot',
@@ -146,7 +146,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
       },
     );
 
-    expect(vars.AVAILABLE_SKILLS).toBe('');
+    expect(vars.AVAILABLE_SKILLS).toEqual([]);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       `Skill import error: Skill source does not exist (${missingSource})`,
       { stageId: undefined },
@@ -195,7 +195,9 @@ describe('buildUserVars runtime skill diagnostics', () => {
         },
       ],
     });
-    expect(vars.AVAILABLE_SKILLS).toContain('- client-review:');
+    expect(vars.AVAILABLE_SKILLS).toEqual([
+      { plugin: null, text: expect.stringContaining('- client-review:') },
+    ]);
   });
 
   it('does not publish a parent catalog for workflow runs', async () => {

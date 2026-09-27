@@ -1,6 +1,6 @@
 /**
- * The process's plugin table: every plugin's tools and continuation by plugin
- * id, which the built-in plugins contribute to the live catalog
+ * The process's plugin table: every plugin's tools, continuation and prompt
+ * contribution by plugin id, which the built-in plugins contribute to the live catalog
  * (`@tools/liveTools`). The `ToolRegistry` service holds it, provided once
  * per process by `installProcessRuntime` from `@tools/registry`, beside the
  * catalog built over it. This module imports no tool, manifest or plugin layer, so a
@@ -91,6 +91,24 @@ export interface Continuation {
   }) => Effect.Effect<void, Error>;
 }
 
+/**
+ * A plugin's section of each request's system text, rendered from the tool
+ * names the request's step offers and whether the run is a child ('' for
+ * none).
+ */
+export type PromptSection = (ctx: {
+  readonly offered: readonly string[];
+  readonly isChild: boolean;
+}) => string;
+
+/** What a plugin adds to the system text of each request whose step pins
+ *  it: its section, and whether the run's skill catalog lists the skills it
+ *  ships. */
+export interface PromptContribution {
+  readonly section: PromptSection | null;
+  readonly skills: boolean;
+}
+
 /** Every plugin's tools, and every tool by name. */
 export interface ToolTable {
   /** Each plugin's tools by registered name, keyed by plugin id. */
@@ -99,15 +117,19 @@ export interface ToolTable {
   readonly layers: ReadonlyMap<string, PluginLayer>;
   /** The continuation of each plugin that contributes one, by plugin id. */
   readonly continuations: ReadonlyMap<string, Continuation>;
+  /** The prompt contribution of each plugin that makes one, by plugin id. */
+  readonly prompt: ReadonlyMap<string, PromptContribution>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
 }
 
-/** A table over plugin id → tools, layer and continuation. */
+/** A table over plugin id → tools, layer, continuation and prompt
+ *  contribution. */
 export function toolTable(
   plugins: Readonly<Record<string, Readonly<Record<string, ITool>>>>,
   layers: Readonly<Record<string, PluginLayer>> = {},
   continuations: Readonly<Record<string, Continuation>> = {},
+  prompt: Readonly<Record<string, PromptContribution>> = {},
 ): ToolTable {
   const byName = new Map(Object.values(plugins).flatMap(Object.entries));
   return {
@@ -119,6 +141,7 @@ export function toolTable(
     ),
     layers: new Map(Object.entries(layers)),
     continuations: new Map(Object.entries(continuations)),
+    prompt: new Map(Object.entries(prompt)),
     get: (name) => byName.get(name),
   };
 }

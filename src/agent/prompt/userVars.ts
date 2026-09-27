@@ -153,9 +153,9 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
     [
       getRequiredFileVars(agentSetting, agentPath),
       getAttachedMemories(agentConfig.memories, options.storageRoot),
-      // AVAILABLE_SKILLS is only substituted into TOOL_USE_INSTRUCTIONS, so the
-      // catalog (a multi-source readdir + per-skill realpath/read/parse) is dead
-      // work for workflow agents. The settings toggle gives users a hard off
+      // Only a tool-use run's steps list AVAILABLE_SKILLS, so the catalog (a
+      // multi-source readdir + per-skill realpath/read/parse) is dead work
+      // for workflow agents. The settings toggle gives users a hard off
       // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
       agentSetting.agentCategory === AgentCategory.ToolUse &&
       AgentSkillsEnabledSchema.parse(
@@ -164,7 +164,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
         ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
         : // A fresh object per call, not a shared constant: `skills` is handed
           // to the snapshot consumer, and a shared array would accumulate.
-          Effect.succeed({ catalog: '', skills: [], issues: [] }),
+          Effect.succeed({ catalog: [], skills: [], issues: [] }),
     ],
     { concurrency: 'unbounded' },
   );

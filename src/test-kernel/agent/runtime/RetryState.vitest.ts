@@ -337,6 +337,7 @@ const freshState = (): RunState => ({
   overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
+  offeredSections: [],
 });
 
 interface InvokerKit {

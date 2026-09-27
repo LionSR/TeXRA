@@ -69,6 +69,10 @@ export interface ToolPlugin {
    *  `PLUGIN_CONTINUATIONS` (`@tools/registry`), which a run's step pins
    *  while the plugin is switched on. */
   readonly continuation?: true;
+  /** Adds a section to each request's system text: a function in
+   *  `PLUGIN_PROMPT_SECTIONS` (`@tools/registry`), which a run's step pins
+   *  while the plugin is switched on. */
+  readonly promptSection?: true;
   /** Owns resources: a layer in `@tools/registry`, built while a pinned
    *  catalog generation includes the plugin (`@tools/liveTools`). */
   readonly layer?: true;

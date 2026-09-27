@@ -744,7 +744,7 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     { startImmediately: true },
   );
   yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
-  yield* registerLanguageModelTools(context, runtime, runtimeSession);
+  yield* registerLanguageModelTools(runtime, runtimeSession);
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(

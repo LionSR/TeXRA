@@ -3,8 +3,9 @@ import { Effect, type FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import { PromptBuilder, toolInstructions } from '@agent/prompt/PromptBuilder';
+import { PromptBuilder } from '@agent/prompt/PromptBuilder';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /** The system prompt reads `AGENTS.md` through `FileSystem`, so the
@@ -38,7 +39,10 @@ describe('PromptBuilder', () => {
     // Regression test for #7957: relevance gating (added in #7855) must not
     // silently drop pinned memories, which are documented as loading every
     // session (docs/guide/memory.md, MemoryTool's description).
-    const instructionSuffix = toolInstructions(['memory'], false);
+    const instructionSuffix = memoryPromptSection({
+      offered: ['memory'],
+      isChild: false,
+    });
 
     // Behavioral contract, not exact prose (review note on #7959): pinned
     // files must be individually viewed at session start — a directory

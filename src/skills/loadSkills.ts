@@ -37,6 +37,8 @@ export interface SkillSource {
   readonly path: string;
   readonly label?: string;
   readonly required?: boolean;
+  /** The tool plugin that ships these skills, whose switch gates them. */
+  readonly plugin?: string;
 }
 
 /**
