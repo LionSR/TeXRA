@@ -79,19 +79,6 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
 );
 
 /**
- * Seed the disabled-tool list for first-time users only, on any host.
- *
- * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
- * opt-in and seeded as disabled on a fresh install, unless it is
- * `onByDefault`. Callers pass
- * the global state store they already hold. DISABLED_TOOLS is its own
- * fresh-install signal, because this seed is the only thing that writes it
- * before the user does: an absent value means neither the seed nor the user
- * has ever set the list, and a present one (an empty list included) means the
- * user's choices are already recorded, so re-seeding would silently disable
- * tools they had enabled.
- */
-/**
  * Switch a tool plugin on or off in the global state store the caller
  * holds, and tell this process's listeners outside a run (the extension's
  * Copilot tools); runs read the switch at their next step.
@@ -111,6 +98,19 @@ export function setToolEnabled(
     .pipe(Effect.map(() => emitAppSignal('toolSwitchesChanged', undefined)));
 }
 
+/**
+ * Seed the disabled-tool list for first-time users only, on any host.
+ *
+ * Every plugin flagged `toggleable: true` in TOOL_PLUGINS is treated as
+ * opt-in and seeded as disabled on a fresh install, unless it is
+ * `onByDefault`. Callers pass
+ * the global state store they already hold. DISABLED_TOOLS is its own
+ * fresh-install signal, because this seed is the only thing that writes it
+ * before the user does: an absent value means neither the seed nor the user
+ * has ever set the list, and a present one (an empty list included) means the
+ * user's choices are already recorded, so re-seeding would silently disable
+ * tools they had enabled.
+ */
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
     const disabledTools = yield* state.get<string[]>(

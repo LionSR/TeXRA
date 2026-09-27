@@ -5,25 +5,10 @@ import type {
   NormalizedUsage,
   RunId,
   RunUsageTotals,
-  UsageRoute,
 } from '@shared/schemas';
-import type { UsageLog, UsageLogStats } from '@shared/usageLog';
+import type { UsageLog } from '@shared/usageLog';
 import { roundTo } from '@utils/core';
 import type { ModelConfig } from 'llm-zoo';
-
-/**
- * Cache-miss tokens billed for this round. Backend billing always needs a
- * real number, so it falls back to the derived estimate (input minus
- * cache-read) when the provider is silent. Display never guesses: it shows
- * only what a provider reported.
- */
-function billedRoundCacheMissTokens(
-  reported: number | undefined,
-  roundInputTokens: number,
-  roundCacheReadTokens: number,
-): number {
-  return reported ?? Math.max(0, roundInputTokens - roundCacheReadTokens);
-}
 
 /**
  * Metadata for usage logging. Required because `agentCategory` is billed
@@ -82,55 +67,27 @@ export class UsageMonitor {
     bound: { readonly config: UsageMonitorModelInfo },
   ): void {
     if (!latestUsage) return;
-    const roundCacheReadTokens = latestUsage.cachedInputTokens ?? 0;
-    this.logToBackend(
-      totals.totalResponseTimeMs,
-      {
-        outputTokens: latestUsage.outputTokens,
-        cachedInputTokens: roundCacheReadTokens,
-        cacheMissInputTokens: billedRoundCacheMissTokens(
-          latestUsage.cacheMissInputTokens,
-          latestUsage.inputTokens,
-          roundCacheReadTokens,
-        ),
-        reasoningTokens: latestUsage.reasoningTokens ?? 0,
-        cost: latestUsage.cost,
-        usageRoute: latestUsage.usageRoute ?? 'api-key',
-      },
-      latestUsage.provider,
-      bound.config,
-    );
-  }
-
-  /**
-   * Log per-round usage to backend for analytics/billing.
-   * Errors are caught and logged, never thrown.
-   */
-  private logToBackend(
-    totalResponseTimeMs: number,
-    usage: Pick<
-      UsageLogStats,
-      'outputTokens' | 'cachedInputTokens' | 'reasoningTokens' | 'cost'
-    > & { cacheMissInputTokens: number; usageRoute?: UsageRoute },
-    provider: NormalizedUsage['provider'],
-    model: UsageMonitorModelInfo,
-  ): void {
+    const cachedInputTokens = latestUsage.cachedInputTokens ?? 0;
     try {
-      const cachedInputTokens = usage.cachedInputTokens ?? 0;
-
       this.context.usageLog.log(
         {
-          model: model.fullName,
-          provider,
+          model: bound.config.fullName,
+          provider: latestUsage.provider,
           agentName: this.metadata.agentName,
           agentCategory: this.metadata.agentCategory,
-          inputTokens: usage.cacheMissInputTokens,
-          outputTokens: usage.outputTokens,
-          cost: roundTo(usage.cost, 6),
-          responseTimeMs: Math.round(totalResponseTimeMs),
+          // Backend billing always needs a real number, so a provider that
+          // reported no cache-miss count is billed the derived estimate
+          // (input minus cache-read). Display never guesses: it shows only
+          // what a provider reported.
+          inputTokens:
+            latestUsage.cacheMissInputTokens ??
+            Math.max(0, latestUsage.inputTokens - cachedInputTokens),
+          outputTokens: latestUsage.outputTokens,
+          cost: roundTo(latestUsage.cost, 6),
+          responseTimeMs: Math.round(totals.totalResponseTimeMs),
           cachedInputTokens,
-          reasoningTokens: usage.reasoningTokens ?? 0,
-          usageRoute: usage.usageRoute,
+          reasoningTokens: latestUsage.reasoningTokens ?? 0,
+          usageRoute: latestUsage.usageRoute ?? 'api-key',
           // An external wire key of the usage-log edge function, the same
           // class as the CLI's NDJSON projection keys: the relay's request
           // column is still named `streamId`, so the key stays until that
@@ -142,6 +99,7 @@ export class UsageMonitor {
         this.context.config,
       );
     } catch (error) {
+      // Best-effort billing edge: a failed log never reaches the run loop.
       this.context.logger.warn('Backend usage logging failed', {
         data: error,
       });

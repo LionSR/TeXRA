@@ -9,6 +9,12 @@
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 
+/** How a delegation was approved, as the child's own grants record it:
+ *  by the user's one-off answer (`inherit`), or by the run's proposal
+ *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
+export type DelegatedChildApproval =
+  'inherit' | 'auto-approved' | 'goal-approved';
+
 /**
  * Link a freshly resolved child subagent stream to its parent for approval
  * bypass resolution.
@@ -25,12 +31,6 @@ import type { RunId } from '@shared/schemas';
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
  */
-/** How a delegation was approved, as the child's own grants record it:
- *  by the user's one-off answer (`inherit`), or by the run's proposal
- *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
-export type DelegatedChildApproval =
-  'inherit' | 'auto-approved' | 'goal-approved';
-
 export function configureDelegatedChildApprovals(
   childRunId: RunId,
   parentRunId: RunId | undefined,

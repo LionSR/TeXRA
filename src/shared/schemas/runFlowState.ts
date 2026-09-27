@@ -165,6 +165,14 @@ export const AttachedMemoryMissSchema = z.object({
 });
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
 
+/** One skill in a run's catalog, as the prompt lists it, with the tool
+ *  plugin that ships it (null for a core source). */
+const SkillCatalogEntrySchema = z.strictObject({
+  plugin: z.string().min(1).nullable(),
+  text: z.string(),
+});
+export type SkillCatalogEntry = z.infer<typeof SkillCatalogEntrySchema>;
+
 /**
  * The fixed template-variable vocabulary `buildUserVars`
  * (`@agent/prompt/userVars`) produces for prompt rendering — one validator per
@@ -184,14 +192,6 @@ export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
  * `UserVariableChannels` (persisted and resumed by the tool-use flow) is its
  * primary carrier.
  */
-/** One skill in a run's catalog, as the prompt lists it, with the tool
- *  plugin that ships it (null for a core source). */
-const SkillCatalogEntrySchema = z.strictObject({
-  plugin: z.string().min(1).nullable(),
-  text: z.string(),
-});
-export type SkillCatalogEntry = z.infer<typeof SkillCatalogEntrySchema>;
-
 const UserVarsSchema = z.object({
   /** Live model id for the run. */
   MODEL: z.string(),
