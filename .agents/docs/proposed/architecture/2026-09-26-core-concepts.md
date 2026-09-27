@@ -242,6 +242,60 @@ third-party code, flexible writers):
   (Codex, Claude, workflow script already live in plugins), and the native
   driver stays core.
 
+## Decisions for the next two years
+
+The owner decided these on 2026-09-27, choosing in each case the option that
+still fits in two years: sync across devices, remote runs, many clients, and a
+third-party plugin ecosystem.
+
+1. **History is designed for replication now.**
+   - It stays SQLite per project root today, but every row gets an identity
+     that is unique across machines: `(aggregate_id, seq)` with globally unique
+     aggregate ids (run ids are already UUIDs) plus the writing process's
+     `origin`.
+   - `commit` stays a local cursor, and per-aggregate order is the only order
+     replication has to preserve.
+   - A `Storage` port with a conformance suite (as Pico v5 has) lets a remote
+     or replicated backend be added later without touching the runtime.
+   - Claims stay per aggregate. A replicated backend inherits them as the one
+     write authority.
+2. **One protocol between core and every client.**
+   - Hosts, the SDK and any future web, mobile or remote client use one typed
+     protocol:
+     - **Commands** into core;
+     - **projection streams** out: a snapshot of the current view, then every
+       later change in order with none missed;
+     - a **durable history stream** that can resume from a cursor;
+     - a **live stream** for transient progress, which may drop.
+   - It is defined with Zod and carried in-process today. The same messages
+     can cross a process or network boundary later, so hosts cannot diverge in
+     behavior.
+   - This absorbs #13350 move 5 (wire realignment) and move 7's SDK streams.
+3. **Plugins may own durable state, through an open schema registry.** See
+   Central primitives 3:
+   - typed writers per plugin;
+   - per-plugin versions with lazy migration;
+   - rows from a missing plugin kept byte for byte;
+   - one decode site that looks up the registry, and one commit line.
+
+   This replaces "plugin arms inside the one closed union", which made every
+   plugin schema change a whole-store format bump.
+
+4. **Plugin code: one general contract, staged delivery.** Every slot is a
+   typed port that can be served in-process or, later, by another process.
+   - **Version 1:**
+     - third-party tools, prompts and resources run out of process through
+       MCP, which already exists;
+     - third-party data (skills, agents, commands) comes through installed
+       Claude Code and Codex plugins;
+     - deep slots (continuation policy, drivers, event types, layers) take
+       in-process code from built-in and trusted plugins only, with trust per
+       content hash.
+   - **Later, if the ecosystem needs it:** out-of-process deep slots over the
+     same port contracts. They run inside the loop on every step, so they need
+     a protocol with round trips on the hot path.
+   - The owner will discuss version 1's scope before it is built.
+
 ## Invariants
 
 1. **One writer.**
@@ -542,9 +596,8 @@ will drift back.
   apply at the next step boundary and are recorded (Step, above). Settings
   read mid-run follow the same rule: they are captured in the step snapshot,
   and a change is recorded.
-- **Code-plugin isolation.** In-process loading with capabilities limited by
-  `R`, or a worker or child process for third-party code by default. That
-  decides the security review of the loader.
+- **Plugin code, version 1 scope.** Proposed in "Decisions for the next two
+  years" item 4; to be discussed with the owner before it is built.
 
 - **Goal mode after resume.** Recommended: autonomous continuation does not
   survive a resume without a human re-arming it, as in deepseek-harness.
