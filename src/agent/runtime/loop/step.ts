@@ -172,7 +172,11 @@ const openStep = Effect.fn('Step.open')(function* (
     const services = Context.merge(
       yield* pinned.layersFor(used).pipe(Scope.provide(scope)),
       yield* run.session.runs
-        .pinPlugins(new Set(pinned.generation.owners.values()), used)
+        .pinPlugins(
+          pinned.generation.id,
+          new Set(pinned.generation.owners.values()),
+          used,
+        )
         .pipe(Scope.provide(scope)),
     );
     return {

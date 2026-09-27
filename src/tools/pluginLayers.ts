@@ -77,12 +77,22 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
       ),
   });
   const standing = new Map<string, Scope.Closeable>();
+  // The newest catalog generation the standing builds were reconciled with:
+  // a step that pinned an older one (its switch read predates a newer
+  // step's) pins what it uses but never restores a standing build.
+  let applied = 0;
   const lock = yield* Semaphore.make(1);
-  return (on: ReadonlySet<string>, used: ReadonlySet<string>) =>
+  return (
+    generation: number,
+    on: ReadonlySet<string>,
+    used: ReadonlySet<string>,
+  ) =>
     lock.withPermits(1)(
       Effect.uninterruptible(
         Effect.gen(function* () {
-          for (const id of layers.keys()) {
+          const current = generation >= applied;
+          if (current) applied = generation;
+          for (const id of current ? layers.keys() : []) {
             const held = standing.get(id);
             if (on.has(id) && held === undefined) {
               const hold = yield* Scope.fork(scope);
@@ -107,9 +117,10 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
 });
 
 /**
- * The core shutdown protocol's plugin step, before the sessions close: every
- * switched-on plugin's `drain` (what it admitted for a session, such as a
- * poll round's delivery), while its process services are still up.
+ * The core shutdown protocol's plugin step, before the sessions close: the
+ * `drain` of every plugin whose process layer is up, switched on or only
+ * pinned by a step (what it admitted for a session, such as a poll round's
+ * delivery), while its services are still up.
  */
 export const drainPlugins = Effect.fnUntraced(function* (
   live: LiveTools['Service'],

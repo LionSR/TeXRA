@@ -1103,7 +1103,7 @@ async function appendHarnessPlanDecision(
     await harnessRuntime.runPromise(
       Effect.scoped(
         Effect.flatMap(
-          session().runs.pinPlugins(new Set(['goal']), new Set(['goal'])),
+          session().runs.pinPlugins(0, new Set(['goal']), new Set(['goal'])),
           (services) =>
             setGoalSessionAutoApproval(
               session(),

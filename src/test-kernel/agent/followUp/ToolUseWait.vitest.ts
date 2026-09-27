@@ -1171,7 +1171,7 @@ describe('an active goal at the wait', () => {
         // Through the session's goal services, as the plan tool's step would.
         yield* Effect.scoped(
           Effect.flatMap(
-            session.runs.pinPlugins(new Set(['goal']), new Set(['goal'])),
+            session.runs.pinPlugins(0, new Set(['goal']), new Set(['goal'])),
             (services) =>
               setGoalSessionAutoApproval(session, runId, 'commands').pipe(
                 Effect.provide(services),

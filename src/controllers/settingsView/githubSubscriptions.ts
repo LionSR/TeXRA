@@ -18,9 +18,9 @@ interface GitHubSubscriptionEntry {
 
 /**
  * `read` over the GitHub plugin's subscriptions, which are its process
- * services: `none` while the plugin is switched off, when it holds none.
+ * services: `none` once its layer is down (switched off, and no step pins it).
  */
-const whileOn = <A>(
+const whileUp = <A>(
   none: A,
   read: Effect.Effect<A, never, GitHubSubscriptions>,
 ): Effect.Effect<A, never, LiveTools> =>
@@ -39,7 +39,7 @@ const whileOn = <A>(
 export const listGitHubSubscriptionEntries = (
   getRunLabel: (runId: RunId) => string | undefined,
 ) =>
-  whileOn(
+  whileUp(
     [],
     Effect.map(GitHubSubscriptions, (subscriptions) => {
       const toEntry = (binding: {
@@ -76,7 +76,7 @@ export function noActiveGitHubSubscriptionMessage(key: string): string {
  * so it is treated as an explicit no-match instead.
  */
 export const unsubscribeGitHubKey = (key: string) =>
-  whileOn(
+  whileUp(
     0,
     Effect.map(GitHubSubscriptions, (subscriptions) => {
       if (key.includes('/pulls/')) return subscriptions.pr.unbindAll(key);

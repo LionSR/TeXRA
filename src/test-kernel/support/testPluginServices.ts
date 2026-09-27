@@ -60,7 +60,7 @@ export const testCallPluginServices = Layer.merge(
     Effect.flatMap(Runs, (runs) =>
       // A suite's stand-in `Runs` has no session: the call gets its own.
       typeof runs.pinPlugins === 'function'
-        ? runs.pinPlugins(ALL, ALL)
+        ? runs.pinPlugins(0, ALL, ALL)
         : Layer.build(testPluginServicesLayer),
     ),
   ),

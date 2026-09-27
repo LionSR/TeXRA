@@ -163,8 +163,10 @@ export interface RunRegistryInit {
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
-  /** Hold the session layers of the plugins `on`, and pin those of `used`. */
+  /** Hold the session layers of the plugins `on` in catalog generation
+   *  `generation` (unless a newer one was applied), and pin those of `used`. */
   readonly pinPlugins: (
+    generation: number,
     on: ReadonlySet<string>,
     used: ReadonlySet<string>,
   ) => Effect.Effect<Context.Context<PluginServices>, never, Scope.Scope>;
@@ -222,8 +224,8 @@ export class RunRegistry {
   constructor(private readonly init: RunRegistryInit) {}
 
   /** The session services a step pins (`RunRegistryInit.pinPlugins`). */
-  pinPlugins(on: ReadonlySet<string>, used: ReadonlySet<string>) {
-    return this.init.pinPlugins(on, used);
+  pinPlugins(...args: Parameters<RunRegistryInit['pinPlugins']>) {
+    return this.init.pinPlugins(...args);
   }
 
   // ---------------------------------------------------------------- entries

@@ -123,8 +123,9 @@ export class LiveTools extends Context.Service<
       E,
       Scope.Scope
     >;
-    /** A switched-on plugin's process services for the caller's scope, for
-     *  a host that shows, ends or drains its state (none while it is off). */
+    /** A plugin's process services for the caller's scope while its layer
+     *  is up (switched on, or pinned by a step that uses it), for a host that
+     *  shows, ends or drains its state; none once it is down. */
     readonly processServices: (
       plugin: string,
     ) => Effect.Effect<Option.Option<Services>, never, Scope.Scope>;
@@ -186,10 +187,18 @@ const liveToolsLayer = (
       // each generation that includes it hold a reference. It may read this
       // catalog (Copilot's tools follow it), built by then.
       const self: { service?: LiveTools['Service'] } = {};
+      // The plugins whose process layer is up, however it is held.
+      const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
           buildPluginLayer(id, table.processLayers.get(id)!.layer).pipe(
             Effect.provideService(LiveTools, self.service!),
+            Effect.tap(() =>
+              Effect.acquireRelease(
+                Effect.sync(() => up.add(id)),
+                () => Effect.sync(() => up.delete(id)),
+              ),
+            ),
           ),
       });
       // Each held server process by hold key, with its hold count (runs and
@@ -425,7 +434,7 @@ const liveToolsLayer = (
       });
       const processServices = (id: string) =>
         locked(
-          builtIns.has(id) && table.processLayers.has(id)
+          up.has(id)
             ? Effect.map(RcMap.get(layers, id), Option.some)
             : Effect.succeed(Option.none()),
         );
