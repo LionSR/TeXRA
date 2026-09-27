@@ -7,6 +7,7 @@ import {
   type ActiveSkillSourceScope,
   type InstalledPlugin,
   type RawAcceptedSkill,
+  type SkillCatalogEntry,
   type SkillDisplayItem,
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
@@ -52,7 +53,7 @@ let installed: SkillContributionsInstall = {
 };
 
 interface RuntimeSkillCatalogResult {
-  catalog: string;
+  catalog: SkillCatalogEntry[];
   skills: RawAcceptedSkill[];
   issues: SkillLoadIssue[];
 }
@@ -60,6 +61,8 @@ interface RuntimeSkillCatalogResult {
 interface DisabledSkills {
   readonly names: readonly string[];
   readonly scopes: readonly ActiveSkillSourceScope[];
+  /** The tool plugins switched off, whose bundled skills go with them. */
+  readonly plugins: readonly string[];
 }
 
 /** Install the process's skill contributions; the default installs none. */
@@ -71,8 +74,8 @@ export function installSkillContributions(
 
 /**
  * The installed contributions folded for one folder, with the plugins
- * recorded in `stores` and the tool plugins switched off there. `options`
- * replaces the installed options for one call: the CLI's `skills list` flags.
+ * recorded in `stores`. `options` replaces the installed options for one
+ * call: the CLI's `skills list` flags.
  */
 export function runtimeSkillSources(
   cwd: string,
@@ -84,10 +87,6 @@ export function runtimeSkillSources(
       stores,
       GlobalStateKey.INSTALLED_PLUGINS,
     );
-    const disabledPlugins = yield* readSettingFrom<string[]>(
-      stores,
-      GlobalStateKey.DISABLED_TOOLS,
-    );
     return foldSkillSources(installed.contributions, {
       cwd,
       // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
@@ -98,7 +97,6 @@ export function runtimeSkillSources(
       resourcesPath: installed.resourcesPath,
       options,
       plugins,
-      disabledPlugins: new Set(disabledPlugins),
     });
   });
 }
@@ -123,12 +121,19 @@ function sourceLabel(source: SkillSource): string {
   return source.label ?? source.scope;
 }
 
+/** Whether the source is a tool plugin's that is switched off. */
+const pluginOff = (source: SkillSource, disabled: DisabledSkills): boolean =>
+  source.plugin !== undefined && disabled.plugins.includes(source.plugin);
+
 function isSkillDisabled(
-  name: string,
-  scope: ActiveSkillSourceScope,
+  { skill, source }: SourcedSkill,
   disabled: DisabledSkills,
 ): boolean {
-  return disabled.names.includes(name) || disabled.scopes.includes(scope);
+  return (
+    disabled.names.includes(skill.name) ||
+    disabled.scopes.includes(source.scope) ||
+    pluginOff(source, disabled)
+  );
 }
 
 /**
@@ -148,6 +153,10 @@ export function readDisabledSkills(stores: SettingsStores) {
         stores,
         WorkspaceStateKey.DISABLED_SKILL_SOURCES,
       ),
+      plugins: yield* readSettingFrom<string[]>(
+        stores,
+        GlobalStateKey.DISABLED_TOOLS,
+      ),
     };
   });
 }
@@ -158,9 +167,10 @@ export function readDisabledSkills(stores: SettingsStores) {
  * `skills list` per discovered entry.
  */
 export function skillDisplayItem(
-  { skill, source }: SourcedSkill,
+  entry: SourcedSkill,
   disabled: DisabledSkills,
 ): SkillDisplayItem {
+  const { skill, source } = entry;
   return {
     name: skill.name,
     description: skill.description,
@@ -168,7 +178,7 @@ export function skillDisplayItem(
     label: sourceLabel(source),
     path: skill.path,
     sourcePath: source.path,
-    enabled: !isSkillDisabled(skill.name, source.scope, disabled),
+    enabled: !isSkillDisabled(entry, disabled),
   };
 }
 
@@ -178,7 +188,11 @@ export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
     const disabled = yield* readDisabledSkills(stores);
     const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
     return {
-      skills: result.skills.map((entry) => skillDisplayItem(entry, disabled)),
+      // A switched-off plugin's skills are hidden, not listed as disabled:
+      // the plugin's switch is their one control.
+      skills: result.skills
+        .filter(({ source }) => !pluginOff(source, disabled))
+        .map((entry) => skillDisplayItem(entry, disabled)),
       issues: result.errors.map(({ message, path }) => ({ message, path })),
     };
   },
@@ -189,10 +203,7 @@ export function filterDiscoveredSkills(
   disabled: DisabledSkills,
 ): DiscoverSkillSourcesResult {
   return {
-    skills: result.skills.filter(
-      ({ skill, source }) =>
-        !isSkillDisabled(skill.name, source.scope, disabled),
-    ),
+    skills: result.skills.filter((entry) => !isSkillDisabled(entry, disabled)),
     // Keep discovery issues visible even for disabled sources so users can
     // repair a source before enabling it again.
     errors: result.errors,
@@ -212,12 +223,13 @@ export function filterDiscoveredSkills(
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
+  disabled?: DisabledSkills,
 ) {
   return Effect.gen(function* () {
     const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
     const enabled = filterDiscoveredSkills(
       result,
-      yield* readDisabledSkills(stores),
+      disabled ?? (yield* readDisabledSkills(stores)),
     );
     for (const { skill } of enabled.skills) {
       // Hosts hand the workspace root over already canonical, and a
@@ -253,15 +265,6 @@ export function loadEnabledRuntimeSkills(
   });
 }
 
-function formatRuntimeSkillCatalog(skills: readonly SourcedSkill[]): string {
-  return skills
-    .map(
-      ({ skill, source }) =>
-        `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
-    )
-    .join('\n');
-}
-
 export function formatRuntimeSkillActivation({
   skill,
   source,
@@ -283,21 +286,40 @@ export function formatRuntimeSkillActivation({
 
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
   function* (workspaceRoot: string | undefined, stores: SettingsStores) {
-    // The same enabled set the hosts list, projected for the prompt: an empty
-    // source registry discovers nothing and formats to the empty catalog, so
-    // no separate zero-source arm decides that answer.
-    const result = yield* loadEnabledRuntimeSkills(workspaceRoot, stores);
-    // Discovery already orders by source precedence and then skill directory.
-    // Bound that accepted set once here, before either prompt or event
-    // projection.
-    const accepted = result.skills.slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
+    // The enabled set the hosts list, with every tool plugin's skills
+    // whatever its switch: each step lists those of the plugins it pinned,
+    // so a switch flipped mid-conversation reaches the prompt.
+    const disabled = yield* readDisabledSkills(stores);
+    const result = yield* loadEnabledRuntimeSkills(workspaceRoot, stores, {
+      ...disabled,
+      plugins: [],
+    });
+    // Discovery orders by source precedence and then skill directory. The
+    // bound applies to what a reader lists, after its switch filter, so a
+    // switched-off plugin's skills never push an enabled one out: the
+    // catalog keeps the first ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS of core
+    // sources and of each plugin, and each step bounds what it lists
+    // (`stepInstructions`).
+    const kept = new Map<string | undefined, number>();
+    const catalog = result.skills.filter(({ source }) => {
+      const count = kept.get(source.plugin) ?? 0;
+      kept.set(source.plugin, count + 1);
+      return count < ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS;
+    });
     return {
-      catalog: formatRuntimeSkillCatalog(accepted),
-      skills: accepted.map(({ skill, source }) => ({
-        name: skill.name,
-        description: skill.description,
-        source: source.scope,
+      catalog: catalog.map(({ skill, source }) => ({
+        plugin: source.plugin ?? null,
+        text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
       })),
+      // The snapshot names the skills of the switches read at open.
+      skills: catalog
+        .filter(({ source }) => !pluginOff(source, disabled))
+        .slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS)
+        .map(({ skill, source }) => ({
+          name: skill.name,
+          description: skill.description,
+          source: source.scope,
+        })),
       issues: result.errors,
     } satisfies RuntimeSkillCatalogResult;
   },

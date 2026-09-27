@@ -1,4 +1,4 @@
-import { Effect, Result } from 'effect';
+import { Effect } from 'effect';
 // Local imports
 
 import type { StateStore } from '@platform/interfaces';
@@ -32,20 +32,4 @@ export function getDisabledToolIds(store: StateStore) {
     const raw = yield* store.get<string[]>(GlobalStateKey.DISABLED_TOOLS, []);
     return new Set(raw);
   });
-}
-
-/** Toggle a tool group's enabled/disabled state. */
-export function setToolEnabled(
-  toolId: string,
-  enabled: boolean,
-  store: StateStore,
-) {
-  return store
-    .modify(GlobalStateKey.DISABLED_TOOLS, (stored) => {
-      const disabled = new Set((stored as string[] | undefined) ?? []);
-      if (enabled) disabled.delete(toolId);
-      else disabled.add(toolId);
-      return Result.succeed([...disabled]);
-    })
-    .pipe(Effect.asVoid);
 }

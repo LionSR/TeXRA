@@ -184,6 +184,14 @@ export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
  * `UserVariableChannels` (persisted and resumed by the tool-use flow) is its
  * primary carrier.
  */
+/** One skill in a run's catalog, as the prompt lists it, with the tool
+ *  plugin that ships it (null for a core source). */
+const SkillCatalogEntrySchema = z.strictObject({
+  plugin: z.string().min(1).nullable(),
+  text: z.string(),
+});
+export type SkillCatalogEntry = z.infer<typeof SkillCatalogEntrySchema>;
+
 const UserVarsSchema = z.object({
   /** Live model id for the run. */
   MODEL: z.string(),
@@ -230,8 +238,10 @@ const UserVarsSchema = z.object({
   ATTACHED_MEMORIES: z.string().nullable(),
   /** Attached memories that could not be read. */
   ATTACHED_MEMORY_MISSES: z.array(AttachedMemoryMissSchema),
-  /** Pre-rendered skill catalog, '' when skills are disabled or unavailable. */
-  AVAILABLE_SKILLS: z.string(),
+  /** The skill catalog, read once at open with every plugin's skills: each
+   *  step lists those of core sources and of the plugins it pinned
+   *  (`stepInstructions`). Empty when skills are disabled. */
+  AVAILABLE_SKILLS: z.array(SkillCatalogEntrySchema),
 });
 
 /** Derived from UserVarsSchema - single source of truth. */
@@ -293,8 +303,8 @@ const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
-  /** The run's system text, before what each request's offered tools add
-   *  (`toolInstructions`, rebuilt from the step's `tools.offered` set). */
+  /** The run's system text, before what each request's step adds
+   *  (`stepInstructions`, rebuilt from the step's `tools.offered` row). */
   systemPrompt: z.string().optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),

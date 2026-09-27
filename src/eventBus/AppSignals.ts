@@ -98,6 +98,17 @@ export interface AppSignalPayloads {
   toolAvailabilityChanged: undefined;
 
   /**
+   * A tool plugin switch was flipped in this process (`setToolEnabled`).
+   * Keyless: a listener re-reads the switches.
+   *
+   * Consumed by: the extension's Copilot tools (`registerLanguageModelTools`),
+   * which follow the switches without waiting for a run's step. Runs read
+   * the switches at their next step and need no signal; desktop and CLI have
+   * no surface outside a run that the switches shape.
+   */
+  toolSwitchesChanged: undefined;
+
+  /**
    * The workspace agent roster changed outside a settings round-trip. Keyless
    * on purpose: every listener re-reads the roster, so which team or agent
    * moved carries no information.

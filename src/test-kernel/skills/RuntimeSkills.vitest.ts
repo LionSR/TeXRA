@@ -36,8 +36,13 @@ async function createTempRoot(): Promise<string> {
   return makeTempDir('texra-runtime-skills-', tempRoots);
 }
 
-function catalogSkillNames(catalog: string): string[] {
-  return [...catalog.matchAll(/^- ([^:]+):/gm)].map((match) => match[1]);
+const catalogText = (catalog: readonly { readonly text: string }[]) =>
+  catalog.map(({ text }) => text).join('\n');
+
+function catalogSkillNames(catalog: readonly { readonly text: string }[]) {
+  return [...catalogText(catalog).matchAll(/^- ([^:]+):/gm)].map(
+    (match) => match[1],
+  );
 }
 
 const WORKSPACE_ROOT = '/workspace';
@@ -101,11 +106,11 @@ describe('runtime skills', () => {
       testWorkspaceRoots(),
     );
 
-    expect(result.catalog).toContain(
+    expect(catalogText(result.catalog)).toContain(
       '- manuscript-review: Review mathematical manuscripts.',
     );
-    expect(result.catalog).toContain('Source: project');
-    expect(result.catalog).toContain(`Path: ${skillPath}`);
+    expect(catalogText(result.catalog)).toContain('Source: project');
+    expect(catalogText(result.catalog)).toContain(`Path: ${skillPath}`);
     expect(result.skills).toStrictEqual([
       {
         name: 'manuscript-review',
@@ -186,7 +191,7 @@ describe('runtime skills', () => {
     expect(snapshotNames).toHaveLength(ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
     expect(catalogNames).toStrictEqual(snapshotNames);
     expect(snapshotNames.at(-1)).toBe('skill-199');
-    expect(result.catalog).not.toContain('skill-200');
+    expect(catalogText(result.catalog)).not.toContain('skill-200');
 
     expect(
       ActiveSkillsSnapshotSchema.parse({ skills: result.skills }),

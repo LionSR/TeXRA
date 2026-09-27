@@ -3,6 +3,13 @@
  * Model Tool API (`vscode.lm.registerTool`), so they can be referenced in
  * Copilot Chat (e.g. `#texra_arxiv_search`) and invoked by agent mode.
  *
+ * This is the `copilot` plugin's contribution (`@tools/pluginManifest`),
+ * VS Code only: while its switch is on, Copilot sees each of these tools
+ * that the live catalog's current generation (`@tools/liveTools`) holds;
+ * switched off, every registration is disposed. It re-reads on each
+ * generation the catalog publishes and on each switch flipped in this
+ * process.
+ *
  * Only context-free, read-only research tools are surfaced — they need no
  * agent runtime state and are safe to call from an arbitrary chat session.
  * Registration is guarded at this multi-host boundary because compatible
@@ -10,23 +17,25 @@
  */
 
 import * as vscode from 'vscode';
-import { Effect, Fiber } from 'effect';
+import { Effect, Fiber, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
+import { AppState } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
-import { TOOL_TABLE } from '@tools/registry';
+import { LiveTools, type ToolEntry } from '@tools/liveTools';
+import { switchedOffPlugins } from '@tools/plugins';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // Local imports - language model tools
 import {
   buildLanguageModelToolInvocationMessage,
   type LanguageModelResearchToolName,
 } from './languageModelToolInvocationMessage';
-
-const CHANNEL = 'LanguageModelTools';
 
 /** VS Code tool name (manifest) → canonical TeXRA registry tool name. */
 const LM_TOOL_NAMES = {
@@ -44,28 +53,28 @@ function toResultText(result: ToolResult): string {
 }
 
 /**
- * Register the curated TeXRA tools with the VS Code Language Model Tool API,
- * invoked on `session`: its roots and its runs.
+ * Register the curated TeXRA tools with the VS Code Language Model Tool API
+ * while the live catalog offers them, for the caller's scope (the
+ * extension's activation), invoked on `session`: its roots and its runs.
  */
 export const registerLanguageModelTools = Effect.fn(
   'registerLanguageModelTools',
-)(function* (
-  context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
-  session: SessionHandle,
-) {
+)(function* (runtime: ProcessRuntime, session: SessionHandle) {
   const lm = (vscode as { lm?: Partial<typeof vscode.lm> }).lm;
   if (typeof lm?.registerTool !== 'function') return;
-
-  for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-    const tool = TOOL_TABLE.get(toolName);
-    if (!tool) {
-      yield* Effect.logWarning(
-        `Tool "${toolName}" missing from registry; skipping LM registration for "${lmName}".`,
-      ).pipe(withLogChannel(CHANNEL));
-      continue;
-    }
-    const disposable = lm.registerTool(lmName, {
+  const registerTool = lm.registerTool.bind(lm);
+  const live = yield* LiveTools;
+  const appState = yield* AppState;
+  const registered = new Map<string, vscode.Disposable>();
+  yield* Effect.addFinalizer(() =>
+    Effect.sync(() => registered.forEach((disposable) => disposable.dispose())),
+  );
+  const register = (
+    lmName: string,
+    toolName: LanguageModelResearchToolName,
+    tool: ToolEntry['tool'],
+  ) =>
+    registerTool(lmName, {
       prepareInvocation(
         options: vscode.LanguageModelToolInvocationPrepareOptions<unknown>,
       ) {
@@ -127,6 +136,40 @@ export const registerLanguageModelTools = Effect.fn(
         ]);
       },
     });
-    context.subscriptions.push(disposable);
-  }
+  const follow = Effect.gen(function* () {
+    const { entries } = yield* SubscriptionRef.get(live.registry.current);
+    const off = switchedOffPlugins(yield* getDisabledToolIds(appState));
+    for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
+      // The catalog applies switches only at a step, so a plugin switched
+      // off since the last step is still in it; the switch read here wins.
+      const found = off.has('copilot') ? undefined : entries.get(toolName);
+      const entry =
+        found === undefined || off.has(found.plugin) ? undefined : found;
+      const held = registered.get(lmName);
+      if (entry !== undefined && held === undefined) {
+        registered.set(lmName, register(lmName, toolName, entry.tool));
+      } else if (entry === undefined && held !== undefined) {
+        held.dispose();
+        registered.delete(lmName);
+      }
+    }
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Copilot tools were not updated: ${error.message}`,
+      ).pipe(withLogChannel('LanguageModelTools')),
+    ),
+  );
+  // The current generation first, then each change and each switch.
+  yield* Stream.merge(
+    SubscriptionRef.changes(live.registry.current),
+    Stream.callback<void>((queue) =>
+      onAppSignal('toolSwitchesChanged', () =>
+        Queue.offerUnsafe(queue, undefined),
+      ),
+    ),
+  ).pipe(
+    Stream.runForEach(() => follow),
+    Effect.forkScoped,
+  );
 });

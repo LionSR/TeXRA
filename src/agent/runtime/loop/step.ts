@@ -1,19 +1,20 @@
 /**
- * The step: the one boundary where a run's tools and continuation change,
- * and where the change is recorded (`2026-09-26-core-concepts.md`,
+ * The step: the one boundary where a run's tools, continuation and prompt
+ * contributions change, and where the change is recorded (`2026-09-26-core-concepts.md`,
  * invariant 7).
  *
  * Each model request opens a step, and so does a conversation's park. It
  * applies the user's plugin switches to the live catalog
  * (`@tools/liveTools`), pins its current generations, and resolves from them
- * the tools the run is offered (`resolveStepTools`) and the continuation for
- * its agent category, if any plugin on contributes one. The pin is held hand over hand: a step's generation,
+ * the tools the run is offered (`resolveStepTools`), the continuation for
+ * its agent category, if any plugin on contributes one, and the prompt
+ * contribution of each plugin on that makes one. The pin is held hand over hand: a step's generation,
  * and its plugins' layers, stay up until the run's next step has pinned its
  * own, so the calls a response makes run against the tools its request
  * offered, and a generation no step holds drains.
  *
- * When the offered set or the continuation differs from what the run last
- * recorded, the step returns a `tools.offered` row, which the loop appends
+ * When the offered set, the continuation or the prompt contributors differ
+ * from what the run last recorded, the step returns a `tools.offered` row, which the loop appends
  * before the request (or the park's decision) through the run's one ledger
  * writer. A resumed run's first step is
  * held to what it recorded: it offers the recorded tools that are still in
@@ -30,12 +31,12 @@ import { withLogChannel } from '@logger/effectLog';
 import {
   sameIdentity,
   type OfferedTool,
-  type RunId,
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 import { LiveTools, type ContinuationEntry } from '@tools/liveTools';
 import { switchedOffPlugins } from '@tools/plugins';
+import type { PromptContribution } from '@tools/toolTable';
 import { getDisabledToolIds } from '@utils/config/constants';
 
 import { resolveStepTools } from '../agentToolResolution';
@@ -54,7 +55,8 @@ export interface StepTools {
 }
 
 /** The run's current step, the scope that holds its pin, the tools it
- *  withheld for approval, and its continuation. `holding` while only parks
+ *  withheld for approval, its continuation, and its prompt contributions by
+ *  plugin id, sorted. `holding` while only parks
  *  have opened steps in a resumed activation: its hold on the record is not
  *  spent yet. */
 export interface OpenStep {
@@ -62,6 +64,7 @@ export interface OpenStep {
   readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
   readonly continuation: ContinuationEntry | null;
+  readonly prompt: ReadonlyMap<string, PromptContribution>;
   readonly holding: boolean;
 }
 
@@ -159,6 +162,11 @@ const openStep = Effect.fn('Step.open')(function* (
       withheld: resolved.withheldForApproval,
       continuation:
         pinned.continuations.entries.get(run.config.agentCategory) ?? null,
+      prompt: new Map(
+        [...pinned.sections.entries].toSorted(
+          ([a], [b]) => Number(a > b) - Number(a < b),
+        ),
+      ),
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
@@ -166,12 +174,17 @@ const openStep = Effect.fn('Step.open')(function* (
     scope,
     withheld: step.withheld,
     continuation: step.continuation,
+    prompt: step.prompt,
     holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
+  const sections = [...step.prompt.keys()];
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
-  const changed = toolsChanged || state.offeredContinuation !== continuation;
+  const changed =
+    toolsChanged ||
+    state.offeredContinuation !== continuation ||
+    sections.join('\0') !== state.offeredSections.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
@@ -198,23 +211,18 @@ const openStep = Effect.fn('Step.open')(function* (
   return {
     tools: step.tools,
     continuation: step.continuation?.continuation ?? null,
+    prompt: step.prompt,
     rows: changed
-      ? [offeredRow(run.runId, step.tools.offered, continuation)]
+      ? [
+          {
+            type: 'tools.offered',
+            aggregateId: rowAggregate(run.runId),
+            payload: { tools: step.tools.offered, continuation, sections },
+          } satisfies RunLedgerDraft,
+        ]
       : [],
   };
 });
-
-function offeredRow(
-  runId: RunId,
-  tools: readonly OfferedTool[],
-  continuation: string | null,
-): RunLedgerDraft {
-  return {
-    type: 'tools.offered',
-    aggregateId: rowAggregate(runId),
-    payload: { tools, continuation },
-  };
-}
 
 /**
  * The step the loop's next action runs under. A request opens a new step,
@@ -235,12 +243,14 @@ export const stepFor = Effect.fn('Step.for')(function* (
   roundMode: boolean,
   kind: 'request' | 'dispatch' | 'park',
 ) {
-  if (roundMode) return { tools: NO_TOOLS, continuation: null, rows: [] };
+  if (roundMode)
+    return { tools: NO_TOOLS, continuation: null, prompt: new Map(), rows: [] };
   const open = yield* SynchronizedRef.get(run.steps);
   if (open !== null && kind === 'dispatch')
     return {
       tools: open.tools,
       continuation: open.continuation?.continuation ?? null,
+      prompt: open.prompt,
       rows: [],
     };
   const held = open === null || open.holding;

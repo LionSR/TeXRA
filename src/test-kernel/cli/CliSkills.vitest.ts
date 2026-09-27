@@ -65,7 +65,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       options: { additionalPaths: ['.texra/skills'] },
       plugins: [],
-      disabledPlugins: new Set(),
     }).flatMap((tier) => tier.sources);
 
     expect(
@@ -84,7 +83,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
         options: {},
         plugins: [],
-        disabledPlugins: new Set(),
       }),
     ).toThrow('Duplicate skill source contribution id: lean4');
   });
@@ -223,6 +221,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           scope: 'bundled',
           label: 'bundled',
           path: path.join(resources, 'plugins', 'lean4', 'skills'),
+          plugin: 'lean4',
         });
         expect(result.errors).toEqual([]);
 
@@ -318,26 +317,34 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           expect.objectContaining({ name: 'load-paper', source: 'user' }),
           expect.objectContaining({ name: 'publish-paper', source: 'user' }),
         ]);
-        expect(catalog.catalog).toContain(
-          '- load-paper: Load a published paper repository.\n  Source: plugin paper-protocol',
+        expect(JSON.stringify(catalog.catalog)).toContain(
+          '- load-paper: Load a published paper repository.\\n  Source: plugin paper-protocol',
         );
-        expect(catalog.catalog).not.toContain('The bundled copy.');
+        expect(JSON.stringify(catalog.catalog)).not.toContain(
+          'The bundled copy.',
+        );
 
         // Disabled, the plugin stays installed and contributes nothing.
         yield* setPluginEnabled('paper-protocol', false, env);
         const disabled = yield* loadRuntimeSkillCatalog(resources, stores);
-        expect(disabled.catalog).not.toContain('plugin paper-protocol');
+        expect(JSON.stringify(disabled.catalog)).not.toContain(
+          'plugin paper-protocol',
+        );
         expect(disabled.skills).toContainEqual(
           expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
         );
         yield* setPluginEnabled('paper-protocol', true, env);
         expect(
-          (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
+          JSON.stringify(
+            (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
+          ),
         ).toContain('plugin paper-protocol');
 
         yield* removePlugin('paper-protocol', env);
         const after = yield* loadRuntimeSkillCatalog(resources, stores);
-        expect(after.catalog).not.toContain('plugin paper-protocol');
+        expect(JSON.stringify(after.catalog)).not.toContain(
+          'plugin paper-protocol',
+        );
         expect(after.skills).toContainEqual(
           expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
         );

@@ -27,7 +27,7 @@ import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import {
   buildInitialToolUsePrompts,
-  toolInstructions,
+  stepInstructions,
 } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { logUserMessage } from '@agent/trace';
@@ -41,6 +41,7 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
+  type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
@@ -150,7 +151,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  const userChannels: Record<string, unknown> = { ...run.userVarChannels };
+  const userChannels: UserVariableChannels = { ...run.userVarChannels };
   let systemPrompt: string | undefined;
   let response = '';
   // A `/compact` the host admitted: honoured at the next model boundary,
@@ -507,18 +508,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         const tools = toolDefinitionsFor(step.tools.definitions);
         // The system text this request sends: the run's recorded prompt and
-        // what the step's offered tools add, rebuilt from the offered set.
-        // A round sends its own system text and offers no tools.
-        const addedByTools = rounds
+        // what the step's plugins add. A round sends its own system text.
+        const addedByStep = rounds
           ? ''
-          : toolInstructions(
-              step.tools.definitions.map((t) => t.name),
-              isChild(),
-            );
+          : stepInstructions(step.prompt, userChannels.AVAILABLE_SKILLS, {
+              offered: step.tools.definitions.map((t) => t.name),
+              isChild: isChild(),
+            });
         const system =
-          systemPrompt === undefined || addedByTools === ''
+          systemPrompt === undefined || addedByStep === ''
             ? systemPrompt
-            : `${systemPrompt}\n${addedByTools}`;
+            : `${systemPrompt}\n${addedByStep}`;
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.

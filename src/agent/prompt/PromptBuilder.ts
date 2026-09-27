@@ -6,7 +6,11 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
+import {
+  ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
+  type SkillCatalogEntry,
+} from '@shared/schemas';
+import type { PromptContribution, PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
@@ -43,49 +47,36 @@ In replies, lead with the outcome. Keep responses short by being selective about
 Never mention tool names when speaking to the user.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
 {% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
-{% if AVAILABLE_SKILLS %}
-<available_skills>
-The following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.
-{{ AVAILABLE_SKILLS }}
-</available_skills>
-{% endif %}
+
 </tool_use_instructions>`;
 
-/** Base memory instructions for all agents with memory enabled. */
-const MEMORY_TOOL_INSTRUCTIONS = `<memory_tool_instructions>
-Pinned memories are always loaded unless the user forbids memory use. At session start, \`view\` the \`/memories\` directory to find entries marked [pinned]. If the listing is truncated, continue until you have seen every [pinned] entry. Then \`view\` each pinned file so its content applies, regardless of how self-contained the request looks. Pinned entries are the core reusable insights (techniques, strategies, pitfalls) accumulated across sessions. The directory listing alone does not load their content. Beyond pinned entries, use memory when the request may depend on prior sessions, durable user preferences, or shared agent context. For a self-contained request, do not read unpinned memory files or write memory merely because the tool is available. Listing the directory is still appropriate because it is needed to find pinned entries.
-
-Your memory persists across conversations. When memory is in play, record durable progress, decisions, and user preferences (writing style, conventions, formatting, workflow). Keep the folder current and organized by updating, renaming, or deleting files rather than duplicating them. Do not store what the workspace files already state. When project context, coding patterns, or conventions are relevant to the task and git is available, look into git history (commit messages, PR descriptions, recent changes) to understand them. Use \`pin\` only for long-term reusable insights, never task-specific progress notes. Use \`unpin\` for entries that no longer earn their place.
-</memory_tool_instructions>`;
-
-/** Memory instructions for orchestrators that launch subagents. */
-const ORCHESTRATOR_MEMORY_INSTRUCTIONS = `<orchestrator_memory_protocol>
-The /memories directory is shared with all subagents you launch. Subagents can read and write the same files. Use this for persistent context that should survive across conversations. Do not use it as a substitute for subagent result delivery because subagents report back automatically via follow-up messages. Good uses include project conventions, user preferences, and research bibliographies that build up over time.
-
-For continuation or delegation-heavy work, consult relevant memories instead of rediscovering context. Record reusable intelligence: what approaches worked or failed and why, project structure and conventions you discovered, user preferences revealed through corrections or rejections, and effective problem-solving strategies.
-</orchestrator_memory_protocol>`;
-
-/** Memory instructions for subagents launched by an orchestrator. */
-const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
-The /memories directory is shared with the orchestrator and other subagents. Check it when your delegated task may depend on context from prior sessions or sibling agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
-</subagent_memory_protocol>`;
-
 /**
- * The system-prompt instructions a request's offered tools add: the memory
- * protocol while `memory` is offered, with the orchestrator's variant when a
- * delegation tool is too, or the subagent's in a child run. A step computes
- * them from the tools it offers, so they follow a tool switched on or off
- * mid-conversation, and the recorded offered set rebuilds them.
+ * The system text a step adds after the run's recorded prompt: the skill
+ * catalog, holding the skills of core sources and of the plugins the step
+ * pinned, then each pinned plugin's section, in plugin id order. It is built
+ * from the step's record (its offered tools and pinned contributors) and the
+ * catalog the run recorded at open, so a resume rebuilds it.
  */
-export function toolInstructions(
-  offered: readonly string[],
-  isChild: boolean,
+export function stepInstructions(
+  prompt: ReadonlyMap<string, PromptContribution>,
+  catalog: readonly SkillCatalogEntry[] | undefined,
+  ctx: Parameters<PromptSection>[0],
 ): string {
-  if (!offered.includes('memory')) return '';
-  const parts = [MEMORY_TOOL_INSTRUCTIONS];
-  if (hasDelegationTool(offered)) parts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-  else if (isChild) parts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
-  return parts.join('\n');
+  // Bounded after the filter, so a switched-off plugin's skills never push
+  // an enabled one out.
+  const skills = (catalog ?? [])
+    .flatMap(({ plugin, text }) =>
+      plugin === null || prompt.get(plugin)?.skills === true ? [text] : [],
+    )
+    .slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
+  return [
+    ...(skills.length > 0
+      ? [
+          `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.join('\n')}\n</available_skills>`,
+        ]
+      : []),
+    ...[...prompt.values()].flatMap(({ section }) => section?.(ctx) || []),
+  ].join('\n');
 }
 
 /**
@@ -244,7 +235,7 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     const initial = yield* builder.buildInitialPrompts();
 
     // The instruction suffix: tool-use instructions and workspace info. What
-    // the offered tools add is appended per request (`toolInstructions`).
+    // each step's plugins add is appended per request (`stepInstructions`).
     const suffixParts = [
       TOOL_USE_INSTRUCTIONS,
       yield* buildWorkspaceInfoBlock(options.workspace, options.settings),

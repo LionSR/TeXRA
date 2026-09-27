@@ -56,20 +56,13 @@ interface SkillSourceCall {
   readonly options: SkillSourceOptions;
   /** The plugins `texra plugin install` recorded, read from settings. */
   readonly plugins: readonly InstalledPlugin[];
-  /**
-   * The tool plugins the user switched off (`texra.tools.disabled`). A plugin
-   * is one on/off unit, so a switched-off plugin's skills are not scanned.
-   * Only the switch hides them, not a failed dependency probe: the probe
-   * answers per workspace and can be stale, and a plugin's skills are often
-   * what tells the user how to install the dependency it probes for.
-   */
-  readonly disabledPlugins: ReadonlySet<string>;
 }
 
 interface SkillRoot {
   readonly path: string;
   readonly label: string;
   readonly required?: true;
+  readonly plugin?: string;
 }
 
 /**
@@ -152,22 +145,25 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
 ];
 
 /**
- * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`,
- * while the plugin is not switched off.
+ * A tool plugin's bundled skills, shipped at `resources/plugins/<id>/skills`
+ * and tagged with the plugin. A plugin is one on/off unit, so its switch
+ * (`texra.tools.disabled`) gates them (`readDisabledSkills`), and a run's
+ * step lists them while it pins the plugin. Only the switch hides them, not
+ * a failed dependency probe: the probe answers per workspace and can be
+ * stale, and a plugin's skills are often what tells the user how to install
+ * the dependency it probes for.
  */
 function pluginSkillContribution(pluginId: string): SkillSourceContribution {
   return {
     id: pluginId,
     tier: 'bundled',
-    roots: ({ resourcesPath, disabledPlugins }) =>
-      disabledPlugins.has(pluginId)
-        ? []
-        : [
-            {
-              path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
-              label: 'bundled',
-            },
-          ],
+    roots: ({ resourcesPath }) => [
+      {
+        path: path.join(resourcesPath, 'plugins', pluginId, 'skills'),
+        label: 'bundled',
+        plugin: pluginId,
+      },
+    ],
   };
 }
 
@@ -226,6 +222,7 @@ export function foldSkillSources(
             path: key,
             label: root.label,
             ...(root.required === true ? { required: true } : {}),
+            ...(root.plugin === undefined ? {} : { plugin: root.plugin }),
           },
         });
       }
