@@ -429,22 +429,25 @@ manifest flag that declares the contribution. That keeps "the manifest imports
 no tool implementation" true, which dashboards and webviews rely on, and adds
 no `@tools` to `@agent` edges.
 
-| Table                    | Seam and owner                       | Contributors                                                                                                              |
-| ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                                                         |
-| `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                                                                       |
-| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin                                                      |
-| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions, Lean (needs `HostPorts` in `R`, or stays core as ruled on 09-23), `InquiryRecords`, `SetupPlatform` |
-| `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)                                                   |
-| `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                                                           |
-| `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                                                        |
-| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts`                                         |
+| Table                    | Seam and owner                       | Contributors                                                                                            |
+| ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                                       |
+| `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                                                     |
+| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin                                    |
+| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions, Lean (needs `HostPorts` in `R`, or stays core as ruled on 09-23), `SetupPlatform` |
+| `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)                                 |
+| `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                                         |
+| `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                                      |
+| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts`                       |
 
 - **Process services get their own table.** `PLUGIN_LAYERS` is read only
   while `Compositions.pin` builds a run's entry (`compositions.ts:158-207`),
-  and its resources close with the last pin. GitHub subscriptions, inquiries,
-  setup and Lean have consumers outside any run (settings, the session), so
-  they go in `PLUGIN_PROCESS_LAYERS`. The process composes that table once,
+  and its resources close with the last pin. GitHub subscriptions, setup and
+  Lean have consumers outside any run (settings, the session), so they go in
+  `PLUGIN_PROCESS_LAYERS`. `InquiryRecords` stays core and unconditional. The
+  session graph reads it (`sessionLayer.ts:284`), core `SessionRequests`
+  needs it to decide and record inquiry answers (`SessionRequests.ts:83-109`),
+  and inquiry rows must stay decidable while the plugin is off. The process composes that table once,
   selected by its plugin set (`TexraProcessOptions.plugins`, move 4), and
   there is no second instance per run.
 - **Drivers are contributions, not task kinds.** The Codex, Claude and
@@ -462,13 +465,17 @@ no `@tools` to `@agent` edges.
 - **Prompt sections are `(ctx) => string` per plugin**, consulted only for
   plugins in the pinned composition. The first draft's
   `(plugins, ctx) => string[]` coupled plugins to each other.
-- **The GitHub drain is a dependency edge, not a hook.** The GitHub plugin's
-  process layer requires `Sessions` and drains deliveries in its finalizer, so
-  Effect finalizes it before sessions close. No `beforeSessionsClose`, no drain
+- **The GitHub drain is a step of the shutdown protocol, not a hook.** The
+  edge runs from `Sessions` to the plugin, not back. `Sessions` already
+  consumes `GitHubSubscriptions` (`sessionLayer.ts:1262`), so a GitHub layer
+  that also required `Sessions` would form a Layer cycle that neither side
+  can acquire. The first draft of this bullet proposed exactly that edge.
+  Because the plugin layer is provided into `Sessions`, Effect acquires it
+  first and releases it last. The core shutdown protocol's "drain accepted
+  deliveries" step (see the Thesis) therefore calls `drainDeliveries` on a
+  service that is still alive, with no `beforeSessionsClose` hook and no drain
   layer. Today the hosts close sessions before they dispose the process
-  runtime, so the same PR moves those callers onto the one shutdown protocol
-  (see the Thesis). Otherwise the finalizer would run after the sessions it
-  drains into had already closed.
+  runtime, so the same PR moves those callers onto that one protocol.
 - **The goal-grant WeakMap is deleted, not moved.** It saves, mutates and
   restores a bypass value. The effective bypass is computed from the
   approval-policy rows and the goal rows instead, so the bad state cannot
@@ -548,8 +555,8 @@ in `src/ui`, because webview frontends cannot import `@tools`.
 
 1. A deterministic availability input to the composition key; LM tools through
    a pin. First.
-2. `PLUGIN_PROCESS_LAYERS` filled: GitHub (with the `Sessions` dependency
-   edge), Inquiry and Setup; the SDK passes its plugin set and `PACKAGE_SETUP` goes.
+2. `PLUGIN_PROCESS_LAYERS` filled: GitHub (drained by the shutdown
+   protocol) and Setup; the SDK passes its plugin set and `PACKAGE_SETUP` goes.
 3. `PLUGIN_SESSION_LAYERS` for the Codex and Claude registries; the goal grant
    computed from rows, WeakMap deleted.
 4. `PLUGIN_DRIVERS`, resolved from the pinned composition.
@@ -1003,7 +1010,9 @@ RunFailure>` contract of the SDK's `Run`. The trace itself stays infallible,
   `sessionPrograms.ts:87`). Past the cap the trace detaches with the same
   warning as today, and a run nobody reads retains nothing once it settles.
   A caller that awaits only `run.result` therefore costs at most the cap.
-- `start` returns `Effect<Run, LaunchError, Scope>`. The scope bounds only
+- `start` returns `Effect<Run, LaunchError | RunFailure, Scope>`, as
+  `session.start` does today (`sessionPrograms.ts:172`): a failed agent scan,
+  launch schema or pre-admission run stays a typed `RunFailure`. The scope bounds only
   the caller's event subscription: closing it detaches that reader, and the
   run keeps going. The run fiber belongs to the session scope, and only
   `run.interrupt` or closing the session stops it. The core `Run` handle is
@@ -1264,7 +1273,12 @@ builds on that.
 `Runs` chooses the wake inside the run's lane, atomically with the append: a
 live entry is notified, and a resumable one is woken by the session-bound
 resume (move 6), which launches through the path move 3 selects
-(`runWithLaunchGuard`), forked into the session scope, with no host port. The caller never chooses, so a run that turns live or idle while the
+(`runWithLaunchGuard`), forked into the session scope, with no host port. A
+root workflow run is the exception: its resume needs the host's
+`openWorkflowOutput` (move 3). The automatic wake takes that hook from the
+session's attached host (`attachSessionHost`, move 5), and with no host
+attached it leaves the run pending for an explicit host resume. The row stays
+durable either way, so nothing is stranded or finalized without its output. The caller never chooses, so a run that turns live or idle while the
 delivery is prepared cannot leave the row unwoken. The in-memory wake cannot
 commit with the append, so a crash between them is recovered from the log:
 pending input is a fold (queued, minus consumed, minus deferred and not
@@ -1289,8 +1303,9 @@ finalizes (`childRunLoop.ts:631-637`), and waking the parent there is the
 #8093 self-stall that `childRunLoop.ts:482-489` warns about. A
 non-finalizing delivery, where the child continues to another turn, is
 released with its `settled` row. A child that crashes before that job leaves
-no terminal row either, so its resume performs the release. A native child uses it for its turn result before it
-finalizes and calls `wake` with the token its own delivery returned, so a
+no terminal row either, so its resume performs the release. A native child uses it for its turn result. For a non-finalizing turn it
+calls `wake` with the token its own delivery returned. For its last turn it
+never calls `wake`; the release rides the `run.end` job above. Either way a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
 row survives a crash, and the parent never sees the child as still running
@@ -1414,6 +1429,11 @@ non-atomically. There are 21 raw `get<T>` casts of persisted state.
 ### Target
 
 ```ts
+// deletion is app-state only (current-value decision): the retained families
+// cannot return undefined, so an inquiry's revision is never reused
+type Next<F extends Family> = F extends 'app-state'
+  ? Value<F> | undefined
+  : Value<F>;
 export class CurrentValues extends Context.Service<
   CurrentValues,
   {
@@ -1424,7 +1444,8 @@ export class CurrentValues extends Context.Service<
     modify<F extends Family, A>(
       f: F,
       key: string,
-      change: (v: Value<F> | undefined) => readonly [A, Value<F> | undefined],
+      // only app-state may delete its row; the other three families retain one
+      change: (v: Value<F> | undefined) => readonly [A, Next<F>],
     ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>; // one BEGIN IMMEDIATE; a malformed row rolls back
     // every live row of a family, latest write first (inquiry listing,
     // inquiryRecords.ts:241-265, keeps the decision's revision order)
@@ -1572,7 +1593,7 @@ the owner confirms them:
 | 3. D5 and "one process is one host"                           | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                 |
 | 4. Own-key retry with no key                                  | Leave it pending on every host.                                                                                            |
 | 5. Approve-all                                                | Also decide requests already pending, on every host, as recorded rows.                                                     |
-| 6. The plugin drain                                           | Neither a hook nor a drain layer: a layer dependency on `Sessions`.                                                        |
+| 6. The plugin drain                                           | Neither a hook nor a drain layer: a layer dependency on `Sessions` (revised below: that edge is a cycle).                  |
 | 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                |
 | 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                            |
 | 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                     |
@@ -1593,9 +1614,12 @@ the owner confirms them:
    deny it (TUI today)?
 5. Should "approve all delegated" also decide requests already pending, on
    every host?
-6. Confirm the plugin drain as a dependency edge: the GitHub plugin's process
-   layer requires `Sessions` and drains in its finalizer, with no
-   `beforeSessionsClose` hook and no drain layer.
+6. Confirm the plugin drain as a step of the core shutdown protocol, with no
+   `beforeSessionsClose` hook and no drain layer. The recommended edge
+   (GitHub requires `Sessions`) is a Layer cycle, because `Sessions` already
+   consumes `GitHubSubscriptions` (`sessionLayer.ts:1262`). The edge stays
+   `Sessions` → plugin, and the protocol drains the plugin while it is still
+   acquired.
 7. What do `yolo` and `never` do for plan, proposal, retry and question
    requests, on every host? Move 9 PR 2 applies the answer in core. #13359
    left "one approval-policy authority" open for this decision, which shows
