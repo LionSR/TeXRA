@@ -7,6 +7,7 @@ import {
   type Result,
   type RcMap,
 } from 'effect';
+import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
@@ -86,12 +87,23 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
   return { kind: 'free' };
 }
 
+/**
+ * A store failure's text. A `SqlError`'s own message is the driver's generic
+ * `Failed to execute statement`; the SQLite error that says why (`column
+ * index out of range`, `database is locked`) is its reason's cause, so the
+ * message carries both.
+ */
+const storeFailureMessage = (cause: unknown): string =>
+  isSqlError(cause) && cause.reason.cause != null
+    ? `${cause.message}: ${toErrorMessage(cause.reason.cause)}`
+    : toErrorMessage(cause);
+
 /** The database could not be opened, or its schema could not be applied. */
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   readonly path: string;
   readonly cause: unknown;
 }> {
-  override readonly message = toErrorMessage(this.cause);
+  override readonly message = storeFailureMessage(this.cause);
 }
 
 /**
@@ -103,7 +115,9 @@ export class DatabaseWriteFailed extends Data.TaggedError(
 )<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = storeFailureMessage(this.cause);
+}
 
 /**
  * C5: a batch member targets an aggregate this process does not hold open,
@@ -149,7 +163,7 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly path: string;
   readonly cause: unknown;
 }> {
-  override readonly message = toErrorMessage(this.cause);
+  override readonly message = storeFailureMessage(this.cause);
 }
 
 /**

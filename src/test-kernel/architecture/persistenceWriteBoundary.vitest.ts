@@ -3,11 +3,13 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 // Third-party imports
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import {
   ALL_HOST_PRODUCTION_ROOTS,
   expectRealCoverage,
+  parseSourceFile,
   productionFilesUnder,
   REPO_ROOT,
   stripComments,
@@ -79,6 +81,34 @@ const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
     'desktop project records on the global database, which holds no session and has no publisher',
 };
 
+/** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape
+ *  (`\x1b[?25h`) is the one non-SQL `?<digit>` a literal carries, so a `?`
+ *  after `[` is not one. */
+const NUMBERED_SQL_PARAMETER = /(?<!\[)\?\d/;
+
+/** Every string and template-literal piece in one file that holds a
+ *  numbered SQL parameter, as `file:line`. */
+function numberedParameterSites(file: string): string[] {
+  const text = readFileSync(resolve(REPO_ROOT, file), 'utf8');
+  if (!NUMBERED_SQL_PARAMETER.test(text)) return [];
+  const source = parseSourceFile(file, { text, setParentNodes: false });
+  const sites: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isStringLiteralLike(node) || ts.isTemplateLiteralToken(node)) &&
+      NUMBERED_SQL_PARAMETER.test(node.text)
+    ) {
+      const { line } = source.getLineAndCharacterOfPosition(
+        node.getStart(source),
+      );
+      sites.push(`${file}:${line + 1}`);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return sites;
+}
+
 function offenders(pattern: RegExp, allowed: readonly string[]): string[] {
   return PRODUCTION_ROOTS.flatMap(productionFilesUnder)
     .filter((file) => !allowed.includes(file))
@@ -144,6 +174,22 @@ describe('persistence write boundary', () => {
         ),
     );
     expect(stale).toEqual([]);
+  });
+
+  it('binds SQL with anonymous parameters only', () => {
+    const found = PRODUCTION_ROOTS.flatMap(productionFilesUnder)
+      .flatMap(numberedParameterSites)
+      .toSorted();
+
+    expect(
+      found,
+      found.length === 0
+        ? undefined
+        : "Use anonymous `?` parameters, repeating a value in the argument list where the statement uses it twice. Node 22's `node:sqlite` (the CLI supports ^22.19) treats a numbered `?NNN` as named and skips it when binding a positional list, so the statement fails there with `column index out of range`; only the nightly CLI validator runs Node 22 (#13395).",
+    ).toEqual([]);
+    // Not vacuous: the pattern flags the shape #13386 shipped.
+    expect(NUMBERED_SQL_PARAMETER.test('json_each(?1)')).toBe(true);
+    expect(NUMBERED_SQL_PARAMETER.test('\x1b[?2004h')).toBe(false);
   });
 
   it('keeps the Database layer itself the writer the ratchet names', () => {
