@@ -928,7 +928,11 @@ The PRD one-fold §8 protocol (six messages, three each way) is in place, and
   `SessionRequests` (decision 5). Questions, inquiries, retries and plan
   approvals stay pending: they need an answer or carry their own credential
   semantics, which is the filter the TUI applies today
-  (`approvalQueue.ts:457-477`).
+  (`approvalQueue.ts:457-477`). The policy change and its decisions commit in
+  one `exclusive` publisher job, which reads the durable pending set inside
+  the job rather than from the folded view. A request whose opening job
+  committed just before is therefore decided too, and none opened after can
+  miss the new policy.
 - `HostRequest` shrinks from 37 to about 28 genuinely host-only arms, plus
   `storeApiKey` and the desktop file I/O that travels on `desktop:*` today
   (PRD 8.3 already names it a host request). After this move `desktop:*`
@@ -1120,9 +1124,12 @@ RunFailure>` contract of the SDK's `Run`. The trace itself stays infallible,
   `ToolEditApprovalRequest`. The durable permission row holds only path and
   line counts (`prompts.ts:29-36`). The live preview is held until the
   request settles, so a request opened before the consumer subscribed is
-  replayed with its content. Only when recovery after a restart finds a
-  pending `toolEdit` whose preview is gone is it decided `cancelled`, as a
-  recorded row, rather than replayed without its content.
+  replayed with its content. A pending `toolEdit` is decided `cancelled`
+  only when its preview is provably gone: its run's claim is acquirable,
+  because the owning activation died. A process that merely lacks the preview
+  while another process holds the claim leaves the request pending for its
+  owner. The cancellation is a recorded row, and nothing is replayed without
+  its content.
 - `session.decide(req, decision)`, and exactly one approval authority per
   session, chosen when the process is built (`TexraProcessOptions.approvals`,
   move 4): `denyAll` (the default, today's behaviour), `handler(f)`, or
@@ -1416,6 +1423,9 @@ so an unrelated resume of the parent cannot consume the child's row before the
 child finalizes. The deferral is durable, not inferred: `followup.queued`
 gains a `deferred` flag, and the release is a `followup.released
 {followUpIds}` row on the producing child's own aggregate (one format bump).
+Its listing key includes the release's delivery id, so a child that
+releases several turns keeps every release row after a restart. The cold
+listing otherwise keeps only the latest row per aggregate and type.
 The child owns that aggregate, so the release never needs the parent's
 claim. `Database.appendAll` refuses any aggregate another owner holds, and
 the parent may be claimed elsewhere when the child settles. The parent's
