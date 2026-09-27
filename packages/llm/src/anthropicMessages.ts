@@ -16,7 +16,6 @@ import {
   ModelConfigurationSchema,
   FILE_UPLOAD_LIFETIME_SECONDS,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   TurnResultSchema,
   type AnthropicMessagesConfiguration,
   type Model,
@@ -24,6 +23,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
 import { sdkModelError } from './errors.js';
@@ -506,14 +506,10 @@ export function anthropicMessagesModel(
   const prepareTurn: Model['prepareTurn'] = Effect.fn(
     'llm.anthropic.prepareTurn',
   )(function* (request) {
-    const parsed = TurnRequestSchema.safeParse(request);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The canonical Anthropic input is invalid.',
-        cause: parsed.error,
-      });
-    const input = parsed.data;
+    const input = yield* decodeTurnRequest(
+      request,
+      'The canonical Anthropic input is invalid.',
+    );
     if (
       input.mode === 'background' ||
       input.continuation !== undefined ||
@@ -974,13 +970,7 @@ export function anthropicMessagesModel(
           message: 'The prepared Anthropic count invocation is unsupported.',
         });
       const body = yield* invocationBody(turn, origin, config, uploads);
-      const message = turn.messages[0];
-      if (
-        turn.tools.length !== 0 ||
-        turn.messages.length !== 1 ||
-        message?.role !== 'user' ||
-        !message.content.every((part) => part.kind === 'text')
-      )
+      if (initialTextInput(turn) === undefined)
         return yield* new ModelError({
           kind: 'unsupported',
           message:

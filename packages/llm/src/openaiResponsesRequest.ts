@@ -10,11 +10,11 @@ import { z } from 'zod';
 import {
   InputTokenEstimateSchema,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
   type TurnRequest,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
 import { ownedAbortSafeRequest } from './transport.js';
@@ -38,14 +38,10 @@ export const prepareResponsesTurn = Effect.fn('llm.responses.prepareTurn')(
     request: TurnRequest,
     uploads: UploadCache | null,
   ) {
-    const parsed = TurnRequestSchema.safeParse(request);
-    if (!parsed.success)
-      return yield* new ModelError({
-        kind: 'invalid-request',
-        message: 'The model input is invalid.',
-        cause: parsed.error,
-      });
-    const author = parsed.data;
+    const author = yield* decodeTurnRequest(
+      request,
+      'The model input is invalid.',
+    );
     if (
       author.thinkingLevel !== undefined ||
       author.thinking !== undefined ||
@@ -254,13 +250,7 @@ export const estimateResponseInput = Effect.fn(
     'foreground',
     null,
   );
-  if (
-    turn.continuation !== undefined ||
-    turn.tools.length !== 0 ||
-    turn.messages.length !== 1 ||
-    turn.messages[0]?.role !== 'user' ||
-    turn.messages[0].content.some((part) => part.kind !== 'text')
-  )
+  if (initialTextInput(turn) === undefined)
     return yield* new ModelError({
       kind: 'unsupported',
       message:
