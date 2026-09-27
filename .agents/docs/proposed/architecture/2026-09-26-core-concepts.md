@@ -5,8 +5,9 @@ status: proposed
 
 # Core concepts: thirteen nouns, one owner each, laid out on Effect lifetimes
 
-Baseline: `origin/main` at `4311c54176`, **with #13359 assumed merged** (see
-"Assumes #13359"). This note defines the vocabulary the
+Baseline: `origin/main` at `a53db0e`, which includes #13359, #13348, #13355,
+#13361 and #13350. The audits beside this note ran on `4311c54176`; every
+claim below was re-checked on `a53db0e`. This note defines the vocabulary the
 rest of the architecture is checked against. It does not replace
 [the session-core programme](./2026-09-26-effect-native-session-core.md)
 (#13350, merged), which is the bounded delivery plan and owns no topic.
@@ -55,7 +56,7 @@ workflow **round** is a turn opened by the round policy.
 | **Run**               | One `run` aggregate with an identity, a parent edge and a driver. It is pinned at open to a composition, an agent definition and a continuation policy. The native driver is the tool-use loop. A child run is a run with a parent edge; lineage (parent) and supervision (owner) are separate facts.   | run: `Scope.fork(session)`, closed when the run fiber exits; history lasts beyond it                         | a run `Layer` (`AgentRun`, `ModelInvoker`, `RunLedger`) launched through one door, `Runs.launch`, from the session's context                                 | `loop/toolUse.ts`, `loop/rounds.ts`, `run/AgentRun.ts`, `runRegistry.ts`, `childRunLoop.ts`        |
 | **Input**             | Every message to a run: user, child report, peer, subscription, or a turn opened by the continuation policy. Each is a `followup.queued` row on the run's aggregate.                                                                                                                                    | row until `followup.consumed`; the in-process inbox lives with the run                                       | a value on the run's own entry, passed explicitly; **never a context tag**                                                                                   | `src/agent/followUp/`, `FollowUps.ts` (#13348)                                                     |
 | **Agent**             | A resolved definition (settings, prompt, declared tools, category) from an ordered catalog of sources: bundled, user, remote, `plugin:<id>`.                                                                                                                                                            | catalog: process, rebuilt from empty on refresh; definition: recorded at run open                            | an `AgentCatalog` process service holding a `SubscriptionRef` of resolved agents                                                                             | `agentRegistry.ts`, `agentLoad.ts` (target: one loader)                                            |
-| **Plugin**            | A manifest row plus entries in fixed tables, one per extension point, keyed by plugin id and checked with `satisfies`. One on/off unit. Built-in plugins contribute code tables; loaded plugins (MCP, installed Claude Code and Codex plugins) contribute data and composition-lifetime resources only. | a table's value type is its lifetime (rule R4)                                                               | no runtime object and no hooks                                                                                                                               | `pluginManifest.ts`, `registry.ts`, each seam's owner module                                       |
+| **Plugin**            | A manifest row plus entries in fixed tables, one per extension point, keyed by plugin id and checked with `satisfies`. One on/off unit. Built-in plugins contribute code tables; loaded plugins (MCP, installed Claude Code and Codex plugins) contribute data and composition-lifetime resources only. | a table's value type is its lifetime (rule R4)                                                               | no runtime object and no hooks                                                                                                                               | `src/tools/pluginManifest.ts`, `src/tools/registry.ts`, each seam's owner module                   |
 | **Composition**       | What a run gets: preset × the agent's tools × host × probe results, as a hashable key. A **preset** is a stored set of switches. A child whose tools differ gets its own key for its narrowed set, and shares its parent's layer resources through the one `MemoMap`.                                   | key: a value; entry: refcounted in a process `LayerMap`, held by the scopes of the runs that pin it          | `CompositionKey` (`Equal`/`Hash`) plus the `Compositions` `LayerMap`, with one `MemoMap`                                                                     | `composition.ts`, `compositions.ts`                                                                |
 | **Call**              | A model call or a tool call inside a run. A model call is binding → invoker → attempt, gated, priced and retried, with `ModelInvoker` its only caller. A tool call is offered set → guard → request → result, with a loop-owned card.                                                                   | call: `Effect.scoped` per attempt or tool call; a binding lives in its own `Scope.fork(run)`, closed on swap | scoped handles for streams, cards and request waits                                                                                                          | `ModelInvoker.ts`, `run/modelBinding.ts`, `loop/toolUseDispatch.ts`, `loop/toolGuard.ts`           |
 | **Request**           | A wait on a human or authority (approval, retry, question). The **authority** is a pure `decide(state, payload)` run inside the publisher job that appends `request.opened`. The **wait** is a call-scoped `Deferred`. Approval policy and grants are its state and are rebuilt from rows.              | authority: session; each wait: call                                                                          | `ApprovalState` folded synchronously inside the publisher job that decides (a `SubscriptionRef` only mirrors it for readers); decisions are rows             | `SessionRequests.ts`, `runApprovalQueue.ts`                                                        |
@@ -216,6 +217,31 @@ Each owner requirement maps onto these primitives:
 The #13350 moves become "put X on the Registry" or "route Y through History",
 and each such PR deletes the old per-kind mechanism.
 
+### What this revises in the plugin architecture
+
+The central primitives reverse four decisions of the
+[plugin architecture](../../implemented/architecture/2026-09-24-plugin-architecture.md),
+which stays the owner of plugins until the owner confirms this revision. Each
+reversal follows from the owner's 2026-09-27 ruling above (live changes,
+third-party code, flexible writers):
+
+- **Switch-gated skills and agents.** It rules "Plugin skills are not gated by
+  the plugin's switch" (`:190-191`) and pools bundled plugin agents with the
+  core directory (`:192-198`). Invariant 6 withdraws both when a plugin is
+  switched off, so one switch hides everything a plugin contributes.
+- **Runtime load and unload.** It rejects "runtime register/unregister"
+  (`:172-173`, `:272-273`). Plugin + Registry make loading and unloading a
+  scope's open and close.
+- **Plugin-owned durable state and event channels.** It rules "Plugins own no
+  durable state and no event channel" (`:231-232`, `:252`).
+  `History.writer(pluginId)` and `PLUGIN_EVENT_ARMS` give a plugin typed rows
+  on the one commit line, never a second channel.
+- **Drivers.** It rules "no hooks and no task kinds" (`:227-229`), and
+  `toolUse.ts` stays the only run program. `PLUGIN_DRIVERS` is not a task
+  kind: a driver is a plugin's contribution to the existing child-run seam
+  (Codex, Claude, workflow script already live in plugins), and the native
+  driver stays core.
+
 ## Invariants
 
 1. **One writer.**
@@ -298,7 +324,8 @@ and each such PR deletes the old per-kind mechanism.
    never rows.
 10. **One shutdown protocol, owned by core.** Core stops admission, drains
     accepted deliveries, settles runs and releases resources, in that order,
-    within the ruled deadline (`SESSION_CLOSE_DEADLINE_MS`, rulings ledger):
+    within the implemented deadline (`SESSION_CLOSE_DEADLINE_MS`,
+    `sessionLayer.ts:59`; rulings ledger, retired entry at `:316`):
     past it, remaining work is interrupted and the incomplete cleanup is
     reported, so a call that never settles cannot hold shutdown forever.
     Explicit session close while the process keeps running follows the same
@@ -364,7 +391,7 @@ These are meant for AGENTS.md.
 - **R7. Effect's `unstable/*` modules.**
   - Keep `http`, `sql` with its own `reactivity`, `encoding` and `process`.
     `process` becomes the one spawn path for plugin-owned processes.
-  - Reject `rpc` (Effect Schema, +231 KB per webview), `eventlog`
+  - Reject `rpc` (Effect Schema, +231 KB minified, +71 KB gzipped, per webview), `eventlog`
     (duplicates history), `workflow`/`cluster` (duplicate ledger resume), `ai`
     (`packages/llm` owns the model) and `persistence`.
 - **Other rules.**
@@ -420,11 +447,11 @@ Four dependency cycles exist today and are cut by the programme:
 ## Where main stands
 
 The audit counts violations per concept against the invariants above, on
-`4311c54176` **before** #13359 and #13348: Process 12, Session 8, History 10,
-Projection 14, Run 11, Plugin 15, Composition 8, Pin 6, Continuation 7,
-Request 22, Host 20. "Assumes #13359" below lists the items those two PRs
-settle. The audit records were written before #13348 merged, so their notes
-that it has not landed are out of date.
+`4311c54176`, **before** #13359 and #13348 merged: Process 12, Session 8,
+History 10, Projection 14, Run 11, Plugin 15, Composition 8, Pin 6,
+Continuation 7, Request 22, Host 20. These are pre-merge figures; "Assumes
+#13359" below lists the items those two PRs settled. The defect table below is
+re-checked on `a53db0e`.
 
 The full list, with `file:line` for each item, is in
 [`2026-09-26-core-concepts/audit.md`](./2026-09-26-core-concepts/audit.md).
@@ -433,18 +460,18 @@ The Effect mapping and the critique are beside it, as
 [`critique.md`](./2026-09-26-core-concepts/critique.md). The ones to fix first, because they are wrong
 behavior rather than structure:
 
-| #   | Defect                                                                                                                                          | Evidence                                                                                                     | Invariant |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
-| 1   | Four `requiresApproval` tools have no call-time gate and run unprompted on GUI hosts                                                            | `ConfigTools.ts:141`, `UnsetApiKeyTool.ts:84`, `InvokeCommandTool.ts:94`, `InstallVscodeExtensionTool.ts:84` | 8         |
-| 2   | Five tools are approved as `bash` (MCP, codex, claude_code, wolfram, send_to_terminal), so approve-for-session on one is blanket shell approval | `toolGuard.ts:74-91`                                                                                         | 8         |
-| 3   | Every approval bypass is lost on resume in a new process, and the resume republishes an empty snapshot over the durable row                     | `AgentLaunchContext.ts:378-391`                                                                              | 2         |
-| 4   | CLI `never` auto-approves workflow-script proposals                                                                                             | `settleApprovals.ts:69-71`, `proposalFlow.ts:200-202`                                                        | 8         |
-| 5   | A workflow child inherits its parent's follow-up lease (**fixed**: #13348 merged)                                                               | `toolUse.ts:149`                                                                                             | 5         |
-| 6   | Nothing is pinned across resume: the composition and the definition are re-read live                                                            | `executeAgent.ts:403`, `agentLoad.ts`                                                                        | 7         |
-| 7   | `removeRun` and app-state rows append outside the publisher                                                                                     | `Database.ts:1013-1083`, `appStateStore.ts:72-87`                                                            | 1         |
-| 8   | The composition key depends on a module cache, and the CLI never probes                                                                         | `toolAvailability.ts:174,347`                                                                                | 7         |
-| 9   | The CLI rewrites a run's outcome after its terminal decision                                                                                    | `packages/cli/src/commands/workflow.ts:375-414`                                                              | 8         |
-| 10  | One skill project's roots may widen the file allowlist for every session (inferred)                                                             | `externalRoots.ts:68`, `runtimeSkills.ts:235`                                                                | 4         |
+| #   | Defect                                                                                                                                                                                                                                                                                                                                                                                        | Evidence                                                                                                     | Invariant |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| 1   | Four `requiresApproval` tools have no call-time gate and run unprompted on GUI hosts; the only reader of `requiresApproval` withholds them only when prompts are unavailable (`agentToolResolution.ts:289-294`)                                                                                                                                                                               | `ConfigTools.ts:142`, `UnsetApiKeyTool.ts:85`, `InvokeCommandTool.ts:97`, `InstallVscodeExtensionTool.ts:87` | 8         |
+| 2   | Five tools are approved as `bash` (MCP, codex, claude_code, wolfram, send_to_terminal), so approve-for-session on one is blanket shell approval                                                                                                                                                                                                                                               | `toolGuard.ts:74-91`                                                                                         | 8         |
+| 3   | Every approval bypass is lost on resume in a new process, and the resume republishes the in-memory (empty) snapshot over the durable row                                                                                                                                                                                                                                                      | `AgentLaunchContext.ts:378-391`, `SessionHandle.ts:402-406`                                                  | 2         |
+| 4   | Headless runs (`never`, and `ask` with no prompt surface) approve workflow-script proposals in core **without recording a decision**. The approval itself is deliberate: `proposalFlow.ts:192-199` explains that the proposal is a review surface, not the security gate, and bash and edits stay denied downstream. The defect is only the missing `request.opened` / `request.decided` rows | `settleApprovals.ts:69-71`, `approvalPolicy.ts:109-113`, `proposalFlow.ts:192-202`                           | 2, 8      |
+| 5   | A workflow child inherits its parent's follow-up lease (**fixed**: #13348)                                                                                                                                                                                                                                                                                                                    | `toolUse.ts:149-150`                                                                                         | 5         |
+| 6   | The agent definition is re-read live on resume, and resumed tools get no identity check. Re-resolving the composition is the ruled behaviour (ledger 2026-09-23) and is kept                                                                                                                                                                                                                  | `executeAgent.ts:393`, `agentLoad.ts`                                                                        | 7         |
+| 7   | `removeRun` and app-state rows append outside the publisher                                                                                                                                                                                                                                                                                                                                   | `Database.ts:1013-1073`, `appStateStore.ts:76`                                                               | 1         |
+| 8   | The composition key depends on a module cache, and the CLI probes only after a credential change, never at startup                                                                                                                                                                                                                                                                            | `toolAvailability.ts:174,344`                                                                                | 7         |
+| 9   | The CLI decides a run's outcome (non-cancelled becomes FAILED) instead of returning a fact for core to decide                                                                                                                                                                                                                                                                                 | `packages/cli/src/commands/workflow.ts:397-400`                                                              | 8         |
+| 10  | One skill project's roots may widen the read-only file allowlist for every session (inferred)                                                                                                                                                                                                                                                                                                 | `externalRoots.ts:66`, `runtimeSkills.ts:235`                                                                | 4         |
 
 ## Assumes #13359
 

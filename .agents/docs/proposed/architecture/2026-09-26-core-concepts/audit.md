@@ -257,7 +257,7 @@ Tags: [v] means read in the code; [i] means inferred (traced, not reproduced).
 **Unrecorded decisions and missing gates**
 
 15. [v] **Core auto-decisions leave no rows:** `bashApproval.ts:88-92`, `toolEditApproval.ts:264-268`, `runApprovalQueue.ts:172`, `proposalFlow.ts:188-202`. `ModelInvoker` does record its own.
-16. [v] **CLI `never` auto-approves workflow-script proposals.** `settleApprovals.ts:69-71` sets `approvalPromptsUnavailable`, and `proposalFlow.ts:200-202` then approves.
+16. [v] **Headless runs approve workflow-script proposals without a recorded decision.** `settleApprovals.ts:69-71` (and `approvalPolicy.ts:109-113` for headless `ask`) sets `approvalPromptsUnavailable`, and `proposalFlow.ts:200-202` then approves. The approval is deliberate: `proposalFlow.ts:192-199` explains that the proposal is a review surface rather than the security gate, `requiresApproval` delegation tools are already withheld, and bash and edits stay denied downstream. What remains wrong is item 15's: the automatic decision leaves no `request.opened` / `request.decided` rows.
 17. [v] **Four `requiresApproval` tools have no call-time gate** and run unprompted on GUI hosts: `ConfigTools.ts:141`, `UnsetApiKeyTool.ts:84`, `InvokeCommandTool.ts:94`, `InstallVscodeExtensionTool.ts:84`.
 18. [v] **Five tools are approved as `bash`** (`toolGuard.ts:74-91`): MCP, codex, claude_code, wolfram, send_to_terminal. Approve-for-session on any of them is blanket shell approval.
 19. [v] **Tool-edit approve/reject detour through `host.request`** (`ToolEditRequestPanel.ts:54-81`). The edited content is already in the `request.decide` payload (`request.ts:28`), so only the detour remains.
