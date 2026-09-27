@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Effect, Scope } from 'effect';
+import { Effect, Scope, Stream } from 'effect';
 import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
@@ -69,7 +69,11 @@ const mocks = vi.hoisted(() => ({
     globalState: mocks.cliGlobalState,
   })),
   initializeNodeRuntimeSkills: vi.fn(),
-  cliGlobalState: { get: vi.fn(), update: vi.fn() },
+  cliGlobalState: {
+    get: vi.fn(),
+    update: vi.fn(),
+    changes: () => Stream.succeed(undefined),
+  },
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {

@@ -80,8 +80,8 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
 
 /**
  * Switch a tool plugin on or off in the global state store the caller
- * holds, and tell this process's listeners outside a run (the extension's
- * Copilot tools); runs read the switch at their next step.
+ * holds. Every process sharing it follows the write (`AppState.changes`);
+ * runs read the switch at their next step.
  */
 export function setToolEnabled(
   toolId: string,
@@ -95,7 +95,7 @@ export function setToolEnabled(
       else disabled.add(toolId);
       return Result.succeed([...disabled]);
     })
-    .pipe(Effect.map(() => emitAppSignal('toolSwitchesChanged', undefined)));
+    .pipe(Effect.asVoid);
 }
 
 /**

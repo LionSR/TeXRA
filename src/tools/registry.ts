@@ -1,20 +1,12 @@
 // Third-party imports
-import {
-  Cause,
-  Deferred,
-  Effect,
-  FileSystem,
-  Layer,
-  Queue,
-  Schedule,
-} from 'effect';
+import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { revisionKey } from '@common/plugins/mcpServers';
 import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
-import { onAppSignal } from '@eventBus/AppSignals';
 import { AppState } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
@@ -323,10 +315,12 @@ export type HostPluginLayers = {
  * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`), which
  * `installProcessRuntime` provides. The layer takes the process `FileSystem`
  * that `installProcessRuntime` serves, to read that file, and its
- * `AppState`, which holds the key MCP env values are digested under and the
- * switches. A switch flipped in this process reaches the catalog at once,
- * not only at a run's next step, so what follows the catalog outside a run
- * (a host layer's lifetime, its Copilot tools) follows the switch.
+ * `AppState`, which holds the key MCP env values are digested under, the
+ * switches and the plugin install record. A switch flipped or a plugin
+ * disabled in any process sharing that state reaches the catalog at once
+ * (`AppState.changes`), not only at a run's next step, so what follows the
+ * catalog outside a run (a host layer's lifetime, its Copilot tools, an
+ * installed plugin's server) follows the switch.
  */
 export const toolRegistryLayer = (
   mcpConfigPath: string,
@@ -399,40 +393,41 @@ export const toolRegistryLayer = (
             getDisabledToolIds(appState),
             switchedOffPlugins,
           );
-          // Nothing stays pinned: a pin here only applies the switches. A
-          // failed apply changes nothing, so what is off stays off.
+          // Nothing stays pinned: a pin here only applies the switches and
+          // withdraws the installed plugins no longer enabled; it starts
+          // none. A failed apply changes nothing, so what is off stays off.
           const apply = (read: typeof off) =>
-            Effect.scoped(live.pinSwitched(read)).pipe(
+            Effect.scoped(
+              live.pinSwitched(read, { installed: 'withdraw' }),
+            ).pipe(
               Effect.catchCause((cause) =>
                 Effect.logError(
                   `Tool switches were not applied to the catalog; the plugins they switch stay as they were (off, before the first read): ${toErrorMessage(Cause.squash(cause))}`,
                 ),
               ),
             );
-          // Subscribed first, so no flip falls between the first read and
-          // the subscription; then the switches as they stand, read again
-          // with a bounded backoff until they are, then each flip queued
-          // since, off the build: a store not readable yet fails no process.
-          const flips = yield* Queue.unbounded<void>();
-          const subscribed = yield* Deferred.make<void>();
-          yield* onAppSignal(
-            'toolSwitchesChanged',
-            () => Queue.offerUnsafe(flips, undefined),
-            subscribed,
-          ).pipe(Effect.forkScoped);
-          yield* Deferred.await(subscribed).pipe(
-            Effect.andThen(
-              apply(
-                off.pipe(Effect.retry({ schedule: SWITCH_READ, times: 6 })),
+          // The switches as they stand, read again with a bounded backoff
+          // until they are, then again on each change to them or to the
+          // install record, written here or by another process, off the
+          // build: a store not readable yet fails no process.
+          yield* appState
+            .changes([
+              GlobalStateKey.DISABLED_TOOLS,
+              GlobalStateKey.INSTALLED_PLUGINS,
+            ])
+            .pipe(
+              Stream.zipWithIndex,
+              Stream.runForEach(([, index]) =>
+                apply(
+                  index === 0
+                    ? off.pipe(
+                        Effect.retry({ schedule: SWITCH_READ, times: 6 }),
+                      )
+                    : off,
+                ),
               ),
-            ),
-            Effect.andThen(
-              Effect.forever(
-                Queue.take(flips).pipe(Effect.andThen(apply(off))),
-              ),
-            ),
-            Effect.forkScoped,
-          );
+              Effect.forkScoped,
+            );
         }),
       );
       return Layer.provideMerge(followSwitches, catalog);

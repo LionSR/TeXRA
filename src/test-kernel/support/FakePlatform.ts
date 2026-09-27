@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result, Scope } from 'effect';
+import { Effect, Result, Scope, Stream } from 'effect';
 
 // Local imports
 import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
@@ -22,7 +22,7 @@ import {
   type ConfigProvider,
   type ConfigTarget,
   ConfigWriteFailed,
-  type StateStore,
+  type AppStateStore,
   type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModelPort } from '@platform/languageModel';
@@ -309,8 +309,13 @@ export class FakeScopedConfigProvider implements ConfigProvider {
   }
 }
 
-export class FakeStateStore implements StateStore {
+export class FakeStateStore implements AppStateStore {
   private readonly values = new Map<string, unknown>();
+
+  /** No change feed: a reader sees a write at its next read. */
+  changes(): Stream.Stream<void> {
+    return Stream.succeed(undefined);
+  }
 
   constructor(values: Record<string, unknown> = {}) {
     for (const [key, value] of Object.entries(values)) {

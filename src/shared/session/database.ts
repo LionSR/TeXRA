@@ -6,6 +6,7 @@ import {
   type SubscriptionRef,
   type Result,
   type RcMap,
+  type Stream,
 } from 'effect';
 import { isSqlError } from 'effect/unstable/sql/SqlError';
 import { z } from 'zod';
@@ -257,6 +258,13 @@ export class Database extends Context.Service<
     readonly readAppStateKey: (
       key: string,
     ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
+    /**
+     * Emits as subscribed, then after each commit, by this process or
+     * another, that wrote one of `keys`: the wake level narrowed inside the
+     * store to those keys' latest rows. A read that fails is logged and
+     * counts as a change, so a reader re-reads rather than misses one.
+     */
+    readonly appStateChanges: (keys: readonly string[]) => Stream.Stream<void>;
     /** Change one key from its latest value while the write transaction is
      *  held; a refusal writes nothing. */
     readonly updateAppStateKey: <E>(
@@ -375,7 +383,10 @@ export class Database extends Context.Service<
  * The shape is that handle's application-record surface and nothing else:
  * the global root holds no session, so its reactive members (`level`,
  * `observedCommit`, `cleared`) and the run-ledger reads over them have no
- * reader here, and a tag that offered them would invite one.
+ * reader here, and a tag that offered them would invite one. What does
+ * follow this root is a reader of named app-state keys (the tool switches,
+ * the plugin install record), which `appStateChanges` serves already
+ * narrowed to them.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
@@ -383,6 +394,7 @@ export class GlobalDatabase extends Context.Service<
     Context.Service.Shape<typeof Database>,
     | 'appendAll'
     | 'readAppStateKey'
+    | 'appStateChanges'
     | 'updateAppStateKey'
     | 'readInputHistory'
     | 'appendInputHistory'

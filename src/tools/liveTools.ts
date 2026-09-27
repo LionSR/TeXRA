@@ -17,7 +17,9 @@
  * - **Installed plugins** (enabled and trusted Claude Code and Codex plugins)
  *   contribute their MCP servers' tools under their one id, read at each
  *   run's step (`pinSwitched` with `installed`): a disabled or changed one is
- *   withdrawn there, and the generations that pinned it drain as usual.
+ *   withdrawn there, or as soon as the record changes (`'withdraw'`, which
+ *   the process's switch follower applies), and the generations that pinned
+ *   it drain as usual.
  * - **Plugin layers** (`PLUGIN_PROCESS_LAYERS`) are up while their plugin is
  *   on or a pinned generation holds it (`@tools/pluginLayers` builds a
  *   session's `PLUGIN_SESSION_LAYERS` by the same rule).
@@ -78,8 +80,12 @@ export class LiveTools extends Context.Service<
      */
     readonly pinSwitched: <E>(
       off: Effect.Effect<ReadonlySet<string>, E>,
-      /** Also load the installed plugins as they stand: a run's step. */
-      options?: { readonly installed: true },
+      /**
+       * Also read the installed plugins: `true` loads them as they stand (a
+       * run's step); `'withdraw'` only withdraws those disabled, removed or
+       * changed since they loaded, starting nothing (a switch follower).
+       */
+      options?: { readonly installed: true | 'withdraw' },
     ) => Effect.Effect<
       Pinned<string, ToolEntry, void> & {
         /** Pin the process services of the plugins the step uses, from the
@@ -246,16 +252,22 @@ const liveToolsLayer = (
         });
       const pinSwitched = <E>(
         off: Effect.Effect<ReadonlySet<string>, E>,
-        options?: { readonly installed: true },
+        options?: { readonly installed: true | 'withdraw' },
       ) =>
         Effect.gen(function* () {
+          const loading = options?.installed === true;
+          // A withdrawal reads only when something is loaded or a step's
+          // read is in flight, which its newer read then supersedes.
+          const reading =
+            loading ||
+            (options?.installed === 'withdraw' &&
+              (installed.size > 0 || reads > applied));
           // Read, and the servers of a plugin that changed started, outside
           // the lock: a slow server does not hold up every run's step.
-          const readId = options?.installed === true ? ++reads : 0;
-          const read =
-            options?.installed === true
-              ? yield* installedReader
-              : { plugins: [], warnings: [] };
+          const readId = reading ? ++reads : 0;
+          const read = reading
+            ? yield* installedReader
+            : { plugins: [], warnings: [] };
           // Loads started here and not yet adopted by the catalog: an
           // interruption or failure before adoption drops them.
           const started: InstalledLoad[] = [];
@@ -280,7 +292,8 @@ const liveToolsLayer = (
           const pinned = yield* Effect.gen(function* () {
             yield* Effect.forEach(
               read.plugins.filter(
-                (plugin) => installed.get(plugin.id)?.key !== plugin.key,
+                (plugin) =>
+                  loading && installed.get(plugin.id)?.key !== plugin.key,
               ),
               (plugin) =>
                 Effect.map(holds.loadInstalled(plugin), (load) => {
@@ -290,12 +303,14 @@ const liveToolsLayer = (
             );
             return yield* locked(
               Effect.gen(function* () {
-                if (options?.installed === true && readId <= applied) {
+                if (reading && readId <= applied) {
                   // A newer read was applied meanwhile: this one is stale.
                   for (const load of started) yield* retire(load);
-                } else if (options?.installed === true) {
+                } else if (reading) {
                   applied = readId;
-                  const wanted = new Set(read.plugins.map(({ id }) => id));
+                  const wanted = new Map(
+                    read.plugins.map(({ id, key }) => [id, key]),
+                  );
                   for (const load of started) {
                     const current = installed.get(load.id);
                     // A concurrent step loaded this key first: keep its load.
@@ -308,7 +323,7 @@ const liveToolsLayer = (
                     if (current) yield* retire(current);
                   }
                   for (const [id, current] of installed) {
-                    if (wanted.has(id)) continue;
+                    if (wanted.get(id) === current.key) continue;
                     installed.delete(id);
                     yield* retire(current);
                   }
@@ -340,7 +355,7 @@ const liveToolsLayer = (
                   layersFor,
                   warnings: [
                     ...read.warnings,
-                    ...(options?.installed === true
+                    ...(loading
                       ? [...installed.values()].flatMap((load) => load.failures)
                       : []),
                   ],
