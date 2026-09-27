@@ -372,7 +372,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
         : undefined,
       canAdvertiseInterruptedRun,
       expectedCategory: AgentCategory.Workflow,
-      openWorkflowOutput: (
+      publishWorkflowOutput: (
         result,
         agentDefaultOutputFiles,
         tryCommitPublication,
@@ -394,10 +394,8 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               tryCommitPublication,
             }).pipe(Effect.provideService(FileSystem.FileSystem, fileSystem)),
           );
-          let outcome = result.outcome;
           if (Result.isFailure(outputResult)) {
             workflowOutputError = outputResult.failure;
-            if (outcome !== RUN_OUTCOME.CANCELLED) outcome = RUN_OUTCOME.FAILED;
           } else {
             workflowResult = outputResult.success;
           }
@@ -411,7 +409,9 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
               copiedOutputs: [...workflowResult.copiedOutputs],
             }),
           });
-          return outcome;
+          // The fact the run decides its verdict from; the run, not this
+          // host, commits the outcome.
+          return Result.isFailure(outputResult) ? 'failed' : 'published';
         }),
     });
     if (!run.ok) return run.exitCode;

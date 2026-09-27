@@ -56,7 +56,7 @@ import {
 import type { CliContext } from './cliContext';
 
 type RunAgentWorkflowOutput = NonNullable<
-  RunAgentOptions['openWorkflowOutput']
+  RunAgentOptions['publishWorkflowOutput']
 >;
 
 /**
@@ -89,7 +89,7 @@ interface CliExecuteOptions {
   readonly stopAfterCycle?: boolean;
   /** Workflow output handler extended with the CLI publication gate; attempt
    *  the commit synchronously once before destination validation or I/O. */
-  readonly openWorkflowOutput?: CliWorkflowOutputHandler;
+  readonly publishWorkflowOutput?: CliWorkflowOutputHandler;
   /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
   readonly modelCompatibilityKey?: RunAgentOptions['modelCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
@@ -540,16 +540,16 @@ export function executeCliRequest(
         ),
       ),
     );
-    const openWorkflowOutput = options.openWorkflowOutput;
+    const publishWorkflowOutput = options.publishWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>
       agentRuns.launch(request, {
         session,
         enforceCategory: options.enforceCategory,
-        openWorkflowOutput:
-          openWorkflowOutput === undefined
+        publishWorkflowOutput:
+          publishWorkflowOutput === undefined
             ? undefined
             : (result, agentDefaultOutputFiles) =>
-                openWorkflowOutput(
+                publishWorkflowOutput(
                   result,
                   agentDefaultOutputFiles,
                   tryCommitWorkflowOutputPublication,

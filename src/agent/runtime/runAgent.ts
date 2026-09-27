@@ -39,7 +39,7 @@ export interface RunAgentOptions extends Pick<
   | 'onRunResolved'
   | 'onTraceEvent'
   | 'onIdle'
-  | 'openWorkflowOutput'
+  | 'publishWorkflowOutput'
 > {
   readonly session: SessionHandle;
   /** Reject an explicitly supplied category that differs from the resolved definition. */
@@ -89,7 +89,8 @@ export type RunAgentRequest =
  * Validates-then-runs: assigns an runId when a fresh request omits one,
  * registers fresh runs in the run store, reuses a resumed run's record,
  * runs the agent, and — for a
- * workflow result — invokes `openWorkflowOutput` so the host can surface output.
+ * workflow result — awaits the host's `publishWorkflowOutput` before the run's
+ * terminal commit. Presenting the result is the caller's, once this returns.
  *
  * Use this unless you need per-chunk streaming/lifecycle callbacks or subagent
  * lineage; for those, drop to the lower-level engine `executeAgent`, where the

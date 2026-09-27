@@ -90,7 +90,7 @@ export { getHelperModelName } from './helperModelName';
 // RunHandle
 
 // AgentFlowResult
-export type { WorkflowFlowResult } from './AgentFlowResult';
+export type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
 
 // agentLoad: the definition a launch actually loads, for hosts that must read
 // a declared field (a remote agent's `defaultOutputFiles`) the catalog listing

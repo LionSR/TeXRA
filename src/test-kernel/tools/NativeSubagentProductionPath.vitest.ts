@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { Effect, Fiber, Layer, Scope, Stream } from 'effect';
+import { Effect, Exit, Fiber, Layer, Scope, Stream } from 'effect';
 
 /**
  * Production-shaped regression for #9531. Agent registration, launch, child
@@ -58,6 +58,7 @@ import {
 
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
+import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import {
   AgentDirectories,
   AgentResume,
@@ -1338,6 +1339,78 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         ).toContain('<subagent-result');
         expect(session.followUps.hasLiveOwner(PARENT_RUN_ID)).toBe(true);
         expect(parentTurns).toHaveLength(0);
+      }),
+    30_000,
+  );
+
+  /**
+   * Core commits a root workflow's outcome; the host presents it afterwards.
+   * How it can fail:
+   * - the host's open-final-output presentation runs inside the run, so its
+   *   failure ends a completed run FAILED;
+   * - the presentation is dropped rather than moved, so a completed run
+   *   never reaches its auto-open gate;
+   * - the presentation failure is swallowed instead of reaching the caller.
+   */
+  it.live(
+    'records a completed workflow as completed when its host presentation fails',
+    () =>
+      Effect.gen(function* () {
+        const runId = 'b9531b9531b9' as RunId;
+        modelBindingMocks.bindModel.mockImplementation(
+          (input: { readonly config: BoundModel['config'] }) =>
+            Effect.succeed(
+              scriptedBoundModel(
+                input.config,
+                [
+                  {
+                    text: '<documents>\n<document name="notes.md">\nPolished notes.\n</document>\n</documents>',
+                  },
+                ],
+                [],
+              ),
+            ),
+        );
+        const workspace = session.roots.workspace!;
+        yield* Effect.promise(async () => {
+          await mkdir(workspace, { recursive: true });
+          await writeFile(path.join(workspace, 'notes.md'), 'Draft notes.\n');
+        });
+        // The host's presentation fails where it can: reading the auto-open
+        // gate from a settings store that throws.
+        const presentationFailure = new Error('The settings store is gone.');
+        const config = session.roots.config;
+        const get = config.get.bind(config);
+        const gateReads: string[] = [];
+        vi.spyOn(config, 'get').mockImplementation(((key: string) => {
+          if (key !== 'texra.agentOutputs.autoOpenFinal') return get(key);
+          gateReads.push(key);
+          throw presentationFailure;
+        }) as typeof config.get);
+
+        const launch = yield* Effect.exit(
+          launchDesktopAgent(
+            {
+              kind: 'fresh',
+              runId,
+              config: AgentConfigSchema.parse({
+                agent: WORKFLOW_CHILD_AGENT,
+                agentSource: 'custom',
+                agentCategory: AgentCategory.Workflow,
+                model: CHILD_MODEL,
+                instruction: 'Polish the notes.',
+                inputFiles: ['notes.md'],
+              }),
+            },
+            { session, runtime: testRuntime() },
+          ),
+        );
+
+        expect(
+          (yield* getRunRecords(session, runId).readRunEnd())?.outcome,
+        ).toBe(RUN_OUTCOME.COMPLETED);
+        expect(gateReads).toHaveLength(1);
+        expect(launch).toStrictEqual(Exit.die(presentationFailure));
       }),
     30_000,
   );

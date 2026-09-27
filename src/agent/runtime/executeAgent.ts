@@ -14,11 +14,11 @@ import {
   type ModelCompatibilityKey,
   type RunId,
   type RequestEnsureProgressViewPayload,
-  type RunOutcome,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
 import {
   AgentCategory,
+  RUN_OUTCOME,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
 } from '@shared/schemas';
@@ -191,8 +191,9 @@ function launchToolUseRun(
 }
 
 /**
- * A workflow agent, in round mode; output finalization may change the
- * verdict. A child's one turn wraps it all.
+ * A workflow agent, in round mode. The host publishes its output before the
+ * run's terminal commit and reports whether that worked; the verdict stays
+ * this function's. A child's one turn wraps it all.
  */
 function launchWorkflowRun(
   ctx: AgentLaunchContext,
@@ -221,14 +222,17 @@ function launchWorkflowRun(
         : {}),
       compositionHash: result.compositionHash,
     };
-    if (flowResult.error || !options.openWorkflowOutput) return flowResult;
-    const outputOutcome = yield* options.openWorkflowOutput(
+    if (flowResult.error || !options.publishWorkflowOutput) return flowResult;
+    const publication = yield* options.publishWorkflowOutput(
       flowResult,
       ctx.setting.defaultOutputFiles,
     );
-    return outputOutcome === undefined
-      ? flowResult
-      : { ...flowResult, outcome: outputOutcome };
+    // Output the user asked for and did not get fails the run; a stop still
+    // reads as the stop it was.
+    return publication === 'failed' &&
+      flowResult.outcome !== RUN_OUTCOME.CANCELLED
+      ? { ...flowResult, outcome: RUN_OUTCOME.FAILED }
+      : flowResult;
   });
   return options.turns ? options.turns.turnPermit(program) : program;
 }
@@ -311,17 +315,23 @@ export interface SubagentRunOptions {
 /** Options for executeAgent. */
 export interface ExecuteAgentOptions extends SubagentRunOptions {
   /**
-   * Finalize a workflow's host-owned output while its run handle and durable
-   * checkpoint are still live. A stop during this operation can therefore
-   * preserve the checkpoint instead of interrupting an already-terminal run.
-   * Return an outcome when output finalization changes the run's verdict.
+   * Publish a workflow's host-owned output (copies to user-requested
+   * destinations, the result record) while its run handle and durable
+   * checkpoint are still live, before the run's terminal commit. A stop
+   * during this operation can therefore preserve the checkpoint instead of
+   * interrupting an already-terminal run.
+   *
+   * The host reports a fact, `failed` when requested output could not be
+   * delivered, and the run decides its verdict from it; the host never
+   * names an outcome. Presentation (opening the final output) is not
+   * publication: a host does it after the launch returns, from the result.
    *
    * The run yields this program on the run's own fiber, so a stop reaches
    * it. A handler that needs a session-rooted fact (workspace config,
    * storage) reads it from the session it was given, not from the calling
    * fiber: nothing carries one.
    */
-  openWorkflowOutput?: (
+  publishWorkflowOutput?: (
     result: WorkflowFlowResult,
     /**
      * The `defaultOutputFiles` declared by the definition this run loaded —
@@ -330,7 +340,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
      * the launch.
      */
     agentDefaultOutputFiles: readonly string[],
-  ) => Effect.Effect<RunOutcome | void, Error>;
+  ) => Effect.Effect<'published' | 'failed', Error>;
   /**
    * The run's `run.start` was committed by an earlier activation (a resume).
    * That row is also where this run's parent edge comes from: `runAgent`
