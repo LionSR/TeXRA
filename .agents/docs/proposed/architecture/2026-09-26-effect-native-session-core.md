@@ -111,6 +111,43 @@ binding, the approval policy, a run's input queue, the agent catalog, the
 application state and the host windows each have more than one owner or an
 owner outside any scope. Moves 8 to 13 apply the same rule to them.
 
+Three boundaries hold across every move. They come from the owner's
+[joint review](https://github.com/LionSR/TeXRA/pull/13360#issuecomment-5851137649)
+of this note and the core-concepts note (#13360). That note is the target
+vocabulary; this one is the bounded delivery plan, and its reviewed deferrals
+stay explicit (no session kernel in move 1, no whole `ProcessLayer` in
+move 4).
+
+- **The durable run and a live activation have different contracts.** A run
+  survives several activations. Its recorded definition, offered tools,
+  inputs and decisions belong to the run. A fiber, a model binding and a
+  composition resource hold belong to one activation, and each resume
+  acquires them again. That needs no new service or class.
+- **Each fact has one authority.**
+  - Resumable execution facts live in the run history (the session's event
+    table).
+  - Application settings and the other accepted current-value families live
+    in `CurrentValues` (move 12).
+  - Transient observations such as streaming chunks live in the live trace.
+
+  Each has its own consumers, so none is routed through another. Core owns
+  approval policy, admission and the terminal commit. A host port may do
+  fallible work whose result core needs before it commits (output
+  publication, `openWorkflowOutput`), and core awaits it. Pure presentation
+  subscribes afterwards (move 13).
+
+- **Shutdown is one protocol, specified once in core.** Stop admission,
+  drain accepted deliveries, settle runs, then release resources. It runs on
+  explicit session close while the process continues, and on process
+  disposal. Hosts invoke it rather than repeating it (move 4). Plugin
+  acquisition and release stay in their typed layers. For an SDK reader,
+  closing its scope detaches the reader; the session's own ownership
+  governs the run.
+
+Each change that lands completes one ownership transfer and deletes the
+competing mechanism in the same PR: one writer made exclusive, one run
+activation isolated, or one shutdown path made scope-owned.
+
 ## Defects to fix first
 
 These do not depend on any architectural decision. Each is one small PR.
@@ -428,7 +465,10 @@ no `@tools` to `@agent` edges.
 - **The GitHub drain is a dependency edge, not a hook.** The GitHub plugin's
   process layer requires `Sessions` and drains deliveries in its finalizer, so
   Effect finalizes it before sessions close. No `beforeSessionsClose`, no drain
-  layer.
+  layer. Today the hosts close sessions before they dispose the process
+  runtime, so the same PR moves those callers onto the one shutdown protocol
+  (see the Thesis). Otherwise the finalizer would run after the sessions it
+  drains into had already closed.
 - **The goal-grant WeakMap is deleted, not moved.** It saves, mutates and
   restores a bypass value. The effective bypass is computed from the
   approval-policy rows and the goal rows instead, so the bad state cannot
@@ -446,10 +486,19 @@ no `@tools` to `@agent` edges.
   digests, preset id), not only `toolsetHash`, so behaviour can be attributed
   to a plugin revision across restarts. The record is for attribution: a
   resumed run still resolves its own composition, as ruled (ledger,
-  2026-09-23), so no per-process value has to survive a restart.
+  2026-09-23), so no per-process value has to survive a restart. On resume
+  the existing rule stands: the offered tools are the recorded tools
+  intersected with what is available now. So a plugin disabled, replaced or
+  unavailable since the run started narrows the resumed run instead of
+  failing it. Exact historical replay of a plugin revision would need
+  revision retention, trust and missing-resource rules, and is not proposed.
+  Pinning the agent definition is decided separately (decision 10). A child
+  shares its parent's resource hold and records its own narrower offered set,
+  which `toolsetHash` already does.
 - **Presets are stored compositions.** Today's switches become the preset
   `default`, an agent YAML may name a preset, and the session records the
-  preset id. The plugin note already promised this.
+  preset id. A preset describes the user's selection; host availability is
+  resolved when resources are acquired. The plugin note already promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
   an installed plugin that is its commit or tree hash. An MCP definition can
@@ -682,6 +731,11 @@ export const TexraProcess: {
   `PLUGIN_PROCESS_LAYERS`.
 - **`AppSignals` is a service with a shutdown finalizer**, and process-lifetime
   `forkDetach` calls become `forkScoped` on the runtime's scope.
+- **One shutdown protocol in core replaces the four hand-registered chains.**
+  Stop admission, drain accepted deliveries, settle runs, then release
+  resources, in that order. It is the finalizer of the session entry (explicit
+  close while the process lives) and of the process scope (disposal). Hosts
+  call it and no longer order "sessions first, runtime last" themselves.
 - **The owner id gains a per-graph nonce**, so two graphs in one process are
   distinguishable by the lease; the durable-format change rides a free bump.
   Until the module slots `bootstrapHost` writes are graph-owned, the SDK still
