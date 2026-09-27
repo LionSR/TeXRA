@@ -8,6 +8,7 @@ import {
   isExpensiveModel,
   isFastFirstResponseModel,
 } from '@shared/constants/providers';
+import { formatCostUsd } from '@utils/text/stringUtils';
 import { resolveModelSource } from './openRouterRouting';
 
 /** Return whether the registry marks a model as deprecated. */
@@ -65,7 +66,7 @@ function formatCost(
   outputPrice: number | undefined,
 ): string | undefined {
   if (inputPrice === undefined || outputPrice === undefined) return undefined;
-  return `$${inputPrice.toFixed(3)}/$${outputPrice.toFixed(3)}`;
+  return `${formatCostUsd(inputPrice)}/${formatCostUsd(outputPrice)}`;
 }
 
 function prefixHint(prefix: string, base: string): string {

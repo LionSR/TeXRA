@@ -89,6 +89,7 @@
     "quickjs-emscripten-core": "catalog:",
     "safe-stable-stringify": "catalog:",
     "shell-quote": "catalog:",
+    "strip-ansi": "^7.2.0",
     "tar": "catalog:",
     "turndown": "catalog:",
     "turndown-plugin-gfm": "catalog:",

@@ -12,21 +12,13 @@ import {
 } from '@shared/sessionTitle';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { isWorkingRun } from '@shared/session/sessionView';
-import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
+import { stripControlCharacters } from '@utils/text/stringUtils';
 
 import { rootRunIds } from './state/cliState';
 import { attentionRequests } from './state/approvalQueue';
 import { sessionView } from './state/sessionView';
 import { writeOsc } from './notifications/terminalNotifier';
 import { chatTuiCanStopActiveRun, runStopFacts } from './state/sessionRunState';
-
-// Directory names can contain characters that would prematurely terminate
-// the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
-// still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
-// as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
-// can't inject terminal escape sequences into the title.
-// eslint-disable-next-line no-control-regex -- stripping C0/C1 controls
-const TITLE_INVALID_CHARS = /[\x00-\x1f\x7f-\x9f]/g;
 
 // The TUI's ASCII spin cycle reads as stray punctuation once a frame stands
 // alone in a tab title (a `-` is indistinguishable from a separator), so the
@@ -40,11 +32,12 @@ export function terminalTitleText(
   state: SessionTitleState = 'idle',
   activityDetail?: string,
 ): string {
-  const project = sanitizePathSegment(basename(cwd), {
-    invalidCharPattern: TITLE_INVALID_CHARS,
-    replacement: '',
-  });
-  return formatSessionTitle(project, state, {
+  // Directory names can contain characters that would prematurely terminate
+  // the OSC string (a stray BEL/ESC) or that some terminals in 8-bit mode
+  // still interpret as escape-sequence introducers (the C1 range, e.g. 0x9d
+  // as an 8-bit OSC); strip both C0 and C1 controls so a weird folder name
+  // can't inject terminal escape sequences into the title.
+  return formatSessionTitle(stripControlCharacters(basename(cwd)), state, {
     detail: activityDetail,
     style: TERMINAL_TAB_TITLE,
   });
