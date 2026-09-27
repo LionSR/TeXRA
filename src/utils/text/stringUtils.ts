@@ -192,6 +192,17 @@ export function collapseWhitespace(text: string): string {
   return text.replaceAll(/\s+/g, ' ').trim();
 }
 
+// eslint-disable-next-line no-control-regex -- the C0/C1 control ranges are the match target
+const CONTROL_CHARACTERS = /[\x00-\x1f\x7f-\x9f]/g;
+
+/**
+ * Replace every C0/C1 control character (tab and newline included) with
+ * `replacement`, so untrusted text cannot inject terminal escapes.
+ */
+export function stripControlCharacters(text: string, replacement = ''): string {
+  return text.replaceAll(CONTROL_CHARACTERS, replacement);
+}
+
 /**
  * Collapse whitespace first, then truncate to a fixed-width one-line summary.
  */
