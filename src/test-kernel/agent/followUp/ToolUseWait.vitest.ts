@@ -199,6 +199,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',
@@ -469,6 +470,8 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       offeredTools: null,
       offeredContinuation: null,
       offeredSections: [],
+      offeredSystem: null,
+      contents: {},
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [
@@ -489,6 +492,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
         aggregateId: aggregate,
         payload: {
           kind: 'attempt',
+          request: '0'.repeat(64),
           invocation,
           origin: ORIGIN,
           delivery: 'stream',

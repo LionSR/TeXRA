@@ -88,6 +88,11 @@ import {
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
 import { priceTurnUsage } from './run/pricing';
 import { turnText } from './run/turnText';
+import {
+  attemptRows,
+  checkRecordedRequest,
+  recordedRequest,
+} from './run/requestContext';
 import { dispatchFactsFor } from './run/tools';
 import {
   redactedForFact,
@@ -618,13 +623,13 @@ export const modelInvokerLayer = (): Layer.Layer<
         FileSystem.FileSystem
       > {
         const state = yield* cell.current;
-        const turnRequest = turnRequestFor(
+        let sent = turnRequestFor(
           state,
           request,
           bound,
           (yield* backgroundRequested(bound)) ? 'background' : 'foreground',
         );
-        let resolved = yield* prepareAttempt(bound, turnRequest);
+        let resolved = yield* prepareAttempt(bound, sent);
         yield* saveDebug(
           state.messages,
           'messages',
@@ -686,10 +691,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               // The clamp is part of the request, so the request is prepared
               // again with it: execution never reapplies defaults over a
               // resolved turn.
-              resolved = yield* prepareAttempt(bound, {
-                ...turnRequest,
-                maxOutputTokens: reduced,
-              });
+              sent = { ...sent, maxOutputTokens: reduced };
+              resolved = yield* prepareAttempt(bound, sent);
             }
           }
         }
@@ -697,20 +700,12 @@ export const modelInvokerLayer = (): Layer.Layer<
           attempt: invocation.attempt,
           delivery: resolved.mode,
         });
-        // The durable fact before the billed request (F1).
-        yield* cell.append([
-          {
-            type: 'model.message',
-            aggregateId,
-            payload: {
-              kind: 'attempt',
-              invocation,
-              origin: bound.origin,
-              delivery:
-                resolved.mode === 'background' ? 'background' : 'stream',
-            },
-          },
-        ]);
+        // The durable fact before the billed request (F1), with the content
+        // it sends, which the rows alone must rebuild.
+        yield* cell.append((state) =>
+          attemptRows(run, state, invocation, bound.origin, sent, resolved),
+        );
+        yield* checkRecordedRequest(run, sent);
         const trace = openTrace();
         const started = yield* Clock.currentTimeMillis;
         const completed: AttemptOutcome = { value: null, streamedText: '' };
@@ -774,17 +769,15 @@ export const modelInvokerLayer = (): Layer.Layer<
               bound,
             );
           }
-          // The admitted storage mode governs the observation turn, not the
-          // current setting: re-preparing a temporary background turn as stored
-          // would let the completion mint an anchor for a response the provider
-          // never kept. The prior continuation stays out: observing needs no
+          // The admitted request as its rows record it, and its storage mode,
+          // govern the observation turn, not current code or settings:
+          // re-preparing a temporary background turn as stored would let the
+          // completion mint an anchor for a response the provider never kept. The prior continuation stays out: observing needs no
           // anchor, and its fingerprint check would reject the turn before
           // observe can compare the admitted fingerprint and deliver the result.
-          const { continuation: _prior, ...admitted } = turnRequestFor(
-            yield* cell.current,
-            request,
-            bound,
-            'background',
+          const state = yield* cell.current;
+          const { continuation: _prior, ...admitted } = yield* Effect.sync(() =>
+            recordedRequest(state),
           );
           const resolved = yield* prepareAttempt(bound, {
             ...admitted,

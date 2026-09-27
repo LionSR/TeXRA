@@ -45,10 +45,12 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
+import { sha256 } from '@tools/catalogEntries';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
+import { storedText } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
@@ -71,7 +73,7 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
-import { stepFor } from './step';
+import { stepFor, type RenderSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
@@ -166,7 +168,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
       userChannels,
     },
-    ...(systemPrompt !== undefined ? { systemPrompt } : {}),
+    ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
       : {}),
@@ -192,8 +194,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // A resumed root's first step that pins a continuation stands it down,
   // before anything this activation decides can re-arm it.
   let resumeUnseen = start.resume;
+  // A step's system text: the run's recorded prompt and what its plugins add.
+  const render: RenderSystem = (prompt, offered) => ({
+    base: systemPrompt,
+    added: stepInstructions(prompt, userChannels.AVAILABLE_SKILLS, {
+      offered,
+      isChild: isChild(),
+    }),
+  });
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, rounds !== null, kind), (step) => {
+    Effect.tap(stepFor(run, state, rounds !== null, kind, render), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())
         return Effect.void;
       resumeUnseen = false;
@@ -241,7 +251,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A round-mode run opens with no message and offers no tools. A
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
-        const step = yield* openStep(opening, 'request');
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -258,6 +267,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         systemPrompt = prompts.systemPrompt
           ? `${prompts.systemPrompt}\n${prompts.instructionSuffix}`
           : prompts.instructionSuffix;
+        // The first step renders the prompt, and stores its base text.
+        const step = yield* openStep(opening, 'request');
         const userPrefix = prompts.userPrefix.trim();
         const userRequest = prompts.userRequest.trim();
         if (!userPrefix && !userRequest)
@@ -322,7 +333,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       );
       Object.assign(userChannels, flow.stateSlices.userChannels);
     }
-    systemPrompt = flow.systemPrompt;
+    systemPrompt =
+      flow.system === undefined ? undefined : storedText(state, flow.system);
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
@@ -509,18 +521,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         const tools = toolDefinitionsFor(step.tools.definitions);
-        // The system text this request sends: the run's recorded prompt and
-        // what the step's plugins add. A round sends its own system text.
-        const addedByStep = rounds
-          ? ''
-          : stepInstructions(step.prompt, userChannels.AVAILABLE_SKILLS, {
-              offered: step.tools.definitions.map((t) => t.name),
-              isChild: isChild(),
-            });
-        const system =
-          systemPrompt === undefined || addedByStep === ''
-            ? systemPrompt
-            : `${systemPrompt}\n${addedByStep}`;
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
@@ -536,7 +536,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 logger,
                 bound,
                 stores: session.roots,
-                system,
+                system: step.system,
                 tools,
                 force,
               }),
@@ -556,7 +556,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ...(rounds
             ? yield* rounds.request(index)
             : {
-                system,
+                system: step.system,
                 round: state.round,
                 debugName: 'tooluse',
               }),

@@ -1405,6 +1405,7 @@ const TURN_ROWS: readonly SessionEvent[] = [
   toolUseSnapshot(),
   message({
     kind: 'attempt',
+    request: '0'.repeat(64),
     invocation: INVOCATION,
     origin: ORIGIN,
     delivery: 'stream',
@@ -1634,6 +1635,7 @@ describe('foldRunState', () => {
               3,
               message({
                 kind: 'attempt',
+                request: '0'.repeat(64),
                 invocation: INVOCATION,
                 origin: continuationOrigin,
                 delivery: 'stream',
@@ -1701,6 +1703,7 @@ describe('foldRunState', () => {
             11,
             message({
               kind: 'attempt',
+              request: '0'.repeat(64),
               invocation: second,
               origin: ORIGIN,
               delivery: 'stream',

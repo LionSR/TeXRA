@@ -58,7 +58,7 @@ import {
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
-import { ToolsOfferedPayloadSchema } from './offeredTools';
+import { ContextBlobSchema, ToolsOfferedPayloadSchema } from './offeredTools';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
@@ -457,6 +457,7 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.retry', { payload: ModelRetryPayloadSchema }),
   durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
+  durable('context.blob', { payload: ContextBlobSchema }),
   /**
    * One child turn's identity and fate: the child loop's own bookkeeping,
    * never a renderer's. The key is structural, (run, attempt, turn index),
@@ -581,7 +582,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 29;
+export const SESSION_EVENT_FORMAT = 30;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -657,6 +658,7 @@ export function listingTypeOf(
     case 'model.retry':
     case 'flow.snapshot':
     case 'tools.offered':
+    case 'context.blob':
     case 'child.turn':
     case 'workflow.script':
     case 'workflow.journal':
