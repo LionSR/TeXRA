@@ -12,7 +12,7 @@ liveProtocol({
     openaiResponsesModel(
       {
         protocol: 'openai-responses',
-        requestedModel: 'grok-3-mini-beta',
+        requestedModel: 'grok-4.3',
         deployment: {
           endpoint: 'https://api.x.ai/v1',
           credentialScope: 'live',
