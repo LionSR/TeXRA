@@ -106,6 +106,113 @@ these details to the concepts above:
 
   Presenters start from a snapshot and then follow with no gaps.
 
+## Central primitives
+
+The owner ruled on 2026-09-27 that TeXRA should support:
+
+- changes live, at any step;
+- third-party plugins that bring code;
+- flexible writers of history.
+
+Five shared primitives make that one mechanism instead of one mechanism per
+pluggable kind. Each is built from Effect v4 primitives the repo already uses:
+`SubscriptionRef`, `RcMap`/`LayerMap`, `Scope`, `FiberSet` and `Queue`. Every
+pluggable kind is data inside them: tools, agents, skills, prompt sections,
+continuation policies, drivers, model providers, MCP servers and event
+schemas.
+
+1. **Registry: one generational catalog.**
+
+   ```ts
+   interface Registry<K, V> {
+     readonly current: SubscriptionRef<Generation<K, V>>; // latest, rebuilt from active contributions
+     readonly pin: Effect<Generation<K, V>, never, Scope>; // refcounted; drains when released
+     readonly contribute: (
+       owner: PluginId,
+       entries: ReadonlyMap<K, V>,
+     ) => Effect<void, RegistryConflict, Scope>; // withdrawn when the owner's scope closes
+   }
+   interface Generation<K, V> {
+     readonly id: GenerationId;
+     readonly digest: string;
+     readonly entries: ReadonlyMap<K, V>;
+   }
+   ```
+
+   - Any change rebuilds a new immutable generation from the active
+     contributions, never patching in place (OpenCode's rule).
+   - Old generations live while pinned, then drain (Pico v5).
+   - A name clash between owners is rejected loudly.
+   - The existing per-kind catalogs become instances of it: the agent
+     registry's epoch logic, the skill-source fold, the tool-availability
+     cache, `MODEL_PROVIDER_PLUGINS`, and `Compositions`.
+
+2. **Plugin: one scoped contributor, built-in or loaded.**
+
+   ```ts
+   interface PluginModule<R> {
+     readonly id: PluginId;
+     readonly revision: ContentHash;
+     readonly layer?: Layer<never, PluginError, R>; // R = the capabilities it may use
+     readonly contributes: Contributions; // typed entries for named registries
+   }
+   // Plugin.load(module): Effect<LoadedPlugin, PluginError, Scope | Trusted>
+   ```
+
+   - Built-in plugins, installed Claude Code and Codex plugins, MCP servers
+     and third-party code modules all go through `load`. Code arrives by
+     dynamic `import()`.
+   - Unloading or replacing a plugin closes its `Scope`. That withdraws its
+     contributions from every registry, and the registries rebuild while old
+     generations drain.
+   - A plugin receives only the services in its `R`, so Effect's types are the
+     capability system.
+   - Its fibers live in a `FiberSet` owned by its scope. A failure is contained
+     there and recorded, never swallowed.
+
+3. **History: one commit line, many typed writers, an open schema
+   registry.**
+   - `History.writer(pluginId)` returns a scoped handle that may append only
+     that plugin's event types, as jobs on the one publisher queue. Order and
+     atomicity stay single-line, while plugins write their own state.
+   - Event schemas are a Registry keyed by plugin, type and version. A row
+     whose schema is not loaded is kept byte for byte and decoded when the
+     plugin returns.
+   - Each plugin migrates its own versions lazily, so one plugin's schema
+     change does not reset the store.
+   - Projections are Registry entries as well: `init`, `apply` and the slice
+     they own.
+4. **Step: the one boundary where change happens and is recorded.**
+   - `Step.open(run): Effect<StepContext, never, Scope>` pins every registry
+     the run uses as one snapshot, a vector of generation ids.
+   - Before the model request it writes a change row with the difference from
+     the previous step's snapshot (tools, prompt text). This is
+     deepseek-harness's recorded change and OpenCode's context epoch in one
+     rule.
+   - A tool call checks its tool's identity (definition digest plus plugin
+     revision) against the snapshot that offered it, and a stale call is
+     rejected.
+   - A resumed step re-opens from the recorded snapshot where it can. What is
+     missing leaves the run blocked, not failed.
+   - A preset is a saved selection that feeds the snapshot.
+5. **Trust: capabilities and approval for anything that loads.**
+   - Every loaded plugin revision, identified by content hash, needs a trust
+     decision through the core request authority, recorded as a row.
+   - The decision covers exactly the capabilities in the plugin's `R`.
+   - A new hash is a new revision and is untrusted until approved.
+   - An untrusted-by-default plugin can run in a worker or child process.
+
+Each owner requirement maps onto these primitives:
+
+| Requirement           | Primitives                            |
+| --------------------- | ------------------------------------- |
+| Live changes anywhere | Registry + Step                       |
+| Third-party code      | Plugin + Trust                        |
+| Flexible writers      | History writers + the schema registry |
+
+The #13350 moves become "put X on the Registry" or "route Y through History",
+and each such PR deletes the old per-kind mechanism.
+
 ## Invariants
 
 1. **One writer.**
@@ -139,17 +246,22 @@ these details to the concepts above:
 5. **No ambient reads across instances.** A run never reads another run's
    state from context. A child is launched from the session's context, not
    from its parent's fiber.
-6. **Plugins contribute to fixed tables.**
-   - Each extension point has one core call site and resolves its contributors
-     from the run's pinned composition.
-   - There is no register or unregister, and no hook.
-   - A plugin's switch gates every contribution it makes: tools, skills,
-     agents, continuation and layers.
-7. **Changes apply at run open; the durable run and its activations are
-   separate contracts.**
-   - A root run records its composition (plugin set and revisions) and its
-     definition at open. A child joins its parent's composition entry and may
-     only narrow; it records its own narrower offered set.
+6. **Plugins contribute typed entries to registries.**
+   - A plugin (built in, installed or third-party code) contributes typed
+     entries to named registries from inside its own `Scope`. Loading and
+     unloading at runtime are allowed.
+   - Each extension point has one core call site that reads its registry
+     through the step's snapshot.
+   - There are no untyped hooks and no ordered listener chains.
+   - A plugin's switch or unload withdraws every contribution it made: tools,
+     skills, agents, continuation, layers and schemas.
+7. **Changes apply at step boundaries and are recorded; the durable run and
+   its activations are separate contracts.**
+   - Each step pins a snapshot of every registry it reads and records the
+     difference from the previous step before its model request. Nothing
+     changes mid-call.
+   - A child reads the same registries and may only narrow what its parent's
+     step offered. It records its own narrower offered set.
    - A run can have several activations (a live fiber, a model binding, a
      composition hold). The recorded facts belong to the durable run; the
      resources belong to the activation.
@@ -160,8 +272,8 @@ these details to the concepts above:
    - **Blocked, not failed.** If the run's driver, agent or a required plugin
      is missing, the resume leaves the run blocked with a recorded reason. It
      ends only by an explicit stop.
-   - Nothing changes inside an activation. How a long conversation sees a
-     change is open (see Open).
+   - A long conversation sees a change at its next step, recorded as a row.
+     Only the step where something changed pays a prompt-cache miss.
 8. **Core decides; hosts present.** Any decision whose result is recorded
    (request decisions, admission, outcomes) is made in core and committed as a
    row. A host supplies a human's answer as a Command. A host port may do
@@ -376,18 +488,13 @@ will drift back.
   switches. Availability is resolved when resources are acquired. A
   composition also carries the agent's tools and probe results, so it is not a
   preset. deepseek-harness and the joint review agree.
-- **Long conversations and mid-run changes.** A root chat run pinned at open
-  never sees a newly added tool, MCP server or instruction edit, and it keeps
-  old plugin resources alive. Every reference design rejects "fixed forever"
-  for this case. Choose one:
-  1. a Command that opens a new run carrying the history forward;
-  2. admitting a change at a step boundary as a recorded row, as
-     deepseek-harness does with `request/header` and OpenCode with context
-     epochs.
-
-  The same choice settles the settings read mid-run (retry limit, compaction
-  threshold, binding knobs): pin them at open, or record a row when they
-  change. No third option.
+- **Long conversations and mid-run changes. Decided 2026-09-27:** changes
+  apply at the next step boundary and are recorded (Step, above). Settings
+  read mid-run follow the same rule: they are captured in the step snapshot,
+  and a change is recorded.
+- **Code-plugin isolation.** In-process loading with capabilities limited by
+  `R`, or a worker or child process for third-party code by default. That
+  decides the security review of the loader.
 
 - **Goal mode after resume.** Recommended: autonomous continuation does not
   survive a resume without a human re-arming it, as in deepseek-harness.
