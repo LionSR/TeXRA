@@ -494,13 +494,11 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  // Thin provider modules own the public prefer-switch surface; the shared
-  // factory in subscriptionPreference.ts is not a separate consumer key.
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
-    honoredBy: everyHost('src/model/codex/codexSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
@@ -517,7 +515,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    honoredBy: everyHost('src/model/xai/xaiSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   maxImageDimension: {
     schema: z.int().min(100).max(10000).prefault(2000),

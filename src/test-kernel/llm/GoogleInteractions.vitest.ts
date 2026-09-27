@@ -11,7 +11,7 @@ import {
   googleInteractionsModel,
 } from '@texra-ai/llm/google-interactions';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { RemoteOperationSchema } from '@texra-ai/llm/turn';
+import { RemoteOperationSchema, completedTurn } from '@texra-ai/llm/turn';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type { ModelError, TurnRequest, TurnResult } from '@texra-ai/llm/turn';
 
@@ -382,7 +382,7 @@ describe('canonical Google Interactions protocol', () => {
           exchange(completed.result),
         );
         assert(replay.mode === 'foreground');
-        yield* configured.generateTurn(replay);
+        yield* completedTurn(configured.streamTurn(replay));
         // The observed turn anchors the next round: its steps are the ones
         // the interaction already holds, so the replay sends only what
         // follows them.
@@ -541,7 +541,9 @@ describe('canonical Google Interactions protocol', () => {
         ).toMatchObject({ kind: 'observation-deadline', operation });
         const invalidForeground = JSON.parse(JSON.stringify(turn));
         expect(
-          (yield* Effect.flip(configured.generateTurn(invalidForeground))).kind,
+          (yield* Effect.flip(
+            completedTurn(configured.streamTurn(invalidForeground)),
+          )).kind,
         ).toBe('unsupported');
         expect(fetchModel).not.toHaveBeenCalled();
       }),
@@ -1136,7 +1138,7 @@ describe('canonical Google Interactions protocol', () => {
             },
           ]),
         );
-        yield* configured.generateTurn(next);
+        yield* completedTurn(configured.streamTurn(next));
         const sent = fetchModel.mock.calls[1][0] as Request;
         expect(sent.url).toBe('https://synthetic.invalid/v1beta/interactions');
         const body = yield* Effect.promise(() => sent.json());
@@ -1206,7 +1208,7 @@ describe('canonical Google Interactions protocol', () => {
       const configured = model();
       const prepared = yield* configured.prepareTurn(request());
       assert(prepared.mode === 'foreground');
-      const result = yield* configured.generateTurn(prepared);
+      const result = yield* completedTurn(configured.streamTurn(prepared));
       const next = JSON.parse(JSON.stringify(exchange(result)));
       if (changed === 'system') next.system = 'different';
       if (changed === 'signature')
@@ -1245,7 +1247,7 @@ describe('canonical Google Interactions protocol', () => {
       const configured = model();
       const prepared = yield* configured.prepareTurn(request());
       assert(prepared.mode === 'foreground');
-      const result = yield* configured.generateTurn(prepared);
+      const result = yield* completedTurn(configured.streamTurn(prepared));
       const next = JSON.parse(JSON.stringify(exchange(result)));
       let expectedMessage = 'Google tool results';
       if (unsupported === 'parallel-control') {
@@ -1332,14 +1334,14 @@ describe('canonical Google Interactions protocol', () => {
         const restored = JSON.parse(JSON.stringify(prepared));
         restored.controls.toolChoice.name = 'absent';
         expect(
-          yield* Effect.flip(configured.generateTurn(restored)),
+          yield* Effect.flip(completedTurn(configured.streamTurn(restored))),
         ).toMatchObject({ _tag: 'ModelError', kind: 'invalid-request' });
         expect(fetchModel).not.toHaveBeenCalled();
         const events = signedEvents();
         events.splice(12, 3);
         fetchModel.mockImplementation(async () => response(events));
-        const result = yield* configured.generateTurn(
-          JSON.parse(JSON.stringify(prepared)),
+        const result = yield* completedTurn(
+          configured.streamTurn(JSON.parse(JSON.stringify(prepared))),
         );
         expect(
           result.content.filter((part) => part.kind === 'local-call'),
@@ -1484,7 +1486,7 @@ describe('canonical Google Interactions protocol', () => {
       const prepared = yield* configured.prepareTurn(request());
       assert(prepared.mode === 'foreground');
       expect(
-        yield* Effect.flip(configured.generateTurn(prepared)),
+        yield* Effect.flip(completedTurn(configured.streamTurn(prepared))),
       ).toMatchObject({
         _tag: 'ModelError',
         responseId: 'int_1',
@@ -1514,7 +1516,7 @@ describe('canonical Google Interactions protocol', () => {
       const prepared = yield* configured.prepareTurn(request());
       assert(prepared.mode === 'foreground');
       expect(
-        yield* Effect.flip(configured.generateTurn(prepared)),
+        yield* Effect.flip(completedTurn(configured.streamTurn(prepared))),
       ).toMatchObject({
         _tag: 'ModelError',
         kind,

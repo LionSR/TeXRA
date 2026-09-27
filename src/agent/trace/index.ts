@@ -30,7 +30,6 @@ export {
   logInternal,
   debugInternal,
   logContextManagementEvent,
-  logConversationProgress,
   logWebSearch,
   logFilesLoaded,
   logFileCategory,

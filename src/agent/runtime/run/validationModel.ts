@@ -239,20 +239,11 @@ export function validationModel(config: ModelConfig): {
     });
   // The workflow-script switch is read per turn, so a validation run can flip
   // it between turns.
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
-      complete(turn, flag === '1'),
-    );
   const streamTurn: Model['streamTurn'] = (turn) =>
-    Stream.fromEffect(generateTurn(turn)).pipe(
-      Stream.map((result): TurnEvent => ({ kind: 'completed', result })),
-    );
-  return {
-    origin,
-    model: {
-      prepareTurn,
-      streamTurn,
-      generateTurn,
-    },
-  };
+    Stream.fromEffect(
+      Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
+        complete(turn, flag === '1'),
+      ),
+    ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
+  return { origin, model: { prepareTurn, streamTurn } };
 }

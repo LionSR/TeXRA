@@ -68,7 +68,6 @@ const mocks = vi.hoisted(() => ({
     globalState: mocks.cliGlobalState,
   })),
   initializeNodeRuntimeSkills: vi.fn(),
-  getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
 }));
 
@@ -123,7 +122,10 @@ vi.mock('@controllers/session/appStateStore', () => ({
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
-  getCliSecrets: mocks.getCliSecrets,
+  CliSecrets: class {
+    readonly kind = 'cli-secrets';
+  },
+  cliSecretsPath: (storageRoot: string) => storageRoot,
 }));
 
 function cliContext(

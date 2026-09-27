@@ -18,11 +18,7 @@ import { exportRunTranscript } from '@controllers/progressView/exportTranscript'
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import {
-  fromHost,
-  HostCallFailed,
-  hostFailure,
-} from '@controllers/session/hostCallFailure';
+import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
   type WorkflowDiffRequest,
@@ -74,7 +70,6 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
@@ -263,20 +258,6 @@ export function createDesktopHostRequests(
     },
   );
 
-  const runLatexdiffFile = (
-    baseFile: string,
-    editedFile: string,
-    runId?: RunId,
-  ): Effect.Effect<void, HostCallFailed | RequestRefusal> =>
-    (runId === undefined
-      ? fileActions.runLatexdiffFile(baseFile, editedFile)
-      : fileActions.diffAcceptedFilePair(baseFile, editedFile, runId)
-    ).pipe(
-      Effect.mapError((cause) =>
-        hostFailure('fileActions.runLatexdiffFile', cause),
-      ),
-    );
-
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
     storageRoot: session.roots.storage,
@@ -288,7 +269,13 @@ export function createDesktopHostRequests(
       mergeFile: (baseFile, editedFile) =>
         fileActions.runMergeFile(baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runLatexdiffFile(baseFile, editedFile),
+        fileActions
+          .runLatexdiffFile(baseFile, editedFile)
+          .pipe(
+            Effect.mapError((cause) =>
+              hostFailure('fileActions.runLatexdiffFile', cause),
+            ),
+          ),
       openDirectory: (directory) => host.openPath(directory),
       // An accepted-edit backup names an absolute path the controller already
       // resolved, so this reads through the process filesystem rather than a
@@ -491,10 +478,6 @@ export function createDesktopHostRequests(
     runWorkflowDiff,
     runWorkflowFileOperation,
     latexdiffAgainstCommit,
-    mergeFiles: (baseFile, editedFile) =>
-      fileActions.runMergeFile(baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      runLatexdiffFile(baseFile, editedFile),
     openSettings: (section) =>
       Effect.sync(() =>
         postDesktopSettingsView(

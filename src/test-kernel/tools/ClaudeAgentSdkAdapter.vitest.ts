@@ -2,27 +2,24 @@
 // tool summaries, and replace-semantics background-task projection.
 
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports
-import type { AgentTrace } from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
+import { noopTrace } from '@test/support/noopTrace';
 import { ClaudeBackgroundTaskTracker } from '@tools/claudeAgentBackgroundTasks';
 import { claudeResultUsage } from '@tools/claudeAgentShared';
 
 function fakeTrace(): {
   trace: AgentTrace;
-  toolStart: ReturnType<typeof vi.fn>;
-  toolEnd: ReturnType<typeof vi.fn>;
+  toolStarts: () => AgentEvent[];
+  lastToolEnd: () => AgentEvent | undefined;
 } {
-  const toolStart = vi.fn();
-  const toolEnd = vi.fn();
+  const events: AgentEvent[] = [];
   return {
-    trace: {
-      toolStart,
-      toolEnd,
-    } as unknown as AgentTrace,
-    toolStart,
-    toolEnd,
+    trace: { ...noopTrace, emit: (event) => void events.push(event) },
+    toolStarts: () => events.filter((event) => event.type === 'tool.start'),
+    lastToolEnd: () => events.findLast((event) => event.type === 'tool.end'),
   };
 }
 
@@ -67,7 +64,7 @@ describe('Claude Agent SDK adapter', () => {
   });
 
   it('replaces the complete background-task level without pairing task edges', () => {
-    const { trace, toolStart, toolEnd } = fakeTrace();
+    const { trace, toolStarts, lastToolEnd } = fakeTrace();
     const tracker = new ClaudeBackgroundTaskTracker(trace);
 
     tracker.replace([
@@ -78,12 +75,12 @@ describe('Claude Agent SDK adapter', () => {
       },
     ]);
 
-    expect(toolStart).toHaveBeenCalledOnce();
-    expect(toolStart.mock.calls[0]?.[0]).toMatchObject({
+    expect(toolStarts()).toHaveLength(1);
+    expect(toolStarts()[0]).toMatchObject({
       toolName: 'claude:background_tasks',
       input: { source: 'background_tasks_changed' },
     });
-    expect(toolEnd.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(lastToolEnd()).toMatchObject({
       status: 'in_progress',
       result: {
         summary: '1 Claude background task',
@@ -103,7 +100,7 @@ describe('Claude Agent SDK adapter', () => {
         description: 'Run tests',
       },
     ]);
-    expect(toolEnd.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(lastToolEnd()).toMatchObject({
       status: 'in_progress',
       result: {
         summary: '2 Claude background tasks',
@@ -112,7 +109,7 @@ describe('Claude Agent SDK adapter', () => {
     });
 
     tracker.replace([]);
-    expect(toolEnd.mock.calls.at(-1)?.[0]).toMatchObject({
+    expect(lastToolEnd()).toMatchObject({
       status: 'completed',
       result: {
         summary: 'No Claude background tasks remain',

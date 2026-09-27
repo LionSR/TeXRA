@@ -32,16 +32,6 @@ type TraceArm<T extends SessionEventDraft['type']> = T extends unknown
  */
 export type StreamKind = string;
 
-/** Context-state snapshot emitted around context-management checkpoints. */
-export type ContextStateData = Pick<
-  TraceArm<'context.state'>,
-  'inputTokens' | 'contextWindow'
->;
-
-/** One turn's token usage, keyed by the run it belongs to: the trace's own
- *  run, or a child whose spend a parent's usage map keys by that child's id. */
-export type UsageReport = Pick<TraceArm<'usage'>, 'runId' | 'usage'>;
-
 /**
  * The terminal fact as the runtime hands it to in-process consumers
  * (`SessionHandle.onResult`): the `run.end` row named by
@@ -61,24 +51,6 @@ interface StreamChunkEvent {
   readonly text: string;
   readonly stageId?: string;
 }
-
-/**
- * Authoritative final assistant text for the round that just ended the
- * turn — decided once at the flow boundary where `assembly.lastResponse` is
- * set (after `extractResponse`'s replacement-rule cleanup runs), and carried
- * as data from there rather than re-derived downstream. Fires at every
- * mid-run turn boundary (the tool-use loop pausing to wait for the next user
- * message), not only the terminal round, so a subscriber never has to guess
- * whether the run is "really" done (#7086).
- *
- * The round's own MODEL_RESPONSE stream (when the response actually
- * streamed) writes raw provider chunks in real time, before replacement
- * rules run — so its persisted text can trivially differ from this event's
- * text (e.g. a literal vs. a replaced LaTeX symbol). Subscribers reconcile by
- * updating that stream's entry to this text instead of a caller having to
- * prove the two already match.
- */
-export type ResponseFinalizedEvent = TraceArm<'response.finalized'>;
 
 /** Discriminated union of every event the SDK surface emits. */
 export type AgentEvent =

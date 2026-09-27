@@ -16,9 +16,19 @@ const mocks = vi.hoisted(() => ({
   setGLMCodingPlan: vi.fn((_enabled: boolean) => Effect.void),
 }));
 
-vi.mock('@model/codex/codexSubscription', () => ({
-  isPreferCodexSubscription: () => mocks.preferSubscription,
-}));
+vi.mock('@model/subscriptionAccess', async (importActual) => {
+  const actual =
+    await importActual<typeof import('@model/subscriptionAccess')>();
+  return {
+    ...actual,
+    isPreferSubscription: (
+      ...args: Parameters<typeof actual.isPreferSubscription>
+    ) =>
+      args[0] === 'chatgpt'
+        ? mocks.preferSubscription
+        : actual.isPreferSubscription(...args),
+  };
+});
 
 vi.mock('@cli/chat/tui/notifications/terminalNotifier', () => ({
   notify: mocks.notify,

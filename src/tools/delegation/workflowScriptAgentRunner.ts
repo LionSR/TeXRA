@@ -21,16 +21,14 @@ import type { LanguageModel } from '@platform/languageModel';
 import type { Secrets } from '@platform/secrets';
 import { AgentCategory, RUN_OUTCOME } from '@shared/schemas';
 import type { RunEnd, RunId } from '@shared/schemas';
+import { runHeldClause } from '@shared/runs/runStatusDisplay';
 import {
+  claimStanding,
   DatabaseClaimRefused,
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { configureDelegatedChildApprovals } from '@tools/approval';
-import {
-  resolveRunLiveness,
-  type RunLiveness,
-} from '@tools/executions/runLiveness';
 import { ensureError } from '@utils/errors/errorMessage';
 import { deriveRunId } from '@utils/core/idHash';
 
@@ -243,18 +241,6 @@ function workflowCallRunId(call: {
     key: call.key,
     parentRunId: call.parentRunId,
   });
-}
-
-/** Why a started child may not have its attempt number advanced. */
-function livenessClause(liveness: RunLiveness): string {
-  switch (liveness.kind) {
-    case 'unsettled':
-      return liveness.reason;
-    case 'live':
-      return 'still running in this process';
-    case 'interrupted':
-      return 'interrupted';
-  }
 }
 
 /**
@@ -581,15 +567,22 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       // copy therefore decides nothing; it only says whether the attempt owes
       // a liveness proof before the claim below is taken.
       if ((yield* probeChild(runId, records.readRunEnd())) === null) {
-        // The claim is the liveness authority: only a run nobody alive owns
-        // may have its attempt number advanced. An unreadable claim reports
-        // unsettled, so this refuses rather than repeating the work. It is
-        // asked before the fence, because the claim the fence takes reads back
-        // as an owner of this run's own.
-        const liveness = yield* resolveRunLiveness(runId, session);
-        if (liveness.kind !== 'interrupted') {
+        // The claim is the liveness authority (R6): only a run nobody alive
+        // owns may have its attempt number advanced; a live handle here holds
+        // this process's claim. An unreadable claim aborts, so this refuses
+        // rather than repeating the work. It is asked before the fence,
+        // because the claim the fence takes reads back as an owner of this
+        // run's own.
+        const standing = claimStanding(
+          yield* probeChild(runId, session.claimOwner(runId)),
+        );
+        if (standing.kind !== 'free') {
+          const holder =
+            standing.kind === 'held'
+              ? runHeldClause(standing.owner)
+              : "held by this process's claim";
           return yield* abortWorkflow(
-            `Workflow child ${runId} recorded no outcome and is ${livenessClause(liveness)}; refusing to repeat it.`,
+            `Workflow child ${runId} recorded no outcome and is ${holder}; refusing to repeat it.`,
           );
         }
       }

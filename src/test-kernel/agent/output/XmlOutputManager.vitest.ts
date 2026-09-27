@@ -59,7 +59,6 @@ function createXmlManager(
         debug: vi.fn(),
         info: vi.fn(),
         warn: vi.fn(),
-        domain: vi.fn(),
         emit: vi.fn(),
       },
       { strict: true },
@@ -1523,8 +1522,9 @@ Appendix.
         );
 
         expectSources(outputs, ['cost.tex']);
-        expect(logger.domain).toHaveBeenCalledWith(
+        expect(logger.emit).toHaveBeenCalledWith(
           expect.objectContaining({
+            type: 'domain',
             key: 'missingOutputs',
             data: expect.objectContaining({ missing: ['arch.tex'] }),
           }),
@@ -1553,8 +1553,9 @@ Appendix.
         );
 
         expectSources(outputs, ['main.tex']);
-        expect(logger.domain).toHaveBeenCalledWith(
+        expect(logger.emit).toHaveBeenCalledWith(
           expect.objectContaining({
+            type: 'domain',
             key: 'missingOutputs',
             data: expect.objectContaining({ missing: ['appendix.tex'] }),
           }),

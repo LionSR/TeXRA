@@ -2,11 +2,12 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect, vi } from 'vitest';
 
-import { XaiSessionCoordinator } from '@auth/xai/XaiSessionCoordinator';
-import type {
-  SubscriptionOAuthClient,
-  SubscriptionSessionStorage,
+import {
+  SubscriptionOAuthCoordinator,
+  type SubscriptionOAuthClient,
+  type SubscriptionSessionStorage,
 } from '@auth/oauth/SubscriptionOAuthCoordinator';
+import { XAI_POLICY } from '@auth/xai/xaiSessionPolicy';
 import type { XaiSession } from '@auth/xai/xaiSessionTypes';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
@@ -35,11 +36,15 @@ function memoryStorage(initial?: XaiSession): SubscriptionSessionStorage & {
 function makeCoordinator(options: {
   storage: SubscriptionSessionStorage;
   client?: SubscriptionOAuthClient;
-}): XaiSessionCoordinator {
-  return new XaiSessionCoordinator({ ...options, now: () => NOW });
+}): SubscriptionOAuthCoordinator<XaiSession> {
+  return new SubscriptionOAuthCoordinator({
+    ...options,
+    policy: XAI_POLICY,
+    now: () => NOW,
+  });
 }
 
-describe('XaiSessionCoordinator', () => {
+describe('xAI subscription session coordinator', () => {
   afterEach(() => {
     setLogSink(null);
     vi.restoreAllMocks();

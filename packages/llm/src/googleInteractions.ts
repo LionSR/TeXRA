@@ -23,7 +23,6 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
@@ -995,8 +994,6 @@ export function googleInteractionsModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const snapshot = Effect.fn('llm.google.snapshot')(function* (
     raw: unknown,
     operation: RemoteOperation,
@@ -1336,7 +1333,6 @@ export function googleInteractionsModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(config.background === 'supported'
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),

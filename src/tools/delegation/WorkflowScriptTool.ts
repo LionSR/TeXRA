@@ -506,10 +506,7 @@ function executeWorkflowScriptTool(
                         kind: 'multiAgentWorkflow',
                         workflowName: meta.name,
                       },
-                      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                      description: meta.description,
                       config: runConfig,
-                      checkpointId,
                     });
                   }),
                 buildLaunch: (childRun) =>
@@ -518,7 +515,7 @@ function executeWorkflowScriptTool(
                     // grant as delegate_agent/delegate_workflow. A human one-off approval
                     // inherits only the parent's ordinary per-kind bypass state.
                     configureDelegatedChildApprovals(
-                      childRun.childRunId,
+                      runId,
                       parentRunId,
                       proposalDecision.autoApproved
                         ? 'auto-approved'

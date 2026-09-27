@@ -2,8 +2,6 @@
 import { Effect } from 'effect';
 
 import type { DesktopSettingsIpcOptions } from '@desktop/main/desktopSettingsIpc';
-import type { DesktopToolingSettingsController } from '@desktop/main/desktopToolingSettingsController';
-import { unsupported } from '@shared/utils/dispatcher';
 
 const noOpEffect = (): Effect.Effect<void> => Effect.void;
 
@@ -42,32 +40,8 @@ export function createStubSettingsBindings(
     revealRun: () => Effect.succeed('revealed'),
     runLabel: () => undefined,
     stateSettingApplied: noOpEffect,
-    ...overrides,
-  };
-}
-
-export function createStubDesktopToolingSettingsController(
-  overrides: Partial<DesktopToolingSettingsController> = {},
-): DesktopToolingSettingsController {
-  return {
-    toolHandlers: {
-      installToolExtension: unsupported(
-        'Desktop cannot host VS Code extensions.',
-      ),
-      toggleTool: noOpEffect,
-      runToolCommand: noOpEffect,
-    },
-    latexHandlers: {
-      applyLatexSettings: unsupported(
-        'Desktop cannot apply recommended VS Code settings.',
-      ),
-      installLatexWorkshop: unsupported(
-        'Desktop cannot host VS Code extensions.',
-      ),
-      runInstallCommand: noOpEffect,
-    },
-    postStartupData: noOpEffect,
-    followToolAvailability: Effect.void,
+    runInTerminal: noOpEffect,
+    latexRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
     ...overrides,
   };
 }

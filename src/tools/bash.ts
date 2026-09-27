@@ -511,8 +511,6 @@ const executeBackground = Effect.fn('BashTool.executeBackground')(function* (
             Effect.andThen(
               createChildRun(session, runId, parentRunId, {
                 run: { kind: 'process', tool: 'bash' },
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                description: command,
                 config: syntheticConfig,
               }),
             ),
