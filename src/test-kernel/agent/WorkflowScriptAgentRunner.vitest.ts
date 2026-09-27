@@ -31,6 +31,7 @@ import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { testRunFork } from '@test/support/runHandleFixtures';
+import { pinNoPlugins } from '@test/support/testPluginServices';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
@@ -269,6 +270,7 @@ const fenceRoster = () =>
         ),
       ),
     fork: testRunFork,
+    pinPlugins: pinNoPlugins,
   });
 let lanes = fenceRoster();
 const runs = {

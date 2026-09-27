@@ -101,10 +101,11 @@ export interface AppSignalPayloads {
    * A tool plugin switch was flipped in this process (`setToolEnabled`).
    * Keyless: a listener re-reads the switches.
    *
-   * Consumed by: the extension's Copilot tools (`registerLanguageModelTools`),
-   * which follow the switches without waiting for a run's step. Runs read
-   * the switches at their next step and need no signal; desktop and CLI have
-   * no surface outside a run that the switches shape.
+   * Consumed by: the process's tool registry (`toolRegistryLayer`), which
+   * applies the switches to the live catalog at once, so what follows the
+   * catalog outside a run (a host plugin layer's lifetime, the Copilot tools)
+   * need not wait for a run's step. Runs read the switches at their next
+   * step anyway, which also covers a switch flipped by another process.
    */
   toolSwitchesChanged: undefined;
 

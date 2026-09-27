@@ -29,7 +29,7 @@ import type {
   FinalizeRunInput,
   FinalizeRunResult,
 } from '@agent/storage/runLifecycle';
-import type { ProcessServices } from '@platform/processRuntime';
+import type { PluginServices, ProcessServices } from '@platform/processRuntime';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
@@ -70,10 +70,8 @@ class RunAdmissionClosed extends Data.TaggedError('RunAdmissionClosed')<{
 export interface RunStop {
   /** Whether a live interrupt target took the stop. */
   readonly accepted: () => boolean;
-  /** Fails when a durable fact the stop owed storage was refused: the detach
-   *  batch of a detaching stop, or the terminal row of a stop that reached no
-   *  live target. A caller that reported the stop done over either would be
-   *  lying about it. */
+  /** Fails when a durable fact the stop owed storage was refused: a detach
+   *  batch, or the terminal row of a stop that reached no live target. */
   readonly settlement: Effect.Effect<void, Error>;
 }
 
@@ -107,11 +105,9 @@ export interface ChildRunActivation {
   readonly retainsTerminalParent: boolean;
 }
 
-/**
- * Where a follow-up for a run goes: a live flow context, the run's
- * retained queue (a WAITING or resuming cursor, or a parent whose children
- * are still active), or nowhere in this process.
- */
+/** Where a follow-up for a run goes: a live flow context, the run's retained
+ *  queue (a WAITING or resuming cursor, or a parent whose children are still
+ *  active), or nowhere in this process. */
 export type ToolUseFollowUpTarget =
   | {
       readonly kind: 'active';
@@ -143,9 +139,7 @@ export type ManualCompactionRequestResult =
 export interface RunRegistryInit {
   readonly runView: (runId: RunId) => RunView | undefined;
   /** The session's awaited publisher for the registry's own durable fact, a
-   *  severed parent edge (`run.detach`). One batch carries every child of a
-   *  detaching parent, so the caller that asked for the sever is the one
-   *  owner that can hear it refused. */
+   *  severed parent edge (`run.detach`), one batch per detaching parent. */
   readonly commit: (
     events: readonly SessionEventDraft[],
   ) => Effect.Effect<void, Error>;
@@ -169,6 +163,10 @@ export interface RunRegistryInit {
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
+  /** Pin the session layers of the plugins `on` names for the caller's scope. */
+  readonly pinPlugins: (
+    on: ReadonlySet<string>,
+  ) => Effect.Effect<Context.Context<PluginServices>, never, Scope.Scope>;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -188,22 +186,17 @@ interface RunEntry {
   launches: number;
 }
 
-/**
- * Session-owned registry of runs. One instance belongs to each session,
- * built by the session layer in that session's scope and provided as
- * {@link Runs}.
- */
+/** Session-owned registry of runs: one per session, built by the session
+ *  layer in that session's scope and provided as {@link Runs}. */
 export class RunRegistry {
   private readonly entries = new Map<RunId, RunEntry>();
-  /** Completed when the last entry leaves ({@link awaitDrained}); made by
-   *  the first drain that finds entries, dropped once it completes. */
+  /** Completed when the last entry leaves ({@link awaitDrained}). */
   private emptied: Deferred.Deferred<void> | undefined;
   /** The stops begun for each run, one token apiece, so of two overlapping
    *  stops the first to settle cannot admit a child the second's snapshot
    *  already left behind. */
   private readonly stopping = new Map<RunId, Set<symbol>>();
-  /** Steps admitted but not yet started, across every run: session disposal
-   *  fails all of them at once, so they need no per-run keying. */
+  /** Steps admitted but not yet started; disposal fails them all at once. */
   private readonly waiting = new Set<Deferred.Deferred<never, Error>>();
   /** The session's child-run concurrency budget, made on first use. */
   private budget: Semaphore.Semaphore | undefined;
@@ -211,8 +204,7 @@ export class RunRegistry {
   /** Set by {@link closeAdmissions}: the session is closing. */
   private closing = false;
   /** The lane slots `withPerKeyLane` reads and writes: this registry's
-   *  entries, so a lane is never a record of a run the entry map does not
-   *  have. */
+   *  entries, so a lane never records a run the entry map lacks. */
   private readonly lanes = {
     get: (runId: RunId) => this.entries.get(runId)?.lane,
     set: (runId: RunId, lane: PerKeyLane) => {
@@ -227,6 +219,11 @@ export class RunRegistry {
   };
 
   constructor(private readonly init: RunRegistryInit) {}
+
+  /** The session services a step pins (`RunRegistryInit.pinPlugins`). */
+  pinPlugins(on: ReadonlySet<string>) {
+    return this.init.pinPlugins(on);
+  }
 
   // ---------------------------------------------------------------- entries
 

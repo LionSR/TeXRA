@@ -63,7 +63,7 @@ import {
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
 import { SupabaseUriHandler } from '@frontend/auth/UriHandler';
 import { createLanguageModelPort } from '@frontend/lm/createLanguageModelPort';
-import { registerLanguageModelTools } from '@frontend/lm/registerLanguageModelTools';
+import { copilotToolsLayer } from '@frontend/lm/registerLanguageModelTools';
 import { createVscodeLeanLanguageServices } from '@frontend/lean/VscodeIntegration';
 import { registerInlineCriticism } from '@frontend/latex/inlineCriticism';
 import {
@@ -199,12 +199,10 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   }).pipe(
     Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
   );
-  // The resume port closes over the runtime installed just below: a resume
-  // attempt runs on it, and the port is only invoked after activation has
-  // returned. It is served as the runtime's `AgentResume` service. The
-  // session it resumes into is the workspace path's default session; the
-  // credential-only path never initializes one, and a resume request cannot
-  // arrive there because every run belongs to one.
+  // The resume port closes over the runtime installed just below and is only
+  // invoked after activation has returned, served as `AgentResume`. It
+  // resumes into the workspace path's default session; the credential-only
+  // path never opens one, and no resume request arrives there.
   const agentResume: AgentResumePort = {
     tryResumeRun: (runId, recovery) => {
       const session = tryDefaultSession();
@@ -217,16 +215,19 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           );
     },
   };
-  // Usage logging is a runtime service, not an authentication-provider
-  // capability: it runs without Supabase sign-in, as on desktop and CLI.
+  // Usage logging is a runtime service that runs without Supabase sign-in.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
       : undefined;
-  const runtime = installProcessRuntime({
+  const runtime: ProcessRuntime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
     mcpConfigPath: USER_MCP_CONFIG_PATH,
+    // Copilot's TeXRA tools, where a default session runs their calls.
+    pluginLayers: workspaceRoot
+      ? { copilot: copilotToolsLayer(() => runtime, tryDefaultSession) }
+      : {},
     secrets,
     appState,
     auth,
@@ -744,7 +745,6 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     { startImmediately: true },
   );
   yield* registerInlineCriticism(context, runtime, runtimeSession, roots);
-  yield* registerLanguageModelTools(runtime, runtimeSession);
   registerInlineComments(context);
 
   statusBarItem = vscode.window.createStatusBarItem(

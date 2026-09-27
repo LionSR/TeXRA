@@ -35,6 +35,7 @@ import {
   testRunHandle,
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { pinNoPlugins } from '@test/support/testPluginServices';
 import { generateRunId } from '@utils/core';
 
 // Local file imports
@@ -152,6 +153,7 @@ function createRegistry(
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
     fork: testRunFork,
+    pinPlugins: pinNoPlugins,
     ...options,
   });
   return { events, phases, registry };

@@ -83,6 +83,7 @@ import {
 } from '@shared/schemas';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { testRunFork } from '@test/support/runHandleFixtures';
+import { pinNoPlugins } from '@test/support/testPluginServices';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 const RUN_ID = 'a9e70a9e7001' as RunId;
@@ -184,6 +185,7 @@ function realRunRegistry(): RunRegistry {
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
     fork: testRunFork,
+    pinPlugins: pinNoPlugins,
   });
 }
 

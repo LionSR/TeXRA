@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect } from 'vitest';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { Runs } from '@agent/runtime/runRegistry';
 import { freshRunState } from '@shared/session/runStateFold';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { installPlatform as installFakePlatform } from '@test/support/setupPlatform';
@@ -12,6 +13,7 @@ import {
   createTestSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { testPluginServicesLayer } from '@test/support/testPluginServices';
 import { goalOf, pauseGoal, startGoal } from '@tools/goal';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { generateRunId } from '@utils/core';
@@ -19,12 +21,17 @@ import { generateRunId } from '@utils/core';
 const RUN_ID = generateRunId();
 
 const atIdle = (session: SessionHandle) =>
-  goalContinuation.atIdle({
-    session,
-    runId: RUN_ID,
-    state: freshRunState(0),
-    canContinue: true,
-  });
+  goalContinuation
+    .atIdle({
+      session,
+      runId: RUN_ID,
+      state: freshRunState(0),
+      canContinue: true,
+    })
+    .pipe(
+      Effect.provide(testPluginServicesLayer),
+      Effect.provideService(Runs, session.runs),
+    );
 
 describe('goalContinuation', () => {
   let session: SessionHandle;

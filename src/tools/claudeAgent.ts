@@ -33,7 +33,6 @@ import {
   type AgentTrace,
   type OpenToolUseCard,
 } from '@agent/trace';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
@@ -77,9 +76,10 @@ import {
   importClaudeAgentSdk,
   findClaudeBinaryPath,
 } from './claudeAgentImport';
-import { claudeAgentSessionsFor } from './agentCliSessionStores';
+import { ClaudeAgentSessions } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
+  type AgentCliLaunchContext,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -90,6 +90,7 @@ import {
   CLAUDE_AGENT_NAME,
   modelSupportsAdaptiveThinking,
 } from './claudeAgentShared';
+import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
@@ -422,6 +423,7 @@ function buildClaudeAgentLaunch(params: {
   resumeSessionId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
+  registry: AgentCliSessionRegistry;
 }): Effect.Effect<DetachedChildRunLaunch<TurnResult>, never, Runs> {
   const { childRun, runId, initialPrompt } = params;
   const { logger } = childRun;
@@ -440,7 +442,7 @@ function buildClaudeAgentLaunch(params: {
     runId,
     stageLabel: 'Claude Code session',
     initialPrompt,
-    store: claudeAgentSessionsFor,
+    registry: params.registry,
     releaseFallbackClaim: params.releaseFallbackClaim,
     // The shared loop calls this inside its own `Effect.suspend`, so the
     // reads below happen per turn, as the awaited closure they replace did.
@@ -517,7 +519,12 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  Secrets | ToolCall | Runs | AgentResume | ChildProcessSpawner
+  | Secrets
+  | ToolCall
+  | Runs
+  | ClaudeAgentSessions
+  | AgentResume
+  | ChildProcessSpawner
 > {
   const { roots } = toolCall;
   const { CLAUDE_AGENT_MODEL, CLAUDE_AGENT_EFFORT } = WorkspaceStateKey;
@@ -534,7 +541,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
   return yield* dispatchAgentCliTool({
     toolCall,
     agentName: CLAUDE_AGENT_NAME,
-    store: claudeAgentSessionsFor,
+    store: ClaudeAgentSessions,
     // A fork always launches a distinct TeXRA child. Queueing onto the
     // source session would mutate the original instead of branching it.
     resumeId: isFork ? undefined : sessionId,
@@ -547,16 +554,7 @@ const run = Effect.fn('ClaudeAgentTool.run')(function* (
       queuedLabel: 'Claude Code session',
     },
     launch: (context) =>
-      launchClaudeAgentSession(
-        input,
-        permissionMode,
-        model,
-        effort,
-        context.parentRunId,
-        context.parentWorkingDirectory,
-        context.releaseFallbackClaim,
-        context.session,
-      ),
+      launchClaudeAgentSession(input, permissionMode, model, effort, context),
   });
 });
 
@@ -588,10 +586,7 @@ const launchClaudeAgentSession = Effect.fn(
   permissionMode: ClaudeAgentPermissionMode,
   model: string,
   effort: ClaudeAgentEffort,
-  parentRunId: RunId,
-  parentWorkingDirectory: string | undefined,
-  releaseFallbackClaim: (() => void) | undefined,
-  session: SessionHandle,
+  context: AgentCliLaunchContext,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
@@ -604,7 +599,7 @@ const launchClaudeAgentSession = Effect.fn(
   // for sibling files; an out-of-workspace cwd runs isolated. The SDK's
   // `Options` names these `cwd` / `additionalDirectories`, unlike codex.
   const { workingDirectory, additionalDirectories } =
-    buildAgentWorkspaceOptions(roots.workspace, parentWorkingDirectory);
+    buildAgentWorkspaceOptions(roots.workspace, context.parentWorkingDirectory);
   // The env block reads only the process environment and the `Secrets`
   // service, neither of which is workspace-scoped.
   const env = yield* config.buildClaudeAgentEnv();
@@ -623,8 +618,8 @@ const launchClaudeAgentSession = Effect.fn(
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
-    session,
-    parentRunId,
+    session: context.session,
+    parentRunId: context.parentRunId,
     resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),
     agentName: CLAUDE_AGENT_NAME,
     description: input.prompt,
@@ -644,7 +639,8 @@ const launchClaudeAgentSession = Effect.fn(
         pathToClaudeCodeExecutable,
         resumeSessionId: input.session_id ?? undefined,
         forkSession: input.fork_session === true,
-        releaseFallbackClaim,
+        releaseFallbackClaim: context.releaseFallbackClaim,
+        registry: context.registry,
       }),
     summary: `Launched Claude Code CLI: ${preview}`,
     launchedLine: `Claude Code agent launched (model: ${model}, permission: ${permissionMode}).`,

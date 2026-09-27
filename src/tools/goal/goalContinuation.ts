@@ -9,7 +9,8 @@ import { Clock, Effect } from 'effect';
 
 import { GOAL_CONTINUATION_TEMPLATE } from '@agent/runtime/bundledPrompts';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentCategory, goalElapsedMs, type RunId } from '@shared/schemas';
+import { goalElapsedMs } from '@shared/plugins/goal';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import type { Continuation } from '@tools/toolTable';
 import { renderPrompt } from '@utils/prompt';
 import { formatCompactDuration } from '@utils/text/stringUtils';
@@ -26,7 +27,7 @@ const pauseActive = Effect.fn('goal.pause')(function* ({
 }) {
   if (goalOf(session, runId)?.status !== 'active') return;
   yield* pauseGoal(session, runId);
-  setGoalSessionAutoApproval(session, runId, false);
+  yield* setGoalSessionAutoApproval(session, runId, false);
 });
 
 export const goalContinuation: Continuation = {

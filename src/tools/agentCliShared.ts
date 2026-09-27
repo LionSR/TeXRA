@@ -2,14 +2,14 @@
 // Host-agnostic, VS Code-free.
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, type Context } from 'effect';
 
 // Local imports
 import { registerRun } from '@agent/storage';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
-import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import type { Runs } from '@agent/runtime/runRegistry';
 import type {
   ChildRunPort,
   ChildRunPorts,
@@ -50,13 +50,6 @@ import type {
   AgentCliSessionEntry,
   AgentCliSessionRegistry,
 } from './agentCliSessionRegistry';
-
-/** Registry accessor keyed by the session's runs
- * (`codexThreadsFor`/`claudeAgentSessionsFor`); dispatch and loop resolve it
- * once against the `Runs` they take from context. */
-type AgentCliSessionStoreAccessor = (
-  runs: RunRegistry,
-) => AgentCliSessionRegistry;
 
 interface AgentCliResumeLabels {
   notActiveLabel: string;
@@ -338,7 +331,7 @@ export const agentCliApprovalCommand = (
 
 /** Run context resolved for an agent-CLI launch, handed to the provider's
  * `launch` callback by {@link dispatchAgentCliTool}. */
-interface AgentCliLaunchContext {
+export interface AgentCliLaunchContext {
   /** The launching run's session: the child's registration and delivery target. */
   session: SessionHandle;
   parentRunId: RunId;
@@ -346,6 +339,8 @@ interface AgentCliLaunchContext {
   /** Release the disk-based fallback claim if the launch fails before promoting
    * it. Undefined for a fresh (non-resumed) launch. */
   releaseFallbackClaim: (() => void) | undefined;
+  /** The session's registry the step served the tool (`store`). */
+  registry: AgentCliSessionRegistry;
 }
 
 /**
@@ -362,10 +357,11 @@ interface AgentCliLaunchContext {
  * The returned Effect is the tool's whole dispatch: the tool's `execute()`
  * runs it as is.
  */
-export function dispatchAgentCliTool<R = never>(params: {
+export function dispatchAgentCliTool<R = never, S = never>(params: {
   toolCall: ToolCallShape;
   agentName: string;
-  store: AgentCliSessionStoreAccessor;
+  /** The plugin's session registry, served by the step that pinned it. */
+  store: Context.Key<S, AgentCliSessionRegistry>;
   resumeId: string | undefined;
   /** Existing live session read by a fresh launch, such as a fork source. */
   sourceId?: string;
@@ -374,12 +370,12 @@ export function dispatchAgentCliTool<R = never>(params: {
   launch: (
     context: AgentCliLaunchContext,
   ) => Effect.Effect<ToolResult, ToolError, R>;
-}): Effect.Effect<ToolResult, ToolError, R | ToolCall | Runs | AgentResume> {
+}): Effect.Effect<ToolResult, ToolError, R | S | ToolCall | AgentResume> {
   const { agentName, store, resumeId, sourceId, prompt, labels, launch } =
     params;
   return withAgentCliRun(agentName, params.toolCall, (run) =>
     Effect.gen(function* () {
-      const registry = store(yield* Runs);
+      const registry = yield* store;
       const callerRunId = run.runId;
       if (sourceId) {
         yield* requireCallerOwnership(
@@ -401,6 +397,7 @@ export function dispatchAgentCliTool<R = never>(params: {
             parentRunId: run.runId,
             parentWorkingDirectory: params.toolCall.workingDirectory,
             releaseFallbackClaim,
+            registry,
           }),
       });
     }),
@@ -418,7 +415,7 @@ interface AgentCliLoopParams<TTurn> {
   stageLabel: string;
   initialPrompt: string;
   /** Session/thread registry the loop tracks in-flight and successful turns in. */
-  store: AgentCliSessionStoreAccessor;
+  registry: AgentCliSessionRegistry;
   /**
    * The disk-based fallback session/thread id claimed synchronously before the
    * loop starts, if any. Release it if the loop exits before promoting it.
@@ -473,13 +470,13 @@ interface AgentCliLoopParams<TTurn> {
 export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
 ): Effect.Effect<DetachedChildRunLaunch<TTurn>, never, Runs> {
-  return Effect.gen(function* () {
+  return Effect.sync(() => {
     const {
       childRun,
       runId,
       stageLabel,
       initialPrompt,
-      store,
+      registry,
       releaseFallbackClaim,
       runProviderTurn,
       resolveSessionIds,
@@ -491,7 +488,6 @@ export function buildAgentCliLaunch<TTurn>(
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
-    const registry = store(yield* Runs);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.

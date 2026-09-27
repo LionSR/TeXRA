@@ -51,7 +51,6 @@ import {
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { UsageLog } from '@shared/usageLog';
-import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
@@ -93,28 +92,6 @@ export interface FakeHost {
 }
 
 type HostBuilder = () => FakeHost | Promise<FakeHost>;
-
-/**
- * The bare runtime's subscription tables. A registry is a live ownership
- * table over a polling source, so the harness serves none: a suite that
- * exercises one provides `gitHubSubscriptionsLayer` innermost, and a read
- * here is a test wiring error rather than an empty answer. Reaching for the
- * real layer instead would load the follow-up module in this setup file,
- * ahead of the suites that mock it.
- */
-const unreadGitHubSubscriptions = new Proxy(
-  {} as GitHubSubscriptions['Service'],
-  {
-    get: (target, member) => {
-      if (member === 'pr' || member === 'repo' || member === 'issue') {
-        throw new Error(
-          `No GitHub subscriptions in this test: provide gitHubSubscriptionsLayer to read '${member}'.`,
-        );
-      }
-      return Reflect.get(target, member);
-    },
-  },
-);
 
 const unavailableLeanLanguageServices: LeanLanguageServicesShape = {
   listServers: () => [],
@@ -427,7 +404,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // An empty tool table (the real one loads every tool), with goal mode's
     // continuation: a suite that resolves a run's tools runs on the session
     // graph's runtime or provides `toolRegistryLayer`.
-    toolTableLayer(toolTable({}, {}, { goal: goalContinuation })),
+    toolTableLayer(toolTable({}, { goal: goalContinuation })),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),
@@ -449,7 +426,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     // The run-end stop is absent, as on a host whose Lean integration owns
     // server lifetime: the mock's placeholder for it would die on every run.
     Layer.mock(LeanLanguageServices, unavailableLeanLanguageServices),
-    Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
     Secrets.layer(fakeHostSecrets),
     AppState.layer(fakeHostAppState),
     SupabaseAuth.layer(fakeHostAuth),

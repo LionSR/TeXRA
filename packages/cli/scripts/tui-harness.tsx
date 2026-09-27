@@ -60,6 +60,7 @@ import {
   type SessionEventDraft,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { goalStateOf } from '@shared/plugins/goal';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -1591,10 +1592,9 @@ function appendHarnessStatus(): void {
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
-      goal:
-        run?.category === AgentCategory.ToolUse && run.goal.active
-          ? run.goal
-          : undefined,
+      goal: ((goal) => (goal?.active ? goal : undefined))(
+        run && goalStateOf(run),
+      ),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(

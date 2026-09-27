@@ -9,7 +9,6 @@ export * from './agentCliSettings';
 export * from './fileFields';
 export * from './fileTypes';
 export * from './lineChanges';
-export * from './goal';
 export * from './proposalFields';
 export * from './toolConfig';
 export * from './errors';

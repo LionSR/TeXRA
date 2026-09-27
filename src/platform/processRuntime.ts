@@ -29,7 +29,12 @@ import type {
 import type { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
 import type { InquiryRecords } from '@shared/session/inquiryRecords';
 import type { UsageLog } from '@shared/usageLog';
+import type {
+  ClaudeAgentSessions,
+  CodexThreads,
+} from '@tools/agentCliSessionStores';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
+import type { GoalGrants } from '@tools/goal/goalAutoApproval';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
@@ -55,11 +60,9 @@ import type { Secrets } from './secrets';
  * process shares, `GlobalDatabase`, that same root's one database handle,
  * which the records above and the CLI's input history read through,
  * `ProjectDatabases`, whose project-scoped borrows share each persistent
- * connection between application state and a session graph,
- * `GitHubSubscriptions`, the run-ownership tables the subscription tool and
- * the settings Git tab share, `ToolRegistry`, the plugin table every run's
- * offered tools are rebuilt from, and `LiveTools`, the live catalog each
- * run's step pins a generation of.
+ * connection between application state and a session graph, `ToolRegistry`,
+ * the plugin table every run's offered tools are rebuilt from, and
+ * `LiveTools`, the live catalog each run's step pins a generation of.
  */
 export type ProcessServices =
   | ProcessIdentity
@@ -80,11 +83,25 @@ export type ProcessServices =
   | SetupPlatform
   | AgentEngine
   | LeanLanguageServices
-  | GitHubSubscriptions
   | UsageLog
   | SupabaseAuth
   | ToolRegistry
   | LiveTools;
+
+/**
+ * The services plugin layers serve (`PLUGIN_PROCESS_LAYERS`,
+ * `PLUGIN_SESSION_LAYERS` in `@tools/registry`). None is a process service:
+ * a tool or continuation reaches one only through the step that pinned its
+ * plugin, which provides the pinned layers' services to the call.
+ */
+export type PluginServices =
+  GitHubSubscriptions | GoalGrants | CodexThreads | ClaudeAgentSessions;
+
+/** No plugin service is a process service (compile-time guard). */
+type AssertNever<T extends never> = T;
+type _PluginServicesAreNotProcessServices = AssertNever<
+  Extract<ProcessServices, PluginServices>
+>;
 
 /**
  * The services an agent catalog load reads: the global and filesystem views

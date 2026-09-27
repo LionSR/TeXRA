@@ -8,7 +8,8 @@ import {
   APPROVAL_BYPASS_KINDS,
   type ApprovalBypassKind,
 } from '@shared/approvalBypassKind';
-import type { GoalState, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
+import { goalStateOf, type GoalState } from '@shared/plugins/goal';
 import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
@@ -381,8 +382,7 @@ export class RunHeader extends LitElement {
       run.substate ?? undefined,
     );
     const statusLabel = run.statusLabel;
-    const goal: GoalState =
-      run.category === 'toolUse' ? run.goal : { active: false };
+    const goal = goalStateOf(run);
     const enabled = enabledRunActions(run, displayKey);
     const canStop = enabled?.has(ELEMENT_IDS.STOP_STREAM_BTN) === true;
     // A run grant means something only on a live tool-use run this window

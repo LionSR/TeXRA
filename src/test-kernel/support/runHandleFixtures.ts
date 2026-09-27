@@ -7,6 +7,7 @@ import { RunRegistry, type RunRegistryInit } from '@agent/runtime/runRegistry';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { AgentCategory } from '@shared/schemas';
 import type { RunId, RunIdentity } from '@shared/schemas';
+import { testPinPlugins } from './testPluginServices';
 import { testRuntime } from './testProcessRuntime';
 
 /** A registry's launch door over the harness's process runtime, standing in
@@ -41,7 +42,7 @@ export function testRunHandle(input: {
 /** A registry over an empty fold: no run has a view, which is what a
  *  fixture that never publishes a phase-moving row would see. */
 export function testRunRegistry(): RunRegistry {
-  return new RunRegistry({
+  const registry: RunRegistry = new RunRegistry({
     runView: () => undefined,
     commit: () => Effect.void,
     approvals: createSessionApprovals(),
@@ -50,7 +51,9 @@ export function testRunRegistry(): RunRegistry {
     holdRunClaim: () => Effect.void,
     borrowRunClaim: () => Effect.void,
     fork: testRunFork,
+    pinPlugins: testPinPlugins(() => registry),
   });
+  return registry;
 }
 
 /**

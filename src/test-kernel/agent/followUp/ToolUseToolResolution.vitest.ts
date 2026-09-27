@@ -202,13 +202,17 @@ describe('tool-use tool resolution', () => {
             },
           },
         },
+        {},
+        {},
         {
-          zotero: Layer.effectDiscard(
-            Effect.acquireRelease(
-              Effect.sync(() => events.push('open')),
-              () => Effect.sync(() => events.push('close')),
+          zotero: {
+            layer: Layer.effectDiscard(
+              Effect.acquireRelease(
+                Effect.sync(() => events.push('open')),
+                () => Effect.sync(() => events.push('close')),
+              ),
             ),
-          ),
+          },
         },
       );
       return Effect.gen(function* () {

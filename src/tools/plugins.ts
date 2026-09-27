@@ -17,8 +17,10 @@
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
- * and in the registry). No hooks, task kinds or event channels, and no state
- * but a `layer`: a plugin is data, re-registered by code at every startup.
+ * and in the registry). No hooks, task kinds or second event channels: a
+ * plugin holds state only in its process or session layer and writes rows
+ * only of its own kinds, through the one publisher. A plugin is data,
+ * re-registered by code at every startup.
  */
 
 // Local imports
@@ -76,9 +78,21 @@ export interface ToolPlugin {
    *  `PLUGIN_PROMPT_SECTIONS` (`@tools/registry`), which a run's step pins
    *  while the plugin is switched on. */
   readonly promptSection?: true;
-  /** Owns resources: a layer in `@tools/registry`, built while a pinned
-   *  catalog generation includes the plugin (`@tools/liveTools`). */
-  readonly layer?: true;
+  /** Owns process-lifetime services: an entry in `PLUGIN_PROCESS_LAYERS`
+   *  (`@tools/registry`), up while the plugin is switched on or a step pins
+   *  it (`@tools/liveTools`). */
+  readonly processLayer?: true;
+  /** Its process-lifetime services come from the host that runs it, not
+   *  from core: the host passes the layer to `installProcessRuntime`
+   *  (`pluginLayers`), and it follows the same lifetime. */
+  readonly hostLayer?: true;
+  /** Owns session-lifetime services: an entry in `PLUGIN_SESSION_LAYERS`,
+   *  one per open session, up while the plugin is switched on or a step of
+   *  that session pins it. */
+  readonly sessionLayer?: true;
+  /** Writes rows of its own kinds: an arm in `PLUGIN_EVENT_ARMS`
+   *  (`@tools/pluginArms`), read back only while the plugin is on. */
+  readonly rows?: true;
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
   readonly agents?: true;

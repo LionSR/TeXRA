@@ -23,6 +23,7 @@ import {
   appendLocalRequestRefusal,
 } from '@cli/chat/tui/state/transcript';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
+import { goalStateOf } from '@shared/plugins/goal';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import { runRelation } from '@shared/session/runRelation';
 import type { RunView } from '@shared/session/sessionView';
@@ -87,6 +88,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
     const view = currentView();
     const activeRunId = selectedRunIdSignal.get();
     const run = runViewOf(view, activeRunId);
+    const goal = run === undefined ? undefined : goalStateOf(run);
     // The children a status line counts: the active run's, else its
     // parent's (a focused leaf reports its siblings' activity).
     const countedParent =
@@ -117,10 +119,7 @@ export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
             : view.policy.get(activeRunId)?.bypasses,
         statusLabel: run?.statusLabel,
         activeChildSessions,
-        goal:
-          run?.category === AgentCategory.ToolUse && run.goal.active
-            ? run.goal
-            : undefined,
+        goal: goal?.active ? goal : undefined,
         activeSkills,
         sessionId: run ? context.session.runId : undefined,
         commandName: context.cliContext.commandName,

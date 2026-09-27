@@ -1,5 +1,5 @@
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, Layer } from 'effect';
 // Regression coverage for atomic Codex disk-resume claims. Concurrent calls
 // with the same stale thread_id must share one fallback loop: the first call
 // owns asynchronous SDK setup, while later calls wait for registration and
@@ -13,7 +13,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { codexThreadsFor } from '@tools/agentCliSessionStores';
+import { CodexThreads as CodexThreadsService } from '@tools/agentCliSessionStores';
+import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 const mocks = vi.hoisted(() => ({
   registerRun: vi.fn(),
@@ -38,7 +39,13 @@ const testSession = {
     getHandle: () => undefined,
   },
 } as unknown as SessionHandle;
-const CodexThreads = codexThreadsFor(testSession.runs);
+const CodexThreads = new AgentCliSessionRegistry(testSession.runs);
+/** The tool's call layer, serving the suite's one registry as the step would. */
+const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
+  Layer.merge(
+    nativeToolTestLayer(...options),
+    Layer.succeed(CodexThreadsService)(CodexThreads),
+  );
 
 vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
@@ -186,7 +193,7 @@ describe('codex tool - atomic resume fallback', () => {
         );
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             roots: createFakeWorkspaceRoots({
               workspacePath: '/desktop/project',
             }),
@@ -212,7 +219,7 @@ describe('codex tool - atomic resume fallback', () => {
         const release = CodexThreads.claim('stale-thread');
         expect(release).toBeTypeOf('function');
         release?.();
-      }).pipe(Effect.provide(nativeToolTestLayer())),
+      }).pipe(Effect.provide(toolLayer())),
   );
 
   it.effect(
@@ -313,7 +320,7 @@ describe('codex tool - atomic resume fallback', () => {
         claim.mockRestore();
       }).pipe(
         Effect.provide(
-          nativeToolTestLayer({
+          toolLayer({
             run: { session: testSession, runId: parentRunId, toolPolicy: {} },
           }),
         ),

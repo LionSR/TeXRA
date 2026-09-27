@@ -124,7 +124,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     category: AgentCategory.ToolUse,
     todos: [],
     plan: null,
-    goal: { active: false },
+    facts: {},
     outputs: {},
     missingOutputs: {},
     compileFailures: {},

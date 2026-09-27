@@ -219,7 +219,7 @@ const IGNORED_ROW_TYPES: Readonly<
   'conversation.progress': true,
   'run.fact': true,
   'child.park': true,
-  goalStateChanged: true,
+  'plugin.fact': true,
   inquiryThreadUpdated: true,
   'approval.policy': true,
   log: true,

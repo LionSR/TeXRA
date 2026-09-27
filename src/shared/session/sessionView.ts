@@ -21,8 +21,8 @@ import {
   CommitOrdinalSchema,
   ContextStateDataSchema,
   ConversationProgressSchema,
-  GoalStateSchema,
   InquiryThreadUpdatedEventSchema,
+  JsonValueSchema,
   OwnerIdSchema,
   PermissionPayloadSchema,
   PlanSchema,
@@ -106,6 +106,9 @@ const RunViewCommonSchema = z.object({
   command: z.string().nullable(),
   /** The run's input files, from `run.config`. */
   inputFiles: z.array(z.string()),
+  /** Each plugin row kind's latest value, by `plugin/kind` (`plugin.fact`):
+   *  undecoded here, read through its plugin's reader. */
+  facts: z.record(z.string(), JsonValueSchema),
   worktree: WorktreeInfoSchema.nullable(),
   /** The durable phase, folded from `run.activate` (running), `flow.step`
    *  (`waiting` parks, any other step runs), `child.park` (an agent-CLI
@@ -200,8 +203,6 @@ const ToolUseRunViewSchema = RunViewCommonSchema.extend({
   category: z.literal(AgentCategory.ToolUse),
   todos: z.array(TodoItemSchema),
   plan: PlanSchema.nullable(),
-  /** Per run: concurrent runs hold independent goals. */
-  goal: GoalStateSchema,
   outputs: RoundKeyedOutputSidecarValueSchemas.outputFiles,
 });
 

@@ -1,0 +1,110 @@
+/**
+ * Plugin layers: the services a plugin owns at process lifetime
+ * (`PLUGIN_PROCESS_LAYERS`, built by the live catalog, `@tools/liveTools`)
+ * and at session lifetime (`PLUGIN_SESSION_LAYERS`, built per session here).
+ * Either is up while its plugin is switched on or a step pins it, and its
+ * services reach a tool or continuation only through that step.
+ */
+import {
+  Context,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  RcMap,
+  Scope,
+  Semaphore,
+} from 'effect';
+
+import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import { withLogChannel } from '@logger/effectLog';
+import type { PluginServices } from '@platform/processRuntime';
+import type { LiveTools } from '@tools/liveTools';
+import { ToolRegistry } from '@tools/toolTable';
+
+/**
+ * A plugin layer built in the caller's scope, its services typed as the
+ * plugin services it serves (a plugin's layer serves its own tools), and its
+ * coming up and going down logged where the step that caused it is.
+ */
+export const buildPluginLayer = <R>(
+  plugin: string,
+  layer: Layer.Layer<never, never, R>,
+): Effect.Effect<Context.Context<PluginServices>, never, Scope.Scope | R> =>
+  Effect.acquireRelease(Effect.logDebug(`Plugin ${plugin}: services up.`), () =>
+    Effect.logDebug(`Plugin ${plugin}: services down.`),
+  ).pipe(
+    Effect.andThen(Layer.build(layer)),
+    Effect.map((services) => services as Context.Context<PluginServices>),
+    withLogChannel('PluginLayers'),
+  );
+
+/**
+ * One session's plugin layers (the table's), built in the caller's scope, the
+ * session's, over the session's `Runs`. The pin it answers reconciles the session's
+ * standing builds with the plugins a step found switched on (each on plugin
+ * holds its build, an off one lets go) and pins those plugins' services for
+ * the step's scope, so a plugin switched off keeps its services until the
+ * last step that pinned them releases.
+ */
+export const sessionPluginLayers = Effect.fnUntraced(function* (
+  runs: () => RunRegistry,
+) {
+  const layers = (yield* ToolRegistry).sessionLayers;
+  const scope = yield* Effect.scope;
+  const built = yield* RcMap.make({
+    lookup: (id: string) =>
+      buildPluginLayer(id, layers.get(id)!).pipe(
+        Effect.provideService(Runs, runs()),
+      ),
+  });
+  const standing = new Map<string, Scope.Closeable>();
+  const lock = yield* Semaphore.make(1);
+  return (on: ReadonlySet<string>) =>
+    lock.withPermits(1)(
+      Effect.uninterruptible(
+        Effect.gen(function* () {
+          for (const id of layers.keys()) {
+            const held = standing.get(id);
+            if (on.has(id) && held === undefined) {
+              const hold = yield* Scope.fork(scope);
+              yield* RcMap.get(built, id).pipe(Scope.provide(hold));
+              standing.set(id, hold);
+            } else if (!on.has(id) && held !== undefined) {
+              standing.delete(id);
+              yield* Scope.close(held, Exit.void);
+            }
+          }
+          return yield* Effect.reduce(
+            [...on].filter((id) => layers.has(id)),
+            () => Context.empty() as Context.Context<PluginServices>,
+            (merged, id) =>
+              Effect.map(RcMap.get(built, id), (services) =>
+                Context.merge(merged, services),
+              ),
+          );
+        }),
+      ),
+    );
+});
+
+/**
+ * The core shutdown protocol's plugin step, before the sessions close: every
+ * switched-on plugin's `drain` (what it admitted for a session, such as a
+ * poll round's delivery), while its process services are still up.
+ */
+export const drainPlugins = Effect.fnUntraced(function* (
+  live: LiveTools['Service'],
+) {
+  const layers = (yield* ToolRegistry).processLayers;
+  yield* Effect.forEach(
+    [...layers].filter(([, entry]) => entry.drain),
+    ([id, entry]) =>
+      Effect.flatMap(live.processServices(id), (services) =>
+        Option.isSome(services)
+          ? Effect.provide(entry.drain!, services.value)
+          : Effect.void,
+      ),
+    { concurrency: 'unbounded', discard: true },
+  ).pipe(Effect.scoped);
+});

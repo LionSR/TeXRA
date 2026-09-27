@@ -34,7 +34,6 @@ import {
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -67,9 +66,10 @@ import {
   getCodexConfig,
   openCodexClient,
 } from './codexImport';
-import { codexThreadsFor } from './agentCliSessionStores';
+import { CodexThreads } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
+  type AgentCliLaunchContext,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
@@ -83,6 +83,7 @@ import {
   buildCodexTodoToolLog,
   buildCodexTurnToolLog,
 } from './codexShared';
+import type { AgentCliSessionRegistry } from './agentCliSessionRegistry';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import type { DetachedChildRunLaunch } from './delegation/detachedChildRun';
 
@@ -361,6 +362,7 @@ function buildCodexLaunch(params: {
   resumeThreadId: string | undefined;
   /** Release the fallback claim if the loop exits before promoting it. */
   releaseFallbackClaim: (() => void) | undefined;
+  registry: AgentCliSessionRegistry;
 }): Effect.Effect<DetachedChildRunLaunch<RunResult>, never, Runs> {
   const {
     thread,
@@ -376,7 +378,7 @@ function buildCodexLaunch(params: {
     runId,
     stageLabel: 'Codex session',
     initialPrompt,
-    store: codexThreadsFor,
+    registry: params.registry,
     releaseFallbackClaim,
     runProviderTurn: (prompt, _ports, signal) =>
       runStreamedTurn(thread, prompt, logger, signal),
@@ -460,7 +462,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | AgentResume | ChildProcessSpawner
+  ToolCall | Runs | CodexThreads | AgentResume | ChildProcessSpawner
 > {
   const toolCall = yield* ToolCall;
   const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
@@ -468,7 +470,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   return yield* dispatchAgentCliTool({
     toolCall,
     agentName: CODEX_AGENT_NAME,
-    store: codexThreadsFor,
+    store: CodexThreads,
     resumeId: input.thread_id ?? undefined,
     prompt: input.prompt,
     labels: {
@@ -477,15 +479,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
       summaryLabel: 'Codex',
       queuedLabel: 'Codex thread',
     },
-    launch: (context) =>
-      launchCodexSession(
-        input,
-        sandboxMode,
-        context.parentRunId,
-        context.parentWorkingDirectory,
-        context.releaseFallbackClaim,
-        context.session,
-      ),
+    launch: (context) => launchCodexSession(input, sandboxMode, context),
   });
 });
 
@@ -517,10 +511,7 @@ export const CodexTool = defineTool({
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   input: CodexInput,
   sandboxMode: SandboxMode,
-  parentRunId: RunId,
-  parentWorkingDirectory: string | undefined,
-  releaseFallbackClaim: (() => void) | undefined,
-  session: SessionHandle,
+  context: AgentCliLaunchContext,
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
@@ -531,7 +522,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
     input,
     sandboxMode,
     roots,
-    parentWorkingDirectory,
+    context.parentWorkingDirectory,
   ).pipe(Effect.orDie);
   // Synthetic run metadata for the child run: Codex runs outside the normal
   // run loop, so the tool-use category and a stable Codex model label are
@@ -545,8 +536,8 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   const preview = previewLabel(input.prompt);
 
   return yield* launchAgentCliSession({
-    session,
-    parentRunId,
+    session: context.session,
+    parentRunId: context.parentRunId,
     resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
     description: input.prompt,
@@ -559,7 +550,8 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
         runId,
         initialPrompt: input.prompt,
         resumeThreadId: input.thread_id ?? undefined,
-        releaseFallbackClaim,
+        releaseFallbackClaim: context.releaseFallbackClaim,
+        registry: context.registry,
       }),
     summary: `Launched Codex: ${preview}`,
     launchedLine: `Codex agent launched (sandbox: ${sandboxMode}).`,

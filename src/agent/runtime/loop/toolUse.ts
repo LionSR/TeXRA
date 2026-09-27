@@ -197,7 +197,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       if (!resumeUnseen || step.continuation === null || isChild())
         return Effect.void;
       resumeUnseen = false;
-      return step.continuation.onResume({ session, runId });
+      return step.continuation
+        .onResume({ session, runId })
+        .pipe(Effect.provide(step.tools.services));
     });
 
   // ------------------------------------------------------------ host port
@@ -628,12 +630,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             const step = yield* openStep(state, 'park');
             if (step.rows.length > 0) state = yield* cell.append(step.rows);
             if (step.continuation !== null) {
-              next = yield* step.continuation.atIdle({
-                session,
-                runId,
-                state,
-                canContinue,
-              });
+              next = yield* step.continuation
+                .atIdle({ session, runId, state, canContinue })
+                .pipe(Effect.provide(step.tools.services));
             }
           }
           // Every park is idle, a failed turn's included: a resume

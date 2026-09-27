@@ -1,8 +1,9 @@
 // Third-party imports
-import { Effect, FileSystem, Layer } from 'effect';
+import { Cause, Effect, FileSystem, Layer, Queue, Stream } from 'effect';
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { onAppSignal } from '@eventBus/AppSignals';
 import { AppState } from '@platform/interfaces';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
@@ -10,22 +11,33 @@ import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
-import { toolTableLayer } from '@tools/liveTools';
+import { LiveTools, toolTableLayer } from '@tools/liveTools';
 import { mcpPluginLoader, mcpRevisionKey } from '@tools/mcp/mcpConfig';
 import {
+  switchedOffPlugins,
   TOOL_PLUGINS,
   type PluginToolName,
   type ToolPluginEntry,
   type ToolPluginId,
 } from '@tools/plugins';
+import {
+  claudeAgentSessionsLayer,
+  codexThreadsLayer,
+} from '@tools/agentCliSessionStores';
+import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
+import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
+import { goalGrantsLayer } from '@tools/goal/goalAutoApproval';
 import { goalContinuation } from '@tools/goal/goalContinuation';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import {
   toolTable,
   type Continuation,
-  type PluginLayer,
+  type ProcessPluginLayer,
   type PromptSection,
+  type SessionPluginLayer,
 } from '@tools/toolTable';
+import { getDisabledToolIds } from '@utils/config/constants';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -191,18 +203,6 @@ const PLUGIN_TOOLS = {
   };
 };
 
-/**
- * The layer of each plugin that owns resources, keyed by plugin id: exactly
- * the plugins whose manifest entry declares `layer`. Each is one object for
- * the life of the process, so the compositions that include its plugin
- * share one build of it.
- */
-const PLUGIN_LAYERS = {} as const satisfies {
-  readonly [
-    Id in Extract<ToolPluginEntry, { readonly layer: true }>['id']
-  ]: PluginLayer;
-};
-
 /** The continuation of each plugin whose manifest entry declares one. */
 const PLUGIN_CONTINUATIONS = {
   goal: goalContinuation,
@@ -219,6 +219,36 @@ const PLUGIN_PROMPT_SECTIONS: Readonly<Record<string, PromptSection>> = {
   readonly [
     Id in Extract<ToolPluginEntry, { readonly promptSection: true }>['id']
   ]: PromptSection;
+};
+
+// ------------------------------------------------------------ plugin layers
+
+/**
+ * The process services of each plugin whose manifest entry declares
+ * `processLayer`, up while the plugin is on or pinned (`@tools/liveTools`).
+ * GitHub's delivery drain is its step of the core shutdown protocol.
+ */
+const PLUGIN_PROCESS_LAYERS = {
+  'github-pr-subscription': {
+    layer: gitHubSubscriptionsLayer,
+    drain: Effect.flatMap(GitHubSubscriptions, (s) => s.drainDeliveries),
+  },
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly processLayer: true }>['id']
+  ]: ProcessPluginLayer;
+};
+
+/** The session services of each plugin whose manifest entry declares
+ *  `sessionLayer`: one build per open session. */
+const PLUGIN_SESSION_LAYERS = {
+  goal: goalGrantsLayer,
+  codex: codexThreadsLayer,
+  'claude-agent': claudeAgentSessionsLayer,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly sessionLayer: true }>['id']
+  ]: SessionPluginLayer;
 };
 
 type PluginTools = typeof PLUGIN_TOOLS;
@@ -249,7 +279,6 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
  */
 const TOOL_TABLE = toolTable(
   PLUGIN_TOOLS,
-  PLUGIN_LAYERS,
   PLUGIN_CONTINUATIONS,
   // Each plugin's section, and whether it ships skills for the catalog.
   Object.fromEntries(
@@ -260,16 +289,33 @@ const TOOL_TABLE = toolTable(
         : [];
     }),
   ),
+  PLUGIN_PROCESS_LAYERS,
+  PLUGIN_SESSION_LAYERS,
 );
 
+/** The process layers a host supplies, for the plugins whose manifest
+ *  entry declares `hostLayer` (the VS Code host's Copilot tools). */
+export type HostPluginLayers = {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly hostLayer: true }>['id']
+  ]?: ProcessPluginLayer;
+};
+
 /**
- * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it and the
- * MCP servers of `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`),
- * which `installProcessRuntime` provides. The layer takes the process
- * `FileSystem` that `installProcessRuntime` serves, to read that file, and
- * its `AppState`, which holds the key MCP env values are digested under.
+ * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it,
+ * the process layers `hostLayers` adds, and the MCP servers of
+ * `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`), which
+ * `installProcessRuntime` provides. The layer takes the process `FileSystem`
+ * that `installProcessRuntime` serves, to read that file, and its
+ * `AppState`, which holds the key MCP env values are digested under and the
+ * switches. A switch flipped in this process reaches the catalog at once,
+ * not only at a run's next step, so what follows the catalog outside a run
+ * (a host layer's lifetime, its Copilot tools) follows the switch.
  */
-export const toolRegistryLayer = (mcpConfigPath: string) =>
+export const toolRegistryLayer = (
+  mcpConfigPath: string,
+  hostLayers: HostPluginLayers = {},
+) =>
   Layer.unwrap(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
@@ -278,10 +324,46 @@ export const toolRegistryLayer = (mcpConfigPath: string) =>
       const revisionKey = yield* Effect.cached(
         mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
       );
-      return toolTableLayer(
-        TOOL_TABLE,
+      const catalog = toolTableLayer(
+        {
+          ...TOOL_TABLE,
+          processLayers: new Map([
+            ...TOOL_TABLE.processLayers,
+            ...Object.entries(hostLayers),
+          ]),
+        },
         mcpPluginLoader(fs, mcpConfigPath, revisionKey),
       );
+      const followSwitches = Layer.effectDiscard(
+        Effect.gen(function* () {
+          const live = yield* LiveTools;
+          const off = Effect.map(
+            getDisabledToolIds(appState),
+            switchedOffPlugins,
+          );
+          // Nothing stays pinned: a pin here only applies the switches.
+          const apply = Effect.scoped(live.pinSwitched(off)).pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                `Tool switches were not applied to the catalog: ${toErrorMessage(Cause.squash(cause))}`,
+              ),
+            ),
+          );
+          // The switches as they stand, then each flip in this process, off
+          // the build: a store that cannot be read yet fails no process.
+          yield* apply.pipe(
+            Effect.andThen(
+              Stream.callback<void>((queue) =>
+                onAppSignal('toolSwitchesChanged', () =>
+                  Queue.offerUnsafe(queue, undefined),
+                ),
+              ).pipe(Stream.runForEach(() => apply)),
+            ),
+            Effect.forkScoped,
+          );
+        }),
+      );
+      return Layer.provideMerge(followSwitches, catalog);
     }),
   );
 

@@ -121,12 +121,12 @@ import type { UsageLog } from '@shared/usageLog';
 import { releaseRunResources } from '@tools/approval';
 import { InlineComments } from '@tools/comment/InlineCommentTool';
 import type { InlineCommentProvider } from '@tools/comment/InlineCommentTool';
-import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
-import { gitHubSubscriptionsLayer } from '@tools/github/subscriptionRegistries';
+import { LiveTools } from '@tools/liveTools';
+import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
-import { toolRegistryLayer } from '@tools/registry';
+import { toolRegistryLayer, type HostPluginLayers } from '@tools/registry';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { inquiryRecordsLayer } from './inquiryRecords';
@@ -559,6 +559,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             holdRunClaim: (runId) => session.holdRunClaim(runId),
             borrowRunClaim: (runId) => session.borrowRunClaim(runId),
             fork,
+            pinPlugins,
           }),
           // The requests: the approvals above, admitted on the root's log.
           requests: sessionRequests(
@@ -585,6 +586,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       const initialListing = yield* eventLog.readListing();
       // The runs' fork, the gate's probes and the history store end with this scope.
       const fork = yield* makeRunFork();
+      const pinPlugins = yield* sessionPluginLayers(() => session.runs);
       const services = {
         modelRetries: yield* ModelRetryGate.make,
         history: yield* HistoryQuery.make(() => session),
@@ -633,9 +635,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       if (key.open.interactions) {
         yield* session.interactions.use(key.open.interactions);
       }
-      // Registered after the owners, so it is the first thing unwound when
-      // the entry closes: `current` stops answering with this session before
-      // its owners unwind.
+      // Registered after the owners, so it is unwound first: `current` stops
+      // answering with this session before its owners unwind.
       yield* Effect.acquireRelease(
         Effect.sync(() => held.set(key, session)),
         () => Effect.sync(() => held.delete(key)),
@@ -645,9 +646,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
         Stream.runForEach((event) =>
           Effect.suspend(() => {
             const target = aggregateTarget(event.aggregateId);
-            // The local half of a committed removal. The run's goal needs
-            // nothing: `run.removed` drops the run from the view, and its
-            // `goalStateChanged` row goes with it.
+            // The local half of a committed removal; its plugin rows go with it.
             return event.type === 'run.removed' && target.kind === 'run'
               ? Effect.sync(() => {
                   session.runs.detachChildren(target.id);
@@ -1052,6 +1051,8 @@ interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
   readonly mcpConfigPath: string;
+  /** The plugins' process layers this host supplies (Copilot's, in VS Code). */
+  readonly pluginLayers?: HostPluginLayers;
   readonly secrets: PlatformSecrets;
   /**
    * The root's agent-resume port, served as `AgentResume`: the same value the
@@ -1159,6 +1160,7 @@ export function installProcessRuntime({
   processStart,
   globalStorage,
   mcpConfigPath,
+  pluginLayers,
   secrets,
   appState,
   auth,
@@ -1196,10 +1198,8 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    toolRegistryLayer(mcpConfigPath),
+    toolRegistryLayer(mcpConfigPath, pluginLayers),
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
-    // Built with this runtime: a replacement starts with empty tables.
-    gitHubSubscriptionsLayer,
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),
@@ -1257,9 +1257,9 @@ export function installProcessRuntime({
     closeAll: () =>
       Effect.flatMap(runtime.contextEffect, (context) =>
         Effect.gen(function* () {
-          // A delivery a poll round admitted reaches its run's session: it
-          // lands before that session closes, not after.
-          yield* (yield* GitHubSubscriptions).drainDeliveries;
+          // What a plugin admitted for a session (a GitHub poll round's
+          // delivery) lands before that session closes, not after.
+          yield* drainPlugins(yield* LiveTools);
           // The held sessions, read synchronously: a shutdown never waits on
           // an entry still building (a store that will not open), which the
           // runtime's own disposal tears down.

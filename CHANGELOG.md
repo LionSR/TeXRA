@@ -261,6 +261,10 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   workspace's history failed, the error gave no reason; it now includes the
   underlying cause, such as the history file being locked by another process.
 
+- **Switching a tool plugin off now also stops what it was running** —
+  turning off GitHub PR subscriptions ends its subscriptions and polling once
+  no running conversation still uses them.
+
 - **Resuming a stopped workflow in the desktop app continues it instead of
   marking it failed** — Resume on a halted workflow run started the run over
   under its old id, which the app refused, so the run was recorded as failed.
