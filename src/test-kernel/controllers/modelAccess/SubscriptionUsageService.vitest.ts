@@ -7,6 +7,7 @@ import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
 import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import { timestampField } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
+  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,
   parseGlmCodingPlanUsage,
 } from '@controllers/modelAccess/subscriptionUsage/glmCodingPlanUsageAdapter';
@@ -82,6 +83,26 @@ function makeService(
       ? {}
       : { requestTimeoutMs: options.requestTimeoutMs }),
   });
+}
+
+/**
+ * Stores over one mutable GLM region flag. The catalog default is the China
+ * endpoint, so a test that wants the international one seeds `false`.
+ */
+function glmRegionStores(useChina?: boolean): {
+  readonly stores: SettingsStores;
+  setRegion(next: boolean): void;
+} {
+  const globalState =
+    useChina === undefined
+      ? new FakeStateStore()
+      : new FakeStateStore({ [GlobalStateKey.GLM_USE_CHINA]: useChina });
+  return {
+    stores: { ...makeFakeSettingsStores().stores, globalState },
+    setRegion: (next) => {
+      Effect.runSync(globalState.update(GlobalStateKey.GLM_USE_CHINA, next));
+    },
+  };
 }
 
 /**
@@ -498,6 +519,114 @@ describe('SubscriptionUsageService', () => {
       });
     },
   );
+
+  it('does not reuse GLM usage from the previous region within the TTL', async () => {
+    const http = vi.fn<UsageFetch>(async (url) =>
+      jsonResponse({
+        success: true,
+        data: {
+          limits: [
+            {
+              type: 'TOKENS_LIMIT',
+              percentage: String(url) === GLM_CODING_PLAN_USAGE_URL ? 10 : 80,
+              unit: 3,
+            },
+          ],
+        },
+      }),
+    );
+    const region = glmRegionStores(true);
+    const service = makeService({ stores: region.stores });
+
+    const china = await runUsage(service.getUsage('glmCodingPlan'), http);
+    region.setRegion(false);
+    const international = await runUsage(
+      service.getUsage('glmCodingPlan'),
+      http,
+    );
+
+    expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
+      GLM_CODING_PLAN_USAGE_URL,
+      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+    ]);
+    expect(china.state).toBe('available');
+    expect(china.windows[0]?.percentUsed).toBe(10);
+    expect(international.state).toBe('available');
+    expect(international.windows[0]?.percentUsed).toBe(80);
+  });
+
+  it.each([
+    [true, GLM_CODING_PLAN_USAGE_URL, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL],
+    [false, GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL, GLM_CODING_PLAN_USAGE_URL],
+  ])(
+    'serves concurrent GLM region requests from independent cache keys: China=%s',
+    async (initialUseChina, olderUrl, newerUrl) => {
+      const responses = new Map<string, (response: Response) => void>();
+      const firstRequest = createDeferred<void>();
+      const secondRequest = createDeferred<void>();
+      const http = vi.fn<UsageFetch>((url) => {
+        (responses.size === 0 ? firstRequest : secondRequest).resolve();
+        return new Promise<Response>((resolve) => {
+          responses.set(String(url), resolve);
+        });
+      });
+      const region = glmRegionStores(initialUseChina);
+      const service = makeService({ stores: region.stores });
+
+      const olderRequest = runUsage(service.getUsage('glmCodingPlan'), http);
+      await firstRequest.promise;
+      region.setRegion(!initialUseChina);
+      const newerRequest = runUsage(service.getUsage('glmCodingPlan'), http);
+      await secondRequest.promise;
+
+      responses.get(newerUrl)?.(
+        jsonResponse({
+          success: true,
+          data: {
+            limits: [{ type: 'TOKENS_LIMIT', percentage: 80, unit: 3 }],
+          },
+        }),
+      );
+      const newer = await newerRequest;
+      responses.get(olderUrl)?.(
+        jsonResponse({
+          success: true,
+          data: {
+            limits: [{ type: 'TOKENS_LIMIT', percentage: 10, unit: 3 }],
+          },
+        }),
+      );
+      const olderCaller = await olderRequest;
+
+      expect(http.mock.calls.map(([url]) => String(url))).toStrictEqual([
+        olderUrl,
+        newerUrl,
+      ]);
+      expect(newer.windows[0]?.percentUsed).toBe(80);
+      expect(olderCaller.windows[0]?.percentUsed).toBe(10);
+    },
+  );
+
+  it('does not fall back across GLM hosts when the selected region fails', async () => {
+    const http = vi.fn<UsageFetch>(async () =>
+      jsonResponse({ message: 'unavailable' }, 500),
+    );
+    const snapshot = await runUsage(
+      makeService({ stores: glmRegionStores(false).stores }).getUsage(
+        'glmCodingPlan',
+      ),
+      http,
+    );
+
+    expect(http).toHaveBeenCalledOnce();
+    expect(String(http.mock.calls[0][0])).toBe(
+      GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
+    );
+    expect(snapshot).toMatchObject({
+      state: 'unavailable',
+      reason: 'request_failed',
+    });
+  });
 
   it.each([
     ['chatgpt' as const, { 'apiKey.kimiCode': 'k', 'apiKey.glm': 'g' }],

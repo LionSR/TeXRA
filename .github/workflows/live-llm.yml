@@ -58,3 +58,4 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          ZAI_API_KEY: ${{ secrets.ZAI_API_KEY }}

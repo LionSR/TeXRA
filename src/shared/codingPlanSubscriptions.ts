@@ -27,6 +27,7 @@ interface CodingPlanSubscriptionDescriptor {
   readonly modelFamily: string;
   readonly retryFallbackName: string;
   readonly retrySourceName: string;
+  readonly usageVariantSettingKeys: readonly string[];
 }
 
 /** Canonical catalog of coding-plan providers supported by every host. */
@@ -46,6 +47,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     modelFamily: 'Kimi models',
     retryFallbackName: 'your own Moonshot API keys',
     retrySourceName: 'Kimi Code subscription',
+    usageVariantSettingKeys: Object.freeze([]),
   }),
   Object.freeze({
     id: 'glmCodingPlan',
@@ -53,7 +55,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     apiProvider: 'glm',
     exclusiveCredential: false,
     credentialName: 'GLM',
-    credentialSetupUrl: 'https://open.bigmodel.cn',
+    credentialSetupUrl: 'https://open.bigmodel.cn or https://z.ai',
     usageProvider: 'glmCodingPlan',
     usageRoute: 'glm-coding-plan-subscription',
     exhaustionReason: 'glm-coding-plan',
@@ -62,6 +64,7 @@ export const CODING_PLAN_SUBSCRIPTIONS = Object.freeze([
     modelFamily: 'GLM models',
     retryFallbackName: 'the regular GLM endpoint',
     retrySourceName: 'GLM Coding Plan',
+    usageVariantSettingKeys: Object.freeze([GlobalStateKey.GLM_USE_CHINA]),
   }),
 ] as const satisfies readonly CodingPlanSubscriptionDescriptor[]);
 
@@ -74,6 +77,12 @@ const CODING_PLAN_BY_USAGE_ROUTE = new Map<UsageRoute, CodingPlanSubscription>(
 
 const CODING_PLAN_BY_API_PROVIDER = new Map<string, CodingPlanSubscription>(
   CODING_PLAN_SUBSCRIPTIONS.map((plan) => [plan.apiProvider, plan]),
+);
+
+const CODING_PLAN_BY_USAGE_SETTING = new Map<string, CodingPlanSubscription>(
+  CODING_PLAN_SUBSCRIPTIONS.flatMap((plan) =>
+    plan.usageVariantSettingKeys.map((key) => [key, plan] as const),
+  ),
 );
 
 /** Resolve a coding plan from the route stamped on completed usage. */
@@ -90,4 +99,11 @@ export function codingPlanForApiProvider(
   provider: string,
 ): CodingPlanSubscription | undefined {
   return CODING_PLAN_BY_API_PROVIDER.get(provider);
+}
+
+/** Resolve a plan whose usage endpoint varies with a setting. */
+export function codingPlanForUsageSetting(
+  key: string,
+): CodingPlanSubscription | undefined {
+  return CODING_PLAN_BY_USAGE_SETTING.get(key);
 }

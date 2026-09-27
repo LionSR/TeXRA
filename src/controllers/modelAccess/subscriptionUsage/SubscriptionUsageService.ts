@@ -16,12 +16,14 @@ import type {
   SubscriptionUsageSnapshots,
 } from '@shared/schemas';
 import { SUBSCRIPTION_USAGE_PROVIDERS } from '@shared/schemas';
+import { useChinaRegion } from '@utils/config/providerConfig';
 import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { fetchChatGptUsage } from './codexUsageAdapter';
 import {
   fetchGlmCodingPlanUsage,
+  GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
   GLM_CODING_PLAN_USAGE_URL,
 } from './glmCodingPlanUsageAdapter';
 import { fetchKimiCodeUsage } from './kimiCodeUsageAdapter';
@@ -69,7 +71,11 @@ type SubscriptionUsageUnavailableReason = Extract<
 >['reason'];
 
 interface SubscriptionUsageAdapter {
-  readonly fetch: () => Effect.Effect<
+  /** Credential-derived request variant (today: the GLM region flag). */
+  readonly resolveVariant?: () => Effect.Effect<boolean, Error>;
+  readonly fetch: (
+    variant: boolean | undefined,
+  ) => Effect.Effect<
     ParsedSubscriptionUsage | null,
     Error,
     HttpClient.HttpClient
@@ -138,13 +144,16 @@ export class SubscriptionUsageService {
           ),
       },
       glmCodingPlan: {
-        fetch: () =>
+        resolveVariant: () => useChinaRegion(this.stores, 'glm'),
+        fetch: (useChina) =>
           Effect.flatMap(this.loadApiKey('glm'), (apiKey) =>
             apiKey
               ? fetchGlmCodingPlanUsage(
                   apiKey,
                   this.requestTimeoutMs,
-                  GLM_CODING_PLAN_USAGE_URL,
+                  (useChina ?? true)
+                    ? GLM_CODING_PLAN_USAGE_URL
+                    : GLM_CODING_PLAN_INTERNATIONAL_USAGE_URL,
                 )
               : Effect.succeed(null),
           ),
@@ -183,8 +192,13 @@ export class SubscriptionUsageService {
   invalidate(provider?: SubscriptionUsageProvider): void {
     const providers = provider ? [provider] : SUBSCRIPTION_USAGE_PROVIDERS;
     for (const target of providers) {
-      this.cache.delete(target);
-      this.pending.delete(target);
+      const keyPrefix = `${target}:`;
+      for (const key of this.cache.keys()) {
+        if (key.startsWith(keyPrefix)) this.cache.delete(key);
+      }
+      for (const key of this.pending.keys()) {
+        if (key.startsWith(keyPrefix)) this.pending.delete(key);
+      }
     }
   }
 
@@ -192,7 +206,27 @@ export class SubscriptionUsageService {
     provider: SubscriptionUsageProvider,
     options: { readonly forceRefresh?: boolean } = {},
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
-    return this.coalesced(provider, options);
+    const adapter = this.adapters[provider];
+    return Effect.matchCauseEffect(
+      Effect.suspend(
+        (): Effect.Effect<boolean | undefined, Error> =>
+          adapter.resolveVariant?.() ?? Effect.succeed(undefined),
+      ),
+      {
+        onFailure: (cause) =>
+          Effect.gen({ self: this }, function* () {
+            const error = settleFailure(cause);
+            yield* Effect.logWarning(
+              `Subscription usage variant probe failed for ${provider}: ${toErrorMessage(error)}`,
+            ).pipe(
+              Effect.annotateLogs({ data: error }),
+              withLogChannel(CHANNEL),
+            );
+            return this.unavailable(provider, 'request_failed');
+          }),
+        onSuccess: (variant) => this.coalesced(provider, variant, options),
+      },
+    );
   }
 
   /** One snapshot per subscription provider, for a settings-view refresh. */
@@ -227,9 +261,10 @@ export class SubscriptionUsageService {
    */
   private coalesced(
     provider: SubscriptionUsageProvider,
+    variant: boolean | undefined,
     options: { readonly forceRefresh?: boolean },
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
-    const key = provider;
+    const key = `${provider}:${variant ?? 'default'}`;
     return Effect.suspend(() => {
       if (options.forceRefresh) {
         this.cache.delete(key);
@@ -244,7 +279,7 @@ export class SubscriptionUsageService {
       }
       const request = attempt;
       return request.run(() =>
-        this.fetchUsage(provider).pipe(
+        this.fetchUsage(provider, variant).pipe(
           Effect.onExit((exit) =>
             Effect.sync(() => {
               if (this.pending.get(key) !== request) return;
@@ -288,8 +323,9 @@ export class SubscriptionUsageService {
 
   private fetchUsage(
     provider: SubscriptionUsageProvider,
+    variant: boolean | undefined,
   ): Effect.Effect<SubscriptionUsageSnapshot, never, HttpClient.HttpClient> {
-    return Effect.suspend(() => this.adapters[provider].fetch()).pipe(
+    return Effect.suspend(() => this.adapters[provider].fetch(variant)).pipe(
       Effect.map((parsed) => {
         if (parsed === null) {
           return this.unavailable(provider, 'missing_credentials');

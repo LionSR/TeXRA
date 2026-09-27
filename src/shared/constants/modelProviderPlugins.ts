@@ -245,9 +245,26 @@ const MANIFEST = [
     keyUrl: 'https://open.bigmodel.cn/',
     apiKey: true,
     endpointKey: GlobalStateKey.ENDPOINT_GLM,
-    // Zhipu serves Responses only on bigmodel.cn, for API and Coding Plan
-    // keys alike; Z.ai's international API has no Responses endpoint.
-    baseUrl: 'https://open.bigmodel.cn/api/v1',
+    // China=true is the default since bigmodel.cn is the primary platform;
+    // when toggled off (international), the key URL is z.ai.
+    region: {
+      key: GlobalStateKey.GLM_USE_CHINA,
+      default: true,
+      control: {
+        label: 'GLM China region',
+        description:
+          'Use the China region endpoint (open.bigmodel.cn) instead of international (api.z.ai). Enabled by default. API keys work with either endpoint.',
+        warningUrl: 'https://open.bigmodel.cn/',
+        warningUrlLabel: 'BigModel console',
+      },
+      keyUrlWhenUnset: 'https://z.ai/',
+    },
+    // Both regions serve Responses at /api/v1, for API and Coding Plan keys
+    // alike (BigModel and Z.AI Codex guides).
+    baseUrl: {
+      china: 'https://open.bigmodel.cn/api/v1',
+      international: 'https://api.z.ai/api/v1',
+    },
     compatibilityKey: 'GLM',
     setupModel: 'glm53',
     modelSource: true,

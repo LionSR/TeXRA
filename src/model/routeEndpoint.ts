@@ -7,8 +7,8 @@ import { Effect } from 'effect';
  * per-model base URL, then the route's own (Kimi Code, OpenRouter), then a
  * per-provider dashboard endpoint, then the provider plugin's default
  * (`baseUrl` in `@shared/constants/modelProviderPlugins`), picked by region
- * when it has two. A GLM Coding Plan key takes the same Responses endpoint
- * as an API key.
+ * when it has two. A GLM Coding Plan key takes its region's Responses
+ * endpoint, the same one an API key does.
  */
 
 import type { StateReadFailed } from '@platform/interfaces';

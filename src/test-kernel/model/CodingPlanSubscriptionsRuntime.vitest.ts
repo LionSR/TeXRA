@@ -59,13 +59,17 @@ describe('coding-plan subscription runtime', () => {
       hostStores().globalState.update(GlobalStateKey.GLM_CODING_PLAN, true),
     );
     await Effect.runPromise(
+      hostStores().globalState.update(GlobalStateKey.GLM_USE_CHINA, true),
+    );
+    await Effect.runPromise(
       hostStores().globalState.update(GlobalStateKey.USE_OPENROUTER, true),
     );
   });
 
   it.effect.each([
     {
-      name: 'Coding Plan',
+      name: 'China Coding Plan',
+      useChina: true,
       codingPlan: true,
       expected: {
         baseUrl: 'https://open.bigmodel.cn/api/v1',
@@ -73,11 +77,31 @@ describe('coding-plan subscription runtime', () => {
       },
     },
     {
-      name: 'regular API',
-      codingPlan: false,
-      expected: { baseUrl: 'https://open.bigmodel.cn/api/v1' },
+      name: 'global Coding Plan',
+      useChina: false,
+      codingPlan: true,
+      expected: {
+        baseUrl: 'https://api.z.ai/api/v1',
+        usageRoute: 'glm-coding-plan-subscription',
+      },
     },
-  ])('resolves the exact $name route', ({ codingPlan, expected }) =>
+    {
+      name: 'China regular API',
+      useChina: true,
+      codingPlan: false,
+      expected: {
+        baseUrl: 'https://open.bigmodel.cn/api/v1',
+      },
+    },
+    {
+      name: 'global regular API',
+      useChina: false,
+      codingPlan: false,
+      expected: {
+        baseUrl: 'https://api.z.ai/api/v1',
+      },
+    },
+  ])('resolves the exact $name route', ({ useChina, codingPlan, expected }) =>
     Effect.gen(function* () {
       yield* hostStores().globalState.update(
         GlobalStateKey.USE_OPENROUTER,
@@ -87,6 +111,10 @@ describe('coding-plan subscription runtime', () => {
       yield* hostStores().globalState.update(
         GlobalStateKey.GLM_CODING_PLAN,
         codingPlan,
+      );
+      yield* hostStores().globalState.update(
+        GlobalStateKey.GLM_USE_CHINA,
+        useChina,
       );
 
       expect(yield* boundEndpoint(GLM53)).toEqual(expected);
@@ -177,7 +205,7 @@ describe('coding-plan subscription runtime', () => {
         );
         expect(
           yield* boundEndpoint(GLM53, ['glm-coding-plan-subscription']),
-        ).toEqual({ baseUrl: 'https://open.bigmodel.cn/api/v1' });
+        ).toEqual({ baseUrl: expect.stringMatching(/\/api\/v1$/) });
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
         expect(

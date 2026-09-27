@@ -10,11 +10,10 @@ All notable changes to this project will be documented in this file.
   with a DeepSeek, Kimi/Kimi Code, GLM, DashScope, MiniMax or xAI key now
   talk to that vendor's OpenAI-compatible Responses endpoint instead of
   Chat Completions. Models a vendor serves only on Chat Completions are
-  reached through OpenRouter. GLM now uses only BigModel
-  (`open.bigmodel.cn`), for API and Coding Plan keys alike: Z.AI has no
-  Responses endpoint, so the GLM China/international toggle is gone and a
-  Z.AI key no longer works directly — use a BigModel key or OpenRouter.
-  MiniMax's China region moves to `api.minimax.cn`.
+  reached through OpenRouter. GLM keeps its China (BigModel) and
+  international (Z.AI) regions; both serve Responses at `/api/v1`, and a
+  Coding Plan key uses the same endpoint as an API key. MiniMax's China
+  region moves to `api.minimax.cn`.
 - **`delegate_agent` no longer takes `execution_id`** — send a subagent
   follow-up instructions with the `executions` tool instead (`action: "send"`
   on `/executions/<run id>`). A custom agent whose prompt tells it to resume a

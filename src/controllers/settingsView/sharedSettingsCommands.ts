@@ -52,7 +52,10 @@ import { discoverCopilotRoutes } from '@model/copilotRouting';
 import type { ProcessServices } from '@platform/processRuntime';
 import { type StorageFs, withSessionFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import { codingPlanForApiProvider } from '@shared/codingPlanSubscriptions';
+import {
+  codingPlanForApiProvider,
+  codingPlanForUsageSetting,
+} from '@shared/codingPlanSubscriptions';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import type { SubscriptionUsageProvider } from '@shared/schemas';
 import { buildSettingsSnapshotMessage } from '@shared/settingsView/handlers/settingsSnapshot';
@@ -280,6 +283,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       if (result.kind !== 'applied') return;
       if (result.entry.onWrite?.invalidatesModelOptions) {
         yield* refreshAfterCredentialChange();
+      }
+      if (codingPlanForUsageSetting(key) !== undefined) {
+        yield* postUsage(false);
       }
       yield* bindings.stateSettingApplied(key);
     });
