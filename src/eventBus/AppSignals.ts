@@ -1,4 +1,4 @@
-import { Effect, PubSub } from 'effect';
+import { Deferred, Effect, PubSub } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
@@ -217,15 +217,19 @@ export function emitAppSignal<K extends AppSignal>(
  * Deliver `signal` to `listener` until the caller interrupts. The program a
  * host's run edge forks: its scope holds the subscription, so interrupting
  * the fiber unsubscribes, and the `warn` on a failing listener is this
- * module's, not the host's.
+ * module's, not the host's. `subscribed` completes once the subscription is
+ * live, for a caller that must not miss a signal published after it reads
+ * the state the signal announces.
  */
 export function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
+  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   return Effect.scoped(
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(yield* openHub);
+      if (subscribed) yield* Deferred.succeed(subscribed, undefined);
       while (true) {
         const event = yield* PubSub.take(subscription);
         if (event.signal !== signal) continue;

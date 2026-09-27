@@ -1,12 +1,12 @@
 // Third-party imports
 import {
   Cause,
+  Deferred,
   Effect,
   FileSystem,
   Layer,
   Queue,
   Schedule,
-  Stream,
 } from 'effect';
 
 // Local imports
@@ -371,16 +371,23 @@ export const toolRegistryLayer = (
                 ),
               ),
             );
-          // The switches as they stand, read again with a bounded backoff
-          // until they are, then each flip in this process, off the build: a
-          // store that cannot be read yet fails no process.
-          yield* apply(true).pipe(
+          // Subscribed first, so no flip falls between the first read and
+          // the subscription; then the switches as they stand, read again
+          // with a bounded backoff until they are, then each flip queued
+          // since, off the build: a store not readable yet fails no process.
+          const flips = yield* Queue.unbounded<void>();
+          const subscribed = yield* Deferred.make<void>();
+          yield* onAppSignal(
+            'toolSwitchesChanged',
+            () => Queue.offerUnsafe(flips, undefined),
+            subscribed,
+          ).pipe(Effect.forkScoped);
+          yield* Deferred.await(subscribed).pipe(
+            Effect.andThen(apply(true)),
             Effect.andThen(
-              Stream.callback<void>((queue) =>
-                onAppSignal('toolSwitchesChanged', () =>
-                  Queue.offerUnsafe(queue, undefined),
-                ),
-              ).pipe(Stream.runForEach(() => apply(false))),
+              Effect.forever(
+                Queue.take(flips).pipe(Effect.andThen(apply(false))),
+              ),
             ),
             Effect.forkScoped,
           );
