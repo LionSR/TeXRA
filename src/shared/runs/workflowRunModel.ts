@@ -36,7 +36,7 @@ import {
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
 } from '@ui/copy/workflowCall';
-import { filterNotNullish } from '@utils/core';
+import { filterNotNullish, groupBy } from '@utils/core';
 import {
   formatCompactDuration,
   formatCompactTokenCount,
@@ -193,18 +193,12 @@ function unionWithDeclaredPlan(
   runSettled: boolean,
 ): readonly MutablePhase[] {
   const cardIds = new Set(cards.map((row) => row.call.id));
-  const declaredByPhase = new Map<string, WorkflowCallIdentity[]>();
-  const unphased: WorkflowCallIdentity[] = [];
-  for (const task of plan.tasks) {
-    if (cardIds.has(task.id)) continue;
-    if (task.phase === undefined) {
-      unphased.push(task);
-      continue;
-    }
-    const list = declaredByPhase.get(task.phase) ?? [];
-    list.push(task);
-    declaredByPhase.set(task.phase, list);
-  }
+  const remainingTasks = plan.tasks.filter((task) => !cardIds.has(task.id));
+  const unphased = remainingTasks.filter((task) => task.phase === undefined);
+  const declaredByPhase = groupBy(
+    remainingTasks.filter((task) => task.phase !== undefined),
+    (task) => task.phase!,
+  );
   const byTitle = new Map(
     opened.map((phase) => [phase.heading.phaseLabel, phase] as const),
   );

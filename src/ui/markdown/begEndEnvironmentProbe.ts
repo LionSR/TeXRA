@@ -4,6 +4,8 @@
 
 import MarkdownIt, { type StateBlock } from 'markdown-it';
 
+import { groupBy } from '@utils/core';
+
 import {
   MARKDOWN_PARSER_OPTIONS,
   type MarkdownItInstance,
@@ -161,13 +163,11 @@ export function createBegEndEnvironmentProbe(
       }
       if (openerNames.size === 0) return matches;
 
-      closersByEnv = new Map();
-      for (const closer of content.matchAll(/\\end\{([a-z]+)\}/g)) {
-        const name = closer[1]!;
-        const positions = closersByEnv.get(name) ?? [];
-        positions.push(closer.index);
-        closersByEnv.set(name, positions);
-      }
+      closersByEnv = groupBy(
+        [...content.matchAll(/\\end\{([a-z]+)\}/g)],
+        (closer) => closer[1]!,
+        (closer) => closer.index,
+      );
       if (![...openerNames].some((name) => closersByEnv.has(name))) {
         return matches;
       }
