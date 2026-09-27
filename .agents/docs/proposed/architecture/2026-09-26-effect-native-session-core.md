@@ -586,7 +586,10 @@ no `@tools` to `@agent` edges.
   safe digest to record, so `run.activate` records such an MCP plugin as
   `{ id: 'mcp:<name>', revision: 'unkeyed' }`. Attribution by revision is
   explicitly unavailable in that configuration: no guessable hash is written
-  and nothing is silently omitted. Today's MCP revision is an HMAC under a
+  and nothing is silently omitted. An installed plugin that carries a
+  `.mcp.json` is recorded the same way (`revision: 'unkeyed'`). It is never
+  trusted from saved state, and its MCP contribution is decided by the
+  `approvals` mode on every start, like a standalone MCP server. Today's MCP revision is an HMAC under a
   per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
   unguessable and different after every restart, so it stays the in-process
   resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
@@ -819,7 +822,11 @@ export const TexraProcess: {
   host identity, skills and plugin agent directories.
 - **The host identity is data** on `SettingsStores`/`WorkspaceRoots`, not a
   slot or a tag. It is core and always present, and `bootstrapHost` reads the
-  host from it rather than from `SetupPlatform.host`. `SetupPlatform` stays a
+  host from it rather than from `SetupPlatform.host`. `SettingHost` is today
+  the closed union `vscode | cli | desktop` (`stateSettings.ts:106-107`), and
+  an embedder is none of those. So it gains an `sdk` member with its own
+  routing: setting slots under `storageDir`, no host-only setup steps. The SDK
+  never masquerades as a product host. `SetupPlatform` stays a
   core service, because the availability probe reads it in every graph (move
   2). The optional part of Setup is its tools.
 - **`AppSignals` is a service with a shutdown finalizer**, and process-lifetime
@@ -1427,7 +1434,10 @@ A child's aggregate is not collected while its parent still holds an
 unconsumed follow-up that child produced. Collection deletes an aggregate's
 events, the release included, which would leave the parent's row deferred
 forever. Removing the parent removes both together, as the removal closure
-already does. Its listing key includes the release's delivery id, so a child that
+already does. Removing the child alone, while such a delivery is still
+unreleased (the child crashed before settling it), is refused with a typed
+`RunHasPendingDelivery`. The user resumes the child, which releases it, or
+removes the parent. Its listing key includes the release's delivery id, so a child that
 releases several turns keeps every release row after a restart. The cold
 listing otherwise keeps only the latest row per aggregate and type.
 The child owns that aggregate, so the release never needs the parent's
@@ -1544,7 +1554,12 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
   exists without its pinned definition. It does not go on `flow.snapshot`: resume reads only the latest
   snapshot (`AgentRun.ts:263`), and the loop replaces that at every turn and
   wait (`toolUse.ts:405,695`). A pin there would be lost or copied into
-  every checkpoint. Resume then runs from the recorded definition, so an edit between a halt and its resume changes neither the
+  every checkpoint. The definition is materialized before it is recorded.
+  The instruction files an agent names through `requiredFilesInternal` are
+  read relative to the agent's path on every activation today
+  (`userVars.ts:114`). Their contents and digests go into `run.definition`,
+  so moving, deleting or editing them cannot change a pinned run. Resume then
+  runs from the recorded definition, so an edit between a halt and its resume changes neither the
   settings nor the instructions.
 - Post-auth invalidation stays per host, as ruled.
 
