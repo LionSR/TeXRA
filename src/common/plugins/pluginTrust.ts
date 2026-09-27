@@ -16,7 +16,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, type FileSystem, Result } from 'effect';
 
 // Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -177,7 +177,7 @@ export function listPlugins(env: PluginEnv) {
     const envKey = yield* envKeyOf(env);
     return yield* Effect.forEach(
       installed,
-      (record): Effect.Effect<PluginListing> =>
+      (record): Effect.Effect<PluginListing, never, FileSystem.FileSystem> =>
         Effect.gen(function* () {
           const plugin = yield* rereadPlugin(record);
           const key = yield* trustKey(record, plugin, envKey);
@@ -240,7 +240,7 @@ export interface InstalledPluginLoad {
  */
 export function readInstalledPluginLoad(
   stores: Pick<SettingsStores, 'globalState'>,
-): Effect.Effect<InstalledPluginLoad> {
+): Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem> {
   return Effect.gen(function* () {
     const enabled = (yield* readInstalled(stores)).filter(
       (record) => record.enabled,

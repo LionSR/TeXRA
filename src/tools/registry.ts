@@ -342,7 +342,9 @@ export const toolRegistryLayer = (
       // MCP servers, keyed by what they would start, and why each other
       // enabled one loads nothing.
       const installed: InstalledToolReader = Effect.gen(function* () {
-        const load = yield* readInstalledPluginLoad({ globalState: appState });
+        const load = yield* readInstalledPluginLoad({
+          globalState: appState,
+        }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
         const withServers = load.loadable.filter(
           ({ plugin }) => plugin.mcpServers.length > 0,
         );

@@ -5,16 +5,19 @@
 // until the user enables it and trusts the version it is at (`./pluginTrust`).
 
 // Node imports
-import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
-// Local imports - shared contracts and utilities
-import { AgentSourceSchema, type InstalledPlugin } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+// Local imports - shared contracts
+import {
+  AgentSourceSchema,
+  SkillNameSchema,
+  type InstalledPlugin,
+} from '@shared/schemas';
+import { pathExists } from '@utils/files/fsDurability';
 
 // Local imports - plugin install record, reading and git
 import {
@@ -27,6 +30,7 @@ import {
 import { readPluginCandidates, type PluginCandidate } from './marketplace';
 import { checkoutDetached, fetchPinned } from './pluginGit';
 import {
+  ioError,
   PluginError,
   PluginRequestError,
   readPlugin,
@@ -94,14 +98,10 @@ export function parsePluginOrigin(
   return Result.succeed({ kind: 'local', path: path.resolve(cwd, expanded) });
 }
 
-const fsEffect = <A>(run: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => new PluginError({ message: toErrorMessage(error) }),
-  });
-
 const removeDir = (dir: string) =>
-  fsEffect(() => fs.rm(dir, { recursive: true, force: true }));
+  FileSystem.FileSystem.use((fs) =>
+    fs.remove(dir, { recursive: true, force: true }),
+  ).pipe(Effect.mapError(ioError));
 
 /** Cleanup after a failure: a directory left behind is named, not hidden. */
 const cleanupDir = (dir: string) =>
@@ -165,8 +165,13 @@ function installFromRoot(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<InstalledPlugin[], InstallFailure, ChildProcessSpawner> {
+): Effect.Effect<
+  InstalledPlugin[],
+  InstallFailure,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const candidates: readonly PluginCandidate[] = yield* readPluginCandidates(
       root,
       only,
@@ -201,20 +206,19 @@ function installFromRoot(
       // update and remove act on one plugin without touching another.
       const dest = path.join(pluginsDir(run.env), plugin.name);
       // A plain mkdir claims the directory: it fails if anything is there.
-      yield* Effect.tryPromise({
-        try: () => fs.mkdir(dest),
-        catch: (error) =>
-          new PluginError({
-            message:
-              (error as NodeJS.ErrnoException).code === 'EEXIST'
-                ? `${dest} already exists but no installed plugin records it. Delete it, then install again.`
-                : toErrorMessage(error),
-          }),
-      });
-      run.created.push(dest);
-      yield* fsEffect(() =>
-        fs.cp(root, dest, { recursive: true, verbatimSymlinks: true }),
+      yield* fs.makeDirectory(dest).pipe(
+        Effect.mapError((error) =>
+          error.reason._tag === 'AlreadyExists'
+            ? new PluginError({
+                message: `${dest} already exists but no installed plugin records it. Delete it, then install again.`,
+              })
+            : ioError(error),
+        ),
       );
+      run.created.push(dest);
+      // The checkout holds no symlinks (`checkoutDetached` writes them as
+      // plain files), so the copy has none to rewrite.
+      yield* fs.copy(root, dest).pipe(Effect.mapError(ioError));
       const pluginPath = path.join(dest, path.relative(root, candidate.dir));
       records.push({
         name: plugin.name,
@@ -236,9 +240,13 @@ function installOrigin(
   only: readonly string[],
   run: InstallRun,
   nested: boolean,
-): Effect.Effect<InstalledPlugin[], InstallFailure, ChildProcessSpawner> {
+): Effect.Effect<
+  InstalledPlugin[],
+  InstallFailure,
+  ChildProcessSpawner | FileSystem.FileSystem
+> {
   if (origin.kind === 'local') {
-    return fsEffect(() => fs.realpath(origin.path)).pipe(
+    return FileSystem.FileSystem.use((fs) => fs.realPath(origin.path)).pipe(
       Effect.mapError(
         () =>
           new PluginRequestError({
@@ -265,10 +273,16 @@ function installOrigin(
   // Fetch into a staging directory beside the managed ones; it is removed
   // however the install ends, and each plugin is copied out of it.
   return Effect.acquireUseRelease(
-    fsEffect(async () => {
-      await fs.mkdir(pluginsDir(run.env), { recursive: true });
-      return fs.mkdtemp(path.join(pluginsDir(run.env), '.staging-'));
-    }),
+    FileSystem.FileSystem.use((fs) =>
+      fs.makeDirectory(pluginsDir(run.env), { recursive: true }).pipe(
+        Effect.andThen(
+          fs.makeTempDirectory({
+            directory: pluginsDir(run.env),
+            prefix: '.staging-',
+          }),
+        ),
+      ),
+    ).pipe(Effect.mapError(ioError)),
     (staging) =>
       fetchPinned(staging, origin.url, origin.ref).pipe(
         Effect.flatMap((commit) =>
@@ -338,10 +352,13 @@ export function removePlugin(name: string, env: PluginEnv) {
       ] as const);
     });
     if (plugin === undefined) {
-      const leftover = yield* fsEffect(() => fs.stat(dir)).pipe(
-        Effect.as(true),
-        Effect.catch(() => Effect.succeed(false)),
-      );
+      // Only a name a plugin could have had names a managed directory: `..`
+      // or `.` would name the plugins directory's parent or itself.
+      const leftover =
+        SkillNameSchema.safeParse(name).success &&
+        (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, dir)).pipe(
+          Effect.mapError(ioError),
+        ));
       if (!leftover)
         return yield* Effect.fail(
           new PluginRequestError({
@@ -363,7 +380,7 @@ export function removePlugin(name: string, env: PluginEnv) {
  */
 export function rereadPlugin(
   plugin: InstalledPlugin,
-): Effect.Effect<ResolvedPlugin, PluginError> {
+): Effect.Effect<ResolvedPlugin, PluginError, FileSystem.FileSystem> {
   return readPlugin(plugin.path, {
     name: plugin.name,
     version: plugin.version,

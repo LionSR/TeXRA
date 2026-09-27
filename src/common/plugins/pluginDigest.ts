@@ -6,40 +6,39 @@
 
 // Node imports
 import { createHash } from 'node:crypto';
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import {
+  Context,
+  Effect,
+  FileSystem,
+  Option,
+  type PlatformError,
+} from 'effect';
+import { LRUCache } from 'lru-cache';
 import stableStringify from 'safe-stable-stringify';
 
 // Local imports - utilities
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { absentReason } from '@utils/files/fsEntryExists';
 import { whichOnExtendedPath } from '@utils/system/platformPaths';
 
 // Local imports - plugin reading
 import { envDigest, type McpServerConfig } from './mcpServers';
-import { PluginError, type ResolvedPlugin } from './pluginManifest';
+import { escapes, PluginError, type ResolvedPlugin } from './pluginManifest';
 
-const sha256 = (value: string | Buffer) =>
+const sha256 = (value: string | Uint8Array) =>
   createHash('sha256').update(value).digest('hex');
-
-const within = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative !== '' &&
-    !relative.startsWith(`..${path.sep}`) &&
-    relative !== '..' &&
-    !path.isAbsolute(relative)
-  );
-};
 
 /**
  * Content hashes by (path, size, mtime), for this process: a plugin's files
  * are digested at every step that loads it, and an unchanged file is read
- * once. An entry holds only a hash of the bytes its key names.
+ * once. An entry holds only a hash of the bytes its key names; past the
+ * bound the least recently used go, so edits leave no unbounded trail.
  */
-const contentHashes = new Map<string, string>();
+const ContentHashes = Context.Reference('@texra/PluginContentHashes', {
+  defaultValue: () => new LRUCache<string, string>({ max: 10_000 }),
+});
 
 /**
  * Every file under the plugin root, as sorted `[path, sha256]` pairs; `.git`
@@ -47,38 +46,55 @@ const contentHashes = new Map<string, string>();
  * it. Any edit inside the plugin, a script a server imports included,
  * changes it.
  */
-const pluginFiles = (root: string) =>
-  Effect.tryPromise({
-    try: async () => {
-      const files: [string, string][] = [];
-      const walk = async (dir: string): Promise<void> => {
-        for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
-          const full = path.join(dir, entry.name);
-          const relative = path.relative(root, full);
-          if (entry.isDirectory()) {
-            if (entry.name !== '.git') await walk(full);
-          } else if (entry.isSymbolicLink()) {
-            files.push([relative, `-> ${await fs.readlink(full)}`]);
-          } else if (entry.isFile()) {
-            const stat = await fs.stat(full);
-            const key = `${full}\0${stat.size}\0${stat.mtimeMs}`;
-            let hash = contentHashes.get(key);
-            if (hash === undefined) {
-              hash = sha256(await fs.readFile(full));
-              contentHashes.set(key, hash);
-            }
-            files.push([relative, hash]);
-          }
+const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
+  root: string,
+) {
+  const fs = yield* FileSystem.FileSystem;
+  const hashes = yield* ContentHashes;
+  const files: [string, string][] = [];
+  const walk = (
+    dir: string,
+  ): Effect.Effect<void, PlatformError.PlatformError> =>
+    Effect.gen(function* () {
+      for (const name of yield* fs.readDirectory(dir)) {
+        const full = path.join(dir, name);
+        const relative = path.relative(root, full);
+        // `readLink` answers lstat's half (`FileSystem` has no lstat): a
+        // path it reads is a link, digested as its target text.
+        const link = yield* fs
+          .readLink(full)
+          .pipe(Effect.catch(() => Effect.succeed(undefined)));
+        if (link !== undefined) {
+          files.push([relative, `-> ${link}`]);
+          continue;
         }
-      };
-      await walk(root);
-      return files.toSorted(([a], [b]) => Number(a > b) - Number(a < b));
-    },
-    catch: (error) =>
-      new PluginError({
-        message: `Could not read the plugin at ${root}: ${toErrorMessage(error)}`,
-      }),
-  });
+        const info = yield* fs.stat(full);
+        if (info.type === 'Directory') {
+          if (name !== '.git') yield* walk(full);
+        } else if (info.type === 'File') {
+          const mtime = Option.getOrUndefined(info.mtime)?.getTime();
+          // No modification time, no cache: size alone cannot vouch.
+          const key =
+            mtime === undefined ? undefined : `${full}\0${info.size}\0${mtime}`;
+          let hash = key === undefined ? undefined : hashes.get(key);
+          if (hash === undefined) {
+            hash = sha256(yield* fs.readFile(full));
+            if (key !== undefined) hashes.set(key, hash);
+          }
+          files.push([relative, hash]);
+        }
+      }
+    });
+  yield* walk(root).pipe(
+    Effect.mapError(
+      (error) =>
+        new PluginError({
+          message: `Could not read the plugin at ${root}: ${error.message}`,
+        }),
+    ),
+  );
+  return files.toSorted(([a], [b]) => Number(a > b) - Number(a < b));
+});
 
 /** A file a server names that lies outside the plugin: trusted by its
  *  resolved path, size and modification time, not its content. */
@@ -86,7 +102,7 @@ interface ExternalFile {
   readonly role: 'command' | 'file';
   readonly path: string;
   readonly size: number;
-  readonly mtimeMs: number;
+  readonly mtimeMs: number | null;
 }
 
 /**
@@ -95,11 +111,13 @@ interface ExternalFile {
  * each argument that is an existing file. They are not hashed, so an
  * upgraded runtime asks again without being read on every step, but their
  * content is not pinned. A command that resolves to nothing fails the
- * server's start, loudly.
+ * server's start, loudly; a path that is there but cannot be read fails
+ * here.
  */
-export const externalFiles = (root: string, server: McpServerConfig) =>
-  Effect.promise(async () => {
-    const realRoot = await fs.realpath(root);
+export const externalFiles = Effect.fn('pluginDigest.externalFiles')(
+  function* (root: string, server: McpServerConfig) {
+    const fs = yield* FileSystem.FileSystem;
+    const realRoot = yield* fs.realPath(root);
     const command =
       server.command.includes('/') || server.command.includes(path.sep)
         ? path.resolve(root, server.command)
@@ -110,19 +128,30 @@ export const externalFiles = (root: string, server: McpServerConfig) =>
     ];
     const found: ExternalFile[] = [];
     for (const [role, candidate] of candidates) {
-      const real = await fs.realpath(candidate).catch(() => null);
-      if (real === null || within(realRoot, real)) continue;
-      const stat = await fs.stat(real);
-      if (stat.isFile())
+      // An argument that names nothing is not a file; any other failure is.
+      const real = yield* fs
+        .realPath(candidate)
+        .pipe(Effect.catchIf(absentReason, () => Effect.succeed(undefined)));
+      if (real === undefined || !escapes(path.relative(realRoot, real)))
+        continue;
+      const info = yield* fs.stat(real);
+      if (info.type === 'File')
         found.push({
           role,
           path: real,
-          size: stat.size,
-          mtimeMs: stat.mtimeMs,
+          size: Number(info.size),
+          mtimeMs: Option.getOrUndefined(info.mtime)?.getTime() ?? null,
         });
     }
     return found;
-  });
+  },
+  Effect.mapError(
+    (error) =>
+      new PluginError({
+        message: `Could not read what a plugin's server runs: ${error.message}`,
+      }),
+  ),
+);
 
 /**
  * sha256 over what the plugin ships and runs: every file under its root,
