@@ -242,9 +242,8 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   preview of a workflow's final revised file ran inside the run, so a failure
   there ended a finished run as failed. The preview now opens after the run
   has recorded its outcome, and a failure to open it no longer changes that
-  outcome. The CLI's `--output` and `--output-dir` copies still run before the
-  run ends: a copy that fails still fails the run with the same message and
-  exit code, and the run, not the CLI, now decides that verdict.
+  outcome. In the CLI, an `--output` or `--output-dir` copy that fails still
+  reports the same error and exit code.
 
 - **OpenAI reasoning models no longer fail with "The terminal snapshot
   conflicts with completed output items"** — when a GPT reasoning model
