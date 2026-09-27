@@ -195,11 +195,19 @@ export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
  */
 export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
+  /** Each kind's effective value, own or inherited: what surfaces show. */
   bypasses: ApprovalBypassesSchema,
-  /** The bypass kinds an autonomous goal holds on rather than a human. A
-   *  resume in a new process restores every other bypass and leaves these
-   *  off until a human re-arms them. */
-  autonomous: z.array(z.enum(APPROVAL_BYPASS_KINDS)),
+  /**
+   * The run's own value per kind, where it has one (absent: it defers to its
+   * ancestry): `on` a human granted, `off` an explicit override, `autonomous`
+   * a grant an autonomous goal made. A resume in a new process restores
+   * exactly the `on` and `off` values; an autonomous grant stays off until a
+   * human re-arms it.
+   */
+  own: z.partialRecord(
+    z.enum(APPROVAL_BYPASS_KINDS),
+    z.enum(['on', 'off', 'autonomous']),
+  ),
 });
 export type ApprovalPolicySnapshot = z.infer<
   typeof ApprovalPolicySnapshotSchema

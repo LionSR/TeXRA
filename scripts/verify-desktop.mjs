@@ -1604,6 +1604,7 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     approvalPolicy: {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },
+      own: {},
     },
     parent: parentRunId
       ? { id: parentRunId, startCommit: parentCreation.commit }

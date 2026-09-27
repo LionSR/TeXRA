@@ -427,9 +427,12 @@ describe('AgentLaunchContext', () => {
 
         const restored = { bash: false, toolEdit: true, superYolo: false };
         expect(session.approvals.bypassesFor(EXECUTION_ID)).toEqual(restored);
-        expect(
-          (yield* session.readView([])).policy.get(EXECUTION_ID)?.bypasses,
-        ).toEqual(restored);
+        expect((yield* session.readView([])).policy.get(EXECUTION_ID)).toEqual(
+          expect.objectContaining({
+            bypasses: restored,
+            own: { toolEdit: 'on' },
+          }),
+        );
       }),
   );
 

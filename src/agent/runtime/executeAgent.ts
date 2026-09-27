@@ -305,7 +305,7 @@ export interface SubagentRunOptions {
    */
   composition?: CompositionKey;
   /** Record that this run met an approval-policy denial (see `AgentRun`). */
-  onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
+  onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
   /** Fires once with the run's id right after its handle is tracked (F-2). */

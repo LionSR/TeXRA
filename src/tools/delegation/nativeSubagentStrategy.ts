@@ -24,6 +24,7 @@ import {
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import type { CompositionKey } from '@tools/compositions';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
@@ -51,7 +52,7 @@ export interface ChildRunLaunchOptions {
    * resolves its own.
    */
   readonly composition?: CompositionKey;
-  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
+  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
 }

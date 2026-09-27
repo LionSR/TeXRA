@@ -33,6 +33,7 @@ import {
   texraApprovalDenialMessage,
 } from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
+import type { DelegatedChildApproval } from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
 import { generateShortId } from '@utils/core';
@@ -175,8 +176,10 @@ export function proposalResultToToolResult(
 
 interface DelegationProposalDecision {
   readonly result: RequestDecision;
-  /** True only when the run's proposal-bypass policy supplied approval. */
-  readonly autoApproved: boolean;
+  /** How the child's own grants record this approval (see
+   *  {@link DelegatedChildApproval}); `inherit` unless the run's proposal
+   *  bypass supplied it. */
+  readonly childApproval: DelegatedChildApproval;
 }
 
 /** Request the shared proposal decision, honoring the run's bypass policy. */
@@ -196,20 +199,25 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     });
     switch (decision) {
       case 'deny-policy':
-        parent.run.onApprovalPolicyDenial?.();
+        parent.run.onApprovalPolicyDenial?.({ kind: 'proposal' });
         return {
           result: {
             action: 'deny',
             reason: texraApprovalDenialMessage(decision),
           },
-          autoApproved: false,
+          childApproval: 'inherit',
         };
       case 'bypass':
-        return { result: { action: 'approve' }, autoApproved: true };
+        return {
+          result: { action: 'approve' },
+          childApproval: session.approvals.proposal.isAutonomous(runId)
+            ? 'goal-approved'
+            : 'auto-approved',
+        };
       case 'unattended':
-        // `autoApproved: false` keeps the child on inherited per-kind
-        // approval state, so its bash and edits still gate.
-        return { result: { action: 'approve' }, autoApproved: false };
+        // `inherit` keeps the child on inherited per-kind approval state,
+        // so its bash and edits still gate.
+        return { result: { action: 'approve' }, childApproval: 'inherit' };
       case 'present':
         break;
     }
@@ -218,7 +226,7 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
       kind: 'proposal',
       data: { requestId: generateShortId(), runId, ...proposal },
     });
-    return { result, autoApproved: false };
+    return { result, childApproval: 'inherit' };
   },
 );
 
@@ -234,11 +242,14 @@ export const proposeAndExecute = Effect.fn('proposeAndExecute')(function* (
 ) {
   const decision = yield* requestDelegationProposal(proposal, parent);
   const { runId } = parent.run;
-  if (decision.autoApproved) {
+  if (decision.childApproval !== 'inherit') {
     // Preserve the approved delegation's edit grant explicitly on the child.
     // Proposal bypass can outlive the parent's ordinary edit-YOLO state.
     return yield* executeSubagent(parent, proposal, runId, {
-      approvalMeta: { autoApproved: true },
+      approvalMeta: {
+        autoApproved: true,
+        childApproval: decision.childApproval,
+      },
     });
   }
 

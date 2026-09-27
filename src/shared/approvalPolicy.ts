@@ -114,6 +114,16 @@ export function decideTexraApproval(input: {
 }
 
 /**
+ * What an approval-policy denial closed, as a run reports it to its host: a
+ * command or edit, a delegation proposal, or the approval-gated tools
+ * withheld from the model when the run resolved its tools.
+ */
+export type ApprovalPolicyDenial =
+  | { readonly kind: 'executable' }
+  | { readonly kind: 'proposal' }
+  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] };
+
+/**
  * Decide one delegation proposal. `never` denies it as it denies every other
  * request kind. Otherwise a scoped proposal bypass approves it, and a run that
  * cannot present one proceeds `unattended`: such a run withholds

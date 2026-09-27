@@ -37,6 +37,7 @@ import {
   type SubagentProgressUpdate,
   type UserVariableChannels,
 } from '@shared/schemas';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
 import type {
   CompositionKey,
@@ -102,10 +103,10 @@ export interface AgentRunShape {
   readonly delegationAgentScope?: AgentDelegationScope | null;
   /**
    * Record that this run met an approval-policy denial: a request settled as
-   * denied, or (with `withheldTools`) approval-gated tools were withheld from
-   * the model when the run resolved its tools.
+   * denied, or approval-gated tools were withheld from the model when the
+   * run resolved its tools.
    */
-  readonly onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
+  readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;

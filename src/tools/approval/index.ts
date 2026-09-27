@@ -25,10 +25,16 @@ import type { RunId } from '@shared/schemas';
  * effective when an orchestrator delegates to another orchestrator. A child
  * may still override any inherited approval explicitly.
  */
+/** How a delegation was approved, as the child's own grants record it:
+ *  by the user's one-off answer (`inherit`), or by the run's proposal
+ *  bypass, a human's (`auto-approved`) or an autonomous goal's. */
+export type DelegatedChildApproval =
+  'inherit' | 'auto-approved' | 'goal-approved';
+
 export function configureDelegatedChildApprovals(
   childRunId: RunId,
   parentRunId: RunId | undefined,
-  policy: 'inherit' | 'auto-approved' = 'inherit',
+  policy: DelegatedChildApproval = 'inherit',
   session: SessionHandle,
 ): void {
   if (parentRunId) {
@@ -37,8 +43,12 @@ export function configureDelegatedChildApprovals(
   // The child's `run.start` is published by the time this runs, so the
   // write is not pre-activation setup: it publishes the child's
   // `approval.policy` like any other bypass change.
-  if (policy === 'auto-approved') {
-    session.approvals.toolEdit.bypass.setBypass(childRunId, true);
+  // A grant a goal's autonomous proposal bypass made stays autonomous on
+  // the child, so a resume leaves it off until a human re-arms the goal.
+  if (policy !== 'inherit') {
+    session.approvals.toolEdit.bypass.setBypass(childRunId, true, {
+      autonomous: policy === 'goal-approved',
+    });
   }
 }
 

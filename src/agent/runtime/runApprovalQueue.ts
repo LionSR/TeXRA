@@ -30,6 +30,9 @@ import type { RequestError } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 
+/** A run's own bypass value with its provenance (see the snapshot's `own`). */
+type OwnGrant = NonNullable<ApprovalPolicySnapshot['own'][ApprovalBypassKind]>;
+
 /**
  * Per-run bypass state. Its one announcement channel is the run's
  * `approval.policy` row, published by the session through `onPolicyChanged`.
@@ -52,6 +55,9 @@ interface RunApprovalBypass {
   /** The run's own explicit value, or `undefined` when it defers to its
    *  ancestor chain. */
   ownBypass(runId: RunId): boolean | undefined;
+  /** {@link ownBypass} with its provenance: the run's entry in its
+   *  `approval.policy` snapshot's `own`. */
+  ownGrant(runId: RunId): OwnGrant | undefined;
   /**
    * Set bypass for a run; `undefined` drops the run's own value so it defers
    * to its ancestor chain again. Publishes the run's new `approval.policy`
@@ -113,10 +119,6 @@ function createRunApprovalBypass(
     );
   }
 
-  // What a run's snapshot reports for this kind, compared whole.
-  const effective = (runId: RunId) =>
-    `${resolve(runId)}/${isAutonomous(runId)}`;
-
   const setBypass: RunApprovalBypass['setBypass'] = (
     runId,
     enabled,
@@ -135,12 +137,12 @@ function createRunApprovalBypass(
 
     const descendants = resolveDescendants(runId);
     const previousDescendantStates = new Map(
-      descendants.map((descendant) => [descendant, effective(descendant)]),
+      descendants.map((descendant) => [descendant, resolve(descendant)]),
     );
     write();
     onEffectiveChange(runId);
     for (const descendant of descendants) {
-      if (previousDescendantStates.get(descendant) !== effective(descendant)) {
+      if (previousDescendantStates.get(descendant) !== resolve(descendant)) {
         onEffectiveChange(descendant);
       }
     }
@@ -150,6 +152,12 @@ function createRunApprovalBypass(
     isBypassed: resolve,
     isAutonomous,
     ownBypass: (runId) => byRun.get(runId),
+    ownGrant(runId) {
+      const own = byRun.get(runId);
+      if (own === undefined) return undefined;
+      if (!own) return 'off';
+      return autonomousRuns.has(runId) ? 'autonomous' : 'on';
+    },
     setBypass,
     clearForRun(runId) {
       byRun.delete(runId);
@@ -238,18 +246,17 @@ export interface SessionApprovals {
   /** Every kind's effective bypass for one run: the `bypasses` half of
    *  the run's `approval.policy` snapshot. */
   bypassesFor(runId: RunId): ApprovalPolicySnapshot['bypasses'];
-  /** Everything the run's snapshot says of its bypasses: {@link bypassesFor}
-   *  and the kinds among them an autonomous goal holds rather than a human. */
-  grantsFor(
-    runId: RunId,
-  ): Pick<ApprovalPolicySnapshot, 'bypasses' | 'autonomous'>;
+  /** Everything the run's snapshot says of its bypasses: the effective
+   *  values ({@link bypassesFor}) and the run's own ones with provenance. */
+  grantsFor(runId: RunId): Pick<ApprovalPolicySnapshot, 'bypasses' | 'own'>;
   /**
-   * Rebuild a run's bypasses from its last durable `approval.policy`
-   * snapshot when this session holds no approval state for the run, which
-   * is a resume in a new process. Every bypass a human granted comes back
-   * as the run's own value; one an autonomous goal held stays off until a
-   * human re-arms it. A run this session already knows keeps its live
-   * state. Silent: the resume publishes the rebuilt snapshot itself.
+   * Rebuild a run's own bypass values from its last durable
+   * `approval.policy` snapshot, for each kind this session holds no own
+   * value of (a resume in a new process). A human's grant and an explicit
+   * override come back as they were; an inherited value stays inherited, so
+   * a later change on the parent still reaches the run; an autonomous
+   * goal's grant stays off until a human re-arms it. Silent: the resume
+   * publishes the rebuilt snapshot itself.
    */
   restoreRun(runId: RunId, snapshot: ApprovalPolicySnapshot): void;
   /**
@@ -383,14 +390,16 @@ export function createSessionApprovals(
     toolEdit: toolEditBypass.isBypassed(runId),
     superYolo: proposal.isBypassed(runId),
   });
-  const grantsFor: SessionApprovals['grantsFor'] = (runId) => ({
-    bypasses: bypassesFor(runId),
-    autonomous: APPROVAL_BYPASS_KINDS.filter((kind) =>
-      byKind[kind].isAutonomous(runId),
-    ),
-  });
-  // Everything a run's snapshot reports about its bypasses, compared whole.
-  const policyKey = (runId: RunId) => JSON.stringify(grantsFor(runId));
+  const grantsFor: SessionApprovals['grantsFor'] = (runId) => {
+    const own: ApprovalPolicySnapshot['own'] = {};
+    for (const kind of APPROVAL_BYPASS_KINDS) {
+      const grant = byKind[kind].ownGrant(runId);
+      if (grant !== undefined) own[kind] = grant;
+    }
+    return { bypasses: bypassesFor(runId), own };
+  };
+  // What a new ancestry edge can move: the run's effective values.
+  const policyKey = (runId: RunId) => JSON.stringify(bypassesFor(runId));
 
   return {
     toolEdit,
@@ -399,15 +408,12 @@ export function createSessionApprovals(
     bypassesFor,
     grantsFor,
     restoreRun(runId, snapshot) {
-      const known =
-        parentOf.has(runId) ||
-        childrenOf.has(runId) ||
-        bypasses.some((bypass) => bypass.ownBypass(runId) !== undefined);
-      if (known) return;
       for (const kind of APPROVAL_BYPASS_KINDS) {
-        if (snapshot.bypasses[kind] && !snapshot.autonomous.includes(kind)) {
-          byKind[kind].setBypass(runId, true, { silent: true });
-        }
+        const durable = snapshot.own[kind];
+        const bypass = byKind[kind];
+        if (durable === undefined || durable === 'autonomous') continue;
+        if (bypass.ownBypass(runId) !== undefined) continue;
+        bypass.setBypass(runId, durable === 'on', { silent: true });
       }
     },
     setDelegatedWorkBypasses(runId, enabled) {
