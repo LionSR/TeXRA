@@ -276,7 +276,7 @@ const ownerLiveness = Layer.effectDiscard(
 const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
   Layer.effectContext(
     Effect.gen(function* () {
-      const { publish, exclusive, detach, settle, ...reads } =
+      const { publish, exclusive, detach, settle, removeRun, ...reads } =
         yield* SessionEvents;
       const eventLog = yield* Database;
       const identity = yield* ProcessIdentity;
@@ -565,7 +565,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
           requests: sessionRequests(
             session,
             approvals,
-            eventLog,
+            { ...eventLog, removeRun },
             local.ref,
             inquiryRecords,
             agentResume,

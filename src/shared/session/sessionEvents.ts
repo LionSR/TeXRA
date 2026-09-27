@@ -24,6 +24,7 @@ import type {
   DatabaseNotOwner,
   DatabaseReadFailed,
   DatabaseWriteFailed,
+  DeletionMode,
 } from './database';
 import type { QueuedFollowUp } from './runRows';
 
@@ -104,6 +105,18 @@ export class SessionEvents extends Context.Service<
      *  publication for its run's drain); a defect is logged as itself, and
      *  a job enqueued after the plane closed goes nowhere. */
     readonly detach: (job: (append: Append) => Effect.Effect<unknown>) => void;
+    /** Remove a run and its dependents (C9): the liveness proofs run on the
+     *  caller's fiber, then the tombstone's transaction runs as the next
+     *  job, so it commits in enqueue order and what this publisher tracks
+     *  forgets every run the tombstone names. */
+    readonly removeRun: (
+      id: AggregateId,
+      mode: DeletionMode,
+      expectedStartCommit: CommitOrdinal,
+    ) => Effect.Effect<
+      readonly SessionEvent[],
+      DatabaseReadFailed | DatabaseWriteFailed
+    >;
     /** Wait for every detached job enqueued before this call to run, and
      *  answer with the highest commit those jobs appended, or null when none
      *  appended. A barrier, never a reporter: a refused job is logged as
