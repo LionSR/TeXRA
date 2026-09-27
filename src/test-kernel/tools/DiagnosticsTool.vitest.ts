@@ -5,6 +5,7 @@ import { Effect } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 
 import { createTestSession } from '@test/support/sessionTestUtils';
@@ -18,7 +19,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     run,
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 }
 

@@ -7,7 +7,7 @@
  * of two inputs ordered by the same transcript seq, so a row the fold's
  * residency cap drops never shifts a notice.
  */
-import { signal } from '@lit-labs/signals';
+import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -19,11 +19,25 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
   focusRun,
+  foregroundReader,
   selectedRunId,
   rootRunId,
   registerCliStateResetHook,
+  sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
+
+/**
+ * The runs whose transcript tier this terminal keeps resident: its
+ * conversation, the runs it owns, and an open reader's run. The view also
+ * lists every earlier run of the workspace, hydrated from the listing;
+ * subscribing all of those folded every past transcript into memory for the
+ * life of the TUI.
+ */
+export const paintedRunIds = computed((): readonly RunId[] => {
+  const reader = foregroundReader.get()?.runId;
+  return [...sessionRunIds.get(), ...(reader ? [reader] : [])];
+});
 
 export interface LocalNotice {
   readonly runId: RunId;

@@ -12,6 +12,7 @@ import {
   deleteMemoryPath,
   loadMemoryItems,
   loadMemoryPreview,
+  onMemoryTreeLane,
   setMemoryPinned,
 } from '@tools/memory/memoryFileSystem';
 
@@ -81,7 +82,9 @@ export class SettingsMemoryController {
       if (!confirmed) return null;
 
       const storagePath = resolveMemoryStoragePath(input.storagePath);
-      yield* Effect.orDie(deleteMemoryPath(storagePath));
+      // On the memory tree's lane, as every memory tool command is: a delete
+      // from here never races an agent's edit beneath it.
+      yield* Effect.orDie(deleteMemoryPath(storagePath).pipe(onMemoryTreeLane));
       return yield* this.getMemoryDataMessage();
     },
   );
@@ -94,7 +97,9 @@ export class SettingsMemoryController {
     pinned: boolean,
   ) {
     const resolvedPath = resolveMemoryStoragePath(storagePath);
-    const result = yield* Effect.orDie(setMemoryPinned(resolvedPath, pinned));
+    const result = yield* Effect.orDie(
+      setMemoryPinned(resolvedPath, pinned).pipe(onMemoryTreeLane),
+    );
     if (result.status === 'cap-reached') {
       yield* Effect.orDie(
         this.deps.prompt.warning(

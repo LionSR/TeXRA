@@ -77,6 +77,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -689,7 +690,7 @@ describe('ModelInvoker retry', () => {
       expect((yield* session.ledger.load(child.runId))?.lastTurn).toEqual(
         completedTurn('child'),
       );
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -710,7 +711,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -733,7 +734,7 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain('Model response was empty');
       }
       denied.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -752,7 +753,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(requests.opened).toEqual([]);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -760,8 +761,7 @@ describe('ModelInvoker retry', () => {
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
-      const logger = new TraceEmitter();
-      logger.subscribe((event) => {
+      const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
           Deferred.doneUnsafe(backoffStarted, Effect.void);
         }
@@ -786,7 +786,7 @@ describe('ModelInvoker retry', () => {
 
       expect(Exit.hasInterrupts(exit)).toBe(true);
       expect(stub.attempts()).toBe(1);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -839,7 +839,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -884,7 +884,7 @@ describe('ModelInvoker retry', () => {
         }
         requests.detach();
         yield* Fiber.interrupt(pump);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -922,7 +922,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -948,7 +948,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -982,7 +982,7 @@ describe('ModelInvoker retry', () => {
       expect(requests.opened).toHaveLength(1);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 });

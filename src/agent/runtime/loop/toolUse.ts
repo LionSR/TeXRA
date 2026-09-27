@@ -142,7 +142,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const invoker = yield* ModelInvoker;
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
-  const isChild = () => runs.getHandle(runId)?.isChild === true;
+  const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
   const continuation = yield* continuationFor(run);
   const rounds = continuation?.rounds ?? null;
   // A conversation holds the run's input lease; rounds take no input.

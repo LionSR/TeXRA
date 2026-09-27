@@ -4,7 +4,7 @@
  * database does to a live reader, and when its owner's scope releases it.
  */
 import { it } from '@effect/vitest';
-import { Effect, Exit, Scope } from 'effect';
+import { Effect, Exit, Result, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
 import { openAppStateStore } from '@controllers/session/appStateStore';
@@ -59,6 +59,19 @@ describe('application state on SQLite', () => {
       expect(yield* two.get('texra.memory.enabled')).toBe(true);
       yield* two.update('texra.useOpenRouter', undefined);
       expect(yield* one.get('texra.useOpenRouter', 'absent')).toBe('absent');
+
+      // Concurrent read-modify-writes of one key both land: each changes
+      // the value the other committed, never a stale read of its own.
+      const add = (store: typeof one, id: string) =>
+        store.modify('texra.disabledTools', (stored) =>
+          Result.succeed([...((stored as string[] | undefined) ?? []), id]),
+        );
+      yield* Effect.all([add(one, 'a'), add(two, 'b')], {
+        concurrency: 'unbounded',
+      });
+      expect(
+        [...(yield* one.get<string[]>('texra.disabledTools'))].sort(),
+      ).toEqual(['a', 'b']);
     }),
   );
 

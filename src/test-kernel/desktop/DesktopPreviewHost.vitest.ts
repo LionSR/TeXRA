@@ -13,6 +13,7 @@ import { withProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Rejected } from '@shared/session/requestErrors';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -187,7 +188,7 @@ describe('desktop preview host', () => {
           Effect.sync(() => {
             handler.dispose();
             detachPresentation();
-          }).pipe(Effect.andThen(() => session.dispose())),
+          }).pipe(Effect.andThen(() => closeSessionOf(session))),
         );
         const error = yield* Effect.flip(
           withProcessServices(

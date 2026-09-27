@@ -42,7 +42,11 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
+import {
+  fileOpResultMessage,
+  packRunOutputs,
+  runCleanRunDir,
+} from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -141,15 +145,6 @@ export interface DesktopHostRequests {
 const CHANNEL = 'DesktopHostRequests';
 
 type WorkflowFileOperation = 'pack' | 'clean';
-
-function operationLabel(operation: WorkflowFileOperation): {
-  verb: string;
-  gerund: string;
-} {
-  return operation === 'pack'
-    ? { verb: 'pack', gerund: 'packing' }
-    : { verb: 'clean', gerund: 'cleaning' };
-}
 
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
@@ -317,50 +312,35 @@ export function createDesktopHostRequests(
         ),
       );
 
+  /** Info results are shown; error results reject the request, which the
+   *  dispatcher surfaces. The wording is the shared `fileOpResultMessage`. */
   const reportFileOperationResult = (
     operation: WorkflowFileOperation,
     result: FileOpResult,
     inputFile: string,
-  ) =>
-    Effect.gen(function* () {
-      const { verb } = operationLabel(operation);
-      switch (result.status) {
-        case 'success': {
-          const folder = result.outputFolder;
-          let message = 'Output files cleaned.';
-          if (operation === 'pack') {
-            message = folder ? `Files packed into ${folder}` : 'Files packed.';
-          }
-          yield* host.showInfoMessage(message);
-          return;
-        }
-        case 'noFiles':
-          yield* host.showInfoMessage(
-            `No files found to ${verb} for ${inputFile}`,
-          );
-          return;
-        case 'error':
-          return yield* Effect.fail(
-            new Rejected({ reason: `Error during ${verb}: ${result.error}` }),
-          );
-      }
-    });
+  ) => {
+    const message = fileOpResultMessage(operation, result, inputFile);
+    return message.level === 'info'
+      ? host.showInfoMessage(message.text)
+      : Effect.fail(new Rejected({ reason: message.text }));
+  };
 
   const runWorkflowFileOperation = (
     operation: WorkflowFileOperation,
     request: WorkflowFileOperationRequest,
   ) =>
     Effect.gen(function* () {
-      const { verb, gerund } = operationLabel(operation);
       const { agent, model, inputFile, runId } = request;
       if (!agent || !model || !inputFile) {
-        return yield* Effect.fail(
-          new Rejected({ reason: `Select an input file before ${gerund}.` }),
+        return yield* reportFileOperationResult(
+          operation,
+          { status: 'missingParams' },
+          inputFile,
         );
       }
       if (!runId) {
         return yield* Effect.fail(
-          new Rejected({ reason: `Missing run identity for ${verb}.` }),
+          new Rejected({ reason: `Missing run identity for ${operation}.` }),
         );
       }
       const ran = yield* Effect.exit(
@@ -374,10 +354,10 @@ export function createDesktopHostRequests(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
         );
-        return yield* Effect.fail(
-          new Rejected({
-            reason: `Error during ${operation}: ${toErrorMessage(error)}`,
-          }),
+        return yield* reportFileOperationResult(
+          operation,
+          { status: 'error', error: toErrorMessage(error) },
+          inputFile,
         );
       }
       yield* reportFileOperationResult(operation, ran.value, inputFile);

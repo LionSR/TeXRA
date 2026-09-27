@@ -24,11 +24,13 @@ export { SessionHandle } from './SessionHandle';
 // and close sessions through it (one session per workspace storage root),
 // and the process-default session that owner holds.
 export {
+  closeAllSessions,
   closeSession,
   initializeDefaultSession,
   installedProcessRuntime,
   listSessions,
   openSessionEffect,
+  SESSION_CLOSE_DEADLINE_MS,
   teardownDefaultSession,
   tryDefaultSession,
 } from './sessionGraph';
@@ -86,7 +88,6 @@ export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 export { getHelperModelName } from './helperModelName';
 
 // RunHandle
-export type { AgentRunHandle } from './RunHandle';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';

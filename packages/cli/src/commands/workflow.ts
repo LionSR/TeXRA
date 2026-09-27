@@ -201,7 +201,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
         return yield* executeCliWorkflowConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
-          lifecycle: services.lifecycle,
+          shutdownScope: services.shutdownScope,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
       }),
@@ -266,7 +266,7 @@ const runToolUseAgent = Effect.fn('runToolUseAgent')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
-          lifecycle: services.lifecycle,
+          shutdownScope: services.shutdownScope,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });
@@ -303,7 +303,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
        *  callbacks on, from the same services. */
       readonly runtime: CliConfigExecuteOptions['runtime'];
       /** The host's shutdown registry, from the same services. */
-      readonly lifecycle: CliConfigExecuteOptions['lifecycle'];
+      readonly shutdownScope: CliConfigExecuteOptions['shutdownScope'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
       readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
@@ -364,7 +364,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     const run = yield* executeCliConfig(config, runContext, {
       session: options.session,
       runtime: options.runtime,
-      lifecycle: options.lifecycle,
+      shutdownScope: options.shutdownScope,
       runId: options.runId,
       modelCompatibilityKey: options.modelCompatibilityKey,
       onInterruptedRunFinalized: recoveryInputIsDurable
@@ -427,7 +427,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
     }
     if (!workflowResult) {
       return yield* Effect.die(
-        new Error('Workflow output was not finalized before lease release.'),
+        new Error('Workflow output was not finalized before the run ended.'),
       );
     }
 

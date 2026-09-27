@@ -35,9 +35,9 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
-  runWithOwnedRunLeaseLaunchGuard: (
+  runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
     >
   ) => args[2],
 }));

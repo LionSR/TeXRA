@@ -58,9 +58,9 @@ vi.mock('@tools/delegation/childRun', () => ({
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedRunLeaseLaunchGuard: (
+  runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
@@ -420,7 +420,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
         expect(mocks.submitFollowUp).toHaveBeenCalledWith(
           launchedRunId,
-          'also update the tests',
+          expect.objectContaining({ text: 'also update the tests' }),
           expect.objectContaining({ session: expect.anything() }),
         );
 
@@ -599,7 +599,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         } as any);
         assert.ok(captured.strategy?.runTurn);
         yield* captured.strategy.runTurn(
-          [{ text: 'continue the fork', origin: 'user' }],
+          [
+            {
+              text: 'continue the fork',
+              from: { kind: 'user' as const },
+            },
+          ],
           ports,
           new AbortController().signal,
         );
@@ -689,7 +694,12 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       assert.ok(captured.strategy?.runTurn);
       yield* captured.strategy.runTurn(
-        [{ text: 'must not resume the source', origin: 'user' }],
+        [
+          {
+            text: 'must not resume the source',
+            from: { kind: 'user' as const },
+          },
+        ],
         ports,
         new AbortController().signal,
       );

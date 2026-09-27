@@ -228,21 +228,21 @@ function ambiguousRunAgentMessage(
 }
 
 /**
- * Resolve and validate an agent for a category-pinned CLI launch.
+ * Resolve and validate the workflow agent a `texra resume` continues.
  */
-export function resolveCliLaunchAgent(
-  stores: AgentRosterStores,
-  name: string,
-  mode: CliAgentLaunchMode,
-) {
-  const target = CLI_AGENT_LAUNCH_TARGETS[mode];
+export function resolveCliResumeAgent(stores: AgentRosterStores, name: string) {
   return Effect.gen(function* () {
     const resolved = yield* resolveCliAgent(
       stores,
       name,
-      target.requiredCategory,
+      CLI_AGENT_LAUNCH_TARGETS.workflowResume.requiredCategory,
     );
-    const agent = yield* checkCliAgentLaunch(stores, name, resolved, mode);
+    const agent = yield* checkCliAgentLaunch(
+      stores,
+      name,
+      resolved,
+      'workflowResume',
+    );
     return agent instanceof CliUsageError ? yield* Effect.fail(agent) : agent;
   });
 }

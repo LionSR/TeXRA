@@ -12,9 +12,7 @@ const CHANNEL = 'LeftoverRunSweep';
 
 /** Runs this process is running right now, by handle or by in-flight phase. */
 function runningRuns(session: SessionHandle): Set<RunId> {
-  const running = new Set(
-    session.runs.getAgentHandles().map((handle) => handle.runId),
-  );
+  const running = new Set(session.runs.activeIds());
   for (const run of SubscriptionRef.getUnsafe(session.view).runs.values()) {
     if (isInFlightPhase(run.status)) running.add(run.id);
   }

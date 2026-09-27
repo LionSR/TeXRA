@@ -4,7 +4,6 @@ import {
   validateRunRequest,
   type ValidatedRunRequest,
 } from '@agent/core/state/runRequests';
-import type { AgentRunHandle } from '@agent/runtime/RunHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 
 // Local imports - team launch
@@ -35,6 +34,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   ToolConfigSchema,
   type AgentDelegationScope,
+  type RunId,
 } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import { Cancelled, Rejected } from '@shared/session/requestErrors';
@@ -138,11 +138,11 @@ function buildLaunchRequest(
 export function launchApprovalOptions(
   { launch }: LaunchRequest,
   approvals: SessionApprovals,
-): { onRun?: (handle: AgentRunHandle) => Effect.Effect<void> } {
+): { onRun?: (runId: RunId) => Effect.Effect<void> } {
   if (launch.approval !== 'autoApprove') return {};
   return {
-    onRun: (handle) =>
-      Effect.sync(() => approvals.setDelegatedWorkBypasses(handle.runId, true)),
+    onRun: (runId) =>
+      Effect.sync(() => approvals.setDelegatedWorkBypasses(runId, true)),
   };
 }
 

@@ -1,6 +1,8 @@
 /**
- * The session store's format stamp (`SESSION_EVENT_FORMAT` in SQLite's
- * `user_version`), read and enforced for `Database`'s open and write paths.
+ * The session store's format: the schema its tables are created with, and
+ * the stamp (`SESSION_EVENT_FORMAT` in SQLite's `user_version`) naming the
+ * one vocabulary its rows hold, read and enforced for `Database`'s open and
+ * write paths.
  * The stamp names the one vocabulary a store holds; there are no readers of
  * another and no migrations, so a store of another format is refused or
  * moved aside, never read and never deleted.
@@ -149,4 +151,74 @@ export const pragmaValue = Effect.fnUntraced(function* (
     [],
   ))[0];
   return row?.[pragma];
+});
+
+/**
+ * Event history and bounded current application records.
+ *
+ * `commit` is a SQLite keyword, so the column is quoted at every site (an
+ * unquoted `commit INTEGER` is a syntax error on every host floor). Every
+ * query in `Database` aliases the snake-case columns onto the unquoted
+ * vocabulary.
+ *
+ * `event_sequence` is declared first because `event` references it, and the
+ * dependency edge (an inquiry thread under the run that asked it, a workflow
+ * checkpoint under the run that invoked it) is self-referential, so both
+ * cascades exist the moment the schema does. One run owns one row here: one
+ * sequence counter and one ownership claim (one run model, section 3.1). `STRICT` makes a wrong-typed value an error at
+ * insert instead of a surprise at read: on persisted data, a silent coercion
+ * is the same defect as a `.catch()` default.
+ *
+ * The three `event` indexes are the ones the C7 reads need: latest-of-type
+ * per aggregate (the listing tier), one aggregate from a commit (the bounded
+ * cross-aggregate resume read), and one type across aggregates in commit
+ * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
+ * both the density guarantee and the index a single aggregate's history reads
+ * from its seq.
+ */
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS input_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  value TEXT NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS event_sequence (
+  aggregate_id TEXT NOT NULL PRIMARY KEY,
+  seq          INTEGER NOT NULL,
+  owner_id     TEXT,
+  parent_id    TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
+  closed       INTEGER NOT NULL DEFAULT 0
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS event_sequence_parent
+  ON event_sequence(parent_id);
+
+CREATE TABLE IF NOT EXISTS event (
+  "commit"     INTEGER PRIMARY KEY AUTOINCREMENT,
+  aggregate_id TEXT NOT NULL
+               REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
+  seq          INTEGER NOT NULL,
+  type         TEXT NOT NULL,
+  owner_id     TEXT NOT NULL,
+  at           INTEGER NOT NULL,
+  data         TEXT NOT NULL,
+  UNIQUE (aggregate_id, seq)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);
+CREATE INDEX IF NOT EXISTS event_agg_commit   ON event(aggregate_id, "commit");
+CREATE INDEX IF NOT EXISTS event_type_commit  ON event(type, "commit");
+`;
+
+export const applySchema = Effect.fnUntraced(function* (
+  sql: SqlClient.SqlClient,
+) {
+  // The official driver prepares one statement at a time. This fixed schema
+  // contains only DDL statements, with no semicolons inside SQL literals.
+  for (const statement of SCHEMA.split(';')
+    .map((part) => part.trim())
+    .filter(Boolean)) {
+    yield* sql.unsafe(statement, []);
+  }
 });

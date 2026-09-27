@@ -48,7 +48,7 @@ import {
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import {
-  attachTestTranscriptFold,
+  createTestRunTrace,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { generateRunId, generateShortId } from '@utils/core';
@@ -669,9 +669,9 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
   ])('persists a $name turn as one structural session stage', (scenario) =>
     Effect.gen(function* () {
       const session = quietSession();
-      const logger = new TraceEmitter();
       const runId = startedRun(session);
-      const recorder = attachTestTranscriptFold(logger, runId);
+      const recorder = createTestRunTrace(runId);
+      const logger = recorder.trace;
 
       try {
         const { result } = yield* runScript({
@@ -694,7 +694,7 @@ describe('tool-use session-stage outcome persistence (#8023)', () => {
         // The turn is the only structural stage: rounds are row facts.
         expect(groups.some((group) => group.kind === 'round')).toBe(false);
       } finally {
-        recorder.unsubscribe();
+        recorder.dispose();
       }
     }),
   );

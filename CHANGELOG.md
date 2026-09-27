@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **`delegate_agent` no longer takes `execution_id`** — send a subagent
+  follow-up instructions with the `executions` tool instead (`action: "send"`
+  on `/executions/<run id>`). A custom agent whose prompt tells it to resume a
+  subagent through `delegate_agent` should be updated. Session history from
+  earlier builds is cleared the first time this build opens a workspace.
 - TeXRA 1.0 starts with new session history. Earlier conversations and saved
   runs remain on disk but are not imported or available to resume. Project
   documents and research files are unchanged. History an older build wrote
@@ -116,6 +121,21 @@ All notable changes to this project will be documented in this file.
   stored shape of a model reply changed.
 
 ### Features
+
+- **Agents can message each other** — any run in a project can send a message
+  to any other run with the `executions` tool's `send` action, the way you
+  type into another terminal pane: an orchestrator to its subagent, a
+  subagent to its orchestrator, one run to a sibling or to an unrelated run.
+  Who launched whom never limits who may talk. The message is read when the
+  recipient finishes its current turn, an idle run wakes to read it, and a
+  subagent's report now arrives the same way. An orchestrator waiting with `executions wait` wakes
+  as soon as any message reaches it, including its subagent's report. Nothing
+  caps how many messages agents exchange; stop the runs if they talk too
+  long. In the terminal, `/ps` lists the
+  session's runs and `/send <id> <text>` messages one; in VS Code and the
+  desktop app, a run's row shows how many messages it has not read yet. A
+  GitHub CI or review notice is now shown to the run as information and no
+  longer replaces what it was asked to do.
 
 - **A message you send after stopping a tool is answered first.** In 0.40.10,
   stopping a run while a tool such as `bash` was running ended the turn there.

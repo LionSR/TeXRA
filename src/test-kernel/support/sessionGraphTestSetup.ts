@@ -12,7 +12,6 @@ import {
   fakeHostAppState,
   fakeHostAuth,
   fakeHostLanguageModel,
-  fakeHostLifecycle,
   fakeHostSecrets,
   fakeSetupPlatform,
 } from './setupPlatform';
@@ -63,7 +62,6 @@ const runtime = installProcessRuntime({
   languageModel: fakeHostLanguageModel,
   agentResume: fakeHostAgentResume,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
-  lifecycle: fakeHostLifecycle,
   setup: fakeSetupPlatform,
   // The harness reports no usage; the telemetry suite starts its own.
   usageLog: UsageLog.disabled,

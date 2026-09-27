@@ -1,5 +1,5 @@
 // Third-party imports
-import { structuredPatch, type StructuredPatchHunk } from 'diff';
+import { applyPatch, structuredPatch, type StructuredPatchHunk } from 'diff';
 import { Effect } from 'effect';
 
 // Local imports - common
@@ -31,6 +31,25 @@ function toLines(text: string): string[] {
 export interface DiffHunks {
   readonly hunks: StructuredPatchHunk[];
   readonly timeout: string | undefined;
+}
+
+/**
+ * The edit from `oldText` to `newText` applied onto `targetText`, a version
+ * of the file that moved on meanwhile, or `undefined` when it does not apply.
+ * Each hunk must find the lines it removes and its context unchanged in
+ * `targetText` (at any offset), so an edit that overlaps or touches a
+ * concurrent change is a conflict, never a fuzzy placement over it.
+ */
+export function mergeEditOnto(
+  oldText: string,
+  newText: string,
+  targetText: string,
+): string | undefined {
+  const patch = structuredPatch('a', 'b', oldText, newText, '', '', {
+    context: DIFF_CONTEXT_LINES,
+  });
+  const merged = applyPatch(targetText, patch);
+  return merged === false ? undefined : merged;
 }
 
 /**

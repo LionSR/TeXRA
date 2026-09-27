@@ -3,10 +3,12 @@ import '@test/support/sessionGraphTestSetup';
 import { Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { RunRegistry } from '@agent/runtime/runRegistry';
 import {
   initializeDefaultSession,
   tryDefaultSession,
 } from '@agent/runtime/sessionGraph';
+import type { RunId } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 
 // An ephemeral session's graph builds synchronously, so the process default

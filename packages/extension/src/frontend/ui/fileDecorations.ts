@@ -1,9 +1,9 @@
+import { Cause, Effect, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
 
 import type { SessionHandle } from '@agent/runtime';
-import { subscribeAppSignal } from '@frontend/events/appSignalSubscriptions';
-import { subscribeOutputFiles } from '@frontend/events/runFactSubscriptions';
-import type { ProcessRuntime } from '@platform/processRuntime';
+import { onAppSignal } from '@eventBus/AppSignals';
+import { outputFilesProduced } from '@frontend/events/runFactSubscriptions';
 
 // Session-scoped: the touched set is not persisted across window reloads so
 // the badges clear on restart and track only the current session's activity.
@@ -48,45 +48,51 @@ class TeXRAFileDecorationProvider implements vscode.FileDecorationProvider {
   }
 }
 
+/** Badge the files TeXRA wrote, for as long as the caller's scope lasts:
+ *  both listeners are fibers of it (activation's, in the extension). */
 export function registerFileDecorations(
   context: vscode.ExtensionContext,
-  runtime: ProcessRuntime,
   session: Pick<SessionHandle, 'events' | 'now'>,
-): void {
-  const provider = new TeXRAFileDecorationProvider();
-
-  const unsubscribeOutputFiles = subscribeOutputFiles(
-    session,
-    ({ filesByRound }) => {
-      // Only mark the primary output location. Lineage entries (original,
-      // diffBase) are reference points; marking them would badge the
-      // source file as "Modified by TeXRA" before the user has actually
-      // accepted the workflow output.
-      const paths = new Set<string>();
-      for (const roundFiles of Object.values(filesByRound)) {
-        for (const info of roundFiles) {
-          if (info.location.kind === 'workspace') {
-            paths.add(info.location.absolutePath);
+): Effect.Effect<void, never, Scope.Scope> {
+  return Effect.gen(function* () {
+    const provider = new TeXRAFileDecorationProvider();
+    yield* Effect.forkScoped(
+      Stream.runForEach(outputFilesProduced(session), ({ filesByRound }) =>
+        Effect.sync(() => {
+          // Only mark the primary output location. Lineage entries (original,
+          // diffBase) are reference points; marking them would badge the
+          // source file as "Modified by TeXRA" before the user has actually
+          // accepted the workflow output.
+          const paths = new Set<string>();
+          for (const roundFiles of Object.values(filesByRound)) {
+            for (const info of roundFiles) {
+              if (info.location.kind === 'workspace') {
+                paths.add(info.location.absolutePath);
+              }
+            }
           }
-        }
-      }
-      provider.markTouched(paths);
-    },
-    runtime,
-  );
-
-  const writtenListener = subscribeAppSignal(
-    runtime,
-    'workspaceFilesWritten',
-    ({ absolutePaths }) => {
-      provider.markTouched(absolutePaths);
-    },
-  );
-
-  context.subscriptions.push(
-    vscode.window.registerFileDecorationProvider(provider),
-    provider,
-    { dispose: unsubscribeOutputFiles },
-    writtenListener,
-  );
+          provider.markTouched(paths);
+        }),
+      ).pipe(
+        // The listener ends with a failed read; it says so rather than
+        // leaving the badges quietly stale.
+        Effect.catchCause((cause) =>
+          Effect.logWarning(
+            'TeXRA stopped badging output files: the session read failed',
+          ).pipe(Effect.annotateLogs({ data: Cause.squash(cause) })),
+        ),
+      ),
+      { startImmediately: true },
+    );
+    yield* Effect.forkScoped(
+      onAppSignal('workspaceFilesWritten', ({ absolutePaths }) => {
+        provider.markTouched(absolutePaths);
+      }),
+      { startImmediately: true },
+    );
+    context.subscriptions.push(
+      vscode.window.registerFileDecorationProvider(provider),
+      provider,
+    );
+  });
 }

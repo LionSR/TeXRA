@@ -18,6 +18,7 @@ import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
 import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
@@ -67,7 +68,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     fn,
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 }
 
@@ -289,11 +290,13 @@ describe('ExecutionsTool', () => {
           session.followUps.claimLive(parentRunId, 'flow');
           const delivery = {
             text: 'child result',
-            origin: 'subagent_result' as const,
+            from: { kind: 'run' as const, runId: childRunId },
             deliveryId: `${childRunId}:turn:1:delivery`,
           };
           yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
-          expect(session.pendingFollowUps(parentRunId)).toHaveLength(1);
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toHaveLength(1);
 
           const waited = yield* ExecutionsTool.call({
             path: `/executions/${childRunId}`,
@@ -309,7 +312,9 @@ describe('ExecutionsTool', () => {
           expect(waited.output).toContain(
             '<subagent-result>full report</subagent-result>',
           );
-          expect(session.pendingFollowUps(parentRunId)).toEqual([]);
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
           // The child loop's replayed wake finds the row consumed.
           expect(
             yield* session.followUps.submit(
@@ -318,7 +323,9 @@ describe('ExecutionsTool', () => {
               'live_owner',
             ),
           ).toEqual({ kind: 'duplicate' });
-          expect(session.pendingFollowUps(parentRunId)).toEqual([]);
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
         }),
       ),
   );
@@ -367,6 +374,61 @@ describe('ExecutionsTool', () => {
             'waiting',
             RUN_PHASE.WAITING,
           );
+          const result = yield* Fiber.join(wait);
+          expect(result.status).not.toBe('error');
+        }),
+      ),
+    { timeout: 5000 },
+  );
+
+  it.live(
+    "wakes a blocking wait when the waiting run is sent a child's report",
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'turn.begin',
+            RUN_PHASE.RUNNING,
+          );
+          const wait = yield* Effect.forkChild(
+            ExecutionsTool.call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+              timeout: 600,
+            }).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session, runId: parentRunId, toolPolicy: {} },
+                }),
+              ),
+            ),
+          );
+          yield* Effect.yieldNow;
+          // The child stays RUNNING: only the committed report can end it.
+          session.publish([
+            {
+              type: 'followup.queued',
+              aggregateId: aggregateId('run', parentRunId),
+              followUpId: 'child-report',
+              content: {
+                text: '<subagent-progress id="c41d0000000d" agent="review" type="started" />',
+                from: { kind: 'run', runId: childRunId, relation: 'child' },
+              },
+            },
+          ]);
           const result = yield* Fiber.join(wait);
           expect(result.status).not.toBe('error');
         }),

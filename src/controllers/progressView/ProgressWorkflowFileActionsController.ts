@@ -17,6 +17,7 @@ import {
   findRunDirUnder,
   runDirUnder,
 } from '@utils/files/runStorageFs';
+import { truncatedHexId } from '@utils/core/idHash';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { RunOutputsSource } from './runOutputs';
 
@@ -67,7 +68,11 @@ interface ProgressWorkflowFileActionsControllerDeps {
 }
 
 export class ProgressWorkflowFileActionsController {
-  /** Per-stream snapshot of each output file's content at compare time. */
+  /**
+   * Per-stream digest of each output file's content at compare time. A
+   * digest, not the content: Accept only asks whether the file changed
+   * since. Kept while the file is still an output of its run.
+   */
   private readonly modelOutputBackups = new Map<RunId, Map<string, string>>();
 
   constructor(
@@ -196,7 +201,7 @@ export class ProgressWorkflowFileActionsController {
         activeRun !== undefined &&
         backup !== undefined &&
         currentContent !== undefined &&
-        currentContent !== backup
+        contentDigest(currentContent) !== backup
       ) {
         const fileName = path.basename(file);
         yield* this.deps.sendFollowUp(
@@ -253,9 +258,23 @@ export class ProgressWorkflowFileActionsController {
 
     return Effect.gen({ self: this }, function* () {
       const content = yield* this.deps.host.readFile(file);
+      // A digest lives while its file is still an output of its run: a
+      // removed run, or a round that no longer lists the file, takes its
+      // digests with it, so the map is bounded by outputs that exist.
+      for (const [stream, digests] of this.modelOutputBackups) {
+        const outputs = new Set(
+          Object.values(this.deps.state.getOutputFiles(stream))
+            .flat()
+            .map((info) => info.location.absolutePath),
+        );
+        for (const tracked of digests.keys()) {
+          if (!outputs.has(tracked)) digests.delete(tracked);
+        }
+        if (digests.size === 0) this.modelOutputBackups.delete(stream);
+      }
       const runBackups =
         this.modelOutputBackups.get(runId) ?? new Map<string, string>();
-      runBackups.set(file, content);
+      runBackups.set(file, contentDigest(content));
       this.modelOutputBackups.set(runId, runBackups);
     }).pipe(
       // Best-effort: backup only informs the accepted-edit follow-up, but a
@@ -294,4 +313,9 @@ export class ProgressWorkflowFileActionsController {
       round: Math.max(...rounds),
     };
   }
+}
+
+/** A full sha256 digest of a file's text: what a compare-time backup keeps. */
+function contentDigest(content: string): string {
+  return truncatedHexId(content, 64);
 }

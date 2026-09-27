@@ -44,7 +44,7 @@ import {
 import { classifyRun } from './runClassification';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
-import { RunLive } from './runRoster';
+import { RunLive } from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -412,8 +412,10 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         },
       };
       const onIdle = (): void => {
-        if (!session.pendingFollowUps(runId).some(isAdmitted))
-          Deferred.doneUnsafe(idle, Effect.void);
+        const pending = session.events.pendingFollowUps(
+          aggregateId('run', runId),
+        );
+        if (!pending.some(isAdmitted)) Deferred.doneUnsafe(idle, Effect.void);
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;

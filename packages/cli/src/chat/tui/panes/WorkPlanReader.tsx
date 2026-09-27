@@ -17,8 +17,6 @@ import {
 import { formFrameWidth } from '../forms/_shared/FormFrame';
 import { ScrollableModalText } from '../modals/ScrollableModalText';
 
-const WORK_PLAN_LOADING_TEXT = 'Loading work plan…';
-
 /** Render the complete work plan loaded from committed events. */
 function formatWorkPlanReaderText(
   plan: Plan | null,
@@ -42,14 +40,12 @@ function formatWorkPlanReaderText(
 
 export function WorkPlanReader({
   availableRows,
-  loading = false,
   onClose,
   runId,
   session,
   title,
 }: {
   readonly availableRows: number;
-  readonly loading?: boolean;
   readonly onClose: () => void;
   readonly runId: RunId;
   /** The chat's session the plan is read from, threaded from the App. */
@@ -57,7 +53,7 @@ export function WorkPlanReader({
   readonly title: string;
 }): React.JSX.Element {
   const { columns } = useWindowSize();
-  const run = loading ? undefined : session.runView(runId);
+  const run = session.runView(runId);
   const workPlan =
     run?.category === AgentCategory.ToolUse
       ? { plan: run.plan, todos: run.todos }
@@ -65,12 +61,13 @@ export function WorkPlanReader({
   const layout = readerLayout({
     availableRows,
     frameWidth: formFrameWidth(columns),
-    hints: loading ? CLOSE_HINTS : READER_SCROLL_HINTS,
+    hints: READER_SCROLL_HINTS,
     title,
   });
-  const text = loading
-    ? WORK_PLAN_LOADING_TEXT
-    : formatWorkPlanReaderText(workPlan?.plan ?? null, workPlan?.todos ?? []);
+  const text = formatWorkPlanReaderText(
+    workPlan?.plan ?? null,
+    workPlan?.todos ?? [],
+  );
 
   useInput((input, key) => {
     if (isEscapeInput(input, key)) onClose();
