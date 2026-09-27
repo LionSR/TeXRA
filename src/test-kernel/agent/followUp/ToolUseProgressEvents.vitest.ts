@@ -14,7 +14,6 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
@@ -347,7 +346,6 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer(),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),

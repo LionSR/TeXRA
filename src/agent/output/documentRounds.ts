@@ -434,17 +434,17 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
   });
 
   /**
-   * The round's output from its turn's text. The raw output file is
-   * rewritten whole from the text, so running it again for the same round
-   * reruns the pipeline over the same raw output and the run-owned artifacts
-   * it already produced. The text is extracted when it stopped, was cut off
-   * by the output limit (as far as it got), or closes the documents: the turn
-   * sends no stop sequence, so the closing tag stays in the text.
+   * The round's output from its turn's text, rewritten whole into the raw
+   * output file, so a rerun of the round reruns the pipeline over the same
+   * text. It is extracted when the turn stopped, was cut off, or closed the
+   * documents (no stop sequence is sent, so the closing tag stays in the
+   * text). `announce`, the round's notices, runs just ahead of its row.
    */
   const afterTurn = Effect.fn('documentRounds.afterTurn')(function* (
     round: number,
     response: { readonly text: string; readonly finish: TurnFinish },
     cell: RunCell,
+    announce: Effect.Effect<void>,
   ): Effect.fn.Return<RunState, Error, RoundServices> {
     const { text, finish } = response;
     const endTurn =
@@ -487,8 +487,8 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
         }
       }).pipe(recoverWarn('Validate expected outputs'));
     }
-    // The row owns completed outputs. Commit it before fallible presentation
-    // and policy reads.
+    // The row owns completed outputs: it commits before fallible reads.
+    yield* announce;
     const produced = yield* cell.append([
       {
         type: 'output.produced',

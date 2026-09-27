@@ -219,9 +219,8 @@ export const settleRun =
   (
     cell: RunCell,
     logger: AgentTrace,
-    /** The run's input lease, or null. Typed data, not a service lookup:
-     *  a missing FollowUps must not leak a lease with nothing saying so. */
-    lease: FollowUps['Service'] | null,
+    /** The run's own input lease, or null for a run that takes no input. */
+    lease: FollowUps | null,
   ) =>
   (
     exit: Exit.Exit<RunExit, Error>,
