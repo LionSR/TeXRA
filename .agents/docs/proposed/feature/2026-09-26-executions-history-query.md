@@ -31,14 +31,14 @@ three-arm discriminated union (`view` / `wait` / `kill`,
 `src/tools/executions/toolInput.ts`). The paths draw on five different
 sources:
 
-| Source | Paths |
-| --- | --- |
-| Listing fold, `session.readView([])` | `/executions`, `/children`, `/todos`, the `/config` category filter |
-| One aggregate folded, `readView([runId])` | `/executions/{id}` (workflow board) |
-| Private run records, `getRunRecords` (`run.report`, `run.result`, `run.record`, `run.workspaceFiles`) | `/report`, `/result`, `/config`, `/workspace-files` |
-| Transcript fold, `readCompletedRunConversation` → `readRunTranscript` | `/conversation` |
-| Live, in-memory `session.runView` | `/output`, plus the liveness notes on `/report` and `/result` |
-| Filesystem (`StorageFs`, `FileSystem`) | `/files`, `/files/{path}`, `/workspace-files/{path}` |
+| Source                                                                                                | Paths                                                               |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Listing fold, `session.readView([])`                                                                  | `/executions`, `/children`, `/todos`, the `/config` category filter |
+| One aggregate folded, `readView([runId])`                                                             | `/executions/{id}` (workflow board)                                 |
+| Private run records, `getRunRecords` (`run.report`, `run.result`, `run.record`, `run.workspaceFiles`) | `/report`, `/result`, `/config`, `/workspace-files`                 |
+| Transcript fold, `readCompletedRunConversation` → `readRunTranscript`                                 | `/conversation`                                                     |
+| Live, in-memory `session.runView`                                                                     | `/output`, plus the liveness notes on `/report` and `/result`       |
+| Filesystem (`StorageFs`, `FileSystem`)                                                                | `/files`, `/files/{path}`, `/workspace-files/{path}`                |
 
 The first four are the `event` table read four different ways. The
 [tools-surface collapse](../../archived/simplification/2026-09-20-tools-and-schema-surface-collapse.md)
@@ -70,7 +70,7 @@ implemented in `src/controllers/session/Database.ts`:
 
 ```ts
 query: (sql: string, params: ReadonlyArray<SqlParam>) =>
-  Effect.Effect<QueryRows, DatabaseQueryRefused | DatabaseReadFailed>
+  Effect.Effect<QueryRows, DatabaseQueryRefused | DatabaseReadFailed>;
 ```
 
 - It runs on its own `readOnly: true` connection to the same file. Writes
@@ -79,7 +79,7 @@ query: (sql: string, params: ReadonlyArray<SqlParam>) =>
 - It runs in a worker thread. `node:sqlite` is synchronous and exposes no
   interrupt, progress handler or authorizer (on 22.22 the `DatabaseSync`
   prototype has `open close prepare exec function aggregate createSession
-  applyChangeset enableLoadExtension loadExtension`). An Effect timeout
+applyChangeset enableLoadExtension loadExtension`). An Effect timeout
   cannot preempt a statement already on the main thread, so one runaway
   recursive CTE would freeze the extension host. Running in a worker makes
   interruption real: the timeout, or interrupting the calling fiber,
@@ -91,7 +91,7 @@ query: (sql: string, params: ReadonlyArray<SqlParam>) =>
   a clear error message; the read-only connection is what enforces it.
   Extension loading stays disabled, which is the `node:sqlite` default.
 - `DatabaseQueryRefused { reason: 'syntax' | 'not-a-read' | 'timeout' |
-  'row-limit', message }` is a `Data.TaggedError`. The error channel is never
+'row-limit', message }` is a `Data.TaggedError`. The error channel is never
   `unknown`.
 - Ephemeral sessions (`:memory:`) have no file for a second connection to
   open. There, `query` fails loudly with `DatabaseQueryRefused`. It does not
@@ -112,15 +112,15 @@ file.
 The views cover display rows and the private run records only. They strip the
 `.1` suffix, hide `seq`, `commit` and `owner_id`, and flatten the JSON.
 
-| View | Columns (sketch) | Rows |
-| --- | --- | --- |
-| `runs` | `id, parent_id, agent, model, category, is_remote, started_at, ended_at, outcome, error, cost, input_tokens, output_tokens, closed` | `run.start`, `run.config`, `run.end`, `event_sequence.closed` |
-| `run_tree` | `ancestor_id, id, depth` | recursive over `run.start.parent.id` |
-| `messages` | `run_id, at, role, text` | the rows `foldRunTranscript` reads: `log` by `messageType`, `stream.end.finalText`, `response.finalized` |
-| `tool_calls` | `run_id, call_id, tool, input, status, result, started_at, ended_at` | `tool.start` joined to `tool.end` on `logId` |
-| `usage` | `run_id, at, model, input_tokens, output_tokens, cost` | `usage` |
-| `todos` | `run_id, content, status` | the latest `run.fact` with `key = 'todos'` |
-| `reports` | `run_id, report, result_json` | `run.report`, `run.result` |
+| View         | Columns (sketch)                                                                                                                    | Rows                                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `runs`       | `id, parent_id, agent, model, category, is_remote, started_at, ended_at, outcome, error, cost, input_tokens, output_tokens, closed` | `run.start`, `run.config`, `run.end`, `event_sequence.closed`                                            |
+| `run_tree`   | `ancestor_id, id, depth`                                                                                                            | recursive over `run.start.parent.id`                                                                     |
+| `messages`   | `run_id, at, role, text`                                                                                                            | the rows `foldRunTranscript` reads: `log` by `messageType`, `stream.end.finalText`, `response.finalized` |
+| `tool_calls` | `run_id, call_id, tool, input, status, result, started_at, ended_at`                                                                | `tool.start` joined to `tool.end` on `logId`                                                             |
+| `usage`      | `run_id, at, model, input_tokens, output_tokens, cost`                                                                              | `usage`                                                                                                  |
+| `todos`      | `run_id, content, status`                                                                                                           | the latest `run.fact` with `key = 'todos'`                                                               |
+| `reports`    | `run_id, report, result_json`                                                                                                       | `run.report`, `run.result`                                                                               |
 
 Rules:
 
@@ -150,9 +150,12 @@ Add the arm to `ExecutionsToolInputSchema`:
 
 ```ts
 const QueryActionSchema = z.strictObject({
-  path: PathFieldSchema.nullish(),        // ignored; kept for union flattening
+  path: PathFieldSchema.nullish(), // ignored; kept for union flattening
   action: z.literal('query'),
-  sql: z.string().min(1).describe('One read-only SQL statement over the views below.'),
+  sql: z
+    .string()
+    .min(1)
+    .describe('One read-only SQL statement over the views below.'),
   params: z.array(z.union([z.string(), z.number(), z.null()])).nullish(),
 });
 ```
@@ -212,9 +215,13 @@ live, and replay is deterministic only if a resumed script sees the same rows
 the first attempt saw. An orchestrator script then treats history as data:
 
 ```js
-const failed = yield* query(
-  "select id, error from runs where parent_id = ? and outcome = 'failed'", [args.runId]);
-yield* all(failed.map((r) => agent(`Diagnose run ${r.id}: ${r.error}`)));
+const failed =
+  yield *
+  query(
+    "select id, error from runs where parent_id = ? and outcome = 'failed'",
+    [args.runId],
+  );
+yield * all(failed.map((r) => agent(`Diagnose run ${r.id}: ${r.error}`)));
 ```
 
 This is where "code as the tool" leads: the model's reads and its control flow
