@@ -308,6 +308,17 @@ const execSubscribe = Effect.fn('GitHubSubscriptionTool.subscribe')(function* (
   );
 });
 
+/** The 200 body of an unconditional GET, or a ToolError naming the status. */
+const ghGetOk = <T>(
+  path: string,
+  failure = (status: number) => `Unexpected GitHub response status: ${status}`,
+): Effect.Effect<T, Error, Secrets> =>
+  Effect.flatMap(ghGet<T>(path), (res) =>
+    res.status === 200
+      ? Effect.succeed(res.data)
+      : Effect.fail(new ToolError(failure(res.status))),
+  );
+
 /**
  * Returns true iff the given issue/PR number resolves to a PR. One GET to
  * `/repos/{o}/{r}/issues/{n}`; the response object has a `pull_request`
@@ -318,17 +329,14 @@ const resolveIssueIsPR = (
   repo: string,
   number: number,
 ): Effect.Effect<boolean, Error, Secrets> =>
-  Effect.flatMap(
-    ghGet<GhIssue>(`/repos/${owner}/${repo}/issues/${number}`),
-    (res) =>
-      res.status !== 200
-        ? Effect.fail(
-            new ToolError(
-              `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${res.status}. ` +
-                `Verify the number exists and the repo is accessible.`,
-            ),
-          )
-        : Effect.succeed(res.data.pull_request != null),
+  Effect.map(
+    ghGetOk<GhIssue>(
+      `/repos/${owner}/${repo}/issues/${number}`,
+      (status) =>
+        `Failed to resolve ${owner}/${repo}/issues/${number}: GitHub returned status ${status}. ` +
+        `Verify the number exists and the repo is accessible.`,
+    ),
+    (issue) => issue.pull_request != null,
   );
 
 const execUnsubscribe = Effect.fn('GitHubSubscriptionTool.unsubscribe')(
@@ -426,14 +434,9 @@ const getDefaultBranch = (
   owner: string,
   repo: string,
 ): Effect.Effect<string, Error, Secrets> =>
-  Effect.flatMap(
-    ghGet<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
-    (res) =>
-      res.status !== 200
-        ? Effect.fail(
-            new ToolError(`Unexpected GitHub response status: ${res.status}`),
-          )
-        : Effect.succeed(res.data.default_branch ?? 'main'),
+  Effect.map(
+    ghGetOk<{ default_branch?: string }>(`/repos/${owner}/${repo}`),
+    (repository) => repository.default_branch ?? 'main',
   );
 
 export function parseOriginHeadDefaultBranch(ref: string): string | undefined {
@@ -542,14 +545,8 @@ const execFindCurrent = Effect.fn('GitHubSubscriptionTool.findCurrent')(
       );
     }
     const apiPath = `/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${remote.owner}:${encodeURIComponent(branch)}&per_page=1`;
-    const res =
-      yield* ghGet<Array<{ number: number; html_url: string }>>(apiPath);
-    if (res.status !== 200) {
-      return yield* Effect.fail(
-        new ToolError(`Unexpected GitHub response status: ${res.status}`),
-      );
-    }
-    const pr = res.data[0];
+    const [pr] =
+      yield* ghGetOk<Array<{ number: number; html_url: string }>>(apiPath);
     if (!pr) {
       const { defaultBranch, suggestions } = yield* getFindCurrentFallbackInfo(
         remote.owner,
