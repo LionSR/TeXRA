@@ -144,7 +144,13 @@ move 4).
   (`sessionLayer.ts:1262`). Closing one session drains only the deliveries
   bound to that session. It never stops process polling that other open
   sessions still use: `PollingLifetime.drain` closes polling for good
-  (`PollingSourceBase.ts:99-137`). Hosts invoke it rather than repeating it (move 4). Plugin
+  (`PollingSourceBase.ts:99-137`). Today there is one process-wide delivery
+  `FiberSet`, so the per-session drain needs a new primitive first. Deliveries
+  become a `FiberMap` keyed by the target session's root. A session's close
+  unbinds its subscriptions and awaits that key's fibers, and the plugin
+  entry's drain takes an optional session root for this. Until that
+  primitive lands, closing one session leaves the process drain untouched,
+  and admission to the closed session is refused. Hosts invoke it rather than repeating it (move 4). Plugin
   acquisition and release stay in their typed layers. For an SDK reader,
   closing its scope detaches the reader; the session's own ownership
   governs the run.
@@ -349,7 +355,10 @@ O(1) lookups, and nothing here shows a wrong decision caused by the tolerant
 view. The measurable win needs no kernel:
 
 1. Replace `persistedParentRunId` with a single-run read and collapse
-   `runAgent`'s double read.
+   `runAgent`'s double read. The read folds that run's `run.start` and any
+   later `run.detach`, since lineage is `run.start.parent` severed by a detach
+   (`runRecords.ts:100-116`). A child promoted to a root is never reattached
+   on resume.
 2. Make `listingTypeOf` exhaustive.
 3. Land the de-duplication cuts (usage ×4, output ×3, `run.config` on every
    activation) now, on a plain format bump: 1.0 starts from a clean state, so a
@@ -434,32 +443,44 @@ manifest flag that declares the contribution. That keeps "the manifest imports
 no tool implementation" true, which dashboards and webviews rely on, and adds
 no `@tools` to `@agent` edges.
 
-| Table                    | Seam and owner                       | Contributors                                                                                            |
-| ------------------------ | ------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                                       |
-| `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                                                     |
-| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin                                    |
-| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions, Lean (needs `HostPorts` in `R`, or stays core as ruled on 09-23), `SetupPlatform` |
-| `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)                                 |
-| `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                                         |
-| `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                                      |
-| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts`                       |
+| Table                    | Seam and owner                       | Contributors                                                                      |
+| ------------------------ | ------------------------------------ | --------------------------------------------------------------------------------- |
+| `PLUGIN_TOOLS`           | tools (exists)                       | every tool plugin                                                                 |
+| `PLUGIN_CONTINUATIONS`   | the run loop's continuation (exists) | `documents` (rounds), `plan` (goal)                                               |
+| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty) | none yet: built by `Compositions.pin` and released with the last pin              |
+| `PLUGIN_PROCESS_LAYERS`  | process services                     | GitHub subscriptions only (Lean, `SetupPlatform` and `InquiryRecords` stay core)  |
+| `PLUGIN_SESSION_LAYERS`  | the session entry                    | Codex and Claude handle registries (two real contributors of one shape)           |
+| `PLUGIN_DRIVERS`         | child-run drivers                    | `codex`, `claude-agent`, `workflow-script`; `native` stays core                   |
+| `PLUGIN_EVENT_ARMS`      | the one closed event schema          | goal, inquiry, workflow checkpoints, documents (`output.produced`)                |
+| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                      | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts` |
 
 - **Process services get their own table.** `PLUGIN_LAYERS` is read only
   while `Compositions.pin` builds a run's entry (`compositions.ts:158-207`),
-  and its resources close with the last pin. GitHub subscriptions, setup and
-  Lean have consumers outside any run (settings, the session), so they go in
-  `PLUGIN_PROCESS_LAYERS`. `InquiryRecords` stays core and unconditional. The
+  and its resources close with the last pin. GitHub subscriptions have
+  consumers outside any run (settings, the session), so they go in
+  `PLUGIN_PROCESS_LAYERS`. Three services that looked like candidates stay
+  core and unconditional:
+  - Lean's layer needs `HostPorts` in `R`, which `TexraProcess.layer`'s input
+    channel does not carry, so it stays core as ruled on 09-23.
+  - `SetupPlatform` is read by the shared availability probe
+    (`toolProbes.ts:68-82`, `pluginAvailability.ts:101-112`) in every graph,
+    so only the Setup plugin's tools are optional.
+  - `InquiryRecords`, for the reasons below.
+
+  `InquiryRecords` stays core and unconditional. The
   session graph reads it (`sessionLayer.ts:284`), core `SessionRequests`
   needs it to decide and record inquiry answers (`SessionRequests.ts:83-109`),
   and inquiry rows must stay decidable while the plugin is off. The process composes that table once,
   selected by its plugin set (`TexraProcessOptions.plugins`, move 4), and
   there is no second instance per run.
+
 - **Drivers are contributions, not task kinds.** The Codex, Claude and
   workflow-script drivers already live in their plugins
   (`agentCliShared.ts:532`, `workflowScriptStrategy.ts:157`). Resolve a driver
-  from the run's pinned composition, and fail a resume loudly if its driver
-  plugin is off. This also deletes `resumeRun`'s `@tools/delegation` import.
+  from the run's resolved composition. A driver is the one contribution that
+  does not narrow on resume: a run whose driver plugin is off cannot execute
+  at all, so its resume fails loudly with a typed `DriverUnavailable`, and no
+  other driver is substituted. This also deletes `resumeRun`'s `@tools/delegation` import.
 - **Documents stays a plugin.** Its workflow arm of `RunView` becomes the
   documents plugin's fold slice; the category is the fact that selects which
   continuation plugin a run gets.
@@ -501,16 +522,18 @@ no `@tools` to `@agent` edges.
   its `skills/`, `agents/`, `commands/` and `.mcp.json` become data-table
   entries; it enters `Composition.loaded`, so one switch hides everything it
   contributes. Third parties never write TypeScript.
-- **The composition is recorded in the log.** The opening `flow.snapshot`
-  records the composition value (plugin set, the loaded plugins' content
-  digests, preset id), not only `toolsetHash`, so behaviour can be attributed
+- **The composition is recorded in the log, per activation.** Every
+  activation's opening `flow.snapshot` (the fresh launch and each resume)
+  records the composition it resolved (plugin set, the loaded plugins'
+  content digests, preset id), not only `toolsetHash`. Work done after a
+  resume is then attributed to the composition that actually ran it, so behaviour can be attributed
   to a plugin revision across restarts. The record is for attribution: a
   resumed run still resolves its own composition, as ruled (ledger,
   2026-09-23), so no per-process value has to survive a restart. On resume
   the existing rule stands: the offered tools are the recorded tools
   intersected with what is available now. So a plugin disabled, replaced or
   unavailable since the run started narrows the resumed run instead of
-  failing it. Exact historical replay of a plugin revision would need
+  failing it, except a missing driver (below). Exact historical replay of a plugin revision would need
   revision retention, trust and missing-resource rules, and is not proposed.
   Pinning the agent definition is decided separately (decision 10). A child
   shares its parent's resource hold and records its own narrower offered set,
@@ -518,7 +541,12 @@ no `@tools` to `@agent` edges.
 - **Presets are stored compositions.** Today's switches become the preset
   `default`, an agent YAML may name a preset, and the session records the
   preset id. A preset describes the user's selection; host availability is
-  resolved when resources are acquired. The plugin note already promised this.
+  resolved when resources are acquired. A run's preset is bounded by the
+  process's plugin set (`TexraProcessOptions.plugins`): process-scoped
+  services are composed once at process start. A run whose preset names a
+  process plugin the process did not compose fails to open with a typed
+  `PluginNotComposed`, and nothing is dropped silently. Run-pinned
+  contributions (tools, `PLUGIN_LAYERS`) still switch at run open. The plugin note already promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
   an installed plugin that is its commit or tree hash. An MCP definition can
@@ -532,8 +560,10 @@ no `@tools` to `@agent` edges.
   resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
   `.texra/mcp.json` trust prompt.
 - **Self-improvement goes through data.** An approval-gated tool in the
-  `setup` plugin installs, enables, trusts and saves presets. It takes effect
-  at the next run open; in-flight runs keep their pin. Code tables change
+  `setup` plugin installs, enables, trusts and saves presets. A change to
+  run-pinned contributions takes effect at the next run open; enabling a
+  process plugin takes effect at the next process start. In-flight runs keep
+  their pin. Code tables change
   only by editing the code and restarting.
 
 ### Why not the alternatives
@@ -568,8 +598,10 @@ in `src/ui`, because webview frontends cannot import `@tools`.
 
 1. A deterministic availability input to the composition key; LM tools through
    a pin. First.
-2. `PLUGIN_PROCESS_LAYERS` filled: GitHub (drained by the shutdown
-   protocol) and Setup; the SDK passes its plugin set and `PACKAGE_SETUP` goes.
+2. `PLUGIN_PROCESS_LAYERS` filled with GitHub (drained by the shutdown
+   protocol, after its session-side reads go through the selected entry). The
+   SDK passes its plugin set, and a real core `SetupPlatform` replaces
+   `PACKAGE_SETUP`, whose `host` throws.
 3. `PLUGIN_SESSION_LAYERS` for the Codex and Claude registries; the goal grant
    computed from rows, WeakMap deleted.
 4. `PLUGIN_DRIVERS`, resolved from the pinned composition.
@@ -686,8 +718,8 @@ hits in 5 files.
   module slots `bootstrapHost` still writes (setting host, account probes,
   skill and plugin directories, dispatcher), so a second graph is refused until
   those are graph-owned; coexistence is allowed only then.
-- The Lean process layer needs `HostPorts` in `R`, or it stays core, as ruled
-  on 09-23.
+- The Lean process layer needs `HostPorts` in `R`, which the SDK layer's
+  input channel does not carry, so Lean stays core, as ruled on 09-23.
 - Measure the bare-run count before the CLI PR (`RT-install-cli-process-runtime`).
 - `ProcessLayer` as a whole waits until a PR shows it deletes more than it
   adds.
@@ -722,7 +754,7 @@ export interface TexraProcessOptions {
   readonly modelTransport?: 'bound' | 'process-global'; // default 'bound': the long-stream fetch, not global
   readonly diagnostics?: Layer.Layer<never>;
   // Which plugins the process composes: a preset id or an explicit set.
-  // Default: core only, so an embedder opts in to Setup, GitHub, Lean and the rest.
+  // Default: core only, so an embedder opts in to GitHub and the plugin tools.
   readonly plugins?:
     { readonly preset: string } | { readonly ids: readonly PluginId[] };
   // The one approval authority for every session this process opens (move 7).
@@ -750,10 +782,9 @@ export const TexraProcess: {
   host identity, skills and plugin agent directories.
 - **The host identity is data** on `SettingsStores`/`WorkspaceRoots`, not a
   slot or a tag. It is core and always present, and `bootstrapHost` reads the
-  host from it rather than from `SetupPlatform.host`. A core-only process
-  (the SDK default, `plugins` omitted) therefore bootstraps without the Setup
-  plugin, and `SetupPlatform` is only the Setup plugin's capability in
-  `PLUGIN_PROCESS_LAYERS`.
+  host from it rather than from `SetupPlatform.host`. `SetupPlatform` stays a
+  core service, because the availability probe reads it in every graph (move
+  2). The optional part of Setup is its tools.
 - **`AppSignals` is a service with a shutdown finalizer**, and process-lifetime
   `forkDetach` calls become `forkScoped` on the runtime's scope.
 - **One shutdown protocol in core replaces the four hand-registered chains.**
@@ -1293,8 +1324,12 @@ live entry is notified, and a resumable one is woken by the session-bound
 resume (move 6), which launches through the path move 3 selects
 (`runWithLaunchGuard`), forked into the session scope, with no host port. A
 root workflow run is the exception: its resume needs the host's
-`openWorkflowOutput` (move 3). The automatic wake takes that hook from the
-session's attached host (`attachSessionHost`, move 5), and with no host
+`openWorkflowOutput` (move 3). Only a host-launched root needs it: its
+opening snapshot records that it was launched with a host hook. A root
+launched through the SDK has none, presents from facts, and resumes without
+one, so an embedder's workflow input is woken like any other. For a
+host-launched root, the automatic wake takes the hook from the session's
+attached host (`attachSessionHost`, move 5), and with no host
 attached it leaves the run pending. `attachSessionHost` then runs the
 pending-input scan again for the runs that were waiting on a host. Recovery
 after a restart runs while the session is still opening, before any host can
@@ -1325,9 +1360,12 @@ finalizes (`childRunLoop.ts:631-637`), and waking the parent there is the
 #8093 self-stall that `childRunLoop.ts:482-489` warns about. A
 non-finalizing delivery, where the child continues to another turn, is
 released with its `settled` row. A child that crashes before that job leaves
-no terminal row either, so its resume performs the release. A native child uses it for its turn result. For a non-finalizing turn it
-calls `wake` with the token its own delivery returned. For its last turn it
-never calls `wake`; the release rides the `run.end` job above. Either way a
+no terminal row either, so its resume performs the release. A native child uses it for its turn result, and never calls `wake` as a
+separate step. It hands its delivery's `WakeToken` to the job that settles
+the delivery. For a non-finalizing turn that is the `child.turn` `settled`
+job, and for its last turn the `run.end` job. So a crash between settling
+and releasing is impossible. `wake(token)` stays for a producer with no
+settling row of its own. Either way a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
 `submitPendingDelivery` do today (`childRunLoop.ts:601-607,654`): the durable
 row survives a crash, and the parent never sees the child as still running
@@ -1558,7 +1596,10 @@ for each child (inference). The host-neutral controllers still carry
   format bump, so a host opens the right PDF and does not reopen earlier
   rounds' files.
 - **Presentation is checkpointed in the log, at least once.** After the host
-  presents a round it publishes `output.presented {runId, roundId}`. An
+  presents a round it publishes `output.presented {runId, roundId}`. The
+  cold listing keeps only the latest row per aggregate and type
+  (`listingTypeOf`, `Database.ts:160-191`), so the listing key for this row
+  includes `roundId` and every round's checkpoint survives a restart. An
   attaching host presents only facts with no `output.presented` row, so a
   reattached window does not replay rounds already checkpointed and loses no
   outputs produced while no host was attached. A crash between the side
@@ -1615,21 +1656,21 @@ These were in the first draft and did not survive the checks:
 The owner's two reviews recommend answers to all thirteen; they stay open until
 the owner confirms them:
 
-| Decision                                                      | Review recommendation                                                                                                      |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 1. Plugins owning schema arms                                 | Yes, with tier and fold slice in the plugin module.                                                                        |
-| 2. Kernel-only runtime reads                                  | Not as a new service now; the single-run lineage read first. A future kernel lives inside `SessionEvents` with one writer. |
-| 3. D5 and "one process is one host"                           | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                 |
-| 4. Own-key retry with no key                                  | Leave it pending on every host.                                                                                            |
-| 5. Approve-all                                                | Also decide requests already pending, on every host, as recorded rows.                                                     |
-| 6. The plugin drain                                           | Neither a hook nor a drain layer: a layer dependency on `Sessions` (revised below: that edge is a cycle).                  |
-| 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                |
-| 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                            |
-| 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                     |
-| 10. Pin the agent definition on the snapshot                  | Yes: the log records what the model saw, and resume uses the recorded definition.                                          |
-| 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                     |
-| 12. One global app-state root on desktop                      | Yes.                                                                                                                       |
-| 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                |
+| Decision                                                      | Review recommendation                                                                                                                                         |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Plugins owning schema arms                                 | Yes, with tier and fold slice in the plugin module.                                                                                                           |
+| 2. Kernel-only runtime reads                                  | Not as a new service now; the single-run lineage read first. A future kernel lives inside `SessionEvents` with one writer.                                    |
+| 3. D5 and "one process is one host"                           | Re-rule them, with an owner-id nonce; the second-graph guard stays until the module slots are graph-owned.                                                    |
+| 4. Own-key retry with no key                                  | Leave it pending on every host.                                                                                                                               |
+| 5. Approve-all                                                | Also decide requests already pending, on every host, as recorded rows.                                                                                        |
+| 6. The plugin drain                                           | Neither a hook nor a drain layer. As corrected: the edge stays `Sessions` → plugin, and the selected plugin's typed drain runs in the core shutdown protocol. |
+| 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                                                   |
+| 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                                                               |
+| 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                                                        |
+| 10. Pin the agent definition on the snapshot                  | Yes: the log records what the model saw, and resume uses the recorded definition.                                                                             |
+| 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                                                        |
+| 12. One global app-state root on desktop                      | Yes.                                                                                                                                                          |
+| 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                                                   |
 
 1. May static in-tree plugins own durable state as arms of the one closed
    schema? Move 2 assumes yes.
@@ -1642,7 +1683,9 @@ the owner confirms them:
 4. Own-key retry with no key entered: leave the retry pending (GUI today) or
    deny it (TUI today)?
 5. Should "approve all delegated" also decide requests already pending, on
-   every host?
+   every host? Only the kinds the bypass covers would cascade (`toolEdit`,
+   `bash`, `proposal`, the keys of `BYPASS_OF_KIND`). Questions, inquiries,
+   retries and plan approvals stay pending.
 6. Confirm the plugin drain as a step of the core shutdown protocol, with no
    `beforeSessionsClose` hook and no drain layer. The recommended edge
    (GitHub requires `Sessions`) is a Layer cycle, because `Sessions` already
