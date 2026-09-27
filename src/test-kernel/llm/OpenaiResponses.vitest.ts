@@ -1713,8 +1713,6 @@ describe('native OpenAI Responses protocol', () => {
           ...CONFIG,
           supportsForcedToolChoice: false,
           requestDialect: 'compatible',
-          // GLM and DashScope store by default; that default is not sent.
-          defaults: { ...CONFIG.defaults, store: true },
         });
         expect(
           (yield* Effect.flip(

@@ -157,15 +157,15 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
       });
     const wireInput = yield* responseInput(turn, config, uploads);
     const reasoning = turn.controls.reasoning;
-    // A compatible route sends `store` only to depart from the vendor default.
+    // A compatible route sends `store` only to ask for storage it defaults off.
     let storage: Pick<ResponseCreateParamsBase, 'store' | 'include'> = {};
     if (config.requestDialect === 'openai') {
       storage = {
         store: turn.controls.store,
         include: ['reasoning.encrypted_content'],
       };
-    } else if (turn.controls.store !== config.defaults.store) {
-      storage = { store: turn.controls.store };
+    } else if (turn.controls.store) {
+      storage = { store: true };
     }
     const parameters: ResponseCreateParamsBase = {
       model: turn.requestedModel,
