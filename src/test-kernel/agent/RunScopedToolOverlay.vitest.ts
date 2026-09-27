@@ -194,7 +194,12 @@ describe('run-scoped tool resolution', () => {
         // `gone` vanished and `added` appeared since the run opened.
         const resumed = yield* Effect.gen(function* () {
           const state = yield* session.ledger.load(runId);
-          const step = yield* stepFor(yield* AgentRun, state!, false);
+          const step = yield* stepFor(
+            yield* AgentRun,
+            state!,
+            false,
+            'request',
+          );
           return { state: state!, step };
         }).pipe(
           Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),

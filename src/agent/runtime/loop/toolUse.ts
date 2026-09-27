@@ -188,6 +188,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ]);
   };
 
+  // A resumed root's first step that pins a continuation stands it down,
+  // before anything this activation decides can re-arm it.
+  let resumeUnseen = start.resume;
+  const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
+    Effect.tap(stepFor(run, state, rounds !== null, kind), (step) => {
+      if (!resumeUnseen || step.continuation === null || isChild())
+        return Effect.void;
+      resumeUnseen = false;
+      return step.continuation.onResume({ session, runId });
+    });
+
   // ------------------------------------------------------------ host port
   let live = false;
   const flowContext: ToolUseFlowContext = {
@@ -227,7 +238,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A round-mode run opens with no message and offers no tools. A
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
-        const step = yield* stepFor(run, opening, false);
+        const step = yield* openStep(opening, 'request');
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -461,7 +472,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const dispatched = yield* dispatchPendingResponse(
             cell,
             turnContext,
-            (yield* stepFor(run, state, rounds !== null, false)).tools,
+            (yield* openStep(state, 'dispatch')).tools,
             joined?.rows,
           );
           state = dispatched.state;
@@ -492,7 +503,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         const bound = yield* SynchronizedRef.get(run.model);
         // The step this request opens, its offered set recorded when changed.
-        const step = yield* stepFor(run, state, rounds !== null);
+        const step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         const tools = toolDefinitionsFor(step.tools.definitions);
         // The system text this request sends: the run's recorded prompt and
@@ -592,8 +603,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     Effect.gen(function* () {
       if (!followUps) return yield* Effect.die(new Error(`${runId}: no lease`));
       let restoring = start.resume;
-      // Continuation does not survive a resume (see `Continuation`).
-      let resumed = start.resume;
       for (;;) {
         let state = yield* cell.current;
         const parked = state.phase === 'waiting' || state.phase === 'halted';
@@ -613,11 +622,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
-          // A park opens a step: a continuation switched on or off applies,
-          // recorded, here.
+          // A park opens a step, which pins (and records) its continuation.
           let next: string | null = null;
           if (!isChild()) {
-            const step = yield* stepFor(run, state, false);
+            const step = yield* openStep(state, 'park');
             if (step.rows.length > 0) state = yield* cell.append(step.rows);
             if (step.continuation !== null) {
               next = yield* step.continuation.atIdle({
@@ -625,9 +633,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 runId,
                 state,
                 canContinue,
-                resumed,
               });
-              resumed = false;
             }
           }
           // Every park is idle, a failed turn's included: a resume

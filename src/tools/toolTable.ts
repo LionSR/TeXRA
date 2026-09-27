@@ -72,9 +72,10 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
 /**
  * What decides that a parked run of one agent category continues, pinned by
  * each step beside its tools (`@agent/runtime/loop/step`); with none, the run
- * parks. `atIdle` answers the synthetic turn's text or null. `canContinue`
- * is false when the run ends here or a follow-up is queued; `resumed` holds
- * until a resumed activation's first park is decided.
+ * parks. `atIdle` answers the synthetic turn's text or null; `canContinue`
+ * is false when the run ends here or a follow-up is queued. `onResume` runs
+ * at a resumed activation's first step that pins it, before the activation
+ * decides anything: continuation does not survive a resume on its own.
  */
 export interface Continuation {
   readonly category: AgentCategory;
@@ -83,8 +84,11 @@ export interface Continuation {
     readonly runId: RunId;
     readonly state: RunState;
     readonly canContinue: boolean;
-    readonly resumed: boolean;
   }) => Effect.Effect<string | null, Error>;
+  readonly onResume: (run: {
+    readonly session: SessionHandle;
+    readonly runId: RunId;
+  }) => Effect.Effect<void, Error>;
 }
 
 /** Every plugin's tools, and every tool by name. */

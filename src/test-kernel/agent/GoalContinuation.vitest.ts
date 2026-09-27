@@ -24,7 +24,6 @@ const atIdle = (session: SessionHandle) =>
     runId: RUN_ID,
     state: freshRunState(0),
     canContinue: true,
-    resumed: false,
   });
 
 describe('goalContinuation', () => {

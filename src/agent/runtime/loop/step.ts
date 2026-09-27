@@ -54,12 +54,15 @@ export interface StepTools {
 }
 
 /** The run's current step, the scope that holds its pin, the tools it
- *  withheld for approval, and its continuation. */
+ *  withheld for approval, and its continuation. `holding` while only parks
+ *  have opened steps in a resumed activation: its hold on the record is not
+ *  spent yet. */
 export interface OpenStep {
   readonly tools: StepTools;
   readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
   readonly continuation: ContinuationEntry | null;
+  readonly holding: boolean;
 }
 
 /** A round-mode run's step: it offers no tools. */
@@ -126,7 +129,8 @@ function heldToRecord(
  * Open the run's next step: apply the switches and pin the generation they
  * produce, as one step (`LiveTools.pinSwitched`), release the previous
  * step's pin, and resolve what it offers.
- * `recorded` holds a resumed activation's first step to it. The rows
+ * `recorded` holds a resumed activation's first step to it; `holding` says
+ * the hold outlives this step (a park's). The rows
  * are what the loop appends before a request: the new offered set, when it
  * differs from `state`'s.
  */
@@ -134,6 +138,7 @@ const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,
   recorded: readonly OfferedTool[] | null,
+  holding: boolean,
 ) {
   const live = yield* LiveTools;
   const scope = yield* Scope.fork(run.scope);
@@ -161,6 +166,7 @@ const openStep = Effect.fn('Step.open')(function* (
     scope,
     withheld: step.withheld,
     continuation: step.continuation,
+    holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
@@ -217,30 +223,34 @@ function offeredRow(
  * pending, against a step pinned for the dispatch and held to the record,
  * which records nothing. A call to a tool whose identity changed or that
  * left since it was offered is stale: it settles as `tool_unavailable`,
- * like a name the run was never offered, and the step names the tool. The
- * first step a resumed activation opens is held to the record. A round-mode
- * run offers no tools, and its rounds are its own continuation.
+ * like a name the run was never offered, and the step names the tool. A
+ * park opens a step for its continuation, recorded like a request's. The
+ * first request or dispatch step a resumed activation opens is held to the
+ * record, and so is every park before it, which leaves the hold unspent. A
+ * round-mode run offers no tools, and its rounds are its own continuation.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
   roundMode: boolean,
-  request = true,
+  kind: 'request' | 'dispatch' | 'park',
 ) {
   if (roundMode) return { tools: NO_TOOLS, continuation: null, rows: [] };
   const open = yield* SynchronizedRef.get(run.steps);
-  if (open !== null && !request)
+  if (open !== null && kind === 'dispatch')
     return {
       tools: open.tools,
       continuation: open.continuation?.continuation ?? null,
       rows: [],
     };
+  const held = open === null || open.holding;
   const step = yield* openStep(
     run,
     state,
-    open === null ? state.offeredTools : null,
+    held ? state.offeredTools : null,
+    held && kind === 'park',
   );
-  return request ? step : { ...step, rows: [] };
+  return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });
 
 /** What `run`'s current step offers: the most a child it launches now may
