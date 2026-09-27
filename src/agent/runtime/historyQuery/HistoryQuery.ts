@@ -219,10 +219,13 @@ const openStore = Effect.fn('HistoryQuery.open')(function* (
       string,
       Cause.Done | PlatformError
     >();
+    // A failed write ends the reply queue with its cause, so the request
+    // waiting on a reply fails as `HistoryQueryFailed` instead of hanging.
     yield* Stream.fromQueue(requests).pipe(
       Stream.map((line) => `${line}\n`),
       Stream.encodeText,
       Stream.run(handle.stdin),
+      Effect.catch((error) => Queue.fail(replies, error)),
       Effect.forkIn(scope),
     );
     yield* Stream.runIntoQueue(
