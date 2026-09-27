@@ -6,14 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
-- **Direct vendor keys use each vendor's Responses API** — models reached
-  with a DeepSeek, Kimi/Kimi Code, GLM, DashScope, MiniMax or xAI key now
-  talk to that vendor's OpenAI-compatible Responses endpoint instead of
-  Chat Completions. Models a vendor serves only on Chat Completions are
-  reached through OpenRouter. GLM keeps its China (BigModel) and
-  international (Z.AI) regions; both serve Responses at `/api/v1`, and a
-  Coding Plan key uses the same endpoint as an API key. MiniMax's China
-  region moves to `api.minimax.cn`.
+- **Some models now need OpenRouter instead of a direct vendor key** —
+  models reached with a DeepSeek, Kimi/Kimi Code, GLM, DashScope, MiniMax or
+  xAI key use that vendor's newer API. A model the vendor does not offer
+  there is no longer available with the vendor's key; select it through
+  OpenRouter instead. GLM keeps its China (BigModel) and international
+  (Z.AI) regions, and a Coding Plan key reaches the same endpoint as an API
+  key. MiniMax's China region moves to `api.minimax.cn`.
 - **`delegate_agent` no longer takes `execution_id`** — send a subagent
   follow-up instructions with the `executions` tool instead (`action: "send"`
   on `/executions/<run id>`). A custom agent whose prompt tells it to resume a
