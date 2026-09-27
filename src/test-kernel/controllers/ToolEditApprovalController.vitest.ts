@@ -76,7 +76,7 @@ function decided(requestId: string): SessionEvent {
     decision: { action: 'approve' },
     seq: 1,
     commit: 1,
-    ownerId: null,
+    origin: null,
     at: 0,
   };
 }

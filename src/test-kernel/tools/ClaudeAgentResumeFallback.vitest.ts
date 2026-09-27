@@ -339,7 +339,6 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect.objectContaining({
           type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
-          recordTranscript: false,
         }),
       );
     }).pipe(

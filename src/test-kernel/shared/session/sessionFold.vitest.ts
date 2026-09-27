@@ -739,10 +739,10 @@ describe('sessionFold', () => {
     expect(listed.runs.has(ROOT)).toBe(true);
   });
 
-  it('takes the run total from the newest cumulative usage row, on a cold read and on replay', () => {
-    // `usage` is a latest-only listing key, so a cold read hands the fold one
-    // row per run. Each row therefore carries the run's cumulative totals,
-    // and the fold replaces rather than accumulates.
+  it("sums a run's priced turns once each, on a cold read and on replay", () => {
+    // Each `usage` row is one priced turn, and the listing reads every one,
+    // so the fold sums them, keyed by seq so a row both reads bring counts
+    // once.
     const log = new Log();
     const start = log.emit(CHILD, 2000, {
       type: 'run.start',
@@ -753,32 +753,34 @@ describe('sessionFold', () => {
       parent: null,
     });
     const rounds = [
-      { inputTokens: 100, outputTokens: 10, cost: 0.01 },
-      { inputTokens: 300, outputTokens: 25, cost: 0.03 },
-      { inputTokens: 600, outputTokens: 45, cost: 0.06 },
+      { inputTokens: 100, outputTokens: 10, cost: 0.25 },
+      { inputTokens: 300, outputTokens: 25, cost: 0.5 },
+      { inputTokens: 600, outputTokens: 45, cost: 1 },
     ].map((usage, index) =>
-      log.emit(CHILD, 2010 + index, { type: 'usage', runId: CHILD, usage }),
+      log.emit(CHILD, 2010 + index, { type: 'usage', usage }),
     );
     const total = {
-      inputTokens: 600,
-      outputTokens: 45,
-      cost: 0.06,
+      inputTokens: 1000,
+      outputTokens: 80,
+      cost: 1.75,
       cacheReadInputTokens: 0,
       cacheMissInputTokens: 0,
       cacheCreationInputTokens: 0,
       reasoningTokens: 0,
     };
 
-    // The cold listing read: start plus the newest usage row.
+    // The cold listing read: start plus every usage row.
     const listing = foldAll([
       { _tag: 'event', read: 'listing', event: start },
-      { _tag: 'event', read: 'listing', event: rounds[2] },
+      ...rounds.map((event) => ({
+        _tag: 'event' as const,
+        read: 'listing' as const,
+        event,
+      })),
     ]);
     expect(runView(listing, CHILD).usage).toStrictEqual(total);
 
-    // The aggregate replay then brings all three rows back. The total is the
-    // newest row: not 1000 (the three rows summed onto the listing row), and
-    // not 300 (the row a delta-shaped publisher would have left last).
+    // The aggregate replay then brings all three rows back: each counts once.
     const replayed = foldAll(
       rounds.map((event) => ({ _tag: 'event', read: 'aggregate', event })),
       listing,
@@ -1034,7 +1036,7 @@ describe('sessionFold', () => {
         aggregateId,
         seq: ++seq,
         commit,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 5000,
       } as DisplaySessionEvent);
     const queued = (commit: number, followUpId: string, text: string) =>
@@ -1069,7 +1071,7 @@ describe('sessionFold', () => {
   it('mints a run from run.start alone', () => {
     const ghost = 'eeeeeeeeeeee' as RunId;
     const settled = foldAll(scenario.events);
-    const stamp = { seq: 1, commit: 99, ownerId: OWNER, at: 4000 };
+    const stamp = { seq: 1, commit: 99, origin: OWNER, at: 4000 };
     const facts: FoldInput[] = [
       tail({
         ...stamp,
@@ -1138,7 +1140,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 1,
         commit: 199,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 3900,
         type: 'run.activate',
         category: AgentCategory.ToolUse,
@@ -1148,7 +1150,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 2,
         commit: 200,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 4000,
         type: 'stream.start',
         id: 'late',
@@ -1197,7 +1199,7 @@ describe('sessionFold', () => {
         aggregateId: qualifyAggregateId('run', CHILD),
         seq: childSeq + 3,
         commit: 201,
-        ownerId: OWNER,
+        origin: OWNER,
         at: 4100,
         type: 'log',
         level: 'info',
@@ -1378,7 +1380,7 @@ const ledgerRow = (
     ...draft,
     seq: commit,
     commit,
-    ownerId: null,
+    origin: null,
     at: 0,
   });
 
@@ -1389,7 +1391,7 @@ const rowAccepted = (draft: Record<string, unknown>): boolean =>
     ...draft,
     seq: 1,
     commit: 1,
-    ownerId: null,
+    origin: null,
     at: 0,
   }).success;
 

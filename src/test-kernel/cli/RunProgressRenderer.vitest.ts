@@ -25,7 +25,6 @@ import {
   type RunIdentity,
   type RunPhase,
   AgentCategory,
-  emptyRunEndOutput,
   USER_FOLLOW_UP_SUPPORT,
 } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
@@ -849,7 +848,7 @@ describe('CLI run progress renderer', () => {
               type: 'run.end',
               aggregateId: qualifyAggregateId('run', 'b2b2b2' as RunId),
               outcome: 'completed',
-              output: emptyRunEndOutput(AgentCategory.Workflow),
+              output: { category: 'workflow' },
             },
           ]);
           yield* session.settlePublications();

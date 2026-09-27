@@ -25,8 +25,6 @@ import { senderOf } from '@agent/followUp/followUpSender';
 import { AgentResume } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
-  emptyUsageStats,
-  sumUsageStats,
   ToolError,
   type FollowUpContent,
   type RunId,
@@ -264,7 +262,7 @@ export const launchAgentCliSession = Effect.fn(
             Effect.andThen(
               createChildRun(params.session, runId, params.parentRunId, {
                 run: identity,
-                config: params.config,
+                category: params.config.agentCategory,
               }),
             ),
           ),
@@ -508,8 +506,6 @@ export function buildAgentCliLaunch<TTurn>(
     // captured here (rather than threaded through the loop contract) since
     // `formatDelivery`/`formatError` run strictly after the turn that set it.
     let lastPrompt = initialPrompt;
-    /** The child run's spend across every turn this loop has run. */
-    let cumulativeUsage: TokenUsageStats = emptyUsageStats();
     const runTurn = (
       followUps: readonly FollowUpContent[],
       ports: ChildRunPorts,
@@ -539,16 +535,9 @@ export function buildAgentCliLaunch<TTurn>(
       publishUsage: (turn) => {
         const usage = getUsage(turn);
         if (!usage) return;
-        // Each provider reports only the turn it just ran, so the loop holds
-        // the child run's running total and publishes that. Not a transcript
-        // event: the session's `usage` row is a latest-only listing key.
-        cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
-        logger.emit({
-          type: 'usage',
-          runId,
-          usage: cumulativeUsage,
-          recordTranscript: false,
-        });
+        // The child has no ledger, so its `usage` rows are its one record of
+        // spend: one per turn, which is what each provider reports.
+        logger.emit({ type: 'usage', usage });
       },
       formatDelivery: (turn, wallTimeMs) =>
         Effect.try({

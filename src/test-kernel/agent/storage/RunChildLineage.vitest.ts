@@ -40,7 +40,7 @@ describe('persisted parent edge', () => {
           },
         ]);
         expect(rows[0]).toMatchObject({
-          parent: { id: 'aaa0ff', startCommit: 1 },
+          parent: { id: 'aaa0ff', uid: expect.any(String) },
         });
         const ownRows = yield* session.readRunRecords('aaa010' as RunId);
         expect(ownRows).toHaveLength(1);

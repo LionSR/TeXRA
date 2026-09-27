@@ -145,6 +145,14 @@ describe('deriveResumability', () => {
             }),
           ),
         );
+        vi.spyOn(session, 'readAggregate').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'session.db',
+              cause: new Error('corrupt run metadata'),
+            }),
+          ),
+        );
 
         expect(yield* deriveResumability(runId, session)).toEqual({
           kind: 'unreadable',

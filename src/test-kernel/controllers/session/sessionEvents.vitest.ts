@@ -615,7 +615,7 @@ describe('session events and view', () => {
         expect(released.cursor).toBe(held.cursor);
         expect(released.runs.get(RUN)?.group).toBe('interrupted');
         expect(released.runs.get(RUN)?.readOnly).toBe(false);
-        expect((yield* db.readAggregate(id, 1))[0]?.ownerId).toBe(SELF);
+        expect((yield* db.readAggregate(id, 1))[0]?.origin).toBe(SELF);
       }).pipe(Effect.provide(graph([runStart, waiting, requested]))),
   );
   it.effect('lists stored run facts in commit order and on the wire', () =>
@@ -653,9 +653,9 @@ describe('session events and view', () => {
         existence: {
           checkedAggregateIds: rows.map(({ aggregateId }) => aggregateId),
           removedAggregateIds: [],
-          claims: rows.map(({ aggregateId, ownerId }) => ({
+          claims: rows.map(({ aggregateId, origin }) => ({
             aggregateId,
-            ownerId,
+            ownerId: origin,
           })),
         },
       });
@@ -961,7 +961,7 @@ describe('Sessions owner', () => {
           );
           expect(sweep).toHaveBeenCalledWith(OLDER);
           for (const event of committed) {
-            const foreign = { ...event, ownerId: OTHER };
+            const foreign = { ...event, origin: OTHER };
             yield* session.receiveFoldedEvent(foreign);
           }
           expect(sweep).toHaveBeenCalledOnce();
@@ -1490,7 +1490,7 @@ describe('the C1 event table and the C6 publisher', () => {
         ]);
         // The writer is the process, stamped by the layer (C5), and `at` is
         // the layer's own clock: no caller passes either.
-        expect(first.every((e) => e.ownerId === SELF && e.at === now)).toBe(
+        expect(first.every((e) => e.origin === SELF && e.at === now)).toBe(
           true,
         );
         // One wake per committed batch, independent of its event ordinal.
@@ -1532,11 +1532,14 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* SubscriptionRef.get(db.level)).toBe(0);
 
         // The parent can be created earlier in this same transaction. The
-        // database stamps its actual creation commit; the launcher names
+        // database stamps its actual incarnation uid; the launcher names
         // only the parent's id.
         const created = yield* db.appendAll([runStart, child]);
+        const [parentState] = yield* db.aggregateState([
+          qualifyAggregateId('run', RUN),
+        ]);
         expect(created[1]).toMatchObject({
-          parent: { id: RUN, startCommit: created[0]?.commit },
+          parent: { id: RUN, uid: parentState?.uid },
         });
         expect(yield* db.readAll(0)).toEqual(created);
         expect(created[0]).toMatchObject({ parent: null });
@@ -1581,7 +1584,7 @@ describe('the C1 event table and the C6 publisher', () => {
           ...runStart,
           seq: 700,
           commit: 800,
-          ownerId: OTHER,
+          origin: OTHER,
           at: 1,
         };
         yield* db.appendAll([suppliedEnvelope, olderStart]);
@@ -1596,7 +1599,7 @@ describe('the C1 event table and the C6 publisher', () => {
               events: raw
                 .prepare(
                   `SELECT "commit" AS "commit", aggregate_id AS aggregateId,
-                          seq, type, owner_id AS ownerId, at, data
+                          seq, type, origin, at, data
                    FROM event ORDER BY "commit"`,
                 )
                 .all(),
@@ -1626,7 +1629,7 @@ describe('the C1 event table and the C6 publisher', () => {
             aggregateId: qualifyAggregateId('run', RUN),
             seq: 1,
             type: 'run.start.1',
-            ownerId: SELF,
+            origin: SELF,
             at: now,
             data: JSON.stringify({
               identity: runStart.identity,
@@ -1641,7 +1644,7 @@ describe('the C1 event table and the C6 publisher', () => {
             aggregateId: qualifyAggregateId('run', OLDER),
             seq: 1,
             type: 'run.start.1',
-            ownerId: SELF,
+            origin: SELF,
             at: now,
             data: JSON.stringify({
               identity: runStart.identity,
@@ -1887,6 +1890,7 @@ describe('the C1 event table and the C6 publisher', () => {
         expect(yield* db.aggregateState([id, other, absent])).toEqual([
           {
             aggregateId: id,
+            uid: expect.any(String),
             ownerId: SELF,
             closed: false,
             parentId: null,
@@ -1894,6 +1898,7 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           {
             aggregateId: other,
+            uid: expect.any(String),
             ownerId: SELF,
             closed: true,
             parentId: null,

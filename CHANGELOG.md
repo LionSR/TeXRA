@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Session history starts over again with this build.** The first time it
+  opens a workspace, the history an earlier build wrote is moved aside
+  (`texra.db.format<N>`) and TeXRA says so; runs from those builds cannot be
+  resumed. Project documents and research files are unchanged.
+- **Scripts reading `--output-format ndjson` progress see each model call's
+  spend on its own.** A `usage` event now reports one model call rather than
+  the run's total so far, so a run's cost is the sum of its `usage` events.
+  The `run.end` event no longer repeats the run's usage or a workflow's
+  output files; the final result record still lists the output files.
 - **Project instructions come from `AGENTS.md`; `.texrarules` is no longer
   read.** Every agent's system prompt gets the `AGENTS.md` at the workspace
   root, or `~/.texra/AGENTS.md` when the workspace has none, the same file

@@ -435,8 +435,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
               ),
           claimOwner: (id) =>
             eventLog.claimOwner(qualifyAggregateId('run', id)),
-          recordListing: () => eventLog.readListing(),
           aggregateRows: (id) => eventLog.readAggregate(id, 1),
+          displayRows: (id) => eventLog.readDisplayAggregate(id, 1),
           publish: (events) =>
             publish(events).pipe(Effect.flatMap(settlePublication)),
           // A job settles against the last commit it appended, never against
@@ -476,7 +476,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
               const reclaimed = [
                 ...new Set(
                   events.flatMap((event) =>
-                    event.type === 'run.record' &&
+                    event.type === 'run.activate' &&
                     !events.some(
                       (other) =>
                         other.type === 'run.start' &&

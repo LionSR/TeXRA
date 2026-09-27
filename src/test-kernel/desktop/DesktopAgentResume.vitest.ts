@@ -91,7 +91,7 @@ function completedRunEnd(): SessionEventDraft {
     type: 'run.end',
     aggregateId: aggregateId('run', runId),
     outcome: RUN_OUTCOME.COMPLETED,
-    output: emptyRunEndOutput(AgentCategory.Workflow),
+    output: { category: 'workflow' },
   };
 }
 

@@ -7,6 +7,7 @@
  */
 
 import { Cause, Effect, Exit } from 'effect';
+import stableStringify from 'safe-stable-stringify';
 
 import {
   isAgentRunRecord,
@@ -16,7 +17,9 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
 import {
   AgentCategory,
+  RunRecordFieldsSchema,
   aggregateId,
+  storedRunOutput,
   type ApprovalPolicySnapshot,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
@@ -43,6 +46,32 @@ function pinRunWorkingDirectory(
   );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
+
+/**
+ * The `run.config` row an activation owes, or null when the run's newest
+ * row already says it. A run's configuration is written with its
+ * registration and afterwards only when it changes, so the newest row is the
+ * configuration and no activation restates it. Its callers hold the run's
+ * claim (an activation after registration, the loop's model switch), so no
+ * other writer can move the row between the read and the write.
+ */
+export const configChange = Effect.fn('configChange')(function* (
+  session: SessionHandle,
+  runId: RunId,
+  config: RunRecord,
+) {
+  const next = RunRecordFieldsSchema.parse(
+    pinRunWorkingDirectory(config, session.roots.workspace),
+  );
+  const stored = yield* getRunRecords(session, runId).readRunRecord();
+  if (stored !== null && stableStringify(stored) === stableStringify(next))
+    return null;
+  return {
+    type: 'run.config',
+    aggregateId: aggregateId('run', runId),
+    config: next,
+  } satisfies SessionEventDraft;
+});
 
 /**
  * The approval snapshot a run's re-activation stamps. Enforcement is the
@@ -135,6 +164,14 @@ export const registerRun = Effect.fn('registerRun')(function* (
     }
     const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
     const target = aggregateId('run', runId);
+    // A registration, first or again, opens the run with its configuration
+    // in the batch that takes the claim: nothing is compared before the
+    // claim is held, so a takeover never skips the row on a stale read.
+    const config = {
+      type: 'run.config',
+      aggregateId: target,
+      config: RunRecordFieldsSchema.parse(pinned),
+    } satisfies SessionEventDraft;
     const category = isAgentRunRecord(pinned)
       ? pinned.agentCategory
       : (options.category ?? AgentCategory.ToolUse);
@@ -165,22 +202,16 @@ export const registerRun = Effect.fn('registerRun')(function* (
         checkpointId: options.checkpointId,
       });
     }
-    events.push(
-      {
-        type: 'run.record',
-        aggregateId: target,
-        record: pinned,
-      },
-      {
-        type: 'run.activate',
-        aggregateId: target,
-        category,
-        ...(options.identity.kind === 'agent' &&
-        options.identity.tool === undefined
-          ? { isRemote }
-          : {}),
-      },
-    );
+    events.push(config);
+    events.push({
+      type: 'run.activate',
+      aggregateId: target,
+      category,
+      ...(options.identity.kind === 'agent' &&
+      options.identity.tool === undefined
+        ? { isRemote }
+        : {}),
+    });
     // Enforcement is the session's in-memory policy; the row is its
     // projection. A re-registration writes no `run.start`, so the
     // activation re-stamps the snapshot enforcement now holds, rebuilt from
@@ -268,22 +299,6 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
   input: FinalizeRunInput,
 ): Effect.fn.Return<FinalizeRunResult> {
   const { runId, outcome, keepExistingOutcome } = input;
-  // The row's usage is the run's ledger totals, whichever path ends the run:
-  // `RunState.usage` folds from the priced `response` rows alone, so a run
-  // resumed in this process bills its earlier rounds even when it ends
-  // before a round here. Absent for a run with no ledger rows (an agent-CLI
-  // child, a launch that failed before its first batch). An unreadable
-  // ledger is logged and leaves the row without usage: it must not also
-  // cost the run its terminal fact.
-  const usage = yield* session.ledger.load(runId).pipe(
-    Effect.map((state) => state?.usage),
-    Effect.catch((cause) =>
-      Effect.logWarning('Failed to read the run usage from its ledger').pipe(
-        Effect.annotateLogs({ runId, error: toErrorMessage(cause) }),
-        Effect.as(undefined),
-      ),
-    ),
-  );
   const status = yield* Effect.exit(
     session.updateRecordFacts(runId, (rows) =>
       Effect.gen(function* () {
@@ -314,8 +329,9 @@ export const finalizeRun = Effect.fn('finalizeRun')(function* (
               aggregateId: target,
               outcome: persisted,
               ...(input.error !== undefined ? { error: input.error } : {}),
-              ...(usage !== undefined ? { usage } : {}),
-              output: input.output ?? emptyRunEndOutput(start.category),
+              output: storedRunOutput(
+                input.output ?? emptyRunEndOutput(start.category),
+              ),
             },
           ],
           value: persisted,

@@ -81,7 +81,7 @@ export const ROOT_POLICY: ApprovalPolicySnapshot = {
  *  aggregate, seq, commit, owner, and clock are stamped on. */
 type DisplaySessionEventBody = DisplaySessionEvent extends infer E
   ? E extends unknown
-    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'ownerId' | 'at'>
+    ? Omit<E, 'aggregateId' | 'seq' | 'commit' | 'origin' | 'at'>
     : never
   : never;
 
@@ -90,16 +90,16 @@ type DisplaySessionEventBody = DisplaySessionEvent extends infer E
 export class Log {
   readonly events: DisplaySessionEvent[] = [];
   private readonly seq = new Map<string, number>();
-  /** Each run's creation commit: what the database stamps on a child's
+  /** Each run's incarnation uid: what the database stamps on a child's
    *  `run.start.parent` (one run model, section 3.2). */
-  private readonly startCommit = new Map<RunId, number>();
+  private readonly uid = new Map<RunId, string>();
   private commit = 0;
 
   emit(
     runId: RunId,
     at: number,
     body: DisplaySessionEventBody,
-    ownerId: string | null = OWNER,
+    origin: string | null = OWNER,
   ): DisplaySessionEvent {
     const key =
       body.type === 'inquiryThreadUpdated'
@@ -110,14 +110,17 @@ export class Log {
     const seq = (this.seq.get(key) ?? 0) + 1;
     this.seq.set(key, seq);
     this.commit += 1;
-    if (body.type === 'run.start') this.startCommit.set(runId, this.commit);
+    if (body.type === 'run.start') {
+      const n = this.commit.toString(16).padStart(12, '0');
+      this.uid.set(runId, `00000000-0000-4000-8000-${n}`);
+    }
     // A body is a distributive omit over the union, so the spread cannot be
     // typed back into the union without this assertion.
     const event = {
       aggregateId: key,
       seq,
       commit: this.commit,
-      ownerId,
+      origin,
       at,
       ...body,
     } as DisplaySessionEvent;
@@ -126,14 +129,14 @@ export class Log {
   }
 
   /** The parent edge a child's `run.start` carries: the launching run and
-   *  its creation commit. A parent with no `run.start` is refused, as the
+   *  its incarnation uid. A parent with no `run.start` is refused, as the
    *  database refuses it. */
   parent(id: RunId): RunParent {
-    const startCommit = this.startCommit.get(id);
-    if (startCommit === undefined) {
+    const uid = this.uid.get(id);
+    if (uid === undefined) {
       throw new Error(`fixture parent ${id} has no run.start`);
     }
-    return { id, startCommit };
+    return { id, uid };
   }
 
   /** Finite-read marker for this fixture log, whose first facts acquire its claims. */
@@ -141,7 +144,7 @@ export class Log {
     const claims = new Map<DisplaySessionEvent['aggregateId'], string | null>();
     const removed = new Set<DisplaySessionEvent['aggregateId']>();
     for (const event of this.events.slice(0, through)) {
-      if (event.seq === 1) claims.set(event.aggregateId, event.ownerId);
+      if (event.seq === 1) claims.set(event.aggregateId, event.origin);
       if (event.type === 'run.removed') {
         claims.delete(event.aggregateId);
         removed.add(event.aggregateId);
@@ -466,7 +469,7 @@ export function buildScenario({ proposal = false } = {}) {
   log.emit(ROOT, T.rootDone, {
     type: 'run.end',
     outcome: 'completed',
-    output: emptyRunEndOutput(AgentCategory.Workflow),
+    output: { category: 'workflow' },
   });
 
   const events = log.events.map(tail);
@@ -846,7 +849,6 @@ function boardView({
   });
   log.emit(ROOT, startedAt, {
     type: 'usage',
-    runId: ROOT,
     usage: { inputTokens: 210_000, outputTokens: 41_000, cost: 1.84 },
   });
   const phases = ['Scout', 'Review', 'Verify', 'Report'];
@@ -945,7 +947,6 @@ function boardView({
       if (kid.outputTokens !== undefined) {
         log.emit(kid.id, kid.startedAt + 3, {
           type: 'usage',
-          runId: kid.id,
           usage: {
             inputTokens: kid.outputTokens * 5,
             outputTokens: kid.outputTokens,
@@ -1023,7 +1024,7 @@ function boardView({
     log.emit(ROOT, closedAt + 2, {
       type: 'run.end',
       outcome,
-      output: emptyRunEndOutput(AgentCategory.Workflow),
+      output: { category: 'workflow' },
     });
   }
   const ids = [ROOT, ...calls.flatMap((c) => c.child?.id ?? [])];

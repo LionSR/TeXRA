@@ -51,8 +51,8 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
     }
     if (
       resultMeta?.producer !== 'subagent' ||
-      resultMeta.output.category !== 'workflow' ||
-      runEnd?.outcome !== RUN_OUTCOME.COMPLETED
+      runEnd?.output.category !== 'workflow' ||
+      runEnd.outcome !== RUN_OUTCOME.COMPLETED
     ) {
       return yield* Effect.fail(
         new Error(
@@ -61,7 +61,7 @@ export const resolveChildRunOutput = Effect.fn('resolveChildRunOutput')(
       );
     }
 
-    const declared = resultMeta.output.outputs.some(
+    const declared = runEnd.output.outputs.some(
       (output) =>
         output.location === 'runStorage' &&
         normalizeFilePath(output.relativePath) === reference.relativePath,

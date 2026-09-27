@@ -257,7 +257,6 @@ function agentRunTestLayer(init: HarnessInit) {
           {
             logger,
             runId: init.runId,
-            runStageId: undefined,
             config: testWorkspaceRoots().config,
             usageLog: { log: () => {} },
           },

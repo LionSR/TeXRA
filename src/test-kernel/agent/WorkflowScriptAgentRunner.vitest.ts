@@ -177,9 +177,10 @@ vi.mock('@agent/workflowScript/checkpoint', () => ({
   recordWorkflowCallAttempt: mocks.recordWorkflowCallAttempt,
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
   getRunRecords: mocks.getRunRecords,
+  deliveredOutput: (await import('@agent/storage/resultMeta')).deliveredOutput,
 }));
 
 // The child's own turn rows live on the same stubbed session, so the one read

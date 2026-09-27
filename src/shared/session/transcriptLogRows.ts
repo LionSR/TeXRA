@@ -4,8 +4,12 @@
  * exactly once (`decodeLogPayload`). A payload its schema rejects is written
  * as an error row naming the diagnostic, never dropped or cast.
  */
+import { MODEL_CONFIGS } from 'llm-zoo';
+
 import {
   MESSAGE_TYPES,
+  addTurnTotals,
+  runStatistics,
   decodeLogPayload,
   type LogLevel,
   type MessageType,
@@ -133,10 +137,23 @@ export function recordLogRow(
       return;
     }
 
-    case 'usage':
-      if (event.recordTranscript === false) return;
-      appendLog(d, event.stageId, MESSAGE_TYPES.STATISTICS, '', event.usage);
+    case 'usage': {
+      // A priced turn shows as a workflow run's statistics so far; other
+      // runs show none.
+      const statistics = d.ctx.statistics;
+      if (statistics === undefined) return;
+      d.ix.spend = addTurnTotals(d.ix.spend, event.usage);
+      const id = d.ix.model ?? statistics.model;
+      const model = id == null ? undefined : MODEL_CONFIGS[id];
+      appendLog(
+        d,
+        d.ix.runStage,
+        MESSAGE_TYPES.STATISTICS,
+        '',
+        runStatistics(d.ix.spend, model?.capabilities),
+      );
       return;
+    }
 
     case 'domain': {
       // A retry lifecycle is a durable marker nothing renders.

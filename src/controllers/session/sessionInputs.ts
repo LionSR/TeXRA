@@ -107,9 +107,9 @@ export const sessionInputsLayer = Layer.effect(
             });
             for (const aggregate of effectiveAggregates) {
               const rows = yield* foldRead(
-                log.readAggregate(aggregate.id, aggregate.fromSeq),
+                log.readDisplayAggregate(aggregate.id, aggregate.fromSeq),
               );
-              for (const event of rows.filter(isDisplaySessionEvent)) {
+              for (const event of rows) {
                 replay.push({ _tag: 'event', read: 'aggregate', event });
               }
             }

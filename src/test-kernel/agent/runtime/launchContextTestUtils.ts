@@ -86,7 +86,6 @@ export function createTestLaunchContext({
       {
         logger,
         runId,
-        runStageId: undefined,
         config: testWorkspaceRoots().config,
         usageLog: { log: () => {} },
       },

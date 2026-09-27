@@ -6,10 +6,10 @@
  * carry a seq.
  *
  * Every durable arm rides one envelope: the aggregate it belongs to, its
- * per-aggregate `seq`, the session-wide `commit` ordinal, the process identity
- * of the writer, and the publish clock. The arms mirror the trace
- * (`AgentEvent`) shapes field for field where the fold reads them, so a
- * publisher translates by naming fields, never by re-encoding.
+ * per-aggregate `seq`, the store-local `commit` cursor, the writing `origin`
+ * and the publish clock; its durable identity is its aggregate's `uid` and
+ * its `seq`. The arms mirror the trace (`AgentEvent`) shapes field for field
+ * where the fold reads them, so a publisher translates by naming fields.
  *
  * One run owns one aggregate, `('run', runId)` (one run model, section 3.1):
  * display rows and the run's private records land on the same aggregate, and
@@ -28,11 +28,10 @@ import { parseJsonWith } from '@common/parsing/safeParseJson';
 import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
-import { AgentConfigFieldsSchema } from './agentConfig';
 import { RoundOutputSchema } from './output';
 import { GoalStateSchema } from './goal';
 import {
-  RunEndSchema,
+  RunEndRowSchema,
   RunRecordFieldsSchema,
   RunWorkspaceFilesSchema,
   ResultMetaSchema,
@@ -119,7 +118,6 @@ const AggregateKindSchema = z.enum([
   'run',
   'workflow-checkpoint',
   'inquiry',
-  'session',
   'desktop-projects',
   'global-inquiry',
   'update-check',
@@ -184,7 +182,8 @@ export function aggregateTarget(key: AggregateId): AggregateTarget {
 const SeqSchema = z.int().positive();
 
 /** The session-wide insert ordinal a replay follows; zero is "before the
- *  first commit", the cursor an empty view starts from. */
+ *  first commit", the cursor an empty view starts from. Local: no row
+ *  stores one. */
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
@@ -223,9 +222,9 @@ export type ApprovalPolicySnapshot = z.infer<
 const envelope = {
   seq: SeqSchema,
   commit: CommitOrdinalSchema,
-  /** Owner of the process that appended the event; null for the trace
-   *  viewer's reconstruction, which has no owning process. */
-  ownerId: OwnerIdSchema.nullable(),
+  /** The process that appended the row (not the aggregate's claim holder);
+   *  null for the trace viewer's reconstruction, which has no writer. */
+  origin: OwnerIdSchema.nullable(),
   /** The publish clock in whole milliseconds: C1 stores it in an `INTEGER`
    *  column of a `STRICT` table, so the vocabulary states that rule here and
    *  the substrate restates it nowhere. */
@@ -250,15 +249,15 @@ function durable<T extends string, S extends z.ZodRawShape>(
 
 /**
  * The parent edge (one run model, section 3.2): the whole of it. `id` is the
- * launching run; `startCommit` is that run's creation commit, stamped by the
- * database inside the child's creation transaction so a logical id a
- * workflow-script retry reuses can never redirect the child to a later
- * incarnation of its parent. Any other spelling of the edge is
- * `parent !== null`, computed from the fold or the handle.
+ * launching run; `uid` is that run's incarnation, stamped by the database
+ * inside the child's creation transaction so a logical id a workflow-script
+ * retry reuses can never redirect the child to a later incarnation of its
+ * parent. Any other spelling of the edge is `parent !== null`, computed from
+ * the fold or the handle.
  */
 const RunParentSchema = z.object({
   id: RunIdSchema,
-  startCommit: z.int().positive(),
+  uid: z.uuid(),
 });
 export type RunParent = z.infer<typeof RunParentSchema>;
 
@@ -328,10 +327,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
      *  workflow-script child (PRD 10.3), and a fold reads `run.start`. */
     isRemote: z.boolean().nullish(),
   }),
-  durable('run.config', {
-    /** The canonical configuration, validated before it becomes durable. */
-    config: AgentConfigFieldsSchema,
-  }),
+  /** What the run runs with, written at registration and then only when it
+   *  changes: the newest row is the configuration every reader reads. */
+  durable('run.config', { config: RunRecordFieldsSchema }),
   /**
    * The parent edge severed: a child promoted to the top level by a stop
    * that detaches its children. The only fact after `run.start` that moves
@@ -340,11 +338,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.detach', {}),
   /**
    * The terminal fact (one run model, section 3.3): outcome, the classified
-   * error behind a failure, the usage totals, and what the run produced.
-   * Written once, by the storage finalizer, after the run's last transcript
-   * row; the fold derives the terminal phase from it and from nothing else.
+   * error behind a failure, and a tool-use run's reply (usage and workflow
+   * files have their own rows). Written once per lifecycle, by the storage
+   * finalizer, after the run's last transcript row; the fold derives the
+   * terminal phase from it and from nothing else.
    */
-  durable('run.end', RunEndSchema.shape),
+  durable('run.end', RunEndRowSchema.shape),
   durable('conversation.progress', { progress: ConversationProgressSchema }),
   durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
@@ -438,7 +437,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
  *  read by the runtime's typed accessors and never by a renderer
  *  (`isDisplaySessionEvent` keeps them out of the transport by type). */
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
-  durable('run.record', { record: RunRecordFieldsSchema }),
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
   durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
@@ -586,7 +584,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 22;
+export const SESSION_EVENT_FORMAT = 23;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -602,7 +600,7 @@ export type SessionEvent = z.infer<typeof SessionEventSchema>;
 /**
  * What a publisher hands `SessionEvents.publish`: the body plus the aggregate
  * it lives on (contract C2). The publisher stamps the rest of the envelope
- * (`seq`, `commit`, `ownerId`, `at`) under its permit; no caller passes them.
+ * (`seq`, `commit`, `origin`, `at`) under its permit; no caller passes them.
  * Parsing a draft removes caller-supplied envelope fields before storage.
  */
 export type SessionEventDraft = z.infer<typeof SessionEventDraftSchema>;
@@ -654,6 +652,7 @@ export function listingTypeOf(
     case 'stream.end':
     case 'response.finalized':
     case 'domain':
+    case 'usage':
     case 'model.message':
     case 'model.compaction':
     case 'tool.intent':
@@ -665,7 +664,8 @@ export function listingTypeOf(
     case 'workflow.script':
     case 'workflow.journal':
     case 'workflow.attempt':
-      // The run ledger's private rows stay out of the listing: a cold hydrate
+      // A priced turn is never "latest of type" (`listingKeyOf`). The run
+      // ledger's private rows stay out of the listing: a cold hydrate
       // must never pull a run's latest `flow.snapshot` into every renderer.
       // `flow.step` and `output.produced` are listing rows (their own keys, the
       // `default` below). The keyed private records and the checkpoint
@@ -695,6 +695,8 @@ export function listingTypeOf(
  * never suppresses another's.
  */
 export function listingKeyOf(event: SessionEvent): string | null {
+  // A priced turn is its own fact; the listing returns every one.
+  if (event.type === 'usage') return `usage/${event.seq}`;
   const type = listingTypeOf(event);
   if (type === null) return null;
   return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;

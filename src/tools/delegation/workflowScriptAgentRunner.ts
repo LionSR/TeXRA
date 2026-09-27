@@ -2,7 +2,7 @@
 import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { deliveredOutput, getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import {
   readWorkflowCallAttempt,
@@ -682,7 +682,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           }
           return {
             runId,
-            result: { ...end, output: meta.output },
+            result: { ...end, output: deliveredOutput(meta, end.output) },
             recovered: true,
           };
         }

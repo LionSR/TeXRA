@@ -370,18 +370,18 @@ describe('AgentLaunchContext', () => {
         });
         expect(batches.mock.calls[0]?.[0].map((event) => event.type)).toEqual([
           'run.start',
-          'run.record',
+          'run.config',
           'run.activate',
         ]);
         expect(
           (yield* Effect.promise(() => recording.read()))
-            .slice(0, 2)
+            .slice(0, 3)
             .map((event) => event.type),
-        ).toEqual(['run.start', 'run.activate']);
+        ).toEqual(['run.start', 'run.config', 'run.activate']);
         // One aggregate, one counter: the activation is the third durable
         // row of the creation batch, and the phase the fold reads from it.
         expect(
-          (yield* Effect.promise(() => recording.read()))[1],
+          (yield* Effect.promise(() => recording.read()))[2],
         ).toMatchObject({ seq: 3 });
       }),
   );

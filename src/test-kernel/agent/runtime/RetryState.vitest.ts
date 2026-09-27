@@ -302,7 +302,6 @@ function agentRun(
       {
         logger,
         runId,
-        runStageId: undefined,
         config: testWorkspaceRoots().config,
         usageLog: { log: () => {} },
       },

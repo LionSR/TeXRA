@@ -10,7 +10,7 @@
  */
 
 export { getRunRecords } from './runRecords';
-export { unwrapResultMeta } from './resultMeta';
+export { deliveredOutput, type RunResult } from './resultMeta';
 export {
   listRunWorkspaceFiles,
   resolveRunWorkspaceFilePath,

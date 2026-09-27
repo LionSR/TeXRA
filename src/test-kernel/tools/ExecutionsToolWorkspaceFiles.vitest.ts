@@ -79,6 +79,7 @@ const mocks = vi.hoisted(() => ({
   readReport: vi.fn(),
   readResultMeta: vi.fn(),
   readRunEnd: vi.fn(),
+  readResult: vi.fn(),
   readWorkspaceFiles: vi.fn(),
 }));
 
@@ -95,6 +96,7 @@ vi.mock('@agent/storage/runRecords', async () => {
         readReport: () => Effect.promise(() => mocks.readReport()),
         readResultMeta: () => Effect.promise(() => mocks.readResultMeta()),
         readRunEnd: () => Effect.promise(() => mocks.readRunEnd()),
+        readResult: () => Effect.promise(() => mocks.readResult()),
         readWorkspaceFiles: () =>
           Effect.promise(() => mocks.readWorkspaceFiles()),
       }),
@@ -158,6 +160,7 @@ describe('ExecutionsTool', () => {
     mocks.readReport.mockResolvedValue(null);
     mocks.readResultMeta.mockResolvedValue(null);
     mocks.readRunEnd.mockResolvedValue(null);
+    mocks.readResult.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
   });
 
@@ -567,58 +570,26 @@ describe('ExecutionsTool', () => {
       ),
   );
 
-  it.live.each([
-    {
-      label: 'subagent',
-      record: {
-        producer: 'subagent' as const,
-        agentName: 'reviewer',
-        wallTimeMs: 20,
+  it.live("serves the run's joined result envelope", () =>
+    Effect.gen(function* () {
+      // The join of the producer record and the terminal result is
+      // `getRunRecords().readResult`'s; the endpoint serves it verbatim.
+      const envelope = {
+        outcome: 'completed' as const,
+        usage: { totalCost: 0.2 },
         output: {
           category: 'toolUse' as const,
           response: 'Checked the proof.',
           files: ['notes.md'],
         },
-      },
-    },
-    {
-      label: 'CLI workflow',
-      record: {
-        producer: 'cliWorkflow' as const,
-        copiedOutput: '/workspace/polished.tex',
-        output: {
-          category: 'workflow' as const,
-          outputs: [],
-          compileFailures: [],
-          diffs: [],
-        },
-      },
-    },
-  ])('exposes only the final envelope for a $label result', ({ record }) =>
-    Effect.gen(function* () {
-      // The terminal fact comes from the `run.end` row; the producer record
-      // contributes the delivery-enriched output and nothing else.
-      const runEnd = {
-        outcome: 'completed' as const,
-        usage: { totalCost: 0.2 },
-        output: { category: 'toolUse' as const, response: '', files: [] },
       };
-      mocks.readResultMeta.mockResolvedValue(record);
-      mocks.readRunEnd.mockResolvedValue(runEnd);
+      mocks.readResult.mockResolvedValue(envelope);
 
       const result = yield* ExecutionsTool.call({
         path: '/executions/abc123/result',
       });
 
-      expect(JSON.parse(result.output ?? '')).toEqual({
-        outcome: 'completed',
-        usage: { totalCost: 0.2 },
-        output: record.output,
-      });
-      expect(result.output).not.toContain('producer');
-      expect(result.output).not.toContain('agentName');
-      expect(result.output).not.toContain('wallTimeMs');
-      expect(result.output).not.toContain('copiedOutput');
+      expect(JSON.parse(result.output ?? '')).toEqual(envelope);
     }).pipe(
       Effect.provide(
         nativeToolTestLayer({

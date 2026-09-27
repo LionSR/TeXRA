@@ -256,6 +256,7 @@ describe('session isolation', () => {
           runId,
           session: sessionB,
         });
+        publishTestRunStart(sessionB, runId);
 
         yield* Effect.provide(
           runFlowWithLifecycle(ctx, () =>

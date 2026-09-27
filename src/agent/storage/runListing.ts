@@ -1,6 +1,6 @@
 /** Run history derived from committed session events. */
 
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 
@@ -98,16 +98,16 @@ export function isUserVisibleRun(
   return isAgentRunEntry(entry) && entry.parentRunId === undefined;
 }
 
-/** The latest `run.record` row of each run in one committed listing. */
+/** The latest `run.config` row of each run in one committed listing. */
 function recordRows(
   rows: readonly SessionEvent[],
-): Map<RunId, Extract<SessionEvent, { type: 'run.record' }>> {
+): Map<RunId, Extract<SessionEvent, { type: 'run.config' }>> {
   const records = new Map<
     RunId,
-    Extract<SessionEvent, { type: 'run.record' }>
+    Extract<SessionEvent, { type: 'run.config' }>
   >();
   for (const row of rows) {
-    if (row.type !== 'run.record') continue;
+    if (row.type !== 'run.config') continue;
     const target = aggregateTarget(row.aggregateId);
     if (target.kind === 'run') records.set(target.id, row);
   }
@@ -117,14 +117,14 @@ function recordRows(
 /**
  * Every run the session's fold lists, with its private record: the view
  * folded cold from the log (one run model, R1) beside the same listing's
- * `run.record` rows, which never enter the display fold.
+ * `run.config` rows, parsed into the runtime's record.
  */
 export const listRuns = Effect.fn('listRuns')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<RunListingEntry[], Error> {
   const [view, listing] = yield* Effect.all([
     session.readView([]),
-    session.readRecordListing(),
+    Stream.runCollect(session.events.listing()),
   ]);
   const records = recordRows(listing);
   const results = yield* Effect.forEach(
@@ -135,7 +135,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
         const record = yield* Effect.try({
           try: () => {
             const row = records.get(id);
-            return row === undefined ? null : RunRecordSchema.parse(row.record);
+            return row === undefined ? null : RunRecordSchema.parse(row.config);
           },
           catch: ensureError,
         });
