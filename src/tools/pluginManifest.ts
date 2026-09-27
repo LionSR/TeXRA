@@ -151,6 +151,8 @@ export const MANIFEST = [
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,
     continuation: true,
+    sessionLayer: true,
+    rows: true,
   },
   {
     id: 'texcount',
@@ -294,6 +296,7 @@ export const MANIFEST = [
     configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and Settings → General in VS Code both manage the stored token. Requires a git repository in the workspace. Polls every ${GITHUB_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
     authNote: 'Uses personal access token',
     toggleable: true,
+    processLayer: true,
     availability: GITHUB_AVAILABILITY,
   },
   {
@@ -346,6 +349,7 @@ export const MANIFEST = [
       'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
     authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
     toggleable: true,
+    sessionLayer: true,
     availability: CODEX_AVAILABILITY,
   },
   {
@@ -390,6 +394,7 @@ export const MANIFEST = [
       'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
     authNote: 'OAuth, OAuth token, or API key',
     toggleable: true,
+    sessionLayer: true,
     availability: CLAUDE_CODE_AVAILABILITY,
   },
   // The system LaTeX and image dependencies are not tool groups: no agent
@@ -440,9 +445,10 @@ export const MANIFEST = [
     hidden: true,
   },
   {
-    // Contributes no tool of its own: while it is on, the VS Code host exposes
-    // the research tools of the other plugins on in the live catalog to
-    // Copilot (`registerLanguageModelTools` in packages/extension).
+    // Contributes no tool of its own: its process layer, which the VS Code
+    // host supplies, exposes the research tools of the other plugins on in
+    // the live catalog to Copilot while it is on (`copilotToolsLayer` in
+    // packages/extension).
     id: 'copilot',
     toolNames: [],
     name: 'Copilot Chat Tools',
@@ -455,5 +461,6 @@ export const MANIFEST = [
     toggleable: true,
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,
+    hostLayer: true,
   },
 ] as const satisfies readonly ToolPlugin[];

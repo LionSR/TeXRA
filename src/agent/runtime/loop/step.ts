@@ -8,10 +8,12 @@
  * (`@tools/liveTools`), pins its current generations, and resolves from them
  * the tools the run is offered (`resolveStepTools`), the continuation for
  * its agent category, if any plugin on contributes one, and the prompt
- * contribution of each plugin on that makes one. The pin is held hand over hand: a step's generation,
- * and its plugins' layers, stay up until the run's next step has pinned its
- * own, so the calls a response makes run against the tools its request
- * offered, and a generation no step holds drains.
+ * contribution of each plugin on that makes one, with the process and
+ * session services of the plugins it pinned: the only way a tool call or a
+ * continuation reaches a plugin's services. The pin is held hand over hand: a
+ * step's generation, and its plugins' layers, stay up until the run's next
+ * step has pinned its own, so the calls a response makes run against the
+ * tools its request offered, and a generation no step holds drains.
  *
  * When the offered set, the continuation or the prompt contributors differ
  * from what the run last recorded, the step returns a `tools.offered` row, which the loop appends
@@ -28,6 +30,7 @@ import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
+import type { PluginServices } from '@platform/processRuntime';
 import {
   sameIdentity,
   type OfferedTool,
@@ -50,8 +53,8 @@ export interface StepTools {
   readonly registry: RuntimeToolRegistry;
   /** Each offered tool's identity, in offer order. */
   readonly offered: readonly OfferedTool[];
-  /** The services of the pinned generation's plugin layers. */
-  readonly services: Context.Context<never>;
+  /** The pinned plugins' process and session services. */
+  readonly services: Context.Context<PluginServices>;
 }
 
 /** The run's current step, the scope that holds its pin, the tools it
@@ -73,7 +76,7 @@ const NO_TOOLS: StepTools = {
   definitions: [],
   registry: new MapToolRegistry(new Map()),
   offered: [],
-  services: Context.empty(),
+  services: Context.empty() as Context.Context<PluginServices>,
 };
 
 /** Whether `b` is the set `a` records: the same tools, as the same
@@ -156,12 +159,31 @@ const openStep = Effect.fn('Step.open')(function* (
       .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
+    const tools = held?.tools ?? resolved;
+    const continuation =
+      pinned.continuations.entries.get(run.config.agentCategory) ?? null;
+    // Only the plugins this step uses hold services: a parked run keeps up
+    // nothing it does not offer.
+    const used = new Set([
+      ...tools.offered.map(({ plugin }) => plugin),
+      ...(continuation === null ? [] : [continuation.plugin]),
+      ...pinned.sections.entries.keys(),
+    ]);
+    const services = Context.merge(
+      yield* pinned.layersFor(used).pipe(Scope.provide(scope)),
+      yield* run.session.runs
+        .pinPlugins(
+          pinned.generation.id,
+          new Set(pinned.generation.owners.values()),
+          used,
+        )
+        .pipe(Scope.provide(scope)),
+    );
     return {
-      tools: { ...(held?.tools ?? resolved), services: pinned.resources },
+      tools: { ...tools, services },
       warnings: [...resolved.warnings, ...(held?.notes ?? [])],
       withheld: resolved.withheldForApproval,
-      continuation:
-        pinned.continuations.entries.get(run.config.agentCategory) ?? null,
+      continuation,
       prompt: new Map(
         [...pinned.sections.entries].toSorted(
           ([a], [b]) => Number(a > b) - Number(a < b),

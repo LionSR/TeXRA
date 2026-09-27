@@ -64,6 +64,7 @@ import { dispatchFactsFor } from '@agent/runtime/run/tools';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { TraceEmitter, type AgentEvent, type AgentTrace } from '@agent/trace';
+import type { PluginServices } from '@platform/processRuntime';
 import { DatabaseWriteFailed } from '@shared/session/database';
 import {
   AgentCategory,
@@ -410,7 +411,7 @@ const dispatch = (kit: DispatchKit, userInstruction?: string) =>
           definitions: [],
           registry: kit.tools,
           offered: [],
-          services: Context.empty(),
+          services: Context.empty() as Context.Context<PluginServices>,
         },
       ),
     ),

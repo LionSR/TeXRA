@@ -359,6 +359,7 @@ function createRun(
     modelLabel: null,
     command: null,
     inputFiles: [],
+    facts: {},
     worktree: event.worktree ?? null,
     status,
     substate: null,
@@ -406,7 +407,6 @@ function createRun(
         category: AgentCategory.ToolUse,
         todos: [],
         plan: null,
-        goal: { active: false },
         outputs: NO_ROUNDS,
         missingOutputs: NO_ROUNDS,
         compileFailures: NO_ROUNDS,
@@ -989,9 +989,8 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         },
       };
     case 'run.fact': {
-      // Every family is a latest-only listing key of its own, so a cold
-      // read delivers one row per family and each row carries the run's
-      // whole value: the newest row replaces what the view holds.
+      // Each family (and each `plugin.fact` kind) is a latest-only listing
+      // key of its own: the newest row replaces what the view holds.
       const fact = event.fact;
       if (run.category !== AgentCategory.ToolUse)
         return wrongArm(run, `run.fact ${fact.key}`);
@@ -999,10 +998,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         ? { ...run, todos: fact.todos }
         : { ...run, plan: fact.plan };
     }
-    case 'goalStateChanged':
-      return run.category === AgentCategory.ToolUse
-        ? { ...run, goal: event.state }
-        : wrongArm(run, 'goalStateChanged');
+    case 'plugin.fact':
+      return {
+        ...run,
+        facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
+      };
     case 'child.park':
       // A loop-driven child's park or pause; no ledger, so `flow` stays null.
       return event.phase === 'paused'

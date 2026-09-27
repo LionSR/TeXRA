@@ -10,9 +10,9 @@
  * never selects the ephemeral mode.
  *
  * Before its write transaction, this layer validates and serializes the
- * complete batch (C6). It also owns the envelope C1 gives its own
- * columns: the writer (C5, from `ProcessIdentity`), the publish clock, and the
- * `seq` and `commit` ordinals, none of which a caller can supply.
+ * complete batch (C6). It also owns the envelope C1 gives its own columns: the
+ * writer (C5, from `ProcessIdentity`), the publish clock, and the `seq` and
+ * `commit` ordinals, none of which a caller can supply.
  *
  * The official Node SQLite driver owns the scoped connection. Effect SQL owns
  * statement run, connection reservation and transactions; this layer owns the
@@ -80,6 +80,7 @@ import {
   DatabaseReadFailed,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
 import { USAGE_ROWS } from './usageProjection';
@@ -97,8 +98,7 @@ const CHANNEL = 'sessionDatabase';
 const invariant = (message: string) => Effect.die(new Error(message));
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
   e.seq, e.type, e.origin AS origin, e.at, e.data`;
-/** Listing arms of the present vocabulary; pending requests and queued
- *  follow-ups are sets. */
+/** Listing arms of the present vocabulary; requests and follow-ups are sets. */
 const LISTING_TYPES = SessionEventDraftSchema.options
   .map((schema) => schema.shape.type.value)
   .filter(
@@ -110,10 +110,9 @@ const LISTING_TYPES = SessionEventDraftSchema.options
       type !== 'followup.consumed',
   )
   .map((type) => `${type}.1`);
-/** Latest per aggregate and type, and per discriminator where the type
- *  carries one: `run.fact` holds five families on one row type, and the
- *  expression is `NULL` for every other type (`listingKeyOf`). */
-const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key')`;
+/** Latest per aggregate, type and family (`listingKeyOf`). */
+const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key'),
+  json_extract(data, '$.plugin'), json_extract(data, '$.kind')`;
 const READ_LISTING = `
 WITH latest AS (
   SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -179,13 +178,19 @@ function decodeEvent(row: Record<string, unknown>): SessionEvent {
     at: row.at,
     type,
   });
-  if (parsed.success) return parsed.data;
-  const issue = parsed.error.issues[0];
-  const at = issue?.path.join('.');
+  const event = parsed.success ? parsed.data : undefined;
+  // A plugin row's value is checked against its arm, if this build has one.
+  const arm = PLUGIN_ARMS.get(
+    event?.type === 'plugin.fact' ? `${event.plugin}/${event.kind}` : '',
+  );
+  const refused = arm?.schema.safeParse(payload.value).error;
+  if (event !== undefined && refused === undefined) return event;
+  const issue = (refused ?? parsed.error)?.issues[0];
+  const at = [...(refused ? ['value'] : []), ...(issue?.path ?? [])].join('.');
   const reason =
     at === 'type'
       ? `unknown event type "${type}"`
-      : `${type} at ${at || 'event'}: ${issue?.message ?? parsed.error.message}`;
+      : `${type} at ${at || 'event'}: ${issue?.message}`;
   throw new Error(
     `Stored row ${String(row.aggregateId)} seq ${String(row.seq)} does not match the current event format (${reason})`,
   );
@@ -266,13 +271,29 @@ export const databaseLayer = (
       /** The first row a statement returns, if any. */
       const execOne = (statement: string, params?: readonly unknown[]) =>
         exec(statement, params).pipe(Effect.map((rows) => rows[0]));
+      // Plugin kinds this build lacks: kept as written, left out of reads.
+      const leftOut = new Set<string>();
       /** The rows a read statement returns, decoded as ledger events. */
       const decodedRows = (
         statement: string,
         params: readonly unknown[],
       ): Effect.Effect<SessionEvent[], SqlError> =>
         exec(statement, params).pipe(
-          Effect.map((rows) => rows.map(decodeEvent)),
+          Effect.flatMap((rows) => {
+            const fresh: string[] = [];
+            const kept = rows.map(decodeEvent).filter((event) => {
+              if (event.type !== 'plugin.fact') return true;
+              const kind = `${event.plugin}/${event.kind}`;
+              if (PLUGIN_ARMS.has(kind)) return true;
+              if (!leftOut.has(kind)) fresh.push(kind);
+              return !leftOut.add(kind);
+            });
+            return fresh.length === 0
+              ? Effect.succeed(kept)
+              : Effect.logWarning(
+                  `${path} holds rows of plugin kinds this build does not have (${fresh.join(', ')}); they stay in the store and are left out of every read.`,
+                ).pipe(withLogChannel(CHANNEL), Effect.as(kept));
+          }),
         );
       const currentCommit = exec(highWater, []).pipe(
         Effect.map(commitFromRows),
@@ -319,9 +340,8 @@ export const databaseLayer = (
       const displayTypes = JSON.stringify(
         DISPLAY_EVENT_TYPES.map((type) => `${type}.1`),
       );
-      // The latest listing row of each type on one open run: its creation,
-      // status and tombstone beside its private records, never a transcript
-      // row. A closed (tombstoned) run reads as absent.
+      // Each type's latest listing row on one open run (creation, status and
+      // tombstone beside its private records; no transcript row); closed: absent.
       const runRecords = `
         WITH latest AS (
           SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -647,9 +667,8 @@ export const databaseLayer = (
                 `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
-            // Stamp the declared parent's incarnation in this same
-            // transaction. A reused logical id must not redirect the child to
-            // a later incarnation of its parent.
+            // Stamp the declared parent's incarnation in this transaction: a
+            // reused logical id must not redirect the child to a later one.
             let parent: RunParent | null = null;
             if (draft.type === 'run.start' && draft.parent !== null) {
               const parentState = (yield* readState([
@@ -666,9 +685,8 @@ export const databaseLayer = (
               }
               parent = { id: draft.parent.id, uid: parentState.uid };
             }
-            // A tombstone names only run directories owned by this
-            // lifecycle. Derive the targets under the same write permit
-            // and transaction as closure; no caller chooses cleanup paths.
+            // A tombstone names only run directories this lifecycle owns,
+            // derived under the closure's permit and transaction, not a caller.
             const committedDraft = yield* Effect.gen(function* () {
               if (draft.type === 'run.removed') {
                 const owned = yield* exec(deletionRuns, [draft.aggregateId]);
@@ -701,10 +719,9 @@ export const databaseLayer = (
               ]);
             }
             if (draft.type === 'workflow.script') {
-              // The checkpoint outlives the workflow run's attempts but not
-              // the run that invoked it: hang the aggregate under that run so
-              // its deletion closes and collects the journal with it, instead
-              // of stranding rows no id can reach.
+              // The checkpoint outlives the workflow run's attempts but not the
+              // run that invoked it: hang it under that run so its deletion
+              // collects the journal instead of stranding rows no id reaches.
               yield* exec(reparent, [
                 qualifyAggregateId('run', draft.parentRunId),
                 draft.aggregateId,
@@ -947,9 +964,8 @@ export const databaseLayer = (
         claimOwner: (id) =>
           Effect.gen(function* () {
             const state = (yield* query(readState([id])))[0];
-            // A tombstoned row keeps the owner that closed it, and the
-            // aggregate it named is gone: nothing holds what no longer
-            // exists, so it reads unclaimed rather than held.
+            // A tombstoned row keeps the owner that closed it, but what it
+            // named is gone: nothing holds it, so it reads unclaimed.
             const owner =
               state?.closed === true ? null : (state?.ownerId ?? null);
             if (owner === null) return { ownerId: null, liveness: null };
@@ -1199,10 +1215,9 @@ export const databaseLayer = (
 /**
  * The process's handle on the global storage root: one connection, schema and
  * `data_version` poll for every application record of that root, built with
- * the runtime the entry hands it to and closed with it. The root is a value
- * because the entry knows it before the runtime exists. Building it creates the
- * directory, the SQLite file and the poll fiber, so an entry that must create
- * none passes a refusing layer instead (`installProcessRuntime`'s option).
+ * the runtime the entry hands it to and closed with it. Building it creates
+ * the directory, the SQLite file and the poll fiber, so an entry that must
+ * create none passes a refusing layer (`installProcessRuntime`'s option).
  */
 export const globalDatabaseLayer = (
   storage: string,
@@ -1269,12 +1284,9 @@ function validateInquiryTransition(
   }
   return reopened;
 }
-/**
- * Serialize the validated draft before opening the transaction. Draft parsing
- * removes caller-supplied envelope fields; the type and aggregate key have
- * their own C1 columns. Child creation adds the parent's database-owned uid
- * to this payload inside the creation transaction.
- */
+/** Serialize the validated draft before opening the transaction; the type
+ *  and aggregate key have their own C1 columns. Child creation adds the
+ *  parent's database-owned uid to this payload inside its transaction. */
 function payloadOf(draft: {
   readonly type: string;
   readonly aggregateId: AggregateId;
@@ -1317,9 +1329,8 @@ const configure = Effect.fnUntraced(function* (
     mode === 'persistent' ? 'wal' : 'memory',
   );
   yield* verifyPragma(sql, 'foreign_keys', 1);
-  // A store holds one vocabulary, stamped in SQLite's own slot. The stamp is
-  // read before this build's schema touches the tables, so a store of another
-  // format is refused or moved aside before anything is written to it.
+  // A store holds one vocabulary, stamped in SQLite's own slot and read before
+  // this build's schema touches it: another format is refused or moved aside.
   const movedAside =
     (yield* pragmaValue(sql, 'user_version')) === SESSION_EVENT_FORMAT
       ? null

@@ -29,7 +29,7 @@ import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
 import { RoundOutputSchema } from './output';
-import { GoalStateSchema } from './goal';
+import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
@@ -111,10 +111,8 @@ export function ownerPid(ownerId: OwnerId): number {
  */
 export type OwnerLiveness = 'alive' | 'dead' | 'unprovable';
 
-/**
- * C2 separates independent lifecycles even when their logical ids coincide.
- * `run` is keyed by the run id; every other kind by its own logical id.
- */
+/** C2 separates independent lifecycles even when their logical ids coincide:
+ *  `run` is keyed by the run id, every other kind by its own logical id. */
 const AggregateKindSchema = z.enum([
   'run',
   'workflow-checkpoint',
@@ -188,11 +186,8 @@ const SeqSchema = z.int().positive();
 export const CommitOrdinalSchema = z.int().nonnegative();
 export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 
-/**
- * The full approval-policy snapshot after a change, emitted by the single
- * policy authority (`src/shared/approvalPolicy.ts`). Never a toggle delta:
- * the fold keeps the latest snapshot per run.
- */
+/** The full approval-policy snapshot after a change, from the single policy
+ *  authority (`src/shared/approvalPolicy.ts`); the fold keeps the latest. */
 export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
   /** Each kind's effective value, own or inherited: what surfaces show. */
@@ -364,12 +359,13 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
-  /** Goal is per run, and this row is the goal: it carries the whole
-   *  pursuit, so the fold's `RunView.goal` is what every reader reads and
-   *  no store holds a second copy. A listing key (`listingTypeOf`'s
-   *  default), so a cold read hydrates each run's goal without replaying
-   *  the run. */
-  durable('goalStateChanged', { state: GoalStateSchema }),
+  /** A row of a plugin's own kind (`@tools/pluginArms`): core folds `value`
+   *  latest per (plugin, kind) and never reads it; the plugin decodes it. */
+  durable('plugin.fact', {
+    plugin: z.string().min(1),
+    kind: z.string().min(1),
+    value: JsonValueSchema,
+  }),
   /** Aggregate is the thread id; `parentRunId` is the payload's edge. */
   durable(
     'inquiryThreadUpdated',
@@ -585,7 +581,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 27;
+export const SESSION_EVENT_FORMAT = 28;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -633,9 +629,8 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * fold reads it over the whole aggregate, so listing it would pull the latest
  * one of every run into every renderer for no reader.
  *
- * A listing key is "latest per aggregate and type", so `run.fact`, which
- * holds two families on one type, is read grouped by its `key` as well
- * ({@link listingKeyOf} and `Database`'s listing queries).
+ * `run.fact` and `plugin.fact` hold several families on one type, so they
+ * are read grouped by family as well (`listingKeyOf`, `Database`).
  */
 export function listingTypeOf(
   event: Pick<SessionEvent, 'type'>,
@@ -698,6 +693,8 @@ export function listingKeyOf(event: SessionEvent): string | null {
   if (event.type === 'usage') return `usage/${event.seq}`;
   const type = listingTypeOf(event);
   if (type === null) return null;
+  if (event.type === 'plugin.fact')
+    return `${type}/${event.plugin}/${event.kind}`;
   return event.type === 'run.fact' ? `${type}/${event.fact.key}` : type;
 }
 

@@ -418,7 +418,18 @@ describe('AgentLaunchContext', () => {
         // A human approves edits for the session; the run's goal then
         // auto-approves its commands.
         session.approvals.toolEdit.bypass.setBypass(EXECUTION_ID, true);
-        setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
+        // Through the session's goal services, as the plan tool's step would.
+        yield* Effect.scoped(
+          Effect.flatMap(
+            session.runs.pinPlugins(0, new Set(['goal']), new Set(['goal'])),
+            (services) =>
+              setGoalSessionAutoApproval(
+                session,
+                EXECUTION_ID,
+                'commands',
+              ).pipe(Effect.provide(services)),
+          ),
+        );
         yield* session.settlePublications();
         // A new process: nothing of the run's approval state is in memory.
         session.approvals.clearAll();

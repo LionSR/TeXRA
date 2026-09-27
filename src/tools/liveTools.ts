@@ -1,39 +1,44 @@
 /**
- * The process's live tool catalog: a `Registry` (`@tools/liveRegistry`) of
- * every tool some plugin currently contributes, keyed by tool name, and a
- * second of every continuation, keyed by the agent category it serves, and
- * a third of every prompt contribution, keyed by its plugin.
+ * The process's live tool catalog: `Registry`s (`@tools/liveRegistry`) of
+ * every tool some plugin contributes (by tool name), every continuation (by
+ * agent category) and every prompt contribution (by plugin).
  *
- * - **Built-in plugins** contribute their manifest table while their switch
- *   is on, and their continuation and prompt contribution with them.
- *   `pinSwitched` reads the user's switches, reconciles the contributions
- *   with them and pins the generations that produces, as one serialized
- *   step: a plugin switched off withdraws all three, one switched on
- *   contributes them again. A run's step opens through it
- *   (`@agent/runtime/loop/step`), so a switch flipped by any host, or by
- *   `texra tools` from another shell, reaches every open run at its next
- *   step.
+ * - **Built-in plugins** contribute all three while their switch is on.
+ *   `pinSwitched` reads the switches, reconciles the contributions with them
+ *   and pins the generations that produces, as one serialized step. A run's
+ *   step opens through it (`@agent/runtime/loop/step`), so a switch flipped
+ *   by any host, or by `texra tools` from another shell, reaches every open
+ *   run at its next step.
  * - **Loaded plugins** (MCP servers, `@tools/toolTable`) contribute the tools
- *   their server listed while some run holds them (`hold`). Holds are
- *   counted per spec and keyed env revision, so runs naming the same server
- *   share one process, which stops with the last hold. An edited server's
- *   new process supersedes the older one in the catalog while both run, and
- *   its recorded revision differs, so a run moved onto it records the move.
- * - **Plugin layers** are built once per plugin while any pinned generation
- *   holds it, and released with the last one.
+ *   their server listed while some run holds them (`hold`), counted per spec
+ *   and keyed env revision: runs naming the same server share one process,
+ *   which stops with the last hold, and an edited server's new process
+ *   supersedes the older one and records a new revision.
+ * - **Plugin layers** (`PLUGIN_PROCESS_LAYERS`) are up while their plugin is
+ *   on or a pinned generation holds it (`@tools/pluginLayers` builds a
+ *   session's `PLUGIN_SESSION_LAYERS` by the same rule).
  *
- * Each entry carries its identity, the digest of its name and input schema
- * with its plugin's id and revision, which a call is checked against before
- * it runs.
+ * Each entry carries its identity (the digest of its name and input schema,
+ * its plugin's id and revision), which a call is checked against.
  */
 import { createHash } from 'node:crypto';
 
-import { Context, Effect, Exit, Layer, RcMap, Scope, Semaphore } from 'effect';
+import {
+  Context,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  RcMap,
+  Scope,
+  Semaphore,
+} from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { toolDefinitionsFor } from '@agent/runtime/run/tools';
+import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory } from '@shared/schemas';
 import {
   makeRegistry,
@@ -49,30 +54,27 @@ import {
   type PromptContribution,
   type ToolTable,
 } from '@tools/toolTable';
-import { isObject } from '@utils/core';
+import { buildPluginLayer } from '@tools/pluginLayers';
+import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
   readonly tool: ITool;
   /** The contributing plugin's id. */
   readonly plugin: string;
-  /** The plugin's revision, which rows record. `builtin` for a built-in
-   *  plugin, whose code cannot change under a process: each tool's digest
-   *  covers its own schema. A loaded plugin's is a digest of its spec and
-   *  of its env values' keyed digest (`LoadedPlugin.revision`, keyed per
-   *  install), so the same entry records the same revision across restarts
-   *  and an edited one records a change, and no value can be read back. */
+  /** The plugin's revision, which rows record: `builtin` for a built-in
+   *  plugin (each tool's digest covers its schema); for a loaded one a
+   *  digest of its spec and of its env values' keyed digest, stable across
+   *  restarts, changed by an edit, and unreadable back to a value. */
   readonly revision: string;
-  /** The loaded server process the tool dispatches through, by its hold
-   *  key; never recorded. A pinned generation holds each such process, so
-   *  nothing it can dispatch to stops before its pin closes. */
+  /** The loaded server process it dispatches through, by hold key; never
+   *  recorded. A pinned generation holds each such process. */
   readonly server?: string;
   /** The tool's identity: sha256 over its name and input schema, every
    *  description left out. A call runs only while its tool still has it. */
   readonly digest: string;
   /** sha256 over the catalog's definition, descriptions included: a
-   *  reworded tool is a new generation. What a step records as shown is the
-   *  definition it sends (`resolveStepTools`). */
+   *  reworded tool is a new generation (a step records what it sends). */
   readonly shown: string;
 }
 
@@ -84,18 +86,20 @@ export interface ContinuationEntry {
   readonly continuation: Continuation;
 }
 
-/** What a hold found for each loaded plugin the declarations name. */
+/** What a hold found: the configuration problems the read found, and each
+ *  configured plugin by id with why it offers no tools, if so. */
 export interface HeldPlugins {
-  /** The configuration problems the read found. */
   readonly warnings: readonly string[];
-  /** Each configured plugin by id, with why it offers no tools, if so. */
   readonly loaded: ReadonlyMap<string, string | undefined>;
 }
+
+/** The services a pin serves: its plugins' layers'. */
+type Services = Context.Context<PluginServices>;
 
 export class LiveTools extends Context.Service<
   LiveTools,
   {
-    readonly registry: Registry<string, ToolEntry, Context.Context<never>>;
+    readonly registry: Registry<string, ToolEntry, void>;
     /**
      * Read the switches, contribute exactly the built-in plugins they leave
      * on, and pin the tool, continuation and prompt generations that produces, as
@@ -106,7 +110,12 @@ export class LiveTools extends Context.Service<
     readonly pinSwitched: <E>(
       off: Effect.Effect<ReadonlySet<string>, E>,
     ) => Effect.Effect<
-      Pinned<string, ToolEntry, Context.Context<never>> & {
+      Pinned<string, ToolEntry, void> & {
+        /** Pin the process services of the plugins the step uses, from the
+         *  plugins on when it pinned, for the caller's scope. */
+        readonly layersFor: (
+          plugins: ReadonlySet<string>,
+        ) => Effect.Effect<Services, never, Scope.Scope>;
         readonly continuations: Generation<AgentCategory, ContinuationEntry>;
         /** Each switched-on plugin's prompt contribution, by plugin id. */
         readonly sections: Generation<string, PromptContribution>;
@@ -114,6 +123,12 @@ export class LiveTools extends Context.Service<
       E,
       Scope.Scope
     >;
+    /** A plugin's process services for the caller's scope while its layer
+     *  is up (switched on, or pinned by a step that uses it), for a host that
+     *  shows, ends or drains its state; none once it is down. */
+    readonly processServices: (
+      plugin: string,
+    ) => Effect.Effect<Option.Option<Services>, never, Scope.Scope>;
     /** Hold the loaded plugins `declared` names until the caller's scope
      *  closes; their tools are in the catalog while held. */
     readonly hold: (
@@ -127,69 +142,10 @@ const sha256 = (value: unknown): string =>
     .update(stableStringify(value) ?? '')
     .digest('hex');
 
-/** Keywords whose value is one schema, or an array of schemas. */
-const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
-  'items',
-  'prefixItems',
-  'additionalProperties',
-  'additionalItems',
-  'unevaluatedProperties',
-  'unevaluatedItems',
-  'contains',
-  'contentSchema',
-  'propertyNames',
-  'not',
-  'if',
-  'then',
-  'else',
-  'anyOf',
-  'oneOf',
-  'allOf',
-]);
-
-/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
-const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
-  'properties',
-  '$defs',
-  'definitions',
-  'patternProperties',
-  'dependentSchemas',
-  'dependencies',
-]);
-
 /**
- * A JSON Schema node with the `description` keyword dropped at every schema
- * position. It walks keywords, not keys: a property named `description` is a
- * name in a `properties` map and stays, and `enum`/`const`/`default` values
- * are data and are not entered.
- */
-function withoutSchemaDescriptions(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
-  if (!isObject(node)) return node;
-  const out: Record<string, unknown> = {};
-  for (const [keyword, value] of Object.entries(node)) {
-    if (keyword === 'description') continue;
-    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
-      out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isObject(value)) {
-      out[keyword] = Object.fromEntries(
-        Object.entries(value).map(([name, schema]) => [
-          name,
-          withoutSchemaDescriptions(schema),
-        ]),
-      );
-    } else {
-      out[keyword] = value;
-    }
-  }
-  return out;
-}
-
-/**
- * A tool's identity digest and the digest of its definition as a request
- * carries it. The identity is the name and input schema only: a description,
- * the tool's own or a schema node's, can change without invalidating a call
- * the model already made.
+ * A tool's identity digest (its name and input schema only, so a reworded
+ * description never invalidates a call the model already made) and the
+ * digest of its definition as a request carries it.
  */
 export const toolDigests = (
   tool: Pick<ITool, 'definition'>,
@@ -219,6 +175,7 @@ const entriesOf = (
 
 const liveToolsLayer = (
   loader: PluginLoader,
+  closed: ReadonlySet<string>,
 ): Layer.Layer<LiveTools, never, ToolRegistry | ChildProcessSpawner> =>
   Layer.effect(
     LiveTools,
@@ -226,15 +183,26 @@ const liveToolsLayer = (
       const table: ToolTable = yield* ToolRegistry;
       const spawner = yield* ChildProcessSpawner;
       const scope = yield* Effect.scope;
-      // Each plugin's layer, built once while any pinned generation holds
-      // the plugin, in the map entry's own scope: it outlives every
-      // generation that shares it and is released with the last.
+      // Each plugin's process layer, in its map entry's scope: its switch and
+      // each generation that includes it hold a reference. It may read this
+      // catalog (Copilot's tools follow it), built by then.
+      const self: { service?: LiveTools['Service'] } = {};
+      // The plugins whose process layer is up, however it is held.
+      const up = new Set<string>();
       const layers = yield* RcMap.make({
         lookup: (id: string) =>
-          Layer.build(table.layers.get(id) ?? Layer.empty),
+          buildPluginLayer(id, table.processLayers.get(id)!.layer).pipe(
+            Effect.provideService(LiveTools, self.service!),
+            Effect.tap(() =>
+              Effect.acquireRelease(
+                Effect.sync(() => up.add(id)),
+                () => Effect.sync(() => up.delete(id)),
+              ),
+            ),
+          ),
       });
-      // Each held server process by hold key, with its count of holds (runs
-      // and pins). Read and written only under the catalog's lock.
+      // Each held server process by hold key, with its hold count (runs and
+      // pins). Read and written only under the catalog's lock, as is:
       const servers = new Map<
         string,
         {
@@ -243,18 +211,14 @@ const liveToolsLayer = (
           readonly failure: string | undefined;
         }
       >();
-      // Each built-in plugin's open contribution, by id: its scope closes
-      // when the plugin is switched off. Read and written only under the
-      // catalog's lock.
+      // each built-in plugin's open contribution, closed when switched off.
       const builtIns = new Map<string, Scope.Closeable>();
-      // The catalog's lock. What runs under it is short and uninterruptible,
-      // so a cancelled step never leaves a scope opened or closed without
-      // the maps that track it saying so.
+      // The catalog's lock: what runs under it is short and uninterruptible,
+      // so a cancelled step never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
       const locked = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
         lock.withPermits(1)(Effect.uninterruptible(effect));
-      /** Drop one hold of a server; the last withdraws its tools and stops
-       *  its process. */
+      /** Drop one hold of a server; the last withdraws it and stops it. */
       const release = (id: string) =>
         locked(
           Effect.gen(function* () {
@@ -265,11 +229,7 @@ const liveToolsLayer = (
             yield* Scope.close(open.scope, Exit.void);
           }),
         );
-      const registry = yield* makeRegistry<
-        string,
-        ToolEntry,
-        Context.Context<never>
-      >({
+      const registry = yield* makeRegistry<string, ToolEntry, void>({
         digest: (entries) =>
           sha256(
             [...entries]
@@ -282,36 +242,24 @@ const liveToolsLayer = (
               ])
               .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
           ),
+        // The server processes the generation dispatches through, held for
+        // the pin. Pins are taken only under the catalog's lock
+        // (`pinSwitched`), where a server in `current` is still up.
         acquire: (generation) =>
-          Effect.andThen(
-            // The server processes the generation dispatches through, held
-            // for the pin. Pins are taken only under the catalog's lock
-            // (`pinSwitched`), where a server in `current` is still up.
-            Effect.forEach(
-              new Set(
-                [...generation.entries.values()].flatMap(
-                  (entry) => entry.server ?? [],
-                ),
+          Effect.forEach(
+            new Set(
+              [...generation.entries.values()].flatMap(
+                (entry) => entry.server ?? [],
               ),
-              (server) =>
-                Effect.acquireRelease(
-                  Effect.sync(() => {
-                    servers.get(server)!.count += 1;
-                  }),
-                  () => release(server),
-                ),
-              { discard: true },
             ),
-            Effect.reduce(
-              [...new Set(generation.owners.values())].filter((id) =>
-                table.layers.has(id),
+            (server) =>
+              Effect.acquireRelease(
+                Effect.sync(() => {
+                  servers.get(server)!.count += 1;
+                }),
+                () => release(server),
               ),
-              () => Context.empty(),
-              (merged, id) =>
-                Effect.map(RcMap.get(layers, id), (services) =>
-                  Context.merge(merged, services),
-                ),
-            ),
+            { discard: true },
           ),
       });
 
@@ -336,14 +284,15 @@ const liveToolsLayer = (
       });
 
       /** Open and close the built-in contributions (a plugin's tools,
-       *  continuation and prompt contribution, in one scope) to match
-       *  `off`. */
+       *  continuation, prompt contribution and process layer, in one
+       *  scope) to match `off`. */
       const reconcile = (off: ReadonlySet<string>) =>
         Effect.gen(function* () {
           for (const id of new Set([
             ...table.plugins.keys(),
             ...table.continuations.keys(),
             ...table.prompt.keys(),
+            ...table.processLayers.keys(),
           ])) {
             const on = !off.has(id);
             const held = builtIns.get(id);
@@ -371,6 +320,9 @@ const liveToolsLayer = (
                   new Map(prompt === undefined ? [] : [[id, prompt]]),
                 ),
               ]).pipe(Scope.provide(contribution), Effect.orDie);
+              // The switch's own hold on the plugin's process services.
+              if (table.processLayers.has(id))
+                yield* RcMap.get(layers, id).pipe(Scope.provide(contribution));
               builtIns.set(id, contribution);
             } else if (!on && held !== undefined) {
               builtIns.delete(id);
@@ -378,17 +330,34 @@ const liveToolsLayer = (
             }
           }
         });
-      yield* locked(reconcile(new Set()));
       const pinSwitched = <E>(off: Effect.Effect<ReadonlySet<string>, E>) =>
         locked(
           Effect.gen(function* () {
             yield* reconcile(yield* off);
             const { generation } = yield* continuations.pin;
             const pinned = yield* sections.pin;
+            // Every on plugin's process layer, held until the step has
+            // pinned the ones it uses: a flip meanwhile drops none of them.
+            const on = [...builtIns.keys()].filter((id) =>
+              table.processLayers.has(id),
+            );
+            const bridge = yield* Scope.fork(yield* Effect.scope);
+            for (const id of on)
+              yield* RcMap.get(layers, id).pipe(Scope.provide(bridge));
+            const layersFor = (plugins: ReadonlySet<string>) =>
+              Effect.reduce(
+                on.filter((id) => plugins.has(id)),
+                () => Context.empty() as Services,
+                (merged, id) =>
+                  Effect.map(RcMap.get(layers, id), (services) =>
+                    Context.merge(merged, services),
+                  ),
+              ).pipe(Effect.ensuring(Scope.close(bridge, Exit.void)));
             return {
               ...(yield* registry.pin),
               continuations: generation,
               sections: pinned.generation,
+              layersFor,
             };
           }),
         );
@@ -463,22 +432,32 @@ const liveToolsLayer = (
         }
         return { warnings: read.warnings, loaded };
       });
-      return { registry, pinSwitched, hold };
+      const processServices = (id: string) =>
+        locked(
+          up.has(id)
+            ? Effect.map(RcMap.get(layers, id), Option.some)
+            : Effect.succeed(Option.none()),
+        );
+      self.service = { registry, pinSwitched, hold, processServices };
+      yield* locked(reconcile(closed));
+      return self.service;
     }),
   );
 
-/** A loader for a process that loads no plugins from configuration. */
+/** Loads no plugins from configuration. */
 const noLoadedPlugins: PluginLoader = () =>
   Effect.succeed({ plugins: [], warnings: [] });
 
 /**
  * `table` as the `ToolRegistry`, and the live catalog over it and the
- * plugins `loader` reads (none when omitted).
+ * plugins `loader` reads (none when omitted), holding the `closed` plugins
+ * off until a step or a caller first applies the switches.
  */
 export const toolTableLayer = (
   table: ToolTable,
   loader: PluginLoader = noLoadedPlugins,
+  closed: ReadonlySet<string> = new Set(),
 ): Layer.Layer<LiveTools | ToolRegistry, never, ChildProcessSpawner> =>
-  liveToolsLayer(loader).pipe(
+  liveToolsLayer(loader, closed).pipe(
     Layer.provideMerge(Layer.succeed(ToolRegistry)(table)),
   );

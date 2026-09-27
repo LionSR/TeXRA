@@ -60,6 +60,7 @@ import {
   type SessionEventDraft,
   type UserQuestionPermission,
 } from '@shared/schemas';
+import { goalStateOf } from '@shared/plugins/goal';
 import { subscribeToSignalChanges } from '@shared/signals';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -1098,10 +1099,19 @@ async function appendHarnessPlanDecision(
     // The same grant `PlanTool.startGoalForPlan` applies next: approving a
     // plan as a goal auto-approves commands, and nothing broader unless the
     // user explicitly widened the scope.
-    setGoalSessionAutoApproval(
-      session(),
-      HARNESS_RUN_ID,
-      result.autoApproveAll ? 'allAgentWork' : 'commands',
+    // Under the goal plugin's session services, as the step serves them.
+    await harnessRuntime.runPromise(
+      Effect.scoped(
+        Effect.flatMap(
+          session().runs.pinPlugins(0, new Set(['goal']), new Set(['goal'])),
+          (services) =>
+            setGoalSessionAutoApproval(
+              session(),
+              HARNESS_RUN_ID,
+              result.autoApproveAll ? 'allAgentWork' : 'commands',
+            ).pipe(Effect.provide(services)),
+        ),
+      ),
     );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');
@@ -1591,10 +1601,9 @@ function appendHarnessStatus(): void {
       approvalBypasses: view.policy.get(runId)?.bypasses,
       statusLabel: run?.statusLabel,
       activeChildSessions: runningChildCount(view, run),
-      goal:
-        run?.category === AgentCategory.ToolUse && run.goal.active
-          ? run.goal
-          : undefined,
+      goal: ((goal) => (goal?.active ? goal : undefined))(
+        run && goalStateOf(run),
+      ),
       // The harness never commits a `skills.snapshot` row.
       activeSkills: [],
       queuedFollowUpMessages: (view.queuedFollowUps.get(runId) ?? []).map(

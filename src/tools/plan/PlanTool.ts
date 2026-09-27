@@ -21,8 +21,9 @@ import { z } from 'zod';
 import type { WorkPlanState } from '@agent/core/state/AgentWorkspaceState';
 import { ToolCall, type ToolCallShape } from '@agent/runtime/ToolCall';
 import { withLogChannel } from '@logger/effectLog';
-import type { Goal, Plan, RunId, ToolResult } from '@shared/schemas';
-import { goalElapsedMs, ToolError } from '@shared/schemas';
+import { goalElapsedMs, type Goal } from '@shared/plugins/goal';
+import type { Plan, RunId, ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { refusalOf } from '@shared/session/approvalDecision';
 import {
   clearGoal,
@@ -33,6 +34,7 @@ import {
   startGoal,
   type GoalAutoApprovalScope,
 } from '@tools/goal';
+import type { GoalGrants } from '@tools/goal/goalAutoApproval';
 import { requireNonEmptyString } from '@tools/utils';
 import { defineTool } from '@tools/core/define';
 import { errorResult, executed } from '@tools/core/result';
@@ -101,7 +103,7 @@ function buildApprovedResult(): ToolResult {
 /**
  * Everything this tool's program needs from its invocation capability: the
  * call, and the run `execute` established — whose session owns this turn, its
- * approval surface and its own `goalStateChanged` row, read and written
+ * approval surface and its own goal row (`@shared/plugins/goal`), read and written
  * through `ports.run.session`.
  */
 interface PlanPorts {
@@ -130,7 +132,11 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   if (goalOf(ports.run.session, runId)) {
     return yield* Effect.gen(function* () {
       const active = yield* retargetGoal(ports.run.session, runId, objective);
-      setGoalSessionAutoApproval(ports.run.session, runId, autoApprovalScope);
+      yield* setGoalSessionAutoApproval(
+        ports.run.session,
+        runId,
+        autoApprovalScope,
+      );
       return executed(
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
@@ -172,7 +178,11 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
 
   return yield* Effect.gen(function* () {
     const goal = yield* startGoal(ports.run.session, runId, objective);
-    setGoalSessionAutoApproval(ports.run.session, runId, autoApprovalScope);
+    yield* setGoalSessionAutoApproval(
+      ports.run.session,
+      runId,
+      autoApprovalScope,
+    );
     return executed(
       `The user approved this plan and started an autonomous goal ` +
         `(${goal.goalId}) toward its stopping condition.\n\n` +
@@ -347,7 +357,7 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
     );
   }
   const updated = (yield* pauseGoal(ports.run.session, runId)) ?? goal;
-  setGoalSessionAutoApproval(ports.run.session, runId, false);
+  yield* setGoalSessionAutoApproval(ports.run.session, runId, false);
   return executed(
     `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
@@ -371,7 +381,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
   // The autonomous loop stops because the run's next row states that no goal
   // is in flight for the wait-node continuation check.
   yield* clearGoal(ports.run.session, runId);
-  setGoalSessionAutoApproval(ports.run.session, runId, false);
+  yield* setGoalSessionAutoApproval(ports.run.session, runId, false);
   return executed(
     `Goal ${goal.goalId} marked complete.\n\n` +
       `Reason: ${reason}\n\n` +
@@ -387,7 +397,7 @@ const executeComplete = Effect.fn('PlanTool.executeComplete')(function* (
 function planCommand(
   ports: PlanPorts,
   input: PlanToolInput,
-): Effect.Effect<ToolResult, Error> {
+): Effect.Effect<ToolResult, Error, GoalGrants> {
   switch (input.command) {
     case 'update':
       return executeUpdate(ports, { objective: input.objective });

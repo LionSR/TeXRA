@@ -1,4 +1,4 @@
-import { Effect, PubSub } from 'effect';
+import { Deferred, Effect, PubSub } from 'effect';
 
 /**
  * Cross-cutting, process-scoped app-lifecycle signals (auth, subscriptions,
@@ -101,10 +101,11 @@ export interface AppSignalPayloads {
    * A tool plugin switch was flipped in this process (`setToolEnabled`).
    * Keyless: a listener re-reads the switches.
    *
-   * Consumed by: the extension's Copilot tools (`registerLanguageModelTools`),
-   * which follow the switches without waiting for a run's step. Runs read
-   * the switches at their next step and need no signal; desktop and CLI have
-   * no surface outside a run that the switches shape.
+   * Consumed by: the process's tool registry (`toolRegistryLayer`), which
+   * applies the switches to the live catalog at once, so what follows the
+   * catalog outside a run (a host plugin layer's lifetime, the Copilot tools)
+   * need not wait for a run's step. Runs read the switches at their next
+   * step anyway, which also covers a switch flipped by another process.
    */
   toolSwitchesChanged: undefined;
 
@@ -216,15 +217,19 @@ export function emitAppSignal<K extends AppSignal>(
  * Deliver `signal` to `listener` until the caller interrupts. The program a
  * host's run edge forks: its scope holds the subscription, so interrupting
  * the fiber unsubscribes, and the `warn` on a failing listener is this
- * module's, not the host's.
+ * module's, not the host's. `subscribed` completes once the subscription is
+ * live, for a caller that must not miss a signal published after it reads
+ * the state the signal announces.
  */
 export function onAppSignal<K extends AppSignal>(
   signal: K,
   listener: (payload: AppSignalPayloads[K]) => void,
+  subscribed?: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   return Effect.scoped(
     Effect.gen(function* () {
       const subscription = yield* PubSub.subscribe(yield* openHub);
+      if (subscribed) yield* Deferred.succeed(subscribed, undefined);
       while (true) {
         const event = yield* PubSub.take(subscription);
         if (event.signal !== signal) continue;

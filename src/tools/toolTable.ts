@@ -1,6 +1,6 @@
 /**
- * The process's plugin table: every plugin's tools, continuation and prompt
- * contribution by plugin id, which the built-in plugins contribute to the live catalog
+ * The process's plugin table: every plugin's tools, continuation, prompt
+ * contribution and layers by plugin id, which the built-in plugins contribute to the live catalog
  * (`@tools/liveTools`). The `ToolRegistry` service holds it, provided once
  * per process by `installProcessRuntime` from `@tools/registry`, beside the
  * catalog built over it. This module imports no tool, manifest or plugin layer, so a
@@ -8,21 +8,46 @@
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { PluginServices } from '@platform/processRuntime';
 import type { AgentCategory, RunId } from '@shared/schemas';
 import type { RunState } from '@shared/session/runStateFold';
+import type { LiveTools } from '@tools/liveTools';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
- * The resources a plugin owns, as a layer: built when the first pinned
- * catalog generation that includes the plugin is pinned, released when the
- * last one drains (`@tools/liveTools`). One object per plugin for the life
- * of the process, which is what lets generations share it. Its services are
- * erased in this type (and it may neither fail nor require a service): no
- * plugin declares a layer yet, and the first one that does types its
- * services into the tool contract's requirements.
+ * A plugin's process-lifetime services (`PLUGIN_PROCESS_LAYERS`): built
+ * when the plugin is switched on or first pinned, released when it is
+ * switched off and no step pins it (`@tools/liveTools`). Its services are
+ * erased here and typed as `PluginServices` where a step serves them.
+ * `drain` is its step of the core shutdown protocol, run before the
+ * sessions close while its services are still up.
  */
-export type PluginLayer = Layer.Layer<never>;
+export interface ProcessPluginLayer {
+  /** It may read the live catalog it belongs to. */
+  readonly layer: Layer.Layer<never, never, LiveTools>;
+  readonly drain?: Effect.Effect<void, never, PluginServices>;
+}
+
+/**
+ * A plugin's session-lifetime services (`PLUGIN_SESSION_LAYERS`): one build
+ * per open session, up while the plugin is switched on, a step of that
+ * session pins it, or work it started holds it (`PluginHold`), and closed
+ * with the session. It may read the session's `Runs`.
+ */
+export type SessionPluginLayer = Layer.Layer<never, never, Runs | PluginHold>;
+
+/**
+ * Keep the session layer that provides this service up until `until` ends:
+ * for work a plugin starts that outlives the step that started it (an agent
+ * CLI's detached child), so switching the plugin off does not drop state
+ * that work still owns. The hold is taken before this returns.
+ */
+export class PluginHold extends Context.Service<
+  PluginHold,
+  (until: Effect.Effect<void>) => Effect.Effect<void>
+>()('@texra/tools/PluginHold') {}
 
 /** What a loaded plugin's resources answer once up: its tools, or why none. */
 export interface LoadedPluginTools {
@@ -84,11 +109,11 @@ export interface Continuation {
     readonly runId: RunId;
     readonly state: RunState;
     readonly canContinue: boolean;
-  }) => Effect.Effect<string | null, Error>;
+  }) => Effect.Effect<string | null, Error, PluginServices>;
   readonly onResume: (run: {
     readonly session: SessionHandle;
     readonly runId: RunId;
-  }) => Effect.Effect<void, Error>;
+  }) => Effect.Effect<void, Error, PluginServices>;
 }
 
 /**
@@ -113,8 +138,10 @@ export interface PromptContribution {
 export interface ToolTable {
   /** Each plugin's tools by registered name, keyed by plugin id. */
   readonly plugins: ReadonlyMap<string, ReadonlyMap<string, ITool>>;
-  /** The layer of each plugin that owns resources, keyed by plugin id. */
-  readonly layers: ReadonlyMap<string, PluginLayer>;
+  /** Each plugin's process services, by plugin id. */
+  readonly processLayers: ReadonlyMap<string, ProcessPluginLayer>;
+  /** Each plugin's session services, by plugin id. */
+  readonly sessionLayers: ReadonlyMap<string, SessionPluginLayer>;
   /** The continuation of each plugin that contributes one, by plugin id. */
   readonly continuations: ReadonlyMap<string, Continuation>;
   /** The prompt contribution of each plugin that makes one, by plugin id. */
@@ -123,13 +150,14 @@ export interface ToolTable {
   readonly get: (name: string) => ITool | undefined;
 }
 
-/** A table over plugin id → tools, layer, continuation and prompt
- *  contribution. */
+/** A table over plugin id → tools, continuation, prompt contribution and
+ *  layers. */
 export function toolTable(
   plugins: Readonly<Record<string, Readonly<Record<string, ITool>>>>,
-  layers: Readonly<Record<string, PluginLayer>> = {},
   continuations: Readonly<Record<string, Continuation>> = {},
   prompt: Readonly<Record<string, PromptContribution>> = {},
+  processLayers: Readonly<Record<string, ProcessPluginLayer>> = {},
+  sessionLayers: Readonly<Record<string, SessionPluginLayer>> = {},
 ): ToolTable {
   const byName = new Map(Object.values(plugins).flatMap(Object.entries));
   return {
@@ -139,9 +167,10 @@ export function toolTable(
         new Map(Object.entries(tools)),
       ]),
     ),
-    layers: new Map(Object.entries(layers)),
     continuations: new Map(Object.entries(continuations)),
     prompt: new Map(Object.entries(prompt)),
+    processLayers: new Map(Object.entries(processLayers)),
+    sessionLayers: new Map(Object.entries(sessionLayers)),
     get: (name) => byName.get(name),
   };
 }

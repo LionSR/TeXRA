@@ -1,22 +1,23 @@
 /**
- * The goal of a run, read and written as the run's `goalStateChanged` rows.
+ * The goal of a run, read and written as the goal plugin's own rows
+ * (`@shared/plugins/goal`), committed through the one publisher.
  *
- * The row is the goal: it carries the whole pursuit, the session fold parks
- * the latest one on `RunView.goal`, and `goalStateChanged` is a listing key,
- * so a cold read hydrates every run's current goal without replaying a single
- * aggregate. There is no goal store — a second persisted copy would be a
- * second owner of the same fact.
+ * The row is the goal: it carries the whole pursuit, the session fold keeps
+ * the latest one among the run's plugin facts, and a plugin fact is a
+ * listing key, so a cold read hydrates every run's current goal without
+ * replaying a single aggregate. There is no goal store — a second persisted
+ * copy would be a second owner of the same fact.
  */
 import { DateTime, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { AgentCategory, type RunId } from '@shared/schemas';
 import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
+  goalStateOf,
+  goalStateRow,
   type Goal,
   type GoalState,
-  type RunId,
-} from '@shared/schemas';
+} from '@shared/plugins/goal';
 import type { RunView } from '@shared/session/sessionView';
 import { hexId12 } from '@utils/core';
 
@@ -32,8 +33,10 @@ type GoalReader = Pick<SessionHandle, 'runView'>;
 type GoalWriter = GoalReader & Pick<SessionHandle, 'commit'>;
 
 function goalOfRunView(runId: RunId, run: RunView | undefined): Goal | null {
-  if (run?.category !== AgentCategory.ToolUse || !run.goal.active) return null;
-  const { active: _active, ...goal } = run.goal;
+  if (run?.category !== AgentCategory.ToolUse) return null;
+  const state = goalStateOf(run);
+  if (!state.active) return null;
+  const { active: _active, ...goal } = state;
   return { runId, ...goal };
 }
 
@@ -42,15 +45,7 @@ function commitGoalState(
   runId: RunId,
   state: GoalState,
 ): Effect.Effect<void, Error> {
-  return session
-    .commit([
-      {
-        type: 'goalStateChanged',
-        aggregateId: qualifyAggregateId('run', runId),
-        state,
-      },
-    ])
-    .pipe(Effect.asVoid);
+  return session.commit([goalStateRow(runId, state)]).pipe(Effect.asVoid);
 }
 
 /** Commit the run's goal as its next row and hand it back to the caller. */

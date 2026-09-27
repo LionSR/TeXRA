@@ -6,6 +6,7 @@ import { describe, expect } from 'vitest';
 // Local imports
 import type { RunId } from '@shared/schemas';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
+import { noPluginHold } from '@test/support/testPluginServices';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
 describe('AgentCliSessionRegistry', () => {
@@ -14,7 +15,7 @@ describe('AgentCliSessionRegistry', () => {
     () =>
       Effect.gen(function* () {
         const runs = testRunRegistry();
-        const registry = new AgentCliSessionRegistry(runs);
+        const registry = new AgentCliSessionRegistry(runs, noPluginHold);
         const entry = { runId: 'run-a' as RunId };
 
         try {
@@ -56,7 +57,7 @@ describe('AgentCliSessionRegistry', () => {
     () =>
       Effect.gen(function* () {
         const runs = testRunRegistry();
-        const registry = new AgentCliSessionRegistry(runs);
+        const registry = new AgentCliSessionRegistry(runs, noPluginHold);
 
         try {
           const releaseClaim = registry.claim('session-a');
@@ -81,7 +82,7 @@ describe('AgentCliSessionRegistry', () => {
 
   it('releases every active alias owned by one run', () => {
     const runs = testRunRegistry();
-    const registry = new AgentCliSessionRegistry(runs);
+    const registry = new AgentCliSessionRegistry(runs, noPluginHold);
     const runA = 'run-a' as RunId;
     const runB = 'run-b' as RunId;
     const entry = (runId: RunId) => ({ runId });
