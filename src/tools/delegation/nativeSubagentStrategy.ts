@@ -16,6 +16,7 @@ import type {
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import {
   AgentCategory,
   emptyRunEndOutput,
@@ -41,7 +42,6 @@ import {
  * field mapping.
  */
 export interface ChildRunLaunchOptions {
-  readonly agentName: string;
   /** The launching run: the child's parent edge. */
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
@@ -94,12 +94,9 @@ export function createNativeSubagentStrategy(
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
-  // Captured for the turn currently in flight; read once the call resolves.
-  // `executeAgent` never rejects for a
-  // subagent's own application-level failure (runFlowWithLifecycle returns a
-  // terminal failed result instead) — the real underlying error is only
-  // observable through this callback.
-  let lastErr: unknown;
+  // A child's provider/runtime failure rides its turn's `error`
+  // (`runFlowWithLifecycle` returns a terminal failed result rather than
+  // rejecting); a thrown call reaches `formatError` as its `err`.
   let lastResult: AgentFlowResult | undefined;
   // Result construction computes and persists diffs, so every consumer of a
   // turn shares one result. Formatting remains separate: if it throws, the
@@ -111,7 +108,6 @@ export function createNativeSubagentStrategy(
     ports: ChildRunPorts,
     call: Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
   ) {
-    lastErr = undefined;
     lastResult = undefined;
     cachedBuilt = undefined;
     cachedDelivery = undefined;
@@ -133,7 +129,7 @@ export function createNativeSubagentStrategy(
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
         params.runId,
-        params.agentName,
+        config.agent,
         turn.output,
         {
           startedAt: params.startedAt,
@@ -179,15 +175,8 @@ export function createNativeSubagentStrategy(
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
               ports.notify(update),
-            onRunError: (err: unknown) => {
-              lastErr = err;
-            },
             turns: {
-              turnPermit: (turn) =>
-                Effect.suspend(() => {
-                  lastErr = undefined;
-                  return turns.turnPermit(turn);
-                }),
+              turnPermit: turns.turnPermit,
               onTurnBoundary: (turn: AgentFlowResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
@@ -223,7 +212,7 @@ export function createNativeSubagentStrategy(
     isTurnInterrupted: (turn) =>
       params.runMode !== 'single-cycle' &&
       turn.outcome === RUN_OUTCOME.CANCELLED,
-    isTurnError: () => lastErr !== undefined,
+    isTurnError: (turn) => turn.error !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
       turn: AgentFlowResult,
@@ -237,7 +226,7 @@ export function createNativeSubagentStrategy(
         cachedDelivery = yield* Effect.try({
           try: () =>
             formatSubagentDelivery(
-              params.agentName,
+              config.agent,
               { outcome: turn.outcome, output: built.output },
               {
                 runId: params.runId,
@@ -258,8 +247,8 @@ export function createNativeSubagentStrategy(
       const result = turn ?? lastResult;
       return formatSubagentError(
         params.runId,
-        params.agentName,
-        lastErr ?? err,
+        config.agent,
+        turn?.error ?? normalizeProviderError(err),
         {
           wallTimeMs,
           workingDirectory: params.workingDirectory,
@@ -276,7 +265,7 @@ export function createNativeSubagentStrategy(
           // turn produced none.
           const result = turn ?? lastResult;
           return buildSubagentResultMeta(
-            params.agentName,
+            config.agent,
             result?.output ?? emptyRunEndOutput(config.agentCategory),
             Date.now() - params.startedAt,
           );

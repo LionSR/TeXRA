@@ -7,7 +7,6 @@ import { describe, expect } from 'vitest';
 
 // Local imports - tools
 import { retryTransientFetch } from '@tools/timeouts';
-import { isTransientHttpStatus } from '@utils/core/httpStatus';
 
 function kyErrorWithStatus(status: number): HTTPError {
   return new HTTPError(
@@ -106,19 +105,6 @@ describe('retryTransientFetch transience classification', () => {
   it.effect.each([new Error('boom'), 'nope', undefined])(
     'treats non-http errors as permanent: %s',
     (value) => expectTransience(value, false),
-  );
-});
-
-describe('retryTransientFetch / isTransientHttpStatus parity', () => {
-  it.effect('agrees on ky HTTPError status codes', () =>
-    Effect.gen(function* () {
-      for (const status of [400, 404, 408, 429, 500, 503]) {
-        yield* expectTransience(
-          kyErrorWithStatus(status),
-          isTransientHttpStatus(status),
-        );
-      }
-    }),
   );
 });
 

@@ -172,7 +172,7 @@ key is available.
 
 Using your own provider API key? TeXRA stores keys in VS Code's secret storage; they are never written to settings files.
 
-1.  **Open the Settings Dashboard**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel's title bar, or run **TeXRA: Open Settings** from the Command Palette.
+1.  **Open Settings**: Select the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon in the TeXRA panel header, or run **TeXRA: Open Settings** from the Command Palette.
 2.  **Go to the Models page**: The **API keys** list shows every provider with its current key status (`Set`, `Env`, or `Not set`).
 3.  **Set the key**: Find your provider's row and select the <wa-icon library="texra" name="key"></wa-icon> **Set API key** button, then paste your key. If you don't have a key yet, select the <wa-icon library="texra" name="arrow-up-right-from-square"></wa-icon> **Get** button to open the provider's API key page.
 
@@ -202,7 +202,7 @@ above what your plan allows fails and triggers compaction recovery.
 
 ## Customizing the model list
 
-Choose which models appear in the extension picker from **Dashboard → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
+Choose which models appear in the extension picker from **Settings → Models → Models**: toggle them on or off per provider, no JSON required (the choice is saved in the extension).
 
 In the CLI TUI, run `/model` after a chat starts to see the models your current credentials can run. Mid-session switching is limited to models that share the active model's provider family; other entries are shown disabled with a reason, and switching waits until the current response finishes. To change family, start a new chat with `--model`. Before you send the first message, `/agent` chains straight into that same model picker, so choosing a root agent and its model stays one step.
 
@@ -218,7 +218,7 @@ To access additional models or alternative pricing:
 
 1. Get an [OpenRouter](https://openrouter.ai/) API key
 2. Add it with the `TeXRA: Set API Key` command
-3. In Dashboard → Models → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
+3. In Settings → Models → API keys, expand the OpenRouter row and turn on **Use OpenRouter for all models**
 
 Expanding any provider's row in **API Configuration** reveals its key field plus the per-provider toggles described here:
 

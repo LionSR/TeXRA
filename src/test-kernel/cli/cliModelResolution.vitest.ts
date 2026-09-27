@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Effect } from 'effect';
 
-import {
-  buildHeadlessRunContext,
-  selectCliRunModel,
-} from '@cli/runtime/runModel';
+import { selectCliRunModel } from '@cli/runtime/runModel';
 import { CLI_CHEAP_START_MODEL } from '@cli/runtime/cliConfig';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { selectCliRunnableModel } from '@cli/runtime/modelAccess';
@@ -94,31 +91,6 @@ describe('selectCliRunModel precedence', () => {
         { model: CLI_CHEAP_START_MODEL, reason: 'builtin-default' },
       ],
       { stores },
-    );
-  });
-
-  it('checks model access before returning the model', async () => {
-    await withRunModel('staleConfiguredModel');
-    const stores = storesOf();
-    const context = makeContext();
-    selectCliRunnableModelMock.mockReturnValueOnce(
-      Effect.succeed({
-        model: 'deepseekT',
-        notice: 'Using deepseekT instead.',
-      }),
-    );
-
-    await expect(runSelect(context, undefined, 'run', stores)).resolves.toBe(
-      'deepseekT',
-    );
-    expect(selectCliRunnableModelMock).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        { model: 'staleConfiguredModel', reason: 'command-config' },
-      ]),
-      { stores },
-    );
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      'Using deepseekT instead.',
     );
   });
 

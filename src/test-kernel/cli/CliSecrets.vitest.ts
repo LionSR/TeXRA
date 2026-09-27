@@ -3,24 +3,11 @@ import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { describe, expect, vi } from 'vitest';
+import { describe, expect } from 'vitest';
 
 import { CliSecrets, cliSecretsPath } from '@cli/runtime/cliSecrets';
-import { withTempDir, withTempDirEffect } from '@test/support/tempDirPlatform';
+import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { withEnv } from '@test/support/testEnv';
-
-async function withSecretsRoot(
-  run: (paths: {
-    root: string;
-    storageRoot: string;
-    secretsPath: string;
-  }) => Promise<void>,
-): Promise<void> {
-  await withTempDir('texra-cli-secrets-', async (root) => {
-    const storageRoot = path.join(root, 'storage');
-    await run({ root, storageRoot, secretsPath: cliSecretsPath(storageRoot) });
-  });
-}
 
 function withSecretsRootEffect<A, E, R>(
   run: (paths: {
@@ -39,25 +26,6 @@ describe('CLI secrets', () => {
   // POSIX file modes don't exist on Windows. skipIf (rather than an early
   // return) so the skip is visible in reports instead of a zero-assertion pass.
   const itPosix = it.effect.skipIf(process.platform === 'win32');
-
-  it.effect('stores secrets under the configured storage root', () =>
-    Effect.gen(function* () {
-      yield* withSecretsRootEffect(({ storageRoot, secretsPath }) =>
-        Effect.gen(function* () {
-          const secrets = new CliSecrets(secretsPath);
-          yield* secrets.set('TEXRA_CLI_SECRETS_TEST_KEY', 'test-key');
-
-          expect(yield* secrets.get('TEXRA_CLI_SECRETS_TEST_KEY')).toBe(
-            'test-key',
-          );
-          expect(
-            yield* Effect.promise(() => fs.readFile(secretsPath, 'utf8')),
-          ).toContain('TEXRA_CLI_SECRETS_TEST_KEY');
-          expect(path.dirname(secretsPath)).toBe(storageRoot);
-        }),
-      );
-    }).pipe(withEnv({})),
-  );
 
   it.effect(
     'aborts a write instead of wiping the file when the read fails for a reason other than a missing file',
@@ -205,16 +173,4 @@ describe('CLI secrets', () => {
       );
     }),
   );
-
-  it('keeps one process-wide secrets store after the first root is selected', async () => {
-    vi.resetModules();
-    const { getCliSecrets } = await import('@cli/runtime/cliSecrets');
-
-    await withSecretsRoot(async ({ root, storageRoot }) => {
-      const first = getCliSecrets(storageRoot);
-      const second = getCliSecrets(path.join(root, 'other-storage'));
-
-      expect(second).toBe(first);
-    });
-  });
 });

@@ -5,6 +5,8 @@ import { css } from 'lit';
 import { visuallyHiddenStyles } from '@ui/styles';
 import { buttonStyles } from '@ui/styles/controlStyles';
 
+import { heroStyles } from './components/NewTaskHero';
+
 /**
  * Layout for the `<progress-app>` shell: the 38px header, the body, the
  * docked list of the wide editor tab, and the empty state. The docking is
@@ -77,6 +79,20 @@ export const progressAppStyles = css`
   :host([placement='desktop']) .reading > * {
     width: min(760px, 100%);
     margin: 0 auto;
+  }
+  /* The desktop's new task is one centred group: hero, attachments and
+     composer together, not the hero at the top and the composer across an
+     empty page at the bottom. Its rail already lists the running tasks, so
+     the Active now strip would be a second copy there. */
+  :host([placement='desktop']) .empty {
+    /* \`safe\`: a group taller than the pane starts at the top, not clipped. */
+    justify-content: safe center;
+  }
+  :host([placement='desktop']) .launch-banners {
+    margin-top: 0;
+  }
+  :host([placement='desktop']) .active-now {
+    display: none;
   }
 
   /* The dock cell of the header exists only docked wide (see the container
@@ -167,11 +183,10 @@ export const progressAppStyles = css`
     .shell.is-editor .dock {
       display: flex;
     }
-    /* The dock cell carries the paper name and the one New task control;
-       the main cell keeps only the stream's actions. */
+    /* The dock cell names the paper and the docked list replaces the
+       drawer; New task and Settings stay at the main cell's end. */
     .shell.is-editor .sessions-button,
     .shell.is-editor .header-main-title,
-    .shell.is-editor #shell-new-task,
     .shell.is-editor session-drawer {
       display: none;
     }
@@ -203,49 +218,7 @@ export const progressAppStyles = css`
     padding: var(--wa-space-l) var(--wa-space-xs);
   }
 
-  .hero {
-    display: grid;
-    justify-items: center;
-    gap: var(--wa-space-2xs);
-    padding: 0 var(--wa-space-xs);
-    text-align: center;
-  }
-
-  .hero-mark {
-    display: grid;
-    place-items: center;
-    width: 42px;
-    height: 42px;
-    border-radius: var(--wa-border-radius-l);
-    border: var(--border-thin) solid var(--wa-color-brand-border-quiet);
-    background: var(--wa-color-brand-fill-quiet);
-    color: var(--wa-color-brand-on-quiet);
-    font-size: 18px;
-  }
-
-  .hero h1 {
-    margin: var(--wa-space-3xs) 0 0;
-    font-size: var(--font-size-h2, 1.25em);
-    font-weight: var(--font-weight-semibold);
-    letter-spacing: -0.005em;
-    line-height: var(--line-height-heading, 1.25);
-  }
-
-  .hero p {
-    margin: 0;
-    max-width: 34ch;
-    font-size: var(--font-size-sm);
-    line-height: var(--line-height-normal, 1.5);
-    color: var(--color-text-secondary);
-  }
-
-  .hero-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--wa-space-2xs);
-    margin-top: var(--wa-space-2xs);
-  }
+  ${heroStyles}
 
   .context::part(base) {
     border-radius: var(--wa-border-radius-m);

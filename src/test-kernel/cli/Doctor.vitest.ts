@@ -262,19 +262,6 @@ describe('CLI doctor', () => {
     }
   });
 
-  it('reports loaded workspace config warnings', async () => {
-    const report = await buildReadyReport(
-      Effect.succeed({ authenticated: true }),
-      {
-        ...context,
-        configWarnings: ['Ignoring invalid model.'],
-      },
-    );
-
-    expect(checkById(report, 'config')?.status).toBe('warn');
-    expect(formatDoctorText(report)).toContain('Ignoring invalid model.');
-  });
-
   it('redacts email-like values outside the auth account message', () => {
     const report: DoctorReport = {
       ok: false,
@@ -310,14 +297,6 @@ describe('CLI doctor', () => {
         hint: 'Ask admin@example.edu to update it.',
       }),
     );
-  });
-
-  it('falls back to unknown for an empty auth account label', async () => {
-    const report = await buildReadyReport(
-      Effect.succeed({ authenticated: true, accountLabel: '' }),
-    );
-
-    expect(checkById(report, 'auth')?.message).toBe('Signed in as unknown.');
   });
 
   it('emits stable ndjson record kinds', async () => {

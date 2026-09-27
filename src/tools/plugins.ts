@@ -12,7 +12,8 @@
  * card's inline settings rows, the agent creator's tool groups, availability
  * probes, the first-install toggle seed, switched-off plugins, a run's
  * injected tools (`@tools/composition`), install/auth actions, `texra tools`
- * guides, and the bundled skills and agents the bootstrap installs (ungated).
+ * guides, and the bundled skills and agents the bootstrap installs, which a
+ * switched-off plugin withholds with its tools.
  *
  * Rules: an id is persisted (the disabled-tools key), so it never changes and
  * is never reused; every tool belongs to exactly one plugin (checked below
@@ -29,8 +30,9 @@ import { MANIFEST } from '@tools/pluginManifest';
 export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
-  /** The registered tools this plugin provides; `@tools/registry` checks them. */
-  readonly toolNames: readonly [string, ...string[]];
+  /** The registered tools this plugin provides; `@tools/registry` checks
+   *  them. Empty only for a plugin that contributes a continuation policy. */
+  readonly toolNames: readonly [string, ...string[]] | readonly [];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -52,14 +54,21 @@ export interface ToolPlugin {
    *  already names the plugin, so 'Model' rather than 'Claude Code model'). */
   readonly settings?: readonly (readonly [key: string, label: string])[];
   /** Tools of this plugin offered to every tool-use agent, declared or not,
-   *  while a boolean catalog setting is on: tool name to setting key. An
-   *  injected tool still passes the host and approval gates; reflection
+   *  while the plugin is on and a boolean catalog setting is on: tool name to
+   *  setting key, or `true` for no setting but the plugin's own switch. An
+   *  injected tool still passes the host and approval gates; workflow
    *  runs get none. */
-  readonly injectedWhen?: Readonly<Record<string, string>>;
+  readonly injectedWhen?: Readonly<Record<string, string | true>>;
   /** Opt-in: the dashboard shows an enable/disable toggle, a fresh install
-   *  seeds the plugin disabled, and while disabled its tools are withheld
-   *  from every agent. */
+   *  seeds the plugin disabled (unless `onByDefault`), and while disabled its
+   *  tools are withheld from every agent. */
   readonly toggleable?: boolean;
+  /** A toggleable plugin a fresh install seeds on rather than off. */
+  readonly onByDefault?: true;
+  /** Decides what a parked tool-use run does next: a policy in
+   *  `PLUGIN_CONTINUATIONS` (`@agent/runtime/loop/continuationPolicy`), which
+   *  a run gets only while its pinned composition includes the plugin. */
+  readonly continuation?: true;
   /** Owns resources: a layer in `@tools/registry`, built while an open
    *  composition includes the plugin (`@tools/compositions`). */
   readonly layer?: true;

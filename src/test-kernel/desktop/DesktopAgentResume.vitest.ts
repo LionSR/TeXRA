@@ -26,6 +26,7 @@ import {
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import {
@@ -109,7 +110,7 @@ function failAfterLifecycle(
   runAgent.mockImplementation((_request, options) =>
     Effect.tryPromise({
       try: async () => {
-        await Effect.runPromise(options.onRun?.({} as never) ?? Effect.void);
+        await Effect.runPromise(options.onRun?.(runId) ?? Effect.void);
         session.publish([failedRunEnd(category, message)]);
         throw new Error(message);
       },
@@ -161,7 +162,7 @@ async function createResumeHarness(): Promise<{
     if (disposed) return;
     disposed = true;
     owner.disable();
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   };
   onTestFinished(dispose);
   return { owner, session, dispose };
@@ -246,25 +247,6 @@ describe('desktop process resume owner', () => {
       }),
   );
 
-  it.effect('presents one workflow failure after lifecycle startup', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() => mockWorkflowResume());
-      const harness = yield* Effect.promise(() => createResumeHarness());
-      failAfterLifecycle(
-        harness.session,
-        'workflow',
-        'workflow lifecycle failed',
-      );
-      const presenter = attachResultPresenter(harness.session);
-
-      expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
-      expectOneErrorPresentation(
-        presenter,
-        'Resume failed: workflow lifecycle failed',
-      );
-    }),
-  );
-
   it.effect(
     'replays one detached post-lifecycle workflow failure on replacement',
     () =>
@@ -305,16 +287,14 @@ describe('desktop process resume owner', () => {
         const flow = harness.session.followUps.claimLive(runId, 'flow')!;
         yield* harness.session.followUps.submit(
           runId,
-          { text: 'keep this queued' },
+          { from: { kind: 'user' as const }, text: 'keep this queued' },
           'live_owner',
         );
         harness.session.followUps.release(flow, 'recoverable');
         resumeToolUseFromResumeData.mockImplementation((_resume, options) =>
           Effect.tryPromise({
             try: async () => {
-              await Effect.runPromise(
-                options?.onRun?.({} as never) ?? Effect.void,
-              );
+              await Effect.runPromise(options?.onRun?.(runId) ?? Effect.void);
               harness.session.publish([
                 failedRunEnd(
                   AgentCategory.ToolUse,
@@ -368,9 +348,7 @@ describe('desktop process resume owner', () => {
         runAgent.mockImplementation((_request, options) =>
           Effect.tryPromise({
             try: async () => {
-              await Effect.runPromise(
-                options.onRun?.({} as never) ?? Effect.void,
-              );
+              await Effect.runPromise(options.onRun?.(runId) ?? Effect.void);
               options.session?.publish([completedRunEnd()]);
               throw new Error('final artifact flush failed');
             },

@@ -2,7 +2,7 @@
  * TeXRA sugar over {@link AgentTrace}, as plain functions.
  *
  * Every helper takes the trace as its first argument and reduces to a
- * single primitive call (`info` / `warn` / `error` / `domain` / `emit`).
+ * single primitive call (`info` / `warn` / `error` / `emit`).
  * Agent code uses these instead of the bigger
  * `error(msg, { data: buildErrorLogData(...), messageType })` blocks so
  * call sites stay 1 line.
@@ -11,17 +11,20 @@
  * `MessageType`, and renders `level=error` with `messageType: ERROR` as an
  * error row.
  */
+// Third-party imports
+import { Effect } from 'effect';
+
+// Local imports
 import {
   buildErrorLogData,
   normalizeProviderError,
 } from '@common/errors/sdkError/providerErrorFormat';
-import { createLog } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import {
   MESSAGE_TYPES,
   type CompactionActivityData,
   type CompactionActivityOutcome,
   type ContextManagementData,
-  type ConversationProgress,
   type ErrorContext,
   type FileListEntry,
   type MediaAttachmentKind,
@@ -40,16 +43,19 @@ export function logSdkError(
   err: unknown,
   context?: ErrorContext,
   stageId?: string,
-): void {
-  logErrorData(trace, message, buildErrorLogData(err, context), stageId);
-  // The provider's raw response body stays out of the stream log, since it
-  // can echo the request; it is a diagnostic for the process log.
-  const body = normalizeProviderError(err).rawErrorBody;
-  if (body !== undefined) {
-    createLog('agentTrace').warn(`${message} (provider response body)`, {
-      data: body,
-    });
-  }
+): Effect.Effect<void> {
+  return Effect.suspend(() => {
+    logErrorData(trace, message, buildErrorLogData(err, context), stageId);
+    // The provider's raw response body stays out of the stream log, since it
+    // can echo the request; it is a diagnostic for the process log.
+    const body = normalizeProviderError(err).rawErrorBody;
+    return body === undefined
+      ? Effect.void
+      : Effect.logWarning(`${message} (provider response body)`).pipe(
+          Effect.annotateLogs({ data: body }),
+          withLogChannel('agentTrace'),
+        );
+  });
 }
 
 /** Emit an error log with a pre-serialized data payload. */
@@ -66,16 +72,19 @@ export function logErrorData(
   });
 }
 
-/** Emit a user-visible progress/status note. */
+/**
+ * Emit a user-visible progress/status note. A status note is its message
+ * alone and takes no payload: the transcript stringifies a `progressStatus`
+ * row's `data` verbatim into its detail, and an arbitrary payload (a request,
+ * headers, config) could write a secret there.
+ */
 export function logProgressStatus(
   trace: AgentTrace,
   message: string,
-  data?: unknown,
   stageId?: string,
 ): void {
   trace.info(message, {
     messageType: MESSAGE_TYPES.PROGRESS_STATUS,
-    data,
     stageId,
   });
 }
@@ -170,13 +179,19 @@ export function debugInternal(
 
 // ─── Domain events ──────────────────────────────────────────────────────
 
+/**
+ * Emit a context-management event. Its producers (the output-budget clamp in
+ * `ModelInvoker`, compaction in `run/compaction.ts`) build `text` and
+ * `data.details` from token counts and their own labels, never from provider
+ * or tool text, so no secret can reach this row; keep it that way.
+ */
 export function logContextManagementEvent(
   trace: AgentTrace,
   text: string,
   data?: ContextManagementData,
   stageId?: string,
 ): void {
-  trace.domain({ key: 'contextManagement', text, data, stageId });
+  trace.emit({ type: 'domain', key: 'contextManagement', text, data, stageId });
 }
 
 export function logWebSearch(
@@ -184,7 +199,7 @@ export function logWebSearch(
   data: unknown,
   stageId?: string,
 ): void {
-  trace.domain({ key: 'webSearch', data, stageId });
+  trace.emit({ type: 'domain', key: 'webSearch', data, stageId });
 }
 
 /** Files-loaded card with full {@link FileListEntry} entries. */
@@ -194,7 +209,8 @@ export function logFilesLoaded(
   entries: readonly FileListEntry[],
   stageId?: string,
 ): void {
-  trace.domain({
+  trace.emit({
+    type: 'domain',
     key: 'filesLoaded',
     data: { category, entries },
     text: category,
@@ -220,21 +236,4 @@ export function logFileCategory(
     sourceDisplay: category,
   }));
   logFilesLoaded(trace, category, entries, stageId);
-}
-
-/**
- * Report conversation-progress counters (tool-call count).
- * The retained `updateConversationProgress` host event is projected from this
- * run fact by the session progress projector instead of flow code calling
- * `session.interactions.emit` directly.
- * Never rendered as a transcript row (suppressed in the transcript fold)
- * — it is a UI-only signal, not a log line. Round labels come from typed
- * `stage.start` metadata with `kind: "round"`.
- */
-export function logConversationProgress(
-  trace: AgentTrace,
-  data: ConversationProgress,
-  stageId?: string,
-): void {
-  trace.emit({ type: 'conversation.progress', progress: data, stageId });
 }

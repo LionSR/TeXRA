@@ -18,13 +18,13 @@
 
 // Third-party imports
 import { type Work } from '@jamesgopsill/crossref-client';
-import { Data, Duration, Effect } from 'effect';
+import { Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
 import { ToolError } from '@shared/schemas';
-import { acquireRateLimitSlot } from '@tools/support/rateLimiter';
+import { rateLimitedApiCall } from '@tools/support/rateLimiter';
 import { CROSSREF_CONSTANTS, CrossrefClient } from '@tools/citation/constants';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -40,7 +40,6 @@ import {
 } from './bbtClient';
 
 const CHANNEL = 'ZoteroAddTool';
-const CROSSREF_RESOLVE_TIMEOUT_MS = 15_000; // 15 s
 
 /**
  * Schema for a single item to add to Zotero.
@@ -194,39 +193,6 @@ interface CrossrefAuthor {
   name?: string;
 }
 
-/** The Crossref lookup for a DOI rejected or outlived its deadline. */
-class CrossrefLookupFailed extends Data.TaggedError('CrossrefLookupFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/**
- * Fetch a DOI's Crossref work under the shared Crossref rate limit and a
- * deadline. The client has no timeout or cancellation hook of its own, so a
- * timed-out or cancelled lookup is abandoned — safe for this read-only call.
- */
-const crossrefWork = Effect.fn('ZoteroAddTool.crossrefWork')(function* (
-  doi: string,
-) {
-  yield* acquireRateLimitSlot(
-    'crossref',
-    CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
-  );
-  return yield* Effect.tryPromise({
-    try: () => CrossrefClient.work(doi),
-    catch: (cause) => new CrossrefLookupFailed({ cause }),
-  }).pipe(
-    Effect.timeoutOrElse({
-      duration: Duration.millis(CROSSREF_RESOLVE_TIMEOUT_MS),
-      orElse: () =>
-        Effect.fail(
-          new CrossrefLookupFailed({
-            cause: new Error('Crossref lookup timed out'),
-          }),
-        ),
-    }),
-  );
-});
-
 /** Build the Zotero Connector item for a resolved Crossref work. */
 function workToZoteroItem(doi: string, work: Work): ZoteroConnectorItem {
   const creators: ZoteroCreator[] | undefined = work.author?.length
@@ -277,22 +243,29 @@ function workToZoteroItem(doi: string, work: Work): ZoteroConnectorItem {
 /**
  * Resolve a DOI to full metadata via the Crossref API.
  * Uses the shared CrossrefClient and rate limiter from @tools/citation.
- * Succeeds with a Zotero-format item object, or null if resolution fails;
+ * Succeeds with a Zotero-format item object, or null if resolution fails or
+ * outlives the Crossref deadline;
  * an interrupted tool call stops here instead of degrading to the fallback
  * metadata.
  */
 const resolveDOI = Effect.fn('ZoteroAddTool.resolveDOI')((doi: string) =>
-  crossrefWork(doi).pipe(
+  rateLimitedApiCall(
+    'crossref',
+    CROSSREF_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    CROSSREF_CONSTANTS.TIMEOUT_MS,
+    'Crossref lookup failed',
+    () => CrossrefClient.work(doi),
+  ).pipe(
     Effect.map((response) =>
       response.ok && response.content?.message
         ? workToZoteroItem(doi, response.content.message)
         : null,
     ),
-    Effect.catchTag('CrossrefLookupFailed', (error) =>
+    Effect.catch((error) =>
       // The caller still falls back to the user's own metadata; log so a
       // silently degraded entry is traceable to the Crossref failure.
       Effect.logWarning(
-        `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(error.cause)}`,
+        `Crossref lookup failed for DOI ${doi}: ${toErrorMessage(error)}`,
       ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
     ),
   ),

@@ -172,8 +172,8 @@ export class FileList extends LitElement {
                     size="s"
                     @click=${this.runLatexFixer}
                   >
-                    ${waIcon('screwdriver-wrench', { slot: 'start' })} Run
-                    latexFixer
+                    ${waIcon('screwdriver-wrench', { slot: 'start' })} Fix
+                    compile errors
                   </wa-button>
                 </div>
               `

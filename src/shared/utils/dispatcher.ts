@@ -33,22 +33,6 @@ export function isUnsupported(value: unknown): value is Unsupported {
 }
 
 /**
- * Narrows a registry entry to its handler, throwing if it is an
- * {@link Unsupported} marker. For call sites (mainly tests) that invoke a
- * specific registry entry directly instead of going through a dispatcher —
- * production code should prefer the dispatcher, which turns `Unsupported`
- * into visible feedback rather than a thrown error.
- */
-export function assertSupported<T>(entry: T | Unsupported): T {
-  if (isUnsupported(entry)) {
-    throw new Error(
-      `Expected a supported handler but this command is unsupported: ${entry.unsupported}`,
-    );
-  }
-  return entry;
-}
-
-/**
  * Thrown into a dispatcher's `onError` callback when the matched command
  * resolves to an {@link Unsupported} registry entry. Distinguishes "this host
  * deliberately doesn't do this" from a genuine parse/handler failure so

@@ -14,6 +14,10 @@
 // gone, and one whose file has fallen to the threshold, both fail until the
 // entry is deleted.
 //
+// A small drop is still free, but a file cut materially — more than
+// MAX_HEADROOM of its budget — must re-pin its entry: headroom left behind
+// is room the next PR can grow into unnoticed (#13047).
+//
 // What that asymmetry costs, stated plainly: this suite compares each file
 // against the number in the baseline, so it cannot tell a budget that was
 // always 700 from one a PR raised to 700. Raising an entry is an author rule,
@@ -38,6 +42,10 @@ import {
 } from '../support/repoScan';
 
 const BASELINE_FILE = 'config/ratchets/file-size-baseline.json';
+
+/** Unclaimed budget, as a fraction of the budget, that a listed file may
+ *  carry before its entry must come down to the file's size. */
+const MAX_HEADROOM = 0.05;
 
 interface FileSizeBaseline {
   semantics: string;
@@ -119,6 +127,22 @@ describe('production file-size ratchet', () => {
       stale,
       `Stale entr(ies) in ${BASELINE_FILE}:\n${stale.join('\n')}\n\n` +
         `Remove them so they cannot absorb a future oversized file.`,
+    ).toEqual([]);
+  });
+
+  it('rejects budgets left materially above their file (reclaimable headroom)', () => {
+    const loose = Object.entries(baseline.files)
+      .filter(([file, budget]) => {
+        const lines = current.get(file);
+        return lines !== undefined && budget - lines > budget * MAX_HEADROOM;
+      })
+      .map(([file, budget]) => `  ${file}: ${budget} -> ${current.get(file)}`)
+      .toSorted((a, b) => a.localeCompare(b));
+    expect(
+      loose,
+      `Budget(s) in ${BASELINE_FILE} more than ${MAX_HEADROOM * 100}% above ` +
+        `their file:\n${loose.join('\n')}\n\n` +
+        `Lower each entry to the file's current line count.`,
     ).toEqual([]);
   });
 

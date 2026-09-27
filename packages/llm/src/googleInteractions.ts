@@ -23,13 +23,12 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
   RemoteOperationSchema,
-  authOrRejectionKind,
+  sdkModelError,
   boundOperation,
   cancellationStatus,
   enrichModelError,
@@ -312,19 +311,11 @@ const HttpFailureSchema = z.object({ status: z.int().min(400).max(599) });
 function sdkFailure(cause: unknown): ModelError {
   // The pinned Interactions SDK does not export its HTTP error constructors.
   const decoded = HttpFailureSchema.safeParse(cause);
-  const status = decoded.success ? decoded.data.status : undefined;
-  let kind: ModelError['kind'] = 'transport';
-  if (cause instanceof SyntaxError) kind = 'malformed-output';
-  else if (status !== undefined) {
-    kind = authOrRejectionKind(status);
-  }
-  return new ModelError({
-    kind,
-    message:
-      cause instanceof Error ? cause.message : 'The Google transport failed.',
-    ...(status === undefined ? {} : { status }),
+  return sdkModelError(
     cause,
-  });
+    decoded.success ? { status: decoded.data.status } : undefined,
+    'The Google transport failed.',
+  );
 }
 
 /** Google's abort signature: the SDK surfaces cancellation as a bare DOMException. */
@@ -671,7 +662,7 @@ export function googleInteractionsModel(
     },
   );
 
-  const streamTurn: Model['streamTurn'] = (input) =>
+  const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.suspend(() => {
       let responseId: string | undefined;
       let returnedModel: string | null = null;
@@ -682,18 +673,15 @@ export function googleInteractionsModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const parsed = ResolvedTurnSchema.safeParse(input);
           if (
-            !parsed.success ||
-            parsed.data.protocol !== 'google-interactions' ||
-            parsed.data.mode !== 'foreground'
+            turn.protocol !== 'google-interactions' ||
+            turn.mode !== 'foreground'
           ) {
             return yield* new ModelError({
               kind: 'unsupported',
               message: 'The prepared Google invocation is unsupported.',
             });
           }
-          const turn = parsed.data;
           const inputSteps = yield* invocationInput(turn, origin);
 
           let reader: ReadableStreamDefaultReader<unknown> | undefined =
@@ -1006,8 +994,6 @@ export function googleInteractionsModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const snapshot = Effect.fn('llm.google.snapshot')(function* (
     raw: unknown,
     operation: RemoteOperation,
@@ -1066,16 +1052,14 @@ export function googleInteractionsModel(
     });
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.google.submit',
-  )(function* (input) {
+  )(function* (turn) {
     let operation: RemoteOperation | undefined;
     return yield* Effect.gen(function* () {
-      const parsed = ResolvedTurnSchema.safeParse(input);
       if (
-        !parsed.success ||
-        parsed.data.protocol !== 'google-interactions' ||
-        parsed.data.mode !== 'background' ||
+        turn.protocol !== 'google-interactions' ||
+        turn.mode !== 'background' ||
         config.background !== 'supported' ||
-        !parsed.data.controls.store
+        !turn.controls.store
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -1083,7 +1067,6 @@ export function googleInteractionsModel(
             'Google background execution requires an enabled route and store:true.',
         });
       }
-      const turn = parsed.data;
       const inputSteps = yield* invocationInput(turn, origin);
       const raw = yield* ownedAbortSafeRequest(
         (signal) =>
@@ -1138,19 +1121,17 @@ export function googleInteractionsModel(
     );
   });
   const observe: NonNullable<Model['background']>['observe'] = (
-    admitted,
+    turn,
     input,
     policy,
   ) =>
     Stream.unwrap(
       Effect.gen(function* () {
         const operation = yield* boundOperation(input, origin);
-        const parsedTurn = ResolvedTurnSchema.safeParse(admitted);
         if (
-          !parsedTurn.success ||
-          parsedTurn.data.protocol !== 'google-interactions' ||
-          parsedTurn.data.mode !== 'background' ||
-          !sameModelOrigin(parsedTurn.data, operation.origin)
+          turn.protocol !== 'google-interactions' ||
+          turn.mode !== 'background' ||
+          !sameModelOrigin(turn, operation.origin)
         ) {
           return yield* new ModelError({
             kind: 'unsupported',
@@ -1158,7 +1139,6 @@ export function googleInteractionsModel(
             operation,
           });
         }
-        const turn = parsedTurn.data;
         const chain = yield* canChain(GOOGLE_PREFIX_DOMAIN, turn, operation);
         const parsedPolicy = ObservationPolicySchema.safeParse(policy);
         if (!parsedPolicy.success)
@@ -1295,18 +1275,12 @@ export function googleInteractionsModel(
   });
 
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
-    Effect.fn('llm.google.estimateInputTokens')(function* (input) {
-      const parsed = ResolvedTurnSchema.safeParse(input);
-      if (
-        !parsed.success ||
-        parsed.data.protocol !== 'google-interactions' ||
-        parsed.data.mode !== 'foreground'
-      )
+    Effect.fn('llm.google.estimateInputTokens')(function* (turn) {
+      if (turn.protocol !== 'google-interactions' || turn.mode !== 'foreground')
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'The prepared Google count invocation is unsupported.',
         });
-      const turn = parsed.data;
       yield* invocationInput(turn, origin);
       const message = turn.messages[0];
       if (
@@ -1359,7 +1333,6 @@ export function googleInteractionsModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(config.background === 'supported'
       ? { background: Object.freeze({ submit, observe, cancel }) }
       : {}),

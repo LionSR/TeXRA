@@ -8,7 +8,6 @@ import type { AgentRunServices } from '@agent/runtime/runRegistry';
 import { Runs } from '@agent/runtime/runRegistry';
 import { deriveWorkflowScriptCheckpointId } from '@agent/workflowScript/checkpoint';
 import { runPersistedWorkflowScript } from '@agent/workflowScript/checkpoint';
-import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
@@ -42,7 +41,8 @@ const script = `export const meta = {
   name: 'strategy-test',
   description: 'tests the workflow script strategy',
 }
-return await agent('saved call')`;
+const call = yield* attempt(agent('saved call'))
+return call._tag === 'Success' ? call.value : call.error.name`;
 const paperOutput: OutputFileSummary = {
   round: 0,
   relativePath: 'paper.tex',
@@ -190,7 +190,7 @@ describe('createWorkflowScriptStrategy', () => {
         expect(delivery).toContain('with scriptPath:');
         expect(delivery).toContain('<workflow-summary>');
         expect(delivery).toContain('"outcome":"completed"');
-        expect(delivery).toContain('"taskDone":1');
+        expect(delivery).toContain('"ok":1');
         expect(delivery).toContain('"costUsd":0.42');
         expect(delivery).toContain(
           '"files":[{"path":"paper.tex","added":12,"removed":8}]',
@@ -221,7 +221,7 @@ describe('createWorkflowScriptStrategy', () => {
   name: 'structured-envelope',
   description: 'reads the structured envelope',
 }
-return await agent('Solve.', {
+return yield* agent('Solve.', {
   agentName: 'prover',
   schema: {
     type: 'object',
@@ -272,37 +272,11 @@ return await agent('Solve.', {
       expect(ports.recordCost).toHaveBeenCalledOnce();
       expect(ports.recordCost).toHaveBeenCalledWith(0);
       const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
-      expect(delivery).toContain('Saved result');
-      expect(delivery).not.toContain('Using saved result');
+      expect(delivery).toContain('Reused: saved call');
       expect(delivery).toContain(
         '"files":[{"path":"paper.tex","added":12,"removed":8}]',
       );
     }),
-  );
-
-  it.effect(
-    'passes JSON arguments through and formats a zero-call result',
-    () =>
-      Effect.gen(function* () {
-        const ports = fakePorts();
-        const strategy = createWorkflowScriptStrategy(
-          strategyParams({
-            name: 'arguments',
-            script: `export const meta = {
-  name: 'arguments',
-  description: 'returns its arguments',
-}
-return args`,
-            args: { question: 'What is conserved?' },
-            createRunAgent: billingRunAgent,
-          }),
-        );
-
-        const turn = yield* launchStrategy(strategy, ports);
-        const delivery = yield* onFakeHost(strategy.formatDelivery(turn, 0));
-        expect(delivery).toContain('"question": "What is conserved?"');
-        expect(ports.recordCost).toHaveBeenCalledWith(0);
-      }),
   );
 
   it.effect('retains checkpoint arguments when a null retry omits them', () =>
@@ -371,7 +345,7 @@ return 'done'`,
   name: 'retained-settlement',
   description: 'tests retained journal settlement',
 }
-await agent('saved call')
+yield* agent('saved call')
 throw new Error('script failed after replay')`;
         const seedError = yield* Effect.flip(
           runPersistedWorkflowScript({
@@ -408,12 +382,11 @@ throw new Error('script failed after replay')`;
         );
         expect(errText).toContain('with scriptPath:');
         expect(errText).toContain('"outcome":"failed"');
-        // The failure line's tallies come from the engine's terminal snapshot —
-        // the run replayed one cached call and declared no phases — not from a
+        // The failure line's tallies come from the run's own cards — the run
+        // replayed one cached call and declared no phases — not from a
         // re-parse of the checkpoint's script.
         expect(errText).toContain('"phaseCount":0');
-        expect(errText).toContain('"taskDone":1');
-        expect(errText).toContain('"taskTotal":1');
+        expect(errText).toContain('"total":1,"ok":1');
       }),
   );
 
@@ -426,13 +399,15 @@ throw new Error('script failed after replay')`;
   name: '${name}',
   description: 'seeds stale recovery entries',
 }
-await agent('stale file')
-return await agent('malformed stale')`;
+yield* agent('stale file')
+return yield* agent('malformed stale')`;
         const staleResult: RunEnd = {
           ...finalResult,
           output: {
             category: 'workflow',
-            outputs: [{ ...paperOutput, relativePath: 'stale.tex' }],
+            outputs: [
+              { ...paperOutput, relativePath: 'stale.tex', originalPath: null },
+            ],
             compileFailures: [],
             diffs: [],
           },
@@ -453,7 +428,13 @@ return await agent('malformed stale')`;
           usage: RunUsageTotalsSchema.parse({ totalCost: 0.25 }),
           output: {
             category: 'workflow',
-            outputs: [{ ...paperOutput, relativePath: 'current.tex' }],
+            outputs: [
+              {
+                ...paperOutput,
+                relativePath: 'current.tex',
+                originalPath: null,
+              },
+            ],
             compileFailures: [],
             diffs: [],
           },
@@ -466,7 +447,7 @@ return await agent('malformed stale')`;
   name: '${name}',
   description: 'fails after current work',
 }
-await agent('current file')
+yield* agent('current file')
 throw new Error('current revision failed')`,
             createRunAgent: (hooks) => (invocation) =>
               Effect.sync(() => {
@@ -487,7 +468,7 @@ throw new Error('current revision failed')`,
   );
 
   it.effect(
-    'keeps the delivery summary at the last durable journal state when journaling fails',
+    'reports the call whose journal write failed, and none of its files',
     () =>
       Effect.gen(function* () {
         const session = testDefaultSession();
@@ -527,8 +508,8 @@ throw new Error('current revision failed')`,
 
         const errText = strategy.formatError(null, new Error('boom'));
         expect(errText).toContain('"outcome":"failed"');
-        expect(errText).toContain('"taskDone":0');
-        expect(errText).toContain('"taskTotal":0');
+        expect(errText).toContain('"total":1,"ok":0');
+        expect(errText).toContain('"failed":1');
         expect(errText).not.toContain('paper.tex');
       }),
   );
@@ -539,7 +520,7 @@ throw new Error('current revision failed')`,
   name: 'malformed-cost',
   description: 'tests malformed journal cost settlement',
 }
-return await agent('saved call')`;
+return yield* agent('saved call')`;
       const ports = fakePorts();
       const strategy = createWorkflowScriptStrategy(
         strategyParams({
@@ -686,7 +667,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBeNull();
+        expect(turn.result).toBe('Skipped');
         expect(fake.attempts()).toBe(1);
         // The registration is dropped when the run settles.
         workflowControls.control(grandchildRunId, 'skip');
@@ -702,9 +683,8 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
           succeedAtAttempt: 2,
           attemptCosts: [0.1, 0.5],
         });
-        const logger = new TraceEmitter();
         const completedTaskCosts: number[] = [];
-        logger.subscribe((event) => {
+        const logger = new TraceEmitter((event) => {
           if (
             event.type === 'workflow.call' &&
             event.call.status === 'completed'
@@ -781,7 +761,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         // The attempt-specific id the roster exposes reaches the engine index.
         workflowControls.control(attemptRunId, 'skip');
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBeNull();
+        expect(turn.result).toBe('Skipped');
         expect(fake.attempts()).toBe(2);
       }),
   );
@@ -808,7 +788,7 @@ describe('createWorkflowScriptStrategy interactive controls', () => {
         workflowControls.control(grandchildRunId, 'skip');
 
         const turn = yield* Fiber.join(launch);
-        expect(turn.result).toBeNull();
+        expect(turn.result).toBe('Skipped');
         expect(ports.recordCost.mock.calls).toEqual([[0.42], [0.42]]);
       }),
   );

@@ -133,6 +133,8 @@ describe('shared JsonStore', () => {
 
         const error = yield* Effect.flip(store.set('added', 2));
         expect(error).toBeInstanceOf(SyntaxError);
+        // #13188: a failed flush must not leave the value readable in memory.
+        expect(store.get('added')).toBeUndefined();
         expect(yield* Effect.promise(() => readFile(filePath, 'utf8'))).toBe(
           corrupt,
         );

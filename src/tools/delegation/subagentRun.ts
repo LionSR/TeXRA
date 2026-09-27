@@ -10,6 +10,8 @@
 // Third-party imports
 import { Cause, Effect, Exit } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
+import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
+import { registerRun } from '@agent/storage/runLifecycle';
 
 // Local imports
 import {
@@ -30,10 +32,7 @@ import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  registerChildRun,
-  startDetachedChildRunLoop,
-} from './detachedChildRun';
+import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import type { DelegationParent } from './proposalFlow';
@@ -89,7 +88,6 @@ interface ApprovalMeta {
 export const executeSubagent = Effect.fn('executeSubagent')(function* (
   parent: DelegationParent,
   configPayload: AgentConfigPayload,
-  agentName: string,
   parentRunId: RunId,
   options?: { approvalMeta?: ApprovalMeta },
 ) {
@@ -111,6 +109,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     ...(delegationAgentScope ? { delegationAgentScope } : {}),
   };
   const workingDirectory = childConfigPayload.workingDirectory ?? undefined;
+  const agentName = configPayload.agent;
 
   const inheritChildRunApprovals = (resolvedRunId: RunId): void => {
     // Live inherited bypass values: each approval follows the parent's
@@ -139,7 +138,6 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     const deliveryExit = yield* Effect.exit(
       executeSubagentForDeliveryInBand({
         configPayload: childConfigPayload,
-        agentName,
         parentRunId,
         session: parentSession,
         approvalPromptsUnavailable:
@@ -174,6 +172,19 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     suppressErrorNotification: true,
   });
   const { config } = definition;
+  // A detached child launches after this call settles, so a child that needs
+  // a plugin its parent's composition lacks is refused here, on the call
+  // that asked for it, before any row records it.
+  const refusal = childCompositionRefusal(
+    parent.run.composition.key.composition,
+    definition.setting.tools,
+    agentName,
+  );
+  if (refusal !== undefined) {
+    return errorResult(refusal, {
+      summary: `Subagent '${agentName}' not launched`,
+    });
+  }
   const isToolUse = config.agentCategory === AgentCategory.ToolUse;
   // One decision for the child's follow-up capability: the roster row it
   // registers under and the run it launches must agree.
@@ -182,17 +193,15 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      yield* registerChildRun(parentSession, {
-        runId,
-        config,
+      yield* registerRun(parentSession, runId, config, {
+        identity: { kind: 'agent', agent: config.agent },
         userFollowUpSupport,
-        parentRunId: parentRunId,
+        parentRunId,
       });
 
       const strategyParams = {
         definition,
         runId,
-        agentName,
         parentRunId,
         session: parentSession,
         startedAt,
@@ -251,7 +260,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
       `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
       ...(isToolUse
         ? [
-            `To send follow-up instructions after delivery: use delegate_agent with execution_id set to this ID.`,
+            `To send follow-up instructions: executions tool, action=send, path=/executions/${runId}.`,
           ]
         : []),
     ].join('\n'),

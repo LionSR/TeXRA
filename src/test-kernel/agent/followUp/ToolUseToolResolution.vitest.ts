@@ -29,7 +29,7 @@ describe('tool-use tool resolution', () => {
     names: readonly string[],
     options: {
       approvalPromptsUnavailable: boolean;
-      host?: 'cli' | 'desktop' | 'extension' | undefined;
+      host?: 'cli' | 'desktop' | 'vscode' | undefined;
       injectTools?: boolean;
     },
   ) {
@@ -39,7 +39,7 @@ describe('tool-use tool resolution', () => {
       injectTools: false,
       stores: hostStores(),
       workspaceRoot: undefined,
-      host: 'extension',
+      host: 'vscode',
       ...options,
     }).pipe(
       Effect.map(({ definitions }) => definitions.map((tool) => tool.name)),
@@ -136,6 +136,48 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
+    "a child only narrows its parent: it passes the parent's gates and cannot name a plugin the parent lacks",
+    () =>
+      Effect.gen(function* () {
+        const resolve = (
+          names: readonly string[],
+          approvalPromptsUnavailable: boolean,
+          inherited?: CompositionKey,
+        ) =>
+          resolveAgentTools({
+            tools: toolDefs(names),
+            logger,
+            injectTools: false,
+            stores: hostStores(),
+            workspaceRoot: undefined,
+            host: 'vscode',
+            approvalPromptsUnavailable,
+            inherited,
+          });
+        const parent = yield* resolve(['grep'], true);
+        // The child's own host could answer approvals; its parent's could not.
+        const child = yield* resolve(
+          ['bash', 'grep', 'write_file'],
+          false,
+          parent.pinned.key,
+        );
+        expect(child.definitions.map((tool) => tool.name)).toEqual(['grep']);
+        const refused = yield* Effect.flip(
+          resolve(['grep', 'mcp__candidate__*'], false, parent.pinned.key),
+        );
+        expect(refused.message).toContain('mcp__candidate__*');
+        expect(refused.message).toContain('MCP server "candidate"');
+      }).pipe(
+        Effect.scoped,
+        Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
+        Effect.provide(
+          toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
+        ),
+        Effect.provide(nodeSpawnerLayer),
+      ),
+  );
+
+  it.effect(
     'a run keeps its composition across a switch change, and its plugin layer closes with the last run holding it',
     () => {
       const events: string[] = [];
@@ -167,7 +209,7 @@ describe('tool-use tool resolution', () => {
             injectTools: false,
             stores,
             workspaceRoot: undefined,
-            host: 'extension',
+            host: 'vscode',
             inherited,
           }).pipe(
             Effect.provide(

@@ -24,17 +24,6 @@ const CHANNEL = 'claudeAgent';
 // ============================================================================
 
 /**
- * True when `CLAUDE_CODE_OAUTH_TOKEN` is set in `env`. Exported so callers
- * that only need the env-var check (e.g. display-only status strings) don't
- * have to read `process.env` directly in VS Code-free zones.
- */
-export function hasClaudeCodeOauthToken(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return !!env.CLAUDE_CODE_OAUTH_TOKEN;
-}
-
-/**
  * Detect an existing Claude Code OAuth credential — either the
  * `CLAUDE_CODE_OAUTH_TOKEN` env var (from `claude setup-token`) or a
  * `claude login` session (Pro/Max subscription).
@@ -45,15 +34,17 @@ export function hasClaudeCodeOauthToken(
  * `-w`/`-g`) so they never trigger a keychain access prompt; any failure is
  * swallowed and treated as "no credential."
  *
- * `env` and `currentPlatform` are injectable for testability; home-directory
- * resolution goes through `safeHomedir()` (mockable via `node:os`).
+ * `env` is the environment the subprocess will get, so the answer matches
+ * what Claude Code sees; `currentPlatform` is injectable for testability;
+ * home-directory resolution goes through `safeHomedir()` (mockable via
+ * `node:os`).
  */
 const hasClaudeOauthCredential = Effect.fn('hasClaudeOauthCredential')(
   function* (
-    env: NodeJS.ProcessEnv = process.env,
-    currentPlatform: NodeJS.Platform = process.platform,
+    env: NodeJS.ProcessEnv,
+    currentPlatform: NodeJS.Platform,
   ): Effect.fn.Return<boolean, never, ChildProcessSpawner> {
-    if (hasClaudeCodeOauthToken(env)) return true;
+    if (env.CLAUDE_CODE_OAUTH_TOKEN) return true;
 
     const configDir = resolveClaudeConfigDir(env.CLAUDE_CONFIG_DIR);
     // Raw node:fs/promises, not the `FileSystem` service: `access(F_OK)` is

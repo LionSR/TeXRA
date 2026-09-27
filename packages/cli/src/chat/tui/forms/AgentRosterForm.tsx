@@ -67,7 +67,7 @@ function selectionLabel(record: CliAgentRosterRecord): string {
   return selection.kind;
 }
 
-export function buildChatDefaultAgentItems(
+function buildChatDefaultAgentItems(
   agents: readonly AgentEntry[],
   effectiveKeys: readonly string[],
 ): SelectItem<string>[] {

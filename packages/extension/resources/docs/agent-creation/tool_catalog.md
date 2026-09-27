@@ -70,8 +70,12 @@ recommended groups at the bottom are a good starting point.
   either mode. The selected workspace files are fixed for the run and available
   through the immutable `files.inputFiles`, `files.contextFiles`, and
   `files.mediaFiles` arrays. The script begins with an exported `meta` object
-  containing `name` and `description`, and can use `agent`, `phase`, `log`,
-  `parallel` plus ordinary JavaScript control flow. Workflow-agent calls accept the same
+  containing `name` and `description`. The body is a generator: `agent`,
+  `all`, `forEach`, `attempt`, `retry`, and `timeout` build operations that
+  run when the script writes `yield*` before them (`await` is a syntax error),
+  and `phase`, `log`, and ordinary JavaScript control flow do the rest. A
+  failed call throws `AgentFailed` (a skipped one `Skipped`), `all` fails fast,
+  and `attempt` turns a failure into a value. Workflow-agent calls accept the same
   three file roles. Any call may declare an available model short name with
   `model`; omitted models follow ordinary delegation policy.
   `agent(prompt, { agentName, model, schema })` instead runs a named tool-use
@@ -89,9 +93,10 @@ recommended groups at the bottom are a good starting point.
   Script" switch in Settings → Tools (off by default for new installs), which
   disables the tool for every agent regardless of its configured tool list.
 - `delegate_agent` — delegate to another tool-use agent. Pass `agent`,
-  `model`, and `instruction` for a fresh run, or `execution_id` +
-  `instruction` to resume a WAITING subagent.
-- `executions` — view execution history and manage running executions.
+  `model`, and `instruction`.
+- `executions` — view execution history and manage running executions;
+  `action: "send"` on `/executions/<id>` messages another run, such as a
+  follow-up to a WAITING subagent.
 - `accept_run_files` — accept output files from a completed execution.
 
 ## External coding agents
@@ -126,10 +131,6 @@ recommended groups at the bottom are a good starting point.
 - `inline_comment` — leave resolvable inline comment threads in the editor
   via VS Code's native Comments UI (gutter bubbles + Comments panel). Not
   available on the CLI or desktop hosts.
-- `report_review_issue` — report one finding from an agent review of the
-  current change set; appears in the Agent Review panel and as an editor
-  diagnostic. Only accepted while an agent review session is collecting
-  issues.
 
 ## Utility
 

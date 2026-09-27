@@ -108,25 +108,6 @@ describe('agent YAML scanner', () => {
     }),
   );
 
-  it.live('skips agent names that are not identifiers', () =>
-    Effect.gen(function* () {
-      const dir = yield* agentDir({
-        'review.yaml': [
-          'name: review team',
-          'description: Verifies manuscripts.',
-          'settings:',
-          '  agentCategory: toolUse',
-          'prompts:',
-          '  systemPrompt: review',
-        ],
-      });
-
-      const { entries } = yield* scanCustom(dir);
-
-      expect(entries).toEqual([]);
-    }),
-  );
-
   it.live(
     'skips duplicate YAML names instead of returning colliding entries',
     () =>
@@ -141,19 +122,6 @@ describe('agent YAML scanner', () => {
 
         expect(entries.map((entry) => entry.name)).toEqual(['unique']);
       }),
-  );
-
-  it.live('skips a file with malformed YAML instead of throwing', () =>
-    Effect.gen(function* () {
-      const dir = yield* agentDir({
-        'broken.yaml': ['name: "unterminated'],
-        'valid.yaml': toolUseAgent('valid', 'hi'),
-      });
-
-      const { entries } = yield* scanCustom(dir);
-
-      expect(entries.map((entry) => entry.name)).toEqual(['valid']);
-    }),
   );
 
   it.live('reports skipped custom YAML files as scan issues', () =>

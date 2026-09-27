@@ -1,7 +1,8 @@
 // Type imports
 import { Cause, Effect, type Scope } from 'effect';
 import { z, ZodError, type ZodType } from 'zod';
-import type { ITool, ToolGuard, ToolHost } from '@agent/core/tools/ToolTypes';
+import type { ITool, ToolGuard } from '@agent/core/tools/ToolTypes';
+import type { SettingHost } from '@shared/state/stateSettings';
 import {
   DIAGNOSTIC_TYPE_VALIDATION_ERROR,
   formatZodIssuesForDiagnostics,
@@ -9,8 +10,7 @@ import {
   type ToolDefinition,
   type ToolResult,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import { findStorageRefusal } from '@shared/session/runLedger';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Third-party imports
@@ -29,7 +29,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
   readonly parallelSafe: boolean | undefined;
   readonly requiresApproval: boolean | undefined;
   readonly slow: boolean | undefined;
-  readonly unavailableHosts: readonly ToolHost[] | undefined;
+  readonly unavailableHosts: readonly SettingHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
 };
 
@@ -40,7 +40,7 @@ export type DefineToolOptions<T, R = never> = {
   /** Roster namespace a delegation tool's description is annotated from. */
   availabilityCategory?: ToolDefinition['availabilityCategory'];
   /** Product hosts this tool definition statically excludes itself from. */
-  unavailableHosts?: readonly ToolHost[];
+  unavailableHosts?: readonly SettingHost[];
   /**
    * What the run loop checks before this tool's body runs: the paths the call
    * writes and the command it must get approved. Declared here, applied once
@@ -102,12 +102,8 @@ export function defineTool<T, R = never>(
           Effect.flatMap(def.execute),
           Effect.catchCause((cause) => {
             if (Cause.hasInterrupts(cause)) return Effect.failCause(cause);
+            if (findStorageRefusal(cause)) return Effect.failCause(cause);
             const error = Cause.squash(cause);
-            if (
-              error instanceof DatabaseWriteFailed ||
-              error instanceof RunLedgerRefused
-            )
-              return Effect.failCause(cause);
             if (error instanceof ZodError) {
               return Effect.succeed<ToolResult>({
                 status: 'error',

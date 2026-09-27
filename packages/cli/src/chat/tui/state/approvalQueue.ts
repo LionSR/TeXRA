@@ -13,7 +13,7 @@ import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type {
   PermissionPayload,
@@ -28,10 +28,7 @@ import {
   type SurfaceDecision,
 } from '@shared/session/approvalDecision';
 import type { HostRequest } from '@shared/session/hostRequest';
-import {
-  requestAnswerability,
-  type SessionView,
-} from '@shared/session/sessionView';
+import { attentionOf, type SessionView } from '@shared/session/sessionView';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
 import { assertNever, groupBy } from '@utils/core';
 
@@ -47,10 +44,6 @@ interface TuiApprovalAdornments {
   readonly toolEdit: {
     readonly originalContent: string;
     readonly proposedContent: string;
-  };
-  readonly retry: {
-    readonly personalApiKeyAvailable?: boolean;
-    readonly missingPersonalApiKeyMessage?: string;
   };
 }
 
@@ -80,7 +73,7 @@ export type ApprovalPayload = {
       : { readonly tui?: never });
 }[PendingApprovalKind];
 
-/** The two arms modals read adornments from. */
+/** The two arms their modals read by name. */
 export type ToolEditApprovalPayload = Extract<
   ApprovalPayload,
   { kind: 'toolEdit' }
@@ -193,19 +186,15 @@ export const attentionRequests = computed((): readonly AttentionRequest[] => {
   // The fold lists every kind, including an `externalInquiry` a persisted
   // session carries from another host; this surface renders none of those,
   // so the narrowing is a filter rather than an assertion. It renders only
-  // what this window can answer (`requestAnswerability`): not a stopped run's
-  // leftover (its modal would trap the keys `/resume` needs), nor a request
-  // on a run another process holds (its answer is refused, then reopens).
-  const requests = view.requests
-    .filter((request): request is PendingApprovalFact => {
-      const run = view.runs.get(request.runId);
-      return (
+  // what this window can answer (`attentionOf`, the rule every host reads):
+  // not a stopped run's leftover (its modal would trap the keys `/resume`
+  // needs), nor a request on a run another process holds.
+  const requests = attentionOf(view)
+    .requests.filter(
+      (request): request is PendingApprovalFact =>
         included.has(request.runId) &&
-        request.payload.kind !== 'externalInquiry' &&
-        run !== undefined &&
-        requestAnswerability(run, request.payload) === 'answerable'
-      );
-    })
+        request.payload.kind !== 'externalInquiry',
+    )
     .map((pending): AttentionRequest => ({
       requestId: pending.requestId,
       runId: pending.runId,
@@ -232,14 +221,15 @@ function presentedPayload(
       return payload;
     case 'toolEdit':
     case 'retry':
-      // Presentable only once the host stages its adornments.
+      // Presentable only once the host stages it: a tool edit with its
+      // preview, a retry once the CLI policy has not settled it.
       return undefined;
   }
   assertNever(payload, 'Unhandled approval payload kind');
 }
 
 /** The order requests became presentable: a request that only became
- *  showable now (a retry after its key lookup) joins behind the modal the
+ *  showable now (a staged tool edit or retry) joins behind the modal the
  *  user is already answering rather than displacing it. The stamp is a
  *  monotonic counter, not the map's size: settled entries are pruned, and a
  *  size-based stamp would hand a later request the index of one on screen. */
@@ -445,14 +435,13 @@ function decideRequest(
   }
   for (const arm of arms) {
     if (!('host' in arm)) continue;
-    if (!hostCapability) {
-      logWarning(
-        'cli.tui',
-        `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+    if (hostCapability) hostCapability(arm.host);
+    else
+      runtime.runFork(
+        Effect.logWarning(
+          `No attached host performs ${arm.host.kind}: request ${request.requestId} stays pending.`,
+        ).pipe(withLogChannel('cli.tui')),
       );
-      continue;
-    }
-    hostCapability(arm.host);
   }
   // Both approve-all actions on a proposal turn the run's delegated-work
   // bypass on, so the work already queued behind it follows.
@@ -506,9 +495,10 @@ export function decidePendingRequest(
     .get()
     .find((pending) => pending.requestId === requestId);
   if (!request) {
-    logWarning(
-      'cli.tui',
-      `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+    runtime.runFork(
+      Effect.logWarning(
+        `Request ${requestId} is no longer pending: its ${decision.action} decision was not sent.`,
+      ).pipe(withLogChannel('cli.tui')),
     );
     return;
   }

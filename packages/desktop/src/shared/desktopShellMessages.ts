@@ -2,13 +2,12 @@ import { z } from 'zod';
 
 export const DESKTOP_SHELL_COMMANDS = {
   OPEN_WORKBENCH: 'desktop:openWorkbench',
+  OPEN_SETTINGS: 'desktop:openSettings',
   SAVE_FILE: 'desktop:saveFile',
-  SHOW_LAUNCHER: 'desktop:showLauncher',
-  /** Clear the launcher's selections back to their defaults. */
   TOGGLE_LAYOUT: 'desktop:toggleLayout',
 } as const;
 
-const DesktopWorkbenchKindSchema = z.enum(['settings', 'logs']);
+const DesktopWorkbenchKindSchema = z.enum(['logs']);
 export type DesktopWorkbenchKind = z.infer<typeof DesktopWorkbenchKindSchema>;
 
 export const DesktopOpenWorkbenchMessageSchema = z.object({
@@ -16,8 +15,9 @@ export const DesktopOpenWorkbenchMessageSchema = z.object({
   kind: DesktopWorkbenchKindSchema,
 });
 
-export const DesktopShowLauncherMessageSchema = z.object({
-  command: z.literal(DESKTOP_SHELL_COMMANDS.SHOW_LAUNCHER),
+/** Settings is a popup dialog over the shell, not a workbench tab. */
+export const DesktopOpenSettingsMessageSchema = z.object({
+  command: z.literal(DESKTOP_SHELL_COMMANDS.OPEN_SETTINGS),
 });
 
 export const DesktopSaveFileMessageSchema = z.object({

@@ -20,7 +20,7 @@ Treat these as intentional by default; removing an unused method _inside_ one ca
 
 - The checked-in architectural ratchets under `config/ratchets/` (listed in `CLAUDE.md` → "Layout"). Baselines freeze remaining edges or public surface — they shrink, never widen. Proposing to _shrink_ one is a good candidate; proposing to delete the ratchet mechanism is not.
 - The frozen `@agent/*` SDK surface (`packages/agent/`). There is no `@texra/core` workspace package (deleted by #7099); do not propose recreating it.
-- The two run programs (`src/agent/runtime/loop/toolUse.ts`, `src/agent/runtime/loop/reflection.ts`) over the run ledger. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the ledger.
+- The one run program (`src/agent/runtime/loop/toolUse.ts`, with workflow agents as its round mode in `src/agent/runtime/loop/rounds.ts`) over the run ledger. There is deliberately no flow engine, cursor, or services bag — do not propose reintroducing one, and do not propose a second writer of the ledger.
 - The four hosts (extension, desktop, CLI, trace-viewer) and the platform-ports composition root. Desktop has had no public release, which makes desktop state a _simplification_ source (no migration machinery allowed), not a target.
 - The five browser-reachable `@utils/*` modules (the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs`). The constraint is intentional; reducing the reachable set is welcome, adding Node built-ins to it is a regression.
 

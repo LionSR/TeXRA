@@ -19,8 +19,7 @@ interface ModuleMocks {
  * A suite that mocks in a loader helper and unmocks from a hand-written
  * `afterEach` list owns the same specifier list twice, and the two drift the
  * moment a mock is added, renamed, or removed. Recording the specifier at the
- * mock site keeps teardown exact, and pins it to `onTestFinished` so suites
- * share one teardown idiom with `disposeAfterTest`.
+ * mock site keeps teardown exact, and pins it to `onTestFinished`.
  */
 export function createModuleMocks(): ModuleMocks {
   let mockedInTest: Set<string> | undefined;

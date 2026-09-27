@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { TraceEmitter } from '@agent/trace';
 import {
   MESSAGE_TYPES,
   RUN_OUTCOME,
@@ -8,24 +7,21 @@ import {
   TOOL_CALL_STATUS,
   type RunId,
 } from '@shared/schemas';
-import { openWork } from '@shared/session/transcriptReads';
-import { attachTestTranscriptFold } from '@test/support/sessionTestUtils';
+import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import type { TranscriptRow } from '@ui/transcript';
 
-/** A fold attached to a fresh trace, plus its rows, groups and open work. */
+/** A fold built into a fresh trace, plus its rows and groups. */
 function attachRecorder(runId: RunId = 'stream:test' as RunId) {
-  const trace = new TraceEmitter();
-  const recorder = attachTestTranscriptFold(trace, runId);
+  const recorder = createTestRunTrace(runId);
   const rows = recorder.rows;
   return {
-    trace,
+    trace: recorder.trace,
     settlePhase: recorder.settlePhase,
     rows,
     row: (id: string | undefined): TranscriptRow | undefined =>
       rows().find((row) => row.id === id),
     group: (id: string | undefined) =>
       recorder.transcript().taskGroups.find((group) => group.id === id),
-    open: () => openWork(recorder.transcript()),
   };
 }
 
@@ -34,24 +30,14 @@ function assistantRows(rows: readonly TranscriptRow[]) {
   return rows.flatMap((row) => (row.kind === 'assistant' ? [row] : []));
 }
 
-describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', () => {
-  it('opens a started stage as a RunPhase.RUNNING group', () => {
-    const { trace, group, open } = attachRecorder();
-
-    const stage = trace.openStage('r0', { kind: 'round' });
-
-    expect(group(stage.id)?.status).toBe(RUN_PHASE.RUNNING);
-    expect(open()).toEqual([{ kind: 'stage', id: stage.id }]);
-  });
-
+describe('createTestRunTrace RunPhase-native group rows (issue #7993)', () => {
   it('defaults a stage end to the literal RunOutcome.COMPLETED', () => {
-    const { trace, group, open } = attachRecorder();
+    const { trace, group } = attachRecorder();
 
     const stage = trace.openStage('r0', { kind: 'round' });
     stage.end();
 
     expect(group(stage.id)?.status).toBe(RUN_OUTCOME.COMPLETED);
-    expect(open()).toEqual([]);
   });
 
   it('records a failed stage end as RunOutcome.FAILED', () => {
@@ -64,7 +50,7 @@ describe('attachTestTranscriptFold RunPhase-native group rows (issue #7993)', ()
   });
 });
 
-describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
+describe('createTestRunTrace stage kind (issue #7267)', () => {
   it("preserves a round stage's kind onto its closed group", () => {
     const { trace, group } = attachRecorder();
 
@@ -78,7 +64,7 @@ describe('attachTestTranscriptFold stage kind (issue #7267)', () => {
   });
 });
 
-describe('attachTestTranscriptFold undecodable compaction payload', () => {
+describe('createTestRunTrace undecodable compaction payload', () => {
   it('writes an error row naming the diagnostic instead of dropping it', () => {
     const { trace, rows } = attachRecorder();
 
@@ -101,7 +87,7 @@ describe('attachTestTranscriptFold undecodable compaction payload', () => {
   });
 });
 
-describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
+describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('upserts the round MODEL_RESPONSE stream entry to the authoritative text', () => {
     const { trace, rows } = attachRecorder();
 
@@ -112,7 +98,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     // ...then the flow boundary emits the authoritative, replacement-clean
     // text once `assembly.lastResponse` is set.
     const completedText = 'Done \\checkmark\n'.repeat(4000);
-    trace.responseFinalized(completedText);
+    trace.emit({ type: 'response.finalized', text: completedText });
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -123,7 +109,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
     const { trace, rows } = attachRecorder();
 
-    trace.responseFinalized('The answer is 2.');
+    trace.emit({ type: 'response.finalized', text: 'The answer is 2.' });
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -143,7 +129,7 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     // call) — its `response.finalized` must append a new entry, not
     // overwrite round 0's already-closed stream entry.
     const round1 = trace.openStage('r1', { kind: 'round', index: 1 });
-    trace.responseFinalized('Final answer.');
+    trace.emit({ type: 'response.finalized', text: 'Final answer.' });
     round1.end();
 
     const responses = assistantRows(rows());
@@ -163,14 +149,18 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
     toolRequest.append('I will inspect the file.');
     toolRequest.finalize();
 
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:read',
       toolName: 'read',
       input: { path: 'paper.tex' },
     });
-    trace.toolEnd({ logId: 'tool:read', status: 'completed' });
+    trace.emit({ type: 'tool.end', logId: 'tool:read', status: 'completed' });
 
-    trace.responseFinalized('The file contains the theorem statement.');
+    trace.emit({
+      type: 'response.finalized',
+      text: 'The file contains the theorem statement.',
+    });
     round.end();
 
     const responses = assistantRows(rows());
@@ -182,15 +172,16 @@ describe('attachTestTranscriptFold response.finalized (issue #7086)', () => {
   });
 });
 
-describe('attachTestTranscriptFold workflow task state', () => {
+describe('createTestRunTrace workflow task state', () => {
   it('assigns source settlement order before terminal status projection', () => {
     const runId = 'stream:terminal-settlement' as RunId;
-    const { trace, settlePhase, row, rows, open } = attachRecorder(runId);
+    const { trace, settlePhase, row, rows } = attachRecorder(runId);
 
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     response.append('Partial answer');
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:pending',
       toolName: 'read',
       input: { path: 'paper.tex' },
@@ -219,15 +210,6 @@ describe('attachTestTranscriptFold workflow task state', () => {
       },
     });
     expect(row('task:planned')).not.toHaveProperty('settlementSeqNo');
-    expect(open()).toEqual([
-      { kind: 'stage', id: phase.id },
-      {
-        kind: 'call',
-        id: 'task:planned',
-        stageId: undefined,
-        call: { id: 'planned', label: 'Audit later', status: 'queued' },
-      },
-    ]);
 
     // The terminal status is the authoritative boundary for recorder-owned
     // runs/tools. Late provider cleanup cannot mutate a row already made
@@ -237,7 +219,8 @@ describe('attachTestTranscriptFold workflow task state', () => {
       id: response.id,
       finalText: 'Late replacement',
     });
-    trace.toolEnd({
+    trace.emit({
+      type: 'tool.end',
       logId: 'tool:pending',
       status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
@@ -267,7 +250,7 @@ describe('attachTestTranscriptFold workflow task state', () => {
     });
 
     settlePhase(RUN_PHASE.RUNNING);
-    trace.responseFinalized('Fresh turn response');
+    trace.emit({ type: 'response.finalized', text: 'Fresh turn response' });
     const responses = assistantRows(rows());
     expect(responses).toMatchObject([
       { settlementSeqNo: 5, text: { full: 'Fresh turn response' } },
@@ -277,11 +260,12 @@ describe('attachTestTranscriptFold workflow task state', () => {
 
   it('closes source rows at waiting and accepts fresh rows after resume', () => {
     const runId = 'stream:waiting-settlement' as RunId;
-    const { trace, settlePhase, rows, open } = attachRecorder(runId);
+    const { trace, settlePhase, rows } = attachRecorder(runId);
 
     const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:waiting',
       toolName: 'read',
       input: { path: 'waiting.tex' },
@@ -296,18 +280,19 @@ describe('attachTestTranscriptFold workflow task state', () => {
         toolUse: { status: 'failed' },
       },
     ]);
-    expect(open()).toEqual([]);
 
     settlePhase(RUN_PHASE.RUNNING);
     const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     resumedResponse.append('Resumed response');
     resumedResponse.finalize();
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:resumed',
       toolName: 'read',
       input: { path: 'resumed.tex' },
     });
-    trace.toolEnd({
+    trace.emit({
+      type: 'tool.end',
       logId: 'tool:resumed',
       status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'done' },

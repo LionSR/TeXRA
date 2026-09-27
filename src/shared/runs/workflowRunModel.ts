@@ -11,17 +11,19 @@
 
 // Local imports - shared schemas and copy
 import {
-  WORKFLOW_CALL_STATUS,
+  WORKFLOW_NOT_RUN_LABEL,
   WORKFLOW_TASK_STATUS_LABEL,
   interruptedWorkflowCall,
   isTerminalWorkflowCallProgress,
-  isTerminalWorkflowCallStatus,
+  tallyWorkflowCalls,
+  workflowCallStatusLabel,
   type RunLifecycleStatus,
   type RunId,
   type TaskGroup,
   type WorkflowCallIdentity,
   type WorkflowCallProgress,
   type WorkflowDeclaredPlan,
+  type WorkflowTally,
 } from '@shared/schemas';
 import { compareBySeqNo } from '@shared/runs/runOrdering';
 import { isInFlightPhase } from '@shared/runs/runStatus';
@@ -33,7 +35,6 @@ import {
   workflowCallDetail,
   workflowPhaseHeadingOfGroup,
   type WorkflowPhaseHeading,
-  type WorkflowTally,
 } from '@ui/copy/workflowCall';
 import { filterNotNullish } from '@utils/core';
 import {
@@ -73,6 +74,8 @@ export interface WorkflowRunModel {
   /** Current-attempt cards issued outside a phase, when any. */
   readonly unphasedPhase: WorkflowPhaseModel | undefined;
   readonly tally: WorkflowTally;
+  /** The run has ended: an unissued plan entry is not run, not planned. */
+  readonly settled: boolean;
   /** The child stream a card may open, by row id: its `childRunId` when
    *  that card is the stream's only claimant. A stream two cards claim is
    *  nobody's — opening it would jump somewhere the user did not point at. */
@@ -104,11 +107,7 @@ interface WorkflowRunModelInput {
   readonly workflowAttemptId?: string;
   /** The newest attempt's declared plan, if the run declared one. */
   readonly plan: WorkflowDeclaredPlan | undefined;
-  /** The stream's resolved lifecycle phase. The run has ended once it is a
-   *  known phase neither running nor waiting (an absent one has not: plan-only
-   *  phases must not vanish before the first status), and plan-only phases it
-   *  never reached are then nothing to show: the settle sweep has housed every
-   *  declared card under a stage, so an empty one is its own suppression. */
+  /** The stream's resolved lifecycle phase; settled once known and done. */
   readonly runPhase: RunLifecycleStatus | undefined;
   /** Whether the run is durably final: a terminal outcome with no producer
    *  left anywhere (the fold's `runDurablyFinal`), the same fact
@@ -174,27 +173,9 @@ function interruptedTaskRow(row: WorkflowTaskRow): WorkflowTaskRow {
     ...row,
     call,
     line: formatWorkflowCallLine(call),
-    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    statusLabel: workflowCallStatusLabel(call),
     metadataParts: formatWorkflowCallMetadataParts(call),
     ...(detail ? { detail } : {}),
-  };
-}
-
-/** Counts over the statuses the cells PAINT, so a tally can never say
- *  "1 running" beside a strip that shows the call as cancelled. */
-function tallyOf(
-  statuses: readonly WorkflowCallProgress['status'][],
-  declared: number,
-): WorkflowTally {
-  return {
-    done: statuses.filter(isTerminalWorkflowCallStatus).length,
-    total: statuses.length,
-    running: statuses.filter(
-      (status) => status === WORKFLOW_CALL_STATUS.RUNNING,
-    ).length,
-    failed: statuses.filter((status) => status === WORKFLOW_CALL_STATUS.FAILED)
-      .length,
-    declared,
   };
 }
 
@@ -337,14 +318,11 @@ export function workflowRunModel(
       latestAttemptId === undefined ||
       phase.attemptId === latestAttemptId,
   );
+  const settled =
+    input.runPhase !== undefined && !isInFlightPhase(input.runPhase);
   const ordered = [
     ...(input.plan
-      ? unionWithDeclaredPlan(
-          opened,
-          input.plan,
-          tasks,
-          input.runPhase !== undefined && !isInFlightPhase(input.runPhase),
-        )
+      ? unionWithDeclaredPlan(opened, input.plan, tasks, settled)
       : opened),
   ];
   if (unphased) ordered.push(unphased);
@@ -368,14 +346,15 @@ export function workflowRunModel(
     (sum, phase) => sum + phase.declaredTasks.length,
     0,
   );
-  const phaseModels = ordered.map((phase) => {
-    const cells = phase.tasks.map((row) => row.call.status);
-    return {
-      ...phase,
-      tally: tallyOf(cells, phase.declaredTasks.length),
-      cells,
-    };
-  });
+  const phaseModels = ordered.map((phase) => ({
+    ...phase,
+    tally: tallyWorkflowCalls(
+      phase.tasks.map((row) => row.call),
+      phase.declaredTasks.length,
+      settled,
+    ),
+    cells: phase.tasks.map((row) => row.call.status),
+  }));
   return {
     phases: phaseModels,
     tasks,
@@ -383,10 +362,12 @@ export function workflowRunModel(
       unphased === undefined
         ? undefined
         : phaseModels[ordered.indexOf(unphased)],
-    tally: tallyOf(
-      tasks.map((row) => row.call.status),
+    tally: tallyWorkflowCalls(
+      tasks.map((row) => row.call),
       declaredTotal,
+      settled,
     ),
+    settled,
     childRunOf,
     liveOf,
   };
@@ -427,9 +408,9 @@ export function formatWorkflowCallLiveParts(
 // A phase's rows: attention first, volume collapsed
 // ---------------------------------------------------------------------------
 
-/** The counted groups a phase's quiet rows collapse into: the volume that
- *  has run, and the two kinds that have not started. */
-export type WorkflowRowGroup = 'finished' | 'queued' | 'declared';
+/** The counted groups a phase's quiet rows collapse into; unissued plan
+ *  entries are planned while the run lives and not run once it ends. */
+export type WorkflowRowGroup = 'finished' | 'queued' | 'planned' | 'not run';
 
 /** `12 queued`, `5 finished · 1 saved result`: the one spelling of a counted
  *  group's row, naming a finished group's replayed results. */
@@ -440,12 +421,17 @@ export function formatWorkflowRowGroup(row: {
 }): string {
   const { count, group, cached = 0 } = row;
   const noun =
-    group === 'declared'
+    group === 'planned'
       ? WORKFLOW_TASK_STATUS_LABEL.declared.toLowerCase()
       : group;
   return cached > 0
     ? `${count} ${noun} · ${cached} ${pluralize(cached, 'saved result')}`
     : `${count} ${noun}`;
+}
+
+/** The status word of a plan entry with no card yet. */
+export function workflowPlanEntryLabel(settled: boolean): string {
+  return settled ? WORKFLOW_NOT_RUN_LABEL : WORKFLOW_TASK_STATUS_LABEL.declared;
 }
 
 export type WorkflowPhaseRow =
@@ -464,7 +450,7 @@ export type WorkflowPhaseRow =
       readonly key: string;
       readonly group: WorkflowRowGroup;
       readonly count: number;
-      /** Members that are replayed results (`cached`); finished only. */
+      /** Members that are reused results (`cached`); finished only. */
       readonly cached: number;
       readonly expanded: boolean;
     };
@@ -488,6 +474,9 @@ function taskRowOf(row: WorkflowTaskRow): WorkflowPhaseRow {
   return { kind: 'task', key: `task:${row.id}`, row };
 }
 
+const isCachedRow = (row: WorkflowPhaseRow): boolean =>
+  row.kind === 'task' && row.row.call.status === 'cached';
+
 function declaredRowOf(task: WorkflowCallIdentity): WorkflowPhaseRow {
   return { kind: 'declared', key: `declared:${task.id}`, task };
 }
@@ -506,12 +495,14 @@ function matchesFilter(
  * `waiting`, by row id, read off the child runs by the host that holds
  * them), then failed, then running, transcript order within, and the volume
  * collapses into counted groups that open in place: `finished` for every
- * settled card, `queued` and `declared` for the ones that have not started.
+ * settled card, `queued` for those awaiting a slot, `planned` / `not run`
+ * for unissued plan entries; a phase of three rows or fewer folds nothing.
  */
 export function workflowPhaseRows(
   phase: WorkflowPhaseModel,
   view: {
     readonly expanded: ReadonlySet<WorkflowRowGroup>;
+    readonly settled: boolean;
     readonly filter?: string;
     readonly waiting?: ReadonlySet<string>;
   },
@@ -534,22 +525,35 @@ export function workflowPhaseRows(
           matchesFilter(
             filter,
             task.label,
-            WORKFLOW_TASK_STATUS_LABEL.declared,
+            workflowPlanEntryLabel(view.settled),
           ),
         )
         .map(declaredRowOf),
     ];
   }
 
+  const unissued = view.settled ? 'not run' : 'planned';
   const attention: WorkflowTaskRow[] = [];
-  const queued: WorkflowTaskRow[] = [];
-  const done: WorkflowTaskRow[] = [];
+  const quiet: Record<WorkflowRowGroup, WorkflowPhaseRow[]> = {
+    finished: [],
+    queued: [],
+    planned: [],
+    'not run': [],
+  };
   for (const row of phase.tasks) {
-    const status = row.call.status;
-    if (isAttentionStatus(status)) attention.push(row);
-    else if (status === 'queued') queued.push(row);
-    else done.push(row);
+    const { call } = row;
+    let group: WorkflowRowGroup = 'finished';
+    if (isAttentionStatus(call.status)) {
+      attention.push(row);
+      continue;
+    }
+    if (call.status === 'queued') group = 'queued';
+    else if (call.status === 'declared') group = unissued;
+    else if (call.status === 'skipped' && call.reason === 'not-reached')
+      group = 'not run';
+    quiet[group].push(taskRowOf(row));
   }
+  quiet[unissued].push(...phase.declaredTasks.map(declaredRowOf));
   const rank = (row: WorkflowTaskRow): number =>
     view.waiting?.has(row.id)
       ? ATTENTION_RANK.waiting
@@ -558,31 +562,27 @@ export function workflowPhaseRows(
   const attentionRows = attention
     .toSorted((a, b) => rank(a) - rank(b))
     .map(taskRowOf);
-  const groupRows = (
-    group: WorkflowRowGroup,
-    members: readonly WorkflowPhaseRow[],
-    cached = 0,
-  ): readonly WorkflowPhaseRow[] => {
-    if (members.length === 0) return [];
-    const expanded = view.expanded.has(group);
-    const header: WorkflowPhaseRow = {
-      kind: 'group',
-      key: `group:${group}`,
-      group,
-      count: members.length,
-      cached,
-      expanded,
-    };
-    return expanded ? [header, ...members] : [header];
-  };
+  const groups = Object.entries(quiet) as [
+    WorkflowRowGroup,
+    typeof quiet.queued,
+  ][];
+  if (phase.tasks.length + phase.declaredTasks.length <= 3) {
+    return [...attentionRows, ...groups.flatMap(([, members]) => members)];
+  }
   return [
     ...attentionRows,
-    ...groupRows(
-      'finished',
-      done.map(taskRowOf),
-      done.filter((row) => row.call.status === 'cached').length,
-    ),
-    ...groupRows('queued', queued.map(taskRowOf)),
-    ...groupRows('declared', phase.declaredTasks.map(declaredRowOf)),
+    ...groups.flatMap(([group, members]): WorkflowPhaseRow[] => {
+      if (members.length === 0) return [];
+      const expanded = view.expanded.has(group);
+      const header: WorkflowPhaseRow = {
+        kind: 'group',
+        key: `group:${group}`,
+        group,
+        count: members.length,
+        cached: members.filter(isCachedRow).length,
+        expanded,
+      };
+      return expanded ? [header, ...members] : [header];
+    }),
   ];
 }

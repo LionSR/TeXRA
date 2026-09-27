@@ -21,7 +21,6 @@ import {
   PdfOpenFailed,
   type SessionHandle,
 } from '@agent/runtime';
-import { hasAnyUsableSetupCredential } from '@commands/setup/setupAssistantCommand';
 import {
   BundledViewContentProvider,
   getCombinedLocalResourceRoots,
@@ -57,11 +56,8 @@ import { createAgentPresentationHost } from '@frontend/events/agentEventListener
 import { onTexraAuthSessionsChanged } from '@frontend/events/onTexraAuthSessionsChanged';
 import { pushManualCriticism } from '@frontend/latex/inlineCriticism';
 import { getLinterMessages } from '@frontend/latex/linter';
-import { AgentReviewService } from '@frontend/review/AgentReviewService';
 import { withLogChannel } from '@logger/effectLog';
-import { createLog } from '@logger/logUtils';
 import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import { Lifecycle, SHUTDOWN_PHASE } from '@platform/interfaces';
 import type {
   StateStore,
   StateReadFailed,
@@ -77,7 +73,10 @@ import {
   type SessionType,
   type RunId,
 } from '@shared/schemas';
-import { projectDisplayOf } from '@shared/session/hostSnapshot';
+import {
+  projectDisplayOf,
+  type HostSnapshot,
+} from '@shared/session/hostSnapshot';
 import type {
   DownMessage,
   SurfaceActionMessage,
@@ -92,7 +91,8 @@ import { createExtensionHostRequests } from './extensionHostRequests';
 import { RequestAttention } from './requestAttention';
 
 const CHANNEL = 'ProgressViewProvider';
-const log = createLog(CHANNEL);
+const CATALOG_RESCAN_FAILED =
+  'Agent catalog rescan after an agent-directory change failed';
 
 export type ProgressRunRevealResult = 'revealed' | 'missing';
 
@@ -119,7 +119,6 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'texra.mainView';
   private static _instance: ProgressViewProvider | undefined;
 
-  public readonly session: SessionHandle;
   public readonly bridge: SessionBridge;
   public readonly snapshot: HostSnapshotSource;
   public readonly toolEditApprovals: ToolEditApprovalController;
@@ -135,6 +134,19 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
   private sidebarPort: Port | undefined;
   /** The popped-out tab and its port, attached and released together. */
   private editor: { panel: vscode.WebviewPanel; port: Port } | undefined;
+  /** The last API-key banner the snapshot published. */
+  private apiKeyBanner: HostSnapshot['banners']['apiKey'] = { visible: false };
+
+  /**
+   * A credential changed: re-read the API-key banner, which repaints the
+   * setup pill, then the funnel that reads it.
+   */
+  public readonly refreshApiKeyStatus = Effect.suspend(() =>
+    this.snapshot.refreshHostBanners.pipe(
+      Effect.andThen(this.refreshOnboardingFunnel()),
+    ),
+  );
+
   private readonly attention = new RequestAttention({
     sidebar: () => this.sidebarView,
     panel: () => this.editor?.panel,
@@ -153,32 +165,41 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
    */
   private readonly onboardingFunnel: OnboardingFunnelRefresher;
   private readonly debouncedRefreshCatalogs = createFlushableDebounce(
-    () => void this.runtime.runPromise(this.refreshCatalogs()),
+    () =>
+      this.runtime.runFork(
+        this.refreshCatalogs().pipe(
+          Effect.ignore({ log: 'Warn', message: CATALOG_RESCAN_FAILED }),
+          withLogChannel(CHANNEL),
+        ),
+      ),
     DEBOUNCE_OPTIONS_MS,
   );
+  private readonly draftRequests = new HostDraftRequests();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
-    private readonly globalState: StateStore,
+    globalState: StateStore,
     private readonly secrets: PlatformSecrets,
     /** Process runtime shared with every extension surface. */
     private readonly runtime: ProcessRuntime,
     /** Session created by the extension entry. */
-    session: SessionHandle,
-    public readonly refreshApiKeyStatus: Effect.Effect<
-      void,
-      Error,
-      ProcessServices
-    >,
+    public readonly session: SessionHandle,
+    /** The setup pill: painted from the snapshot's API-key banner on every
+     *  publish, so the pill and the welcome card read one credential answer. */
+    private readonly paintSetupPill: (
+      banner: HostSnapshot['banners']['apiKey'],
+    ) => void,
   ) {
-    this.session = session;
     this.contentProvider = new BundledViewContentProvider(
       context,
       'ProgressView',
       'progressView',
     );
     this.onboardingFunnel = new OnboardingFunnelRefresher({
-      hasCredential: () => hasAnyUsableSetupCredential(session.roots, secrets),
+      // The snapshot's API-key banner is the one credential answer: every
+      // credential change re-reads it (`refreshApiKeyStatus`) before this
+      // refresher runs.
+      hasCredential: () => Effect.sync(() => !this.apiKeyBanner.visible),
       flags: globalState,
       apply: (transition) =>
         Effect.gen({ self: this }, function* () {
@@ -230,19 +251,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Already an Effect program: the typed port lets the banner read it
       // directly instead of settling it on the runtime first.
       apiKeyBanner: () =>
-        hasUsableSetupCredential(this.session.roots, this.secrets)
-          .pipe(withLogChannel('Setup Credentials'))
-          .pipe(
-            Effect.map((usable) => ({ visible: !usable })),
-            Effect.mapError(
-              (cause) =>
-                new HostSnapshotReadFailed({
-                  member: 'apiKeyBanner',
-                  message: 'The provider credential status could not be read.',
-                  cause,
-                }),
-            ),
+        hasUsableSetupCredential(this.session.roots, this.secrets).pipe(
+          withLogChannel('Setup Credentials'),
+          Effect.map((usable) => ({ visible: !usable })),
+          Effect.mapError(
+            (cause) =>
+              new HostSnapshotReadFailed({
+                member: 'apiKeyBanner',
+                message: 'The provider credential status could not be read.',
+                cause,
+              }),
           ),
+        ),
       // Already an Effect program, and one that answers a failed probe as a
       // missing tool rather than failing, so the banner reads it directly.
       dependencyBanner: () =>
@@ -252,10 +272,22 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
             missingTools: [...missingTools],
           })),
         ),
-      onError: (error) => {
-        log.error('Host snapshot refresh failed', { data: error });
-      },
-      publish: (snapshot) => this.bridge.setHost(snapshot),
+      onError: (error) =>
+        this.runtime.runFork(
+          Effect.logError('Host snapshot refresh failed').pipe(
+            Effect.annotateLogs({ data: error }),
+            withLogChannel(CHANNEL),
+          ),
+        ),
+      publish: (snapshot) =>
+        this.bridge.setHost(snapshot).pipe(
+          Effect.andThen(
+            Effect.sync(() => {
+              this.apiKeyBanner = snapshot.banners.apiKey;
+              this.paintSetupPill(snapshot.banners.apiKey);
+            }),
+          ),
+        ),
     });
     const storageRoot = context.storageUri ?? context.globalStorageUri;
     // The tool-edit preview: staged copies of the original and proposed
@@ -291,9 +323,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 event.type === 'run.end' &&
                 event.output.category === 'workflow' &&
                 event.outcome !== 'failed'
-              ) {
+              )
                 this.chime();
-              }
             }),
           ),
         ),
@@ -301,9 +332,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     );
     const attention = this.runtime.runFork(this.attention.follow(session));
     this.disposables.push({
-      dispose: () => {
-        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention]));
-      },
+      dispose: () =>
+        this.runtime.runFork(Fiber.interruptAll([sessionEvents, attention])),
     });
 
     const hostRequests = createExtensionHostRequests({
@@ -313,7 +343,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       globalState,
       secrets,
       snapshot: this.snapshot,
-      draftRequests: new HostDraftRequests(),
+      draftRequests: this.draftRequests,
       toolEditApprovals: this.toolEditApprovals,
       surfaceAction: (action) => this.surfaceAction(action),
       popOutToEditor: () => this.popOutToEditor(),
@@ -342,16 +372,15 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
         }),
         openPdf: ({ location, preserveFocus }) =>
           Effect.tryPromise({
-            try: async () => {
-              await vscode.commands.executeCommand(
+            try: () =>
+              vscode.commands.executeCommand<void>(
                 'vscode.open',
                 vscode.Uri.file(location.absolutePath),
                 {
                   viewColumn: vscode.ViewColumn.Beside,
                   preserveFocus,
                 } satisfies vscode.TextDocumentShowOptions,
-              );
-            },
+              ),
             catch: (cause) =>
               new PdfOpenFailed({
                 path: location.absolutePath,
@@ -359,13 +388,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                 cause,
               }),
           }),
-        // Findings from the changeReviewer tool-use session flow in through
-        // the report_review_issue tool and land in the panel + diagnostics.
-        reportReviewIssue: (report) =>
-          AgentReviewService.addIssueReport(report),
         // Staging is the host's half of a `request.opened`; the fold lists the
         // request either way, so a staging failure is reported, never swallowed.
-        presentToolEdit: (request) => {
+        presentToolEdit: (request) =>
           this.runtime.runFork(
             this.toolEditApprovals
               .present(request)
@@ -377,8 +402,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
                   ),
                 ),
               ),
-          );
-        },
+          ),
         // An open that never committed leaves the staged preview with no
         // decision to release it; this is that release, composed into the
         // session's own program rather than run here: closing the diff view
@@ -418,9 +442,9 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public initialize() {
     return Effect.gen({ self: this }, function* () {
-      // `ON` phase, behind the run settlement activation registered earlier.
-      (yield* Lifecycle).onShutdown(
-        SHUTDOWN_PHASE.ON,
+      // A finalizer of the activation scope: it runs after every session has
+      // closed, which activation registers after this.
+      yield* Effect.addFinalizer(() =>
         withProcessServices(this.runtime, this.dispose()),
       );
       yield* this.snapshot.refresh;
@@ -461,7 +485,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     fileWatcher.onDidDelete(refreshFiles);
     this.disposables.push(
       fileWatcher,
-      agentDirectories.watchAgentDirectories(() =>
+      agentDirectories.watchAgentDirectories(this.runtime, () =>
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );
@@ -469,7 +493,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       if (isAgentCatalogAuthRefreshDeferred()) {
         runAfterAgentCatalogAuthRefresh(this.runtime, [
           this.snapshot.refreshCatalogs,
-          this.refreshOnboardingFunnel(),
+          this.refreshApiKeyStatus,
         ]);
         return;
       }
@@ -485,11 +509,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       yield* allSettledVoid<
         StateReadFailed | StateWriteFailed,
         ProcessServices
-      >([
-        this.snapshot.refreshCatalogs,
-        this.snapshot.refreshHostBanners,
-        this.refreshOnboardingFunnel(),
-      ]);
+      >([this.snapshot.refreshCatalogs, this.refreshApiKeyStatus]);
     });
   }
 
@@ -522,7 +542,10 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     agentName: string,
     sessionType: SessionType,
   ): Effect.Effect<void> {
-    return this.snapshot.showAgentConfigBanner(agentName, sessionType);
+    return withProcessServices(
+      this.runtime,
+      this.snapshot.showAgentConfigBanner(agentName, sessionType),
+    );
   }
 
   /** Recompute the user-scoped funnel; the shared refresher owns the loop. */
@@ -566,15 +589,18 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     view: vscode.WebviewView | vscode.WebviewPanel,
   ): Effect.Effect<Port, SurfacePlacementFailed, FileSystem.FileSystem> {
     return Effect.gen({ self: this }, function* () {
+      const warn = (text: string) =>
+        this.runtime.runFork(
+          Effect.logWarning(text).pipe(withLogChannel(CHANNEL)),
+        );
       const send = (message: DownMessage): void => {
         void Promise.resolve(view.webview.postMessage(message)).then(
           (delivered) => {
-            if (!delivered) {
-              log.warn(`A ${message.kind} message was not delivered to ${id}`);
-            }
+            if (!delivered)
+              warn(`A ${message.kind} message was not delivered to ${id}`);
           },
           (error: unknown) => {
-            log.warn(
+            warn(
               `Posting a ${message.kind} message to ${id} failed: ${toErrorMessage(error)}`,
             );
           },
@@ -687,9 +713,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
 
   public showInSidebar(): Effect.Effect<void, SurfacePlacementFailed> {
     return Effect.tryPromise({
-      try: async () => {
-        await vscode.commands.executeCommand('texra.mainView.focus');
-      },
+      try: () => vscode.commands.executeCommand<void>('texra.mainView.focus'),
       catch: (cause) =>
         new SurfacePlacementFailed({
           member: 'showInSidebar',
@@ -717,9 +741,8 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       // Each surface decides from its own selection: one on the New-task
       // state opens the newest session, one showing a session keeps it.
       const newest = SubscriptionRef.getUnsafe(this.session.view).order.at(0);
-      if (newest !== undefined) {
+      if (newest !== undefined)
         this.surfaceAction({ kind: 'showSessions', runId: newest });
-      }
     });
   }
 
@@ -755,7 +778,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
       }
       const panel = vscode.window.createWebviewPanel(
         'texra.progress.panel',
-        'TeXRA',
+        'TeXRA Sessions',
         vscode.ViewColumn.One,
         {
           enableScripts: true,
@@ -779,20 +802,21 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
-  /** Awaits the staged tool-edit preview files' removal: runtime disposal
-   *  follows the shutdown drain and would cut a forked release short. */
+  /** Awaits the preview files' removal and the recorder's stop: runtime
+   *  disposal (and its exit-time child kill) would cut a forked one short. */
   private dispose(): Effect.Effect<void, never, ProcessServices> {
     return Effect.gen({ self: this }, function* () {
       this.closeSidebarPort();
       this.closePort(this.editor?.port);
       this.editor?.panel.dispose();
       this.editor = undefined;
+      this.debouncedRefreshCatalogs.cancel();
       yield* Scope.close(this.bridgeScope, Exit.void);
       for (const disposable of this.disposables.splice(0)) disposable.dispose();
+      yield* this.draftRequests.shutdown;
       yield* this.toolEditApprovals.dispose();
-      if (ProgressViewProvider._instance === this) {
+      if (ProgressViewProvider._instance === this)
         ProgressViewProvider._instance = undefined;
-      }
     });
   }
 }

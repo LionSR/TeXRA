@@ -25,7 +25,6 @@ export function mountProgressWebview(app: ProgressApp): () => void {
   }
   const sessions = createSessionSurfaces({
     storage: createWebviewStorage(hostBridge),
-    hostRequestFailureOwner: 'surface',
   });
   // Every message the extension posts to this window is a session message;
   // one that is not is the host's defect.
@@ -57,11 +56,22 @@ export function mountProgressWebview(app: ProgressApp): () => void {
     app.surface = session.surface$.get();
     app.host = session.host$.get();
   };
-  const unsubscribe = sessions.onChange(assign);
+  // Seen only while the window has focus: a run finishing behind another app
+  // is news when the user comes back.
+  const markShownRunSeen = () => {
+    if (document.hasFocus())
+      sessions.act(sessionKey, { kind: 'seen', view: session.view$.get() });
+  };
+  const unsubscribe = sessions.onChange(() => {
+    assign();
+    markShownRunSeen();
+  });
+  window.addEventListener('focus', markShownRunSeen);
   assign();
 
   const dispose = (): void => {
     window.removeEventListener('pagehide', dispose);
+    window.removeEventListener('focus', markShownRunSeen);
     window.removeEventListener('message', receive);
     unsubscribe();
     sessions.dispose();

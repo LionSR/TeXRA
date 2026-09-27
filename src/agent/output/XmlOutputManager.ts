@@ -269,10 +269,11 @@ export class XmlOutputManager {
       // The XML-parse and regex tiers read the CDATA-wrapped variant (so the
       // parser treats thinking/document bodies as opaque text); the header and
       // similarity tiers below read the raw response instead.
-      const cdataWrapped = addCdataToTagsMultiple(rawOutputContent, [
-        SCRATCHPAD_TAG,
-        OUTPUT_DOCUMENT_TAG,
-      ]);
+      const cdataWrapped = addCdataToTagsMultiple(
+        rawOutputContent,
+        [SCRATCHPAD_TAG, OUTPUT_DOCUMENT_TAG],
+        { tag: OUTPUT_DOCUMENT_TAG, container: OUTPUT_DOCUMENTS_TAG },
+      );
 
       // A response the XML parser refuses is expected input, not a defect:
       // every later tier below exists to recover from exactly that, so the
@@ -406,7 +407,7 @@ export class XmlOutputManager {
         // Multi-input agents have no name to synthesize a single-document
         // recovery from, but an unlabeled fenced block can still be routed by
         // comparing it against each original input file's content. Only valid
-        // when baseFiles really is the input files: the reflection loop
+        // when baseFiles really is the input files: the documents plugin
         // substitutes config.outputFiles for baseFiles whenever the agent
         // declares any (single-artifact-from-many-inputs agents like ocr/
         // paper2slide), so zipping baseFiles[i] with inputFiles[i] there would

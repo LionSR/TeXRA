@@ -60,12 +60,6 @@ export const WORKBENCH_KIND_META = {
     label: 'Review',
     singleton: true,
   },
-  settings: {
-    defaultPlacement: 'right',
-    icon: 'gear',
-    label: 'Settings',
-    singleton: true,
-  },
   logs: {
     defaultPlacement: 'right',
     icon: 'file-lines',
@@ -114,9 +108,6 @@ export const DesktopShellStateSchema = z.object({
   workbenchWidth: z.number(),
   workbenchTabs: z.array(WorkbenchTabSchema),
   nextTerminalSerial: z.int().positive(),
-  /** Per top-level run, its `lastTimestamp` when the user last had it on
-   *  screen: what the rail's `unseenRuns` compares a finished run against. */
-  seen: z.record(z.string(), z.number()).prefault({}),
 });
 
 export type DesktopShellState = z.infer<typeof DesktopShellStateSchema>;
@@ -137,7 +128,6 @@ export function initialDesktopShellState(): DesktopShellState {
     workbenchWidth: 640,
     workbenchTabs: [],
     nextTerminalSerial: 1,
-    seen: {},
   };
 }
 
@@ -205,7 +195,7 @@ export interface OpenWorkbenchTabRequest {
 /**
  * Opens a workbench surface or focuses its existing tab.
  *
- * Browser/settings/logs are singletons because they represent one host-owned
+ * Browser/logs are singletons because they represent one host-owned
  * surface. Editors are keyed by file, and terminals intentionally create a new
  * session each time.
  */

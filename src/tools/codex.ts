@@ -30,6 +30,7 @@ import {
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
+import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentResume } from '@platform/interfaces';
@@ -56,7 +57,6 @@ import { formatWallTimeSeconds, previewLabel } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import { CODEX_CLI_MODEL } from './codexConfig';
 import { defineTool } from './core/define';
 import { buildAgentWorkspaceOptions } from './agentWorkspaceOptions';
 import {
@@ -64,16 +64,12 @@ import {
   getCodexConfig,
   openCodexClient,
 } from './codexImport';
-import { type ChildRun } from './delegation/childRun';
 import { codexThreadsFor } from './agentCliSessionStores';
 import {
   agentCliApprovalCommand,
-  agentCliCall,
-  type AgentCliToolFailure,
   buildAgentCliLaunch,
   dispatchAgentCliTool,
   launchAgentCliSession,
-  reraiseAgentCliCallFailure,
 } from './agentCliShared';
 import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
@@ -361,7 +357,7 @@ export function runStreamedTurn(
  */
 function buildCodexLaunch(params: {
   thread: Thread;
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   initialPrompt: string;
   /**
@@ -468,7 +464,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
   input: CodexInput,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const toolCall = yield* ToolCall;
@@ -507,7 +503,7 @@ export const CodexTool = defineTool({
     'Requires the Codex CLI to be installed (`npm install -g @openai/codex`). ' +
     'Auth is handled by the CLI itself: use `codex login` (OAuth, recommended) or set OPENAI_API_KEY env var. ' +
     'Always async: returns immediately with a run ID; each turn is delivered back as a follow-up message (including the thread_id). ' +
-    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like delegate_agent(execution_id=…). ' +
+    'Pass thread_id on a later call to send a follow-up instruction to an existing session, like executions send to a delegate_agent subagent. ' +
     'Choose codex for coding tasks that benefit from a separate OpenAI agent. It runs in its own sandbox with independent tool use, async and multi-turn like delegate_agent. ' +
     'When multiple codex agents must edit the same files, or to isolate experimental changes, use a git worktree (`git worktree add ../worktree-name branch-name`); codex runs in the working directory of the calling agent and takes no directory argument. ' +
     'codex and claude_code are both independent sandboxed coders distinct from the in-process delegate_agent specialists. Prefer whichever vendor fits the task, and for parallel or isolated edits run them against a git worktree.',
@@ -520,7 +516,7 @@ export const CodexTool = defineTool({
     // A resumed thread keeps its stored workspace: name none, not the wrong one.
     cwd: 'unknown',
   },
-  execute: (input) => reraiseAgentCliCallFailure(runCodex(input)),
+  execute: (input) => runCodex(input),
 });
 
 const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
@@ -532,13 +528,16 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   session: SessionHandle,
 ): Effect.fn.Return<
   ToolResult,
-  AgentCliToolFailure,
+  ToolError,
   ToolCall | Runs | AgentResume | ChildProcessSpawner
 > {
   const { roots } = yield* ToolCall;
-  const thread = yield* agentCliCall(
-    createCodexThread(input, sandboxMode, roots, parentWorkingDirectory),
-  );
+  const thread = yield* createCodexThread(
+    input,
+    sandboxMode,
+    roots,
+    parentWorkingDirectory,
+  ).pipe(Effect.orDie);
   // Synthetic run metadata for the child run: Codex runs outside the normal
   // run loop, so the tool-use category and a stable Codex model label are
   // stated here rather than inherited from the generic AgentConfig defaults.

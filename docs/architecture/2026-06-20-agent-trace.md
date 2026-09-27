@@ -22,8 +22,7 @@ there is a single runtime implementation behind both.
                           │  TeXRA helpers — plain functions       │
                           │  taking an AgentTrace:                 │
                           │  • logSdkError / logProgressStatus     │
-                          │  • logUserMessage / logFilesLoaded     │
-                          │  • logFileCategory / logWebSearch      │
+                          │  • logUserMessage                      │
                           │  • startToolUseCard / endToolUseCard   │
                           │  • debugInternal / logInternal / …     │
                           └────────────────────┬───────────────────┘
@@ -37,10 +36,6 @@ there is a single runtime implementation behind both.
                           │  • activeStageId                       │
                           │  • debug / info / warn / error         │
                           │  • openStage / openStream              │
-                          │  • usage / contextState                │
-                          │  • toolStart / toolEnd                 │
-                          │  • responseFinalized                   │
-                          │  • domain (escape hatch)               │
                           └────────────────────┬───────────────────┘
                                                │
                                     implemented by
@@ -82,9 +77,12 @@ there is a single runtime implementation behind both.
             └─────────────────────┘                       └─────────────────────────┘
 ```
 
-Not every product event needs a named helper. Low-traffic, TeXRA-specific
-arms ride the `domain` escape hatch directly
-(`trace.domain({ key, data, text })`) instead of a dedicated named helper.
+Not every product event needs a named helper. Every other arm of the
+`AgentEvent` union (usage, context state, tool cards, the finalized
+response) is emitted directly with `trace.emit({ type, ... })`, and
+low-traffic, TeXRA-specific facts ride the `domain` arm
+(`trace.emit({ type: 'domain', key, data, text })`) instead of a dedicated
+named helper.
 
 ## Where things live
 
@@ -98,7 +96,8 @@ src/agent/trace/                  ← agent-general (no MESSAGE_TYPES, no TeXRA)
 └── index.ts                      ← the module's public surface
 
 src/logger/                       ← channel output and redaction only
-├── logUtils.ts                   ← channel sink, createLog, debug/info/warn/error
+├── logSink.ts                    ← the host sink: entry shape, rendering, writeLogEntry
+├── effectLog.ts                  ← withLogChannel for Effect.log*
 └── redaction.ts                  ← provider-key redaction for logged text
 
 src/transcript/                   ← TeXRA transcript plane

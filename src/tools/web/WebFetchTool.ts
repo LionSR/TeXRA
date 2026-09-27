@@ -5,7 +5,7 @@ import ky from 'ky';
 import { z } from 'zod';
 
 // Local imports - core
-import { ToolError, ToolResult } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { retryTransientFetch, toFetchToolError } from '@tools/timeouts';
 import { defineTool } from '@tools/core/define';
 import { executed } from '@tools/core/result';
@@ -88,9 +88,10 @@ const fetchPage = Effect.fn('WebFetchTool.fetchPage')((url: string) =>
         .exec(contentType)?.[1]
         ?.replaceAll(/^["']|["']$/gu, '');
       // Unsupported labels fall back to UTF-8, as for an absent charset.
-      const decoder = yield* Effect.try(
-        () => new TextDecoder(charset || 'utf-8'),
-      ).pipe(Effect.orElseSucceed(() => new TextDecoder()));
+      const decoder = yield* Effect.try({
+        try: () => new TextDecoder(charset || 'utf-8'),
+        catch: ensureError,
+      }).pipe(Effect.orElseSucceed(() => new TextDecoder()));
       let total = 0;
       const parts = yield* Stream.fromReadableStream({
         evaluate: () => body,

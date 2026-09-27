@@ -5,7 +5,8 @@ import { describe, expect } from 'vitest';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
 import { AgentResume } from '@platform/interfaces';
-import { MESSAGE_TYPES, type RunId } from '@shared/schemas';
+import { MESSAGE_TYPES } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -24,15 +25,18 @@ describe('session-owned transcripts and follow-up queues', () => {
         const launching = createTestSession();
         const sibling = createTestSession();
         yield* Effect.addFinalizer(() =>
-          launching.dispose().pipe(Effect.andThen(sibling.dispose())),
+          closeSessionOf(launching).pipe(
+            Effect.andThen(closeSessionOf(sibling)),
+          ),
         );
         const runId = generateRunId();
 
         publishTestRunStart(launching, runId);
         yield* launching.settlePublications();
-        const trace = new TraceEmitter();
-        const detach = launching.attachRunTrace(trace, runId);
-        yield* Effect.addFinalizer(() => Effect.sync(detach));
+        const trace = new TraceEmitter((event) =>
+          launching.publishRunEvent(runId, event),
+        );
+        yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
         const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
         output.append('owned by launching session');
         output.finalize();
@@ -53,20 +57,21 @@ describe('session-owned transcripts and follow-up queues', () => {
   it.effect('commits partial streaming text when the run parks', () =>
     Effect.gen(function* () {
       const session = createTestSession();
-      yield* Effect.addFinalizer(() => session.dispose());
+      yield* Effect.addFinalizer(() => closeSessionOf(session));
       const runId = generateRunId();
       publishTestRunStart(session, runId);
       yield* session.settlePublications();
-      const trace = new TraceEmitter();
-      const detach = session.attachRunTrace(trace, runId);
-      yield* Effect.addFinalizer(() => Effect.sync(detach));
+      const trace = new TraceEmitter((event) =>
+        session.publishRunEvent(runId, event),
+      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => trace.close()));
       const output = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
       output.append('partial text');
       yield* session.settlePublications();
       // The `waiting` step parks the run and the loop commits the closure
       // facts in that batch (`loop/toolUse.ts`), so the partial text becomes
       // the row's final text instead of streaming forever.
-      session.publish(yield* session.streamClosureFacts(runId));
+      session.publish(session.streamClosureFacts(runId));
       yield* session.settlePublications();
       const { rows } = yield* readRunTranscript(session, runId);
       expect(
@@ -82,7 +87,7 @@ describe('session-owned transcripts and follow-up queues', () => {
       const a = createTestSession();
       const b = createTestSession();
       yield* Effect.addFinalizer(() =>
-        a.dispose().pipe(Effect.andThen(b.dispose())),
+        closeSessionOf(a).pipe(Effect.andThen(closeSessionOf(b))),
       );
       const runId = generateRunId();
 
@@ -93,7 +98,11 @@ describe('session-owned transcripts and follow-up queues', () => {
 
       expect(a.followUps.hasLiveOwner(runId)).toBe(false);
       expect(
-        yield* a.followUps.submit(runId, { text: 'late' }, 'live_owner'),
+        yield* a.followUps.submit(
+          runId,
+          { from: { kind: 'user' as const }, text: 'late' },
+          'live_owner',
+        ),
       ).toEqual({ kind: 'refused' });
       expect(b.followUps.hasLiveOwner(runId)).toBe(true);
     }),
@@ -111,7 +120,7 @@ describe('sendFollowUp host-path session routing', () => {
         yield* Effect.addFinalizer(() =>
           Effect.sync(() =>
             processSession.followUps.terminalize(parentRun),
-          ).pipe(Effect.andThen(processSession.dispose())),
+          ).pipe(Effect.andThen(closeSessionOf(processSession))),
         );
 
         // A child run is tracked in the explicit process session, as desktop
@@ -127,9 +136,13 @@ describe('sendFollowUp host-path session routing', () => {
         // A host-path caller (outside any run ALS, like the desktop IPC handler)
         // that passes its process session sees the live child and queues.
         expect(
-          yield* submitFollowUp(parentRun, 'continue', {
-            session: processSession,
-          }).pipe(
+          yield* submitFollowUp(
+            parentRun,
+            { text: 'continue', from: { kind: 'user' as const } },
+            {
+              session: processSession,
+            },
+          ).pipe(
             Effect.provideService(AgentResume, {
               tryResumeRun: () => Effect.succeed(false),
             }),
@@ -141,9 +154,13 @@ describe('sendFollowUp host-path session routing', () => {
         // and no checkpoint of its own, the classification it falls back to is
         // `finished`.
         expect(
-          yield* submitFollowUp(parentRun, 'continue', {
-            session: testDefaultSession(),
-          }).pipe(
+          yield* submitFollowUp(
+            parentRun,
+            { text: 'continue', from: { kind: 'user' as const } },
+            {
+              session: testDefaultSession(),
+            },
+          ).pipe(
             Effect.provideService(AgentResume, {
               tryResumeRun: () => Effect.succeed(false),
             }),

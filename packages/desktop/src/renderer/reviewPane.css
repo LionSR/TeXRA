@@ -13,7 +13,7 @@
 .desktop-review-toolbar {
   display: flex;
   min-width: 0;
-  min-height: var(--wa-height-control);
+  min-height: var(--height-control);
   align-items: center;
   gap: var(--wa-space-s);
   padding: var(--wa-space-2xs) var(--wa-space-s);
@@ -102,7 +102,7 @@
 }
 
 .desktop-review-directory::part(header) {
-  min-height: var(--wa-height-control-compact);
+  min-height: var(--height-control-compact);
   padding: 0;
   padding-inline-start: calc(var(--review-tree-depth, 0) * var(--wa-space-s));
   border-radius: var(--wa-border-radius-s);
@@ -147,7 +147,7 @@
 
 .desktop-review-file::part(base) {
   width: 100%;
-  min-height: var(--wa-height-control-compact);
+  min-height: var(--height-control-compact);
   justify-content: flex-start;
   border-radius: var(--wa-border-radius-s);
 }
@@ -185,6 +185,19 @@
   margin: 0;
   font-size: inherit;
   font-weight: var(--wa-font-weight-bold, bold);
+}
+
+/* With no entries the empty state is the pane's only child: span both rows. */
+.desktop-review-pane > .desktop-review-empty {
+  grid-row: 1 / -1;
+  padding: var(--wa-space-l);
+  text-align: center;
+}
+
+.desktop-review-empty .empty-state-body {
+  margin: 0;
+  max-width: 36ch;
+  font-size: var(--font-size-sm);
 }
 
 .desktop-review-no-results {

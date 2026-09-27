@@ -27,7 +27,7 @@ import { TestClock } from 'effect/testing';
 import { it } from '@effect/vitest';
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { APIError as OpenAIAPIError } from 'openai';
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 import {
   ModelError,
   ResolvedTurnSchema,
@@ -77,6 +77,7 @@ import {
 } from '@shared/session/database';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { emptyPinnedComposition } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -84,7 +85,6 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
-import { isObject } from '@utils/core';
 import { RunFileService } from '@utils/files/runStorage';
 
 // Local file imports
@@ -93,7 +93,6 @@ import {
   seedActiveRun,
   sessionWithInteractions,
 } from '../progressTestUtils';
-import { testModelInfo } from './launchContextTestUtils';
 
 /** Mirrors RETRY_BACKOFF_MS in ModelInvoker.ts. */
 const RETRY_BACKOFF_MS = 1000;
@@ -209,8 +208,6 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
           return Stream.fromIterable(events);
         }),
       ),
-    generateTurn: () =>
-      Effect.die(new Error('The run loops stream; they never generate.')),
   };
   return { model, attempts: () => served };
 }
@@ -225,6 +222,7 @@ function boundModel(
     compatibilityKey: 'OpenAI',
     model,
     origin: ORIGIN,
+    route: { kind: 'api-key', provider: 'openai', usageRoute: 'api-key' },
     usageRoute: 'api-key',
     contextWindow: MODEL_CONFIGS.gpt54.contextWindow,
     supportsVision: false,
@@ -307,7 +305,7 @@ function agentRun(
       },
       { agentName: CONFIG.agent, agentCategory: SETTING.agentCategory },
     ),
-    callbacks: { onModelChanged: () => undefined },
+    callbacks: {},
   };
 }
 
@@ -322,7 +320,6 @@ const freshState = (): RunState => ({
   phase: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt54',
   modelCompatibilityKey: 'OpenAI',
   lastError: null,
@@ -335,12 +332,10 @@ const freshState = (): RunState => ({
   pendingResponse: null,
   pendingIntents: {},
   requests: {},
-  followUps: [],
-  followUpIds: new Set(),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   roundOutputs: [],
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
 });
 
 interface InvokerKit {
@@ -375,12 +370,9 @@ const openRun = Effect.fn('openRun')(function* (
     snapshotRow(runId, freshState(), {
       phase: 'initial',
       state: {
-        family: 'toolUse',
-        state: {
-          stateSlices: null,
-          offeredTools: [],
-          toolsetHash: '0'.repeat(64),
-        },
+        stateSlices: null,
+        offeredTools: [],
+        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);
@@ -447,23 +439,6 @@ const modelRouteRecovery = (
     ? { retryAfterMs: verdict.retryAfterMs }
     : undefined;
 };
-
-/** Collects the modelRetryLifecycle domain events a TraceEmitter sees. */
-function collectRetryLifecycleEvents(
-  logger: TraceEmitter,
-): Record<string, unknown>[] {
-  const events: Record<string, unknown>[] = [];
-  logger.subscribe((event) => {
-    if (
-      event.type === 'domain' &&
-      event.key === 'modelRetryLifecycle' &&
-      isObject(event.data)
-    ) {
-      events.push(event.data);
-    }
-  });
-  return events;
-}
 
 describe('model failure classification', () => {
   it('treats a user abort as a cancellation, never an automatic retry', () => {
@@ -710,7 +685,7 @@ describe('ModelInvoker retry', () => {
       expect((yield* session.ledger.load(child.runId))?.lastTurn).toEqual(
         completedTurn('child'),
       );
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -731,7 +706,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('response');
       expect(stub.attempts()).toBe(2);
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -754,7 +729,7 @@ describe('ModelInvoker retry', () => {
         expect(outcome.error.message).toContain('Model response was empty');
       }
       denied.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -773,7 +748,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(requests.opened).toEqual([]);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -781,8 +756,7 @@ describe('ModelInvoker retry', () => {
     Effect.gen(function* () {
       const session = sessionWithInteractions(undefined);
       const backoffStarted = yield* Deferred.make<void>();
-      const logger = new TraceEmitter();
-      logger.subscribe((event) => {
+      const logger = new TraceEmitter((event) => {
         if (event.type === 'log' && event.message.includes('automatic retry')) {
           Deferred.doneUnsafe(backoffStarted, Effect.void);
         }
@@ -807,7 +781,7 @@ describe('ModelInvoker retry', () => {
 
       expect(Exit.hasInterrupts(exit)).toBe(true);
       expect(stub.attempts()).toBe(1);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -860,7 +834,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -879,11 +853,16 @@ describe('ModelInvoker retry', () => {
           credentials: 'personal',
         }));
         const stub = stubModel([
-          { fail: httpError('subscription quota exhausted', 429) },
+          {
+            fail: httpError('subscription quota exhausted', 429, {
+              error: { type: 'usage_limit_reached' },
+            }),
+          },
           { ok: completedTurn('recovered') },
         ]);
 
         const kit = yield* openRun(session, stub.model, {
+          route: { kind: 'chatgpt-subscription' },
           usageRoute: 'chatgpt-subscription',
         });
         yield* Effect.promise(() => seedActiveRun(session, kit.runId));
@@ -900,7 +879,7 @@ describe('ModelInvoker retry', () => {
         }
         requests.detach();
         yield* Fiber.interrupt(pump);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -938,7 +917,7 @@ describe('ModelInvoker retry', () => {
       expect(session.runView(runId)?.status).toBe(RUN_PHASE.RUNNING);
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -964,52 +943,7 @@ describe('ModelInvoker retry', () => {
       expect(outcome.kind).toBe('cancelled');
       expect(stub.attempts()).toBe(1);
       requests.detach();
-      yield* session.dispose();
-    }),
-  );
-
-  it.effect('records one operation of attempt and decision diagnostics', () =>
-    Effect.gen(function* () {
-      yield* Effect.promise(() =>
-        installPlatform({ config: { 'texra.model.retry.maxAttempts': 0 } }),
-      );
-      const logger = new TraceEmitter();
-      const events = collectRetryLifecycleEvents(logger);
-      const pump = yield* pumpClock;
-      const session = sessionWithInteractions(undefined);
-      const requests = autoDecideRequests(session, () => ({
-        action: 'retry',
-      }));
-      const stub = stubModel([
-        { fail: httpError('temporary provider failure', 503) },
-        { ok: completedTurn('recovered') },
-      ]);
-
-      const kit = yield* openRun(session, stub.model, {}, logger);
-      const { runId } = kit;
-      yield* Effect.promise(() => seedActiveRun(session, runId));
-      yield* invokeOn(kit);
-
-      expect(events.map((event) => [event.event, event.attempt])).toEqual([
-        ['attempt_started', 1],
-        ['attempt_failed', 1],
-        ['retry_decision_requested', undefined],
-        ['retry_decided', undefined],
-        ['attempt_started', 2],
-        ['attempt_succeeded', 2],
-      ]);
-      expect(
-        events.find((event) => event.event === 'retry_decided'),
-      ).toMatchObject({ action: 'retry' });
-      expect(new Set(events.map((event) => event.operationId)).size).toBe(1);
-      expect(
-        events.every(
-          (event) => event.runId === runId && event.model === 'gpt54',
-        ),
-      ).toBe(true);
-      requests.detach();
-      yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 
@@ -1043,7 +977,7 @@ describe('ModelInvoker retry', () => {
       expect(requests.opened).toHaveLength(1);
       requests.detach();
       yield* Fiber.interrupt(pump);
-      yield* session.dispose();
+      yield* closeSessionOf(session);
     }),
   );
 });

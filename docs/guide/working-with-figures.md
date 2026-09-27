@@ -89,7 +89,7 @@ TeXRA recognizes these media types by default:
 
 <p class="hero-caption">Three media categories with their accepted extensions: images and audio carry several formats, while PDFs use native multimodal support where the provider offers it.</p>
 
-PDFs use native multimodal support when the provider offers it. Otherwise TeXRA converts them with GraphicsMagick / ImageMagick + Ghostscript. The status of those system dependencies is on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
+PDFs use native multimodal support when the provider offers it. Otherwise TeXRA converts them with GraphicsMagick / ImageMagick + Ghostscript. The status of those system dependencies is on **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
 ## <wa-icon library="texra" name="clippy"></wa-icon> Clipboard images
 
@@ -128,7 +128,7 @@ Tool-use agents can extract figures programmatically. These tools are part of th
   ]"
 />
 
-<p class="hero-caption">The three LaTeX Extraction tools as they surface in the Progress view. Each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
+<p class="hero-caption">The three LaTeX Extraction tools as they surface in the Sessions view. Each returns referenced files, BibTeX records, or compiled TikZ PDFs the model can read directly. The raw request form for each is below.</p>
 
 ### `extract_figures`
 

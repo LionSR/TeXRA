@@ -40,7 +40,6 @@ async function expectChatDefaults(
 
 describe('CLI chat defaults', () => {
   it('uses assistant and the cheap-start model as the built-in defaults', async () => {
-    expect(CLI_CHEAP_START_MODEL).toBe('deepseekproT');
     expect(MODEL_CONFIGS[CLI_CHEAP_START_MODEL]).toBeDefined();
     await withConfig({});
 

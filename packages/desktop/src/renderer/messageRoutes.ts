@@ -10,9 +10,9 @@ import {
 } from '../shared/desktopLogMessages';
 
 import {
+  DesktopOpenSettingsMessageSchema,
   DesktopOpenWorkbenchMessageSchema,
   DesktopSaveFileMessageSchema,
-  DesktopShowLauncherMessageSchema,
   DesktopToggleLayoutMessageSchema,
   type DesktopLayoutPanel,
 } from '../shared/desktopShellMessages';
@@ -59,8 +59,8 @@ interface DesktopMessageRouteHandlers {
   reloadWorkspaceFiles(session: string): void;
   /** Live read of whether bootstrap failed (routes must not fire then). */
   isBootstrapFailed(): boolean;
-  returnToLauncher(): void;
   openKind(kind: WorkbenchKind): void;
+  openSettings(): void;
   toggleLayoutPanel(panel: DesktopLayoutPanel): void;
   onboarding: {
     show(): void;
@@ -113,11 +113,11 @@ export function createMessageRoutes(
     messageRoute(DesktopSaveFileMessageSchema, () => {
       handlers.saveAllFiles();
     }),
-    messageRoute(DesktopShowLauncherMessageSchema, () => {
-      if (!handlers.isBootstrapFailed()) handlers.returnToLauncher();
-    }),
     messageRoute(DesktopOpenWorkbenchMessageSchema, (message) => {
       if (!handlers.isBootstrapFailed()) handlers.openKind(message.kind);
+    }),
+    messageRoute(DesktopOpenSettingsMessageSchema, () => {
+      if (!handlers.isBootstrapFailed()) handlers.openSettings();
     }),
     messageRoute(DesktopToggleLayoutMessageSchema, (message) => {
       handlers.toggleLayoutPanel(message.panel);

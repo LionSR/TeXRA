@@ -1,4 +1,4 @@
-import { Cause, Exit } from 'effect';
+import { Cause, Data, Exit } from 'effect';
 
 // Local imports - agent runtime
 import type { AgentTrace, StageHandle } from '@agent/trace';
@@ -12,16 +12,32 @@ import {
   isTerminalWorkflowCallProgress,
   RUN_OUTCOME,
   RunEndSchema,
+  tallyWorkflowCalls,
   type RunOutcome,
   type WorkflowCallProgress,
+  type WorkflowTally,
 } from '@shared/schemas';
 import { formatWorkflowCallLine } from '@ui/copy/workflowCall';
 import { generateShortId } from '@utils/core';
 
 /**
+ * A workflow subagent that ran but cannot resolve its agent() call: it ended
+ * with a non-completed outcome, or completed without the output files a
+ * workflow agent owes. The script sees it as that call's rejection.
+ */
+export class WorkflowSubagentUnsuccessful extends Data.TaggedError(
+  'WorkflowSubagentUnsuccessful',
+)<{ readonly message: string }> {}
+
+/** A waited workflow run that settled without the report it owes its caller. */
+export class WorkflowScriptReportMissing extends Data.TaggedError(
+  'WorkflowScriptReportMissing',
+)<{ readonly message: string }> {}
+
+/**
  * `onEvent` is omitted deliberately: this projection owns the engine's event
  * slot outright, so a caller cannot pass a handler that would be silently
- * discarded. What the run did is read back off the cards through `board`.
+ * discarded. What the run did is read back off the cards through `tally`.
  */
 type WorkflowScriptRunWithProgressOptions<R> = Omit<
   PersistedWorkflowScriptRunOptions<R>,
@@ -126,11 +142,12 @@ export interface WorkflowScriptProgressProjection<R> {
   readonly options: PersistedWorkflowScriptRunOptions<R>;
   /** Close every phase the run left open; `exit` is how the run ended. */
   readonly settle: (exit: Exit.Exit<unknown, unknown>) => void;
-  /** Every phase the run declared or entered, and the latest card per call —
-   *  the same cards the boards paint, for the delivery tally. */
-  readonly board: () => {
+  /** Every phase the run declared or entered, and the settled tally of the
+   *  latest card per call and the plan entries it never issued — the same
+   *  count the boards paint, for the delivery summary. */
+  readonly tally: () => {
     readonly phaseCount: number;
-    readonly calls: readonly WorkflowCallProgress[];
+    readonly tally: WorkflowTally;
   };
 }
 
@@ -153,6 +170,7 @@ export function projectWorkflowScriptProgress<R>(
   // colliding with the same logical call in an earlier attempt.
   const projectionId = generateShortId();
   const cards = new Map<WorkflowCallProgress['id'], WorkflowCallProgress>();
+  const planTaskIds = new Set<string>();
   let currentPhase: string | undefined;
 
   const phaseFor = (
@@ -172,9 +190,9 @@ export function projectWorkflowScriptProgress<R>(
   };
 
   /**
-   * Open a phase stage once the run reaches it and answer the stage rows
-   * emitted from there belong to. A not-reached card still opens the declared
-   * phase it sits under, so its row lands beneath that header.
+   * The stage rows emitted from a phase belong to: the engine announces a
+   * phase before any card or log line in it, so this only looks it up —
+   * opening one here is the fallback for a phase it never announced.
    */
   const openPhaseHandle = (phase: string | undefined): string | undefined =>
     phase ? phaseFor(phase).id : undefined;
@@ -204,6 +222,7 @@ export function projectWorkflowScriptProgress<R>(
         return;
       case 'plan':
         for (const phase of event.plan.phases) phaseTitles.add(phase.title);
+        for (const task of event.plan.tasks) planTaskIds.add(task.id);
         // Hosts union the plan with the stages and cards that follow, and a
         // card always wins over its plan entry, so nothing is listed twice.
         trace.emit({
@@ -259,6 +278,13 @@ export function projectWorkflowScriptProgress<R>(
   return {
     options: { ...runOptions, onEvent },
     settle,
-    board: () => ({ phaseCount: phaseTitles.size, calls: [...cards.values()] }),
+    tally: () => ({
+      phaseCount: phaseTitles.size,
+      tally: tallyWorkflowCalls(
+        [...cards.values()],
+        [...planTaskIds].filter((id) => !cards.has(id)).length,
+        true,
+      ),
+    }),
   };
 }

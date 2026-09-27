@@ -12,8 +12,8 @@ import { AgentCategory } from '@shared/schemas';
  * Set when the declared tools can never run; the caller logs it at warn.
  *
  * Latent silent-failure trap: the shared settings schema accepts `tools:`
- * for every category, but a workflow (reflection) run only *sends* the
- * definitions to the provider; a returned tool call is never dispatched.
+ * for every category, but a workflow run offers none of them to the model,
+ * so they never run.
  * Say so at load time instead of letting the agent author discover it from
  * a model that keeps asking for a tool that never answers.
  */

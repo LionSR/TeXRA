@@ -8,7 +8,7 @@ import { it as effectIt } from '@effect/vitest';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 // Local imports
-import { getAgentsByCategory } from '@agent/index';
+import { getAgentsByCategory, resolveAgentForLaunch } from '@agent/index';
 import { refresh } from '@agent/index/agentRegistry';
 import {
   applyInitialCliAgentSelection,
@@ -18,14 +18,14 @@ import { patchSessionMeta, sessionMeta } from '@cli/chat/tui/state/cliState';
 import {
   checkCliAgentLaunch,
   formatCliAgentList,
-  resolveCliAgentInCategory,
   resolveCliRunAgent,
 } from '@cli/runtime/agents';
 import { TuiSession } from '@cli/chat/tui/state/sessionRunState';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { ProcessServices } from '@platform/processRuntime';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { REPO_ROOT } from '@test/support/repoScan';
@@ -83,6 +83,7 @@ describe('CLI agent validation with a shadowed name', () => {
       {
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () =>
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
@@ -108,6 +109,7 @@ describe('CLI agent validation with a shadowed name', () => {
           {} as RootedFileSystem,
         ).pipe(
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
+          Effect.provideService(AppState, new FakeStateStore()),
         ),
         Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
@@ -122,10 +124,10 @@ describe('CLI agent validation with a shadowed name', () => {
     'validates the shadowed name against the tool-use entry launch will run',
     () =>
       Effect.gen(function* () {
-        const entry = yield* resolveCliAgentInCategory(
+        const entry = yield* resolveAgentForLaunch(
           hostStores(),
-          'assistant',
           AgentCategory.ToolUse,
+          'assistant',
         );
 
         expect(entry?.source).toBe('builtInToolUse');
@@ -144,10 +146,10 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          (yield* resolveCliAgentInCategory(
+          (yield* resolveAgentForLaunch(
             hostStores(),
-            'assistant',
             AgentCategory.Workflow,
+            'assistant',
           ))?.source,
         ).toBe('custom');
       }),
@@ -158,10 +160,10 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          yield* resolveCliAgentInCategory(
+          yield* resolveAgentForLaunch(
             hostStores(),
-            'polish',
             AgentCategory.ToolUse,
+            'polish',
           ),
         ).toBeUndefined();
         expect(
@@ -169,16 +171,6 @@ describe('CLI agent validation with a shadowed name', () => {
         ).toContain(
           'Agent "polish" is a workflow agent; `texra chat` only handles tool-use agents.',
         );
-      }),
-  );
-
-  effectIt.effect(
-    'reports an unknown name as missing rather than mismatched',
-    () =>
-      Effect.gen(function* () {
-        expect(
-          String(yield* resolveChatToolUseAgent(hostStores(), 'no-such-agent')),
-        ).toContain('Tool-use agent not found: no-such-agent.');
       }),
   );
 
@@ -231,18 +223,18 @@ describe('CLI agent validation with a shadowed name', () => {
     () =>
       Effect.gen(function* () {
         expect(
-          (yield* resolveCliAgentInCategory(
+          (yield* resolveAgentForLaunch(
             hostStores(),
-            'builtInToolUse:assistant',
             AgentCategory.ToolUse,
+            'builtInToolUse:assistant',
           ))?.source,
         ).toBe('builtInToolUse');
         // The workflow shadow's own key stays out of the tool-use category.
         expect(
-          yield* resolveCliAgentInCategory(
+          yield* resolveAgentForLaunch(
             hostStores(),
-            'custom:assistant',
             AgentCategory.ToolUse,
+            'custom:assistant',
           ),
         ).toBeUndefined();
       }),

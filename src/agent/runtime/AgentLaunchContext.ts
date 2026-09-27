@@ -8,16 +8,12 @@ import { refresh, resolveAgentForLaunch } from '@agent/index';
 import {
   logUserMessage,
   TraceEmitter,
+  type AgentEvent,
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type {
-  AgentPrompt,
-  AgentSetting,
-} from '@agent/core/definition/AgentDataclass';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
@@ -34,7 +30,6 @@ import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
   aggregateId as qualifyAggregateId,
-  type AgentSource,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
@@ -119,12 +114,16 @@ interface AgentLaunchInput {
    * Fires once the run's `run.start` is published, before the run itself
    * begins: the run exists for every fold by then, so a host may select
    * it (its own surface state, never a fact) and approval ancestry may be
-   * registered against it. It carries the run's trace, which has emitted
-   * nothing yet: a consumer of every trace event (the agent package)
-   * attaches here, ahead of the instruction log, the root stage, and the
-   * launch warnings.
+   * registered against it.
    */
-  onRunResolved?: (runId: RunId, trace: AgentTrace) => void;
+  onRunResolved?: (runId: RunId) => void;
+  /**
+   * A second sink of the run's trace, beside the session's: it hears every
+   * event the run emits, from the first (the instruction log, the root
+   * stage, the launch warnings) until the run ends — the agent package's
+   * live event stream, `stream.chunk` text included, which no row carries.
+   */
+  onTraceEvent?: (event: AgentEvent) => void;
   /** Session owning this run's coordination state; every launch supplies it. */
   session?: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
@@ -361,37 +360,38 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       secrets: yield* Secrets,
     };
 
-    const agentLogger = new TraceEmitter();
-    // The run's scope owns the trace's session attachment: it is dropped when
-    // the run ends, and when a launch that never became a run unwinds.
-    yield* Effect.acquireRelease(
-      Effect.sync(() => session.attachRunTrace(agentLogger, runId)),
-      (detach) => Effect.sync(detach),
+    // The run's trace publishes into the session (and to the caller's tap);
+    // the run's scope closes it when the run ends, and when a launch that
+    // never became a run unwinds.
+    const agentLogger = new TraceEmitter(
+      (event) => session.publishRunEvent(runId, event),
+      ...(input.onTraceEvent ? [input.onTraceEvent] : []),
     );
+    yield* Effect.addFinalizer(() => Effect.sync(() => agentLogger.close()));
 
     const isRemote = agentEntry.source === 'remote';
-    // Registration committed creation, configuration and initial activation,
-    // each awaited; a resumed turn appends only its new activation, awaited
-    // here. Both are durable before the run resolves, so this path drains
-    // nothing: a barrier over the run's publications would answer for facts
-    // the run's own fibers queued, and their loss is the terminal drain's to
-    // report on the row it decides.
+    // Registration committed creation, configuration and first activation; a
+    // resume appends its activation here, with the approval snapshot that
+    // enforcement holds (no `run.start` re-stamps it). Both are durable before
+    // the run resolves, so nothing drains here (lost facts are the terminal
+    // drain's), and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      // A durable append: uninterruptible, like every row commit, so a stop
-      // lands either before this activation or after it, never inside it.
+      const aggregateId = qualifyAggregateId('run', runId);
+      const snapshot = session.approvalPolicySnapshotFor(runId);
       yield* Effect.uninterruptible(
         session.commit([
           {
             type: 'run.activate',
-            aggregateId: qualifyAggregateId('run', runId),
+            aggregateId,
             category: setting.agentCategory,
             isRemote,
           },
+          { type: 'approval.policy', aggregateId, snapshot },
         ]),
       );
     }
 
-    input.onRunResolved?.(runId, agentLogger);
+    input.onRunResolved?.(runId);
 
     // Log the initial instruction as a user message so both workflow and
     // tool-use tabs display it inline with the stream log (no separate panel).

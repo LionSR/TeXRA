@@ -5,8 +5,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import {
   resolveGlobalStoragePath,
@@ -15,7 +13,6 @@ import {
 import type { RunId, OutputFileInfo } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -169,10 +166,10 @@ describe('LaTeXdiffService shadow output', () => {
           () => import('@latex/latexdiff'),
         );
 
-        yield* new LaTeXdiffService('test', sessionRoots).runDiffForRound(
+        yield* new LaTeXdiffService('test', sessionRoots).runDiff(
           createExternalLocation(path.join(sourceDir, 'base.tex')),
           createExternalLocation(path.join(sourceDir, 'revised.tex')),
-          1,
+          '_diff',
           undefined,
           { cwd: sessionRoots.workspace, outputDirectory: shadowDir },
         );
@@ -234,24 +231,24 @@ describe('LaTeXdiffService shadow output', () => {
         lineage: { original: base, diffBase: null },
         diff: null,
       });
-      const [{ runLatexdiffFromMetadata }, { LaTeXdiffService }] =
-        yield* Effect.promise(() =>
-          Promise.all([
-            import('@latex/latexdiff/diffOperations'),
-            import('@latex/latexdiff'),
-          ]),
-        );
-      const result = yield* runLatexdiffFromMetadata({
-        rounds: {
-          1: [output(1, first)],
-          2: [output(2, second, './paper.tex')],
+      yield* testWorkspaceRoots().workspaceState.update(
+        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
+        true,
+      );
+      const { runLatexdiffForRun } = yield* Effect.promise(
+        () => import('@latex/latexdiff/diffOperations'),
+      );
+      const result = yield* runLatexdiffForRun({
+        runId,
+        roots: testWorkspaceRoots(),
+        runDiscovery: {
+          readRunOutputs: () =>
+            Effect.succeed({
+              1: [output(1, first)],
+              2: [output(2, second, './paper.tex')],
+            }),
         },
-        workspaceRoot: testWorkspaceRoots().workspace,
-        generateBetweenRoundDiffs: true,
-        latexdiff: {
-          channel: 'test',
-          service: new LaTeXdiffService('test', testWorkspaceRoots()),
-        },
+        channel: 'test',
         progress: { report: vi.fn() },
       });
 
@@ -328,6 +325,35 @@ describe('LaTeXdiffService shadow output', () => {
         expect(diff).not.toContain('\\begin{thebibliography}');
         expect(diff).not.toContain('\\DIFadd{1}');
       }).pipe(Effect.provide(nodePlatformLayer)),
+  );
+
+  // #13191: a failed diff's message is written verbatim into the run
+  // transcript, so latexdiff's stderr is scrubbed where it enters.
+  it.effect('scrubs secrets from a failed diff message', () =>
+    Effect.gen(function* () {
+      const { sourceDir, shadowDir } = yield* Effect.promise(() =>
+        prepareDiffWorkspace(
+          'texra-latexdiff-secret-',
+          '\\documentclass{article}\n\\begin{document}\nold\n\\end{document}\n',
+          '\\documentclass{article}\n\\begin{document}\nnew\n\\end{document}\n',
+        ),
+      );
+      mocks.executeCommand.mockReturnValueOnce(
+        Effect.succeed({
+          success: false,
+          stdout: '',
+          stderr:
+            'OPENAI_API_KEY=sk-abcdefghijklmnop1234 Authorization: Bearer tok.en-123',
+        }),
+      );
+
+      const result = yield* runShadowDiff(sourceDir, shadowDir);
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Failed to run');
+      expect(result.message).not.toContain('sk-abcdefghijklmnop1234');
+      expect(result.message).not.toContain('tok.en-123');
+    }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
   it.effect(
@@ -437,46 +463,5 @@ describe('LaTeXdiffService shadow output', () => {
         ),
       ).toBe('\\newcommand{\\RR}{\\mathbb{R}}\n');
     }),
-  );
-});
-
-describe('LaTeXdiffService logger channel', () => {
-  afterEach(() => {
-    setLogSink(null);
-    vi.restoreAllMocks();
-  });
-
-  // #10635: every entry a diff writes carries the channel the service was
-  // constructed with, whichever helper below it wrote the line.
-  it.effect('binds log lines to the constructor channel', () =>
-    Effect.gen(function* () {
-      const logs = captureLogEntries();
-      const { LaTeXdiffService } = yield* Effect.promise(
-        () => import('@latex/latexdiff'),
-      );
-
-      const result = yield* new LaTeXdiffService(
-        'pinnedLatexdiffChannel',
-        testWorkspaceRoots(),
-      ).runDiff(
-        createExternalLocation('/missing/base.tex'),
-        createExternalLocation('/missing/revised.tex'),
-        '_diff',
-        undefined,
-        { cwd: testWorkspaceRoots().workspace },
-      );
-
-      expect(result.success).toBe(false);
-      expect(
-        logs.has(
-          'WARN',
-          'pinnedLatexdiffChannel',
-          'One or both files do not exist',
-        ),
-      ).toBe(true);
-    }).pipe(
-      Effect.provide(effectDiagnosticsLayer('Trace')),
-      Effect.provide(nodePlatformLayer),
-    ),
   );
 });

@@ -40,15 +40,19 @@ vi.mock('@agent/runtime/loop/toolUse', () => ({
 
 // The per-run services the lane provides are built and exercised by the loop
 // suites. Here only the layer's *input* matters: the tools the lane hands the
-// run and the callbacks it wires, so the layer itself is empty and its input
-// is captured.
+// run and the callbacks it wires, so the layer carries only the composition
+// the launch reads back for its result, and its input is captured.
 vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
   const { Layer } = await import('effect');
+  const actual =
+    await importOriginal<typeof import('@agent/runtime/run/AgentRun')>();
   return {
-    ...(await importOriginal<typeof import('@agent/runtime/run/AgentRun')>()),
+    ...actual,
     agentRunLayer: (...args: unknown[]) => {
       mocks.agentRunLayer(...args);
-      return Layer.empty;
+      return Layer.succeed(actual.AgentRun)({
+        composition: { key: { hash: 'test-composition' } },
+      } as never);
     },
   };
 });
@@ -56,11 +60,6 @@ vi.mock('@agent/runtime/run/AgentRun', async (importOriginal) => {
 vi.mock('@agent/runtime/ModelInvoker', async () => {
   const { Layer } = await import('effect');
   return { modelInvokerLayer: () => Layer.empty };
-});
-
-vi.mock('@agent/runtime/FollowUps', async () => {
-  const { Layer } = await import('effect');
-  return { followUpsLayer: Layer.empty };
 });
 
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
@@ -85,6 +84,7 @@ import {
 } from '@agent/runtime/SessionHandle';
 import {
   aggregateId as qualifyAggregateId,
+  type AggregateId,
   RUN_OUTCOME,
   type RunId,
   AgentCategory,
@@ -105,11 +105,6 @@ interface InterruptibleLoopStart {
 
 interface TestFlowContext {
   interrupt(): void;
-}
-
-/** The callbacks the lane wires into the run's `AgentRun` layer. */
-interface CapturedRunCallbacks {
-  onModelChanged: (model: string) => void;
 }
 
 /** Empty totals: this suite never bills a turn. */
@@ -141,12 +136,12 @@ const LANE_SESSION = {
   runs: {
     launchRun: (_runId: RunId, operation: Effect.Effect<unknown, unknown>) =>
       operation,
-    // No parent is detaching this run, so its release waits on nothing.
-    throughDetach: () => Effect.void,
   },
-  acquireClaims: () => Effect.succeed(Effect.void),
-  graph: { releaseClaims: mocks.releaseClaims },
-  releaseClaims: SessionHandle.prototype.releaseClaims,
+  // The resume's hold on the run's claim: its release is what the suite
+  // observes, when the resume's scope closes.
+  acquireClaims: (id: AggregateId) =>
+    Effect.succeed(Effect.suspend(() => mocks.releaseClaims(id))),
+  holdRunClaim: SessionHandle.prototype.holdRunClaim,
   // The resumed run reads its parent edge off the session's cold fold, so the
   // lineage fixture is that read.
   readView: (...args: unknown[]) =>
@@ -156,7 +151,7 @@ const LANE_SESSION = {
     }),
   status: {},
   settlePublications,
-  releaseRunLease: SessionHandle.prototype.releaseRunLease,
+  commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
 
 function resumeToolUseFromResumeData(
@@ -266,7 +261,7 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
         setting: { agentCategory: AgentCategory.Workflow },
         runId: resume.runId,
         session: {
-          releaseRunLease: vi.fn(async () => {}),
+          commitRunEnd: vi.fn(async () => {}),
         },
       } as unknown as AgentLaunchContext);
 
@@ -421,37 +416,5 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           value.errors[1].cause === teardownFailure,
       );
     }),
-  );
-
-  it.effect(
-    'mirrors a mid-run model switch onto the persisted config only',
-    () =>
-      Effect.gen(function* () {
-        const runId = 'e9421d0de1' as RunId;
-        const ctx = buildResumeContext(runId);
-        mocks.buildAgentLaunchContext.mockResolvedValueOnce(ctx);
-        mocks.runToolUse.mockImplementationOnce(() =>
-          Effect.sync(() => {
-            const callbacks = mocks.agentRunLayer.mock.calls[0]?.[1]
-              .callbacks as CapturedRunCallbacks;
-            callbacks.onModelChanged('next-model');
-            return {
-              outcome: RUN_OUTCOME.COMPLETED,
-              response: '',
-              files: [],
-              usage: NO_USAGE,
-              structured: undefined,
-            };
-          }),
-        );
-
-        yield* resumeToolUseFromResumeData(createToolUseResumeData({ runId }));
-
-        // The cell is the live model: usage accounting and the prompt-side MODEL
-        // variable read it directly, so the only remaining mirror is the
-        // persisted AgentConfig schema field; the seeded transient stays as-is.
-        expect(ctx.config.model).toBe('next-model');
-        expect(ctx.userVarChannels.MODEL).toBe('test-model');
-      }),
   );
 });

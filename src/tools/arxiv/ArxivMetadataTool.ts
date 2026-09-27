@@ -49,6 +49,7 @@ const fetchMetadata = Effect.fn('ArxivMetadataTool.execute')(function* (
   const entries = yield* rateLimitedApiCall(
     'arxiv',
     ARXIV_CONSTANTS.RATE_LIMIT_DELAY_MS,
+    ARXIV_CONSTANTS.TIMEOUT_MS,
     'Failed to query arXiv API',
     () => createArxivClient().ids([requestId]).execute(),
   );

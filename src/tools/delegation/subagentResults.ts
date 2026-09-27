@@ -12,7 +12,6 @@ import path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import { withLogChannel } from '@logger/effectLog';
 import {
   runStorageFilePath,
@@ -20,6 +19,7 @@ import {
   type OutputFileSummary,
   type ResultDiffSummary,
   type ResultMeta,
+  type RetryErrorInfo,
   type RunEndOutput,
   type RunId,
   type RunOutcome,
@@ -32,7 +32,7 @@ import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
 import { sanitizePathSegment } from '@utils/text/sanitizePathSegment';
 import { countLines, formatDuration } from '@utils/text/stringUtils';
-import { unifiedDiffText } from '@utils/text/unifiedDiff';
+import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import { formatDelivery } from './deliveryEnvelope';
 
 export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
@@ -210,19 +210,18 @@ export function formatSubagentDelivery(
 }
 
 /**
- * Format an error as a delivery message.
+ * Format a child's normalized failure as a delivery message.
  */
 export function formatSubagentError(
   runId: string,
   agentName: string,
-  err: unknown,
+  formatted: Pick<RetryErrorInfo, 'message' | 'userRetryable'>,
   options?: {
     wallTimeMs?: number;
     workingDirectory?: string;
     memoryMisses?: readonly AttachedMemoryMiss[];
   },
 ): string {
-  const formatted = normalizeProviderError(err);
   return formatDelivery({
     tag: DELIVERY_TAG.subagentError,
     runId,
@@ -240,22 +239,6 @@ export function formatSubagentError(
     }),
     message: formatted.message,
   });
-}
-
-// ============================================================================
-// Orchestrator follow-up framing
-// ============================================================================
-
-/**
- * Wrap an orchestrator's follow-up instruction in an XML tag so the subagent
- * knows this is a follow-up from its orchestrator (not a fresh user message).
- */
-export function formatFollowUpInstruction(instruction: string): string {
-  return [
-    '<orchestrator-followup>',
-    escapeText(instruction),
-    '</orchestrator-followup>',
-  ].join('\n');
 }
 
 /**
@@ -354,7 +337,8 @@ const computeAndWriteWorkflowDiffs = Effect.fn(
           largeChange = changedLines / originalLines > LARGE_CHANGE_RATIO;
         }
 
-        const diff = unifiedDiffText(original, modified);
+        const { text: diff, timeout } = unifiedDiffText(original, modified);
+        yield* reportDiffTimeout(timeout);
         if (diff) {
           const limit = largeChange ? LARGE_CHANGE_DIFF_LINES : MAX_DIFF_LINES;
           const truncated = truncateDiff(diff, limit);

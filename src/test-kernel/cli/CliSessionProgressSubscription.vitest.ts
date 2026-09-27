@@ -465,36 +465,4 @@ describe('attachCliSessionProgressProjection', () => {
       expect(writeRecord).toHaveBeenCalledTimes(1);
     }),
   );
-
-  it.effect(
-    'writes one record per published flow step without renderer dedup',
-    () =>
-      Effect.gen(function* () {
-        const session = createTestSession();
-        publishTestRunStart(session, runId);
-        yield* session.settlePublications();
-        const { records, publish, detach } = yield* projectionOver(session);
-        yield* Effect.addFinalizer(() => detach);
-        for (const turn of [1, 2]) {
-          yield* Effect.promise(() =>
-            publish({
-              draft: {
-                type: 'flow.step',
-                aggregateId: runAggregate,
-                payload: {
-                  family: 'toolUse',
-                  step: 'turn.begin',
-                  round: 1,
-                  turn,
-                },
-              },
-            }),
-          );
-        }
-
-        expect(
-          records().map((record) => rowFields(record).fields),
-        ).toMatchObject([{ payload: { turn: 1 } }, { payload: { turn: 2 } }]);
-      }),
-  );
 });

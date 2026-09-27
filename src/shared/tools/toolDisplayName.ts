@@ -20,7 +20,7 @@
  *  normalized name. */
 const TOOL_LABEL = new Map<string, string>([
   ['delegate_multi_agents', 'Multi-agent workflow'],
-  ['delegate_agent', 'Delegate agent'],
+  ['delegate_agent', 'Subagent'],
   ['delegate_workflow', 'Delegate workflow'],
   ['codex_patch', 'Codex Files'],
   ['codex_thread', 'Codex Thread'],

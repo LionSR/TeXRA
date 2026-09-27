@@ -4,6 +4,7 @@ import { Effect, FileSystem } from 'effect';
 
 import type { AgentTrace } from '@agent/trace';
 import { LaTeXdiffResult, LaTeXdiffService } from '@latex/latexdiff';
+import { buildBetweenRoundDiffSuffix } from '@latex/latexdiff/diffFileNameManager';
 import { compileLatex2Pdf } from '@latex/texTools';
 import type { WorkspaceFs } from '@platform/rootedFs';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
@@ -93,7 +94,7 @@ export class LatexDiffManager {
       return;
     }
 
-    if (result.message.includes('document environment')) {
+    if (result.reason === 'missing-document-environment') {
       this.logger.debug(`Skipping ${operation}`, {
         data: result.message,
         messageType: MESSAGE_TYPES.INTERNAL,
@@ -208,9 +209,7 @@ export class LatexDiffManager {
           ([, base]) => entryExists(fs, base.absolutePath),
           { concurrency: 'unbounded' },
         );
-        const basePairs = candidatePairs.filter(
-          (_, index) => baseExists[index],
-        );
+        const basePairs = candidatePairs.filter((_, i) => baseExists[i]);
         if (basePairs.length < candidatePairs.length) {
           this.logger.debug(
             `Skipping ${candidatePairs.length - basePairs.length} latexdiff base pair(s): base file not present`,
@@ -227,10 +226,10 @@ export class LatexDiffManager {
               originalLocation: baseLocation,
               baseRound: null,
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffForRound(
+                this.latexdiffService.runDiff(
                   base,
                   revised,
-                  currRound,
+                  '_diff',
                   undefined,
                   { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),
@@ -264,11 +263,10 @@ export class LatexDiffManager {
               originalLocation,
               baseRound: currRound - 1,
               runDiff: (base, revised, cwd) =>
-                this.latexdiffService.runDiffBetweenRounds(
+                this.latexdiffService.runDiff(
                   base,
                   revised,
-                  currRound - 1,
-                  currRound,
+                  buildBetweenRoundDiffSuffix(currRound, currRound - 1),
                   undefined,
                   { cwd, outputDirectory: diffDirectory.absolutePath },
                 ),
@@ -285,7 +283,8 @@ export class LatexDiffManager {
       }
 
       if (aggregated.length > 0) {
-        this.logger.domain({
+        this.logger.emit({
+          type: 'domain',
           key: 'latexdiff',
           text: `Latexdiff results: ${aggregated.length}`,
           data: aggregated,

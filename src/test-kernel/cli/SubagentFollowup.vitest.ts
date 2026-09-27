@@ -4,9 +4,7 @@ import {
   decodeXmlEntities,
   deliveryTagOf,
   hasIncompleteEmbeddedSubagentFollowup,
-  stripOrchestratorFollowup,
   summarizeEmbeddedSubagentFollowups,
-  summarizeFollowupMessage,
   summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 
@@ -23,13 +21,26 @@ const CODEX_STREAMING_TEXT = [
 ].join('\n');
 
 // XML-escaped workflow-summary JSON for the workflow-script-result/error tests.
+function tally(ok: number, failed = 0): Record<string, number> {
+  return {
+    total: ok + failed,
+    ok,
+    running: 0,
+    queued: 0,
+    planned: 0,
+    failed,
+    cancelled: 0,
+    skipped: 0,
+    notRun: 0,
+  };
+}
+
 function workflowSummary(overrides: Record<string, unknown> = {}): string {
   return JSON.stringify({
     name: 'proofread-pipeline',
     outcome: 'completed',
     phaseCount: 2,
-    taskDone: 4,
-    taskTotal: 4,
+    tally: tally(4),
     costUsd: 0.19,
     durationMs: 724_000,
     files: [
@@ -66,19 +77,7 @@ describe('deliveryTagOf', () => {
 });
 
 describe('summarizeSubagentFollowup', () => {
-  it('strips orchestrator follow-up wrappers', () => {
-    expect(
-      stripOrchestratorFollowup(
-        '<orchestrator-followup>\nPlease inspect the file.\n</orchestrator-followup>',
-      ),
-    ).toBe('Please inspect the file.');
-    expect(stripOrchestratorFollowup('ordinary user text')).toBe(
-      'ordinary user text',
-    );
-  });
-
   it('summarizes malformed non-string follow-up payloads without throwing', () => {
-    expect(summarizeFollowupMessage(undefined)).toBe('(empty follow-up)');
     expect(summarizeSubagentFollowup(undefined)).toBe('(empty follow-up)');
   });
 
@@ -256,11 +255,10 @@ describe('summarizeSubagentFollowup', () => {
 
     expect(summarizeSubagentFollowup(xml)).toBe(
       [
-        '✓ proofread-pipeline completed · 2 phases · 4/4 calls succeeded · $0.190 · 12m 4s',
+        '✓ proofread-pipeline completed · 2 phases · 4 ok · $0.190 · 12m 4s',
         '  paper_A.tex (+120 -80)',
         '  notes.txt',
         '  script: .texra/workflow-scripts/proofread-pipeline.mjs',
-        '  rerun: edit the script, then call delegate_multi_agents with scriptPath',
       ].join('\n'),
     );
   });
@@ -270,7 +268,7 @@ describe('summarizeSubagentFollowup', () => {
       '<workflow-script-error id="abc">',
       `<workflow-summary>${workflowSummary({
         outcome: 'failed',
-        taskDone: 1,
+        tally: tally(1, 3),
         costUsd: 0.03,
         durationMs: 5_000,
         files: [],
@@ -286,7 +284,9 @@ describe('summarizeSubagentFollowup', () => {
     ].join('\n');
 
     const rendered = summarizeSubagentFollowup(xml);
-    expect(rendered).toContain('✗ proofread-pipeline failed');
+    expect(rendered).toContain(
+      '✗ proofread-pipeline failed · 2 phases · 1 ok · 3 failed',
+    );
     expect(rendered).toContain('Model request failed: quota exhausted');
     expect(rendered).not.toContain('=== Run log ===');
     expect(rendered).not.toContain('Finished: earlier task');
@@ -298,8 +298,7 @@ describe('summarizeSubagentFollowup', () => {
       `<workflow-summary>${workflowSummary({
         outcome: 'failed',
         phaseCount: 0,
-        taskDone: 0,
-        taskTotal: 0,
+        tally: tally(0),
         costUsd: 0,
         durationMs: 100,
         files: [],
@@ -347,19 +346,6 @@ describe('summarizeSubagentFollowup', () => {
     expect(summary).not.toContain('result line 13');
     expect(summary).toContain(
       '… 8 more lines; open the subagent transcript for the full response',
-    );
-  });
-
-  it('summarizes wrapped result follow-up messages for queued displays', () => {
-    const xml = [
-      '<orchestrator-followup>',
-      '<subagent-result id="abc" agent="reviewer" category="toolUse" status="completed">',
-      '<response>All good &lt;ok&gt;</response>',
-      '</subagent-result>',
-      '</orchestrator-followup>',
-    ].join('');
-    expect(summarizeFollowupMessage(xml)).toBe(
-      '✓ reviewer completed\nAll good <ok>',
     );
   });
 

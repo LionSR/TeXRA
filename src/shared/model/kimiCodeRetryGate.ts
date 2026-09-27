@@ -1,13 +1,13 @@
 /**
- * Browser-safe Kimi Code subscription model facts and retry gate.
+ * Browser-safe Kimi Code subscription model facts.
  *
  * The pure field-level predicates below are the single source for Kimi Code
  * eligibility/exclusivity. Host-side route resolution
- * (`@model/modelRoute`) imports them, so routing decisions
- * and webview retry panels can never drift. This module is deliberately free
+ * (`@model/modelRoute`) imports them, and the retry owner reads a Kimi Code
+ * model's fallback off that route decision. This module is deliberately free
  * of platform/secret-store imports.
  */
-import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
+import { ModelProvider } from 'llm-zoo';
 
 import { KIMI_CODE_BASE_URL } from '@shared/constants/providers';
 
@@ -47,36 +47,5 @@ export function isKimiCodeExclusiveModel(
 ): boolean {
   return (
     isKimiSubscriptionEligible(model) && model.baseUrl === KIMI_CODE_BASE_URL
-  );
-}
-
-/**
- * Whether the retrying model is served ONLY by the Kimi Code coding endpoint
- * (`kimi-for-coding` aliases pin their `baseUrl` in the registry). Unknown or
- * non-Kimi models are not exclusive, so a missing `model` never blocks the
- * GLM/Kimi dual-backend switch.
- */
-export function isKimiCodeExclusiveRetryModel(
-  model: string | undefined,
-): boolean {
-  if (model === undefined) return false;
-  const config = MODEL_CONFIGS[model];
-  return config !== undefined && isKimiCodeExclusiveModel(config);
-}
-
-/**
- * Whether the progress-view retry must not offer the personal API-key switch.
- * Exclusive Kimi Code models have no open-platform fallback when their
- * coding-plan quota is exhausted, so switching to a personal credential cannot
- * reroute them. Both the webview offer gate and the host enforcement gate
- * consume this composed predicate so they cannot desync.
- */
-export function isKimiCodeSubscriptionRetryBlocked(
-  model: string | undefined,
-  exhaustionReason: string | undefined,
-): boolean {
-  return (
-    exhaustionReason === 'kimi-code-subscription' &&
-    isKimiCodeExclusiveRetryModel(model)
   );
 }

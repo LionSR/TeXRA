@@ -14,9 +14,9 @@ under `runKind: 'multiAgentWorkflow'`; each `agent()` invocation in that script 
 a **workflow call**. A **task run** is the host's stored execution record (and a
 **background task** is host-managed asynchronous work), not a workflow call.
 A trace **stage** is a generic grouping construct. Script **phases** and
-reflection **rounds** are distinct typed stage kinds with different semantics:
-phases group calls for progress display, while rounds delimit repeated
-reflection iterations.
+workflow-agent **rounds** are distinct typed stage kinds with different
+semantics: phases group calls for progress display, while rounds delimit a
+workflow agent's repeated revision turns.
 
 ## Shape
 
@@ -31,11 +31,15 @@ export const meta = {
   ],
 };
 phase('Draft');
-const sections = await parallel([
-  () => agent('Draft the introduction.', { id: 'introduction' }),
-  () => agent('Draft the results.', { id: 'results' }),
-]);
-return sections.filter((result) => result !== null);
+const sections =
+  yield *
+  all([
+    attempt(agent('Draft the introduction.', { id: 'introduction' })),
+    attempt(agent('Draft the results.', { id: 'results' })),
+  ]);
+return sections
+  .filter((result) => result._tag === 'Success')
+  .map((result) => result.value);
 ```
 
 When the task set comes from runtime arguments, the script omits `meta.tasks`
@@ -46,16 +50,22 @@ export const meta = {
   name: 'audit-sections',
   description: 'Audit every requested section in parallel',
 };
-return await parallel(
-  args.sections.map(
-    (section, index) => () =>
-      agent(`Audit ${section}.`, {
-        id: `section-${index}`,
-        label: `Audit ${section}`,
-      }),
-  ),
+return (
+  yield *
+  forEach(args.sections, (section, index) =>
+    agent(`Audit ${section}.`, {
+      id: `section-${index}`,
+      label: `Audit ${section}`,
+    }),
+  )
 );
 ```
+
+The body is a generator. `agent()`, `all()`, `forEach()`, `attempt()`,
+`retry()` and `timeout()` build frozen operation values that run nothing;
+`yield*` hands one to the host, which runs it and resumes the script with the
+result or throws a failure into it. `await` is a syntax error that the parser
+reports with a pointed hint.
 
 - `meta.tasks` — optional declarative task plan. When present, each
   `agent()` call must reference exactly one task with `{ id }`; its display
@@ -69,8 +79,9 @@ return await parallel(
   a plan label the script has not issued, and every other status is an issued
   call, carrying the invocation facts (`kind`, plus the declared `model`,
   agent, and file basenames) the script supplied when it called `agent()`. A
-  plan entry the run never reaches stays `declared` and settles as
-  not-reached. Hosts must not present plan entries as resolved calls, nor
+  plan entry the run never reaches stays `declared`: nothing sweeps it into a
+  settled card or opens its phase, and once the run has ended the shared run
+  model reads it as not run. Hosts must not present plan entries as resolved calls, nor
   infer parallelism or dependencies from shared phase membership — the
   `queued`/`running` cards are the only source of real concurrency.
   The engine publishes its plan, phase and call transitions once, through
@@ -83,27 +94,40 @@ return await parallel(
   result: in production the child's output plus `outcome` and `cost`, so a
   workflow call reads `{ category, outcome, outputs, diffs, compileFailures,
 cost }` and a tool-use call `{ category, outcome, response, files,
-structured, cost }`), or `null` when the call failed or an interactive user
-  skipped it. The call's card and run-log line say which; the script only
-  needs to filter nulls before synthesis.
+structured, cost }`). A failed call throws an Error named `AgentFailed` into
+  the script, and a call the user skips throws `Skipped`.
   Set `opts.model` to an available model short name when a call needs a
   different cost or capability profile; otherwise ordinary delegation policy
   chooses the model. An explicitly selected model that is unavailable aborts
-  the workflow rather than resolving that call to `null`.
+  the workflow rather than failing just that call.
   `agent(prompt, { schema })`, where `schema` is a JSON Schema object, runs a
   tool-use agent (name one via `agentName`) that finishes by calling
   `submit_output`; the call resolves to an envelope whose `.structured` is the
   validated object rather than edited files.
-- `parallel(thunks)` — concurrent barrier. Failed `agent()` calls resolve to
-  `null`; other thrown errors reject the workflow.
-- `pipeline(items, ...stages)` — each item runs through the stages on its own,
-  with no barrier between stages. A stage receives `(previousResult,
-originalItem, index)`; a stage that returns `null` ends that item as `null`.
-  Both primitives live in the realm prelude for the reason given under
-  Sandbox. Orchestration patterns for the model are in the
-  `multi-agent-orchestration` skill the `workflow-script` plugin ships.
-- Ordinary JavaScript loops and awaited `agent()` calls own sequential control
-  flow; array methods such as `.filter()` and `.join()` own local fan-in.
+- `all(items, { concurrency })` — concurrent barrier, fail-fast: the first
+  failure interrupts the siblings still running (their cards settle
+  cancelled) and fails the `all()`. An item is an operation or a generator
+  function (a multi-step branch); a called generator is refused.
+  `forEach(items, fn, opts)` is realm-side shorthand for `all(items.map(fn))`.
+- `attempt(op)` — never fails: `{ _tag: 'Success', value }` or
+  `{ _tag: 'Failure', error: { name, message } }`. Tolerant fan-out is
+  `all(items.map((x) => attempt(agent(...))))`.
+- `retry(op, { times })` — re-runs an operation or a whole branch after
+  `AgentFailed` or `TimedOut` (default once, at most 10); a `Skipped` call is
+  the user's verdict and is not retried. A re-attempt issuing a call key an
+  earlier attempt of the same `retry()` issued is the same call: the
+  duplicate-key check admits it, it keeps its card, and if it completed it
+  replays from this run's journal instead of running (and billing) again.
+- `timeout(op, ms)` — interrupts the operation at the deadline, which reaches
+  a child as a stop, and throws `TimedOut`.
+- Operation failures (`AgentFailed`, `TimedOut`, `Skipped`) are the only
+  failures a script can observe. Run-level faults (`WorkflowRunAbortError`:
+  contract faults, the call cap, journal-write failures, the wall clock) and
+  the script's own errors (a `TypeError`, its own `Error`) end the run;
+  `attempt()` does not turn them into values and `retry()` does not re-run
+  them.
+- Ordinary JavaScript loops over `yield* agent(...)` own sequential control
+  flow; array methods such as `.filter()` and `.map()` own local fan-in.
 - `log(msg)` / `phase(title)` / `args` — progress + parameterization.
 - `files` — immutable, role-separated workspace files bound to the run:
   `files.inputFiles` are editable, while `files.contextFiles` and
@@ -161,8 +185,8 @@ originalItem, index)`; a stage that returns `null` ends that item as `null`.
   was lost. A settled turn with a manifest is durable work the terminal row
   labels: a FAILED or CANCELLED row is an ordinary failed child (the manifest
   is written for `isError` too), replayed as the call's own failure, the same
-  one a live child of that outcome raises and the same `null` the engine
-  journals nothing for; a COMPLETED row recovers the manifest. Only a run that
+  one a live child of that outcome raises and the same `AgentFailed` the
+  engine journals nothing for; a COMPLETED row recovers the manifest. Only a run that
   opened no turn and delivered no manifest frees the next id — a decision
   taken while holding that attempt's run claim, so a resume starting one
   instant later is refused instead of running beside the id this frees. A
@@ -175,7 +199,7 @@ originalItem, index)`; a stage that returns `null` ends that item as `null`.
   current journal.
   Deliberately NOT an append-only started/result journal (the shape Claude
   Code's Workflow tool uses): such a log cannot distinguish "never
-  finished" from a `null` result, and beside the checkpoint, the commit
+  finished" from a failed result, and beside the checkpoint, the commit
   fence, and the child run aggregate it would be a second owner of the
   same fact. Ruled 2026-08-28 (.agents/docs/archived/feature/2026-08-28-workflow-plan-vs-issued-calls.md §Study).
 - **Cost ownership**: child costs remain in the persisted typed results. The
@@ -183,31 +207,26 @@ originalItem, index)`; a stage that returns `null` ends that item as `null`.
   boundary, rather than mutating parent totals during child launch; this keeps
   live execution, recovered manifests, and journal replay on one accounting
   path.
-- **Sandbox**: a fresh QuickJS runtime and context per script, with a
-  wall-clock interrupt deadline, a separate 60 s guest CPU budget (time spent
-  executing guest code, so waiting on `agent()` calls never counts), 64 MB
-  heap limit, 1 MB stack limit, dynamic code
+- **Sandbox**: a fresh QuickJS runtime and context per script, with a CPU
+  interrupt deadline, 64 MB heap limit, 1 MB stack limit, dynamic code
   generation disabled, and no `require`/`process`. The WASM module is loaded
   once, while script heaps and interrupt state remain isolated. The boundary
-  is **data-only in both directions**
-  (`sandbox.ts`): only JSON text crosses it, so neither side ever holds the
-  other realm's callables or objects. Scripts reach the host through
-  realm-local bridge wrappers whose arguments are stringified realm-side
-  (with a pristine, prelude-captured `JSON.stringify`) and whose results
-  arrive as JSON revived with the sandbox's own `JSON.parse`; host errors
-  are re-thrown as realm-local Errors. The script's own return value is
-  reported through a result channel as JSON text rather than awaited
-  host-side. Crucially, `parallel()` and `pipeline()` run **inside the
-  realm** as a trusted prelude — they consume script-created arrays and
-  callbacks, so running them host-side
-  would hand the script a host callback (via an overridden `arr.map`) or a
-  host resolve function (via a malicious `thenable.then`) whose
-  `.constructor` is the host's ungated `Function`. This closes the classic
-  `fn.constructor('return process')()` escape in both directions. Script
-  bodies are also forced into strict mode. QuickJS promise jobs are pumped
-  explicitly, so the same interrupt handler preempts synchronous loops and
-  loops reached after an `await` without blocking the host event loop; the
-  CPU budget is what stops them long before a long wall clock would.
+  is **data-only in both directions** (`sandbox.ts`): only JSON text crosses
+  it, so neither side ever holds the other realm's callables or objects. The
+  realm holds no host promises and so has no job queue to pump. The host
+  reaches it through exactly one trusted function, `step`, which the protocol
+  prelude captures before the body is evaluated and never installs as a
+  global: `step` runs one generator to its next yield and reports the yielded
+  operation, the result, or the throw as JSON text that the host validates
+  with a Zod discriminated union. A multi-step branch crosses as the id of a
+  generator function the realm keeps in its own table, so the host never
+  calls a method on a guest object; that is what closes the classic
+  `fn.constructor('return process')()` escape, since every callback a script
+  can capture is realm-local and codegen-gated. `log()` and `phase()` are
+  synchronous bridge calls whose arguments are stringified realm-side with a
+  pristine, prelude-captured `JSON.stringify`. Script bodies are forced into
+  strict mode, and the interrupt handler preempts a step still running at the
+  run's deadline, so a synchronous loop cannot outlive the wall clock.
 - **Determinism**: `Date.now()`, `Math.random()`, and argless `new Date()`
   throw inside scripts, installed non-writable so scripts cannot restore
   them (`new Date(timestamp)` stays usable). Resume relies on replaying the
@@ -228,33 +247,39 @@ originalItem, index)`; a stage that returns `null` ends that item as `null`.
   starts a new journal.
   Otherwise-identical calls must provide distinct `id` options; ambiguous
   duplicates fail before launch.
-- **Budgets**: one concurrency semaphore (the host's child-run budget; library default 4) across all `agent()`
-  calls, a live-call cap (default 1000; journal replays are free), a fan-out
-  cap of 4096 per `parallel()` or `pipeline()` call, a wall-clock timeout
-  (default 60 minutes, `meta.timeoutMs` up to 24 hours), and the guest CPU
-  budget. The cap raises
-  `WorkflowRunAbortError`, which `parallel()` does not convert to `null` — the
-  whole run fails. The timeout is the sandbox's own error: guest execution is
-  interrupted and every in-flight `agent()` fiber is interrupted and awaited
-  before the run settles.
+- **Budgets**: two bounds with two meanings: one concurrency semaphore (the
+  host's child-run budget; library default 4) across every `agent()` call in
+  every branch, and each `all()`'s own `concurrency` over its items (a branch
+  holds no permit while it waits on its children, so a budget of 1 cannot
+  deadlock). Also a live-call cap (default 200; journal replays are free), a
+  fan-out cap of 512 items per `all()` (in the wire schema), and a wall-clock
+  timeout. The cap and the timeout are `WorkflowRunAbortError` run faults,
+  which no script can catch: in-flight `agent()` fibers are interrupted and
+  awaited before the run settles.
 - **Cancellation is interruption**: the engine and the sandbox take no
-  `AbortSignal`. The sandbox is one scoped Effect whose QuickJS runtime,
-  context, pending host promises, `agent()` fibers and deadline timer are
-  resources of its scope, so a result, a timeout, the first run-level fault,
-  or the caller interrupting the run all tear it down the same way: calls
+  `AbortSignal`. The interpreter (`interpreter.ts`) runs each operation as the
+  Effect combinator it names (`Effect.forEach` for `all()`, `catchIf` for
+  `attempt()`, `Effect.retry` for `retry()`, `Effect.timeoutOrElse` for
+  `timeout()`) inside one scope that owns the QuickJS runtime and context and
+  the deadline timer, so a result, a timeout, the first run-level fault, or
+  the caller interrupting the run all tear it down the same way: calls
   interrupted (an admitted journal commit reaching its durability point
-  first), then the realm disposed, then the terminal sweep. Skip and retry
-  are a per-attempt `Deferred` decision the host's gesture and the runner's
-  settlement race for; a retry journals its supersession before it
-  interrupts the runner. The two cancellation edges live in the host, where
-  the child-run loop is a detached fiber: `workflowScriptStrategy` turns the
-  loop's abort into an interrupt of the run, and `executeSubagentInBand`
-  turns an interrupt of its caller into a stop of the in-band child by run
-  id, then waits for the child to settle.
-- **Debuggability**: a thrown error inside a `parallel()` thunk or `pipeline()` stage
-  (a script bug, as opposed to an `agent()` failure,
-  which already resolves to `null` with its own `agent:end` event) rejects the
-  workflow so the saved script can be edited and rerun.
+  first), then the realm disposed, then the terminal sweep, which cancels
+  every call the run ended around — the call whose fault ended it failed on
+  its own card. A call an operation interrupts while the run goes on (a
+  fail-fast sibling, a `timeout()`) settles its own card cancelled. Skip and
+  retry are a per-attempt `Deferred` decision the host's gesture and the
+  runner's settlement race for; a retry journals its supersession — a mark at
+  the retried child's own attempt, so the replacement's id reads as the free
+  slot above it — before it interrupts the runner. The two cancellation edges
+  live in the host, where the child-run loop is a detached fiber:
+  `workflowScriptStrategy` turns the loop's abort into an interrupt of the
+  run, and `executeSubagentInBand` turns an interrupt of its caller into a
+  stop of the in-band child by run id, then waits for the child to settle.
+- **Debuggability**: a script's own error (a bug, as opposed to an operation
+  failure) fails the workflow with up to three guest stack frames, so the
+  saved script can be edited and rerun. An uncaught `AgentFailed` fails it
+  with a hint to wrap the call in `attempt()`.
 
 ## Production integration
 

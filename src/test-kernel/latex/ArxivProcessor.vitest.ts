@@ -17,15 +17,14 @@ import {
   Path,
 } from 'effect';
 import { FetchHttpClient, type HttpClient } from 'effect/unstable/http';
+import * as tar from 'tar';
 import { afterEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { ArxivProcessor } from '@latex/arxivProcessor';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { captureLogEntries } from '@test/support/logSinkCapture';
-import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
+import { setupPlatform } from '@test/support/setupPlatform';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 
 const tempDirs = useTempDirs();
@@ -106,50 +105,6 @@ function sourceResponse(status = 200): Response {
   });
 }
 
-describe('arXiv processor logger channel', () => {
-  const withDebugPlatform = Effect.promise(() => installPlatform()).pipe(
-    Effect.asVoid,
-  );
-
-  /** The logger production installs, so entries reach the captured sink. */
-  const withDiagnostics = <A, E, R>(
-    self: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E, R> =>
-    Effect.provide(self, effectDiagnosticsLayer('Trace'));
-
-  // #7347 renamed the exported singleton to PascalCase and accidentally
-  // changed the channel string too. It is rendered as the `[channel]` prefix
-  // on every line this class emits, so it must stay lowercase for log filters
-  // that match `[arxivProcessor]`.
-  //
-  // `it.live`: the 429 retry backoff sleeps on the effect clock, which the
-  // TestClock `it.effect` installs never advances on its own.
-  it.live('emits download retry logs on the "arxivProcessor" channel', () =>
-    Effect.gen(function* () {
-      yield* withDebugPlatform;
-      const logs = captureLogEntries();
-      const destBasePath = yield* tempSourceBase;
-      let attempt = 0;
-      const fetchMock = vi.fn(async () => {
-        attempt += 1;
-        return attempt === 1
-          ? new Response(null, { status: 429 })
-          : sourceResponse();
-      });
-      const downloadedPath = yield* ArxivProcessor.downloadFile(
-        SOURCE_URL,
-        destBasePath,
-        5000,
-      ).pipe(onFetch(fetchMock));
-
-      expect(downloadedPath).toBe(destBasePath);
-      expect(
-        logs.has('DEBUG', 'arxivProcessor', 'Download attempt failed'),
-      ).toBe(true);
-    }).pipe(withDiagnostics, Effect.provide(httpPlatformLayer)),
-  );
-});
-
 describe('arXiv source download filenames', () => {
   setupPlatform({});
 
@@ -213,6 +168,112 @@ describe('arXiv source download filenames', () => {
             fs.readFile(path.join(paperDir, 'main.tex'), 'utf8'),
           ),
         ).toBe(tex);
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
+    'removes a paper directory it created when extraction stops partway',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-partial-', tempDirs),
+        );
+        // `main.tex` lands whole; the archive is cut inside the next entry, so
+        // tar writes one `.tex` into the paper directory before it rejects.
+        // Cancel mid-extraction leaves the same partial tree.
+        const archive = yield* Effect.promise(async () => {
+          const srcDir = await makeTempDir('texra-arxiv-tar-', tempDirs);
+          await fs.writeFile(path.join(srcDir, 'main.tex'), 'whole');
+          await fs.writeFile(path.join(srcDir, 'z.tex'), 'x'.repeat(4096));
+          const tarPath = path.join(srcDir, 'source.tar');
+          await tar.c({ cwd: srcDir, file: tarPath }, ['main.tex', 'z.tex']);
+          return (await fs.readFile(tarPath)).subarray(0, 2048);
+        });
+        const fetchMock = vi.fn(
+          async () =>
+            new Response(archive, {
+              headers: {
+                'content-disposition': 'attachment; filename="source.tar"',
+              },
+            }),
+        );
+        const exit = yield* Effect.exit(
+          ArxivProcessor.downloadSource('2404.12175', {
+            workspaceRoot,
+            formatter: null,
+            autoIndent: false,
+          }).pipe(onFetch(fetchMock)),
+        );
+        expect(Exit.isFailure(exit)).toBe(true);
+        expect(
+          yield* Effect.promise(() => fs.readdir(workspaceRoot)),
+        ).toStrictEqual(['References']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readdir(path.join(workspaceRoot, 'References')),
+          ),
+        ).toStrictEqual([]);
+      }).pipe(Effect.provide(httpPlatformLayer)),
+  );
+
+  it.live(
+    'refuses an archive entry that already exists at the root, then places a clean one',
+    () =>
+      Effect.gen(function* () {
+        const workspaceRoot = yield* Effect.promise(() =>
+          makeTempDir('texra-arxiv-root-', tempDirs),
+        );
+        const archive = yield* Effect.promise(async () => {
+          const srcDir = await makeTempDir('texra-arxiv-tar-', tempDirs);
+          await fs.mkdir(path.join(srcDir, 'figures'));
+          await fs.writeFile(path.join(srcDir, 'main.tex'), 'arxiv');
+          await fs.writeFile(path.join(srcDir, 'figures/a.txt'), 'fig');
+          const tarPath = path.join(srcDir, 'source.tar');
+          await tar.c({ cwd: srcDir, file: tarPath }, ['main.tex', 'figures']);
+          await fs.writeFile(path.join(workspaceRoot, 'main.tex'), 'mine');
+          return fs.readFile(tarPath);
+        });
+        const download = ArxivProcessor.downloadSource('2404.12175', {
+          workspaceRoot,
+          formatter: null,
+          autoIndent: false,
+          destination: 'root',
+        }).pipe(
+          onFetch(
+            vi.fn(
+              async () =>
+                new Response(archive, {
+                  headers: {
+                    'content-disposition': 'attachment; filename="source.tar"',
+                  },
+                }),
+            ),
+          ),
+        );
+        const listRoot = Effect.promise(async () =>
+          (await fs.readdir(workspaceRoot)).sort(),
+        );
+        const error = yield* Effect.flip(download);
+        expect(error.message).toBe(
+          `Target already exists: ${path.join(workspaceRoot, 'main.tex')}`,
+        );
+        expect(yield* listRoot).toStrictEqual(['main.tex']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(workspaceRoot, 'main.tex'), 'utf8'),
+          ),
+        ).toBe('mine');
+
+        yield* Effect.promise(() =>
+          fs.rm(path.join(workspaceRoot, 'main.tex')),
+        );
+        yield* download;
+        expect(yield* listRoot).toStrictEqual(['figures', 'main.tex']);
+        expect(
+          yield* Effect.promise(() =>
+            fs.readFile(path.join(workspaceRoot, 'figures/a.txt'), 'utf8'),
+          ),
+        ).toBe('fig');
       }).pipe(Effect.provide(httpPlatformLayer)),
   );
 

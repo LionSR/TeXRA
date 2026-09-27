@@ -17,6 +17,8 @@ export const ARXIV_CONSTANTS = Object.freeze({
   MAX_AUTHORS: 50,
   /** arXiv API rate limit: approximately 1 request per 3 seconds */
   RATE_LIMIT_DELAY_MS: 3000,
+  /** Deadline for one arXiv request (the client sets no timeout of its own) */
+  TIMEOUT_MS: 30_000,
 } as const);
 
 // Crossref API constants
@@ -27,4 +29,6 @@ export const CROSSREF_CONSTANTS = Object.freeze({
   DEFAULT_ROWS: 10,
   /** Crossref API is more lenient, but add conservative delay to be respectful */
   RATE_LIMIT_DELAY_MS: 1000,
+  /** Deadline for one Crossref request (the client sets no timeout of its own) */
+  TIMEOUT_MS: 15_000,
 } as const);

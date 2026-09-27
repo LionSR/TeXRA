@@ -2,11 +2,14 @@
 import path from 'node:path';
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, FileSystem } from 'effect';
 import { MODEL_CONFIGS, ModelProvider } from 'llm-zoo';
 
 // Local imports - platform
-import { JsonConfigProvider } from '@platform/defaults/jsonConfigProvider';
+import {
+  JsonConfigProvider,
+  type ConfigStore,
+} from '@platform/defaults/jsonConfigProvider';
 import { nodeFileServices, type JsonStore } from '@platform/defaults/jsonStore';
 import {
   TEXRA_CONFIG_FILE_NAME,
@@ -23,6 +26,9 @@ import {
   CLI_CONFIG_SLOT_KEYS,
   settingByKey,
 } from '@shared/state/stateSettings';
+
+// Local imports - tools
+import { mcpConfigWarnings, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 
 // Local imports - utilities
 import {
@@ -117,12 +123,12 @@ export interface CliStartupConfig {
    * next run reads.
    */
   readonly config: ConfigProvider;
-  /** Every config problem found at open, for the CLI and `texra doctor`. */
+  /** The routine config problems found at open, for the CLI and `texra doctor`. */
   readonly warnings: readonly string[];
   /**
-   * The subset of `warnings` saying the project file could not be used at all
-   * (malformed JSON, not an object, not writable): actionable degradation,
-   * not routine noise, so it is printed even under `--quiet`.
+   * The problems saying the project file could not be used at all (malformed
+   * JSON, not an object, not writable): actionable degradation, not routine
+   * noise, so it is printed even under `--quiet`.
    */
   readonly degradations: readonly string[];
 }
@@ -268,10 +274,34 @@ export function loadCliStartupConfig(
       const stores = yield* openTexraConfigStores(storageRoot, cwd, (message) =>
         degradations.push(message),
       );
+      // The user's MCP server config, which only a run declaring MCP tools
+      // otherwise reads: a broken file warns here, not first mid-run.
+      const mcpWarnings = yield* mcpConfigWarnings(
+        yield* FileSystem.FileSystem,
+        USER_MCP_CONFIG_PATH,
+      );
+      // A value its catalog row rejects is reported once, in `warnings`
+      // below, and then reads as absent: every read passes over it to the
+      // next tier, as that warning says, instead of each reader warning about
+      // the same value again. Writes still land in the file itself.
+      const withoutInvalid = (store: JsonStore): ConfigStore => ({
+        get: <T>(key: string): T | undefined => {
+          const value = store.get<T>(key);
+          const entry = settingByKey(key);
+          return value !== undefined &&
+            entry &&
+            !entry.schema.safeParse(value).success
+            ? undefined
+            : value;
+        },
+        set: (key, value) => store.set(key, value),
+      });
       return {
-        config: new JsonConfigProvider(stores),
+        config: new JsonConfigProvider({
+          workspace: withoutInvalid(stores.workspace),
+          global: withoutInvalid(stores.global),
+        }),
         warnings: [
-          ...degradations,
           ...configFileWarnings([
             {
               store: stores.workspace,
@@ -287,6 +317,7 @@ export function loadCliStartupConfig(
               isProjectFile: false,
             },
           ]),
+          ...mcpWarnings,
         ],
         degradations,
       };

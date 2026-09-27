@@ -69,8 +69,8 @@ export type {
   ITool,
   IToolRegistry,
   ToolGuard,
-  ToolHost,
 } from '@agent/core/tools/ToolTypes';
+export type { SettingHost } from '@shared/state/stateSettings';
 export { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 export { defineTool } from '@tools/core/definition';
 export type { DefinedTool } from '@tools/core/definition';

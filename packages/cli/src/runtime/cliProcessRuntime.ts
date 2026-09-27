@@ -56,7 +56,6 @@ import {
   StateWriteFailed,
   type StateStore,
 } from '@platform/interfaces';
-import { createLifecycleHost } from '@platform/defaults/lifecycleHost';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
 import {
   withProcessServices,
@@ -69,7 +68,7 @@ import { usageLogLayer } from '@telemetry/UsageLogService';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
-import { getCliSecrets } from './cliSecrets';
+import { CliSecrets, cliSecretsPath } from './cliSecrets';
 import { setCliLogRuntime, writeTextStderr } from './logSinks';
 import { cliAgentResume } from './cliAgentResume';
 import { ensureCliSupabaseAuth, signInCliSupabase } from './supabaseAuth';
@@ -88,17 +87,19 @@ const NO_PLATFORM_APP_STATE =
  * answered with the caller's fallback would read as absent state rather than
  * as no store at all.
  */
+const refuseWrite = (key: string) =>
+  Effect.fail(
+    new StateWriteFailed({
+      key,
+      message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
+      cause: undefined,
+    }),
+  );
 const refusingStateStore: StateStore = Object.freeze({
   get: (key: string) =>
     Effect.die(new Error(`${NO_PLATFORM_APP_STATE} "${key}" cannot be read.`)),
-  update: (key: string) =>
-    Effect.fail(
-      new StateWriteFailed({
-        key,
-        message: `${NO_PLATFORM_APP_STATE} "${key}" cannot be written.`,
-        cause: undefined,
-      }),
-    ),
+  update: refuseWrite,
+  modify: refuseWrite,
 });
 
 const NO_PLATFORM_GLOBAL_ROOT =
@@ -125,6 +126,7 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 )({
   appendAll: () => refuseGlobalRecord('appendAll'),
   readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
+  updateAppStateKey: () => refuseGlobalRecord('updateAppStateKey'),
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),
   readDesktopProjects: () => refuseGlobalRecord('readDesktopProjects'),
@@ -211,22 +213,14 @@ export function installCliProcessRuntime(
     // and which runs no records operation — must not create it at all.
     const globalStoragePath = resolveGlobalStoragePath(storageRoot);
     const version = await readCliVersion();
-    const secrets = getCliSecrets(storageRoot);
+    const secrets = new CliSecrets(cliSecretsPath(storageRoot));
     // The account plane is built beside the runtime that serves it.
     const auth = ensureCliSupabaseAuth(secrets);
-    // The process lifecycle and agent directories are process services the
-    // runtime serves, so both are built here, before the install, rather than
-    // in the platform init that may join an already-installed runtime. The
-    // built-in agent directories read straight out of the CLI package's
-    // `dist/resources`; the platform-less entries pass no resources root and
-    // load no agents.
-    const lifecycle = createLifecycleHost({
-      onError: (phase, error) => {
-        writeTextStderr(
-          `[error] [cli.lifecycle] Lifecycle ${phase} handler failed: ${toErrorMessage(error)}`,
-        );
-      },
-    });
+    // The agent directories are a process service the runtime serves, so
+    // they are built here, before the install, rather than in the platform
+    // init that may join an already-installed runtime. The built-in agent
+    // directories read straight out of the CLI package's `dist/resources`;
+    // the platform-less entries pass no resources root and load no agents.
     const agentDirectories = new AgentDirectoryService({
       channel: 'cli',
       resourcesPath: options?.resourcesPath ?? '',
@@ -253,7 +247,6 @@ export function installCliProcessRuntime(
       // mounted, whichever entry installed this runtime.
       agentResume: cliAgentResume,
       agentDirectories: AgentDirectories.layer(agentDirectories),
-      lifecycle,
       setup: {
         host: 'cli',
         // The one closure left over the runtime being installed, and a real
@@ -266,9 +259,11 @@ export function installCliProcessRuntime(
         signIn: () =>
           withProcessServices(
             runtime,
-            signInCliSupabase(runtime, { openBrowser: true }).pipe(
-              Effect.andThen(auth.authenticated),
-            ),
+            signInCliSupabase(runtime, {
+              noBrowser: false,
+              // No panel owns this sign-in, so the URL goes to stderr.
+              writeProgress: writeTextStderr,
+            }).pipe(Effect.andThen(auth.authenticated)),
           ).pipe(
             Effect.mapError(
               (cause) =>
@@ -307,9 +302,11 @@ export function installCliProcessRuntime(
  * after the disposal settles, so a write racing the teardown still reaches
  * the runtime that is unwinding, exactly as it did before the shutdown began.
  *
- * Registered by `initCliPlatform` as the last shutdown step and called
- * directly by the same root when a failed init must not leave the runtime
- * installed with nothing to dispose it.
+ * Registered by `initCliPlatform` as the last shutdown step, and run by the
+ * process entry (`bin/texra.ts`) for whatever runtime is still installed —
+ * which is how a failed init's runtime goes. Never from a fiber on the
+ * runtime being disposed: that disposal waits for the fiber asking for it,
+ * and the process exits with its top-level await unsettled.
  */
 export const disposeCliProcessRuntime: Effect.Effect<void> = Effect.suspend(
   () => {

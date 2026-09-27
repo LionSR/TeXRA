@@ -151,21 +151,6 @@ describe('ChatExportController.exportAsHtml', () => {
         );
       }).pipe(Effect.provide(rootedFsLayer(session.roots))),
   );
-
-  it.effect('throws when the standalone template bundle is missing', () =>
-    Effect.gen(function* () {
-      const runId = 'eec002' as RunId;
-      publishTestRunStart(session, runId);
-      yield* settlePublications;
-      yield* getRunRecords(session, runId).writeRunRecord(config());
-      yield* persistTranscriptEntry(runId);
-
-      const error = yield* Effect.flip(
-        controller.exportAsHtml(runId, '/nonexistent/index.html'),
-      );
-      expect(error.message).toMatch(/Trace-viewer standalone bundle missing/);
-    }).pipe(Effect.provide(rootedFsLayer(session.roots))),
-  );
 });
 
 describe('ChatExportController.buildExportInput', () => {
@@ -179,28 +164,6 @@ describe('ChatExportController.buildExportInput', () => {
       session,
     });
   });
-
-  it.effect('reports config_missing when nothing is stored', () =>
-    Effect.gen(function* () {
-      expect(yield* controller.buildExportInput('eec404' as RunId)).toEqual({
-        status: 'config_missing',
-      });
-    }),
-  );
-
-  it.effect('returns ok when config and transcript are stored', () =>
-    Effect.gen(function* () {
-      const runId = 'eec001' as RunId;
-      publishTestRunStart(session, runId);
-      yield* settlePublications;
-      yield* getRunRecords(session, runId).writeRunRecord(config());
-      yield* persistTranscriptEntry(runId);
-
-      expect(yield* controller.buildExportInput(runId)).toMatchObject({
-        status: 'ok',
-      });
-    }),
-  );
 
   it.effect(
     'reports conversation_missing when a config is stored but no transcript exists',

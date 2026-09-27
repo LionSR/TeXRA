@@ -37,12 +37,7 @@ import type { ToolRegistry } from '@tools/toolTable';
 import type { HttpClient } from 'effect/unstable/http';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
-import type {
-  AgentDirectories,
-  AgentResume,
-  AppState,
-  Lifecycle,
-} from './interfaces';
+import type { AgentDirectories, AgentResume, AppState } from './interfaces';
 import type { LanguageModel } from './languageModel';
 import type { GlobalStorageFs } from './rootedFs';
 import type { Secrets } from './secrets';
@@ -82,7 +77,6 @@ export type ProcessServices =
   | LanguageModel
   | AgentResume
   | AgentDirectories
-  | Lifecycle
   | SetupPlatform
   | AgentEngine
   | LeanLanguageServices
@@ -94,13 +88,15 @@ export type ProcessServices =
 
 /**
  * The services an agent catalog load reads: the global and filesystem views
- * the local agent directories are scanned through, and the HTTP client the
- * remote catalog is listed with.
+ * the local agent directories are scanned through, the app state the
+ * disabled-plugin switch is read from, and the HTTP client the remote catalog
+ * is listed with.
  */
 export type AgentCatalogServices =
   | GlobalStorageFs
   | FileSystem.FileSystem
   | AgentDirectories
+  | AppState
   | HttpClient.HttpClient;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<

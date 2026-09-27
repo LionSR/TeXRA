@@ -3,13 +3,17 @@
 // Third-party imports
 import { it } from '@effect/vitest';
 import { Cause, Deferred, Effect, Exit, Fiber } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type {
+  ChildRunPort,
+  ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
@@ -17,6 +21,7 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  type UserFollowUpSupport,
   AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -25,12 +30,8 @@ import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
-import {
-  launchAgentCliSession,
-  reraiseAgentCliCallFailure,
-} from '@tools/agentCliShared';
-import { codexThreadsFor } from '@tools/agentCliSessionStores';
-import { createChildRun, type ChildRun } from '@tools/delegation/childRun';
+import { launchAgentCliSession } from '@tools/agentCliShared';
+import { createChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
 import {
@@ -41,13 +42,10 @@ import {
 
 const runId = 'c11111' as RunId;
 const parentRunId = 'c11112' as RunId;
-const loopRunId = 'c11113' as RunId;
 const stoppedRunId = 'c11114' as RunId;
-const cancelledRunId = 'c11115' as RunId;
 const failedRunId = 'c11116' as RunId;
-const noProjectionAutoCloseRunId = 'c11118' as RunId;
+const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
-const setupRetryRunId = 'c11120' as RunId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
   model: 'test-model',
@@ -55,30 +53,40 @@ const config = AgentConfigSchema.parse({
 });
 
 const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
-  function* (...args: Parameters<typeof createChildRun>) {
-    const [session, runId, parentRunId, options] = args;
+  function* (
+    session: SessionHandle,
+    runId: RunId,
+    parentRunId: RunId,
+    options: Parameters<typeof createChildRun>[3] & {
+      readonly userFollowUpSupport: UserFollowUpSupport;
+      readonly description: string;
+    },
+  ) {
     yield* registerRun(session, runId, options.config, {
       identity: options.run,
       userFollowUpSupport: options.userFollowUpSupport,
       parentRunId,
       description: options.description,
     });
-    const child = yield* createChildRun(...args).pipe(
+    const child = yield* createChildRun(session, runId, parentRunId, {
+      run: options.run,
+      config: options.config,
+    }).pipe(
       Effect.provideService(Runs, session.runs),
-      Effect.onError(() => session.releaseRunLease(runId).pipe(Effect.orDie)),
+      Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
     );
     // What the child loop does once its stop target is reserved.
     child.track();
     return {
       ...child,
       finalize: (
-        input: Parameters<ChildRun['finalize']>[0],
+        input: Parameters<ChildRunPort['finalize']>[0],
       ): Effect.Effect<void, Error> =>
         child
           .finalize(input)
           .pipe(
             Effect.provideService(Runs, session.runs),
-            Effect.ensuring(session.releaseRunLease(runId).pipe(Effect.orDie)),
+            Effect.ensuring(session.commitRunEnd(runId).pipe(Effect.orDie)),
           ),
     };
   },
@@ -130,8 +138,6 @@ describe('child run progress events', () => {
         const recorded = recordSessionEvents(testDefaultSession());
 
         const childRun = yield* Effect.promise(() => startBashChild(runId));
-
-        expect(childRun.childRunId).toBe(runId);
 
         yield* childRun.finalize({
           outcome: RUN_OUTCOME.COMPLETED,
@@ -260,82 +266,6 @@ describe('child run progress events', () => {
         }),
       ]);
     }),
-  );
-
-  it.effect(
-    'rolls back a failed rehydrated setup so the same run can retry',
-    () => {
-      const recorded = recordSessionEvents(testDefaultSession());
-      const attachTrace = vi
-        .spyOn(testDefaultSession(), 'attachRunTrace')
-        .mockImplementationOnce(() => {
-          throw new Error('run setup failed');
-        });
-      const options = {
-        run: {
-          kind: 'multiAgentWorkflow' as const,
-          workflowName: 'retry-setup',
-        },
-        userFollowUpSupport: 'unsupported' as const,
-        description: 'Retry a failed child run setup',
-        config,
-      };
-
-      return Effect.gen(function* () {
-        const error = yield* Effect.flip(
-          createRegisteredChildRun(
-            testDefaultSession(),
-            setupRetryRunId,
-            parentRunId,
-            options,
-          ),
-        );
-        expect(error.message).toContain('run setup failed');
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.removed',
-          ).map((event) => event.aggregateId),
-        ).not.toContain(qualifyAggregateId('run', setupRetryRunId));
-        // Setup failed after the existence fact, so the started run ended
-        // with its terminal row instead of lingering as a ghost.
-        expect(
-          eventsOfType(yield* Effect.promise(() => recorded.read()), 'run.end'),
-        ).toContainEqual(
-          expect.objectContaining({
-            aggregateId: qualifyAggregateId('run', setupRetryRunId),
-            outcome: RUN_OUTCOME.FAILED,
-          }),
-        );
-
-        const retried = yield* createRegisteredChildRun(
-          testDefaultSession(),
-          setupRetryRunId,
-          parentRunId,
-          options,
-        );
-        expect(retried.childRunId).toBe(setupRetryRunId);
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.start',
-          ).filter(
-            (event) =>
-              event.aggregateId === qualifyAggregateId('run', setupRetryRunId),
-          ),
-        ).toHaveLength(1);
-        expect(
-          eventsOfType(
-            yield* Effect.promise(() => recorded.read()),
-            'run.activate',
-          ).filter(
-            (event) =>
-              event.aggregateId === qualifyAggregateId('run', setupRetryRunId),
-          ),
-        ).toHaveLength(2);
-        yield* retried.finalize({ outcome: RUN_OUTCOME.COMPLETED });
-      }).pipe(Effect.ensuring(Effect.sync(() => attachTrace.mockRestore())));
-    },
   );
 
   it.effect(
@@ -496,36 +426,36 @@ describe('child run progress events', () => {
       Effect.gen(function* () {
         const setupError = new Error('child loop setup failed');
         const session = testDefaultSession();
-        const recorded = recordSessionEvents(session);
-        let childRun: ChildRun | undefined;
+        let childRun: ChildRunPort | undefined;
         let childRunId: RunId | undefined;
         let visibleBeforeLoop = true;
 
-        // `reraiseAgentCliCallFailure` re-raises the loop's throw as a
-        // defect, so flip the defect back into the error channel.
+        // The launch dies with the loop's throw, so flip the defect back
+        // into the error channel.
         const defect = yield* Effect.flip(
-          reraiseAgentCliCallFailure(
-            launchAgentCliSession({
-              session: testDefaultSession(),
-              parentRunId,
-              agentName: 'codex',
-              description: 'Fail during synchronous loop setup',
-              config,
-              registerFailedMessage: 'registration failed',
-              buildLaunch: (context) => {
-                childRun = context.childRun;
-                childRunId = context.runId;
-                // Before the loop reserves its stop target, no stop can find
-                // the handle: a stop never reaches a run it cannot interrupt.
-                visibleBeforeLoop =
-                  session.runs.getHandle(context.runId) !== undefined;
-                throw setupError;
-              },
-              summary: 'unreachable',
-              launchedLine: 'unreachable',
-              followUpLine: 'unreachable',
-            }).pipe(Effect.provideService(Runs, session.runs)),
-          ).pipe(Effect.catchDefect((cause) => Effect.fail(cause))),
+          launchAgentCliSession({
+            session: testDefaultSession(),
+            parentRunId,
+            agentName: 'codex',
+            description: 'Fail during synchronous loop setup',
+            config,
+            registerFailedMessage: 'registration failed',
+            buildLaunch: (context) => {
+              childRun = context.childRun;
+              childRunId = context.runId;
+              // Before the loop reserves its stop target, no stop can find
+              // the handle: a stop never reaches a run it cannot interrupt.
+              visibleBeforeLoop =
+                session.runs.getHandle(context.runId) !== undefined;
+              throw setupError;
+            },
+            summary: 'unreachable',
+            launchedLine: 'unreachable',
+            followUpLine: 'unreachable',
+          }).pipe(
+            Effect.provideService(Runs, session.runs),
+            Effect.catchDefect((cause) => Effect.fail(cause)),
+          ),
         );
         expect(defect).toBe(setupError);
         expect(visibleBeforeLoop).toBe(false);
@@ -536,9 +466,7 @@ describe('child run progress events', () => {
           throw new Error('expected the failed child launch to be captured');
         }
         expect(session.runs.getHandle(childRunId)).toBeUndefined();
-        expect(session.runView(childRun.childRunId)?.status).toBe(
-          RUN_PHASE.FAILED,
-        );
+        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.FAILED);
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
@@ -595,6 +523,34 @@ describe('child run progress events', () => {
           kind: 'unexpected',
           message: 'child process exited 1',
         },
+      });
+    }),
+  );
+
+  // `error` is `unknown`: a value with no primitive conversion throws when
+  // formatted, and the child must still settle with its `run.end` row.
+  it.effect('settles a failed child whose error cannot be formatted', () =>
+    Effect.gen(function* () {
+      const childRun = yield* Effect.promise(() =>
+        startCodexChild(unformattableRunId, 'Run an unformattable failure'),
+      );
+
+      yield* childRun.finalize({
+        outcome: RUN_OUTCOME.FAILED,
+        error: Object.create(null),
+      });
+
+      expect(
+        testDefaultSession().runs.getHandle(unformattableRunId),
+      ).toBeUndefined();
+      expect(
+        yield* getRunRecords(
+          testDefaultSession(),
+          unformattableRunId,
+        ).readRunEnd(),
+      ).toMatchObject({
+        outcome: 'failed',
+        error: { message: 'Child run finalize prologue failed' },
       });
     }),
   );

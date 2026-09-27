@@ -177,24 +177,6 @@ function metadataLinesRows(
   );
 }
 
-/** Row-count view of {@link agentProposalMetadataLines} for the scrollable
- * prompt-area budget — same descriptor list, counted rather than painted, so
- * the two can never drift. */
-function agentProposalMetadataRows({
-  fileGroups,
-  payload,
-  width,
-}: {
-  readonly fileGroups: ReturnType<typeof getProposalFileGroups>;
-  readonly payload: AgentProposalPermission;
-  readonly width: number;
-}): number {
-  return metadataLinesRows(
-    agentProposalMetadataLines({ fileGroups, payload }),
-    width,
-  );
-}
-
 function MetadataLineRow(props: {
   readonly line: MetadataLine;
 }): React.JSX.Element {

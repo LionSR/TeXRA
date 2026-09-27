@@ -14,25 +14,15 @@ export const DESKTOP_PROJECT_COMMANDS = {
   CLOSE_PROJECT: 'desktop:projects:close',
 } as const;
 
-/**
- * One open project: its session key and the folder it is, which the
- * renderer's editor and terminal need. What a rail row, switcher entry, or
- * project chip prints for it is the `project` display record of the session's
- * host snapshot (PRD 8.1), which rides the session's frames and is not
- * repeated here.
- */
-const DesktopProjectSchema = z.object({
-  /** The session key; the project's identity on every message. */
-  key: z.string(),
-  /** Canonical folder path. */
-  root: z.string(),
-});
-
 export const DesktopProjectsMessageSchema = z.object({
   command: z.literal(DESKTOP_PROJECT_COMMANDS.PROJECTS),
-  projects: z.array(DesktopProjectSchema),
+  /** The open projects' session keys, in rail order. What a rail row,
+   *  switcher entry, or project chip prints for one is the `project` display
+   *  record of its host snapshot (PRD 8.1), which rides the session's frames
+   *  and is not repeated here; its folder stays with the main process. */
+  open: z.array(z.string()),
   /** Key of the session this window shows: an open project's, or the
-   *  no-workspace session's, which is never listed in `projects`. */
+   *  no-workspace session's, which is never listed in `open`. */
   activeKey: z.string(),
 });
 export type DesktopProjectsMessage = z.infer<

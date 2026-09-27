@@ -10,8 +10,8 @@
 import { Effect } from 'effect';
 
 // Local imports
-import type { ToolHost } from '@agent/core/tools/ToolTypes';
 import { AppState } from '@platform/interfaces';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type {
   ToolCommandKind,
   ToolDashboardItem,
@@ -81,7 +81,7 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
  */
 export function isToolPluginVisible(
   plugin: ToolPlugin,
-  host: ToolHost,
+  host: SettingHost,
 ): boolean {
   return (
     plugin.hidden !== true &&
@@ -106,7 +106,7 @@ export function isToolPluginVisible(
  */
 export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
   function* (
-    host: ToolHost,
+    host: SettingHost,
     probeInputs: ToolProbeInputs,
     cachedResults?: ExternalToolCheckResult[],
   ) {
@@ -152,7 +152,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           ...(def.authCommand
             ? [{ kind: 'auth' as const, command: def.authCommand }]
             : []),
-          ...(def.installExtensionId
+          // The desktop app cannot host VS Code extensions, so it gets no
+          // "Install Extension" button; the install guide and URL still
+          // describe the standalone path (Lean 4's `lake` build, for one).
+          ...(def.installExtensionId && host !== 'desktop'
             ? [
                 {
                   kind: 'extension' as const,

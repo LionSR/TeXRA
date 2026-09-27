@@ -39,18 +39,11 @@ vi.mock('@agent/followUp/ToolUseFollowUp', () => ({
 // The session-keyed registry resolves live handles through its session's
 // RunRegistry. Tests stage a handle here for the lookups they exercise;
 // unset slots miss, like an untracked run.
-const sessionHandles: { byRunId?: unknown; interruptActive?: () => void } = {};
+const sessionHandles: { byRunId?: unknown } = {};
 const testSession = {
   followUps: { acquire: () => ({ enqueue: vi.fn() }) },
   runs: {
     getHandle: () => sessionHandles.byRunId,
-    // A stop by run id reaches whatever the case staged as the run's live
-    // target; an unstaged run has none.
-    interruptActive: () => {
-      if (sessionHandles.interruptActive === undefined) return false;
-      sessionHandles.interruptActive();
-      return true;
-    },
   },
 } as unknown as SessionHandle;
 const ClaudeAgentSessions = claudeAgentSessionsFor(testSession.runs);
@@ -65,9 +58,9 @@ vi.mock('@tools/delegation/childRun', () => ({
 }));
 
 vi.mock('@agent/runtime/childRunLoop', () => ({
-  runWithOwnedRunLeaseLaunchGuard: (
+  runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithOwnedRunLeaseLaunchGuard
+      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
     >
   ) => args[2],
   startChildRunLoop: mocks.startChildRunLoop,
@@ -314,7 +307,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   it.live('preserves legacy usage when a result has no modelUsage', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
-      const publishUsage = vi.spyOn(childRun.logger, 'usage');
+      const publishUsage = vi.spyOn(childRun.logger, 'emit');
       mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
       mocks.query.mockReturnValue(
         (async function* () {
@@ -341,9 +334,10 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       expect(publishUsage).toHaveBeenCalledWith(
         expect.objectContaining({
+          type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
+          recordTranscript: false,
         }),
-        { recordTranscript: false },
       );
     }).pipe(
       Effect.provide(
@@ -427,7 +421,7 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect(mocks.submitFollowUp).toHaveBeenCalledOnce();
         expect(mocks.submitFollowUp).toHaveBeenCalledWith(
           launchedRunId,
-          'also update the tests',
+          expect.objectContaining({ text: 'also update the tests' }),
           expect.objectContaining({ session: expect.anything() }),
         );
 
@@ -449,31 +443,23 @@ describe('claude_agent tool launch and resume fallback', () => {
       ),
   );
 
-  it.live(
-    'exposes an in-flight initial turn to the shared shutdown drain',
-    () =>
-      Effect.gen(function* () {
-        const interrupt = vi.fn();
-        const captured = captureStrategy();
+  it.live('declares its CLI process to the shared shutdown drain', () =>
+    Effect.gen(function* () {
+      const captured = captureStrategy();
 
-        yield* ClaudeAgentTool.call({
-          prompt: 'start a long initial turn',
-        });
+      yield* ClaudeAgentTool.call({
+        prompt: 'start a long initial turn',
+      });
 
-        sessionHandles.interruptActive = interrupt;
-        captured.strategy?.onLoopStart?.(testSession);
-        ClaudeAgentSessions.interruptAll();
-
-        expect(interrupt).toHaveBeenCalledOnce();
-        captured.strategy?.releaseSessionOwnership?.();
-        delete sessionHandles.interruptActive;
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: { session: testSession, runId: parentRunId, toolPolicy: {} },
-          }),
-        ),
+      expect(captured.strategy?.ownsBackgroundProcess).toBe(true);
+      captured.strategy?.releaseSessionOwnership?.();
+    }).pipe(
+      Effect.provide(
+        nativeToolTestLayer({
+          run: { session: testSession, runId: parentRunId, toolPolicy: {} },
+        }),
       ),
+    ),
   );
 
   it.live(
@@ -614,7 +600,12 @@ describe('claude_agent tool launch and resume fallback', () => {
         } as any);
         assert.ok(captured.strategy?.runTurn);
         yield* captured.strategy.runTurn(
-          [{ text: 'continue the fork', origin: 'user' }],
+          [
+            {
+              text: 'continue the fork',
+              from: { kind: 'user' as const },
+            },
+          ],
           ports,
           new AbortController().signal,
         );
@@ -704,7 +695,12 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       assert.ok(captured.strategy?.runTurn);
       yield* captured.strategy.runTurn(
-        [{ text: 'must not resume the source', origin: 'user' }],
+        [
+          {
+            text: 'must not resume the source',
+            from: { kind: 'user' as const },
+          },
+        ],
         ports,
         new AbortController().signal,
       );

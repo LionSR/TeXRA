@@ -83,7 +83,7 @@ type WebviewRuntime = ManagedRuntime.ManagedRuntime<WebviewSessions, never>;
 
 /**
  * Secret-redacting Effect logger for the webview runtime. The process
- * diagnostics layer pulls Node-only `logUtils`, so this writes the same
+ * diagnostics layer is Node-only, so this writes the same
  * structured entry through `logSink` (redacted unless a host marked the sink
  * trusted) instead of Effect's default console logger.
  *

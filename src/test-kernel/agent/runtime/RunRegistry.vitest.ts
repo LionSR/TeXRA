@@ -1,19 +1,17 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Fiber, type Scope } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
 import type { AgentTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import type {
   RunHandle,
   LiveToolUseFlowContext,
 } from '@agent/runtime/RunHandle';
-import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import { RunRegistry, Runs } from '@agent/runtime/runRegistry';
-import { RunLive, RunRoster } from '@agent/runtime/runRoster';
+import { RunRegistry } from '@agent/runtime/runRegistry';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
@@ -28,6 +26,7 @@ import {
   type SessionEventDraft,
 } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
@@ -36,7 +35,6 @@ import {
 } from '@test/support/runHandleFixtures';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { generateRunId } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { eventsOfType } from '../progressTestUtils';
@@ -68,13 +66,6 @@ vi.mock('@agent/storage', async (importOriginal) => {
 });
 
 setupPlatform({ workspacePath: '/workspace' });
-
-/** What a tool-use run that produced no output ends with on its `run.end`. */
-const EMPTY_TOOL_USE_OUTPUT = {
-  category: 'toolUse',
-  response: '',
-  files: [],
-} as const;
 
 type HandleOverrides = {
   agentName?: string;
@@ -123,6 +114,8 @@ function createRegistry(
     commit?: (
       drafts: readonly SessionEventDraft[],
     ) => Effect.Effect<void, Error>;
+    holdRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
+    borrowRunClaim?: (runId: RunId) => Effect.Effect<void, Error, Scope.Scope>;
   } = {},
 ): {
   events: PublishedEvents;
@@ -155,7 +148,8 @@ function createRegistry(
       }),
     approvals: createSessionApprovals(),
     finalizeRun: (input) => finalizeRun(testDefaultSession(), input),
-    acquireRunClaim: () => Effect.succeed(Effect.void),
+    holdRunClaim: () => Effect.void,
+    borrowRunClaim: () => Effect.void,
     ...options,
   });
   return { events, phases, registry };
@@ -213,17 +207,17 @@ function createLiveToolUseFlowContext(
  * live target took it. */
 function killRegistry(
   registry: RunRegistry,
-  ...args: Parameters<RunRegistry['kill']>
+  ...args: Parameters<RunRegistry['stop']>
 ): boolean {
-  const stop = registry.kill(...args);
+  const stop = registry.stop(...args);
   Effect.runFork(stop.settlement);
   return stop.accepted();
 }
 function stopRegistry(
   registry: RunRegistry,
-  ...args: Parameters<RunRegistry['stopAgentRun']>
+  ...args: Parameters<RunRegistry['stop']>
 ): void {
-  Effect.runFork(registry.stopAgentRun(...args));
+  Effect.runFork(registry.stop(...args).settlement);
 }
 
 describe('runRegistry', () => {
@@ -244,13 +238,12 @@ describe('runRegistry', () => {
         });
 
         expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-        yield* registry.detachActiveChildren(parentRunId);
+        yield* registry['detachActiveChildren'](parentRunId);
         expect(registry.hasActiveChildren(parentRunId)).toBe(false);
 
         const handle = createHandle(runId, parentRunId);
         registry.track(handle);
         expect(handle.parent).toBeNull();
-        expect(handle.deliveryTarget).toBeUndefined();
       }),
   );
 
@@ -270,7 +263,7 @@ describe('runRegistry', () => {
             Effect.sync(() => registry.track(createHandle(runId))).pipe(
               Effect.ensuring(
                 Effect.gen(function* () {
-                  registry.untrack(runId);
+                  untrackRun(registry, runId);
                   yield* Deferred.succeed(untracked, undefined);
                   yield* Deferred.await(release);
                 }),
@@ -280,7 +273,7 @@ describe('runRegistry', () => {
         );
         yield* Deferred.await(untracked);
         registry.closeAdmissions();
-        expect(registry.getActiveIds()).toEqual([]);
+        expect(registry.activeIds()).toEqual([]);
         expect(registry.isLive(runId)).toBe(true);
         const drain = yield* Effect.forkChild(
           registry
@@ -359,7 +352,7 @@ describe('runRegistry', () => {
           interrupt,
         );
 
-        const stop = registry.kill(runId);
+        const stop = registry.stop(runId);
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
@@ -375,7 +368,7 @@ describe('runRegistry', () => {
     // or the fallback could spuriously tear down a handle mid-completion, in
     // the narrow window between its own interrupt unregister and its own
     // untrack.
-    const { phases, registry } = createRegistry();
+    const { registry } = createRegistry();
     const parentRunId = generateRunId();
     const runId = generateRunId();
 
@@ -443,7 +436,7 @@ describe('runRegistry', () => {
           childInterrupt,
         );
 
-        yield* registry.stopAgentRun(rootRunId);
+        yield* registry.stop(rootRunId).settlement;
 
         expect(rootInterrupt).toHaveBeenCalledOnce();
         expect(childInterrupt).toHaveBeenCalledOnce();
@@ -476,7 +469,7 @@ describe('runRegistry', () => {
           { agentName: 'test-grandchild' },
         );
 
-        const stop = registry.kill(childRunId);
+        const stop = registry.stop(childRunId);
         expect(stop.accepted()).toBe(true);
         yield* stop.settlement;
 
@@ -511,7 +504,7 @@ describe('runRegistry', () => {
           { agentName: 'test-grandchild' },
         );
 
-        const stop = registry.kill(childRunId, {
+        const stop = registry.stop(childRunId, {
           detachActiveChildren: true,
         });
         // A detaching stop admits the interrupt only once its detach batch
@@ -550,7 +543,7 @@ describe('runRegistry', () => {
         });
         trackInterruptibleHandle(registry, { runId }, fiberInterrupt);
 
-        const stop = registry.kill(runId);
+        const stop = registry.stop(runId);
         yield* stop.settlement;
         expect(stop.accepted()).toBe(true);
         expect(loopInterrupt).toHaveBeenCalledOnce();
@@ -595,9 +588,9 @@ describe('runRegistry', () => {
             { agentName: 'test-grandchild' },
           );
 
-          yield* registry.stopAgentRun(rootRunId, {
+          yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
-          });
+          }).settlement;
 
           expect(rootInterrupt).toHaveBeenCalledOnce();
           expect(childInterrupt).not.toHaveBeenCalled();
@@ -635,7 +628,7 @@ describe('runRegistry', () => {
         );
 
         const error = yield* Effect.flip(
-          registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+          registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
         );
         expect(error.message).toBe('detach batch refused');
         expect(registry.getHandle(childRunId)?.isOwnedBy(rootRunId)).toBe(true);
@@ -675,7 +668,7 @@ describe('runRegistry', () => {
           );
 
           const stopped = yield* Effect.forkChild(
-            registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+            registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
           );
           yield* Deferred.await(commitStarted);
           expect(rootInterrupt).not.toHaveBeenCalled();
@@ -716,7 +709,7 @@ describe('runRegistry', () => {
         );
 
         const stopped = yield* Effect.forkChild(
-          registry.stopAgentRun(rootRunId, { detachActiveChildren: true }),
+          registry.stop(rootRunId, { detachActiveChildren: true }).settlement,
         );
         yield* Deferred.await(commitStarted);
 
@@ -770,9 +763,9 @@ describe('runRegistry', () => {
           // in-flight token lifted — while the parent's `run.end` has not
           // folded yet. The window the token closed is open again, and the
           // child whose lineage read preceded the stop registers inside it.
-          yield* registry.stopAgentRun(rootRunId, {
+          yield* registry.stop(rootRunId, {
             detachActiveChildren: true,
-          });
+          }).settlement;
           expect(registry.getHandle(childRunId)?.parent).toBeNull();
           trackInterruptibleHandle(
             registry,
@@ -846,9 +839,9 @@ describe('runRegistry', () => {
             descendantInterrupt,
           );
 
-          yield* registry.stopAgentRun(childRunId, {
+          yield* registry.stop(childRunId, {
             detachActiveChildren: true,
-          });
+          }).settlement;
 
           expect(childInterrupt).toHaveBeenCalledOnce();
           expect(rootInterrupt).not.toHaveBeenCalled();
@@ -879,11 +872,11 @@ describe('runRegistry', () => {
           interrupt,
         });
 
-        yield* registry.stopAgentRun(runId);
+        yield* registry.stop(runId).settlement;
 
         expect(interrupt).toHaveBeenCalledOnce();
         expect(storageMocks.finalizeRun).not.toHaveBeenCalled();
-        expect(registry.getActiveIds()).toContain(runId);
+        expect(registry.activeIds()).toContain(runId);
       }),
   );
 
@@ -899,7 +892,7 @@ describe('runRegistry', () => {
         // registry's own runFork drops that failure.
         publishTestRunStart(testDefaultSession(), runId);
         yield* testDefaultSession().settlePublications();
-        yield* registry.stopAgentRun(runId);
+        yield* registry.stop(runId).settlement;
 
         // `run.end` is the run's whole terminal fact (one run model, 3.3), so
         // a stop that reached no live handle still writes it.
@@ -916,50 +909,8 @@ describe('runRegistry', () => {
     }),
   );
 
-  it('reports agent status from its run-status owner', () => {
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-
-    try {
-      phases.set(runId, RUN_PHASE.WAITING);
-      const handle = createHandle(runId, parentRunId);
-      registry.track(handle);
-
-      expect(registry.getStatus(handle).status).toBe(RUN_PHASE.WAITING);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('reports active elapsed from runStartedAt without a handle fallback', () => {
-    vi.useFakeTimers({ now: 1_000 });
-    const { phases, registry } = createRegistry();
-    const parentRunId = generateRunId();
-    const runId = generateRunId();
-    const handle = createHandle(runId, parentRunId);
-
-    try {
-      registry.track(handle);
-      vi.setSystemTime(10_000);
-      phases.set(runId, RUN_PHASE.RUNNING, {
-        runStartedAt: 6_000,
-      });
-
-      expect(registry.getStatus(handle)).toEqual({
-        status: RUN_PHASE.RUNNING,
-        elapsed: '4s',
-      });
-      phases.set(runId, RUN_PHASE.RUNNING);
-      expect(registry.getStatus(handle).elapsed).toBeNull();
-    } finally {
-      vi.useRealTimers();
-      registry.dispose();
-    }
-  });
-
   it('detaches children of an ownerless run and cancels it', () => {
-    const { events, phases, registry } = createRegistry();
+    const { events, registry } = createRegistry();
     const recorded = recordSessionEvents(events);
     const parentRunId = generateRunId();
     const childRunId = generateRunId();
@@ -999,35 +950,11 @@ describe('runRegistry', () => {
 
       registry.track(handle);
       expect(registry.hasActiveChildren(parentRunId)).toBe(true);
-      registry.untrack(runId);
+      untrackRun(registry, runId);
 
       // The parent edge is a `run.start` fact, so tracking publishes none.
       expect(recorded.events).toEqual([]);
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
-    } finally {
-      registry.dispose();
-    }
-  });
-
-  it('clears live tool-use context while the handle remains tracked', () => {
-    const { registry } = createRegistry();
-    const runId = generateRunId();
-    const context = createLiveToolUseFlowContext();
-
-    try {
-      const handle = createHandle(runId, null, {
-        agentName: 'test-tool-use',
-      });
-
-      handle.attachToolUseFlow(context);
-      registry.track(handle);
-
-      expect(registry.getToolUseFlowContext(runId)).toBe(context);
-
-      handle.detachToolUseFlow(context);
-
-      expect(registry.getToolUseFlowContext(runId)).toBeUndefined();
-      expect(registry.getHandle(runId)).toBe(handle);
     } finally {
       registry.dispose();
     }
@@ -1123,10 +1050,10 @@ describe('runRegistry', () => {
       const handle = createHandle(runId, parentRunId);
 
       registry.track(handle);
-      expect(handle.deliveryTarget).toBe(parentRunId);
+      expect(handle.parent).toBe(parentRunId);
       const sinceTrack = recordSessionEvents(events);
-      yield* registry.detachActiveChildren(parentRunId);
-      expect(handle.deliveryTarget).toBeUndefined();
+      yield* registry['detachActiveChildren'](parentRunId);
+      expect(handle.parent).toBeNull();
 
       expect(sinceTrack.events.map((event) => event.type)).toEqual([
         'run.detach',
@@ -1151,13 +1078,13 @@ describe('runRegistry', () => {
       // the parent's detaching stop landing while that preparation runs.
       const provisional = createHandle(runId, parentRunId);
       registry.track(provisional);
-      yield* registry.detachActiveChildren(parentRunId);
+      yield* registry['detachActiveChildren'](parentRunId);
 
       // The lifecycle's handle, built from the edge the launch started with.
       const lifecycle = createHandle(runId, parentRunId);
       registry.track(lifecycle);
 
-      expect(lifecycle.deliveryTarget).toBeUndefined();
+      expect(lifecycle.parent).toBeNull();
       expect(registry.hasActiveChildren(parentRunId)).toBe(false);
     }),
   );
@@ -1175,11 +1102,11 @@ describe('runRegistry', () => {
       approvals.registerRunParent(childRunId, parentRunId);
       registry.track(handle);
 
-      yield* registry.detachActiveChildren(parentRunId);
+      yield* registry['detachActiveChildren'](parentRunId);
       approvals.toolEdit.bypass.setBypass(parentRunId, false);
 
       expect(approvals.toolEdit.bypass.isBypassed(childRunId)).toBe(true);
-      expect(handle.deliveryTarget).toBeUndefined();
+      expect(handle.parent).toBeNull();
     }),
   );
 });
@@ -1219,7 +1146,7 @@ it.effect(
       const parked = createHandle(runId, generateRunId());
       registry.track(parked);
       expect(yield* Effect.flip(removal)).toBeInstanceOf(RunLive);
-      registry.untrack(runId);
+      untrackRun(registry, runId);
 
       const admitted = yield* Deferred.make<void>();
       const collected = yield* Deferred.make<void>();
@@ -1253,14 +1180,17 @@ it.effect('holds a run against launches without making it a stop target', () =>
   Effect.gen(function* () {
     const claimed = yield* Deferred.make<void>();
     const released = vi.fn();
-    const roster = new RunRoster(createSessionApprovals(), () =>
-      Deferred.await(claimed).pipe(Effect.as(Effect.sync(released))),
-    );
+    const { registry: roster } = createRegistry({
+      borrowRunClaim: () =>
+        Effect.acquireRelease(Deferred.await(claimed), () =>
+          Effect.sync(released),
+        ),
+    });
     const runId = 'abcd13' as RunId;
     const hold = yield* Effect.forkChild(
       Effect.scoped(
         Effect.gen(function* () {
-          yield* roster.holdInactive(runId);
+          yield* roster.holdInactiveRun(runId);
           yield* Effect.never;
         }),
       ),
@@ -1270,7 +1200,7 @@ it.effect('holds a run against launches without making it a stop target', () =>
     // claim is still in flight is refused, not started beside it.
     expect(roster.isLive(runId)).toBe(true);
     expect(
-      yield* Effect.flip(roster.launch(runId, Effect.void)),
+      yield* Effect.flip(roster.launchRun(runId, Effect.void)),
     ).toBeInstanceOf(RunLive);
     // A run only held is not running: a stop by run id reaches nothing.
     expect(roster.interrupt(runId)).toBe(false);

@@ -33,7 +33,7 @@ import { runTerminalCommand } from './setupTerminalRunner';
 const INSTALL_EXTENSION_COMMAND = 'workbench.extensions.installExtension';
 
 export const vscodeSetupPlatform: SetupPlatformShape = {
-  host: 'extension',
+  host: 'vscode',
   signIn: runSignInCommand,
   commands: {
     invoke: (commandId, ...args) =>

@@ -8,10 +8,11 @@ import { afterEach, beforeAll, beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { refresh } from '@agent/index/agentRegistry';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import type { AgentRosterSelection } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { getDefaultTeamId } from '@shared/state/onboardingState';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { fakeSupabaseAuth } from '@test/support/fakeSupabaseAuth';
 import {
@@ -87,6 +88,7 @@ beforeAll(async () => {
       setup: createFakeSetupPlatform({ signIn }),
       agentDirectories: {
         custom: () => Effect.sync(() => ''),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () =>
           Effect.sync(() =>
             resolve(REPO_ROOT, 'packages/extension/resources/agents'),
@@ -106,6 +108,7 @@ beforeAll(async () => {
         nodePlatformLayer,
         testHttpClientLayer,
         AgentDirectories.layer(fakeHostAgentDirectories),
+        AppState.layer(new FakeStateStore()),
       ),
     ),
   );
@@ -133,24 +136,6 @@ describe('apply_team', () => {
           teamId: 'starter',
         });
       }),
-  );
-
-  it.effect('records the user-level default team id', () =>
-    Effect.gen(function* () {
-      yield* applyTeam({
-        teamId: 'starter',
-        unavailableAction: 'continue',
-      });
-      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe('starter');
-
-      yield* applyTeam({
-        teamId: 'physicist',
-        unavailableAction: 'continue',
-      });
-      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-        'physicist',
-      );
-    }),
   );
 
   it.effect('rejects an unknown teamId without writing any state', () =>

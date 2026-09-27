@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   loginWithLoopback: vi.fn(),
-  setPreferCodexSubscription: vi.fn(),
+  setPreferSubscription: vi.fn(),
   // Answers like the real reporter, which is an `Effect` the sign-in
   // program yields.
   showLoggedErrorMessage: vi.fn(() => Effect.succeed('')),
@@ -38,9 +38,9 @@ vi.mock('@auth/codex', async (importOriginal) => ({
   loginWithLoopback: mocks.loginWithLoopback,
 }));
 
-vi.mock('@model/codex/codexSubscription', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@model/codex/codexSubscription')>()),
-  setPreferCodexSubscription: mocks.setPreferCodexSubscription,
+vi.mock('@model/subscriptionAccess', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@model/subscriptionAccess')>()),
+  setPreferSubscription: mocks.setPreferSubscription,
 }));
 
 vi.mock('@frontend/ui/errorHandlingUtils', () => ({
@@ -82,7 +82,7 @@ function mockLoopbackSuccess(): void {
 }
 
 function mockPreferenceEnabled(): void {
-  mocks.setPreferCodexSubscription.mockReturnValue(Effect.void);
+  mocks.setPreferSubscription.mockReturnValue(Effect.void);
 }
 
 describe('signInWithSubscription (ChatGPT)', () => {
@@ -107,12 +107,12 @@ describe('signInWithSubscription (ChatGPT)', () => {
       'ChatGPT sign-in failed',
       expect.any(Error),
     );
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
+    expect(mocks.setPreferSubscription).not.toHaveBeenCalled();
   });
 
   it('does not treat a completed OAuth sign-in as a sign-in failure when preference update fails', async () => {
     mockLoopbackSuccess();
-    mocks.setPreferCodexSubscription.mockReturnValue(
+    mocks.setPreferSubscription.mockReturnValue(
       Effect.fail(new Error('config write failed')),
     );
 
@@ -172,18 +172,6 @@ describe('signInWithSubscription (ChatGPT)', () => {
     expect(mocks.openExternal).not.toHaveBeenCalled();
     expect(mocks.writeText).not.toHaveBeenCalled();
     expect(mocks.showLoggedErrorMessage).not.toHaveBeenCalled();
-    expect(mocks.setPreferCodexSubscription).not.toHaveBeenCalled();
-  });
-
-  it('returns true when OAuth and preference enablement both succeed', async () => {
-    mockLoopbackSuccess();
-    mockPreferenceEnabled();
-
-    const signedIn = await signInWithChatGptSubscription('TestChannel');
-
-    expect(signedIn).toBe(true);
-    expect(mocks.showInformationMessage).toHaveBeenCalledWith(
-      'Signed in with ChatGPT as person@example.com. ChatGPT subscription is enabled for Codex models.',
-    );
+    expect(mocks.setPreferSubscription).not.toHaveBeenCalled();
   });
 });

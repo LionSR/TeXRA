@@ -2,8 +2,6 @@ import { z } from 'zod';
 
 import { RunIdSchema } from './identifiers';
 
-export const GOAL_FEATURE_FLAG_KEY = 'texra.goal.enabled' as const;
-
 /**
  * A goal is a live pursuit: it exists only while the autonomous loop is running
  * (`active`) or waiting for the user (`paused`). Finishing or abandoning one
@@ -40,9 +38,13 @@ const GoalSchema = ActiveGoalSchema.extend({ runId: RunIdSchema });
 export type Goal = z.infer<typeof GoalSchema>;
 
 /**
- * Wall-clock elapsed time since the goal was started.
+ * Wall-clock elapsed time since the goal was started, as of `nowMs` (the
+ * caller's `Clock` reading, the same clock that stamped `startedAt`).
  * Computed live so we don't need to accumulate ticks.
  */
-export function goalElapsedMs(goal: { startedAt: string }): number {
-  return Math.max(0, Date.now() - new Date(goal.startedAt).getTime());
+export function goalElapsedMs(
+  goal: { startedAt: string },
+  nowMs: number,
+): number {
+  return Math.max(0, nowMs - new Date(goal.startedAt).getTime());
 }

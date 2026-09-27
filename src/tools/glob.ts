@@ -3,7 +3,7 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { Effect, FileSystem, Option } from 'effect';
-import { glob } from 'glob';
+import { Glob } from 'glob';
 import { z } from 'zod';
 import { ToolCall } from '@agent/runtime/ToolCall';
 
@@ -15,6 +15,7 @@ import { resolveToolPath, type ToolPathCall } from '@tools/pathResolution';
 import { executed } from '@tools/core/result';
 import { filterNotNull } from '@utils/core';
 import { toPosixPath } from '@utils/core/pathCore';
+import { globEscape } from '@utils/files/rootedFileSystem';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { pluralize } from '@utils/text/stringUtils';
 
@@ -58,9 +59,14 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
   const gitignore = yield* getGitignoreMatcher(call.roots.workspace);
 
   const cancelSignal = ports.signal;
-  const matches = yield* Effect.tryPromise({
+  const patternError = (err: unknown) =>
+    new ToolError(
+      `Glob pattern error: ${toErrorMessage(err)}. ` +
+        `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
+    );
+  const walker = yield* Effect.try({
     try: () =>
-      glob(input.pattern, {
+      new Glob(input.pattern, {
         cwd: path.absolute,
         dot: true,
         nodir: false,
@@ -69,11 +75,22 @@ const runGlob = Effect.fn('GlobTool.execute')(function* (
         signal: cancelSignal,
         follow: false,
       }),
-    catch: (err) =>
+    catch: patternError,
+  });
+  // Refused before the walk: an absolute or `..` alternative would walk
+  // outside the search directory (the whole disk, for `/**`).
+  const escaping = globEscape(walker.patterns);
+  if (escaping !== undefined) {
+    return yield* Effect.fail(
       new ToolError(
-        `Glob pattern error: ${toErrorMessage(err)}. ` +
-          `Check syntax: use ** for recursive, * for single level. Example: "**/*.tex"`,
+        `Glob pattern must stay under the search directory: "${escaping}". ` +
+          `Put an outside base in "path" instead (for example path ".." with pattern "**/*.tex"); that path is still checked against the allowed roots.`,
       ),
+    );
+  }
+  const matches = yield* Effect.tryPromise({
+    try: () => walker.walk(),
+    catch: patternError,
   });
 
   // The walk is done, but stat-ing every match on a large tree is itself

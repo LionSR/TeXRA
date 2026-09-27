@@ -24,11 +24,13 @@ export { SessionHandle } from './SessionHandle';
 // and close sessions through it (one session per workspace storage root),
 // and the process-default session that owner holds.
 export {
+  closeAllSessions,
   closeSession,
   initializeDefaultSession,
   installedProcessRuntime,
   listSessions,
   openSessionEffect,
+  SESSION_CLOSE_DEADLINE_MS,
   teardownDefaultSession,
   tryDefaultSession,
 } from './sessionGraph';
@@ -57,7 +59,7 @@ export { classifyRun } from './runClassification';
 // terminalResultToast
 export {
   attachTerminalResultToast,
-  presentAgentFailure,
+  presentRunFailure,
   trackTerminalResultPresentation,
 } from './terminalResultToast';
 
@@ -85,11 +87,7 @@ export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 // helperModelName
 export { getHelperModelName } from './helperModelName';
 
-// textConnection
-export { createAgentResponseTextConnector } from './textConnection';
-
 // RunHandle
-export type { AgentRunHandle } from './RunHandle';
 
 // AgentFlowResult
 export type { WorkflowFlowResult } from './AgentFlowResult';

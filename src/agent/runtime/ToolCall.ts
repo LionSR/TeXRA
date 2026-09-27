@@ -36,6 +36,7 @@ export interface ToolCallShape {
         | 'runId'
         | 'toolPolicy'
         | 'config'
+        | 'model'
         | 'logger'
         | 'delegationAgentScope'
         | 'composition'

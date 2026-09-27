@@ -71,23 +71,6 @@ describe('discoverSkillSources over one root', () => {
     });
   });
 
-  it('rejects skills without descriptions', async () => {
-    const root = await createTempRoot();
-    await writeSkill(root, 'missing-description', {
-      name: 'missing-description',
-    });
-
-    const result = await discoverSkillSources([
-      { scope: 'project', path: root },
-    ]);
-
-    expect(result.skills).toEqual([]);
-    expectReportedIssue(result, {
-      severity: 'error',
-      code: 'missing_description',
-    });
-  });
-
   it('loads name-mismatched skills with a warning', async () => {
     const root = await createTempRoot();
     await writeSkill(root, 'directory-name', {

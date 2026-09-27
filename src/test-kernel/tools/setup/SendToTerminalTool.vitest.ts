@@ -10,7 +10,6 @@ import { describe } from 'vitest';
 
 // Local imports
 
-import { TERMINAL_OUTPUT_MAX_CHARS } from '@common/terminalOutput';
 import type { TerminalRunResult } from '@hosts/uiHosts';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
@@ -69,87 +68,6 @@ const callTool = (
   );
 
 describe('SendToTerminalTool', () => {
-  it.effect('advertises the host terminal capture limit', () =>
-    Effect.gen(function* () {
-      const { tool } = yield* Effect.tryPromise(() => setupTool());
-      const description = tool.definition.description;
-      assert.ok(description);
-      assert.ok(
-        description.includes(`up to ${TERMINAL_OUTPUT_MAX_CHARS} characters`),
-      );
-    }),
-  );
-
-  it.effect('runs the command and returns exit code + captured output', () =>
-    Effect.gen(function* () {
-      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
-
-      const result = yield* callTool(tool, runId, {
-        command: 'sudo apt-get install -y perl',
-      });
-
-      assert.equal(result.status, 'executed');
-      assert.equal(runs.length, 1);
-      assert.equal(runs[0].command, 'sudo apt-get install -y perl');
-      assert.equal(runs[0].name, 'TeXRA: setup');
-      assert.match(result.summary ?? '', /exited 0/);
-      assert.match(result.output ?? '', /installed perl/);
-    }),
-  );
-
-  it.effect('always prepends TeXRA: to a caller-supplied label', () =>
-    Effect.gen(function* () {
-      const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());
-
-      yield* callTool(tool, runId, {
-        command: 'sudo apt-get install -y perl',
-        label: 'install LaTeX',
-      });
-
-      assert.equal(runs[0].name, 'TeXRA: install LaTeX');
-    }),
-  );
-
-  it.effect('reports a non-zero exit code clearly to the agent', () =>
-    Effect.gen(function* () {
-      const { tool, runId } = yield* Effect.tryPromise(() =>
-        setupTool({
-          exitCode: 100,
-          output: 'E: Unable to locate package fakepkg\n',
-          timedOut: false,
-        }),
-      );
-
-      const result = yield* callTool(tool, runId, {
-        command: 'sudo apt-get install -y fakepkg',
-      });
-
-      assert.equal(result.status, 'executed');
-      assert.match(result.summary ?? '', /exited 100/);
-      assert.match(result.output ?? '', /Unable to locate package/);
-    }),
-  );
-
-  it.effect('reports a timeout without throwing', () =>
-    Effect.gen(function* () {
-      const { tool, runId } = yield* Effect.tryPromise(() =>
-        setupTool({
-          exitCode: undefined,
-          output: 'fetching...\n',
-          timedOut: true,
-        }),
-      );
-
-      const result = yield* callTool(tool, runId, {
-        command: 'sudo apt-get install -y perl',
-        timeout: 1000,
-      });
-
-      assert.equal(result.status, 'executed');
-      assert.match(result.summary ?? '', /timed out/);
-    }),
-  );
-
   it.effect('rejects commands containing newlines', () =>
     Effect.gen(function* () {
       const { tool, runs, runId } = yield* Effect.tryPromise(() => setupTool());

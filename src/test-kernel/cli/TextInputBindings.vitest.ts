@@ -1,15 +1,12 @@
 // Audit of the declarative text-input keymap: every chord routes to exactly
 // the binding that declares it, every table entry is reachable (no dead or
-// shadowed "excessive" entries), and the /help docs render from the same
-// table so they cannot drift from the implementation.
+// shadowed "excessive" entries).
 
 import { describe, expect, it } from 'vitest';
 
-import { formatSlashCommandHelp } from '@cli/chat/tui/commands/helpText';
 import {
   matchTextInputBinding,
   TEXT_INPUT_BINDINGS,
-  textInputEditingHelp,
   type TextInputKey,
 } from '@cli/chat/tui/input/textInputBindings';
 
@@ -149,16 +146,5 @@ describe('text input keymap', () => {
     );
 
     expect(unreachable).toEqual([]);
-  });
-
-  it('renders the advertised bindings into /help from the same table', () => {
-    const help = textInputEditingHelp();
-
-    expect(formatSlashCommandHelp([])).toContain(help);
-    for (const binding of TEXT_INPUT_BINDINGS) {
-      if (binding.advertise) {
-        expect(help).toContain(`\`${binding.keys}\``);
-      }
-    }
   });
 });

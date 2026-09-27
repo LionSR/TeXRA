@@ -5,13 +5,13 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import type { AgentTrace } from '@agent/trace';
-import { CODEX_THREAD_TOOL, CODEX_TURN_TOOL } from '@shared/schemas';
+import { CODEX_TURN_TOOL } from '@shared/schemas';
 import type { RunId } from '@shared/schemas';
 import { createTestRunTrace } from '@test/support/sessionTestUtils';
 import { runStreamedTurn } from '@tools/codex';
 
 // Local file imports
-import { recordTraceEvents, runFactsOfKey } from '../progressTestUtils';
+import { recordingTrace, runFactsOfKey } from '../progressTestUtils';
 import type {
   CommandExecutionItem,
   Thread,
@@ -63,8 +63,7 @@ function toolLogs(store: TestTrace): Record<string, unknown>[] {
 describe('codex progress events', () => {
   it.effect('publishes a todo_list item as run facts', () =>
     Effect.gen(function* () {
-      const { logger } = yield* Effect.promise(() => createLogger());
-      const recorded = recordTraceEvents(logger);
+      const { trace: logger, events } = recordingTrace();
       const thread = threadOf([
         {
           type: 'item.completed',
@@ -84,7 +83,7 @@ describe('codex progress events', () => {
 
       yield* runStreamedTurn(thread, 'Do the thing', logger);
 
-      expect(runFactsOfKey(recorded.events, 'todos')).toMatchObject([
+      expect(runFactsOfKey(events, 'todos')).toMatchObject([
         {
           todos: [
             {
@@ -151,48 +150,6 @@ describe('codex progress events', () => {
         output: 'building...\ndone',
         status: 'completed',
       });
-    }),
-  );
-
-  it.effect('emits Codex thread and turn cards across the turn lifecycle', () =>
-    Effect.gen(function* () {
-      const { store, logger } = yield* Effect.promise(() => createLogger());
-      const thread = threadOf([
-        { type: 'thread.started', thread_id: 'thread_abc' },
-        { type: 'turn.started' },
-        {
-          type: 'item.completed',
-          item: { id: 'msg-1', type: 'agent_message', text: 'Done.' },
-        },
-        turnCompleted(5, 2),
-      ]);
-
-      const result = yield* runStreamedTurn(thread, 'Do the thing', logger);
-
-      expect(result.finalResponse).toBe('Done.');
-
-      const logs = toolLogs(store);
-
-      // A one-shot thread card, then a running->completed turn card.
-      expect(logs.map((data) => data.toolName)).toEqual([
-        CODEX_THREAD_TOOL,
-        CODEX_TURN_TOOL,
-      ]);
-
-      expect(logs[0]).toMatchObject({
-        toolName: CODEX_THREAD_TOOL,
-        input: { threadId: 'thread_abc' },
-        status: 'completed',
-      });
-
-      expect(logs[1]).toMatchObject({
-        toolName: CODEX_TURN_TOOL,
-        input: { state: 'completed' },
-        status: 'completed',
-      });
-
-      const turnInput = (logs[1] as { input?: { wallTimeMs?: number } }).input;
-      expect(typeof turnInput?.wallTimeMs).toBe('number');
     }),
   );
 

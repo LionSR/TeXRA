@@ -27,7 +27,6 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     phase: 'initial',
     round: 0,
     turn: 0,
-    continuationIndex: 0,
     modelId: 'test-model',
     modelCompatibilityKey: null,
     lastError: null,
@@ -124,16 +123,6 @@ describe('deriveResumability', () => {
       yield* Effect.promise(() =>
         writeMeta(runId, { outcome: RUN_OUTCOME.CANCELLED }),
       );
-
-      expect(yield* deriveResumability(runId, session)).toEqual({
-        kind: 'none',
-      });
-    }),
-  );
-
-  it.effect('reports a run with no durable state as not resumable', () =>
-    Effect.gen(function* () {
-      const runId = 'ac0008' as RunId;
 
       expect(yield* deriveResumability(runId, session)).toEqual({
         kind: 'none',

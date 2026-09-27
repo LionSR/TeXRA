@@ -17,14 +17,16 @@
  * `sessionFold` reads whatever the listing, the aggregate or the tail
  * delivered, where the same row means the opening simply never arrived.
  */
-import type {
-  FlowStep,
-  PermissionPayload,
-  RequestDecision,
-  RoundOutput,
-  RunFamily,
-  RunOutcome,
-  SessionEvent,
+import {
+  type FlowStep,
+  type PermissionPayload,
+  type RequestDecision,
+  type RoundOutput,
+  RUN_PHASE,
+  type RunFamily,
+  type RunOutcome,
+  type RunPhase,
+  type SessionEvent,
 } from '@shared/schemas';
 
 /** The rows this module owns, and the only rows it accepts. A type listed
@@ -60,35 +62,45 @@ type RequestState = {
 };
 
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
-type PendingFollowUp = Pick<
+export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
   'followUpId' | 'content'
 >;
 
 /**
- * What these rows say about one run. `RunState` is a superset of it, so the
- * loop's fold applies the patch to itself; `sessionFold` keeps one per run
- * beside its view and projects the view's containers from it.
+ * What these rows say about one run's position: everything but its pending
+ * input. `RunState` is a superset of it, so the loop's fold applies the
+ * patch to itself.
  */
-export type RunRows = {
+export type RunPosition = {
   readonly family: RunFamily | null;
   readonly step: FlowStep | null;
   readonly outcome: RunOutcome | null;
   readonly round: number;
   readonly turn: number;
-  readonly continuationIndex: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
+  /** Complete output collection from the newest `output.produced` row. */
+  readonly roundOutputs: RoundOutput[];
+};
+
+/**
+ * What these rows say about one run: its position and the input it has not
+ * taken. `sessionFold` keeps one per run beside its view and projects the
+ * view's containers from it; the admission's replay check reads it whole.
+ * The loop's pending input is the publisher's
+ * (`SessionEvents.pendingFollowUps`), so `RunState` carries only the
+ * position.
+ */
+export type RunRows = RunPosition & {
   /** Queued without consumed, in commit order. */
-  readonly followUps: readonly PendingFollowUp[];
+  readonly followUps: readonly QueuedFollowUp[];
   /**
    * Every follow-up id a row named, queued or consumed: the unique key. A
    * delivery its producer replays after a restart (#9531) is a second row
    * under an id already here, and it is queued once, never twice.
    */
   readonly followUpIds: ReadonlySet<string>;
-  /** Complete output collection from the newest `output.produced` row. */
-  readonly roundOutputs: RoundOutput[];
 };
 
 /**
@@ -107,18 +119,22 @@ export function byId<T>(
   return record;
 }
 
-/** The slice before any of these rows folded. */
-export const freshRunRows = (): RunRows => ({
+/** The position before any of these rows folded. */
+export const freshRunPosition = (): RunPosition => ({
   family: null,
   step: null,
   outcome: null,
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   requests: byId([]),
+  roundOutputs: [],
+});
+
+/** The slice before any of these rows folded. */
+export const freshRunRows = (): RunRows => ({
+  ...freshRunPosition(),
   followUps: [],
   followUpIds: new Set(),
-  roundOutputs: [],
 });
 
 export type RunRowVerdict =
@@ -136,34 +152,42 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The shared rows that move a run's pending input, not its position. */
+type FollowUpRow = Extract<
+  SharedRunRow,
+  { type: 'followup.queued' | 'followup.consumed' }
+>;
+
+export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
+  row.type === 'followup.queued' || row.type === 'followup.consumed';
+
 /**
  * Apply one shared row. `current` is `null` for a reader that holds no slice
  * for the run yet: queued input and the loop's own position open one, a
- * request, a consumption or an output presupposes it and moves nothing.
+ * request, a consumption or an output presupposes it and moves nothing. A
+ * reader that folds only the position (`RunState`) applies only the rows
+ * that move it.
  */
+export function applyRunRow(
+  current: RunPosition | null,
+  row: Exclude<SharedRunRow, FollowUpRow>,
+): RunRowVerdict;
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
+): RunRowVerdict;
+export function applyRunRow(
+  current: RunPosition | null,
+  row: SharedRunRow,
 ): RunRowVerdict {
+  // A follow-up row enters only through the `RunRows` overload.
+  const slice = current as RunRows | null;
   switch (row.type) {
     case 'flow.step': {
       const p = row.payload;
       const rows = current ?? freshRunRows();
-      if (rows.family !== null && rows.family !== p.family) {
-        return { kind: 'contradiction', detail: 'a step of another family' };
-      }
-      // A continuation counts within its round: a reflection round opens at
-      // continuation 0, so the index is monotone only while the round holds.
-      const round = p.round ?? rows.round;
-      const coordinates = [
-        ['round', p.round],
-        ['turn', p.turn],
-        [
-          'continuationIndex',
-          round === rows.round ? p.continuationIndex : null,
-        ],
-      ] as const;
-      for (const [name, value] of coordinates) {
+      for (const name of ['round', 'turn'] as const) {
+        const value = p[name];
         if (value != null && value < rows[name]) {
           return {
             kind: 'contradiction',
@@ -174,9 +198,8 @@ export function applyRunRow(
       return applied({
         family: p.family,
         step: p.step,
-        round,
+        round: p.round ?? rows.round,
         turn: p.turn ?? rows.turn,
-        continuationIndex: p.continuationIndex ?? rows.continuationIndex,
         outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
     }
@@ -223,7 +246,7 @@ export function applyRunRow(
       // Queued input may precede everything else a run writes, so it opens
       // the slice the way the loop's own first step does. A replayed
       // delivery id is the same follow-up, already queued once.
-      const rows = current ?? freshRunRows();
+      const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
       return applied({
         followUps: [
@@ -238,17 +261,17 @@ export function applyRunRow(
       // id this slice never queued (another writer queued it while the loop
       // ran, or the read that delivered this row did not carry the queuing)
       // consumes nothing, and is recorded so the queuing cannot land twice.
-      if (current === null) return { kind: 'unchanged' };
-      const followUps = current.followUps.filter(
+      if (slice === null) return { kind: 'unchanged' };
+      const followUps = slice.followUps.filter(
         (f) => f.followUpId !== row.followUpId,
       );
-      const removed = followUps.length !== current.followUps.length;
-      if (!removed && current.followUpIds.has(row.followUpId)) {
+      const removed = followUps.length !== slice.followUps.length;
+      if (!removed && slice.followUpIds.has(row.followUpId)) {
         return { kind: 'unchanged' };
       }
       return applied({
         ...(removed ? { followUps } : {}),
-        followUpIds: new Set([...current.followUpIds, row.followUpId]),
+        followUpIds: new Set([...slice.followUpIds, row.followUpId]),
       });
     }
     case 'output.produced':
@@ -256,4 +279,65 @@ export function applyRunRow(
       if (current === null) return { kind: 'unchanged' };
       return applied({ roundOutputs: row.rounds });
   }
+}
+
+/**
+ * The slice one run's whole committed aggregate folds to: for a reader that
+ * holds every row of the run and needs only what these rows say (is this
+ * request open, is this follow-up queued), with no `RunState` to build. A
+ * whole aggregate answers every decision it holds, so a contradiction or an
+ * unresolved decision is a malformed aggregate and throws, as it refuses
+ * in `runStateFold`.
+ */
+export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
+  let slice = freshRunRows();
+  for (const row of rows) {
+    if (!isSharedRunRow(row)) continue;
+    const verdict = applyRunRow(slice, row);
+    if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
+      throw new Error(
+        `${row.type} on ${row.aggregateId}: ${
+          verdict.kind === 'unresolved'
+            ? `decision names no request ${verdict.requestId}`
+            : verdict.detail
+        }`,
+      );
+    }
+    if (verdict.kind === 'applied') slice = { ...slice, ...verdict.rows };
+  }
+  return slice;
+}
+
+/**
+ * The phase a lifecycle row moves its run to (one run model, 3.3), or null
+ * for a row that moves none: an activation and every loop step but
+ * `waiting` and `halted` open the run window, `waiting` and a child's park
+ * rest it, `run.end` ends it on its outcome. `halted` is the loop's own word
+ * and leaves the phase to `run.end`. The one statement of the rule: the
+ * session fold's run window, the transcript boundary, the held chunk text
+ * and the publisher's open streams all move on it.
+ */
+export function phaseMoveOf(row: SessionEvent): RunPhase | null {
+  switch (row.type) {
+    case 'run.activate':
+      return RUN_PHASE.RUNNING;
+    case 'flow.step':
+      if (row.payload.step === 'halted') return null;
+      return row.payload.step === 'waiting'
+        ? RUN_PHASE.WAITING
+        : RUN_PHASE.RUNNING;
+    case 'child.park':
+      return row.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING;
+    case 'run.end':
+      return row.outcome;
+    default:
+      return null;
+  }
+}
+
+/** Whether the row's phase move rests or ends the run: the move that closes
+ *  its run window, every open stream and every held chunk with it. */
+export function closesRunWindow(row: SessionEvent): boolean {
+  const phase = phaseMoveOf(row);
+  return phase !== null && phase !== RUN_PHASE.RUNNING;
 }

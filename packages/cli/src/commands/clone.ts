@@ -20,7 +20,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 // Local imports - runtime
 import { CliUsageError, type CliContext } from '../runtime/cliContext';
 
-import { getCliSecrets } from '../runtime/cliSecrets';
+import { CliSecrets, cliSecretsPath } from '../runtime/cliSecrets';
 import { CliExitCode } from '../runtime/exitCodes';
 import { askCliQuestion, writeTextStderr } from '../runtime/logSinks';
 
@@ -37,7 +37,8 @@ function buildOverleafClonePorts(
   remote: OverleafRemote,
   workspacePath: string,
 ): OverleafCloneWorkflowPorts {
-  const secrets = getCliSecrets(context.storageRoot);
+  // Clone installs no platform, so it opens the store over its root itself.
+  const secrets = new CliSecrets(cliSecretsPath(context.storageRoot));
   let canonicalWorkspacePath = workspacePath;
   return {
     // `orDie` keeps what `Effect.promise` did with a rejected store call: a
@@ -108,9 +109,7 @@ function buildOverleafClonePorts(
         Effect.mapError((error) => ensureError(error.reason.cause ?? error)),
         Effect.flatMap((canonical) => {
           canonicalWorkspacePath = canonical;
-          return gitClone(clone, canonical).pipe(
-            Effect.mapError((error) => new Error(error.message)),
-          );
+          return gitClone(clone, canonical);
         }),
       ),
     showCloneSucceeded: (label) =>

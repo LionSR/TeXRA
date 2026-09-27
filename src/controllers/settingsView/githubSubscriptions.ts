@@ -12,7 +12,7 @@ interface GitHubSubscriptionOwner {
 
 interface GitHubSubscriptionEntry {
   readonly key: string;
-  readonly owners: readonly GitHubSubscriptionOwner[];
+  readonly owners: GitHubSubscriptionOwner[];
 }
 
 /** Builds the shared PR, issue, and repository subscription presentation. */

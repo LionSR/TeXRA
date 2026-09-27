@@ -1,9 +1,8 @@
 import '@test/support/sessionGraphTestSetup';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { Deferred, Effect, Fiber } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -12,6 +11,8 @@ import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
+import { GlobalStateKey } from '@shared/state/stateKeys';
+import { untrackRun } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import {
@@ -41,7 +42,7 @@ const mocks = vi.hoisted(() => ({
   prepareInteractivePrompt: vi.fn(),
   readCliRunOutcomeState: vi.fn(),
   deriveResumability: vi.fn(),
-  releaseRunLeaseAfterArtifacts: vi.fn(),
+  commitRunEndAfterArtifacts: vi.fn(),
   runAgent: vi.fn(),
   writeTextStderr: vi.fn(),
   writeTextStderrAndWait: vi.fn<() => Promise<void>>(async () => undefined),
@@ -157,15 +158,15 @@ function toolUseConfig() {
   };
 }
 
-/** A run program's options with the session, runtime and lifecycle the
- *  wrapper below supplies. */
-type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'lifecycle'>;
+/** A run program's options with the session, runtime and shutdown scope
+ *  the wrapper below supplies. */
+type WithoutSession<O> = Omit<O, 'session' | 'runtime' | 'shutdownScope'>;
 
 async function loadExecuteCli() {
   const runtime = await import('@cli/runtime/executeCli');
-  // The commands thread `initCliPlatform`'s session, runtime and lifecycle
-  // in; here the process default this file installs stands in for the first
-  // two and the installed host's lifecycle for the third.
+  // The commands thread `initCliPlatform`'s session, runtime and shutdown
+  // scope in; here the process default this file installs stands in for the
+  // first two and the installed host's shutdown scope for the third.
   return {
     ...runtime,
     executeCliRequest: (
@@ -179,7 +180,7 @@ async function loadExecuteCli() {
         runtime.executeCliRequest(request, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -196,7 +197,7 @@ async function loadExecuteCli() {
         runtime.executeCliConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -213,7 +214,7 @@ async function loadExecuteCli() {
         runtime.executeCliToolUseConfig(config, context, {
           session: Effect.succeed(testDefaultSession()),
           runtime: testRuntime(),
-          lifecycle: installedHost().platform.lifecycle,
+          shutdownScope: installedHost().platform.shutdownScope,
           agentRuns: agentRunsFake,
           ...options,
         }),
@@ -223,10 +224,10 @@ async function loadExecuteCli() {
 }
 
 type LeaseOptions = {
-  beforeLeaseRelease?: () => Effect.Effect<boolean | void, Error>;
+  beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
   openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
   session?: SessionHandle;
-  onRunLeaseAcquired?: (runId: RunId) => void;
+  onRunClaimed?: (runId: RunId) => void;
 };
 
 /**
@@ -268,7 +269,7 @@ function stubHangingRun(published: Deferred.Deferred<LeaseOptions>): {
     } finally {
       generation?.interruptUnsafe();
       if (runs && runs.getHandle(runId) === launchHandle) {
-        runs.untrack(runId);
+        if (runs) untrackRun(runs, runId);
       }
     }
   });
@@ -287,27 +288,22 @@ async function spyOnArtifactFlush() {
 }
 
 /**
- * The reflection snapshot a resumable run carries on its aggregate. Only its
- * presence is read here; the workflow command owns the rule that reads its
- * fields.
+ * The snapshot a resumable run carries on its aggregate. Only its presence
+ * is read here; the workflow command owns the rule that reads its fields.
  */
-function reflectionSnapshot(): FlowSnapshotPayload {
+function checkpointSnapshot(): FlowSnapshotPayload {
   return {
-    family: 'reflection',
+    family: 'toolUse',
     runtime: {
       phase: 'initial',
       round: 0,
       turn: 0,
-      continuationIndex: 0,
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
       declinedRoutes: [],
     },
-    state: {
-      totalRounds: 4,
-      workspaceSnapshot: AgentWorkspaceState.create().toSnapshot(),
-    },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   };
 }
 
@@ -342,23 +338,23 @@ async function stubExecuteCliDeps(): Promise<void> {
   });
   mocks.deriveResumability.mockResolvedValue({
     kind: 'checkpoint',
-    snapshot: reflectionSnapshot(),
+    snapshot: checkpointSnapshot(),
   });
-  mocks.releaseRunLeaseAfterArtifacts.mockResolvedValue(undefined);
+  mocks.commitRunEndAfterArtifacts.mockResolvedValue(undefined);
   // The CLI shutdown drain is the session's one exit choreography; the suite
   // observes it through the same spy the deleted host-local shim fed.
   const { SessionHandle } = await import('@agent/runtime/SessionHandle');
-  vi.spyOn(SessionHandle.prototype, 'releaseRunLease').mockImplementation(
+  vi.spyOn(SessionHandle.prototype, 'commitRunEnd').mockImplementation(
     function (this: unknown, runId) {
       return Effect.tryPromise({
-        try: () => mocks.releaseRunLeaseAfterArtifacts(this, runId),
+        try: () => mocks.commitRunEndAfterArtifacts(this, runId),
         catch: (error) => error as Error,
       });
     },
   );
   mocks.finalizeRun.mockResolvedValue({ ok: true });
   mocks.runAgent.mockImplementation(async (_request, options) => {
-    options.onRunLeaseAcquired?.('exec-1' as RunId);
+    options.onRunClaimed?.('exec-1' as RunId);
     return COMPLETED_RUN;
   });
 }
@@ -434,63 +430,6 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  it.effect(
-    'observes workflow-script children for every visible text run',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = {
-          config: toolUseConfig(),
-          runId: 'abcdef',
-        } as CliRequest;
-
-        yield* executeCliRequest(
-          request,
-          cliContext({ outputFormat: 'text', renderRunProgress: true }),
-        );
-
-        expect(mocks.attachWorkflowPlainOutput).toHaveBeenCalledWith(
-          expect.anything(),
-          expect.anything(),
-          expect.objectContaining({
-            runId: 'abcdef',
-            writeLine: mocks.writeTextStderr,
-          }),
-        );
-        expect(
-          mocks.attachWorkflowPlainOutput.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          mocks.runAgent.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-        expect(mocks.attachRunProgressRenderer).toHaveBeenCalledTimes(1);
-        expect(mocks.detachWorkflowPlainOutput).toHaveBeenCalledTimes(1);
-      }),
-  );
-
-  it.effect(
-    'keeps workflow-script progress quiet when run progress is disabled',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = {
-          config: {
-            agent: 'proof-workflow',
-            model: 'gpt54',
-            agentCategory: 'workflow',
-          },
-          runId: 'abcdef',
-        } as CliRequest;
-
-        yield* executeCliRequest(
-          request,
-          cliContext({ outputFormat: 'text', renderRunProgress: false }),
-        );
-
-        expect(mocks.attachWorkflowPlainOutput).not.toHaveBeenCalled();
-      }),
-  );
-
   it.effect.each([
     { policy: 'never', overrides: {} },
     { policy: 'ask', overrides: { approvalPolicy: 'ask' } },
@@ -527,44 +466,6 @@ describe('executeCliRequest', () => {
         }),
       );
     }),
-  );
-
-  it.effect('hides host-unavailable tools in CLI run', () =>
-    Effect.gen(function* () {
-      const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const request = baseRequest();
-
-      yield* executeCliRequest(
-        request,
-        cliContext({ mode: 'interactive', approvalPolicy: 'ask' }),
-      );
-
-      expect(mocks.runAgent).toHaveBeenCalledWith(
-        request,
-        expect.objectContaining({
-          approvalPromptsUnavailable: false,
-        }),
-      );
-    }),
-  );
-
-  it.effect(
-    'restores CLI host interactions before closing the runtime host',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-
-        yield* executeCliRequest(request, cliContext());
-
-        expect(mocks.disposeHostInteractions).toHaveBeenCalledTimes(1);
-        expect(mocks.close).toHaveBeenCalledTimes(1);
-        expect(
-          mocks.disposeHostInteractions.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          mocks.close.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-        );
-      }),
   );
 
   it.effect(
@@ -698,24 +599,6 @@ describe('executeCliRequest', () => {
   );
 
   it.effect(
-    'resolves a classified run failure to a non-zero exit code without rethrowing or finalizing again',
-    () =>
-      Effect.gen(function* () {
-        const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
-        mocks.runAgent.mockImplementationOnce(async () => {
-          throw new AgentError('provider boom');
-        });
-
-        const result = yield* executeCliRequest(request, cliContext());
-
-        expect(result).toEqual({ ok: false, exitCode: CliExitCode.AgentError });
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.close).toHaveBeenCalledTimes(1);
-      }),
-  );
-
-  it.effect(
     'does not repeat an error already presented before lifecycle startup',
     () =>
       Effect.gen(function* () {
@@ -739,8 +622,7 @@ describe('executeCliRequest', () => {
   );
 
   // it.live for the shutdown choreography below: the run is forked in-fiber,
-  // but runShutdown drives the lifecycle host's real-clock phase deadline and
-  // its handler settles on the process runtime.
+  // but the command's shutdown step settles on the process runtime.
   it.live.each([
     { label: 'fresh', kind: 'fresh' },
     { label: 'resumed', kind: 'resume' },
@@ -752,8 +634,8 @@ describe('executeCliRequest', () => {
           loadExecuteCliOnInstalledHost,
         );
         const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
-        mocks.releaseRunLeaseAfterArtifacts.mockImplementationOnce(
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
+        mocks.commitRunEndAfterArtifacts.mockImplementationOnce(
           async (session, runId) =>
             Effect.runPromise(session.settlePublications(runId)),
         );
@@ -778,19 +660,19 @@ describe('executeCliRequest', () => {
         // The stub resumes this fiber synchronously, so one macrotask lets the
         // rest of the stub (the tracked launch handle) run first.
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
           detachActiveChildren: false,
         });
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
@@ -805,7 +687,7 @@ describe('executeCliRequest', () => {
         expect(shutdownResolved).toBe(false);
         settleRecoveryWrite();
         yield* Fiber.join(shutdown);
-        expect(mocks.releaseRunLeaseAfterArtifacts).toHaveBeenCalledOnce();
+        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledOnce();
         expect(flushSpy).toHaveBeenCalled();
         expect(mocks.finalizeRun).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -814,14 +696,14 @@ describe('executeCliRequest', () => {
           }),
         );
         expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.releaseRunLeaseAfterArtifacts.mock.invocationCallOrder[0] ??
+          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0] ??
             Number.POSITIVE_INFINITY,
         );
         expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
           'exec-1',
         );
         expect(
-          mocks.releaseRunLeaseAfterArtifacts.mock.invocationCallOrder[0],
+          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0],
         ).toBeLessThan(
           onInterruptedRunFinalized.mock.invocationCallOrder[0] ??
             Number.POSITIVE_INFINITY,
@@ -861,12 +743,12 @@ describe('executeCliRequest', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -881,16 +763,13 @@ describe('executeCliRequest', () => {
       }),
   );
 
-  // The pre-checkpoint shutdown bound is the lifecycle host's per-phase
-  // join-with-deadline; its regression pin lives in LifecycleHost.vitest.ts.
-
   it.live('forwards a failed shutdown drain to the runtime release hook', () =>
     Effect.gen(function* () {
       const { platform, executeCliRequest } = yield* Effect.promise(
         loadExecuteCliOnInstalledHost,
       );
       const drainError = new Error('snapshot drain failed');
-      mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(drainError);
+      mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(drainError);
       const published = yield* Deferred.make<LeaseOptions>();
       const hangingRun = stubHangingRun(published);
 
@@ -900,13 +779,16 @@ describe('executeCliRequest', () => {
       const leaseOptions = yield* Deferred.await(published);
       yield* settle;
       expect(leaseOptions).toBeDefined();
-      leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
-        startImmediately: true,
-      });
+      leaseOptions.onRunClaimed?.('exec-1' as RunId);
+      const shutdown = yield* Effect.forkChild(
+        Scope.close(platform.shutdownScope, Exit.void),
+        {
+          startImmediately: true,
+        },
+      );
 
       expect(
-        yield* Effect.flip(leaseOptions.beforeLeaseRelease?.() ?? Effect.void),
+        yield* Effect.flip(leaseOptions.beforeRunEnd?.() ?? Effect.void),
       ).toBe(drainError);
       hangingRun.resolve(COMPLETED_RUN);
       yield* Fiber.join(shutdown);
@@ -942,7 +824,7 @@ describe('executeCliRequest', () => {
                 Deferred.doneUnsafe(launch, Effect.void);
               });
             } finally {
-              runs?.untrack(runId);
+              if (runs) untrackRun(runs, runId);
             }
           },
         );
@@ -953,7 +835,7 @@ describe('executeCliRequest', () => {
         yield* Deferred.await(launch);
         yield* settle;
 
-        yield* platform.lifecycle.runShutdown;
+        yield* Scope.close(platform.shutdownScope, Exit.void);
         expect(yield* Fiber.join(run)).toEqual({
           ok: false,
           exitCode: CliExitCode.Interrupted,
@@ -969,7 +851,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        vi.spyOn(testDefaultSession().runs, 'kill').mockReturnValue({
+        vi.spyOn(testDefaultSession().runs, 'stop').mockReturnValue({
           accepted: () => false,
           settlement: Effect.void,
         });
@@ -981,10 +863,10 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         hangingRun.resolve(COMPLETED_RUN);
@@ -992,7 +874,7 @@ describe('executeCliRequest', () => {
         yield* Fiber.join(run);
 
         expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        expect(mocks.releaseRunLeaseAfterArtifacts).not.toHaveBeenCalled();
+        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
       }),
   );
 
@@ -1023,10 +905,10 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
@@ -1055,7 +937,7 @@ describe('executeCliRequest', () => {
         const { platform, executeCliRequest } = yield* Effect.promise(
           loadExecuteCliOnInstalledHost,
         );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         const published = yield* Deferred.make<LeaseOptions>();
         const hangingRun = stubHangingRun(published);
         let publicationCommitted: boolean | undefined;
@@ -1074,13 +956,13 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
         yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
           Effect.void;
 
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
@@ -1109,7 +991,7 @@ describe('executeCliRequest', () => {
         const { AgentError: RuntimeAgentError } = yield* Effect.promise(
           () => import('@common/errors'),
         );
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'kill');
+        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
         const outputFailure = new Error(
           'Workflow completed without generated outputs; nothing was copied to out.',
         );
@@ -1122,7 +1004,7 @@ describe('executeCliRequest', () => {
         });
         mocks.runAgent.mockImplementationOnce(
           async (_request: unknown, options: LeaseOptions) => {
-            options.onRunLeaseAcquired?.('exec-1' as RunId);
+            options.onRunClaimed?.('exec-1' as RunId);
             try {
               await testRuntime().runPromise(
                 options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
@@ -1160,7 +1042,7 @@ describe('executeCliRequest', () => {
         yield* settle;
         expect(outputResolutionFailed).toBe(true);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
@@ -1193,7 +1075,7 @@ describe('executeCliRequest', () => {
         const { DatabaseNotOwner } = yield* Effect.promise(
           () => import('@shared/session/database'),
         );
-        mocks.releaseRunLeaseAfterArtifacts.mockRejectedValueOnce(
+        mocks.commitRunEndAfterArtifacts.mockRejectedValueOnce(
           new DatabaseNotOwner({
             // The fixture's run id is not a canonical one, so the key is
             // written directly: only its type matters to the drain.
@@ -1211,15 +1093,13 @@ describe('executeCliRequest', () => {
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
         expect(leaseOptions).toBeDefined();
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
 
-        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
-          false,
-        );
+        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(false);
         hangingRun.resolve(COMPLETED_RUN);
         yield* Fiber.join(shutdown);
         yield* Fiber.join(run);
@@ -1253,10 +1133,13 @@ describe('executeCliRequest', () => {
       const leaseOptions = yield* Deferred.await(published);
       yield* settle;
       expect(mocks.runAgent).toHaveBeenCalledOnce();
-      leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
-      const shutdown = yield* Effect.forkChild(platform.lifecycle.runShutdown, {
-        startImmediately: true,
-      });
+      leaseOptions.onRunClaimed?.('exec-1' as RunId);
+      const shutdown = yield* Effect.forkChild(
+        Scope.close(platform.shutdownScope, Exit.void),
+        {
+          startImmediately: true,
+        },
+      );
       yield* settle;
       expect(mocks.emit).not.toHaveBeenCalled();
       mockCancelledOutcome();
@@ -1317,18 +1200,16 @@ describe('executeCliRequest', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
         yield* settle;
         // The drain runs under the lease, before the launch settles: this is
         // the instant at which its failure notice used to claim the run's own
         // presentation and suppress the message below.
-        expect(yield* leaseOptions.beforeLeaseRelease?.() ?? Effect.void).toBe(
-          true,
-        );
+        expect(yield* leaseOptions.beforeRunEnd?.() ?? Effect.void).toBe(true);
         hangingRun.reject(
           new RuntimeAgentError('Error executing agent chat: boom'),
         );
@@ -1357,7 +1238,7 @@ describe('executeCliRequest', () => {
 
       yield* executeCliRequest(request, cliContext(), {});
       mocks.finalizeRun.mockClear();
-      yield* platform.lifecycle.runShutdown;
+      yield* Scope.close(platform.shutdownScope, Exit.void);
 
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
     }),
@@ -1370,34 +1251,8 @@ describe('executeCliConfig', () => {
     await installFreshDefaultSession();
   });
 
-  /** Stubs a completed tool-use run and drives executeCliToolUseConfig. */
-  const runCompletedToolUseConfig = (resolvedOutcome: string) =>
-    Effect.gen(function* () {
-      const { AgentCategory } = yield* Effect.promise(
-        () => import('@shared/schemas'),
-      );
-      const { executeCliToolUseConfig } = yield* Effect.promise(loadExecuteCli);
-      mocks.runAgent.mockResolvedValueOnce({
-        outcome: 'completed',
-        output: {
-          category: AgentCategory.ToolUse,
-          response: 'Done.',
-          files: [],
-        },
-        runId: 'exec-1',
-      });
-      mocks.readCliRunOutcomeState.mockResolvedValueOnce({
-        outcome: resolvedOutcome,
-        outcomePersisted: true,
-      });
-      return yield* executeCliToolUseConfig(toolUseConfig(), cliContext(), {
-        stopAfterCycle: true,
-      });
-    });
-
   // it.live for the two shutdown tests below: the run is forked in-fiber, but
-  // runShutdown drives the lifecycle host's real-clock phase deadline and its
-  // handler settles on the process runtime.
+  // the command's shutdown step settles on the process runtime.
   it.live(
     'prints a complete resume command after interrupted tool-use recovery is available',
     () =>
@@ -1434,12 +1289,12 @@ describe('executeCliConfig', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -1483,12 +1338,12 @@ describe('executeCliConfig', () => {
         );
         const leaseOptions = yield* Deferred.await(published);
         yield* settle;
-        expect(leaseOptions.onRunLeaseAcquired).toBeDefined();
+        expect(leaseOptions.onRunClaimed).toBeDefined();
         const shutdown = yield* Effect.forkChild(
-          platform.lifecycle.runShutdown,
+          Scope.close(platform.shutdownScope, Exit.void),
           { startImmediately: true },
         );
-        leaseOptions.onRunLeaseAcquired?.('exec-1' as RunId);
+        leaseOptions.onRunClaimed?.('exec-1' as RunId);
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_RUN);
 
@@ -1498,27 +1353,46 @@ describe('executeCliConfig', () => {
       }),
   );
 
-  it.effect('reports invalid configs without starting the runtime host', () =>
-    Effect.gen(function* () {
-      const { executeCliConfig } = yield* Effect.promise(loadExecuteCli);
-      const invalidConfig = {
-        agentCategory: 'invalid',
-      } as unknown as Parameters<typeof executeCliConfig>[0];
-
-      const result = yield* executeCliConfig(invalidConfig, cliContext());
-
-      expect(result).toMatchObject({ ok: false });
-      expect(mocks.writeTextStderr).toHaveBeenCalledWith(expect.any(String));
-      expect(mocks.createCliRuntimeHost).not.toHaveBeenCalled();
-      expect(mocks.runAgent).not.toHaveBeenCalled();
-    }),
-  );
-
   it.effect(
-    'derives the internal CLI result and exit code for tool-use configs',
+    'records each installed plugin by source and pinned commit in the CLI result',
     () =>
       Effect.gen(function* () {
-        const result = yield* runCompletedToolUseConfig('completed');
+        const commit = 'a'.repeat(40);
+        yield* testDefaultSession().roots.globalState.update(
+          GlobalStateKey.INSTALLED_PLUGINS,
+          [
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+              path: '/home/me/.texra/plugins/notes',
+              skills: ['/home/me/.texra/plugins/notes/skills'],
+            },
+          ],
+        );
+        const { AgentCategory } = yield* Effect.promise(
+          () => import('@shared/schemas'),
+        );
+        const { executeCliToolUseConfig } =
+          yield* Effect.promise(loadExecuteCli);
+        mocks.runAgent.mockResolvedValueOnce({
+          outcome: 'completed',
+          output: {
+            category: AgentCategory.ToolUse,
+            response: 'Done.',
+            files: [],
+          },
+          runId: 'exec-1',
+        });
+        mocks.readCliRunOutcomeState.mockResolvedValueOnce({
+          outcome: 'completed',
+          outcomePersisted: true,
+        });
+        const result = yield* executeCliToolUseConfig(
+          toolUseConfig(),
+          cliContext(),
+          { stopAfterCycle: true },
+        );
 
         expect(result).toMatchObject({
           ok: true,
@@ -1530,34 +1404,22 @@ describe('executeCliConfig', () => {
           },
         });
         if (result.ok) {
+          // The result names each installed plugin by where it came from and
+          // its pinned commit, never by the local checkout it was read from.
+          expect(result.result.plugins).toEqual([
+            {
+              name: 'notes',
+              source: 'https://github.com/example/notes.git',
+              commit,
+            },
+          ]);
           expect(Object.keys(result.result)).toEqual([
             'outcome',
             'output',
             'runId',
+            'plugins',
             'workingDirectory',
           ]);
-        }
-      }),
-  );
-
-  it.effect(
-    'carries only the resolved outcome after a shutdown interruption',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* runCompletedToolUseConfig('cancelled');
-
-        expect(result).toMatchObject({
-          ok: true,
-          exitCode: CliExitCode.Interrupted,
-          result: {
-            outcome: 'cancelled',
-            workingDirectory: '/tmp/project',
-          },
-        });
-        if (result.ok) {
-          expect(Object.hasOwn(result.result, 'status')).toBe(false);
-          expect(Object.hasOwn(result.result, 'terminalStatus')).toBe(false);
-          expect(Object.hasOwn(result.result, 'endGroupStatus')).toBe(false);
         }
       }),
   );

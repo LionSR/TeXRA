@@ -12,7 +12,9 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   JsonValue,
+  PersistedJsonValue,
   CommitOrdinal,
+  DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
@@ -86,7 +88,9 @@ export function claimStanding(claim: AggregateClaim): ClaimStanding {
 export class DatabaseOpenFailed extends Data.TaggedError('DatabaseOpenFailed')<{
   readonly path: string;
   readonly cause: unknown;
-}> {}
+}> {
+  override readonly message = toErrorMessage(this.cause);
+}
 
 /**
  * A batch was rejected. C6 is all-or-nothing: the transaction rolled back, so
@@ -122,6 +126,22 @@ export class DatabaseClaimRefused extends Data.TaggedError(
   readonly verdict: 'alive' | 'unprovable';
 }> {}
 
+/**
+ * The owner the database names as holding an aggregate this caller was
+ * refused (not proven alive: a claim verdict may be `unprovable`), or null
+ * when the refusal names none: the claim verdict (carried as the write
+ * failure's cause), or a `DatabaseNotOwner` naming an owner of an open
+ * aggregate. A closed aggregate is finished and an ownerless one is free, so
+ * neither is held elsewhere.
+ */
+export const heldElsewhereBy = (error: unknown): OwnerId | null => {
+  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
+  if (refusal instanceof DatabaseClaimRefused) return refusal.ownerId;
+  return refusal instanceof DatabaseNotOwner && !refusal.closed
+    ? refusal.ownerId
+    : null;
+};
+
 /** A query failed or encountered an invalid persisted row. */
 export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   readonly path: string;
@@ -130,27 +150,28 @@ export class DatabaseReadFailed extends Data.TaggedError('DatabaseReadFailed')<{
   override readonly message = toErrorMessage(this.cause);
 }
 
-/** Why a session's root could not be opened: its database would not open,
- *  or the reads the session is built from failed. */
-export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
-
 /**
- * What opening a store of another event format left behind: the file, the
- * rows it held, and the format they were written under. Null when the store
- * was this build's or empty. The one fact a host presents about it; the
- * database keeps no other memory of the rows.
+ * What opening a store of an older event format moved aside: the store, the
+ * rows it held, the format they were written under, and the file they were
+ * moved to. Null when the store was this build's or empty. The one fact a
+ * host presents about it; this build never reads the moved rows.
  */
-export interface SessionStoreCleared {
+export interface SessionStoreMovedAside {
   readonly path: string;
+  readonly aside: string;
   readonly rows: number;
   readonly storedFormat: number;
 }
 
+/** Why a session's root could not be opened: its database would not open,
+ *  or the reads the session is built from failed. */
+export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
+
 export class Database extends Context.Service<
   Database,
   {
-    /** Set when this open cleared a store of another event format. */
-    readonly cleared: SessionStoreCleared | null;
+    /** Set when this open moved a store of an older event format aside. */
+    readonly movedAside: SessionStoreMovedAside | null;
     /**
      * C6: append an ordered batch, possibly across several aggregates, in one
      * `BEGIN IMMEDIATE` under the process's single permit. Each target's
@@ -180,6 +201,11 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** {@link readAll} filtered to display types in SQL: a tail never decodes
+     *  a run's private records only to drop them. */
+    readonly readDisplay: (
+      fromCommit: CommitOrdinal,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
@@ -215,6 +241,17 @@ export class Database extends Context.Service<
     readonly readAppStateKey: (
       key: string,
     ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
+    /** Change one key from its latest value while the write transaction is
+     *  held; a refusal writes nothing. */
+    readonly updateAppStateKey: <E>(
+      key: string,
+      change: (
+        current: JsonValue | undefined,
+      ) => Result.Result<PersistedJsonValue, E>,
+    ) => Effect.Effect<
+      Result.Result<PersistedJsonValue, E>,
+      DatabaseWriteFailed
+    >;
     readonly readUpdateCheck: (
       host: UpdateCheckHost,
     ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
@@ -321,6 +358,7 @@ export class GlobalDatabase extends Context.Service<
     Context.Service.Shape<typeof Database>,
     | 'appendAll'
     | 'readAppStateKey'
+    | 'updateAppStateKey'
     | 'readInputHistory'
     | 'appendInputHistory'
     | 'readDesktopProjects'

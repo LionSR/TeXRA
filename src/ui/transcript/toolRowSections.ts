@@ -26,6 +26,7 @@ import {
 import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   DELEGATION_TOOLS,
+  isWorkflowLaunchOutput,
 } from '@shared/constants/delegationTools';
 import { executionsAction } from '@shared/tools/executionsDisplay';
 import {
@@ -277,6 +278,8 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     sections.push(textSection('Action:', `wait (timeout: ${timeout}s)`));
   } else if (action === 'kill') {
     sections.push(textSection('Action:', 'kill'));
+  } else if (action === 'send' && typeof input.message === 'string') {
+    sections.push(textSection('Message:', input.message));
   }
 
   const viewRange = input.view_range;
@@ -304,11 +307,7 @@ function buildAcceptRunFilesSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
   const runId = asString(input.execution_id);
   if (runId) {
-    sections.push({
-      kind: 'identifier',
-      label: 'Run:',
-      value: runId,
-    });
+    sections.push({ kind: 'identifier', label: 'Run:', value: runId });
   }
 
   const raw = Array.isArray(input.files) ? input.files : [];
@@ -345,11 +344,6 @@ function buildDelegationSections(ctx: SectionContext): ToolSection[] {
   const { input } = ctx;
   if (!isObject(input)) return [];
   const sections: ToolSection[] = [];
-
-  const runId = asString(input.execution_id);
-  if (runId) {
-    sections.push({ kind: 'identifier', label: 'Resume:', value: runId });
-  }
 
   const agent = asString(input.agent);
   const model = asString(input.model);
@@ -394,8 +388,9 @@ function buildWorkflowScriptSections(ctx: SectionContext): ToolSection[] {
   const sections: ToolSection[] = [];
 
   const agent = asString(input.agent);
+  const label = 'Default agent:'; // each call may name its own agent
   if (agent !== undefined) {
-    sections.push({ kind: 'identifier', label: 'Agent:', value: agent });
+    sections.push({ kind: 'identifier', label, value: agent });
   }
 
   const script = asString(input.script);
@@ -707,15 +702,17 @@ export function dispatchSections(ctx: SectionContext): {
     if (sections.length === 0) break;
     return {
       sections,
-      // `delegate_multi_agents` is deliberately absent: its sections describe
-      // the call (agent, script, args, files) and carry no output, so calling
-      // them 'rendered-by-sections' hid the script's real result. A diff
+      // `delegate_multi_agents` carries its output only for a detached launch
+      // (model instructions; the result is its own delivery row), not the
+      // awaited run's real result, which its sections do not show. A diff
       // shows what an edit changed, so it stands for the output only when the
       // edit applied: a failed edit's output is its failure, which no diff
       // shows, and a host may paint no diff for it at all.
       carriesOutput:
         isMcpToolName(ctx.toolName) ||
-        (!ctx.failed && sections.some((section) => section.kind === 'diff')),
+        (!ctx.failed && sections.some((section) => section.kind === 'diff')) ||
+        (ctx.toolName === DELEGATE_MULTI_AGENTS_TOOL_NAME &&
+          isWorkflowLaunchOutput(ctx.outputText)),
       ...(fileLinkKind ? { fileLinkKind } : {}),
     };
   }

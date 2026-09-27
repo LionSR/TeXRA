@@ -3,8 +3,13 @@ import { SubscriptionRef } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import { sumUsageStats, type TokenUsageStats } from '@shared/schemas';
-import { isActivePhase } from '@shared/runs/runStatus';
-import { isLiveRun, type RunView } from '@shared/session/sessionView';
+import type { SessionTitleState } from '@shared/sessionTitle';
+import {
+  isLiveRun,
+  isWorkingRun,
+  sessionActivity,
+  type RunView,
+} from '@shared/session/sessionView';
 
 /**
  * Projects the accumulated spend of the runs currently in flight for the
@@ -13,8 +18,10 @@ import { isLiveRun, type RunView } from '@shared/session/sessionView';
  * Holds no state of its own: the session's fold is the one reader of which
  * runs are live (`isLiveRun`, the reading every host shares; an interrupted
  * run spends nothing, so it counts towards neither figure) and carries each
- * run's metered total (`RunView.usage`). The spinner counts the live runs
- * that are working right now, not an idle conversation waiting for input.
+ * run's metered total (`RunView.usage`). The pill shows the session's
+ * activity (`sessionActivity`, the reading every host's title shares), so a
+ * request waiting on the user keeps it on screen; its spinner counts the live
+ * runs that are working right now.
  * Both getters read that view live, so a run leaving flight drops out of the
  * total without any bookkeeping here, and the summing rule has a single home
  * (`sumUsageStats`).
@@ -22,10 +29,12 @@ import { isLiveRun, type RunView } from '@shared/session/sessionView';
 export class StatusBarUsageTracker {
   constructor(private readonly session: Pick<SessionHandle, 'view'>) {}
 
+  public get activity(): SessionTitleState {
+    return sessionActivity(SubscriptionRef.getUnsafe(this.session.view));
+  }
+
   public get activeRunCount(): number {
-    return this.runs.filter(
-      (run) => isLiveRun(run) && isActivePhase(run.status),
-    ).length;
+    return this.runs.filter(isWorkingRun).length;
   }
 
   public get totalUsage(): TokenUsageStats {

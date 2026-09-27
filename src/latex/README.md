@@ -22,14 +22,14 @@ consequences worth knowing before you touch a file here:
   running fiber is interrupted. Do not add a `signal` parameter to a function
   here so a caller can pass one down.
 
-- **Diagnostics are `Effect.log*`, not `createLog`.** A program names its
+- **Diagnostics are `Effect.log*`.** A program names its
   channel once with `withLogChannel` from `@logger/effectLog` and every entry
   below it inherits that channel, so no helper takes a channel parameter just
-  to log. Both producers end at the same host sink, so a test asserts on the
+  to log. Every producer ends at the same host sink, so a test asserts on the
   entries the sink received (`@test/support/logSinkCapture`) rather than on a
   logger-namespace spy. One consequence to know: the Effect logger drops
-  `Debug` entries unless `texra.logger.debugMode` is on, where `createLog`
-  emitted them and let the host's level filter decide. `LatexMediaManager`'s
+  `Debug` entries below the host's `MinimumLogLevel` (the CLI shows them
+  only with `--verbose`). `LatexMediaManager`'s
   injected `LatexTrace` is not this — that is the run's product trace and
   stays as it is (migration PRD, R9).
 
@@ -97,13 +97,14 @@ The files have distinct roles:
   resolves which one a workspace setting selects and runs it, and
   `indentDirectory.ts` applies it across a whole directory.
 - **`latexdiff/`** — full-run discovery and operation planning around
-  `LaTeXdiffService`. `runLatexdiff.ts` is the host-neutral entry point the
-  VS Code command and the desktop stream-toolbar action call (the CLI's
-  latexdiff workflow instead goes through the agent's own `LatexDiffManager`,
-  which uses `LaTeXdiffService` directly); it resolves which round outputs to
-  diff via `outputDiscovery.ts`/`executionDiscovery.ts` (the latter's narrow
-  port lets `latex` stay out of `@agent/storage`), then builds and dispatches
-  the diff operations via `diffOperations.ts`/`diffCommandExecutor.ts`, naming
+  `LaTeXdiffService`. `diffOperations.ts` (`runLatexdiffForRun`) is the
+  host-neutral entry point the VS Code command and the desktop stream-toolbar
+  action call (the CLI's latexdiff workflow instead goes through the agent's
+  own `LatexDiffManager`, which uses `LaTeXdiffService` directly); it reads
+  the run's recorded round outputs through the narrow `runDiscovery.ts` port
+  (which lets `latex` stay out of `@agent/storage`), then builds and
+  dispatches the diff operations through `LaTeXdiffService.runDiff` and
+  `diffCommandExecutor.ts`, naming
   output files with `diffFileNameManager.ts` (the math markup mode is the
   `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to

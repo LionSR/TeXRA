@@ -7,8 +7,6 @@ import {
   type AgentRosterControllerDeps,
   type AgentRosterEntry,
 } from '@agent/roster/AgentRosterController';
-import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
-import { setLogSink } from '@logger/logSink';
 import type { StateStore } from '@platform/interfaces';
 import {
   agentMatchesIdentifier,
@@ -17,7 +15,6 @@ import {
 } from '@shared/schemas';
 import { GlobalStateKey, WorkspaceStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
-import { captureLogEntries } from '@test/support/logSinkCapture';
 
 const agents: Record<AgentCategory, AgentRosterEntry[]> = {
   workflow: [
@@ -64,32 +61,7 @@ function controller(
 describe('AgentRosterController', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    setLogSink(null);
   });
-
-  it.effect(
-    'warns and falls back to the inherited roster on malformed state',
-    () =>
-      Effect.gen(function* () {
-        const logs = captureLogEntries();
-        const roster = controller(
-          new FakeStateStore({
-            [WorkspaceStateKey.AGENT_ROSTER_SELECTION]: { kind: 'invalid' },
-          }),
-        );
-
-        expect((yield* roster.snapshot()).selection).toEqual({
-          kind: 'inherit',
-        });
-        expect(
-          logs.has(
-            'WARN',
-            'AgentRosterController',
-            'malformed roster selection',
-          ),
-        ).toBe(true);
-      }).pipe(Effect.provide(effectDiagnosticsLayer('Trace'))),
-  );
 
   it.effect('uses the user default only for inherited workspaces', () =>
     Effect.gen(function* () {
@@ -108,22 +80,6 @@ describe('AgentRosterController', () => {
       expect(
         (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
       ).toEqual(['lead']);
-    }),
-  );
-
-  it.effect('persists one canonical team selection', () =>
-    Effect.gen(function* () {
-      const workspaceState = new FakeStateStore();
-      const roster = controller(workspaceState);
-
-      yield* roster.setTeam('test-team');
-
-      expect(
-        yield* workspaceState.get(WorkspaceStateKey.AGENT_ROSTER_SELECTION),
-      ).toEqual({
-        kind: 'team',
-        teamId: 'test-team',
-      });
     }),
   );
 

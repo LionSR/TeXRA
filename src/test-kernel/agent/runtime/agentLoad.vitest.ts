@@ -4,14 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Layer } from 'effect';
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  beforeEach,
-  afterEach,
-  vi,
-} from 'vitest';
+import { afterAll, beforeAll, describe, afterEach, vi } from 'vitest';
 
 import { getAgent, loadAgents, refresh } from '@agent/index';
 import type { AgentEntry } from '@agent/index/agentEntry';
@@ -22,10 +15,12 @@ import {
 import {
   AgentDirectories,
   AgentDirectoriesFailed,
+  AppState,
   type AgentDirectoriesPort,
 } from '@platform/interfaces';
 import type { AgentCatalogServices } from '@platform/processRuntime';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import {
   fakeHostAgentDirectories,
   installPlatform,
@@ -52,6 +47,7 @@ function onGlobalStorage<A, E>(
       nodePlatformLayer,
       testHttpClientLayer,
       AgentDirectories.layer(fakeHostAgentDirectories),
+      AppState.layer(new FakeStateStore()),
     ),
   );
 }
@@ -115,15 +111,6 @@ describe('validateAgentYamlContent', () => {
       ].join('\n'),
     ),
   );
-
-  it.effect('wraps malformed YAML text through the shared parse boundary', () =>
-    Effect.gen(function* () {
-      const error = yield* Effect.flip(
-        validateAgentYamlContent('name: "unterminated'),
-      );
-      assert.ok(error.message.startsWith('Failed to parse agent YAML:'));
-    }),
-  );
 });
 
 describe('loadAgentSettingAndPrompts', () => {
@@ -154,43 +141,6 @@ describe('loadAgentSettingAndPrompts', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  it.effect('loads settings and prompts from the given definition path', () =>
-    Effect.gen(function* () {
-      const entry = customEntry('polish', AgentCategory.Workflow);
-
-      putYaml(entry, [
-        'name: polish',
-        'settings:',
-        // agentCategory is the discriminator of AgentSettingSchema; only
-        // builtInToolUse agents get it defaulted, so custom YAMLs declare it.
-        '  agentCategory: workflow',
-        '  rounds: 1',
-        'prompts:',
-        '  userRequest: unified variant',
-        '',
-      ]);
-
-      const [, prompts] = yield* loadDefinition(entry);
-
-      assert.strictEqual(prompts.userRequest, 'unified variant');
-    }),
-  );
-
-  it.effect(
-    'rejects with a wrapped error naming the path for malformed YAML',
-    () =>
-      Effect.gen(function* () {
-        const entry = customEntry('broken', AgentCategory.Workflow);
-
-        writeFileSync(entry.path, 'name: "unterminated\n');
-
-        const error = yield* Effect.flip(loadDefinition(entry));
-        assert.ok(
-          error.message.startsWith(`Failed to parse YAML at ${entry.path}:`),
-        );
-      }),
-  );
 
   it.effect(
     'rejects a circular "inherits" chain instead of recursing without bound',
@@ -260,6 +210,7 @@ describe('agent registry load state', () => {
           counter.scans += 1;
           return agentDir;
         }),
+      customConfigured: () => Effect.succeed(false),
       builtIn: () => Effect.sync(() => agentDir),
       builtInToolUse: () => Effect.sync(() => agentDir),
     };
@@ -324,6 +275,7 @@ describe('agent registry load state', () => {
                 cause: scanFailure,
               }),
             ),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () => Effect.sync(() => agentDir),
           builtInToolUse: () => Effect.sync(() => agentDir),
         }),

@@ -13,7 +13,7 @@
  */
 import {
   MESSAGE_TYPES,
-  WORKFLOW_TASK_STATUS_LABEL,
+  workflowCallStatusLabel,
   type ErrorLogData,
   type ExtendedTokenUsageStats,
   type FileListEntry,
@@ -25,7 +25,7 @@ import { getModelLabel } from '@shared/model/modelLabel';
 import { normalizeToolUse } from '@shared/toolUse';
 import {
   hasIncompleteEmbeddedSubagentFollowup,
-  summarizeFollowupMessage,
+  summarizeSubagentFollowup,
 } from '@shared/subagentFollowup';
 import {
   formatWorkflowCallLine,
@@ -286,7 +286,7 @@ export function workflowTaskRow(
     kind: 'workflowTask',
     call,
     line: formatWorkflowCallLine(call),
-    statusLabel: WORKFLOW_TASK_STATUS_LABEL[call.status],
+    statusLabel: workflowCallStatusLabel(call),
     metadataParts: formatWorkflowCallMetadataParts(call),
     ...(detail ? { detail } : {}),
   };
@@ -322,7 +322,7 @@ export function logPayloadRow(
         ...base,
         kind: 'user',
         text: measured,
-        summary: transcriptText(summarizeFollowupMessage(measured.full)),
+        summary: transcriptText(summarizeSubagentFollowup(measured.full)),
         ...(payload.data?.workflowSummary
           ? { workflowSummary: payload.data.workflowSummary }
           : {}),

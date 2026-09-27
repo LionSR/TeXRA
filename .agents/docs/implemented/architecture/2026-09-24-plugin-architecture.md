@@ -197,6 +197,17 @@ unregister, no plugin state, no event channel) now covers:
   scan pools them with the core directory. They are the same YAML in the same
   persisted source, so agent keys do not change and no agent source is added.
 
+- **Continuation at idle.** `ToolPlugin.continuation: true` declares that a
+  plugin decides what a parked tool-use run does next; `PLUGIN_CONTINUATIONS`
+  in `src/agent/runtime/loop/continuationPolicy.ts` holds its policy, and a
+  `satisfies` check keeps the table and the manifest flags in step. The run
+  resolves its policy once, from its pinned composition's plugins, so a
+  switched-off plugin and a child's narrowing apply to it as they do to
+  tools; with none on, the run parks. The `goal` plugin (the `plan` tool) is
+  the one contributor, and its switch replaced the `texra.goal.enabled`
+  setting. The loop still owns the queue, the child check and
+  `stopAfterCycle`; the policy only answers "another turn, or park?".
+
 ## What is deliberately core
 
 These are not plugin surfaces, and a proposal to open one needs its own owner
@@ -212,8 +223,9 @@ decision:
   prompt, which is recorded on the snapshot next to `offeredTools`. Plugin
   prompt fragments would make the recorded prompt depend on inputs the
   composition does not capture.
-- **The run loop.** `src/agent/runtime/loop/toolUse.ts` and `reflection.ts`
-  are the only run programs. v1 plugins have no hooks and no task kinds, so a
+- **The run loop.** `src/agent/runtime/loop/toolUse.ts` is the only run
+  program (workflow agents run it in round mode since the one-run-program
+  series). v1 plugins have no hooks and no task kinds, so a
   plugin cannot add a step, a node or a wait.
 - **The ledger.** `appendBatch` on the run ledger
   (`src/shared/session/runLedger.ts`) is the one writer. Plugins own no durable state and no

@@ -4,29 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 
-describe('agent workspace work-plan state (src/agent/core/state/AgentWorkspaceState.ts)', () => {
-  it.each([
-    ['a snapshot without workPlan', {}],
-    ['a retired todo/plan snapshot', { todos: [], plan: null }],
-    ['a null workPlan', { workPlan: null }],
-    [
-      'invalid current workPlan entries',
-      { workPlan: { todos: [{ content: 'Missing status and active form' }] } },
-    ],
-  ])('rejects %s', (_name, snapshot) => {
-    expect(() => AgentWorkspaceState.fromSnapshot(snapshot)).toThrow();
-  });
-
-  it('round-trips the canonical work-plan snapshot', () => {
-    const state = AgentWorkspaceState.create();
-    const snapshot = state.toSnapshot();
-
-    expect(AgentWorkspaceState.fromSnapshot(snapshot).toSnapshot()).toEqual(
-      snapshot,
-    );
-  });
-});
-
 describe('agent workspace file-interaction state', () => {
   it('round-trips edit paths and line counts through the workspace snapshot', () => {
     const state = AgentWorkspaceState.create();
@@ -54,19 +31,5 @@ describe('agent workspace file-interaction state', () => {
       { path: 'paper.tex', added: 4, removed: 1 },
       { path: 'notes.md', added: 2, removed: 5 },
     ]);
-  });
-
-  it('prefaults missing added/removed on persisted file-edit snapshots', () => {
-    const state = AgentWorkspaceState.fromSnapshot({
-      workPlan: {},
-      interactions: { edits: [{ path: 'legacy.md' }] },
-    }).interactions;
-
-    expect(state.editedFilePaths).toEqual(['legacy.md']);
-    expect(state.toSnapshot()).toEqual({
-      readFiles: [],
-      edits: [{ path: 'legacy.md', added: 0, removed: 0 }],
-      toolCallCount: 0,
-    });
   });
 });

@@ -1,8 +1,8 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
+import { Deferred, Effect, Exit, Fiber, Random, Scope } from 'effect';
 import { TestClock } from 'effect/testing';
-import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
+import { describe, expect, vi, type Mock } from 'vitest';
 
 // Local imports
 import {
@@ -28,14 +28,23 @@ function wireRoutes(
   return [{ key: ROUTE, classifyFailure }];
 }
 
-/** Run `attempt` through `gate` on `routes` with the test's base backoff. */
+/** A draw at the middle of [0, 1): the ±20 % jitter scales by exactly 1. */
+const MIDPOINT_RANDOM: Random.Random = {
+  nextDoubleUnsafe: () => 0.5,
+  nextIntUnsafe: () => 0,
+};
+
+/** Run `attempt` through `gate` on `routes` with the test's base backoff and
+ *  a jitter-free cooldown. */
 function gated<A, E>(
   gate: ModelRetryGate,
   routes: readonly [RoutePolicy, ...RoutePolicy[]],
   attempt: Effect.Effect<A, E>,
   baseBackoffMs = 1000,
 ): Effect.Effect<A, E> {
-  return gate.withRoutes(routes, { baseBackoffMs })(attempt);
+  return gate
+    .withRoutes(routes, { baseBackoffMs })(attempt)
+    .pipe(Effect.provideService(Random.Random, MIDPOINT_RANDOM));
 }
 
 /** An attempt that succeeds at once and counts its admissions. */
@@ -108,14 +117,6 @@ const failRecoveryProbe = (gate: ModelRetryGate) =>
   });
 
 describe('ModelRetryGate', () => {
-  beforeEach(() => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5);
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
   it.effect(
     'admits one recovery probe and releases siblings after success',
     () =>

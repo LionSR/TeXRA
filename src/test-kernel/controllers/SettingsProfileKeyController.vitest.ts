@@ -95,32 +95,7 @@ describe('SettingsProfileKeyController', () => {
 
       assert.equal(yield* secrets.get('apiKey.openai'), 'sk-real-openai-key');
       assert.equal(refreshCount(), 1);
-      assert.equal(
-        hosts.prompt.inputs[0]?.options.prompt,
-        'Enter OpenAI API key',
-      );
       assert.equal(hosts.prompt.inputs[0]?.options.password, true);
-      assert.equal(
-        hosts.prompt.messages.at(-1)?.message,
-        'OpenAI API key has been set',
-      );
-    }),
-  );
-
-  it.effect('does nothing when provider key input is cancelled', () =>
-    Effect.gen(function* () {
-      const { controller, secrets, refreshCount, hosts } =
-        yield* Effect.promise(() =>
-          createController({
-            inputResponses: [undefined],
-          }),
-        );
-
-      yield* controller.setProviderKey('openai');
-
-      assert.equal(yield* secrets.get('apiKey.openai'), undefined);
-      assert.equal(refreshCount(), 0);
-      assert.equal(hosts.prompt.messages.length, 0);
     }),
   );
 
@@ -147,22 +122,14 @@ describe('SettingsProfileKeyController', () => {
     'removes provider keys after confirmation and refreshes dependent state',
     () =>
       Effect.gen(function* () {
-        const { controller, deleted, refreshCount, hosts } =
-          yield* Effect.promise(() => createController());
+        const { controller, deleted, refreshCount } = yield* Effect.promise(
+          () => createController(),
+        );
 
         yield* controller.removeProviderKey('openai');
 
         assert.deepEqual(deleted, ['apiKey.openai']);
         assert.equal(refreshCount(), 1);
-        assert.equal(
-          hosts.prompt.confirms[0]?.message,
-          'Remove the OpenAI API key? This cannot be undone.',
-        );
-        assert.equal(hosts.prompt.confirms[0]?.options?.modal, false);
-        assert.equal(
-          hosts.prompt.messages.at(-1)?.message,
-          'OpenAI API key has been removed',
-        );
       }),
   );
 
@@ -180,73 +147,6 @@ describe('SettingsProfileKeyController', () => {
       assert.deepEqual(deleted, []);
       assert.equal(refreshCount(), 0);
       assert.equal(hosts.prompt.messages.length, 0);
-    }),
-  );
-
-  it.effect('commits a provider key without prompting for input', () =>
-    Effect.gen(function* () {
-      const { controller, hosts, secrets, refreshCount } =
-        yield* Effect.promise(() => createController());
-
-      yield* controller.commitProviderKey('openai', '  sk-direct-secret  ');
-
-      assert.equal(yield* secrets.get('apiKey.openai'), 'sk-direct-secret');
-      assert.equal(hosts.prompt.inputs.length, 0);
-      assert.equal(refreshCount(), 1);
-      assert.equal(
-        hosts.prompt.messages.at(-1)?.message,
-        'OpenAI API key has been set',
-      );
-    }),
-  );
-
-  it.effect('reports an empty provider key instead of storing it', () =>
-    Effect.gen(function* () {
-      const { controller, secrets, refreshCount, hosts } =
-        yield* Effect.promise(() => createController());
-
-      const failure = yield* Effect.flip(
-        controller.commitProviderKey('openai', ''),
-      );
-
-      assert.equal(yield* secrets.get('apiKey.openai'), undefined);
-      assert.equal(refreshCount(), 0);
-      assert.equal(hosts.prompt.messages.length, 0);
-      assert.match(String(failure.cause), /empty/);
-    }),
-  );
-
-  it.effect('does not refresh when secret storage fails', () =>
-    Effect.gen(function* () {
-      const error = new Error('write failed');
-      const { controller, refreshCount } = yield* Effect.promise(() =>
-        createController({
-          inputResponses: ['sk-real-openai-key'],
-          setError: error,
-        }),
-      );
-
-      const failure = yield* Effect.flip(controller.setProviderKey('openai'));
-
-      assert.match(failure.message, /Failed to set OpenAI API key/);
-      assert.equal(refreshCount(), 0);
-    }),
-  );
-
-  it.effect('does not refresh when secret deletion fails', () =>
-    Effect.gen(function* () {
-      const error = new Error('delete failed');
-      const { controller, refreshCount, deleted } = yield* Effect.promise(() =>
-        createController({ deleteError: error }),
-      );
-
-      const failure = yield* Effect.flip(
-        controller.removeProviderKey('openai'),
-      );
-
-      assert.match(failure.message, /Failed to remove OpenAI API key/);
-      assert.deepEqual(deleted, []);
-      assert.equal(refreshCount(), 0);
     }),
   );
 

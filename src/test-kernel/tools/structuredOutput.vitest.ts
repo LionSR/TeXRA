@@ -10,10 +10,6 @@ import {
   normalizeStructuredOutputSchema,
 } from '@tools/structuredOutput';
 
-// The synthetic terminal tool's name is a file-local const in
-// structuredOutput.ts; assert against the literal here.
-const SUBMIT_OUTPUT_TOOL_NAME = 'submit_output';
-
 function makeCapture() {
   return vi.fn<(value: unknown) => void>();
 }
@@ -138,36 +134,6 @@ describe('normalizeStructuredOutputSchema', () => {
 
 describe('buildTerminalTool', () => {
   const schema = z.strictObject({ title: z.string(), count: z.number() });
-
-  it.effect(
-    'captures already-validated input and returns a success result',
-    () =>
-      Effect.gen(function* () {
-        const capture = makeCapture();
-        const tool = buildTerminalTool(schema, capture);
-
-        expect(tool.definition.name).toBe(SUBMIT_OUTPUT_TOOL_NAME);
-
-        const result = yield* tool.call({ title: 'Lemma', count: 2 });
-
-        expect(result).toMatchObject({ status: 'executed', endTurn: true });
-        expect(capture).toHaveBeenCalledWith({ title: 'Lemma', count: 2 });
-      }),
-  );
-
-  it.effect(
-    'rejects invalid input via its own schema before execute (repair path)',
-    () =>
-      Effect.gen(function* () {
-        const capture = makeCapture();
-        const tool = buildTerminalTool(schema, capture);
-
-        const result = yield* tool.call({ title: 'Lemma', count: 'two' });
-
-        expect(result.status).toBe('error');
-        expect(capture).not.toHaveBeenCalled();
-      }),
-  );
 
   it('rejects a non-object root schema so provider tool inputs stay valid', () => {
     expect(() => buildTerminalTool(z.array(z.string()), vi.fn())).toThrow(

@@ -17,7 +17,7 @@
 // the "don't show" preference.
 
 import '@awesome.me/webawesome/dist/components/button/button.js';
-import '@awesome.me/webawesome/dist/components/card/card.js';
+import '@awesome.me/webawesome/dist/components/dialog/dialog.js';
 import '@awesome.me/webawesome/dist/components/checkbox/checkbox.js';
 import { html, nothing, type TemplateResult } from 'lit';
 
@@ -28,7 +28,6 @@ import { OWN_API_KEYS } from '@ui/copy/modelAccess';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 interface StartupPanelController {
-  isVisible(): boolean;
   template(): TemplateResult | typeof nothing;
   show(): void;
   hide(): void;
@@ -142,7 +141,7 @@ export function createStartupTeamPanel({
           ${waIcon('wand-magic-sparkles')}
         </span>
         <div>
-          <h1 id=${titleId}>What are you working on?</h1>
+          <h1 id=${titleId}>What kind of work do you do?</h1>
           <p>
             TeXRA configures a team of agents, their tools, and their workflows
             for the kind of work you do. You can change any of it later.
@@ -297,9 +296,9 @@ export function createStartupTeamPanel({
           <div>
             <strong>Tabs</strong>
             <span>
-              Open a terminal, browser, or Settings from the bottom of the
-              sidebar. Open files from the project list; everything stays open
-              beside a running agent.
+              Open Files, a terminal, or a browser from the + on the side
+              panel's tab bar. They stay open beside a running agent; Settings
+              is at the bottom of the sidebar.
             </span>
           </div>
         </li>
@@ -367,26 +366,29 @@ export function createStartupTeamPanel({
     done: doneStepTemplate,
   };
 
+  /** A modal over the window, not a page in the conversation's place:
+   *  the task behind it stays mounted, and Esc or a click outside closes it
+   *  as Skip would. `wa-hide` bubbles from the dialog's own popups too, so
+   *  only the dialog's own close counts. */
   function panelTemplate(): TemplateResult {
     return html`
-      <section
-        class="desktop-startup-panel"
+      <wa-dialog
+        class="desktop-onboarding"
+        open
+        light-dismiss
+        without-header
         aria-labelledby=${titleId}
         data-step=${step}
+        @wa-hide=${(event: Event) => {
+          if (event.target === event.currentTarget) closePanel();
+        }}
       >
-        <wa-card
-          class="desktop-onboarding"
-          appearance="filled-outlined"
-          with-footer
-        >
-          ${STEP_TEMPLATES[step]()}
-        </wa-card>
-      </section>
+        ${STEP_TEMPLATES[step]()}
+      </wa-dialog>
     `;
   }
 
   return {
-    isVisible: () => visible,
     template: () => (visible ? panelTemplate() : nothing),
     show: () => {
       if (visible) return;

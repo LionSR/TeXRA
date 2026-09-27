@@ -20,6 +20,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 
 import {
   Cause,
+  Clock,
   Context,
   Data,
   Effect,
@@ -49,8 +50,10 @@ import {
 } from '@agent/trace';
 import { hasMissingApiKeyErrorMarker } from '@common/errors/sdkError/errorMetadata';
 import { isUserAbort } from '@common/errors/sdkError/errorPatterns';
+import { routeCredentialSwitch } from '@model/modelRoute';
 import type { StateReadFailed } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
+import { quotaFallbackRouteFor } from '@shared/quotaFallbackRoutes';
 import { roundedUtilizationPercent } from '@shared/runs/contextUtilization';
 import {
   AgentCategory,
@@ -64,12 +67,14 @@ import {
   type RequestDecision,
   type RetryErrorInfo,
 } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
+import type { DatabaseWriteFailed } from '@shared/session/database';
+import {
+  findStorageRefusal,
+  type RunLedgerRefused,
+} from '@shared/session/runLedger';
 import type { RunState } from '@shared/session/runStateFold';
 import { generateShortId } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from './run/AgentRun';
 import { estimateInputTokensOrNull } from './run/estimateInputTokens';
@@ -103,6 +108,12 @@ import type { RoutePolicy } from './ModelRetryGate';
 type RetryCredentials = NonNullable<
   Extract<RequestDecision, { action: 'retry' }>['credentials']
 >;
+
+/** The answer the invoker gives itself for an automatic quota fallback. */
+const PERSONAL_RETRY = {
+  type: 'request.decided',
+  decision: { action: 'retry', credentials: 'personal' },
+} as const;
 
 /** Base delay between automatic attempts; the gate scales its own on top. */
 const RETRY_BACKOFF_MS = 1000;
@@ -142,7 +153,7 @@ const PARTIAL_TEXT_TAIL_MAX = 4096;
 
 export interface InvokeRequest {
   readonly system: string | undefined;
-  /** The tools this turn advertises; a reflection turn advertises none. */
+  /** The tools this turn advertises; a workflow round advertises none. */
   readonly tools: TurnRequest['tools'];
   readonly toolChoice: TurnRequest['toolChoice'];
   /** The turn's round ordinal, for debug file naming. */
@@ -242,7 +253,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         details: Record<string, unknown> = {},
       ): void => {
-        logger.domain({
+        logger.emit({
+          type: 'domain',
           key: 'modelRetryLifecycle',
           data: {
             kind: 'model_retry_lifecycle',
@@ -263,6 +275,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         objectType: 'messages' | 'response',
         round: number,
         baseName: string,
+        bound: BoundModel,
       ) =>
         maybeSaveDebugObject({
           object,
@@ -270,7 +283,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           context: {
             logger,
             runId,
-            modelName: run.config.model,
+            modelName: bound.modelId,
             isRemote: run.config.agentSource === 'remote',
             roots: session.roots,
           },
@@ -447,19 +460,15 @@ export const modelInvokerLayer = (): Layer.Layer<
           trace.output.finalize();
           if (Cause.hasInterrupts(streamed.cause))
             return yield* Effect.interrupt;
+          const refused = findStorageRefusal(streamed.cause);
+          if (refused) return yield* Effect.fail(refused);
           const cause = Cause.squash(streamed.cause);
-          if (
-            cause instanceof RunLedgerRefused ||
-            cause instanceof DatabaseWriteFailed
-          ) {
-            return yield* Effect.fail(cause);
-          }
           logRetryLifecycle(operationId, 'attempt_failed', bound, {
             attempt: invocation.attempt,
           });
           return yield* failAttempt(cause, bound, completed.streamedText);
         }
-        const responseTimeMs = Date.now() - started;
+        const responseTimeMs = (yield* Clock.currentTimeMillis) - started;
         const turn = completed.value;
         if (turn === null) {
           trace.thinking.finalize(undefined);
@@ -482,14 +491,12 @@ export const modelInvokerLayer = (): Layer.Layer<
           'response',
           request.round,
           `${request.debugName}_response`,
+          bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-        if (
-          usage !== null &&
-          usage.inputTokens > 0 &&
-          bound.contextWindow > 0
-        ) {
-          logger.contextState({
+        if (usage && usage.inputTokens > 0 && bound.contextWindow > 0) {
+          logger.emit({
+            type: 'context.state',
             inputTokens: usage.inputTokens,
             contextWindow: bound.contextWindow,
           });
@@ -563,7 +570,8 @@ export const modelInvokerLayer = (): Layer.Layer<
           completed.value = submission.result;
           return;
         }
-        const deadlineAtMs = Date.now() + BACKGROUND_MAX_DURATION_MS;
+        const deadlineAtMs =
+          (yield* Clock.currentTimeMillis) + BACKGROUND_MAX_DURATION_MS;
         yield* cell.append([
           {
             type: 'model.message',
@@ -622,6 +630,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           'messages',
           request.round,
           request.debugName,
+          bound,
         );
         // R4: the input estimate where the provider offers one. A count that
         // fails is logged and the provider enforces its own limit; an input
@@ -703,7 +712,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           },
         ]);
         const trace = openTrace();
-        const started = Date.now();
+        const started = yield* Clock.currentTimeMillis;
         const completed: AttemptOutcome = { value: null, streamedText: '' };
         const onEvent = eventSink(invocation, cell, trace, completed);
         const streamed = yield* Effect.exit(
@@ -797,7 +806,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             resumed: true,
           });
           const trace = openTrace();
-          const started = Date.now();
+          const started = yield* Clock.currentTimeMillis;
           const completed: AttemptOutcome = { value: null, streamedText: '' };
           const streamed = yield* Effect.exit(
             Stream.runForEach(
@@ -871,26 +880,6 @@ export const modelInvokerLayer = (): Layer.Layer<
         })(attemptOnce(cell, invocation, request, bound, operationId));
       };
 
-      /**
-       * The routes the run declines after this decision. Answering a retry
-       * with the user's own API key turns this run away from the subscription
-       * route the failed attempt billed — for this run only, on its own
-       * ledger, so a concurrent run's fallback is untouched and the user's
-       * stored preference stays theirs to change in settings.
-       */
-      const declinedAfter = (
-        state: RunState,
-        selection: RetryCredentials,
-        failed: BoundModel,
-      ): readonly DeclinableUsageRoute[] => {
-        if (selection !== 'personal' || failed.usageRoute === 'api-key') {
-          return state.declinedRoutes;
-        }
-        return state.declinedRoutes.includes(failed.usageRoute)
-          ? state.declinedRoutes
-          : [...state.declinedRoutes, failed.usageRoute];
-      };
-
       /** Rebuild the model binding a retry runs on. */
       const rebind = (
         selection: RetryCredentials,
@@ -946,14 +935,6 @@ export const modelInvokerLayer = (): Layer.Layer<
       > {
         const requestId = outstanding ?? `retry-${generateShortId()}`;
         const info = toRetryErrorInfo(recorded);
-        const request = {
-          requestId,
-          runId,
-          operation: 'Model request',
-          model: failed.modelId,
-          errorMessage: info.message,
-          errorDetails: info,
-        };
         const pendingRetry = (substate: 'waiting' | 'authorized' | 'started') =>
           ({
             requestId,
@@ -967,12 +948,38 @@ export const modelInvokerLayer = (): Layer.Layer<
             substate,
           }) as const;
         if (outstanding === null) {
+          const credentialSwitch = yield* routeCredentialSwitch(
+            failed,
+            recorded,
+            (yield* cell.current).declinedRoutes,
+            run.stores.secrets,
+          );
+          const automatic =
+            credentialSwitch?.kind === 'decline-route' &&
+            credentialSwitch.automatic
+              ? quotaFallbackRouteFor(credentialSwitch.route)
+              : null;
+          const request = {
+            requestId,
+            runId,
+            operation: 'Model request',
+            model: failed.modelId,
+            errorMessage: info.message,
+            errorDetails: info,
+            credentialSwitch,
+          };
           logErrorData(logger, 'Model request failed', recorded);
           logRetryLifecycle(operationId, 'retry_decision_requested', failed, {
             userRetryable: info.userRetryable,
             statusCode: info.statusCode,
             provider: info.provider,
           });
+          if (automatic !== null) {
+            logProgressStatus(
+              logger,
+              `${automatic.retrySourceName} usage limit reached; retrying with ${automatic.retryFallbackName}.`,
+            );
+          }
           yield* cell.append((state) => [
             {
               type: 'request.opened',
@@ -987,15 +994,18 @@ export const modelInvokerLayer = (): Layer.Layer<
             ...retryRows(runId, state, pendingRetry('waiting'), {
               lastError: info,
             }),
+            // The invoker's own answer, recorded like any other.
+            ...(automatic
+              ? [{ ...PERSONAL_RETRY, aggregateId, requestId }]
+              : []),
           ]);
         }
         const state = yield* cell.current;
         logger.debug('Waiting for manual retry', { data: info.message });
-        // The decision is the `request.decided` row (R5): one a surface already
-        // landed for an outstanding request (a crash after the decision keeps
-        // its unused consent), else the one the decide command lands on the
-        // tail while this fiber waits. A plane that closes first is a
-        // cancellation.
+        // The decision is the `request.decided` row (R5): one already landed
+        // (the invoker's own, or a surface's before a crash), else the one the
+        // decide command lands while this fiber waits. A plane that closes
+        // first is a cancellation.
         let decision = state.requests[requestId]?.decision ?? null;
         if (decision === null) {
           const row = yield* session
@@ -1023,24 +1033,27 @@ export const modelInvokerLayer = (): Layer.Layer<
         if (decision.action === 'retry') {
           logger.debug('Manual retry triggered');
           const selection = decision.credentials ?? 'configured';
-          const declinedRoutes = declinedAfter(
-            yield* cell.current,
-            selection,
-            failed,
-          );
-          // Always rebuild the binding on a manual retry: the user may have set
-          // a new key or toggled a route preference while the panel waited, and
-          // a personal-credentials answer declines the exhausted route for the
-          // rest of this run. A rebind that fails leaves the run on the binding
-          // it has, loudly.
+          // A personal retry declines the route its offer named, on this
+          // run's ledger only: no concurrent run or stored preference changes.
+          const { declinedRoutes: declined, requests } = yield* cell.current;
+          const opened = requests[requestId]?.payload;
+          const offer =
+            opened?.kind === 'retry' ? opened.data.credentialSwitch : null;
+          const declinedRoutes =
+            selection === 'personal' &&
+            offer?.kind === 'decline-route' &&
+            !declined.includes(offer.route)
+              ? [...declined, offer.route]
+              : declined;
+          // Always rebuild the binding: a key or preference may have changed
+          // while the panel waited, and a personal answer declines the offered
+          // route. A rebind that fails leaves the binding as it is, loudly.
           yield* rebind(selection, failed, declinedRoutes).pipe(
             Effect.catch((error) =>
               Effect.sync(() =>
                 logger.warn(
                   'Failed to refresh the model binding before retry',
-                  {
-                    data: error,
-                  },
+                  { data: error },
                 ),
               ),
             ),

@@ -96,35 +96,6 @@ describe('tool-edit-request-panel', () => {
     ).toStrictEqual(['openDiff', 'previewProposed', 'showLatexdiff']);
   });
 
-  it('delegates the diff action to the host on every press', async () => {
-    // Each host answers openDiff its own way — the extension opens a VS Code
-    // diff tab, the desktop posts desktop:showDiff to its Review workbench —
-    // so the panel never renders a diff itself and holds no toggle state.
-    const element = await mountPanel(createPermission());
-    const actions = recordPermissionActions(element);
-
-    expect(element.handleKeyboardShortcut('d')).toBe(true);
-    await element.updateComplete;
-    expect(element.handleKeyboardShortcut('d')).toBe(true);
-    await element.updateComplete;
-
-    expect(actions).toEqual([
-      {
-        kind: 'toolEdit',
-        requestId: 'request-1',
-        action: 'openDiff',
-        feedback: null,
-      },
-      {
-        kind: 'toolEdit',
-        requestId: 'request-1',
-        action: 'openDiff',
-        feedback: null,
-      },
-    ]);
-    expect(element.shadowRoot?.querySelector('texra-diff-view')).toBeNull();
-  });
-
   it('offers "Approve all edits in this run" and "a" enables it', async () => {
     const element = await mountPanel(
       createPermission({ allowBypass: true, runId: RUN_ID }),

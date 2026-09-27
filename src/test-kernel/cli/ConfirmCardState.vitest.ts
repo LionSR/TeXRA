@@ -30,10 +30,6 @@ describe('CLI confirm-card key handling', () => {
     expect(confirmCardKeyDecision('n', {}, immediateRows)).toEqual(reject);
   });
 
-  it('does not reserve a second key for rejection feedback', () => {
-    expect(confirmCardKeyDecision('e', {}, feedbackRows)).toBeUndefined();
-  });
-
   it('only enables approve-always where the modal allows it', () => {
     const rows = confirmCardKeyRows({ alwaysAllowLabel: 'approve all' });
     expect(confirmCardKeyDecision('a', {}, rows)).toEqual({

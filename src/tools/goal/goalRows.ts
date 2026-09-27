@@ -7,7 +7,7 @@
  * aggregate. There is no goal store — a second persisted copy would be a
  * second owner of the same fact.
  */
-import { Effect } from 'effect';
+import { DateTime, Effect } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
@@ -105,7 +105,7 @@ export function startGoal(
       runId,
       objective: trimmed,
       status: 'active',
-      startedAt: new Date().toISOString(),
+      startedAt: DateTime.formatIso(yield* DateTime.now),
     });
   });
 }

@@ -527,7 +527,6 @@ describe('BashTool', () => {
           parentRunId,
           'flow',
         )!;
-        const recorded = recordSessionEvents(testDefaultSession());
 
         try {
           const launchResult = yield* launchBackgroundBash(parentRunId);
@@ -816,7 +815,7 @@ describe('BashTool', () => {
 
         // The user stop lands CANCELLED on the run phase; only afterwards does
         // the killed process report its non-zero exit.
-        const stopped = testDefaultSession().runs.kill(runId);
+        const stopped = testDefaultSession().runs.stop(runId);
         assert.equal(stopped.accepted(), true);
         const stopSettlement = yield* Effect.forkChild(stopped.settlement);
         resolveCommand({

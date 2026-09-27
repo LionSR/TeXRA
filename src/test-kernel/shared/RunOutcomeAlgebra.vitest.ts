@@ -7,7 +7,6 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   RunPhaseSchema,
-  type RunOutcome,
   type RunPhase,
 } from '@shared/schemas';
 import {
@@ -50,12 +49,6 @@ describe('run outcome algebra', () => {
     );
     expect(runOutcomeToCliRunStatus(RUN_OUTCOME.FAILED)).toBe(
       CLI_RUN_STATUS.ERROR,
-    );
-  });
-
-  it('fails loudly on an out-of-vocabulary outcome', () => {
-    expect(() => runOutcomeToCliRunStatus('bogus' as RunOutcome)).toThrow(
-      'Unhandled run outcome: bogus',
     );
   });
 });

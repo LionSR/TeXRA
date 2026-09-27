@@ -12,15 +12,7 @@
 
 // Node imports
 // Third-party imports
-import {
-  Data,
-  Deferred,
-  Duration,
-  Effect,
-  FileSystem,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 
 // Local imports
 import {
@@ -33,6 +25,7 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { Runs } from '@agent/runtime/runRegistry';
 import { detachSubagentsOnStop } from '@agent/runtime/detachSubagentsOnStop';
+import { AgentResume } from '@platform/interfaces';
 import { StorageFs } from '@platform/rootedFs';
 import {
   AgentCategory,
@@ -63,7 +56,6 @@ import {
   buildSummaryTailLines,
   childRunViews,
   formatChildLine,
-  formatListingLine,
   formatRunStatus,
   formatTodoHeader,
   formatTodoSection,
@@ -71,11 +63,7 @@ import {
   runTodos,
 } from './executionFormatters';
 import { defineTool } from './core/define';
-import {
-  formatFileView,
-  paginateToolListing,
-  formatPaginationHint,
-} from './formatting';
+import { formatFileView } from './formatting';
 import { serializeFilteredConfig } from './executions/configView';
 import { formatConversation } from './executions/conversationFormat';
 import { orchestratorKillDenial } from './executions/killPolicy';
@@ -90,27 +78,11 @@ import {
   ExecutionsToolInputSchema,
   type ExecutionsToolInput,
 } from './executions/toolInput';
+import { listRuns } from './executions/runListing';
+import { sendToRun } from './executions/send';
 import { turnAttributionNote } from './executions/turnAttribution';
-import {
-  listenForFollowUp,
-  shouldSkipWait,
-} from './executions/waitCoordination';
+import { shouldSkipWait } from './executions/waitCoordination';
 import { workflowBoardView } from './executions/workflowSummaryView';
-
-/**
- * One of the still-Promise collaborators this tool reads — run
- * storage, the transcript store, the two filesystems — rejected. Nothing
- * here recovers from it: `execute` re-raises `cause`, so the tool runner
- * surfaces the same error instance the collaborator raised.
- */
-class ExecutionsReadFailed extends Data.TaggedError('ExecutionsReadFailed')<{
-  readonly cause: unknown;
-}> {}
-
-/** Re-tag any collaborator rejection as {@link ExecutionsReadFailed}. */
-const readFailed = Effect.mapError(
-  (cause: unknown) => new ExecutionsReadFailed({ cause }),
-);
 
 interface RunToolContext {
   readonly session: SessionHandle;
@@ -118,17 +90,18 @@ interface RunToolContext {
 }
 
 /**
- * Block until one of `runIds` changes status, the caller's run
- * receives a follow-up (the user breaking the wait), or `timeoutSeconds`
- * elapse — whichever comes first. A status change is read off the session's
- * view stream against the phases the wait started from, so a change landing
- * before the stream's first emission still wakes it; `settled` is re-checked
- * once the listeners are up, closing the window after the caller's
- * pre-check. The view stream ends with the session, which ends the wait
- * too. The race settles on the first completion, success or failure, so a
- * dead fold surfaces at once instead of stalling until the deadline.
- * Interrupting the winner-less racers closes the view subscription and
- * disposes the follow-up listener.
+ * Block until one of `runIds` changes status, the caller's run is sent a
+ * follow-up (a child's report, a peer's reply, the user breaking the wait),
+ * or `timeoutSeconds` elapse — whichever comes first. Both are read off the
+ * session's view stream against the view the wait started from: a status as
+ * the phases, a follow-up as a `queuedFollowUps` id the caller did not hold.
+ * The caller is inside this tool call, so nothing it is sent is taken before
+ * the wait sees it, whoever sent it; a change landing before the stream's
+ * first emission still wakes it. `settled` is re-checked once the stream is
+ * up, closing the window after the caller's pre-check. The view stream ends
+ * with the session, which ends the wait too. The race settles on the first
+ * completion, success or failure, so a dead fold surfaces at once instead
+ * of stalling until the deadline.
  */
 const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   function* (
@@ -139,30 +112,29 @@ const awaitStatusChange = Effect.fn('ExecutionsTool.awaitStatusChange')(
   ) {
     const phases = (view: SessionView): string =>
       runIds.map((id) => view.runs.get(id)?.status ?? '').join(',');
-    const started = phases(SubscriptionRef.getUnsafe(context.session.view));
-    const followUp = yield* Deferred.make<void>();
-    yield* Effect.acquireRelease(
-      Effect.sync(() =>
-        listenForFollowUp(context.session, context.runId, () => {
-          Deferred.doneUnsafe(followUp, Effect.void);
-        }),
+    const sent = (view: SessionView): readonly string[] =>
+      context.runId === undefined
+        ? []
+        : (view.queuedFollowUps.get(context.runId) ?? []).map(
+            (f) => f.followUpId,
+          );
+    const initial = SubscriptionRef.getUnsafe(context.session.view);
+    const started = phases(initial);
+    const held = new Set(sent(initial));
+    const change = context.session.viewChanges.pipe(
+      Stream.filter(
+        (view) =>
+          phases(view) !== started || sent(view).some((id) => !held.has(id)),
       ),
-      (stop) => Effect.sync(stop),
-    );
-    const statusChange = context.session.viewChanges.pipe(
-      Stream.filter((view) => phases(view) !== started),
       Stream.runHead,
     );
     const alreadySettled = Effect.suspend(() =>
       settled() ? Effect.void : Effect.never,
     );
-    yield* Effect.raceAllFirst([
-      statusChange,
-      alreadySettled,
-      Deferred.await(followUp),
-    ]).pipe(Effect.timeoutOption(Duration.seconds(timeoutSeconds)));
+    yield* Effect.raceAllFirst([change, alreadySettled]).pipe(
+      Effect.timeoutOption(Duration.seconds(timeoutSeconds)),
+    );
   },
-  Effect.scoped,
 );
 
 interface SizedEntry {
@@ -185,8 +157,9 @@ function formatSizedEntryLines(entries: readonly SizedEntry[]): string[] {
 }
 
 /**
- * Every line of logic below is one Effect program. Fatal storage and
- * filesystem failures remain failures for the invocation boundary.
+ * Every line of logic below is one Effect program. A storage or filesystem
+ * read failure dies at its read site (`Effect.orDie`): nothing here recovers
+ * from one, and the tool runner surfaces the collaborator's own error.
  */
 const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
   input: ExecutionsToolInput,
@@ -196,9 +169,7 @@ const executeExecutionsTool = Effect.fn('ExecutionsTool.call')(function* (
     session: run.session,
     runId: run.runId,
   };
-  return yield* runExecutions(context, input).pipe(
-    Effect.catchTag('ExecutionsReadFailed', (error) => Effect.die(error.cause)),
-  );
+  return yield* runExecutions(context, input);
 });
 
 const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
@@ -206,8 +177,8 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
   input: ExecutionsToolInput,
 ): Effect.fn.Return<
   ToolResult,
-  Error | ExecutionsReadFailed,
-  Runs | FileSystem.FileSystem | StorageFs
+  Error,
+  Runs | FileSystem.FileSystem | StorageFs | AgentResume
 > {
   const segments = getPathSegments(input.path);
   const [namespace, id, resource, ...rest] = segments;
@@ -220,7 +191,7 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
 
   // /executions - list all runs
   if (!id) {
-    if (input.action === 'kill') {
+    if (input.action === 'kill' || input.action === 'send') {
       return yield* Effect.fail(
         new ToolError(
           `action='${input.action}' requires a specific run: use /executions/{id}.`,
@@ -230,7 +201,12 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
     if (input.action === 'wait') {
       yield* waitForRuns(context, input.timeout, input.ids);
     }
-    return yield* listRuns(context, input.offset, input.limit);
+    return yield* listRuns(
+      context.session,
+      context.runId,
+      input.offset,
+      input.limit,
+    );
   }
 
   const runId = yield* resolveRunId(context, id);
@@ -240,10 +216,18 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
     switch (input.action) {
       case 'kill':
         return yield* handleKill(context, runId);
+      case 'send':
+        return yield* sendToRun(
+          context.session,
+          context.runId,
+          runId,
+          input.message,
+        );
       case 'wait':
         yield* waitForRuns(context, input.timeout, [runId]);
         return yield* showSummary(context, runId, {
-          suppressAutoDeliveredSubagentReport: true,
+          suppressAutoDeliveredSubagentReport:
+            !(yield* context.session.followUps.withdraw(context.runId, runId)),
         });
       case 'view':
         return yield* showSummary(context, runId, {
@@ -255,8 +239,8 @@ const runExecutions = Effect.fn('ExecutionsTool.run')(function* (
   }
 
   // Sub-resource paths (config, conversation, files, ...) only support
-  // reading — wait/kill operate on /executions or /executions/{id}, never a
-  // deeper resource.
+  // reading — wait/kill/send operate on /executions or /executions/{id},
+  // never a deeper resource.
   if (input.action !== 'view') {
     return yield* Effect.fail(
       new ToolError(
@@ -345,42 +329,16 @@ const waitForRuns = Effect.fn('ExecutionsTool.waitForRuns')(function* (
   ids?: readonly RunId[] | null,
 ) {
   const runs = yield* Runs;
-  const candidateIds = ids?.length ? unique(ids) : runs.getActiveIds();
+  const candidateIds = ids?.length ? unique(ids) : runs.activeIds();
   // Exclude runs that are already effectively done
   // (completed, inactive, or tool-use subagent WAITING with result delivered).
-  const pendingIds = candidateIds.filter((id) => !shouldSkipWait(runs, id));
+  const pendingIds = candidateIds.filter(
+    (id) => !shouldSkipWait(context.session, id),
+  );
   if (pendingIds.length === 0) return;
 
   yield* awaitStatusChange(context, timeout, pendingIds, () =>
-    pendingIds.every((id) => shouldSkipWait(runs, id)),
-  );
-});
-
-const listRuns = Effect.fn('ExecutionsTool.listRuns')(function* (
-  context: RunToolContext,
-  offset: number,
-  limit: number,
-) {
-  // One cold fold of the log's listing tier: every run's identity, model,
-  // description, parentage and status, already decided. Nothing per row.
-  const view = yield* context.session.readView([]);
-  const entries = [...view.runs.values()].toSorted(
-    (left, right) =>
-      right.launchedAt - left.launchedAt || right.createdAt - left.createdAt,
-  );
-
-  if (entries.length === 0) {
-    return executed('No run history found.');
-  }
-
-  const { page, start, end, total } = paginateToolListing(
-    entries,
-    offset,
-    limit,
-  );
-
-  return executed(
-    `Executions (showing ${start}–${end} of ${total}, most recent first):\n\n${page.map(formatListingLine).join('\n')}${formatPaginationHint(end, total)}`,
+    pendingIds.every((id) => shouldSkipWait(context.session, id)),
   );
 });
 
@@ -433,11 +391,9 @@ const showSummary = Effect.fn('ExecutionsTool.showSummary')(function* (
     lines.push(...children.map((child) => `  ${formatChildLine(child)}`));
   }
 
-  // A report the caller already received as a follow-up is elided. Only a
-  // handle this process still tracks proves the child-run loop delivered
-  // it, so a finished run keeps its report inline. Deliberately
-  // identity-agnostic: a background bash run (`process`, category
-  // toolUse) auto-delivers exactly like a delegated agent.
+  // A report the caller already received as a follow-up is elided; a wait
+  // withdraws one still queued and shows it here. Only a live handle proves
+  // the child-run loop delivered it (a background bash run included).
   const suppressReport =
     options.suppressAutoDeliveredSubagentReport === true &&
     run.category === AgentCategory.ToolUse &&
@@ -498,7 +454,7 @@ const handleKill = Effect.fn('ExecutionsTool.handleKill')(function* (
     context.session.roots,
   );
   const success = yield* Effect.suspend(() => {
-    const stop = runs.kill(runId, {
+    const stop = runs.stop(runId, {
       detachActiveChildren,
     });
     // Asked after the settlement: a detaching stop interrupts the run
@@ -640,7 +596,7 @@ const showConversation = Effect.fn('ExecutionsTool.showConversation')(
     const conversationResult = yield* readCompletedRunConversation(
       runId,
       context.session,
-    ).pipe(readFailed);
+    ).pipe(Effect.orDie);
     const { conversation, source } = conversationResult;
 
     if (!conversation) {
@@ -711,7 +667,7 @@ const showOutput = Effect.fn('ExecutionsTool.showOutput')(function* (
   // The row above already proved the run is in the session's view; its
   // output is read from the run's own committed rows.
   const { lines, chars } = projectProcessOutput(
-    yield* context.session.readRunEvents(runId).pipe(readFailed),
+    yield* context.session.readRunEvents(runId).pipe(Effect.orDie),
   );
   // The row above was read before the transcript, and a command that
   // finished during that read must not be judged against it: the view is
@@ -779,7 +735,7 @@ const listFiles = Effect.fn('ExecutionsTool.listFiles')(function* (
   runId: RunId,
 ) {
   const files = yield* listRunGeneratedFiles(runId, context.session).pipe(
-    readFailed,
+    Effect.orDie,
   );
   if (files.length === 0) {
     return executed('No files generated for this run.');
@@ -804,7 +760,7 @@ const readFile = Effect.fn('ExecutionsTool.readFile')(function* (
     context.session.roots.storage,
     runId,
     filePath,
-  ).pipe(readFailed);
+  ).pipe(Effect.orDie);
   if (!fullPath) {
     return yield* Effect.fail(new ToolError(`File not found: ${displayPath}`));
   }
@@ -824,7 +780,7 @@ const listWorkspaceFiles = Effect.fn('ExecutionsTool.listWorkspaceFiles')(
       { concurrency: 2 },
     );
     const entries = yield* listRunWorkspaceFiles(record, paths).pipe(
-      readFailed,
+      Effect.orDie,
     );
 
     if (entries.length === 0) {
@@ -910,6 +866,7 @@ Use view_range: [start, end] to paginate file and background-command output cont
 Use action: "wait" on /executions or /executions/{id} to wait for a status change instead of polling.
 Use action: "wait" with ids: ["id1", "id2", ...] on /executions to wait for any of the listed runs to change.
 Use action: "kill" on /executions/{id} to terminate a live run.
+Use action: "send" with message on /executions/{id} to message any other run in this project: your subagent (a follow-up it continues from), your orchestrator, a sibling, or any other run. It reads the message after its current turn; an idle run wakes to read it.
 Delegated subagent and workflow results are delivered automatically as follow-up messages. No wait is needed for runs you launched. Use action: "wait" only when you cannot proceed without a status change.`,
   schema: ExecutionsToolInputSchema,
   execute: executeExecutionsTool,
@@ -937,7 +894,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     viewRange: [number, number] | undefined;
   },
 ) {
-  const stats = yield* fs.stat(fullPath).pipe(readFailed);
+  const stats = yield* fs.stat(fullPath).pipe(Effect.orDie);
   // A symlink to a directory counts, which is what the bitmask probe this
   // replaced answered for: the standard `stat` follows the link.
   if (stats.type === 'Directory') {
@@ -948,7 +905,7 @@ const readFileContent = Effect.fn('ExecutionsTool.readFileContent')(function* (
     );
   }
 
-  const content = yield* readNormalizedFile(fs, fullPath).pipe(readFailed);
+  const content = yield* readNormalizedFile(fs, fullPath).pipe(Effect.orDie);
   return formatFileView({
     path: resultPath,
     lines: splitContentLines(content),

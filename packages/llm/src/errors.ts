@@ -11,10 +11,7 @@ import {
 } from './protocol.js';
 
 // Local imports - canonical messages
-import {
-  MiniMaxDetectionSchema,
-  OpenRouterFileAnnotationSchema,
-} from './message.js';
+import { MiniMaxDetectionSchema } from './message.js';
 
 /** Enough evidence to observe accepted remote work, without a second transcript. */
 const ResponsesOperationSchema = z
@@ -88,15 +85,6 @@ const ModelErrorFieldsSchema = z.strictObject({
         statusCode: z.int(),
         statusMessage: z.string().optional(),
       }).readonly(),
-      z
-        .strictObject({
-          kind: z.literal('openrouter'),
-          origin: OriginSchema.extend({
-            protocol: z.literal('openrouter-chat'),
-          }).readonly(),
-          fileAnnotations: z.array(OpenRouterFileAnnotationSchema).readonly(),
-        })
-        .readonly(),
       z
         .strictObject({
           kind: z.literal('vscode-lm'),
@@ -202,9 +190,7 @@ export const hasErrorField = (value: unknown): value is { error: unknown } =>
  * seconds or as an HTTP date. Undefined when the response says nothing —
  * the caller's own backoff then owns the wait.
  */
-export function retryAfterMsOf(
-  headers: Headers | undefined,
-): number | undefined {
+function retryAfterMsOf(headers: Headers | undefined): number | undefined {
   // `Number('')` and `Number(null)` are both 0, so an absent header has to be
   // recognised as absent before it is read as a delay of zero.
   const read = (name: string): string | undefined => {
@@ -225,4 +211,36 @@ export function retryAfterMsOf(
     return Math.round(seconds * 1000);
   const date = Date.parse(retryAfter);
   return Number.isFinite(date) ? Math.max(0, date - Date.now()) : undefined;
+}
+
+/** The HTTP facts a provider SDK's error carries, when the failure had a reply. */
+interface SdkHttpFailure {
+  readonly status?: number;
+  readonly headers?: Headers;
+  readonly requestId?: string | null;
+}
+
+/**
+ * The one classification of a provider SDK failure. A `SyntaxError` is
+ * malformed output, a failure with an HTTP reply is an authentication or
+ * provider rejection by its status, and anything else is transport. Each
+ * protocol only extracts `http` from its own SDK's error type.
+ */
+export function sdkModelError(
+  cause: unknown,
+  http: SdkHttpFailure | undefined,
+  fallbackMessage: string,
+): ModelError {
+  const retryAfterMs = retryAfterMsOf(http?.headers);
+  let kind: ModelError['kind'] = 'transport';
+  if (cause instanceof SyntaxError) kind = 'malformed-output';
+  else if (http) kind = authOrRejectionKind(http.status);
+  return new ModelError({
+    kind,
+    message: cause instanceof Error ? cause.message : fallbackMessage,
+    ...(http?.status === undefined ? {} : { status: http.status }),
+    ...(http?.requestId == null ? {} : { requestId: http.requestId }),
+    ...(retryAfterMs === undefined ? {} : { retryAfterMs }),
+    cause,
+  });
 }

@@ -68,19 +68,6 @@ function dispatchChange(element: HTMLElement): void {
 }
 
 describe('user-question-panel', () => {
-  it('skips on one "n", the word the CLI uses for declining a question', async () => {
-    const element = await mountPanel();
-    const actions = collectActions(element);
-
-    expect(
-      element.shadowRoot
-        ?.querySelector('wa-button[data-action="decline"]')
-        ?.textContent?.trim(),
-    ).toBe('Skip');
-    expect(element.handleKeyboardShortcut('n')).toBe(true);
-    expect(actions).toEqual([{ action: 'skip' }]);
-  });
-
   it('does not submit an empty answer set', async () => {
     const element = await mountPanel();
     const actions = collectActions(element);

@@ -29,14 +29,9 @@ import {
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
-import {
-  claimStanding,
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
+import { claimStanding, heldElsewhereBy } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { foldRunState, type RunState } from '@shared/session/runStateFold';
+import { foldRunRows } from '@shared/session/runRows';
 import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -49,7 +44,7 @@ import {
 import { classifyRun } from './runClassification';
 import { startChildRunLoop } from './childRunLoop';
 import { Runs } from './runRegistry';
-import { RunLive } from './runRoster';
+import { RunLive } from './runRegistry';
 import {
   retrieveSessionResumeData,
   type ToolUseResumeData,
@@ -280,14 +275,9 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
-  Effect.gen(function* () {
-    const folded = foldRunState(
-      null,
-      yield* session.readAggregate(aggregateId('run', runId)),
-    );
-    if (Result.isFailure(folded)) return yield* Effect.fail(folded.failure);
-    return folded.success?.followUps ?? [];
-  });
+  Effect.flatMap(session.readAggregate(aggregateId('run', runId)), (rows) =>
+    Effect.try({ try: () => foldRunRows(rows).followUps, catch: ensureError }),
+  );
 
 const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>
   Effect.logWarning(
@@ -331,12 +321,7 @@ function refusalFor(
 ): Effect.Effect<ResumeRunResult | undefined> {
   if (error instanceof RunLive) return Effect.succeed(REFUSED);
   // A live owner refused the claim, or took it after its owner was proved dead.
-  const refusal = error instanceof DatabaseWriteFailed ? error.cause : error;
-  const holder =
-    refusal instanceof DatabaseClaimRefused ||
-    (refusal instanceof DatabaseNotOwner && !refusal.closed)
-      ? refusal.ownerId
-      : null;
+  const holder = heldElsewhereBy(error);
   if (holder !== null) {
     return session
       .markUnreadable(runId, runHeldMessage(ownerPid(holder)))
@@ -426,9 +411,11 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
           cancelledAtFlowAttachment = true;
         },
       };
-      const onIdle = (state: RunState): void => {
-        if (!state.followUps.some(isAdmitted))
-          Deferred.doneUnsafe(idle, Effect.void);
+      const onIdle = (): void => {
+        const pending = session.events.pendingFollowUps(
+          aggregateId('run', runId),
+        );
+        if (!pending.some(isAdmitted)) Deferred.doneUnsafe(idle, Effect.void);
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
       let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;
@@ -453,7 +440,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
             ...launchOptions,
             runId,
             parentRunId,
-            agentName: resume.agentConfig.agent,
             startedAt: Date.now(),
             workingDirectory: resume.agentConfig.workingDirectory ?? undefined,
             userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.NATIVE_INTERACTIVE,

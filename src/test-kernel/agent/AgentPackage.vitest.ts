@@ -136,6 +136,10 @@ vi.mock('@agent/runtime', async () => {
     }
   }
   const sessions = new Map<string, FakeSession>();
+  const closeSession = (root: string) =>
+    Effect.sync(() => {
+      sessions.delete(root);
+    }).pipe(Effect.andThen(() => mocks.closeSession(root)));
   return {
     openSessionEffect: (init: ConstructorParameters<typeof FakeSession>[0]) =>
       Effect.sync(() => {
@@ -147,10 +151,13 @@ vi.mock('@agent/runtime', async () => {
         return session;
       }),
     listSessions: () => Effect.sync(() => [...sessions.values()]),
-    closeSession: (root: string) =>
-      Effect.sync(() => {
-        sessions.delete(root);
-      }).pipe(Effect.andThen(() => mocks.closeSession(root))),
+    closeSession,
+    closeAllSessions: () =>
+      Effect.suspend(() =>
+        Effect.forEach([...sessions.keys()], (root) => closeSession(root), {
+          concurrency: 'unbounded',
+        }),
+      ),
     runAgent: (input: unknown, options: RunAgentOptions) =>
       Effect.tryPromise({
         try: () => mocks.runValidatedAgent(input, options),
@@ -172,7 +179,7 @@ vi.mock('@controllers/session/sessionLayer', async () => {
 });
 
 // Local imports - package API under test
-import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 import type { SessionView as RuntimeSessionView } from '@shared/session/sessionView';
@@ -186,7 +193,6 @@ import {
 import { nodePlatform } from '../../../packages/agent/src/node';
 
 const PLATFORM = {
-  lifecycle: { onShutdown: vi.fn(), shutdownRan: false },
   globalState: { get: () => undefined, update: async () => undefined },
   roots: { storage: '/storage' },
   storage: { getGlobalStoragePath: () => '/global-storage' },
@@ -511,7 +517,7 @@ describe('agent package sessions', () => {
         // Each close spends its whole budget, as a close with a run still
         // live past it does.
         const spendBudget = () =>
-          Effect.sleep(SHUTDOWN_PHASE_DEADLINE_MS).pipe(
+          Effect.sleep(SESSION_CLOSE_DEADLINE_MS).pipe(
             Effect.as({ settled: false, abandoned: [] as string[] }),
           );
         mocks.closeSession
@@ -525,7 +531,7 @@ describe('agent package sessions', () => {
           }).pipe(Effect.scoped, Effect.provide(Sessions.layer(PLATFORM))),
         );
 
-        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
 
         expect(released.pollUnsafe()).toBeDefined();
         expect(mocks.closeSession).toHaveBeenCalledTimes(2);
@@ -661,17 +667,21 @@ describe('agent package Node configuration', () => {
         workspaceDir: '/workspace',
       }).roots;
 
-      yield* config.update('texra.goal.enabled', true, 'global');
-      expect(config.get('goal.enabled')).toBe(true);
-      expect(config.inspect('goal.enabled')?.globalValue).toBe(true);
+      yield* config.update('texra.agentOutputs.autoOpenFinal', true, 'global');
+      expect(config.get('agentOutputs.autoOpenFinal')).toBe(true);
+      expect(config.inspect('agentOutputs.autoOpenFinal')?.globalValue).toBe(
+        true,
+      );
 
-      yield* config.update('goal.enabled', undefined, 'global');
+      yield* config.update('agentOutputs.autoOpenFinal', undefined, 'global');
       // With no explicit value, resolution matches every host: the core-schema
-      // default (goal.enabled defaults to true) wins over the caller fallback.
-      expect(config.get('texra.goal.enabled', false)).toBe(true);
+      // default (true) wins over the caller fallback.
+      expect(config.get('texra.agentOutputs.autoOpenFinal', false)).toBe(true);
       // A key outside the core schema still falls back to the caller default.
       expect(config.get('custom.nonCoreKey', false)).toBe(false);
-      expect(config.inspect('texra.goal.enabled')?.globalValue).toBeUndefined();
+      expect(
+        config.inspect('texra.agentOutputs.autoOpenFinal')?.globalValue,
+      ).toBeUndefined();
     }),
   );
 });

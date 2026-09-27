@@ -1,9 +1,7 @@
-import { Cause, Effect, Exit } from 'effect';
-import type { ReviewIssueReport } from '@agent/review/reviewIssues';
+import { Cause, Effect } from 'effect';
 import { withLogChannel } from '@logger/effectLog';
 import type { FileLocation } from '@shared/schemas';
 import type { ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
-import { throwAggregated } from '@utils/core';
 import type { GenericDiagnostic } from '@utils/diagnostics/diagnosticFormatting';
 import { HostPresentationFailed } from './runtimePresentationEvents';
 import type {
@@ -71,16 +69,6 @@ type OpenPdfOpener = (
 ) => Effect.Effect<void, PdfOpenFailed>;
 
 /**
- * Collects one agent-review finding. Returns `accepted: false` with a reason
- * when no review session is collecting issues (or the report is rejected), so
- * the tool can surface that to the agent.
- */
-type ReportReviewIssueSink = (report: ReviewIssueReport) => {
-  readonly accepted: boolean;
-  readonly reason?: string;
-};
-
-/**
  * The host's presentation surface for a session (ruling A9-3): what a host
  * can show or do on the runtime's behalf. It answers nothing. Every request a
  * run makes of a person is a `request.opened` row the fold lists and a
@@ -105,8 +93,6 @@ export interface HostInteractions {
   readonly addCriticism?: AddCriticismSink;
   /** Open a PDF in the active host's viewer. */
   readonly openPdf?: OpenPdfOpener;
-  /** Report one agent-review finding to the active host's review session. */
-  readonly reportReviewIssue?: ReportReviewIssueSink;
   /**
    * Stage a tool edit's preview (its original and proposed content, which
    * the durable request payload does not carry) for the request the fold
@@ -280,10 +266,6 @@ export class SessionHostInteractions implements HostInteractions {
     return this.activeAttachment?.interactions.openPdf;
   }
 
-  get reportReviewIssue(): ReportReviewIssueSink | undefined {
-    return this.activeAttachment?.interactions.reportReviewIssue;
-  }
-
   /**
    * Stage a preview on the attached host and hand back the release for it,
    * bound to the attachment that staged: the stack may have changed by the
@@ -312,35 +294,30 @@ export class SessionHostInteractions implements HostInteractions {
   }
 
   /**
-   * Dispose every attachment, newest first. Every host is disposed even when
-   * an earlier one fails, and every failure is reported: the program ends by
-   * raising them as one aggregate, which the session's teardown collects
-   * beside its other owners' — never all but the first, as the `firstError`
-   * this replaced did.
+   * Dispose every attachment, newest first. Each host's dispose is a scope
+   * finalizer, so every host is disposed even when an earlier one fails, and
+   * every failure is its own reason in the defect the close raises, which the
+   * session's teardown collects beside its other owners'.
    */
   dispose(): Effect.Effect<void> {
     return Effect.suspend(() => {
       if (this.disposed) return Effect.void;
       this.disposed = true;
-      const pending = this.attachments.toReversed().filter((attachment) => {
+      const pending = this.attachments.filter((attachment) => {
         if (attachment.disposed) return false;
         attachment.disposed = true;
         return true;
       });
       this.attachments.length = 0;
       this.pendingPresentationReplays.length = 0;
-      return Effect.forEach(pending, (attachment) =>
-        Effect.exit(Effect.sync(() => attachment.interactions.dispose?.())),
-      ).pipe(
-        Effect.flatMap((exits) =>
-          Effect.sync(() => {
-            throwAggregated(
-              exits.flatMap((exit) =>
-                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
-              ),
-              'Host interaction attachments failed to dispose',
-            );
-          }),
+      return Effect.scoped(
+        Effect.forEach(
+          pending,
+          (attachment) =>
+            Effect.addFinalizer(() =>
+              Effect.sync(() => attachment.interactions.dispose?.()),
+            ),
+          { discard: true },
         ),
       );
     });

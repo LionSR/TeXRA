@@ -21,11 +21,11 @@ While TeXRA's agents focus primarily on substantive research—deriving theorems
 | <wa-icon library="texra" name="book"></wa-icon> Bibliography resolution       | Built-in                   |
 | <wa-icon library="texra" name="symbol-operator"></wa-icon> Symbolic math      | `wolfram`                  |
 
-All are configured from **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status.
+All are configured from **Settings → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) or **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>), where each tool shows its status.
 
 <ToolStatusPanel />
 
-<p class="hero-caption">Dashboard → Tools: ready tools show a green check (<strong>Ready</strong>); missing tools show a <strong>Needs setup</strong> badge with <strong>Install in Terminal</strong> / <strong>Install</strong> actions. On Dashboard → LaTeX → Dependencies, missing binaries show a <strong>Not found</strong> tag.</p>
+<p class="hero-caption">Settings → Tools: ready tools show a green check (<strong>Ready</strong>); missing tools show a <strong>Needs setup</strong> badge with <strong>Install in Terminal</strong> / <strong>Install</strong> actions. On Settings → LaTeX → Dependencies, missing binaries show a <strong>Not found</strong> tag.</p>
 
 The same status is one command away in any terminal. `texra doctor` probes
 the same toolchain:
@@ -54,7 +54,7 @@ TeXRA uses formatters to keep LaTeX code consistent and readable.
 
 Formatting does not run on its own after agent execution. The selected formatter runs when you invoke it, and after **Download arXiv Source** unpacks a project. In the VS Code extension, run it from the Command Palette (`Ctrl+Shift+P`) → **TeXRA: Format Current LaTeX File**, which formats the file in the active editor.
 
-**Configuration:** Formatter selection and installation live on the **LaTeX** tab (<wa-icon library="texra" name="file-code"></wa-icon>) of the TeXRA Dashboard. Read the [LaTeX configuration settings](./configuration.md#latex-configuration) for the full set.
+**Configuration:** Formatter selection and installation live on the **LaTeX** tab (<wa-icon library="texra" name="file-code"></wa-icon>) of the TeXRA Settings. Read the [LaTeX configuration settings](./configuration.md#latex-configuration) for the full set.
 
 ## <wa-icon library="texra" name="diff-single"></wa-icon> Version comparison with `latexdiff`
 
@@ -83,7 +83,7 @@ Read the [LaTeX Diff guide](./latex-diff.md) for the full workflow.
 - `sum`: aggregate totals across multiple top-level files
 
 ::: warning Requirement
-`texcount` must be on your `PATH`. It ships with most TeX distributions. Check **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>) → **Dependencies**: the **TeXcount** row shows a **Not found** tag when it is missing (texcount is not listed on the Tools tab). Install it with your TeX package manager.
+`texcount` must be on your `PATH`. It ships with most TeX distributions. Check **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>) → **Dependencies**: the **TeXcount** row shows a **Not found** tag when it is missing (texcount is not listed on the Tools tab). Install it with your TeX package manager.
 :::
 
 ## <wa-icon library="texra" name="file-media"></wa-icon> Figure extraction
@@ -98,7 +98,7 @@ The `extract_figures` tool finds `\includegraphics` references and returns the i
 
 ### TikZ figures
 
-The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Tools tab does not list these; **Dashboard → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide, and `texra doctor` reports them too:
+The `extract_tikz_figures` tool discovers `tikzpicture` environments, compiles them to standalone PDFs, and returns the rendered output. It compiles with `pdflatex` and rasterizes with Ghostscript plus GraphicsMagick or ImageMagick. The Tools tab does not list these; **Settings → LaTeX → Dependencies** shows a **TeX Distribution** row (pdflatex/latexmk) and an **Image Processing** row (Ghostscript + GraphicsMagick/ImageMagick) with an install guide, and `texra doctor` reports them too:
 
 <TikzDepsHero />
 
@@ -120,7 +120,7 @@ Useful whenever an agent needs exact citation records to edit, format, or valida
 
 The `wolfram` tool executes Wolfram Language code through `wolframscript`, so agents can verify calculations or perform symbolic algebra. It is not LaTeX-specific, but it is useful for validating mathematical content in papers and derivations.
 
-The Wolfram card sits under **Dashboard → Tools → Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>). Requires a local [Wolfram Engine](https://www.wolfram.com/engine/) install.
+The Wolfram card sits under **Settings → Tools → Computation** (<wa-icon library="texra" name="symbol-operator"></wa-icon>). Requires a local [Wolfram Engine](https://www.wolfram.com/engine/) install.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Configuring tool usage
 
@@ -128,7 +128,7 @@ Control how TeXRA uses these tools from the UI:
 
 - **Tool Config dropdown** (<wa-icon library="texra" name="tools"></wa-icon>): toggle the **Attach TeX Count** (<wa-icon library="texra" name="symbol-numeric"></wa-icon>) per-run helper. Read the [agent execution settings](./configuration.md#agent-execution-settings-webview-interface).
 - **Auto Extract dropdown** (<wa-icon library="texra" name="wand"></wa-icon>): toggle automatic extraction of Figures or TikZ Figures. Read the [figures guide](./working-with-figures.md).
-- **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>): enable or disable whole tool groups, view install guides, and run installers.
+- **Settings → Tools** (<wa-icon library="texra" name="tools"></wa-icon>): enable or disable whole tool groups, view install guides, and run installers.
 
 Both per-run dropdowns live in the file-group headers, next to your input and media files:
 

@@ -39,6 +39,22 @@ test('application menu releases a closed window and binds once to its replacemen
 
   await launched.page.close();
   await expect.poll(() => launched?.app.windows().length).toBe(0);
+  // The renderer goes before the main process's `closed` handler swaps in
+  // the window-less menu, so wait for the main process's own view of the
+  // release rather than the page count alone.
+  await expect
+    .poll(() =>
+      launched?.app.evaluate(({ BrowserWindow, Menu }) => {
+        const items = (Menu.getApplicationMenu()?.items ?? []).flatMap(
+          (item) => item.submenu?.items ?? [],
+        );
+        return (
+          BrowserWindow.getAllWindows().length === 0 &&
+          !items.some((item) => item.label === 'Show Logs')
+        );
+      }),
+    )
+    .toBe(true);
 
   const windowlessProbe = await launched.app.evaluate(
     ({ BrowserWindow, Menu }, closedWindowId) => {

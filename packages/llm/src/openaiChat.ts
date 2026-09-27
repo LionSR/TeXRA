@@ -18,7 +18,6 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
 import { sameModelOrigin, type ModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
@@ -728,7 +727,7 @@ export function openaiChatModel(
   );
 
   const streamTurn = (
-    input: ResolvedTurn,
+    turn: ResolvedTurn,
   ): Stream.Stream<TurnEvent, ModelError> =>
     Stream.suspend(() => {
       let responseId: string | undefined;
@@ -743,16 +742,6 @@ export function openaiChatModel(
         });
       return Stream.unwrap(
         Effect.gen(function* () {
-          const parsed = ResolvedTurnSchema.safeParse(input);
-          if (!parsed.success) {
-            return yield* new ModelError({
-              kind: 'unsupported',
-              message:
-                'The prepared input uses unsupported content or protocol controls.',
-              cause: parsed.error,
-            });
-          }
-          const turn = parsed.data;
           if (
             (turn.protocol !== 'openai-chat' &&
               turn.protocol !== 'deepseek-chat' &&
@@ -1287,30 +1276,22 @@ export function openaiChatModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const estimateInputTokens =
     config.protocol === 'kimi-chat' && config.supportsInputTokenEstimation
       ? Effect.fn('llm.estimateInputTokens')(function* (
           input: Extract<ResolvedTurn, { mode: 'foreground' }>,
         ) {
-          const parsed = ResolvedTurnSchema.safeParse(input);
           if (
-            !parsed.success ||
-            parsed.data.protocol !== 'kimi-chat' ||
-            !sameModelOrigin(parsed.data, origin)
+            input.protocol !== 'kimi-chat' ||
+            !sameModelOrigin(input, origin)
           ) {
             return yield* new ModelError({
               kind: 'unsupported',
               message:
                 'The token estimate requires this Kimi route’s prepared input.',
-              cause: parsed.success ? undefined : parsed.error,
             });
           }
-          const { model, messages } = yield* chatParameters(
-            parsed.data,
-            config,
-          );
+          const { model, messages } = yield* chatParameters(input, config);
           let reader: ReadableStreamDefaultReader<Uint8Array> | undefined =
             undefined;
           // The request signal must abort before cancellation joins a pending read.
@@ -1385,7 +1366,6 @@ export function openaiChatModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(estimateInputTokens === undefined ? {} : { estimateInputTokens }),
   });
 }

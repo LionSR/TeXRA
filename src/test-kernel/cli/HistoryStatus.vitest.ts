@@ -9,7 +9,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import {
   initializeDefaultSession,
   teardownDefaultSession,
@@ -66,27 +65,18 @@ const SNAPSHOT_RUNTIME = {
   phase: 'waiting',
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'deepseekT',
   modelCompatibilityKey: null,
   lastError: null,
   declinedRoutes: [],
 };
 
-/** The opening `flow.snapshot` of a run of either family. */
-function snapshotPayload(
-  family: 'toolUse' | 'reflection',
-): FlowSnapshotPayload {
+/** A run's opening `flow.snapshot`. */
+function snapshotPayload(): FlowSnapshotPayload {
   return FlowSnapshotPayloadSchema.parse({
-    family,
+    family: 'toolUse',
     runtime: SNAPSHOT_RUNTIME,
-    state:
-      family === 'toolUse'
-        ? { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) }
-        : {
-            totalRounds: 2,
-            workspaceSnapshot: AgentWorkspaceState.emptySnapshot(),
-          },
+    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
   });
 }
 
@@ -95,7 +85,6 @@ async function seedSnapshot(
   id: RunId,
   config: AgentConfig,
   agent: string,
-  family: 'toolUse' | 'reflection',
 ): Promise<void> {
   await Effect.runPromise(
     registerRun(testDefaultSession(), id, config, {
@@ -107,11 +96,11 @@ async function seedSnapshot(
       {
         type: 'flow.snapshot',
         aggregateId: aggregateId('run', id),
-        payload: snapshotPayload(family),
+        payload: snapshotPayload(),
       },
     ]),
   );
-  await Effect.runPromise(testDefaultSession().releaseRunLease(id));
+  await Effect.runPromise(testDefaultSession().commitRunEnd(id));
 }
 
 describe('CLI history status formatting', () => {
@@ -170,28 +159,6 @@ describe('CLI history status formatting', () => {
     await expect(statusOf(false)).resolves.toBe('unknown');
   });
 
-  it('prints resumable details instead of inventing completed status', () => {
-    const text = formatCliHistoryDetailsText({
-      id: 'abc123' as RunId,
-      status: HISTORY_RUN_STATUS.RESUMABLE,
-      run: {
-        launchedAt: Date.parse('2026-06-03T05:03:06.717Z'),
-        parentId: null,
-        description: null,
-      },
-      config: null,
-      result: null,
-      report: null,
-      conversationPreview: null,
-      files: [],
-      hasFlowRecord: true,
-    });
-
-    expect(text).toContain('Status: Resumable');
-    expect(text).toContain('Flow record: present');
-    expect(text).not.toContain(`Status: ${CLI_RUN_STATUS.COMPLETED}`);
-  });
-
   // `status` is a frozen contract, so `history show` answers it from the same
   // facts as `history list`: the run's latest snapshot, its config, and the
   // terminal-rejection filter. A run the resume path later refuses is still
@@ -203,7 +170,7 @@ describe('CLI history status formatting', () => {
       Effect.gen(function* () {
         const id = 'bad-f10' as RunId;
         yield* Effect.promise(() =>
-          seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator', 'toolUse'),
+          seedSnapshot(id, TOOL_USE_CONFIG, 'orchestrator'),
         );
 
         const details = yield* withProcessServices(
@@ -223,9 +190,7 @@ describe('CLI history status formatting', () => {
   it.effect('marks workflow snapshots as CLI-resumable', () =>
     Effect.gen(function* () {
       const id = 'c0ffee-f10' as RunId;
-      yield* Effect.promise(() =>
-        seedSnapshot(id, WORKFLOW_CONFIG, 'correct', 'reflection'),
-      );
+      yield* Effect.promise(() => seedSnapshot(id, WORKFLOW_CONFIG, 'correct'));
 
       const details = yield* withProcessServices(
         testRuntime(),
@@ -260,7 +225,7 @@ describe('CLI history status formatting', () => {
         {
           type: 'flow.snapshot',
           aggregateId: aggregateId('run', id),
-          payload: snapshotPayload('toolUse'),
+          payload: snapshotPayload(),
         },
       ]);
 

@@ -26,7 +26,7 @@ import { entryExists } from '@utils/files/fsEntryExists';
  */
 
 /** The user-facing name of an agent category, as both pickers spell it. */
-export function templateAgentCategoryLabel(category: AgentCategory): string {
+function templateAgentCategoryLabel(category: AgentCategory): string {
   return category === 'toolUse' ? 'Tool Use' : 'Workflow';
 }
 

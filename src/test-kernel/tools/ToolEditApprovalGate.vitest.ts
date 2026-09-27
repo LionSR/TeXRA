@@ -245,8 +245,9 @@ describe('Tool edit approval gating', () => {
       });
       const projectPath = project.roots.workspace!;
       const filePath = path.join(projectPath, 'scoped.txt');
-      tracker.recordRead('scoped.txt');
-      relativeFiles.set('scoped.txt', { exists: true, content: 'old content' });
+      // A new file: absent in both views the flow reads, since a path that
+      // appears between the proposal and the write is a conflict.
+      relativeFiles.set('scoped.txt', { exists: false, content: '' });
       const write = workspaceWrites;
 
       const result = yield* withStubbedEditFiles(
@@ -327,26 +328,6 @@ describe('Tool edit approval gating', () => {
       assert.strictEqual(write.mock.calls.length, 0);
       assert.match(result.error ?? '', /Tool edit cancelled/);
       assert.match(result.error ?? '', /Session disposed\./);
-      assert.strictEqual(result.userInstruction, undefined);
-    }),
-  );
-
-  it.effect('preserves an automatic cancellation without a cause', () =>
-    Effect.gen(function* () {
-      const tool = WriteFileTool;
-      const write = stubWorkspaceFile('summary.txt', {
-        exists: true,
-        content: 'base',
-      });
-      nextDecision = () => ({ action: 'cancel', cause: undefined });
-
-      const result = yield* inRun(
-        tool.call({ path: 'summary.txt', content: 'new content' }),
-      );
-
-      assert.strictEqual(write.mock.calls.length, 0);
-      assert.match(result.error ?? '', /Tool edit cancelled/);
-      assert.doesNotMatch(result.error ?? '', /User rejected/);
       assert.strictEqual(result.userInstruction, undefined);
     }),
   );

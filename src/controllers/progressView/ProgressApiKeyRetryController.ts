@@ -1,23 +1,17 @@
 import { Data, Effect, Equal, Redacted } from 'effect';
-import { MODEL_CONFIGS } from 'llm-zoo';
 
 // Local imports
 import type { ApiProvider } from '@model/apiProviders';
 import type { SecretsFailed } from '@platform/secrets';
-import type { ExhaustionReason, RunId } from '@shared/schemas';
-import {
-  isKimiCodeExclusiveModel,
-  isKimiCodeSubscriptionRetryBlocked,
-} from '@shared/model/kimiCodeRetryGate';
-import { quotaFallbackRouteForExhaustion } from '@shared/quotaFallbackRoutes';
+import type { RunId } from '@shared/schemas';
 
 interface ProgressApiKeyRetryRequest {
   stream: RunId;
   requestId: string;
-  provider?: ApiProvider;
-  /** Canonical base model the fallback run will launch with, when known. */
-  model?: string;
-  exhaustionReason?: ExhaustionReason;
+  /** The key the retry will run on, as the run's offer names it. */
+  provider: ApiProvider;
+  /** The stored key is the broken credential: only a changed one proceeds. */
+  requireNewKey: boolean;
 }
 
 /**
@@ -31,47 +25,31 @@ interface ProgressApiKeyRetryRequest {
  * and answers `false`.
  */
 export class ApiKeyPromptFailed extends Data.TaggedError('ApiKeyPromptFailed')<{
-  readonly provider: ApiProvider | undefined;
+  readonly provider: ApiProvider;
   readonly message: string;
   readonly cause?: unknown;
 }> {}
 
 interface ProgressApiKeyRetryControllerDeps {
-  providers: readonly ApiProvider[];
   readKey(
     provider: ApiProvider,
   ): Effect.Effect<Redacted.Redacted<string> | undefined, SecretsFailed>;
   hasUsableKey(provider: ApiProvider): Effect.Effect<boolean, SecretsFailed>;
   promptForApiKey(
-    provider?: ApiProvider,
+    provider: ApiProvider,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   isRetryPending(stream: RunId, requestId: string): boolean;
   triggerRetry(stream: RunId, requestId: string): Effect.Effect<boolean>;
 }
 
 /**
- * Owns the policy for switching from a quota-exhausted subscription route to
- * user-provided keys.
- *
- * The progress view host still owns prompts and messages; this controller keeps
- * the credential/retry rules testable without depending on VS Code APIs.
+ * The key-entry half of a retry's move onto the user's own credential. Which
+ * provider and whether a changed key is required are the run's decision,
+ * carried on the retry request; this only makes sure that key exists before
+ * the retry is settled on it.
  */
 export class ProgressApiKeyRetryController {
   constructor(private readonly deps: ProgressApiKeyRetryControllerDeps) {}
-
-  private credentialProviderFor(
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
-  ): ApiProvider | undefined {
-    if (request.model === undefined) return request.provider;
-    const config = MODEL_CONFIGS[request.model];
-    if (config === undefined) return request.provider;
-    // The live handler rebinds through the direct-route resolver. Exclusive
-    // models bind to the `kimiCode` credential even when the SDK error labels
-    // the open-platform Moonshot provider, so prompt for and verify the key
-    // the retry will actually use; every other model keeps the forwarded
-    // provider (or the default provider sweep) unchanged.
-    return isKimiCodeExclusiveModel(config) ? 'kimiCode' : request.provider;
-  }
 
   /** Switch this retry onto the user's own key and relaunch it. The host
    *  arm that took the request runs this where it stands. */
@@ -81,19 +59,10 @@ export class ProgressApiKeyRetryController {
     this: ProgressApiKeyRetryController,
     request: ProgressApiKeyRetryRequest,
   ) {
-    if (
-      isKimiCodeSubscriptionRetryBlocked(
-        request.model,
-        request.exhaustionReason,
-      )
-    ) {
-      return;
-    }
-
-    const proceeded = yield* this.ensureOwnApiKey({
-      ...request,
-      provider: this.credentialProviderFor(request),
-    });
+    const proceeded = yield* this.ensureOwnApiKey(
+      request.provider,
+      request.requireNewKey,
+    );
     if (
       !proceeded ||
       !this.deps.isRetryPending(request.stream, request.requestId)
@@ -108,94 +77,30 @@ export class ProgressApiKeyRetryController {
     yield* this.deps.triggerRetry(request.stream, request.requestId);
   });
 
-  /** Whether the user has (or has just entered) a usable key for this
-   *  retry's credential owner. */
+  /**
+   * Whether the user has (or has just entered) a usable key for `provider`.
+   * Upstream credit depletion means the stored key is the broken credential,
+   * so only a changed key counts. A subscription quota does not break the
+   * stored key, so an existing one is consent enough and the prompt appears
+   * only when there is none.
+   */
   readonly ensureOwnApiKey = Effect.fn(
     'ProgressApiKeyRetryController.ensureOwnApiKey',
   )(function* (
     this: ProgressApiKeyRetryController,
-    request: Omit<ProgressApiKeyRetryRequest, 'stream' | 'requestId'>,
+    provider: ApiProvider,
+    requireNewKey: boolean,
   ) {
-    const provider = this.resolveProvider(request);
-    const providersToCheck = provider ? [provider] : this.deps.providers;
-    const requireChange = request.exhaustionReason === 'upstream-credit';
-
-    // The gate depends on which credential failed:
-    // - Upstream credit depletion means the stored direct key is the broken
-    //   credential, so the user must provide a changed usable key.
-    // - Subscription quota limits do not imply a broken direct key, so any
-    //   usable direct key is enough consent to retry on it.
-    if (requireChange) {
-      const before = yield* this.readKeys(providersToCheck);
+    if (requireNewKey) {
+      const before = yield* this.deps.readKey(provider);
       yield* this.deps.promptForApiKey(provider);
-      return yield* this.hasChangedUsableKey(providersToCheck, before);
+      const after = yield* this.deps.readKey(provider);
+      // Sealed values are compared by `Equal`, never unwrapped: this only
+      // needs to know whether the credential changed, not what it is.
+      return after !== undefined && !Equal.equals(after, before);
     }
-
-    // Subscription exhaustion does not break the stored direct key, so
-    // if a usable one already exists, switch to it and retry without
-    // re-prompting, since the user has already provided a key. Only prompt when
-    // none exists yet, and only re-check the keys after that prompt (so the
-    // common already-set path reads the secret store once, not twice).
-    if (yield* this.hasAnyUsableKey(providersToCheck)) return true;
+    if (yield* this.deps.hasUsableKey(provider)) return true;
     yield* this.deps.promptForApiKey(provider);
-    return yield* this.hasAnyUsableKey(providersToCheck);
+    return yield* this.deps.hasUsableKey(provider);
   });
-
-  // OAuth subscriptions pin the fallback key provider (ChatGPT → openai,
-  // Grok → xai) so a mislabeled SDK provider cannot prompt for the wrong key.
-  private resolveProvider(
-    request: Pick<ProgressApiKeyRetryRequest, 'provider' | 'exhaustionReason'>,
-  ): ApiProvider | undefined {
-    const route = quotaFallbackRouteForExhaustion(request.exhaustionReason);
-    return route?.fallbackApiProvider ?? request.provider;
-  }
-
-  private hasAnyUsableKey(
-    providers: readonly ApiProvider[],
-  ): Effect.Effect<boolean, SecretsFailed> {
-    return Effect.map(
-      Effect.forEach(
-        providers,
-        (provider) => this.deps.hasUsableKey(provider),
-        { concurrency: 'unbounded' },
-      ),
-      (checks) => checks.some(Boolean),
-    );
-  }
-
-  private hasChangedUsableKey(
-    providers: readonly ApiProvider[],
-    keysBefore: ReadonlyMap<ApiProvider, Redacted.Redacted<string> | undefined>,
-  ): Effect.Effect<boolean, SecretsFailed> {
-    return Effect.map(this.readKeys(providers), (keysAfter) =>
-      providers.some((provider) => {
-        const next = keysAfter.get(provider);
-        // Sealed values are compared by `Equal`, never unwrapped: this only
-        // needs to know whether the credential changed, not what it is.
-        return (
-          next !== undefined && !Equal.equals(next, keysBefore.get(provider))
-        );
-      }),
-    );
-  }
-
-  private readKeys(
-    providers: readonly ApiProvider[],
-  ): Effect.Effect<
-    Map<ApiProvider, Redacted.Redacted<string> | undefined>,
-    SecretsFailed
-  > {
-    return Effect.map(
-      Effect.forEach(
-        providers,
-        (provider) =>
-          Effect.map(
-            this.deps.readKey(provider),
-            (key) => [provider, key] as const,
-          ),
-        { concurrency: 'unbounded' },
-      ),
-      (entries) => new Map(entries),
-    );
-  }
 }

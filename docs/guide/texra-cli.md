@@ -37,6 +37,14 @@ texra agents list
 texra config
 ```
 
+Run `texra` with no model connected and the chat still opens, with a
+**Connect a model** panel in front: sign in with a ChatGPT or Grok
+subscription, or add a provider API key. A message typed before you connect
+is sent as soon as you do. On your first run TeXRA then hands the chat to the
+setup assistant and opens `/agent`, where you pick an agent or a **team** (a
+preset such as Lean Project, led by its orchestrator); `/agent` stays
+available until your first message in any new chat.
+
 For a guided first run, use `texra setup`. It walks you through sign-in
 (TeXRA account, ChatGPT subscription, or an API key), checks your
 environment, shows the agent roster, and starts your first task:
@@ -110,8 +118,14 @@ include `runDirectory`, include `copiedOutput` or `copiedOutputs` when a
 filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
-Final run result objects report their terminal state through `outcome` and
-name the run through `runId`.
+Final run result objects report their terminal state through `outcome` and name
+the run through `runId`. A `texra run` result also records what the run ran
+with: `compositionHash` names the tool composition the run pinned, and `plugins`
+lists the enabled plugins installed when it started or resumed (`name`,
+`source`, and for a fetched plugin its `ref` and pinned `commit`). Two runs with
+the same hash and plugin list ran with the same tools and plugin skills, which
+is what a script comparing agent or prompt variants needs to know. A run stopped
+before its loop returned carries no `compositionHash`.
 
 ### NDJSON contract, version 2
 
@@ -522,10 +536,10 @@ keys were ignored.
 
 Two more switches live in the environment:
 
-| Variable                              | Effect                                                                                                           |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging for rounds billed to your own API key ([Usage logging](./configuration.md#usage-logging)) |
-| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)                                              |
+| Variable                              | Effect                                                                     |
+| ------------------------------------- | -------------------------------------------------------------------------- |
+| `TEXRA_NO_TELEMETRY` / `DO_NOT_TRACK` | Turn off usage logging ([Usage logging](./configuration.md#usage-logging)) |
+| `TEXRA_NO_UPDATE_CHECK`               | Skip the daily check for a newer `texra` release (environment-only)        |
 
 Usage logging can also be turned off in the workspace file with
 `"texra.telemetry.enabled": false` in `.texra/config.json` (`texra doctor`

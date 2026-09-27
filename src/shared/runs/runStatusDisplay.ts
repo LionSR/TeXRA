@@ -1,4 +1,5 @@
 import {
+  AgentCategory,
   ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
@@ -160,33 +161,33 @@ export function formatRoundStageLabel(
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
 
-/** Where a run's loop stands, in the coordinate its family counts in. */
+/** Where a run's loop stands, in the coordinate its category counts in. */
 interface FlowPosition {
   readonly kind: 'round' | 'turn';
   readonly index: number;
 }
 
 /**
- * The coordinate a run's family counts its position in: a reflection run
- * advances `round`, a tool-use run advances `turn` and leaves `round` at the
- * zero it opened with. A renderer that reads `round` first therefore paints
- * `r1` over every tool-use run for its whole life, which is why this rule has
- * one home rather than one copy per surface. The two coordinates are not
- * counted alike on the row: `round` is zero-based (a reflection flow opens at
- * round 0), while `turn` is already one-based — the tool-use loop commits
- * `state.turn + 1` from a zero start and the child loop counts its first turn
- * as 1 — so only `round` gains one when it renders.
+ * The coordinate a run counts its position in. The loop advances `turn`;
+ * `turn` is one-based — the loop commits `state.turn + 1` from a zero start
+ * and the child loop counts its first turn as 1. The row's `round` counts
+ * model calls, not rounds, so no surface reads it; this rule has one home
+ * rather than one copy per surface.
+ *
+ * A workflow agent counts rounds: each round is one turn, so its zero-based
+ * round index is the turn less one, and a run that has not opened its first
+ * turn has none. A caller that does not know the run's category passes
+ * `undefined` and reads the turn.
  */
 export function flowPosition(
   flow: RunFlow | null | undefined,
+  category: AgentCategory | undefined,
 ): FlowPosition | undefined {
-  if (flow == null) return undefined;
-  if (flow.family === 'reflection') {
-    return flow.round == null
-      ? undefined
-      : { kind: 'round', index: flow.round };
+  if (flow?.turn == null) return undefined;
+  if (category !== AgentCategory.Workflow) {
+    return { kind: 'turn', index: flow.turn };
   }
-  return flow.turn == null ? undefined : { kind: 'turn', index: flow.turn };
+  return flow.turn > 0 ? { kind: 'round', index: flow.turn - 1 } : undefined;
 }
 
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for
@@ -215,7 +216,7 @@ export function formatFlowPositionLabel(
 }
 
 /** Spelled-out counterpart of {@link formatFlowPositionLabel} on the same
- *  family-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
+ *  category-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
  *  word the position instead of abbreviating it. Only `round` gains one, for
  *  the reason {@link flowPosition} states. */
 export function formatFlowPositionTitle(

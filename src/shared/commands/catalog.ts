@@ -267,58 +267,6 @@ export const commandCatalog = [
     icon: '$(gear)',
   },
   {
-    id: 'texra.agentReview.run',
-    title: 'Find Issues (Agent Review)',
-    shortTitle: 'Find Issues',
-    category: 'TeXRA',
-    icon: '$(search)',
-  },
-  {
-    id: 'texra.agentReview.runWithOptions',
-    title: 'Find Issues with Options (Agent Review)',
-    shortTitle: 'Options…',
-    category: 'TeXRA',
-    icon: '$(ellipsis)',
-  },
-  {
-    id: 'texra.agentReview.stop',
-    title: 'Stop Agent Review',
-    shortTitle: 'Stop',
-    category: 'TeXRA',
-    icon: '$(debug-stop)',
-  },
-  {
-    id: 'texra.agentReview.fixAllIssues',
-    title: 'Fix All Agent Review Issues',
-    shortTitle: 'Fix All Issues',
-    category: 'TeXRA',
-    icon: '$(tools)',
-  },
-  {
-    id: 'texra.agentReview.fixIssue',
-    title: 'Fix with Agent',
-    category: 'TeXRA',
-    icon: '$(wand)',
-  },
-  {
-    id: 'texra.agentReview.dismissIssue',
-    title: 'Dismiss Agent Review Issue',
-    shortTitle: 'Dismiss',
-    category: 'TeXRA',
-    icon: '$(close)',
-  },
-  {
-    id: 'texra.agentReview.openIssue',
-    title: 'Open Agent Review Issue',
-    category: 'TeXRA',
-  },
-  {
-    id: 'texra.agentReview.clear',
-    title: 'Clear Agent Review Results',
-    category: 'TeXRA',
-    icon: '$(clear-all)',
-  },
-  {
     id: 'texra.replyComment',
     title: 'Reply',
     category: 'TeXRA',
@@ -361,7 +309,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.toggleBottomBar',
     host: 'desktop',
-    title: 'Toggle Bottom Bar',
+    title: 'Toggle Bottom Panel',
     category: 'View',
     keybinding: { key: 'ctrl+j', mac: 'cmd+j' },
   },
@@ -389,7 +337,7 @@ export const commandCatalog = [
   {
     id: 'texra.desktop.showFirstRunWalkthrough',
     host: 'desktop',
-    title: 'Show Startup Team Chooser',
+    title: 'Choose Agent Team',
     category: 'Help',
   },
   {

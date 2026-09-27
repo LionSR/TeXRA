@@ -6,15 +6,12 @@ import { Data, Effect, FileSystem } from 'effect';
 import { BUNDLED_AGENT_DIRECTORY_NAMES } from '@agent/index';
 import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { absentReason } from '@utils/files/fsEntryExists';
+import { envVar } from '@utils/system/envFlags';
 
 /** No resources candidate holds every bundled agent directory. */
 class DesktopResourcesNotFound extends Data.TaggedError(
   'DesktopResourcesNotFound',
 )<{ readonly message: string }> {}
-
-interface DataRootOptions {
-  env?: Partial<Pick<NodeJS.ProcessEnv, 'TEXRA_DESKTOP_E2E_USER_DATA_PATH'>>;
-}
 
 interface ResourcesPathOptions {
   appPath?: string;
@@ -31,16 +28,15 @@ interface ResourcesPathOptions {
  * `packages/desktop/src/main/index.ts`) so relaunches share one throwaway
  * profile without ever touching a developer's real `~/.texra`; when that var
  * is set, the data root stays colocated with that same isolated profile
- * (`userDataPath` is already the isolated path by the time this runs).
+ * (`userDataPath` is already the isolated path by the time this runs). The
+ * variable comes from the ambient Effect `ConfigProvider`.
  */
-export function resolveDesktopDataRoot(
-  userDataPath: string,
-  options: DataRootOptions = {},
-): string {
-  const env = options.env ?? process.env;
-  if (env.TEXRA_DESKTOP_E2E_USER_DATA_PATH?.trim()) return userDataPath;
-  return DEFAULT_NODE_STORAGE_ROOT;
-}
+export const resolveDesktopDataRoot = Effect.fn('resolveDesktopDataRoot')(
+  function* (userDataPath: string) {
+    const e2eUserDataPath = yield* envVar('TEXRA_DESKTOP_E2E_USER_DATA_PATH');
+    return e2eUserDataPath?.trim() ? userDataPath : DEFAULT_NODE_STORAGE_ROOT;
+  },
+);
 
 /**
  * The directory holding the built main bundle: the nearest of `startDir` and

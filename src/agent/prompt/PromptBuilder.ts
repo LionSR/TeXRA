@@ -186,7 +186,7 @@ export class PromptBuilder {
     if (round < templates.length) return templates[round];
 
     // For rounds beyond configured templates, fall back to the last template.
-    // Multi-template agents reuse templates[1] (reflection prompt) for all
+    // Multi-template agents reuse templates[1] (the revision prompt) for all
     // subsequent rounds. Single-template agents reuse templates[0].
     if (round > 0 && templates.length >= 1) {
       const fallbackIndex = Math.min(1, templates.length - 1);

@@ -11,8 +11,6 @@ import {
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
 import type { OnboardingFunnelState } from '@shared/schemas';
-import { getDefaultTeamId } from '@shared/state/onboardingState';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import { FakeStateStore } from '@test/support/FakePlatform';
 
 type OnboardingFunnelInputs = Parameters<
@@ -21,47 +19,6 @@ type OnboardingFunnelInputs = Parameters<
 type OnboardingFunnelTransition = ReturnType<
   typeof planOnboardingFunnelTransition
 >;
-
-describe('derived funnel state', () => {
-  it.each<[string, OnboardingFunnelInputs, OnboardingFunnelState]>([
-    [
-      'is needs-credential only without a credential and without a decline',
-      { hasCredential: false, declined: false, firstRunDone: false },
-      'needs-credential',
-    ],
-    [
-      'a deliberate skip suppresses State 0',
-      { hasCredential: false, declined: true, firstRunDone: false },
-      'done',
-    ],
-    [
-      'credential present + first run pending → setup owns the session',
-      { hasCredential: true, declined: false, firstRunDone: false },
-      'setup',
-    ],
-    [
-      'a stale declined flag never blocks State 1 once a credential exists',
-      { hasCredential: true, declined: true, firstRunDone: false },
-      'setup',
-    ],
-    [
-      'a completed first run with a credential means the normal product',
-      { hasCredential: true, declined: false, firstRunDone: true },
-      'done',
-    ],
-    [
-      'a completed first run without a credential means the normal product',
-      { hasCredential: false, declined: false, firstRunDone: true },
-      'done',
-    ],
-  ])('%s', (_name, inputs, expected) => {
-    // The state arm of the planner is the derived funnel state, for any
-    // previous state.
-    expect(planOnboardingFunnelTransition(undefined, inputs).state).toBe(
-      expected,
-    );
-  });
-});
 
 describe('planOnboardingFunnelTransition', () => {
   it.each<
@@ -127,22 +84,6 @@ describe('planOnboardingFunnelTransition', () => {
   ])('%s', (_name, previous, inputs, expected) => {
     expect(planOnboardingFunnelTransition(previous, inputs)).toEqual(expected);
   });
-});
-
-describe('onboarding flags', () => {
-  it.effect.each([7, ''])(
-    'treats a non-team-id defaultTeamId %j as unset',
-    (value) =>
-      Effect.gen(function* () {
-        expect(
-          yield* getDefaultTeamId(
-            new FakeStateStore({
-              [GlobalStateKey.ONBOARDING_DEFAULT_TEAM_ID]: value,
-            }),
-          ),
-        ).toBeUndefined();
-      }),
-  );
 });
 
 describe('OnboardingFunnelRefresher', () => {

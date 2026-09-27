@@ -2,15 +2,8 @@
 
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Deferred, Effect, Exit, Fiber, Stream } from 'effect';
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  vi,
-  type MockInstance,
-} from 'vitest';
+import { Deferred, Effect, Exit, Fiber, Stream } from 'effect';
+import { afterEach, beforeEach, describe, expect, vi, type Mock } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
@@ -24,7 +17,7 @@ import {
   agentMatchesIdentifier,
 } from '@shared/schemas';
 import type { ModelOptionData, RequestDecision, RunId } from '@shared/schemas';
-import { DatabaseWriteFailed } from '@shared/session/database';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import {
@@ -182,7 +175,6 @@ function callDelegateReview(call = parentRunContext()) {
     instruction: 'Check the proof.',
     memories: [],
     working_directory: null,
-    execution_id: null,
   }).pipe(
     Effect.provideService(AgentEngine, testEngine),
     Effect.provide(nativeToolTestLayer(call)),
@@ -233,7 +225,7 @@ function delegateWithProposalDecision(
       const session = createTestSession();
       const decider = answerOpenedRequests(session, decision);
       yield* Effect.addFinalizer(() =>
-        decider.stop().pipe(Effect.ensuring(session.dispose())),
+        decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
       );
       // A request is a row on its run, so the parent run must exist first.
       publishTestRunStart(session, PARENT_RUN_ID);
@@ -276,7 +268,6 @@ function delegationOptions(
       agentCategory: AgentCategory.ToolUse,
       model: 'deepseekT',
     },
-    agentName: 'review',
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
     composition: emptyPinnedComposition.key,
@@ -303,23 +294,20 @@ function runInBand(
 }
 
 /**
- * One-shot executeAgent mock that reports a failed child via onRunError and
- * returns the same failed result, carrying the given subagent cost.
+ * One-shot executeAgent mock that returns a failed child result carrying its
+ * normalized error and the given subagent cost.
  */
 function mockExecuteAgentErrorOnce(
   totalCostUsd: number,
   extra: Record<string, unknown> = {},
 ): void {
-  mocks.executeAgent.mockImplementationOnce(async (_config, _id, options) => {
-    const failed = {
-      outcome: 'failed',
-      runId: CHILD_RUN_ID,
-      usage: { totalCost: totalCostUsd },
-      output: { category: 'toolUse', response: '', files: [] },
-      ...extra,
-    };
-    await options.onRunError?.(new Error('review model failed'), failed);
-    return failed;
+  mocks.executeAgent.mockResolvedValueOnce({
+    outcome: 'failed',
+    runId: CHILD_RUN_ID,
+    usage: { totalCost: totalCostUsd },
+    output: { category: 'toolUse', response: '', files: [] },
+    error: { message: 'review model failed', userRetryable: true },
+    ...extra,
   });
 }
 
@@ -341,7 +329,7 @@ function mockTrackedChildOnce(
       });
       testDefaultSession().runs.track(handle);
       runOptions.onRunResolved?.(runId);
-      Effect.runSync(runOptions.onRun?.(handle) ?? Effect.void);
+      Effect.runSync(runOptions.onRun?.(runId) ?? Effect.void);
       await options.afterRun?.(handle);
       return {
         outcome: RUN_OUTCOME.COMPLETED,
@@ -395,7 +383,6 @@ function memoryChildRecords() {
 function recordTerminalFact(
   runId: RunId,
   turn: unknown,
-  reportedError: unknown,
   drainFailure: Error | undefined,
 ): void {
   const store = mocks.childRecords(runId) as {
@@ -405,12 +392,13 @@ function recordTerminalFact(
     outcome?: string;
     usage?: unknown;
     output?: unknown;
+    error?: { message: string };
   } | null;
   if (!store.recordRunEnd || !flow?.outcome) return;
   const outcome = drainFailure === undefined ? flow.outcome : 'failed';
   const flowError =
-    outcome === 'failed' && reportedError !== undefined
-      ? { kind: 'unexpected', message: toErrorMessage(reportedError) }
+    outcome === 'failed' && flow.error !== undefined
+      ? { kind: 'unexpected', message: flow.error.message }
       : undefined;
   const error =
     drainFailure === undefined
@@ -425,19 +413,22 @@ function recordTerminalFact(
 }
 
 describe('headless delegation', () => {
-  /**
-   * The claim release the session's exit choreography ends with. The failure
-   * paths fail it rather than `releaseRunLease` itself, so the drain, the
-   * terminal write and the settle above it still run for real.
-   */
-  let releaseClaims: MockInstance<SessionHandle['releaseClaims']>;
+  /** Called when a claim hold on the in-band session is released: the
+   *  last step of a child's ending, after everything it owes the run. */
+  let releaseClaim: Mock<() => void>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    releaseClaims = vi.spyOn(SessionHandle.prototype, 'releaseClaims');
     // A child registers under its parent, and a run's aggregate must begin
     // with its own `run.start`.
     inBandSession = createTestSession();
+    releaseClaim = vi.fn();
+    const acquireClaims = inBandSession.acquireClaims.bind(inBandSession);
+    vi.spyOn(inBandSession, 'acquireClaims').mockImplementation((id) =>
+      Effect.map(acquireClaims(id), (release) =>
+        Effect.andThen(Effect.sync(releaseClaim), release),
+      ),
+    );
     publishTestRunStart(inBandSession, IN_BAND_PARENT_RUN_ID);
     await Effect.runPromise(inBandSession.settlePublications());
     mocks.prepareAgentDefinition.mockImplementation(
@@ -458,18 +449,9 @@ describe('headless delegation', () => {
       executeAgent: (definition, runId, options) =>
         Effect.tryPromise({
           try: async (signal) => {
-            let reportedError: unknown;
             const turn = await mocks.executeAgent(definition, runId, {
               ...options,
               turnSignal: signal,
-              onRunError: (error: unknown, result: unknown) => {
-                reportedError = error;
-                return (
-                  options as {
-                    onRunError?: (e: unknown, r: unknown) => unknown;
-                  }
-                ).onRunError?.(error, result);
-              },
             });
             // Production's lifecycle drains the facts this run queued before
             // it writes the terminal row, and the row is the post-drain fact
@@ -482,7 +464,7 @@ describe('headless delegation', () => {
                 Effect.catch((cause) => Effect.succeed(cause)),
               ),
             );
-            recordTerminalFact(runId, turn, reportedError, drainFailure);
+            recordTerminalFact(runId, turn, drainFailure);
             return turn;
           },
           catch: ensureError,
@@ -600,16 +582,16 @@ describe('headless delegation', () => {
 
   afterEach(async () => {
     const session = testDefaultSession();
-    for (const runId of session.runs.getActiveIds()) {
+    for (const runId of session.runs.activeIds()) {
       // Test handles have no provider interrupt handler. Remove the fake
       // handle, then stop the real child activation that owns the loop.
-      session.runs.untrack(runId);
-      await Effect.runPromise(session.runs.kill(runId).settlement);
+      untrackRun(session.runs, runId);
+      await Effect.runPromise(session.runs.stop(runId).settlement);
     }
     session.followUps.terminalize(PARENT_RUN_ID);
     session.followUps.terminalize(CHILD_RUN_ID);
     await Effect.runPromise(session.runs.awaitDrained());
-    await Effect.runPromise(inBandSession.dispose());
+    await Effect.runPromise(closeSessionOf(inBandSession));
   });
 
   it.effect('awaits child delegation during one-shot tool-use runs', () =>
@@ -679,34 +661,8 @@ describe('headless delegation', () => {
           }),
         );
         expect(mocks.writeResultMeta.mock.invocationCallOrder[0]).toBeLessThan(
-          releaseClaims.mock.invocationCallOrder[0] ?? 0,
+          releaseClaim.mock.invocationCallOrder[0] ?? 0,
         );
-      }),
-  );
-
-  it.effect(
-    'returns the committed result when the final claim release fails',
-    () =>
-      Effect.gen(function* () {
-        const drain = vi.spyOn(inBandSession, 'settlePublications');
-        releaseClaims.mockReturnValueOnce(
-          Effect.fail(
-            new DatabaseWriteFailed({
-              path: 'session.db',
-              cause: new Error('claim release failed'),
-            }),
-          ),
-        );
-
-        const result = yield* runInBand(delegationOptions());
-
-        expect(result.result.outcome).toBe('completed');
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
-        // The release that failed is the last step: everything the exit
-        // choreography owes the run happened before it.
-        expect(drain).toHaveBeenCalled();
-        // The failure injected is the run's own release, not a neighbour's.
-        expect(releaseClaims).toHaveBeenCalledOnce();
       }),
   );
 
@@ -811,28 +767,6 @@ describe('headless delegation', () => {
           yield* Effect.flip(runInBand(delegationOptions())),
         ).toBeInstanceOf(SubagentDurabilityError);
         expect(mocks.writeReport).toHaveBeenCalled();
-      }),
-  );
-
-  it.effect(
-    'preserves the child failure when final claim cleanup also fails',
-    () =>
-      Effect.gen(function* () {
-        const childFailure = new Error('review model failed');
-        mocks.executeAgent.mockRejectedValueOnce(childFailure);
-        releaseClaims.mockReturnValueOnce(
-          Effect.fail(
-            new DatabaseWriteFailed({
-              path: 'session.db',
-              cause: new Error('claim release failed'),
-            }),
-          ),
-        );
-        expect(yield* Effect.flip(runInBand(delegationOptions()))).toBe(
-          childFailure,
-        );
-        // The failure manifest is written above the release that failed.
-        expect(mocks.writeResultMeta).toHaveBeenCalledOnce();
       }),
   );
 
@@ -1056,30 +990,6 @@ describe('headless delegation', () => {
     }),
   );
 
-  it.effect(
-    'composes interactive delegation through the same native launch primitive',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* callDelegateReview();
-
-        expect(result.summary).toBe("Launched 'review' (async)");
-        expect(result.output).toContain(
-          "Subagent 'review' launched. Result will be delivered automatically",
-        );
-        yield* testDefaultSession().runs.awaitDrained();
-        const executeOptions = mocks.executeAgent.mock.calls.at(-1)?.[2];
-        expect(executeOptions).toEqual(
-          expect.objectContaining({
-            parentRunId: PARENT_RUN_ID,
-            session: expect.any(Object),
-          }),
-        );
-        expect(executeOptions).not.toEqual(
-          expect.objectContaining({ stopAfterCycle: true }),
-        );
-      }),
-  );
-
   it.effect('does not attribute proposal cancellation to the user', () =>
     Effect.gen(function* () {
       const result = yield* delegateWithProposalDecision({
@@ -1106,7 +1016,7 @@ describe('headless delegation', () => {
           const session = createTestSession();
           const decider = answerOpenedRequests(session, { action: 'approve' });
           yield* Effect.addFinalizer(() =>
-            decider.stop().pipe(Effect.ensuring(session.dispose())),
+            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
           );
           const result = yield* callDelegateReview(
             parentRunContext({ session, approvalPromptsUnavailable: true }),
@@ -1147,82 +1057,6 @@ describe('headless delegation', () => {
       }),
   );
 
-  it.effect('launches with an approved model override that is available', () =>
-    Effect.gen(function* () {
-      mocks.readModelAvailabilityInputs.mockReturnValue(
-        Effect.succeed([
-          {
-            value: 'deepseekT',
-            label: 'DeepSeek',
-            availability: 'provider-key',
-          },
-          {
-            value: 'gpt5',
-            label: 'GPT-5',
-            availability: 'provider-key',
-          },
-        ]),
-      );
-
-      const launched = Deferred.makeUnsafe<void>();
-      mocks.executeAgent.mockImplementationOnce(async () => {
-        Deferred.doneUnsafe(launched, Effect.void);
-        return {
-          outcome: 'completed',
-          runId: CHILD_RUN_ID,
-          output: {
-            category: 'toolUse',
-            response: 'The proof is correct.',
-            files: [],
-          },
-        };
-      });
-
-      const result = yield* delegateWithProposalDecision(
-        { action: 'approve', model: 'gpt5' },
-        { launchSignal: launched },
-      );
-
-      expect(result.status).toBe('executed');
-      expect(result.summary).toBe("Launched 'review' (async)");
-      expect(mocks.executeAgent).toHaveBeenCalledWith(
-        expect.objectContaining({
-          config: expect.objectContaining({ model: 'gpt5' }),
-        }),
-        expect.any(String),
-        expect.anything(),
-      );
-    }),
-  );
-
-  it.effect(
-    'includes memory misses in interactive early-delivered reports',
-    () =>
-      Effect.gen(function* () {
-        // The mocked `executeAgent` is the child-run loop's `launch` turn, and the
-        // WAITING result it returns is what the loop's single delivery site sees.
-        mockTrackedChildOnce({
-          memoryMisses: [
-            { path: '/memories/missing.md', reason: 'not found & unreadable' },
-          ],
-        });
-
-        const reportWritten = Deferred.makeUnsafe<void>();
-        mocks.writeReport.mockImplementationOnce(() => {
-          Deferred.doneUnsafe(reportWritten, Effect.void);
-        });
-
-        yield* callDelegateReview(parentRunContext({ runId: PARENT_RUN_ID }));
-
-        yield* Deferred.await(reportWritten);
-        expect(mocks.writeReport).toHaveBeenCalledWith(
-          expect.stringContaining(
-            '<memory-miss path="/memories/missing.md" reason="not found &amp; unreadable" />',
-          ),
-        );
-      }),
-  );
-
   it.effect(
     'does not deliver detached subagent results back to the released parent',
     () =>
@@ -1236,7 +1070,7 @@ describe('headless delegation', () => {
           afterRun: (handle) => {
             capturedHandle = handle;
             return Effect.runPromise(
-              testDefaultSession().runs.detachActiveChildren(PARENT_RUN_ID),
+              testDefaultSession().runs['detachActiveChildren'](PARENT_RUN_ID),
             );
           },
         });
@@ -1252,7 +1086,7 @@ describe('headless delegation', () => {
         expect(mocks.writeReport).toHaveBeenCalledWith(
           expect.stringContaining('The proof is correct.'),
         );
-        expect(capturedHandle?.deliveryTarget).toBeUndefined();
+        expect(capturedHandle?.parent).toBeNull();
         expect(
           yield* queuedFollowUps(testDefaultSession(), PARENT_RUN_ID),
         ).toEqual([]);

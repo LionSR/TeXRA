@@ -34,7 +34,7 @@ import { renderLabeledActionButton } from '@ui/wa/actionButtons';
 import { renderDotMeta } from '@ui/wa/metaStrip';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
-import { createFlushableDebounce, tryParseUrl } from '@utils/core';
+import { createFlushableDebounce } from '@utils/core';
 import { BaseRequestPanel } from './BaseRequestPanel';
 import { externalInquiryPanelStyles } from './ExternalInquiryPanel.styles';
 
@@ -55,7 +55,7 @@ interface ValidatableTextarea extends HTMLElement {
 }
 
 function safeHttpUrl(link: string): string | undefined {
-  const url = tryParseUrl(link);
+  const url = URL.parse(link);
   return url && (url.protocol === 'http:' || url.protocol === 'https:')
     ? url.href
     : undefined;

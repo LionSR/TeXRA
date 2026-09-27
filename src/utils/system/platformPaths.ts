@@ -8,8 +8,8 @@ import { globSync } from 'glob';
 import { LRUCache } from 'lru-cache';
 import which from 'which';
 
-// Local imports - log
-import { createLog } from '@logger/logUtils';
+// Local imports
+import { writeLogLine } from '@logger/logSink';
 import { normalizeFilePath, unique } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -33,10 +33,18 @@ export const IS_WINDOWS = process.platform === 'win32';
 // Common LaTeX tool names used across the system
 const TEX_TOOLS = ['latexdiff', 'latexindent', 'latexmk'] as const;
 
-const log = createLog('platformPaths');
-
 // Cache for extra directories to avoid repeated glob operations
 let cachedExtraDirs: string[] | null = null;
+
+/**
+ * Name a directory {@link getExtraDirs} had to skip. The directories are
+ * computed once, synchronously, by whichever PATH consumer runs first (often
+ * extension activation), with no fiber to log from, so this writes the sink
+ * directly at computation time.
+ */
+function warnSkippedDir(message: string): void {
+  writeLogLine('WARN', 'platformPaths', message);
+}
 
 const DEFAULT_MSYS_ROOTS = ['C:\\msys64', 'C:\\msys32'];
 const MSYS_SUBDIRS = ['usr\\bin', 'mingw64\\bin', 'mingw32\\bin'];
@@ -67,7 +75,7 @@ export function safeHomedir(): string | null {
  */
 function absoluteEnvRoot(value: string, variable: string): string | null {
   if (path.isAbsolute(value)) return value;
-  log.warn(
+  warnSkippedDir(
     `Ignoring ${variable}=${value}: it must be an absolute path to be searched for tools.`,
   );
   return null;
@@ -79,7 +87,7 @@ function globDescending(pattern: string): string[] {
   try {
     return globSync(pattern).sort().reverse();
   } catch (err) {
-    log.warn(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
+    warnSkippedDir(`Glob failed for ${pattern}: ${toErrorMessage(err)}`);
     return [];
   }
 }

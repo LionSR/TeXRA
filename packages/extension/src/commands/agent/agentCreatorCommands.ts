@@ -13,11 +13,14 @@ import {
   buildCreatorConfig,
   runAgentCreator,
 } from '@agent/implementations/agentCreator/agentCreatorFlow';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptToAddAgentToConfig } from '@frontend/agents/register';
 import { showLoggedErrorMessage } from '@frontend/ui/errorHandlingUtils';
 import type { PlatformSecrets } from '@platform/secrets';
-import type { StateStore } from '@platform/interfaces';
+import {
+  AgentDirectories,
+  type AgentDirectoriesPort,
+  type StateStore,
+} from '@platform/interfaces';
 import type { AgentCategory } from '@shared/schemas';
 import { normalizeLineEndings } from '@utils/text/stringUtils';
 
@@ -69,39 +72,20 @@ const loadCreatorConfig = Effect.fnUntraced(function* (
 function askForInput(
   options: vscode.InputBoxOptions,
 ): Effect.Effect<string | undefined, AgentCreatorUiFailed> {
-  return Effect.callback<string | undefined, AgentCreatorUiFailed>((resume) => {
-    const tokens = new vscode.CancellationTokenSource();
-    let settled = false;
-    const dispose = () => {
-      settled = true;
-      tokens.dispose();
-    };
-    void Promise.resolve(
-      vscode.window.showInputBox(options, tokens.token),
-    ).then(
-      (value) => {
-        dispose();
-        resume(Effect.succeed(value));
-      },
-      (cause: unknown) => {
-        dispose();
-        resume(
-          Effect.fail(
-            new AgentCreatorUiFailed({
-              reason: 'prompt-failed',
-              message: 'VS Code would not show the input box.',
-              cause,
-            }),
-          ),
-        );
-      },
-    );
-    return Effect.sync(() => {
-      if (settled) return;
-      tokens.cancel();
-      dispose();
-    });
-  });
+  return Effect.acquireUseRelease(
+    Effect.sync(() => new vscode.CancellationTokenSource()),
+    (tokens) =>
+      Effect.tryPromise({
+        try: () => vscode.window.showInputBox(options, tokens.token),
+        catch: (cause) =>
+          new AgentCreatorUiFailed({
+            reason: 'prompt-failed',
+            message: 'VS Code would not show the input box.',
+            cause,
+          }),
+      }).pipe(Effect.onInterrupt(() => Effect.sync(() => tokens.cancel()))),
+    (tokens) => Effect.sync(() => tokens.dispose()),
+  );
 }
 
 /**
@@ -178,7 +162,10 @@ function pickToolGroups(
   );
 }
 
-function buildVSCodeUI(session: SessionHandle): AgentCreatorUI {
+function buildVSCodeUI(
+  session: SessionHandle,
+  agentDirectories: AgentDirectoriesPort,
+): AgentCreatorUI {
   return {
     promptAgentName(categoryLabel) {
       return askForInput({
@@ -296,7 +283,8 @@ export function handleCreateAgentWithAI(
 ) {
   return Effect.gen(function* () {
     const config = yield* loadCreatorConfig(context);
-    yield* runAgentCreator(config, category, buildVSCodeUI(session), {
+    const ui = buildVSCodeUI(session, yield* AgentDirectories);
+    yield* runAgentCreator(config, category, ui, {
       ...session.roots,
       secrets,
     });

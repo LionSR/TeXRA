@@ -1,15 +1,14 @@
 /**
  * Tool-use card lifecycle helpers that work on any {@link AgentTrace}.
  *
- * The trace surface ships `toolStart` / `toolEnd` primitives that take an
- * explicit `logId`. Tool-use flows need to (1) mint a fresh id at start so
+ * The trace's `tool.start` / `tool.end` events carry an explicit `logId`. Tool-use flows need to (1) mint a fresh id at start so
  * subsequent updates can target the same card and (2) capture the active
  * stage so a long-running tool's completion event lands under the same
  * stage as its start.
  *
  * These helpers exist so agent code can program against `AgentTrace`
- * without TeXRA-specific sugar; they reduce to the same `toolStart` /
- * `toolEnd` emissions.
+ * without TeXRA-specific sugar; they reduce to the same `tool.start` /
+ * `tool.end` emissions.
  */
 import type { ToolCallStatus, ToolUseLog } from '@shared/schemas';
 import { generateShortId } from '@utils/core';
@@ -33,7 +32,7 @@ export function startToolUseCard(
   stageId?: string,
 ): ToolUseCardRef {
   const logId = generateShortId();
-  trace.toolStart({ logId, toolName, input }, { stageId });
+  trace.emit({ type: 'tool.start', logId, toolName, input, stageId });
   return { logId, groupId: stageId };
 }
 
@@ -50,7 +49,13 @@ export function endToolUseCard(
   result: Omit<ToolUseLog, 'status'>,
   status: ToolCallStatus = 'completed',
 ): void {
-  trace.toolEnd({ logId: ref.logId, status, result }, { stageId: ref.groupId });
+  trace.emit({
+    type: 'tool.end',
+    logId: ref.logId,
+    status,
+    result,
+    stageId: ref.groupId,
+  });
 }
 
 /**

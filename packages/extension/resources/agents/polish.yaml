@@ -41,11 +41,15 @@ prompts:
     {{ ALL_INPUTS }}
     </documents>
 
+    {% if INSTRUCTION %}
     Apply only the following instruction to the paper:
     <instruction>
     {{ INSTRUCTION }}
     </instruction>
     Apply only the given instruction. If asked to revise section A, do not modify section B unless consistency requires it.
+    {% else %}
+    No specific instruction was given: polish the whole paper for clarity, flow, and readability, without changing its technical content.
+    {% endif %}
 
   userRequest:
     - |

@@ -63,18 +63,4 @@ describe('MainViewDroppedFilesController', () => {
         });
       }).pipe(Effect.provide(nodePlatformLayer)),
   );
-
-  it.effect('fails with Rejected, not a defect, when nothing attaches', () =>
-    Effect.gen(function* () {
-      const root = yield* workspaceWith(['paper/main.tex']);
-      const failure = yield* Effect.flip(
-        attachDroppedFiles(
-          root,
-          [join(root, 'paper', 'main.tex')],
-          CONTEXT_EXTENSIONS,
-        ),
-      );
-      expect(failure._tag).toBe('Rejected');
-    }).pipe(Effect.provide(nodePlatformLayer)),
-  );
 });

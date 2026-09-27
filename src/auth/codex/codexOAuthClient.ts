@@ -1,21 +1,18 @@
 /**
  * Network calls against OpenAI's auth endpoints for the Codex OAuth flow.
  *
- * Token grants: declarative {@link OAuthFormEndpoint} + the shared grant
- * programs. Device-code: OpenAI custom JSON protocol (not RFC 8628). Every
- * export is an Effect program; the device-login flow runs them on one fiber
- * and the session coordinator runs the grants at its Promise boundary.
+ * Device-code only: OpenAI custom JSON protocol (not RFC 8628); the token
+ * grants run over the policy's form endpoint in the shared coordinator. Every
+ * export is an Effect program the device-login flow runs on one fiber.
  */
 // Third-party imports
 import { Effect } from 'effect';
 
 // Local imports
-import { DeviceAuthorizationPending } from '../oauth/deviceAuthorization';
 import {
-  exchangeAuthorizationCode as exchangeFormAuthorizationCode,
-  refreshOAuthTokens,
-  type OAuthFormEndpoint,
-} from '../oauth/formTokenClient';
+  DeviceAuthorizationPending,
+  DeviceAuthorizationTransient,
+} from '../oauth/deviceAuthorization';
 import {
   OAuthHttpError,
   oauthHttpError,
@@ -26,13 +23,10 @@ import {
   CODEX_CLIENT_ID,
   CODEX_DEVICE_TOKEN_URL,
   CODEX_DEVICE_USERCODE_URL,
-  CODEX_TOKEN_URL,
 } from './codexConstants';
 import {
   CodexDeviceTokenSchema,
   CodexDeviceUserCodeSchema,
-  CodexTokenResponseSchema,
-  type CodexTokenResponse,
 } from './codexSessionTypes';
 
 const REQUEST_TIMEOUT_MS = 30_000;
@@ -41,26 +35,6 @@ const JSON_HEADERS = {
   'Content-Type': 'application/json',
   Accept: 'application/json',
 } as const;
-
-/** Declarative Codex token endpoint (code exchange + refresh). */
-const CODEX_FORM_ENDPOINT: OAuthFormEndpoint<CodexTokenResponse> = {
-  tokenUrl: CODEX_TOKEN_URL,
-  clientId: CODEX_CLIENT_ID,
-  tokenResponseSchema: CodexTokenResponseSchema,
-  requestTimeoutMs: REQUEST_TIMEOUT_MS,
-};
-
-export const exchangeAuthorizationCode = Effect.fn(
-  'codexOAuthClient.exchangeAuthorizationCode',
-)(function* (params: { code: string; verifier: string; redirectUri: string }) {
-  return yield* exchangeFormAuthorizationCode(CODEX_FORM_ENDPOINT, params);
-});
-
-export const refreshTokens = Effect.fn('codexOAuthClient.refreshTokens')(
-  function* (refreshToken: string) {
-    return yield* refreshOAuthTokens(CODEX_FORM_ENDPOINT, refreshToken);
-  },
-);
 
 function postJson(url: string, body: unknown, networkErrorMessage: string) {
   return postOAuth({
@@ -103,7 +77,8 @@ export const requestDeviceUserCode = Effect.fn(
  * Poll once for the device authorization result. Succeeds with the
  * authorization code + verifier, or fails with
  * {@link DeviceAuthorizationPending} while the user has not yet approved
- * (403/404). A network blip mid-poll is also pending so the loop keeps trying.
+ * (403/404). A network blip mid-poll is {@link DeviceAuthorizationTransient},
+ * which the shared poll retries a few times before failing with it.
  */
 export const pollDeviceToken = Effect.fn('codexOAuthClient.pollDeviceToken')(
   function* (params: { deviceAuthId: string; userCode: string }) {
@@ -112,8 +87,8 @@ export const pollDeviceToken = Effect.fn('codexOAuthClient.pollDeviceToken')(
       { device_auth_id: params.deviceAuthId, user_code: params.userCode },
       'Network error polling device authorization',
     ).pipe(
-      Effect.catchTag('OAuthNetworkError', () =>
-        Effect.fail(new DeviceAuthorizationPending({ slowDown: false })),
+      Effect.catchTag('OAuthNetworkError', (error) =>
+        Effect.fail(new DeviceAuthorizationTransient({ error })),
       ),
     );
     if (response.status === 403 || response.status === 404) {

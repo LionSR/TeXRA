@@ -14,12 +14,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { Effect, FileSystem } from 'effect';
 
-import {
-  runAgent,
-  validateRunRequest,
-  type SessionHandle,
-} from '@agent/runtime';
-import { AUTH_COMMANDS } from '@auth/constants';
+import { runAgent, type SessionHandle } from '@agent/runtime';
 import { EXTENSION_COMMANDS } from '@commands/extensionCommandIds';
 import {
   createFileSelectionPickers,
@@ -32,7 +27,10 @@ import {
   attachDroppedFiles,
   normalizeMainViewFileExtension,
 } from '@controllers/mainView/MainViewDroppedFilesController';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+import {
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import { ChatExportController } from '@controllers/progressView/ChatExportController';
 import {
   exportRunTranscript,
@@ -50,7 +48,6 @@ import {
 import {
   createHostRunActions,
   type HostRunActionPorts,
-  RunLaunchFailed,
 } from '@controllers/session/hostRunActions';
 import type { HostDraftRequests } from '@controllers/session/hostDraftRequests';
 import type { HostSnapshotSource } from '@controllers/session/hostSnapshotSource';
@@ -60,7 +57,6 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -73,10 +69,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
+import {
+  AgentDirectories,
+  type StateStore,
+  type StateReadFailed,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -97,7 +94,6 @@ import {
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
   Cancelled,
-  isRequestRefusal,
   Rejected,
   type HostRequestFailure,
   type RequestRefusal,
@@ -210,27 +206,16 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Validate an agent request and launch it directly: the port settled with
-   * the run even through the old `texra.execute` command hop, and the hop's
-   * only addition was a second Zod parse of the config `validateRunRequest`
-   * already checked. The launch program takes its process services from this
+   * Launch a validated request directly, as the desktop's `runValidated`
+   * does: the surface's launch and the shared run actions both reach
+   * `runAgent` here. The launch program takes its process services from this
    * runtime's context on the fiber that runs it, as the resume port's program
    * does.
    */
-  const runAgentRequest: HostRunActionPorts['runAgentRequest'] = (
-    request,
+  const runValidated: HostRunActionPorts['runValidated'] = (
+    { config, runId },
     runOptions = {},
   ) => {
-    const validation = validateRunRequest(request);
-    if (!validation.valid) {
-      return Effect.logError(validation.message).pipe(
-        withLogChannel(CHANNEL),
-        Effect.andThen(
-          Effect.fail(new Rejected({ reason: validation.message })),
-        ),
-      );
-    }
-    const { config, runId } = validation.request;
     const launch = runAgent(
       runId === undefined
         ? { kind: 'fresh', config }
@@ -244,28 +229,14 @@ export function createExtensionHostRequests(
         onRun: runOptions.onRun,
         onRunResolved: presentLaunchedProgressRun,
       },
-    ).pipe(
-      Effect.asVoid,
-      // `runAgent` still fails with a bare `Error`, so the port's one channel
-      // is named here: a refusal the launch already worded travels as itself
-      // (the fold the bridge applies), and every other launch failure carries
-      // its own error as the tag's `cause`.
-      Effect.mapError((cause) =>
-        isRequestRefusal(cause)
-          ? cause
-          : new RunLaunchFailed({
-              message: toErrorMessage(cause),
-              cause,
-            }),
-      ),
-    );
+    ).pipe(Effect.asVoid);
     return withProcessServices(runtime, launch);
   };
 
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      runAgentRequest,
+      runValidated,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -316,7 +287,7 @@ export function createExtensionHostRequests(
       mergeFile: (baseFile, editedFile) =>
         runCommand('texra.merge', baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runCommand('texra.latexdiff', undefined, baseFile, editedFile),
+        runCommand('texra.latexdiff', baseFile, editedFile),
       openDirectory: (directory) =>
         runCommand('revealFileInOS', vscode.Uri.file(directory)),
       // An accepted-edit backup names an absolute workspace path the
@@ -453,7 +424,10 @@ export function createExtensionHostRequests(
         session.roots.workspaceState,
         session.roots.storage,
       );
-      yield* runCommand('texra.execute', prepared);
+      yield* runValidated(
+        prepared,
+        launchApprovalOptions(request, session.approvals),
+      ).pipe(Effect.mapError((cause) => hostFailure('runValidated', cause)));
     });
   }
 
@@ -597,15 +571,14 @@ export function createExtensionHostRequests(
     options.refreshOnboardingFunnel(),
   );
 
-  /** The four reads a new credential invalidates, refreshed together as the
-   *  four promises were. */
+  /** The reads a new credential invalidates: the API-key banner with the
+   *  funnel that reads it, and the catalogs. */
   const refreshAfterCredentialChange = Effect.all(
     [
       options.refreshApiKeyStatus.pipe(
         Effect.mapError((cause) => hostFailure('refreshApiKeyStatus', cause)),
       ),
       snapshot.refreshCatalogs,
-      refreshOnboardingFunnel,
     ],
     { concurrency: 'unbounded', discard: true },
   );
@@ -616,9 +589,7 @@ export function createExtensionHostRequests(
     openPath: (file, line) => commandVerb('texra.openFile', file, line),
     openLabel: (label) =>
       Effect.map(
-        runCommand<boolean>('texra.openLabel', label, {
-          notifyNotFound: false,
-        }),
+        runCommand<boolean>('texra.openLabel', label),
         (opened) => opened === true,
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
@@ -628,28 +599,11 @@ export function createExtensionHostRequests(
     runWorkflowFileOperation: (operation, request) =>
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      action === 'latexdiffvc'
-        ? commandVerb('texra.latexdiffvc', undefined, baseFile, commit)
-        : commandVerb(
-            `texra.${action}`,
-            undefined,
-            baseFile,
-            commit,
-            action === 'cleanLatexdiffvc',
-          ),
-    mergeFiles: (baseFile, editedFile) =>
-      commandVerb('texra.merge', baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      commandVerb('texra.latexdiff', undefined, baseFile, editedFile),
-    openSettings: (section, sessionType) => {
-      if (section === 'agents')
-        return commandVerb(
-          'texra.showAgents',
-          sessionType === 'toolUse' ? 'toolUse' : undefined,
-        );
-      return commandVerb(
-        section === 'models' ? 'texra.showModels' : 'texra.showMultiAgent',
-      );
+      commandVerb(`texra.${action}`, baseFile, commit),
+    openSettings: (section) => {
+      if (section === 'teams') return commandVerb('texra.showMultiAgent');
+      if (section === 'models') return commandVerb('texra.showModels');
+      return commandVerb('texra.showDashboard');
     },
     // SecretManager has no key-changed event, so the set-key flow's
     // completion is the explicit refresh point for the funnel.
@@ -671,7 +625,7 @@ export function createExtensionHostRequests(
         sessionType === 'toolUse' ? 'toolUse' : undefined,
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const dir = yield* agentDirectories.custom();
+      const dir = yield* (yield* AgentDirectories).custom();
       if (dir) {
         yield* fromHost('revealFileInOS', () =>
           vscode.commands.executeCommand(

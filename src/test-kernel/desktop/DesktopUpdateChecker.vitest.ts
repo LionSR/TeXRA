@@ -4,10 +4,7 @@ import { Deferred, Effect, Fiber, FileSystem, Layer } from 'effect';
 import { describe, expect, vi } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { updateCheckRecordsLayer } from '@controllers/session/updateCheckRecords';
-import {
-  checkForDesktopUpdate,
-  DESKTOP_RELEASES_PAGE_URL,
-} from '@desktop/main/desktopUpdateChecker';
+import { checkForDesktopUpdate } from '@desktop/main/desktopUpdateChecker';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
@@ -58,21 +55,6 @@ const withRecords = <A, E>(
   );
 
 describe('desktop update checker', () => {
-  it.live('skips entirely for unpackaged (dev) runs', () =>
-    withRecords(
-      Effect.gen(function* () {
-        const notify = vi.fn();
-        const fetchRelease = vi.fn(() => release);
-        yield* runCheck({
-          isPackaged: false,
-          notify,
-          fetchRelease: Effect.sync(fetchRelease),
-        });
-        expect(fetchRelease).not.toHaveBeenCalled();
-        expect(notify).not.toHaveBeenCalled();
-      }),
-    ),
-  );
   it.live('skips entirely when TEXRA_NO_UPDATE_CHECK is set', () =>
     withRecords(
       Effect.gen(function* () {

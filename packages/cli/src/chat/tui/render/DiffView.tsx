@@ -102,9 +102,30 @@ export function initialDiffScrollOffset(
     return fallbackOffset();
   }
 
-  if (addedIndex < initiallyVisibleContentRows) return 0;
+  const windowRows = Math.max(1, maxDisplayLines - 2);
+  let addedEnd = addedIndex;
+  while (lines.at(addedEnd + 1)?.kind === 'added') addedEnd += 1;
+  if (addedEnd - changedIndex + 1 > windowRows) {
+    // The replacement is taller than the window (a long line wrapped over
+    // several rows): open on the first new row that differs from its old
+    // counterpart, one row of the new text above it, so the edit itself
+    // shows rather than the rows it left alone.
+    let differs = 0;
+    while (
+      addedIndex + differs < addedEnd &&
+      changedIndex + differs < removedEnd &&
+      lines.at(addedIndex + differs)?.text.slice(differs === 0 ? 1 : 0) ===
+        lines.at(changedIndex + differs)?.text.slice(differs === 0 ? 1 : 0)
+    ) {
+      differs += 1;
+    }
+    const edited = addedIndex + differs;
+    if (edited < initiallyVisibleContentRows) return 0;
+    return clamp(edited - 1, 0, maxOffset);
+  }
 
-  return clamp(addedIndex - Math.max(1, maxDisplayLines - 2) + 1, 0, maxOffset);
+  if (addedIndex < initiallyVisibleContentRows) return 0;
+  return clamp(addedIndex - windowRows + 1, 0, maxOffset);
 }
 
 // Compact windows cannot scroll far enough to find the edit, so they anchor on

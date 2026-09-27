@@ -188,8 +188,14 @@ describe('sessionFold', () => {
     });
     // The same rows on a quiet view: the debug row is dropped, its cursor
     // still advances.
-    const filtered = fold({ ...live, debug: false }, tail(hidden));
-    expect(filtered.runs).toBe(live.runs);
+    const quiet = foldAll(
+      log.events
+        .filter((event) => event !== hidden)
+        .map((event) => ({ _tag: 'event', read: 'aggregate', event })),
+      foldAll([subscribe(CHILD), alive], emptySessionView('paper', 0, false)),
+    );
+    const filtered = fold(quiet, tail(hidden));
+    expect(filtered.runs).toBe(quiet.runs);
     expect(filtered.folded.get(qualifyAggregateId('run', CHILD))).toBe(
       hidden.seq,
     );
@@ -673,7 +679,7 @@ describe('sessionFold', () => {
         chunk('response-1', 5, 7, '!!'),
         chunk('response-2', 0, 4, 'Late'),
       ],
-      view,
+      buffered,
     );
     const rows = runView(settled, CHILD).transcript.rows;
     expect(rows[0].kind === 'assistant' && rows[0].text.full).toBe(
@@ -1035,7 +1041,14 @@ describe('sessionFold', () => {
       row(commit, {
         type: 'followup.queued',
         followUpId,
-        content: { text, origin: 'subagent_result' },
+        content: {
+          text,
+          from: {
+            kind: 'run' as const,
+            runId: 'c41dc41dc41d' as RunId,
+            relation: 'child' as const,
+          },
+        },
       });
     const view = foldAll(
       [
@@ -1089,6 +1102,26 @@ describe('sessionFold', () => {
     // Promoted to top level, the detached child takes its creation-time
     // place in the listing rather than being appended to the end.
     expect(detached.order).toStrictEqual([PROCESS, CHILD, ROOT]);
+  });
+
+  it('refuses a level it has already folded past', () => {
+    // The indexes advance in place: a second branch off one level would see
+    // the first branch's open card and paint a tool it never started.
+    const { log, pending } = buildScenario();
+    const base = foldAll(pending);
+    const toolStart = (logId: string): FoldInput =>
+      tail(
+        log.emit(CHILD, T.childDone, {
+          type: 'tool.start',
+          logId,
+          toolName: 'bash',
+          input: {},
+        }),
+      );
+    const started = fold(base, toolStart('first'));
+    expect(() => fold(base, toolStart('second'))).toThrow('superseded');
+    // The level it returned folds on.
+    expect(() => fold(started, alive)).not.toThrow();
   });
 
   it('publishes an immutable level and shares its untouched branches with the next (D5)', () => {
@@ -1185,12 +1218,11 @@ describe('sessionFold', () => {
 // continues from. Rows are built through `SessionEventSchema`, the boundary
 // that runs in production; nothing here reaches an arm schema directly.
 //
-// Measured serialized size of the two snapshot drafts below (aggregate id
+// Measured serialized size of the snapshot draft below (aggregate id
 // included, parsed defaults filled), so PR 2 has a number before it turns the
 // writes on (before the offered toolset joined the tool-use state): tool-use
-// with `stateSlices: null` was 362 bytes; reflection with
-// an empty workspace and no round outputs is 741 bytes. Both grow with the
-// family state they carry, never with the conversation, which the rows carry.
+// with `stateSlices: null` was 362 bytes. It grows with the flow state it
+// carries, never with the conversation, which the rows carry.
 // ---------------------------------------------------------------------------
 
 const LEDGER_RUN = RunIdSchema.parse('ab12cd');
@@ -1277,10 +1309,9 @@ const TURN_USAGE = {
   serverToolRequests: 1,
 };
 const RUNTIME = {
-  phase: 'round.ready',
+  phase: 'model.ready',
   round: 0,
   turn: 0,
-  continuationIndex: 0,
   modelId: 'gpt-test',
   modelCompatibilityKey: null,
   lastError: null,
@@ -1300,23 +1331,6 @@ const toolBinding = (callId: string, requestId: string, attempt = 1) => ({
   type: 'tool.binding',
   payload: { callId, attempt, requestId },
 });
-const reflectionSnapshot = {
-  type: 'flow.snapshot',
-  payload: {
-    family: 'reflection',
-    runtime: RUNTIME,
-    state: {
-      totalRounds: 1,
-      workspaceSnapshot: {
-        assembly: {},
-        media: {},
-        reasoning: {},
-        interactions: {},
-        workPlan: {},
-      },
-    },
-  },
-};
 const message = (payload: Record<string, unknown>) => ({
   type: 'model.message',
   payload,
@@ -1569,10 +1583,10 @@ describe('foldRunState', () => {
         const state = compacted('context-limit');
         expect(state?.messages.map((m) => m.role)).toEqual(['user', 'user']);
         // Only an overflow compaction spends the round's one overflow retry.
-        expect(state?.overflowRecoveredAtRound).toBeNull();
+        expect(state?.overflowRecoveredAtTurn).toBeNull();
         const overflow = compacted('context-window');
-        expect(overflow?.round).toBeTypeOf('number');
-        expect(overflow?.overflowRecoveredAtRound).toBe(overflow?.round);
+        expect(overflow?.turn).toBeTypeOf('number');
+        expect(overflow?.overflowRecoveredAtTurn).toBe(overflow?.turn);
       },
     ],
     [
@@ -1671,68 +1685,6 @@ describe('foldRunState', () => {
         expect(state?.outcome).toBe('completed');
         expect(state?.flow?.family).toBe('toolUse');
         expect(state?.snapshotCommit).toBe(10);
-      },
-    ],
-    [
-      'a reflection snapshot: its family state restored, its usage derived',
-      () => {
-        const state = stateOf(
-          foldRunState(null, [
-            ledgerRow(
-              1,
-              message({
-                kind: 'append',
-                messages: [USER('draft the introduction')],
-                sourceResponse: null,
-              }),
-            ),
-            ledgerRow(2, reflectionSnapshot),
-          ]),
-        );
-        const flow = state?.flow;
-        expect(flow?.family).toBe('reflection');
-        // D12: no snapshot payload carries usage; it is derived from the rows.
-        expect(flow?.state).not.toHaveProperty('runStateSnapshot');
-        expect(state?.snapshotCommit).toBe(2);
-      },
-    ],
-    [
-      'a length continuation in a non-final reflection round: the next round opens at continuation 0',
-      () => {
-        const step = (
-          name: string,
-          round: number,
-          continuationIndex: number,
-        ) => ({
-          type: 'flow.step',
-          payload: {
-            family: 'reflection',
-            step: name,
-            round,
-            continuationIndex,
-          },
-        });
-        const rows = [
-          message({
-            kind: 'append',
-            messages: [USER('draft the introduction')],
-            sourceResponse: null,
-          }),
-          reflectionSnapshot,
-          step('round.begin', 0, 0),
-          step('round.end', 0, 1),
-          step('round.begin', 1, 0),
-          step('round.end', 1, 1),
-        ].map((draft, index) => ledgerRow(index + 1, draft));
-        const state = stateOf(foldRunState(null, rows));
-        expect(state?.round).toBe(1);
-        expect(state?.continuationIndex).toBe(1);
-        // Within one round the index still never goes back.
-        expect(
-          reasonOf(
-            foldRunState(state, [ledgerRow(7, step('round.end', 1, 0))]),
-          ),
-        ).toBe('out-of-order');
       },
     ],
     [

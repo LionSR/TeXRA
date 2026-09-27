@@ -13,10 +13,10 @@
  * no `messages()` (the folded state holds them), no snapshot writer helper
  * (a snapshot is a row like any other), no subscribe surface.
  */
-import { Context, Data, type Effect } from 'effect';
+import { Cause, Context, Data, type Effect } from 'effect';
 
 import type { RunId, SessionEvent } from '@shared/schemas';
-import type { DatabaseReadFailed, DatabaseWriteFailed } from './database';
+import { type DatabaseReadFailed, DatabaseWriteFailed } from './database';
 import type {
   RunLedgerDraft,
   RunLedgerInconsistent,
@@ -63,6 +63,26 @@ export class RunLedgerRefused extends Data.TaggedError('RunLedgerRefused')<{
   }
 }
 
+/**
+ * The store's refusal anywhere in `cause`, failure or defect. A refused write
+ * ends the run whatever failed beside it, so a caller that turns the rest of
+ * a cause into a result must look past the first reason `Cause.squash` picks.
+ */
+export function findStorageRefusal(
+  cause: Cause.Cause<unknown>,
+): DatabaseWriteFailed | RunLedgerRefused | undefined {
+  for (const reason of cause.reasons) {
+    if (Cause.isInterruptReason(reason)) continue;
+    const error = Cause.isFailReason(reason) ? reason.error : reason.defect;
+    if (
+      error instanceof DatabaseWriteFailed ||
+      error instanceof RunLedgerRefused
+    )
+      return error;
+  }
+  return undefined;
+}
+
 export class RunLedger extends Context.Service<
   RunLedger,
   {
@@ -84,7 +104,7 @@ export class RunLedger extends Context.Service<
      * folded: the loop's fresh-run branch and, for a run recorded before the
      * run ledger, the honest answer, distinct from "checkpoint corrupt".
      * Queued follow-ups alone still return that unopened state (`phase` is
-     * null) so the caller can seed them; they do not open the run. Ledger
+     * null) so the caller can deliver them; they do not open the run. Ledger
      * rows without an opening `flow.snapshot` are not that case: they are a
      * malformed aggregate and fail `inconsistent`, because folding an
      * `attempt` or a `response` into a fresh run is how a paid invocation

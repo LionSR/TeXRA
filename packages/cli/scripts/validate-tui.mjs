@@ -347,7 +347,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result></orchestrator-followup>',
+        '<subagent-result id="child-q" agent="reviewer" category="toolUse" status="completed"><response>All good &lt;ok&gt;</response></subagent-result>',
     },
     bootExpect: 'queued 1',
     keys: ['/status', '\r'],
@@ -357,11 +357,7 @@ const SCENARIOS = [
       '1. ✓ reviewer completed All good <ok>',
       'Queued follow-ups (1)',
     ],
-    unexpect: [
-      '(empty follow-up)',
-      '<orchestrator-followup>',
-      '<subagent-result',
-    ],
+    unexpect: ['(empty follow-up)', '<subagent-result'],
   },
   {
     name: 'queued-subagent-followup-status-preview',
@@ -369,7 +365,7 @@ const SCENARIOS = [
     env: {
       HARNESS_ENTRIES: '2',
       HARNESS_QUEUED_FOLLOWUPS:
-        '<orchestrator-followup><subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/></orchestrator-followup>',
+        '<subagent-progress id="child-q" agent="review" category="toolUse" type="todos" completed="6" active="0" pending="0"/>',
     },
     bootExpect: 'queued 1',
     frame: 'viewport',
@@ -379,7 +375,7 @@ const SCENARIOS = [
       'queued 1',
       '⟳ review · todos · 6 done, 0 active, 0 pending',
     ],
-    unexpect: ['<orchestrator-followup>', '<subagent-progress'],
+    unexpect: ['<subagent-progress'],
   },
   {
     name: 'compact-queued-followups',
@@ -424,7 +420,7 @@ const SCENARIOS = [
     expect: [
       '● bash (python3 enumerate_triples.py)',
       'tool-output-line-01',
-      '… +9 lines (Ctrl-T to view full output)',
+      '… 9 lines hidden (Ctrl-T to view full output)',
       'tool-output-line-18',
     ],
     unexpect: ['tool-output-line-10 hidden-middle'],
@@ -565,7 +561,7 @@ const SCENARIOS = [
       'Sign in or out, and choose subscri…',
       '/models',
       'Enable or disable models in pickers',
-      '… 8 more',
+      '… 10 more',
     ],
     unexpect: [
       '/ap  Switch',
@@ -588,8 +584,9 @@ const SCENARIOS = [
       'Prefer ChatGPT subscrip',
       'Prefer Grok subscription',
       'Otherwise: Your own API keys',
+      'Add a provider API key',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
     maxBlankLinesBetween: [
@@ -623,7 +620,7 @@ const SCENARIOS = [
       'Workflows',
       'correct',
       'polish',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
     ],
     unexpect: [
       '//agent',
@@ -691,7 +688,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -729,7 +726,7 @@ const SCENARIOS = [
       'correct',
       'polish',
       'Current: chat (hidden from picker)',
-      'Choose the root agent for this chat.',
+      'Choose an agent, or a team it leads, for this chat.',
       'Esc close',
     ],
     unexpect: [
@@ -796,7 +793,7 @@ const SCENARIOS = [
     },
     keys: ['/model', '\r'],
     frame: 'viewport',
-    expect: ['Choose the model for future turns.', '1-9/a-z', 'select'],
+    expect: ['Choose the model for future turns.', '1-2/Enter select'],
     unexpect: [
       'Finish the active response before switching models.',
       'Enter close',
@@ -1031,13 +1028,13 @@ const SCENARIOS = [
       HARNESS_ENTRIES: '0',
       HARNESS_WORKFLOW_SCRIPT_DISABLED: '1',
     },
-    keys: [...CONFIG_TOOLS_FORM_KEYS, '4'],
+    keys: [...CONFIG_TOOLS_FORM_KEYS, '5'],
     frame: 'viewport',
     settleMs: ASYNC_FORM_SETTLE_MS,
     expect: [
       '/config · Tools',
       'Multi-Agent Workflow — enabled · detected · Ready',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
     ],
   },
   {
@@ -1144,7 +1141,7 @@ const SCENARIOS = [
       'Account & access',
       'Prefer ChatGPT subscrip',
       '↑/↓ navigate',
-      '1-8/Enter select',
+      '1-9/Enter select',
       'Esc close',
     ],
   },
@@ -1271,9 +1268,9 @@ const SCENARIOS = [
     expect: [
       '/config · Tools',
       'Toggle external integrations',
-      '+1 earlier, +5 more',
+      'Goal Mode — +7 more',
       '↑/↓ navigate',
-      '1-7/Enter toggle',
+      '1-8/Enter toggle',
       'Esc close',
     ],
     unexpect: ['[TeXRA]', 'toolUtils', 'enabled -', 'TeXRA CLI'],
@@ -1287,7 +1284,7 @@ const SCENARIOS = [
     keys: ['/', DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN, DOWN],
     frame: 'viewport',
     expect: [
-      '… 8 earlier',
+      '… 8 previous rows',
       '› /status   Show session details',
       '/config',
       'View and toggle settings',
@@ -1797,7 +1794,7 @@ const SCENARIOS = [
     bootExpect: ' Ctrl-C ',
     frame: 'viewport',
     expect: [
-      'Agent asks:',
+      'Direction',
       'previous rows',
       'Which proof direction',
       '+2 more',
@@ -2017,7 +2014,7 @@ const SCENARIOS = [
       'Retry the failed call?',
       'HTTP 429 Too Many Requests',
       'retry',
-      'dismiss',
+      'stop run',
       '1 approval',
     ],
     unexpect: [
@@ -2041,7 +2038,7 @@ const SCENARIOS = [
       'ChatGPT subscription usage limit reached. Resets in 2h.',
       'Press k to use your own API key for this retry.',
       'retry',
-      'dismiss',
+      'stop run',
       'use your own API key',
       '1 approval',
     ],
@@ -2052,7 +2049,7 @@ const SCENARIOS = [
     frame: 'viewport',
     cols: 120,
     env: { HARNESS_ENTRIES: '4', HARNESS_RETRY_APPROVAL: '1' },
-    bootExpect: 'dismiss',
+    bootExpect: 'stop run',
     keys: ['n'],
     expect: ['RETRY-REJECTED', '/ commands'],
     unexpect: [
@@ -2100,12 +2097,14 @@ const SCENARIOS = [
       'Recent',
       'nested Interrupted',
       'Resume',
-      '[2 total · 0 running · 2 finished]',
+      // A workflow run counts its calls (the run model's tally), not the
+      // child runs its attempts opened.
+      '[1 ok]',
     ],
     ordered: [
       { before: 'Running', after: 'Waiting on you' },
-      { before: 'Waiting on you', after: '\n Interrupted' },
-      { before: '\n Interrupted', after: 'Recent' },
+      { before: 'Waiting on you', after: '\n  Interrupted' },
+      { before: '\n  Interrupted', after: 'Recent' },
     ],
     unexpect: ['ERROR', 'signal read during notification phase'],
   },
@@ -2134,7 +2133,9 @@ const SCENARIOS = [
       HARNESS_NESTED_CHILDREN: '1',
     },
     keys: ['\t'],
-    expect: ['[4 total · 4 running · 0 finished]'],
+    // leanSolver sits idle between turns: it has delivered, so it counts
+    // as finished, not running.
+    expect: ['[4 total · 3 running · 1 finished]'],
     unexpect: ['● localChecker', '● strategy', '● reviewer'],
   },
   {
@@ -2465,7 +2466,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'x'],
     expect: ['● strategy Stopped', 'Enter focus', 'Tab input', 'Esc input'],
     unexpect: ['v full output', 'k kill'],
   },
@@ -2477,7 +2478,7 @@ const SCENARIOS = [
       HARNESS_CAN_INTERRUPT: '1',
     },
     bootExpect: 'Tab sessions',
-    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'k', '\r'],
+    keys: ['\t', RIGHT, DOWN, DOWN, DOWN, 'x', '\r'],
     frame: 'viewport',
     expect: ['◆ Stopped', 'root active', 'Ctrl-C stop root', 'Esc parent'],
     unexpect: [STOPPED_SUBAGENT_INPUT_MESSAGE_START],
@@ -2515,7 +2516,7 @@ const SCENARIOS = [
       DOWN,
       DOWN,
       DOWN,
-      'k',
+      'x',
       '\r',
       'can you still receive this?',
       '\r',

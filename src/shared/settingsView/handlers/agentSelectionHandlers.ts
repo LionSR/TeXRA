@@ -13,8 +13,6 @@ import type { AgentModePreset, ByCategory } from '@shared/schemas';
 import type {
   AgentScanIssue,
   AgentSelectionItem,
-  UpdateAgentModePresetsMessage,
-  UpdateAgentSelectionMessage,
   UpdateCustomAgentDirMessage,
 } from '@shared/settingsView/settingsViewMessages';
 

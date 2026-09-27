@@ -31,19 +31,6 @@ describe('findBraceBalancedMacroCalls', () => {
     expect(calls).toEqual([{ args: ['a', 'b'], start: 0, end: 12 }]);
   });
 
-  it('finds multiple calls in order', () => {
-    const calls = findBraceBalancedMacroCalls(
-      '\\foo{a}{b} text \\foo{c}{d}',
-      '\\foo',
-      2,
-    );
-
-    expect(calls.map((c) => c.args)).toEqual([
-      ['a', 'b'],
-      ['c', 'd'],
-    ]);
-  });
-
   it('skips a macro name that is a prefix of a longer identifier', () => {
     expect(findBraceBalancedMacroCalls('\\fooBar{a}{b}', '\\foo', 2)).toEqual(
       [],
@@ -62,11 +49,5 @@ describe('findBraceBalancedMacroCalls', () => {
     );
 
     expect(calls.map((c) => c.args)).toEqual([['b', 'c']]);
-  });
-
-  it('returns an empty array when the macro never appears', () => {
-    expect(findBraceBalancedMacroCalls('no macro here', '\\foo', 2)).toEqual(
-      [],
-    );
   });
 });

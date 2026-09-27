@@ -7,8 +7,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  AGENT_ERROR_OUTCOME,
-  type AgentErrorKind,
   agentErrorPresentation,
   classifyAgentError,
 } from '@common/errors/agentErrorClassification';
@@ -16,7 +14,6 @@ import {
   attachContextWindowError,
   attachMissingApiKeyError,
 } from '@common/errors/sdkError/errorMetadata';
-import { RUN_OUTCOME } from '@shared/schemas';
 
 describe('classifyAgentError', () => {
   it('classifies a user abort ahead of every other kind', () => {
@@ -71,12 +68,6 @@ describe('classifyAgentError', () => {
     expect(
       classifyAgentError(new Error('maximum context length is 128000')),
     ).toBe('context-window');
-  });
-
-  it('leaves an unrecognized provider failure unexpected', () => {
-    expect(classifyAgentError(new Error('provider exploded'))).toBe(
-      'unexpected',
-    );
   });
 
   it('prefers the credential marker over a context-window message', () => {

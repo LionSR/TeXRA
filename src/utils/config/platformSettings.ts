@@ -40,13 +40,13 @@ export function initProcessSettingHost(host: SettingHost): void {
 const processSettingHost = (): SettingHost => installedHost ?? 'vscode';
 
 /**
- * The same host in the tool registry's naming, for `unavailableHosts`, or
- * `undefined` when no composition root named one (the agent package embedded
- * in another process, a test). The tool resolver withholds every host-bound
- * tool from such a process rather than guessing which host it is.
+ * The host a composition root named, for the tool resolver's
+ * `unavailableHosts` gate, or `undefined` when none did (the agent package
+ * embedded in another process, a test). The tool resolver withholds every
+ * host-bound tool from such a process rather than guessing which host it is.
  */
-export function processToolHost(): 'cli' | 'desktop' | 'extension' | undefined {
-  return installedHost === 'vscode' ? 'extension' : installedHost;
+export function processToolHost(): SettingHost | undefined {
+  return installedHost;
 }
 
 /**

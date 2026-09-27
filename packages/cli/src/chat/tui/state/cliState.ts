@@ -263,25 +263,12 @@ export function closeInfoPane(): void {
   INFO_PANE_QUEUE.set(INFO_PANE_QUEUE.get().slice(1));
 }
 
-/** A `/plan` reader still loading. The target object is the invocation's
- *  identity: only the request that opened it may resolve or close it. */
-interface WorkPlanReaderRequest {
-  readonly kind: 'workPlan';
-  readonly runId: RunId;
-  readonly loading: true;
-}
-
 /** Passive reader target. Holding the captured run id rather than a text
  * snapshot keeps each reader live even if transcript focus moves elsewhere. */
 type ForegroundReaderTarget =
   | { readonly kind: 'transcript'; readonly runId: RunId }
   | { readonly kind: 'workflow'; readonly runId: RunId }
-  | {
-      readonly kind: 'workPlan';
-      readonly runId: RunId;
-      readonly loading?: false;
-    }
-  | WorkPlanReaderRequest;
+  | { readonly kind: 'workPlan'; readonly runId: RunId };
 
 const FOREGROUND_READER = signal<ForegroundReaderTarget | undefined>(undefined);
 /** The open reader, resolved against the view like the selection: a reader
@@ -299,12 +286,12 @@ export function openTranscriptReader(runId: RunId): void {
   FOREGROUND_READER.set({ kind: 'transcript', runId });
 }
 
-/** View state of the workflow popup — which phase tab is open, which row is
- *  highlighted, which counted groups are unfolded, and the live filter. Held
- *  here rather than in the component so a repaint or a foreground surface
+/** View state of the workflow popup — the phase tab (unset follows the run's
+ *  active phase), the highlighted row, the unfolded groups and the filter.
+ *  Held here, not in the component, so a repaint or a foreground surface
  *  taking over (an approval) hands the popup back exactly as it was. */
 export interface WorkflowPopupView {
-  readonly phaseIndex: number;
+  readonly phaseKey: string | undefined;
   readonly selectedKey: string | undefined;
   readonly expanded: ReadonlySet<WorkflowRowGroup>;
   /** Live filter text; empty means none. */
@@ -314,7 +301,7 @@ export interface WorkflowPopupView {
 }
 
 const INITIAL_WORKFLOW_POPUP_VIEW: WorkflowPopupView = {
-  phaseIndex: 0,
+  phaseKey: undefined,
   selectedKey: undefined,
   expanded: new Set(),
   filter: '',
@@ -349,38 +336,8 @@ export function updateWorkflowPopupView(
   WORKFLOW_POPUP_VIEW.set({ ...current, view: { ...current.view, ...patch } });
 }
 
-/** Capture one `/plan` invocation as the sole owner of async reader output. */
-export function beginWorkPlanReaderRequest(
-  runId: RunId,
-): WorkPlanReaderRequest {
-  const request = { kind: 'workPlan', runId, loading: true } as const;
-  FOREGROUND_READER.set(request);
-  return request;
-}
-
-/** Resolve the loading reader without allowing an older request to replace it. */
-export function finishWorkPlanReaderRequest(
-  request: WorkPlanReaderRequest,
-): boolean {
-  if (FOREGROUND_READER.get() !== request) return false;
-  FOREGROUND_READER.set({ kind: 'workPlan', runId: request.runId });
-  return true;
-}
-
-export function cancelPendingWorkPlanReaderRequest(): void {
-  const target = FOREGROUND_READER.get();
-  if (target?.kind === 'workPlan' && target.loading === true) {
-    FOREGROUND_READER.set(undefined);
-  }
-}
-
-/** Close only the loading reader owned by this invocation. */
-export function cancelWorkPlanReaderRequest(
-  request: WorkPlanReaderRequest,
-): boolean {
-  if (FOREGROUND_READER.get() !== request) return false;
-  FOREGROUND_READER.set(undefined);
-  return true;
+export function openWorkPlanReader(runId: RunId): void {
+  FOREGROUND_READER.set({ kind: 'workPlan', runId });
 }
 
 export function closeForegroundReader(): void {

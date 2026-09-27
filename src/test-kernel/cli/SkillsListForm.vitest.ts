@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  formatSkillActivationPrompt,
-  skillSelectItemsForTui,
-} from '@cli/chat/tui/forms/SkillsListForm';
+import { formatSkillActivationPrompt } from '@cli/chat/tui/forms/SkillsListForm';
 import type { SourcedSkill } from '@skills/loadSkills';
 
 function sourcedSkill(options: {

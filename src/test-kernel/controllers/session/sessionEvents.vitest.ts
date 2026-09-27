@@ -13,15 +13,11 @@
  */
 // Node imports
 import {
-  chmodSync,
   existsSync,
   mkdtempSync,
   mkdirSync,
-  readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync,
 } from 'node:fs';
@@ -55,7 +51,7 @@ vi.mock('@effect/sql-sqlite-node/SqliteClient', async (importOriginal) => ({
   >()),
 }));
 
-import { TraceEmitter, type ResultEvent } from '@agent/trace';
+import { type ResultEvent } from '@agent/trace';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
@@ -65,6 +61,7 @@ import {
   openSessionEffect,
 } from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
+import { SESSION_CLOSE_DEADLINE_MS } from '@agent/runtime/sessionGraph';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import {
@@ -84,7 +81,6 @@ import { sessionInputsLayer } from '@controllers/session/sessionInputs';
 import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { withProcessServices } from '@platform/processRuntime';
 import { AppState, type StateStore } from '@platform/interfaces';
-import { SHUTDOWN_PHASE_DEADLINE_MS } from '@platform/defaults/lifecycleHost';
 import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
@@ -105,6 +101,7 @@ import type { RunLedgerDraft } from '@shared/session/runStateFold';
 import { ProcessIdentity, SessionEvents } from '@shared/session/sessionEvents';
 import { DownMessageSchema } from '@shared/session/sessionFrames';
 import type { SessionView } from '@shared/session/sessionView';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import {
   nodeSpawnerLayer,
@@ -684,10 +681,13 @@ describe('Sessions owner', () => {
             unreadable: [],
           }),
         );
-        const stopAgentRun = vi.fn(() => Effect.void);
+        const stop = vi.fn(() => ({
+          accepted: () => true,
+          settlement: Effect.void,
+        }));
         const session = {
           view: view.ref,
-          runs: { stopAgentRun },
+          runs: { stop },
           roots: createFakeWorkspaceRoots({
             globalState: { [GlobalStateKey.DETACH_SUBAGENTS_ON_STOP]: true },
           }),
@@ -709,7 +709,7 @@ describe('Sessions owner', () => {
         const request = { kind: 'run.stop', runId: RUN } as const;
         const refused = yield* requests.request(request).pipe(Effect.flip);
         expect(refused._tag).toBe('NotOwner');
-        expect(stopAgentRun).not.toHaveBeenCalled();
+        expect(stop).not.toHaveBeenCalled();
 
         yield* db.releaseClaims([qualifyAggregateId('run', RUN)]);
         yield* SubscriptionRef.update(view.ref, (v) => ({
@@ -722,7 +722,7 @@ describe('Sessions owner', () => {
         expect(yield* requests.request(request)).toEqual({ kind: 'done' });
         // A stop that leaves the child policy unset takes the session's
         // configured "Keep subagents running".
-        expect(stopAgentRun).toHaveBeenCalledExactlyOnceWith(RUN, {
+        expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
         });
       }).pipe(
@@ -788,7 +788,7 @@ describe('Sessions owner', () => {
                   workspaceState: state,
                 },
               }),
-              (session) => session.dispose(),
+              (session) => closeSessionOf(session),
             );
             expect(
               opened.mock.calls.filter(
@@ -797,7 +797,7 @@ describe('Sessions owner', () => {
                   join(realpathSync.native(storage), 'texra.db'),
               ),
             ).toHaveLength(1);
-            yield* session.dispose();
+            yield* closeSessionOf(session);
             // Closing the graph releases its borrow, never the still-open project's state.
             yield* state.update('shared', 'after session');
             expect(yield* state.get('shared')).toBe('after session');
@@ -941,7 +941,7 @@ describe('Sessions owner', () => {
         } finally {
           detachResult();
           sweep.mockRestore();
-          yield* session.dispose();
+          yield* closeSessionOf(session);
         }
       }),
   );
@@ -987,7 +987,7 @@ describe('Sessions owner', () => {
           // does not fail a run whose remaining facts are whole.
           yield* session.settlePublications(RUN);
         } finally {
-          yield* session.dispose();
+          yield* closeSessionOf(session);
         }
       }),
   );
@@ -1031,7 +1031,7 @@ describe('Sessions owner', () => {
         const settled = RunIdSchema.parse('aa0001');
         track(session, settled);
         // The run completes: its driver untracks it as it unwinds.
-        session.runs.untrack(settled);
+        untrackRun(session.runs, settled);
         // A native child between turns, detached from its stopped parent: its
         // activation is its only record, so the close must stop it itself, and
         // wait for the loop to release the activation after its last delivery.
@@ -1056,40 +1056,40 @@ describe('Sessions owner', () => {
       }),
   );
 
-  it.live('close releases the session after a stop settlement defect', () =>
-    Effect.gen(function* () {
-      const root = '/workspace/owner/stop-defect';
-      const session = yield* open(root);
-      const runId = RunIdSchema.parse('aa0005');
-      track(session, runId);
-      const stopFailure = new Error('terminal write refused');
-      vi.spyOn(session.runs, 'kill').mockReturnValue({
-        accepted: () => true,
-        settlement: Effect.fail(stopFailure),
-      });
+  it.effect(
+    'close reports a failed stop, settles the run it reached no driver for, and releases the session',
+    () =>
+      Effect.gen(function* () {
+        const root = '/workspace/owner/stop-defect';
+        const session = yield* open(root);
+        const runId = RunIdSchema.parse('aa0005');
+        track(session, runId);
+        vi.spyOn(session.runs, 'stop').mockReturnValue({
+          accepted: () => false,
+          settlement: Effect.fail(new Error('terminal write refused')),
+        });
 
-      const closed = yield* Effect.exit(closeSession(root));
-      expect(Exit.isFailure(closed)).toBe(true);
-      expect(
-        Exit.isFailure(closed) ? Cause.squash(closed.cause) : undefined,
-      ).toBe(stopFailure);
-      expect(isLive(session)).toBe(true);
-
-      session.runs.untrack(runId);
-      yield* Effect.promise(() =>
-        vi.waitFor(() => expect(isLive(session)).toBe(false)),
-      );
-    }),
+        expect(yield* closeSession(root)).toEqual({
+          settled: true,
+          abandoned: [],
+        });
+        expect(isLive(session)).toBe(false);
+      }),
   );
 
   it.effect(
-    'close reports a run still live past the budget as abandoned, and releases the session at its settlement',
+    'close settles a run still live past the budget, reports it abandoned, and releases the session',
     () =>
       Effect.gen(function* () {
         const session = yield* open('/workspace/owner/abandoned');
-        // A run that ignores its interrupt: no handler, no driver to unwind it.
+        // A run whose driver takes the stop and never unwinds.
         const slow = RunIdSchema.parse('aa0003');
-        track(session, slow);
+        session.runs.reserveChildActivation({
+          runId: slow,
+          parent: { current: null },
+          retainsTerminalParent: false,
+          interrupt: () => {},
+        });
         const closing = yield* Effect.forkChild(
           closeSession('/workspace/owner/abandoned'),
         );
@@ -1098,18 +1098,12 @@ describe('Sessions owner', () => {
         yield* Effect.promise(
           () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
         );
-        yield* TestClock.adjust(`${SHUTDOWN_PHASE_DEADLINE_MS} millis`);
+        yield* TestClock.adjust(`${SESSION_CLOSE_DEADLINE_MS} millis`);
         expect(yield* Fiber.join(closing)).toEqual({
           settled: false,
           abandoned: [slow],
         });
-        expect(isLive(session)).toBe(true);
-        session.runs.untrack(slow);
-        // The release runs detached on the session owner (RcMap.invalidate):
-        // no settle covers it.
-        yield* Effect.promise(() =>
-          vi.waitFor(() => expect(isLive(session)).toBe(false)),
-        );
+        expect(isLive(session)).toBe(false);
       }),
   );
 });
@@ -1178,51 +1172,98 @@ describe('the C1 event table and the C6 publisher', () => {
     }).pipe(Effect.ensuring(Effect.sync(() => system.mockRestore())));
   });
 
-  it.effect('clears a store written under another event format at open', () => {
+  /** A store holding one run row, then re-stamped as another build's. */
+  const storeOfFormat = (storage: string, format: number) =>
+    Database.pipe(
+      Effect.flatMap((database) => database.appendAll([runStart])),
+      Effect.provide(substrate(storage)),
+      Effect.andThen(
+        Effect.sync(() => {
+          const connection = reader(storage);
+          try {
+            connection.exec(`PRAGMA user_version = ${format}`);
+          } finally {
+            connection.close();
+          }
+        }),
+      ),
+    );
+
+  it.effect('moves a store of an older event format aside at open', () => {
     const storage = workspace();
+    const format = SESSION_EVENT_FORMAT - 1;
     return Effect.gen(function* () {
-      yield* Database.pipe(
-        Effect.flatMap((database) => database.appendAll([runStart])),
-        Effect.provide(substrate(storage)),
-      );
-      const connection = reader(storage);
-      try {
-        expect(connection.prepare('PRAGMA user_version').get()).toEqual({
-          user_version: SESSION_EVENT_FORMAT,
-        });
-        // Another build's stamp: the rows are its, whatever they decode to.
-        connection.exec(`PRAGMA user_version = ${SESSION_EVENT_FORMAT + 1}`);
-      } finally {
-        connection.close();
-      }
+      yield* storeOfFormat(storage, format);
       const reopenedStore = yield* Database.pipe(
         Effect.flatMap((database) =>
           Effect.map(database.readListing(), (listing) => ({
             listing,
-            cleared: database.cleared,
+            movedAside: database.movedAside,
           })),
         ),
         Effect.provide(substrate(storage)),
       );
-      expect(reopenedStore.listing).toEqual([]);
-      expect(reopenedStore.cleared).toEqual({
-        path: join(storage, 'texra.db'),
-        rows: 1,
-        storedFormat: SESSION_EVENT_FORMAT + 1,
+      const asidePath = join(
+        realpathSync.native(storage),
+        `texra.db.format${format}`,
+      );
+      expect(reopenedStore).toEqual({
+        listing: [],
+        movedAside: {
+          path: join(storage, 'texra.db'),
+          aside: asidePath,
+          rows: 1,
+          storedFormat: format,
+        },
       });
+      const aside = new DatabaseSync(asidePath);
+      try {
+        expect(aside.prepare('PRAGMA user_version').get()).toEqual({
+          user_version: format,
+        });
+        expect(
+          aside.prepare('SELECT count(*) AS rows FROM event').get(),
+        ).toEqual({ rows: 1 });
+      } finally {
+        aside.close();
+      }
       const reopened = reader(storage);
       try {
         expect(reopened.prepare('PRAGMA user_version').get()).toEqual({
           user_version: SESSION_EVENT_FORMAT,
         });
-        expect(
-          reopened.prepare('SELECT count(*) AS rows FROM event').get(),
-        ).toEqual({ rows: 0 });
       } finally {
         reopened.close();
       }
     });
   });
+
+  it.effect(
+    'refuses a store of a newer event format and changes nothing',
+    () => {
+      const storage = workspace();
+      const format = SESSION_EVENT_FORMAT + 1;
+      return Effect.gen(function* () {
+        yield* storeOfFormat(storage, format);
+        const failure = yield* Effect.flip(
+          Database.pipe(Effect.provide(substrate(storage))),
+        );
+        expect(failure._tag).toBe('DatabaseOpenFailed');
+        expect(failure.message).toContain('Update TeXRA');
+        const stored = reader(storage);
+        try {
+          expect(stored.prepare('PRAGMA user_version').get()).toEqual({
+            user_version: format,
+          });
+          expect(
+            stored.prepare('SELECT count(*) AS rows FROM event').get(),
+          ).toEqual({ rows: 1 });
+        } finally {
+          stored.close();
+        }
+      });
+    },
+  );
 
   it.effect('rolls back a failed commit before reusing the connection', () => {
     const storage = workspace();
@@ -2094,7 +2135,9 @@ describe('the C1 event table and the C6 publisher', () => {
    * the store, so this is the one window whose regression costs every run
    * that was live at the crash. The recorded owner here is this pid under a
    * start identity from before the crash: the pid resolves, its identity
-   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict.
+   * differs, and that is `proveOwnerLiveness`'s pid-reuse verdict. The
+   * follow-up the crash left queued reaches the restarted publisher's
+   * pending set where the claim moves.
    */
   it.live('reclaims a run whose recorded owner is provably dead', () => {
     const storage = workspace();
@@ -2104,13 +2147,23 @@ describe('the C1 event table and the C6 publisher', () => {
       'an-earlier-process',
     ]);
     const target = qualifyAggregateId('run', RUN);
+    const followUp = {
+      followUpId: 'left-queued',
+      content: { text: 'deliver me', from: { kind: 'user' as const } },
+    };
     return Effect.gen(function* () {
       yield* Database.pipe(
-        Effect.flatMap((crashed) => crashed.appendAll([runStart])),
+        Effect.flatMap((crashed) =>
+          crashed.appendAll([
+            runStart,
+            { type: 'followup.queued', aggregateId: target, ...followUp },
+          ]),
+        ),
         Effect.provide(substrate(storage, CRASHED)),
       );
       yield* Effect.gen(function* () {
         const restarted = yield* Database;
+        const events = yield* SessionEvents;
         expect(yield* restarted.claimOwner(target)).toEqual({
           ownerId: CRASHED,
           liveness: 'dead',
@@ -2119,13 +2172,23 @@ describe('the C1 event table and the C6 publisher', () => {
         expect((yield* Effect.flip(restarted.appendAll([waiting])))._tag).toBe(
           'DatabaseNotOwner',
         );
-        yield* restarted.acquireClaims([target]);
+        expect(events.pendingFollowUps(target)).toEqual([]);
+        yield* (yield* RunLedger).acquire(RUN);
         expect((yield* restarted.aggregateState([target]))[0]?.ownerId).toBe(
           SELF,
         );
+        // The claim that moved here seeds the input the crash left queued.
+        expect(events.pendingFollowUps(target)).toEqual([followUp]);
         // The resumed run appends onto the rows the crash left behind.
-        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(2);
-      }).pipe(Effect.provide(substrate(storage)));
+        expect((yield* restarted.appendAll([waiting]))[0]?.commit).toBe(3);
+      }).pipe(
+        Effect.provide(
+          runLedgerLayer.pipe(
+            Layer.provideMerge(sessionEventsLayer),
+            Layer.provideMerge(substrate(storage)),
+          ),
+        ),
+      );
     });
   });
 
@@ -2295,16 +2358,17 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (phase: string): RunLedgerDraft => ({
+  const snapshot = (
+    phase: 'model.ready' | 'results.ready',
+  ): RunLedgerDraft => ({
     type: 'flow.snapshot',
     aggregateId: AGGREGATE,
     payload: {
       family: 'toolUse',
       runtime: {
-        phase: phase === 'round.ready' ? 'round.ready' : 'results.ready',
+        phase,
         round: 0,
         turn: 0,
-        continuationIndex: 0,
         modelId: 'gpt-test',
         modelCompatibilityKey: null,
         lastError: null,
@@ -2405,7 +2469,7 @@ describe('RunLedger', () => {
             ],
           },
         },
-        snapshot('round.ready'),
+        snapshot('model.ready'),
       ]);
       state = yield* run.appendBatch(RUN, state, [
         {

@@ -260,13 +260,14 @@ export function recordWorkflowCallAttempt(
 }
 
 /**
- * Journal a user's retry of a live child: the mark for the attempt that
- * replaces it, naming the child it supersedes. The mark the retried child's
- * own launch wrote is the attempt it ran as, so the replacement is the next
- * one. Written before the engine asks for that replacement, so the recovery
- * probe advances past a child that had already accepted a turn — the one
- * thing no other fact may do — and a host that dies in between resumes on the
- * same authorization rather than stranding the call.
+ * Journal a user's retry of a live child: a mark at the retried child's own
+ * attempt, naming it. The mark stays where that child's launch left it, so
+ * the replacement's probe reads the next id as the free launch slot it is;
+ * raising it here would make that id read as a launched attempt whose child
+ * is gone, which the probe refuses. Written before the engine asks for the
+ * replacement, so the probe advances past a child that had already accepted
+ * a turn — the one thing no other fact may do — and a host that dies in
+ * between resumes on the same authorization rather than stranding the call.
  */
 function recordWorkflowCallSupersession(
   session: SessionHandle,
@@ -280,7 +281,7 @@ function recordWorkflowCallSupersession(
         session,
         checkpointId,
         key,
-        (mark.attempt ?? 0) + 1,
+        mark.attempt ?? 0,
         supersededRunId,
       ),
     ),
@@ -310,12 +311,19 @@ export function runPersistedWorkflowScript<R = never>(
     } = options;
     const target = checkpointAggregate(checkpointId);
     // Existence alone decides the claim step; nothing is derived from this
-    // read. An aggregate that exists has its claim taken over, one that does
-    // not is claimed by the script row the run body commits — and a process
-    // that creates it in this gap owns it, so that commit is refused rather
-    // than written behind its back.
+    // read. An aggregate that exists is held here, its claim taken over from
+    // a dead owner; one that does not is claimed by the script row the run
+    // body commits — and a process that creates it in this gap owns it, so
+    // that commit is refused rather than written behind its back.
     const exists =
       (yield* readWorkflowScriptCheckpoint(session, checkpointId)) !== null;
+    // The claim a first journal took with its script row is held from here
+    // and handed back with the rest, when that row committed at all.
+    const releaseCreated = Effect.gen(function* () {
+      if ((yield* readWorkflowScriptCheckpoint(session, checkpointId)) === null)
+        return;
+      yield* Effect.flatten(session.acquireClaims(target, { ends: true }));
+    });
 
     // The process that first journals into a checkpoint claims its aggregate
     // (C5); a relaunch from another process takes the claim over after proving
@@ -326,7 +334,9 @@ export function runPersistedWorkflowScript<R = never>(
     // finished workflow leaves the journal free for the next process to resume
     // instead of holding it until this one exits.
     return yield* Effect.acquireUseRelease(
-      exists ? Effect.asVoid(session.acquireClaims(target)) : Effect.void,
+      exists
+        ? session.acquireClaims(target, { ends: true })
+        : Effect.succeed(releaseCreated),
       () =>
         Effect.gen(function* () {
           // The journal is read under the claim: a process that finished this
@@ -454,22 +464,19 @@ export function runPersistedWorkflowScript<R = never>(
                 ),
           });
         }),
-      // A release that fails leaves the claim standing: the next process reads
-      // it as a live owner and refuses, so the invocation fails with it. The
-      // journal is already durable, so the caller loses no work by hearing
-      // that the checkpoint is still owned.
-      () =>
-        session
-          .releaseClaims(target)
-          .pipe(
-            Effect.mapError(
-              (cause) =>
-                new Error(
-                  `Workflow checkpoint ${checkpointId} claim was not released.`,
-                  { cause },
-                ),
-            ),
+      // The hold's release: the claim goes once no other holder of it is
+      // left. One that fails leaves the claim standing, and says so; the next
+      // process reads it as a live owner until it proves this one dead.
+      (release) =>
+        release.pipe(
+          Effect.mapError(
+            (cause) =>
+              new Error(
+                `Workflow checkpoint ${checkpointId} claim was not released.`,
+                { cause },
+              ),
           ),
+        ),
     );
   }).pipe(withPerKeyLane(checkpointLanes, options.checkpointId));
 }

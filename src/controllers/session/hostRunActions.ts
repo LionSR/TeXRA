@@ -1,5 +1,6 @@
 /** Host-neutral relaunch and retry actions shared by extension and desktop. */
 import {
+  Cause,
   Data,
   Deferred,
   Effect,
@@ -11,21 +12,21 @@ import {
 
 import { presentFollowUpResult, submitFollowUp } from '@agent/followUp';
 import { getRunRecords } from '@agent/storage';
-import type { RunRequest } from '@agent/core/state/runRequests';
+import {
+  validateRunRequest,
+  type RunRequest,
+  type ValidatedRunRequest,
+} from '@agent/core/state/runRequests';
 import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { trackTerminalResultPresentation } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
 import { withLogChannel } from '@logger/effectLog';
 import type { ApiProvider } from '@model/apiProviders';
-import {
-  API_PROVIDERS,
-  lookupApiKey,
-  hasUsableApiKey,
-  isApiProvider,
-} from '@model/apiProviders';
+import { lookupApiKey, hasUsableApiKey } from '@model/apiProviders';
 import type { ModelHostFactUnreadable } from '@model/computeModelOptions';
 import { getRuntimeModelDirectFallback } from '@model/copilotRouting';
 import type { StateReadFailed } from '@platform/interfaces';
@@ -39,13 +40,13 @@ import {
   AgentCategory,
   agentKey,
   agentName,
-  ExhaustionReasonSchema,
   isPlainAgentIdentity,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
 import type { HostRequest } from '@shared/session/hostRequest';
 import {
+  isRequestRefusal,
   Rejected,
   Unavailable,
   type RequestRefusal,
@@ -90,32 +91,20 @@ export interface WorkflowFileOperationRequest {
 }
 
 /**
- * The host's launcher could not start the run. `runAgent` and the desktop's
- * launch program still fail with a bare `Error`, so each host lifts that one
- * channel into this tag where it binds the port, and a refusal the launcher
- * already worded travels as the refusal it is. `cause` is exactly what the
- * launch failed with, so a host that classifies a failure still reads the
- * launch's own error rather than this wrapper.
- *
- * {@link HostRunActionPorts.runAgentRequest} settles only when the launched
- * run itself settles, so the copilot fallback below races it against the
- * launcher's own start callback rather than awaiting it; a launch that faults
- * before that callback reaches the waiter as this failure.
+ * The host's launcher could not start the run: it fails with a bare `Error`,
+ * lifted here with that error as `cause`. {@link HostRunActionPorts.runValidated}
+ * settles only with the run itself, so the copilot fallback races it against
+ * the launcher's start callback; a launch that faults first reaches the
+ * waiter as this failure.
  */
-export class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
+class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
-/**
- * The run's saved setup could not be read: the database would not answer, or
- * it refused the committed `run.record` row. The read is named here and
- * carries its own failure as `cause`, so the host that classifies it reads
- * the record read's typed error rather than this wrapper.
- */
-export class RunConfigUnreadable extends Data.TaggedError(
-  'RunConfigUnreadable',
-)<{
+/** The run's saved setup could not be read: the database would not answer,
+ *  or it refused the committed `run.record` row (`cause`). */
+class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly runId: RunId;
   readonly message: string;
   readonly cause: DatabaseReadFailed;
@@ -124,23 +113,22 @@ export class RunConfigUnreadable extends Data.TaggedError(
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /**
-   * Launch or resume a run; the host's own launcher reaches `runAgent`. The
-   * Effect settles with the launched run itself — a caller that wants only
-   * the launch acknowledged races it against the `onRun` gate instead of
-   * awaiting it. A request the launcher refuses before it starts travels as
-   * the refusal it was worded with; every other launch failure is
-   * {@link RunLaunchFailed}, which carries the launch's own error as `cause`.
+   * Launch or resume a validated run; the host's own launcher reaches
+   * `runAgent`. The Effect settles with the launched run itself — a caller
+   * that wants only the launch acknowledged races it against the `onRun`
+   * gate instead of awaiting it. It fails with the launcher's own error; the
+   * actions below name that channel once.
    */
-  runAgentRequest(
-    request: RunRequest,
+  runValidated(
+    request: ValidatedRunRequest,
     options?: {
       preferHelperModel?: boolean;
       /** This launch replaces a quota-exhausted retry the user answered
        *  with their own API key. */
       ownApiKeyFallback?: boolean;
-      onRun?: () => Effect.Effect<void>;
+      onRun?: (runId: RunId) => Effect.Effect<void>;
     },
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
+  ): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed
@@ -151,7 +139,7 @@ export interface HostRunActionPorts {
    * closes the prompt without entering a key is not a failure.
    */
   promptForApiKey(
-    provider?: ApiProvider,
+    provider: ApiProvider,
   ): Effect.Effect<void, ApiKeyPromptFailed>;
   /** The notification surface, shared with {@link MessageHost}: a host that
    *  could not present fails with `NotificationFailed`, and a user who
@@ -245,6 +233,34 @@ export const createHostRunActions = (
     const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
+
+    /** Validate a request an action built, then launch it: one that does
+     *  not validate is refused before anything starts, a refusal the
+     *  launcher worded travels as itself, anything else is RunLaunchFailed. */
+    const runAgentRequest = (
+      request: RunRequest,
+      options?: Parameters<HostRunActionPorts['runValidated']>[1],
+    ): Effect.Effect<void, RequestRefusal | RunLaunchFailed> => {
+      const validated = validateRunRequest(request);
+      if (!validated.valid) {
+        return Effect.logError(validated.message).pipe(
+          Effect.annotateLogs({ data: validated.issue }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            Effect.fail(new Rejected({ reason: validated.message })),
+          ),
+        );
+      }
+      return ports
+        .runValidated(validated.request, options)
+        .pipe(
+          Effect.mapError((cause) =>
+            isRequestRefusal(cause)
+              ? cause
+              : new RunLaunchFailed({ message: toErrorMessage(cause), cause }),
+          ),
+        );
+    };
 
     const getOutputFiles = (runId: RunId) => {
       const run = session.runView(runId);
@@ -376,7 +392,6 @@ export const createHostRunActions = (
         );
 
     const apiKeyRetry = new ProgressApiKeyRetryController({
-      providers: API_PROVIDERS,
       readKey: (provider) => lookupApiKey(secrets, provider),
       hasUsableKey: (provider) => hasUsableApiKey(secrets, provider),
       // A host that could not ask returns the port's `ApiKeyPromptFailed`.
@@ -406,14 +421,6 @@ export const createHostRunActions = (
       },
     });
 
-    /** The wire carries the reason as text; an unknown one is no reason. */
-    const exhaustionReasonOf = (
-      request: Extract<HostRequest, { kind: 'useOwnApiKey' }>,
-    ) => {
-      const parsed = ExhaustionReasonSchema.safeParse(request.exhaustionReason);
-      return parsed.success ? parsed.data : undefined;
-    };
-
     /** The Copilot subscription's fallback: a replacement run on the user's
      *  own key for the model Copilot served, then the pending retry is
      *  cancelled in its favor. */
@@ -431,7 +438,6 @@ export const createHostRunActions = (
           );
           return;
         }
-        const exhaustionReason = exhaustionReasonOf(request);
         let fallback = getRuntimeModelDirectFallback(
           request.model,
           yield* getUseOpenRouter(session.roots),
@@ -446,10 +452,10 @@ export const createHostRunActions = (
         // OpenRouter preference while that prompt is open. Revalidate both the
         // exact retry identity and the effective credential owner after each
         // prompt so an old action cannot launch or alter a replacement request.
-        let prepared = yield* apiKeyRetry.ensureOwnApiKey({
-          provider: fallback.provider,
-          exhaustionReason,
-        });
+        let prepared = yield* apiKeyRetry.ensureOwnApiKey(
+          fallback.provider,
+          false,
+        );
         if (!prepared || !isRetryPending(runId, requestId)) return;
         const currentFallback = getRuntimeModelDirectFallback(
           request.model,
@@ -461,10 +467,10 @@ export const createHostRunActions = (
         }
         if (currentFallback.provider !== fallback.provider) {
           fallback = currentFallback;
-          prepared = yield* apiKeyRetry.ensureOwnApiKey({
-            provider: fallback.provider,
-            exhaustionReason,
-          });
+          prepared = yield* apiKeyRetry.ensureOwnApiKey(
+            fallback.provider,
+            false,
+          );
           if (!prepared || !isRetryPending(runId, requestId)) return;
           const finalFallback = getRuntimeModelDirectFallback(
             request.model,
@@ -497,16 +503,45 @@ export const createHostRunActions = (
           // waiter as the fiber's failure rather than a lost second resolver.
           return Effect.gen(function* () {
             const runStarted = yield* Deferred.make<void>();
+            // A failure after start has no waiter: warn, and present it
+            // unless the run's terminal result already did. The tracker
+            // opens at start, inside the fiber whose exit disposes it.
+            let terminalResult:
+              ReturnType<typeof trackTerminalResultPresentation> | undefined;
             const requestFiber = yield* Effect.forkDetach(
-              ports.runAgentRequest(
+              runAgentRequest(
                 { config: { ...config, model } },
                 {
                   ownApiKeyFallback: true,
-                  onRun: () =>
+                  onRun: (launchedRunId) =>
                     Effect.sync(() => {
+                      terminalResult = trackTerminalResultPresentation(
+                        session,
+                        (event) => event.runId === launchedRunId,
+                      );
                       Deferred.doneUnsafe(runStarted, Effect.void);
                     }),
                 },
+              ).pipe(
+                Effect.onExit((exit) => {
+                  const tracker = terminalResult;
+                  if (tracker === undefined) return Effect.void;
+                  return Effect.gen(function* () {
+                    if (Exit.isSuccess(exit)) return;
+                    if (Cause.hasInterruptsOnly(exit.cause)) return;
+                    const message = toErrorMessage(Cause.squash(exit.cause));
+                    yield* Effect.logWarning(
+                      `Own-key replacement of run ${runId} failed: ${message}`,
+                    );
+                    yield* tracker.reportUnhandled(() =>
+                      ports.showWarning(`Your own-key run failed: ${message}`),
+                    ) ?? Effect.void;
+                  }).pipe(
+                    Effect.ignore({ log: 'Warn' }),
+                    withLogChannel(CHANNEL),
+                    Effect.ensuring(Effect.sync(tracker.dispose)),
+                  );
+                }),
               ),
             );
             return yield* Effect.raceFirst(
@@ -549,7 +584,7 @@ export const createHostRunActions = (
         const deliver = Effect.gen(function* () {
           const result = yield* submitFollowUp(
             runId,
-            { text },
+            { text, from: { kind: 'user' } },
             { session },
           ).pipe(
             Effect.catch((error) =>
@@ -593,11 +628,11 @@ export const createHostRunActions = (
           yield* (yield* AgentResume).tryResumeRun(runId);
           return;
         }
-        yield* ports.runAgentRequest({ config, runId });
+        yield* runAgentRequest({ config, runId });
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');
-        yield* ports.runAgentRequest({ config });
+        yield* runAgentRequest({ config });
       }),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
@@ -640,25 +675,19 @@ export const createHostRunActions = (
         } else if (plan.kind === 'info') {
           yield* ports.showInfo(plan.message);
         } else {
-          yield* ports.runAgentRequest(plan.request, {
+          yield* runAgentRequest(plan.request, {
             preferHelperModel: true,
           });
         }
       }),
       useOwnApiKey(request) {
-        if (request.exhaustionReason === 'copilot-subscription') {
-          return copilotFallback(request);
-        }
-        const provider =
-          request.provider != null && isApiProvider(request.provider)
-            ? request.provider
-            : undefined;
+        const offer = request.credentialSwitch;
+        if (offer.kind === 'copilot-fallback') return copilotFallback(request);
         return apiKeyRetry.useOwnApiKey({
           stream: request.runId,
           requestId: request.requestId,
-          model: request.model ?? undefined,
-          provider,
-          exhaustionReason: exhaustionReasonOf(request),
+          provider: offer.provider,
+          requireNewKey: offer.kind === 'new-key',
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {

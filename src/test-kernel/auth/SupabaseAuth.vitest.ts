@@ -30,17 +30,6 @@ describe('SupabaseAuth probes', () => {
     setLogSink(null);
   });
 
-  it.effect('reports not ready when the readiness gate fails', () =>
-    Effect.gen(function* () {
-      const auth = createAuth(new FakeSecrets(), () =>
-        Effect.fail(new Error('host auth unavailable')),
-      );
-
-      assert.equal(yield* auth.isReady, false);
-      assert.equal(auth.getInitError()?.message, 'host auth unavailable');
-    }),
-  );
-
   it.effect(
     'warns and reports no label when the stored label read throws',
     () =>

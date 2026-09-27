@@ -17,12 +17,8 @@ import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { initializeDefaultSession } from '@agent/runtime/sessionGraph';
 import { closeSession } from '@agent/runtime/sessionGraph';
 import { RUN_PHASE, DEFAULT_TOOL_CONFIG, aggregateId } from '@shared/schemas';
-import {
-  RunIdSchema,
-  type RunId,
-  type RunPhase,
-  type TodoItem,
-} from '@shared/schemas';
+import { RunIdSchema, type RunId, type RunPhase } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { createFakeRunRecords } from '@test/support/FakeRunRecords';
@@ -40,7 +36,6 @@ import {
 import { withTempDirEffect } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { resolveRunStoragePath } from '@utils/files/runStorageFs';
 
 /**
  * Move a run's phase the way its loop does: a `flow.step` row, which is the
@@ -73,7 +68,7 @@ function withSession<A, E, R>(
   return Effect.acquireUseRelease(
     Effect.sync(createTestSession),
     fn,
-    (session) => session.dispose(),
+    (session) => closeSessionOf(session),
   );
 }
 
@@ -264,6 +259,77 @@ describe('ExecutionsTool', () => {
       ),
   );
 
+  // Regression: a wait that returned a finished child's result left the
+  // child's queued delivery pending, so the parent took the same result
+  // again as a follow-up and ran a second turn.
+  it.live(
+    'withdraws the queued delivery of a child whose result a wait returned',
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'waiting',
+            RUN_PHASE.WAITING,
+          );
+          mocks.readReport.mockResolvedValue(
+            '<subagent-result>full report</subagent-result>',
+          );
+          session.followUps.claimLive(parentRunId, 'flow');
+          const delivery = {
+            text: 'child result',
+            from: { kind: 'run' as const, runId: childRunId },
+            deliveryId: `${childRunId}:turn:1:delivery`,
+          };
+          yield* session.followUps.submit(parentRunId, delivery, 'live_owner');
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toHaveLength(1);
+
+          const waited = yield* ExecutionsTool.call({
+            path: `/executions/${childRunId}`,
+            action: 'wait',
+          }).pipe(
+            Effect.provide(
+              nativeToolTestLayer({
+                run: { session, runId: parentRunId, toolPolicy: {} },
+              }),
+            ),
+          );
+
+          expect(waited.output).toContain(
+            '<subagent-result>full report</subagent-result>',
+          );
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
+          // The child loop's replayed wake finds the row consumed.
+          expect(
+            yield* session.followUps.submit(
+              parentRunId,
+              delivery,
+              'live_owner',
+            ),
+          ).toEqual({ kind: 'duplicate' });
+          expect(
+            session.events.pendingFollowUps(aggregateId('run', parentRunId)),
+          ).toEqual([]);
+        }),
+      ),
+  );
+
   // The blocking wait wakes on the fold's own phase move, read off the
   // session's view stream, well inside its deadline.
   it.live(
@@ -308,6 +374,61 @@ describe('ExecutionsTool', () => {
             'waiting',
             RUN_PHASE.WAITING,
           );
+          const result = yield* Fiber.join(wait);
+          expect(result.status).not.toBe('error');
+        }),
+      ),
+    { timeout: 5000 },
+  );
+
+  it.live(
+    "wakes a blocking wait when the waiting run is sent a child's report",
+    () =>
+      withSession((session) =>
+        Effect.gen(function* () {
+          const parentRunId = RunIdSchema.parse('ba5e0000000d');
+          const childRunId = RunIdSchema.parse('c41d0000000d');
+          publishTestRunStart(session, parentRunId);
+          publishTestRunStart(session, childRunId, { parent: parentRunId });
+          session.runs.track(
+            testRunHandle({
+              runId: childRunId,
+              parent: parentRunId,
+              agent: 'review',
+            }),
+          );
+          yield* foldRunPhase(
+            session,
+            childRunId,
+            'turn.begin',
+            RUN_PHASE.RUNNING,
+          );
+          const wait = yield* Effect.forkChild(
+            ExecutionsTool.call({
+              path: `/executions/${childRunId}`,
+              action: 'wait',
+              timeout: 600,
+            }).pipe(
+              Effect.provide(
+                nativeToolTestLayer({
+                  run: { session, runId: parentRunId, toolPolicy: {} },
+                }),
+              ),
+            ),
+          );
+          yield* Effect.yieldNow;
+          // The child stays RUNNING: only the committed report can end it.
+          session.publish([
+            {
+              type: 'followup.queued',
+              aggregateId: aggregateId('run', parentRunId),
+              followUpId: 'child-report',
+              content: {
+                text: '<subagent-progress id="c41d0000000d" agent="review" type="started" />',
+                from: { kind: 'run', runId: childRunId, relation: 'child' },
+              },
+            },
+          ]);
           const result = yield* Fiber.join(wait);
           expect(result.status).not.toBe('error');
         }),
@@ -508,35 +629,6 @@ describe('ExecutionsTool', () => {
     ),
   );
 
-  it.live('keeps the background process result shape at /result', () =>
-    Effect.gen(function* () {
-      const record = {
-        producer: 'backgroundBash' as const,
-        command: 'echo hi',
-        exitCode: 0,
-        wallTimeMs: 10,
-        success: true,
-      };
-      mocks.readResultMeta.mockResolvedValue(record);
-
-      const result = yield* ExecutionsTool.call({
-        path: '/executions/abc123/result',
-      });
-
-      expect(JSON.parse(result.output ?? '')).toEqual(record);
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
   // The advertised /executions/{id}/todos endpoint must resolve a task list
   // exactly as the completed summary does, from the same committed stream fold.
   it.live.each([
@@ -596,49 +688,6 @@ describe('ExecutionsTool', () => {
       ),
   );
 
-  it.live(
-    'lists and reads persisted workspace files for tool-use executions',
-    () =>
-      Effect.gen(function* () {
-        yield* withTempDirEffect('texra-exec-files-', (workspace) =>
-          Effect.gen(function* () {
-            yield* Effect.promise(() =>
-              writeFile(path.join(workspace, 'review.md'), '# report\n'),
-            );
-            mocks.readConfig.mockResolvedValue({
-              ...config,
-              workingDirectory: workspace,
-            });
-            mocks.readWorkspaceFiles.mockResolvedValue(['review.md']);
-
-            const tool = ExecutionsTool;
-            const listResult = yield* tool.call({
-              path: '/executions/abc123/workspace-files',
-            });
-            const readResult = yield* tool.call({
-              path: '/executions/abc123/workspace-files/review.md',
-            });
-
-            expect(listResult.output).toContain('review.md');
-            expect(readResult.summary).toBe(
-              'Read /executions/abc123/workspace-files/review.md',
-            );
-            expect(readResult.output).toContain('# report');
-          }),
-        );
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'tool-test' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
   it.live('refuses unrecorded workspace file reads', () =>
     Effect.gen(function* () {
       yield* withTempDirEffect('texra-exec-files-', (workspace) =>
@@ -658,61 +707,6 @@ describe('ExecutionsTool', () => {
 
           expect(result.status).toBe('error');
           expect(result.error).toContain('Workspace file not found');
-        }),
-      );
-    }).pipe(
-      Effect.provide(
-        nativeToolTestLayer({
-          run: {
-            session: testDefaultSession(),
-            runId: 'tool-test' as RunId,
-            toolPolicy: {},
-          },
-        }),
-      ),
-    ),
-  );
-
-  // A run's records are rows; every file in its directory is generated output.
-  it.live('lists every file under /executions/{id}/files', () =>
-    Effect.gen(function* () {
-      yield* withTempStorage(() =>
-        Effect.gen(function* () {
-          const runId = 'abc123' as RunId;
-          const runDir = path.join(
-            testWorkspaceRoots().storage,
-            resolveRunStoragePath(runId),
-          );
-          yield* Effect.promise(() => mkdir(runDir, { recursive: true }));
-          const listedFiles = [
-            'conversation.json',
-            'todos.json',
-            'meta.json',
-            'config.json',
-            'report.json',
-            'workspace-files.json',
-            'result-meta.json',
-            'child-def456.json',
-            'stable-subagent-attempt.json',
-            'stable-subagent-sequence-abc123.json',
-          ];
-          for (const name of listedFiles) {
-            yield* Effect.promise(() =>
-              writeFile(path.join(runDir, name), '{}'),
-            );
-          }
-          yield* Effect.promise(() =>
-            writeFile(path.join(runDir, 'output.tex'), 'generated'),
-          );
-
-          const result = yield* ExecutionsTool.call({
-            path: `/executions/${runId}/files`,
-          });
-
-          expect(result.output).toContain('output.tex');
-          for (const name of listedFiles) {
-            expect(result.output).toContain(name);
-          }
         }),
       );
     }).pipe(

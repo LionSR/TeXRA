@@ -9,10 +9,16 @@ export const proposalRequestPanelStyles: CSSResult = css`
     --request-accent: var(--wa-color-text-link);
   }
 
-  /* The pickers open floating menus a scrolling body would clip. */
+  /* The pickers open floating menus a scrolling body would clip, so the
+     whole card scrolls in the dock instead; the rule keeps what scrolls
+     under the sticky action row from running into it. */
   .request-card__details {
     max-height: none;
     overflow-y: visible;
+  }
+
+  .request-card__actions {
+    border-block-start: var(--border-thin) solid var(--wa-color-surface-border);
   }
 
   .workflow-proposal__pickers {
@@ -69,17 +75,9 @@ export const proposalRequestPanelStyles: CSSResult = css`
     flex-shrink: 0;
   }
 
-  .proposal-card__phase-agents {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--color-text-secondary);
-  }
-
   .proposal-card__phase-calls {
     flex: 0 0 auto;
+    margin-inline-start: auto;
     font-variant-numeric: tabular-nums;
     color: var(--color-text-secondary);
   }

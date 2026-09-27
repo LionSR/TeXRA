@@ -1,11 +1,9 @@
 /**
  * The agent flow state a `flow.snapshot` row restores: the run-state and
  * workspace snapshots, the user-variable channels, the model compatibility
- * key, and the message-free core of each flow family. Host-neutral so the run
- * ledger (`runLedgerEvent.ts`) composes them without reaching the agent
- * layer; the agent modules import them back, and the two family modules
- * `.extend()` their core with the one provider-message field, which is the
- * only field of either family state that names a provider SDK type.
+ * key, and the message-free core of the tool-use flow. Host-neutral so the
+ * run ledger (`runLedgerEvent.ts`) composes them without reaching the agent
+ * layer; the agent modules import them back.
  */
 import { z } from 'zod';
 
@@ -225,15 +223,6 @@ const UserVarsSchema = z.object({
   MEDIA_FILE: z.string().nullable(),
   /** Resolved output file list; absent when no usable outputs are configured. */
   OUTPUT_FILES: z.array(z.string()).optional(),
-  /**
-   * Retired: the codex / claude_code guidance now lives in those tools'
-   * descriptions and nothing writes these. Kept so the stored session format
-   * (pinned by sessionEventFormat.vitest.ts) does not move. They stay in the
-   * runtime token list, so a custom template that still names them renders
-   * an empty string.
-   */
-  CODEX_GUIDANCE: z.string().optional(),
-  CLAUDE_CODE_GUIDANCE: z.string().optional(),
   /** Effective round count; workflow agents only. */
   ROUNDS: z.number().optional(),
 
@@ -283,7 +272,7 @@ const MODEL_COMPATIBILITY_KEYS = [
 export type ModelCompatibilityKey = (typeof MODEL_COMPATIBILITY_KEYS)[number];
 export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
 
-// -------------------------------------------------------- family cores
+// ------------------------------------------------------------ flow core
 
 const StateSlicesSchema = z.object({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
@@ -291,13 +280,13 @@ const StateSlicesSchema = z.object({
 });
 
 /**
- * The message-free core of one tool-use flow's shared state: every field of
- * `ToolUseRunSharedSchema` except `messages`, which the agent module adds.
+ * The message-free state of a run's flow: the messages are folded from the
+ * run's `model.message` rows.
  *
- * Default `z.object` semantics by decision (#10641), matching reflection's
- * core: unknown top-level keys in a persisted record are accepted but
- * stripped at this parse boundary, and the resumed flow's first persisted
- * step then rewrites the stripped record. Deliberately not `z.strictObject`
+ * Default `z.object` semantics by decision (#10641): unknown top-level keys
+ * in a persisted record are accepted but stripped at this parse boundary,
+ * and the resumed flow's first persisted step then rewrites the stripped
+ * record. Deliberately not `z.strictObject`
  * — a record written by a newer build carrying keys this build does not know
  * must still resume — and no `.catch`: malformed known fields must keep
  * failing loudly.
@@ -318,42 +307,3 @@ export const ToolUseSnapshotStateSchema = z.object({
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });
-
-/**
- * The message-free core of one reflection flow's shared state: the round
- * budget, the workspace (top-level: reflection has no `stateSlices` and no
- * `userChannels`) and the compile-rejection facts no row carries. The round
- * is `runtime.round`, the output location is derived from it, and whether
- * the round's response ended the turn is derived from the folded last turn.
- */
-export const ReflectionSnapshotStateSchema = z.object({
-  /** The round budget. No row carries it; the CLI's continuability read
-   *  compares `runtime.round` against it. */
-  totalRounds: z.int().nonnegative(),
-
-  workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-
-  /** One-shot compile-failure feedback injected into the next round prompt. */
-  compileFailureContext: z.string().optional(),
-
-  /** Rejected compile result awaiting an explicit successful compile. */
-  unresolvedCompileRejection: z.boolean().optional(),
-});
-
-/**
- * Whether a reflection run holds a compile rejection it can no longer clear:
- * the last round's compile was rejected and no round is left to fix it, so
- * continuing only replays the same rejection. The loop fails its outcome on
- * it and the CLI refuses to offer such a snapshot as continuable.
- */
-export function isTerminalCompileRejection(
-  state: Pick<
-    z.output<typeof ReflectionSnapshotStateSchema>,
-    'unresolvedCompileRejection' | 'totalRounds'
-  >,
-  round: number,
-): boolean {
-  return (
-    state.unresolvedCompileRejection === true && round + 1 >= state.totalRounds
-  );
-}

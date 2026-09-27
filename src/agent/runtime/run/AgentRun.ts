@@ -29,6 +29,7 @@ import type { LanguageModel } from '@platform/languageModel';
 import {
   AgentCategory,
   DeclinableUsageRouteSchema,
+  MESSAGE_TYPES,
   type AgentDelegationScope,
   type DeclinableUsageRoute,
   type JsonValue,
@@ -37,7 +38,6 @@ import {
   type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunState } from '@shared/session/runStateFold';
 import type {
   CompositionKey,
   Compositions,
@@ -46,7 +46,6 @@ import type {
 import { buildTerminalTool } from '@tools/structuredOutput';
 import type { ToolRegistry } from '@tools/toolTable';
 import { processToolHost } from '@utils/config/platformSettings';
-import { ensureError } from '@utils/errors/errorMessage';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
@@ -85,18 +84,15 @@ export interface ToolPolicy {
 interface RunCallbacks {
   /** Fires on meaningful progress: todo changes, tool call milestones. */
   readonly onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Current folded state at an idle turn boundary, after child delivery. */
-  readonly onIdle?: (state: RunState) => void;
-  /** Fires once the run's model changed and the cell holds the new binding. */
-  readonly onModelChanged: (model: string) => void;
+  /** An idle turn boundary, after child delivery. */
+  readonly onIdle?: () => void;
 }
 
 export interface AgentRunShape {
   readonly runId: RunId;
   readonly session: SessionHandle;
   readonly config: AgentConfig;
-  /** The setting with the run's resolved tool list; the loop of the run's
-   *  family narrows it. */
+  /** The setting with the run's resolved tool list. */
   readonly setting: AgentSetting;
   readonly prompt: AgentPrompt;
   readonly logger: AgentTrace;
@@ -180,6 +176,18 @@ interface AgentRunLayerInput {
  * L0 provided), never from a file; a fresh run binds the launch's model
  * under the route the launch context already resolved.
  */
+/**
+ * A run program's result, stamped with the hash of the composition the run
+ * pinned, for a host that reports what the run ran with.
+ */
+export const withCompositionHash = <A extends object, E, R>(
+  program: Effect.Effect<A, E, R>,
+): Effect.Effect<A & { readonly compositionHash: string }, E, R | AgentRun> =>
+  Effect.zipWith(program, Effect.service(AgentRun), (result, run) => ({
+    ...result,
+    compositionHash: run.composition.key.hash,
+  }));
+
 export const agentRunLayer = (
   ctx: AgentLaunchContext,
   input: AgentRunLayerInput,
@@ -235,7 +243,7 @@ export const agentRunLayer = (
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : input.tools,
-        // The reflection family injects none: memory and plan are tool-use
+        // A workflow run injects none: memory and plan are tool-use
         // infrastructure.
         injectTools: setting.agentCategory === AgentCategory.ToolUse,
         stores: ctx.stores,
@@ -259,14 +267,28 @@ export const agentRunLayer = (
       // removed, a dependency gone) is named in the run's transcript; a call
       // the model still makes to it settles as `tool_unavailable`.
       const recorded =
-        snapshot?.payload.family === 'toolUse'
-          ? {
+        snapshot === null
+          ? null
+          : {
               offeredTools: snapshot.payload.state.offeredTools,
               toolsetHash: snapshot.payload.state.toolsetHash,
-            }
-          : null;
-      const toolset = recorded ?? offeredToolset(resolved.definitions);
-      let { definitions, registry: tools } = resolved;
+            };
+      // A workflow agent's rounds offer no tools: a YAML's declared `tools:`
+      // still resolve under the pinned composition, but none is offered, and
+      // a fresh run says so rather than narrowing silently.
+      const workflow = setting.agentCategory === AgentCategory.Workflow;
+      if (workflow && snapshot === null && resolved.definitions.length > 0) {
+        const declared = resolved.definitions.map((d) => d.name).join(', ');
+        logger.warn(
+          `The workflow family advertises no tools under this release, so the tools resolved for this run are not offered to the model: ${declared}. Run the agent in the tool-use family if it needs them.`,
+          { messageType: MESSAGE_TYPES.INTERNAL },
+        );
+      }
+      const offered = workflow
+        ? { definitions: [], registry: new MapToolRegistry(new Map()) }
+        : resolved;
+      const toolset = recorded ?? offeredToolset(offered.definitions);
+      let { definitions, registry: tools } = offered;
       if (recorded !== null) {
         const byName = new Map(definitions.map((d) => [d.name, d]));
         definitions = recorded.offeredTools.flatMap((name) => {

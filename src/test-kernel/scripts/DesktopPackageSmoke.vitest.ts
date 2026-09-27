@@ -1,16 +1,8 @@
-// Node imports
-import { EventEmitter } from 'node:events';
-
 // Third-party imports
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // Local imports - packaged desktop smoke boundaries
 import { buildDesktopSmokeEnvironment } from '../../../scripts/desktop-package-smoke-environment.mjs';
-import {
-  stopChild,
-  waitForExit,
-  waitForTermination,
-} from '../../../scripts/smoke-process-utils.mjs';
 
 describe('packaged desktop smoke environment', () => {
   it('passes only required system variables and isolated TeXRA paths', () => {

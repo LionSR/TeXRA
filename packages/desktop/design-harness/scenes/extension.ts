@@ -192,7 +192,7 @@ function desktopColumn(
 function editorTab(view: SessionView, surfaceRecord: Surface): TemplateResult {
   return html`<div class="h-ext h-ext-wide" id="frame">
     <div class="h-vscode-strip">
-      <span>TeXRA Dashboard</span><span class="active">TeXRA Progress</span>
+      <span>TeXRA Settings</span><span class="active">TeXRA Sessions</span>
     </div>
     <progress-app
       .view=${view}
@@ -222,7 +222,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     const view = fanOutView();
     return desktopColumn(view, surface(view, { kind: 'select', runId: CHILD }));
   },
-  // A run grant in force: the header's read-only chip.
+  // Two run grants on: the header's switches (the ⋯ menu's at 420px).
   'ext-auto-approve': () => {
     const view = fanOutView();
     view.policy.set(CHILD, {

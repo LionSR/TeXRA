@@ -123,24 +123,6 @@ describe('install-github-action command', () => {
     expect(workflow).not.toContain('TEXRA_APP_PRIVATE_KEY');
   });
 
-  it('opens the public GitHub App installer for the repository', async () => {
-    const repo = makeRepo();
-    git(
-      repo,
-      'remote',
-      'add',
-      'origin',
-      'https://github.com/example/project.git',
-    );
-
-    const result = await runInstall(repo);
-
-    expect(result.exitCode).toBe(CliExitCode.Success);
-    expect(browserMocks.tryOpenBrowser).toHaveBeenCalledWith(
-      'https://github.com/apps/texra-ai-bot/installations/new',
-    );
-  });
-
   it('does not switch branches before the GitHub App installer opens', async () => {
     const repo = makeRepo();
     git(

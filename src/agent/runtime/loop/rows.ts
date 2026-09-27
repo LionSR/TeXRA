@@ -12,7 +12,6 @@ import {
   type FlowSnapshotPayload,
   type PendingRetry,
   type PermissionPayload,
-  type RunFamily,
   type RunId,
   type RunLoopPhase,
   type RunOutcome,
@@ -25,44 +24,14 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
-type ToolUseSnapshot = Extract<FlowSnapshotPayload, { family: 'toolUse' }>;
-type ReflectionSnapshot = Extract<
-  FlowSnapshotPayload,
-  { family: 'reflection' }
->;
-export type ToolUseFlowState = ToolUseSnapshot['state'];
-export type ReflectionFlowState = ReflectionSnapshot['state'];
-
-/** The family state a snapshot carries, keyed by its family. */
-type FamilyState =
-  | { readonly family: 'toolUse'; readonly state: ToolUseFlowState }
-  | { readonly family: 'reflection'; readonly state: ReflectionFlowState };
-
-/** The family state of a folded run, or null before its opening. */
-export function familyState(
-  state: RunState,
-  family: 'toolUse',
-): ToolUseFlowState | null;
-export function familyState(
-  state: RunState,
-  family: 'reflection',
-): ReflectionFlowState | null;
-export function familyState(
-  state: RunState,
-  family: RunFamily,
-): ToolUseFlowState | ReflectionFlowState | null {
-  return state.flow?.family === family ? state.flow.state : null;
-}
+export type ToolUseFlowState = FlowSnapshotPayload['state'];
 
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
 }
 
 /** The coordinates a `flow.step` row is stamped with. */
-export type StepCoordinates = Pick<
-  RunState,
-  'family' | 'round' | 'turn' | 'continuationIndex'
->;
+export type StepCoordinates = Pick<RunState, 'family' | 'round' | 'turn'>;
 
 /** A step never lands on an unopened run: the family is the state's. */
 function familyOf(
@@ -87,7 +56,6 @@ export function stepRow(
       step,
       round: state.round,
       turn: state.turn,
-      continuationIndex: state.continuationIndex,
     },
   };
 }
@@ -105,7 +73,6 @@ export function haltedStepRow(
       step: 'halted',
       round: state.round,
       turn: state.turn,
-      continuationIndex: state.continuationIndex,
       outcome,
     },
   };
@@ -128,35 +95,27 @@ export interface SnapshotPatch {
   readonly phase?: RunLoopPhase;
   readonly round?: number;
   readonly turn?: number;
-  readonly continuationIndex?: number;
   readonly runtime?: Partial<
     Pick<
       SnapshotRuntime,
       'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
     >
   >;
-  /** Defaults to the family state the run last wrote. */
-  readonly state?: FamilyState;
+  /** Defaults to the flow state the run last wrote. */
+  readonly state?: ToolUseFlowState;
 }
 
 /**
- * The one `flow.snapshot` constructor, for either family. Coordinates and
- * runtime fields come from the folded state unless the patch moves them; the
- * family state is the one the run last wrote unless the patch rewrites it.
+ * The one `flow.snapshot` constructor. Coordinates and runtime fields come
+ * from the folded state unless the patch moves them; the flow state is the
+ * one the run last wrote unless the patch rewrites it.
  */
 export function snapshotRow(
   runId: RunId,
   state: RunState,
   patch: SnapshotPatch,
 ): RunLedgerDraft {
-  if (
-    state.family !== null &&
-    patch.state !== undefined &&
-    state.family !== patch.state.family
-  ) {
-    throw new Error("A snapshot's family is the run's.");
-  }
-  const flow = patch.state ?? state.flow;
+  const flow = patch.state ?? state.flow?.state ?? null;
   const phase = patch.phase ?? state.phase;
   if (flow === null || phase === null) {
     throw new Error('A flow.snapshot presupposes an opened run.');
@@ -173,7 +132,6 @@ export function snapshotRow(
     phase,
     round: patch.round ?? state.round,
     turn: patch.turn ?? state.turn,
-    continuationIndex: patch.continuationIndex ?? state.continuationIndex,
     modelId,
     modelCompatibilityKey:
       patch.runtime !== undefined && 'modelCompatibilityKey' in patch.runtime
@@ -188,7 +146,7 @@ export function snapshotRow(
   return {
     type: 'flow.snapshot',
     aggregateId: rowAggregate(runId),
-    payload: { ...flow, runtime },
+    payload: { family: 'toolUse', runtime, state: flow },
   };
 }
 

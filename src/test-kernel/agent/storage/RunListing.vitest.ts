@@ -8,7 +8,6 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import * as logger from '@logger/logUtils';
 import { DatabaseReadFailed } from '@shared/session/database';
 import {
   aggregateId,

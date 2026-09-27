@@ -157,7 +157,7 @@ export async function closeTexraApp(launched: LaunchedApp): Promise<void> {
 }
 
 /**
- * Dismiss the shell's first-run startup panel when one is present. Resolves
+ * Dismiss the shell's first-run work-type dialog when one is present. Resolves
  * without acting on profiles that never show it, so callers that only need the
  * launcher can share this step. Pass `required` when the panel is part of what
  * the test asserts, so a missing one fails here instead of silently changing
@@ -168,7 +168,7 @@ export async function dismissStartupPanel(
   options: { required?: boolean } = {},
 ): Promise<void> {
   const waitForDismissButton = page.waitForFunction(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
+    const panel = document.querySelector('wa-dialog.desktop-onboarding');
     const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
@@ -183,14 +183,14 @@ export async function dismissStartupPanel(
   }
 
   await page.evaluate(() => {
-    const panel = document.querySelector('.desktop-startup-panel');
+    const panel = document.querySelector('wa-dialog.desktop-onboarding');
     const btn = [...(panel?.querySelectorAll('wa-button') ?? [])].find(
       (button) => button.textContent?.trim() === 'Skip for now',
     );
     if (btn instanceof HTMLElement) btn.click();
   });
   await page.waitForFunction(
-    () => document.querySelector('.desktop-startup-panel') == null,
+    () => document.querySelector('wa-dialog.desktop-onboarding') == null,
     undefined,
     { timeout: 5000 },
   );
@@ -236,9 +236,10 @@ export async function dismissOnboarding(page: Page): Promise<void> {
 }
 
 export async function showLauncher(launched: LaunchedApp): Promise<void> {
-  await launched.page.evaluate(() => {
-    window.postMessage({ command: 'desktop:showLauncher' }, '*');
-  });
+  await launched.page
+    .locator('.shell-sidebar-primary .shell-sidebar-action')
+    .filter({ hasText: 'New task' })
+    .click();
   await launched.page.waitForFunction(
     () => {
       return (
@@ -253,7 +254,7 @@ export async function showLauncher(launched: LaunchedApp): Promise<void> {
   );
 }
 
-type DesktopWorkbenchKind = 'settings' | 'logs';
+type DesktopWorkbenchKind = 'logs';
 
 export async function openWorkbench(
   launched: LaunchedApp,
@@ -286,7 +287,7 @@ export async function openWorkbench(
 }
 
 /**
- * Route to Settings and activate the tab named `tab` (its wire panel name,
+ * Open the Settings popup and activate the tab named `tab` (its wire panel name,
  * which is also the nav button's `data-panel` value), waiting until that page
  * button reports `data-active="true"` so callers never race the previous
  * tab's render.
@@ -295,7 +296,17 @@ export async function setSettingsTab(
   launched: LaunchedApp,
   tab: string,
 ): Promise<void> {
-  await openWorkbench(launched, 'settings');
+  await launched.page.evaluate(() => {
+    window.postMessage({ command: 'desktop:openSettings' }, '*');
+  });
+  await launched.page.waitForFunction(
+    () =>
+      document.querySelector(
+        'wa-dialog.desktop-settings-overlay settings-app',
+      ) != null,
+    undefined,
+    { timeout: 5000 },
+  );
   await launched.page.evaluate((panel) => {
     window.postMessage({ command: 'setTab', tab: panel }, '*');
   }, tab);

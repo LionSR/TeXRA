@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   boundedUserQuestionPromptLines,
-  isCompactUserQuestionRows,
-  userQuestionChoiceRowsBudget,
-  userQuestionFreeTextControlRows,
-  userQuestionFreeTextOptionRowsBudget,
   userQuestionFreeTextSuggestionLine,
-  userQuestionPromptRowsBudget,
 } from '@cli/chat/tui/modals/UserQuestion';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 

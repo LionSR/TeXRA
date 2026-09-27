@@ -3,7 +3,6 @@ import { defineCommand } from 'citty';
 
 import type { AgentConfigPayload } from '@agent/runtime';
 import { canLaunchTeam, teamPlanHasGaps } from '@common/teams/TeamPlan';
-import type { StateStore } from '@platform/interfaces';
 import { byCategory, AgentCategory } from '@shared/schemas';
 import { filterNotNullish } from '@utils/core';
 
@@ -235,7 +234,7 @@ export const runMultiAgentPreset = Effect.fn('runMultiAgentPreset')(function* (
         const run = yield* executeCliToolUseConfig(config, runContext, {
           session: services.session,
           runtime: services.runtime,
-          lifecycle: services.lifecycle,
+          shutdownScope: services.shutdownScope,
           stopAfterCycle: true,
           recoveryInputIsDurable: stdinInputPath === undefined,
         });

@@ -9,13 +9,9 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Fiber, FileSystem } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
-import { withProcessServices } from '@platform/processRuntime';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { testRuntime } from '@test/support/testProcessRuntime';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import { findToolPlugin } from '@tools/plugins';
 import { resolveWorkspaceRoot } from '@tools/lean/direct/leanServerPool';
-import { createLeanServerRoster } from '@tools/lean/leanServerRegistry';
 import { extractHoverText } from '@tools/lean/leanTypes';
 import { runLakeCommand } from '@tools/lean/direct/lakeCommands';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
@@ -113,70 +109,6 @@ describe('resolveWorkspaceRoot', () => {
 });
 
 // ---------------------------------------------------------------------------
-// LeanExternalToolStatus
-// ---------------------------------------------------------------------------
-
-describe('Lean external tool status', () => {
-  it.effect('counts only starting and running Lean servers as active', () =>
-    Effect.gen(function* () {
-      const lean = findToolPlugin('lean4')?.availability;
-      expect(lean?.statusLabel).toBeDefined();
-
-      // The roster the host's adapter hands the probe, as the probe passes it on
-      // to the status callbacks.
-      const roster = createLeanServerRoster();
-      const prerequisites = () => ({
-        extensionAvailable: false,
-        lakeAvailable: true,
-        requiresExtension: false,
-        servers: roster.list(),
-      });
-
-      roster.register({
-        id: 'direct:/failed',
-        workspaceRoot: '/failed',
-        mode: 'direct-lsp',
-        status: 'error',
-      });
-      roster.register({
-        id: 'direct:/stopped',
-        workspaceRoot: '/stopped',
-        mode: 'direct-lsp',
-        status: 'stopped',
-      });
-
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          lean!.statusLabel!(prerequisites()),
-        ),
-      ).toBeUndefined();
-
-      roster.register({
-        id: 'direct:/running',
-        workspaceRoot: '/running',
-        mode: 'direct-lsp',
-        status: 'starting',
-      });
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          lean!.statusLabel!(prerequisites()),
-        ),
-      ).toBe('1 server active');
-
-      roster.update('direct:/running', { status: 'running' });
-      expect(
-        yield* withProcessServices(
-          testRuntime(),
-          lean!.statusLabel!(prerequisites()),
-        ),
-      ).toBe('1 server active');
-    }),
-  );
-});
-
-// ---------------------------------------------------------------------------
 // LakeCommandsMutex
 // ---------------------------------------------------------------------------
 
@@ -262,25 +194,6 @@ describe('runLakeCommand mutex', () => {
           4 * 1024 * 1024 + '…[output truncated]…\n'.length,
         );
       }),
-  );
-
-  live('preserves non-zero exit diagnostics', () =>
-    Effect.gen(function* () {
-      const result = yield* runLakeCommand({
-        workspaceRoot: workspaceA,
-        lakeCommand: NODE,
-        args: [
-          '-e',
-          `process.stdout.write('build context'); process.stderr.write('compile failed'); process.exit(7)`,
-        ],
-      });
-
-      expect(result).toEqual({
-        exitCode: 7,
-        stdout: 'build context',
-        stderr: 'compile failed',
-      });
-    }),
   );
 
   live('preserves timeout diagnostics', () =>

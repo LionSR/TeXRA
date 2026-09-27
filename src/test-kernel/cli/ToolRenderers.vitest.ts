@@ -2,11 +2,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports - CLI TUI rendering
-import {
-  toolUseDisplayLines,
-  toolUseStyledLines,
-} from '@cli/chat/tui/panes/toolRenderers';
-import { toolDisplaySpanTextProps } from '@cli/chat/tui/panes/ToolUseRow';
+import { toolUseDisplayLines } from '@cli/chat/tui/panes/toolRenderers';
 import { textDisplayWidth } from '@cli/runtime/terminalText';
 
 // Local imports - shared schemas
@@ -74,18 +70,6 @@ describe('CLI tool display lines', () => {
     expect(lines).toContain('  split');
   });
 
-  it('counts wrapped patch rows at the rich terminal width', () => {
-    const entry = toolUse('Edit', {
-      path: 'paper.tex',
-      old_string: 'short\n',
-      new_string: `${'a long replacement '.repeat(8)}\n`,
-    });
-
-    expect(toolUseDisplayLines(entry, { width: 24 }).length).toBeGreaterThan(
-      toolUseDisplayLines(entry).length,
-    );
-  });
-
   it('registers edit patch rendering before the universal fallback', () => {
     const entry = toolUse('Edit', {
       path: 'paper.tex',
@@ -136,20 +120,6 @@ describe('CLI tool display lines', () => {
     expect(lines[1].endsWith('…')).toBe(true);
   });
 
-  it('keeps read_file rows compact instead of printing file contents', () => {
-    const entry = toolUse(
-      'read_file',
-      { path: 'paper.tex' },
-      { outputText: 'Large file contents\nwith many lines' },
-    );
-
-    expect(toolUseDisplayLines(entry)).toMatchInlineSnapshot(`
-      [
-        "● read_file (paper.tex)",
-      ]
-    `);
-  });
-
   it('full transcript prints the output only when the card withholds it', () => {
     // An MCP result section paints the whole output: printing it again under
     // "Full output:" would repeat it (#11968).
@@ -182,9 +152,9 @@ describe('CLI tool display lines', () => {
     expect(editLines).toContain('+We use a ViT.');
 
     // A header painted cut to its width is not the whole output.
-    const summary = `Reported issue #1: ${'long title '.repeat(20)}`;
+    const summary = `Loogle matches: ${'long title '.repeat(20)}`;
     const report = toolUse(
-      'report_review_issue',
+      'lean_loogle',
       {},
       { headerSummary: summary, outputText: summary },
     );

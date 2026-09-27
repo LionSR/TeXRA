@@ -1,14 +1,8 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { Writable } from 'node:stream';
-import { pathToFileURL } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
-
-type LogUpdateRenderer = ((value: string) => boolean) & {
-  reset: () => void;
-};
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -27,43 +21,8 @@ function inkBuildDir(): string {
   return path.dirname(cliRequire.resolve('ink'));
 }
 
-function inkRequire(): NodeJS.Require {
-  return createRequire(path.join(inkBuildDir(), 'ink.js'));
-}
-
 function patchedInkSource(): string {
   return readFileSync(path.join(inkBuildDir(), 'ink.js'), 'utf8');
-}
-
-/**
- * Asserts each token occurs in `source` strictly after the previous one, so a
- * patch hunks reordering fails loudly instead of passing on stale anchors.
- */
-function expectInOrder(source: string, tokens: readonly string[]): void {
-  let cursor = 0;
-  for (const token of tokens) {
-    const index = source.indexOf(token, cursor);
-    expect(
-      index,
-      `missing or out-of-order token: ${token}`,
-    ).toBeGreaterThanOrEqual(0);
-    cursor = index;
-  }
-}
-
-async function createLogUpdateRenderer(
-  incremental: boolean,
-): Promise<LogUpdateRenderer> {
-  const moduleUrl = pathToFileURL(
-    path.join(inkBuildDir(), 'log-update.js'),
-  ).href;
-  const { default: logUpdate } = await import(moduleUrl);
-  const output = new Writable({
-    write(_chunk, _encoding, callback) {
-      callback();
-    },
-  });
-  return logUpdate.create(output, { incremental }) as LogUpdateRenderer;
 }
 
 describe('CLI Ink resize patch', () => {

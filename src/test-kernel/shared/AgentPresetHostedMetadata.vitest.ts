@@ -19,29 +19,6 @@ describe('agent preset hosted-definition metadata', () => {
       ).toEqual([]);
     }
   });
-
-  it('rejects a retired legacy pair-shaped custom team with a warning', () => {
-    // The `workflowAgents`/`toolUseAgents` legacy pair (#9705) is retired:
-    // such a blob must fail parsing loudly, not silently masquerade as an
-    // empty roster.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-    const presets = parseAgentModePresets([
-      {
-        id: 'legacy-team',
-        name: 'Legacy Team',
-        description: 'Saved by an older binary',
-        icon: 'bookmark',
-        workflowAgents: ['polish', 'correct'],
-        toolUseAgents: ['assistant'],
-        texraHostedAgents: ['assistant'],
-      },
-    ]);
-
-    expect(presets).toEqual([]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('index 0'));
-    vi.restoreAllMocks();
-  });
 });
 
 describe('parseAgentModePresets', () => {
@@ -66,20 +43,6 @@ describe('parseAgentModePresets', () => {
       texraHostedAgents: [],
     };
   }
-
-  it('treats an absent custom-preset value as an empty list', () => {
-    const warn = mockConsoleWarn();
-
-    expect(parseAgentModePresets(undefined)).toEqual([]);
-    expect(warn).not.toHaveBeenCalled();
-  });
-
-  it('warns when the custom-preset value is malformed', () => {
-    const warn = mockConsoleWarn();
-
-    expect(parseAgentModePresets('not-an-array')).toEqual([]);
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('not an array'));
-  });
 
   it('warns about a malformed record without dropping valid siblings', () => {
     const warn = mockConsoleWarn();

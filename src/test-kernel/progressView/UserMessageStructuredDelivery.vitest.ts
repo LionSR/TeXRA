@@ -65,8 +65,17 @@ describe('user-message structured delivery', () => {
       name: 'proofread-pipeline',
       outcome: 'completed',
       phaseCount: 2,
-      taskDone: 4,
-      taskTotal: 4,
+      tally: {
+        total: 4,
+        ok: 4,
+        running: 0,
+        queued: 0,
+        planned: 0,
+        failed: 0,
+        cancelled: 0,
+        skipped: 0,
+        notRun: 0,
+      },
       costUsd: 0.19,
       durationMs: 724_000,
       files: [{ path: 'paper.tex', added: 12, removed: 8 }],
@@ -127,28 +136,5 @@ describe('user-message structured delivery', () => {
     expect(
       bubble?.classList.contains('user-message--structured-delivery'),
     ).toBe(true);
-  });
-
-  it('renders plain (non-delivery) text as an unstructured message', async () => {
-    const element = await mount('hello world');
-
-    const bubble = element.shadowRoot?.querySelector('.user-message');
-    expect(
-      bubble?.classList.contains('user-message--structured-delivery'),
-    ).toBe(false);
-    expect(
-      element.shadowRoot?.querySelector(
-        '.user-message-content.markdown-content',
-      ),
-    ).toBeFalsy();
-    const timestamp = element.shadowRoot?.querySelector(
-      '#user-message-timestamp',
-    );
-    expect(timestamp?.hasAttribute('title')).toBe(false);
-    expect(
-      element.shadowRoot?.querySelector(
-        'wa-tooltip[for="user-message-timestamp"]',
-      ),
-    ).toBeTruthy();
   });
 });

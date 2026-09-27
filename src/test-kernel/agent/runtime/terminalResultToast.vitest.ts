@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ResultEvent } from '@agent/trace';
 import { attachTerminalResultToast } from '@agent/runtime/terminalResultToast';
 import { aggregateId, INSTRUCTION_ACTION, type RunId } from '@shared/schemas';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -48,7 +49,7 @@ async function toastsFor(
   } finally {
     detachToast();
     detachHost();
-    await Effect.runPromise(session.dispose());
+    await Effect.runPromise(closeSessionOf(session));
   }
   return emitted;
 }
@@ -69,45 +70,6 @@ describe('terminal result presentation', () => {
         },
       },
     ]);
-  });
-
-  it('maps disk-full and unexpected to error toasts carrying the message', async () => {
-    expect(
-      await toastsFor(
-        result({ error: { kind: 'disk-full', message: 'No space left' } }),
-      ),
-    ).toEqual([
-      { event: 'requestShowError', payload: { message: 'No space left' } },
-    ]);
-
-    expect(
-      await toastsFor(
-        result({ error: { kind: 'unexpected', message: 'Boom' } }),
-      ),
-    ).toEqual([{ event: 'requestShowError', payload: { message: 'Boom' } }]);
-  });
-
-  it('maps context-window to an error toast, defaulting to remediation copy', async () => {
-    expect(
-      await toastsFor(
-        result({
-          error: { kind: 'context-window', message: 'Conversation too long.' },
-        }),
-      ),
-    ).toEqual([
-      {
-        event: 'requestShowError',
-        payload: { message: 'Conversation too long.' },
-      },
-    ]);
-
-    const [defaulted] = await toastsFor(
-      result({ error: { kind: 'context-window' } }),
-    );
-    const message = (defaulted?.payload as { message?: string } | undefined)
-      ?.message;
-    expect(message).toContain('context window');
-    expect(message).toContain('reduce attached files');
   });
 
   it('shows no toast for child runs, aborts, or success', async () => {

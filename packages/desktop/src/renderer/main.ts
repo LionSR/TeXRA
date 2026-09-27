@@ -7,6 +7,7 @@ import '@fontsource-variable/jetbrains-mono';
 
 import './styles.css';
 import './themeTokens.css';
+import './designTokens';
 
 import '@ui/wa';
 import '@awesome.me/webawesome/dist/components/button/button.js';
@@ -21,10 +22,8 @@ import '@progressView/frontend/ProgressApp';
 import './TexraDiffView';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
 import { createSessionSurfaces } from '@progressView/frontend/sessionSurfaces';
-import '@settingsView/frontend';
 import { hostBridge, postMessage } from '@shared/hostBridge';
 import { DESKTOP_THEME_KIND } from '@shared/schemas';
-import { resolvePostMessageTargetOrigin } from '@shared/postMessageOrigin';
 import { applyShellAction, type Shell } from '@shared/session/shell';
 import {
   PersistedState,
@@ -39,11 +38,11 @@ import {
   renderLabeledActionButton,
 } from '@ui/wa/actionButtons';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
+import { TEXRA_TAGLINE } from '@ui/copy/onboarding';
 import { extractErrorMessage } from '@utils/errors/errorMessage';
 
 import { type DesktopLayoutPanel } from '../shared/desktopShellMessages';
 import {
-  buildDesktopSettingsTabMessage,
   DESKTOP_LOCAL_COMMANDS,
   getDesktopCommandMenuEntries,
   type DesktopCommandActions,
@@ -61,7 +60,6 @@ import { createStartupTeamPanel } from './desktopOnboarding';
 import { installDesktopUnsavedCloseWiring } from './desktopUnsavedClose';
 import './desktopShell.css';
 import {
-  conversationDockTemplate,
   shellSidebarTemplate,
   subagentsButtonTemplate,
   type RailProject,
@@ -84,10 +82,11 @@ import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages';
 import { isSafeAbsolutePdfPath } from '../shared/desktopPdfMessages';
 import { getRendererPlatform } from './rendererPlatform';
 import { createDesktopPromptOverlay } from './promptOverlay';
+import { createDesktopSettingsDialog } from './settingsDialog';
 import { createLogsPane } from './logsPane';
 import { disposePendingFileRequests } from './fileRequests';
 import { createProjectWorkbench } from './projectWorkbench';
-import { createProjectRail, unseenRuns } from './projectRail';
+import { createProjectRail } from './projectRail';
 import { createMessageRoutes } from './messageRoutes';
 
 const appRoot = document.querySelector<HTMLElement>('#app')!;
@@ -118,7 +117,7 @@ const startupTeamPanel = createStartupTeamPanel({
   dismiss: () => postMessage(DESKTOP_ONBOARDING_COMMANDS.DISMISS),
   onVisibilityChanged: rerenderShell,
   showLauncher: returnToLauncher,
-  openMultiAgent: () => openSettingsTab('agents/teams'),
+  openMultiAgent: () => settingsDialog.open('agents/teams'),
   // Lazy by necessity: the panel is constructed above the accelerator map's
   // declaration (which lands much later at module scope), so an eager or
   // captured read is a TDZ throw. Reading at render time is also what lets a
@@ -170,11 +169,9 @@ let shell: Shell = {
 };
 let projectsKnown = false;
 let applyingProjectList = false;
-// The folder of every open project, by session key; the no-workspace session
-// is never among them. How a project is named is its host snapshot's.
-let projectRoots: ReadonlyMap<string, string> = new Map();
-const activeProjectRoot = () => projectRoots.get(shell.active);
-const hasWorkspace = () => !projectsKnown || activeProjectRoot() !== undefined;
+// The no-workspace session is never among the open projects; how a project
+// is named is its host snapshot's.
+const hasWorkspace = () => !projectsKnown || shell.open.includes(shell.active);
 function setShell(next: Shell): void {
   shell = next;
   persistedShell.setState({ collapsed: [...next.collapsed] });
@@ -185,7 +182,6 @@ function setShell(next: Shell): void {
 // chrome read those three records and nothing else.
 const projectSessions = createSessionSurfaces({
   storage: rendererState,
-  hostRequestFailureOwner: 'host',
 });
 projectSessions.onChange(rerenderShell);
 // A project whose session has not framed its host snapshot yet is not listed:
@@ -196,15 +192,7 @@ const railProjects = (): RailProject[] =>
     const display = session?.host$.get()?.project;
     if (!session || !display) return [];
     const view = session.view$.get();
-    const workbench = projectWorkbenches.get(key);
-    return [
-      {
-        display,
-        view,
-        surface: session.surface$.get(),
-        unseen: workbench ? unseenRuns(workbench.getState(), view) : new Set(),
-      },
-    ];
+    return [{ display, view, surface: session.surface$.get() }];
   });
 const activeRailProject = (projects: readonly RailProject[]) =>
   projects.find((project) => project.display.key === shell.active);
@@ -262,8 +250,15 @@ const projectRail = createProjectRail({
   sessions: projectSessions,
   workbenches: projectWorkbenches,
 });
-projectSessions.onChange(projectRail.markShownRunSeen);
-window.addEventListener('focus', projectRail.markShownRunSeen);
+// Seen only while the window has focus: a run finishing behind another app is
+// news when the user comes back.
+const markShownRunSeen = () => {
+  const view = projectSessions.get(shell.active)?.view$.get();
+  if (view && document.hasFocus())
+    projectSessions.act(shell.active, { kind: 'seen', view });
+};
+projectSessions.onChange(markShownRunSeen);
+window.addEventListener('focus', markShownRunSeen);
 const selectProject = projectRail.selectProject;
 
 function currentWorkbench() {
@@ -314,13 +309,12 @@ function toggleSidePanelVisibility(): void {
   currentWorkbench().workbench.togglePlacementVisibility('right', 'files');
 }
 
-// `<settings-app>` and `<progress-app>` are instantiated once and slotted into
+// `<progress-app>` is instantiated once and slotted into
 // the shell template via Lit's DOM-node interpolation, so Lit preserves their
 // internal state across re-renders and tab switches.
 const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
 {
-  // Empty-state placeholder when no workspace is open. The launcher cannot
-  // run anything without a workspace; show a minimal prompt instead.
+  // No project open: nothing can run yet, so say what TeXRA is and open one.
   noWorkspacePlaceholder.className = 'desktop-empty-workspace';
   render(
     html`
@@ -328,20 +322,23 @@ const noWorkspacePlaceholder: HTMLElement = document.createElement('section');
         <div class="shell-empty-icon icon-surface is-size-l">
           ${waIcon('folder-open')}
         </div>
-        <h1>Open a folder to start</h1>
-        <p>
-          TeXRA needs a workspace before it can find your files, run agents, and
-          place their output.
-        </p>
+        <h1>Open a project to start</h1>
+        <p>${TEXRA_TAGLINE}</p>
         <ul class="desktop-empty-workspace-capabilities">
-          <li>Pick the TeX, Markdown, or source files an agent should read.</li>
-          <li>Run a team of agents with the model you choose.</li>
-          <li>Follow progress, edit files, and review output in one window.</li>
+          <li>
+            It reads your paper or code and does the work: derivations, proofs,
+            literature, edits.
+          </li>
+          <li>
+            By default it asks before it acts: edits arrive as diffs you accept
+            or reject.
+          </li>
+          <li>You choose the model and the team; progress stays in view.</li>
         </ul>
         <div class="desktop-empty-workspace-actions">
           ${renderLabeledActionButton({
             icon: 'folder-open',
-            text: 'Open Folder',
+            text: 'Open project folder',
             appearance: 'filled',
             variant: 'brand',
             className: 'btn-primary',
@@ -364,8 +361,14 @@ conversationView.placement = 'desktop';
 conversationView.setAttribute('placement', 'desktop');
 conversationView.setAttribute('data-desktop-view', 'progress');
 
-const settingsView: HTMLElement = document.createElement('settings-app');
-settingsView.setAttribute('data-desktop-view', 'settings');
+// Both hooks re-sync the browser view, which stays hidden while the dialog
+// is open (`isBrowserCovered`).
+const syncActiveBrowserView = () =>
+  projectWorkbenches.get(shell.active)?.workbench.syncBrowserViewBounds();
+const settingsDialog = createDesktopSettingsDialog(appRoot, {
+  onShown: syncActiveBrowserView,
+  onHidden: syncActiveBrowserView,
+});
 
 // The logs viewer is hosted directly in its workbench tab body.
 const logsController = createLogsPane();
@@ -377,7 +380,6 @@ const promptOverlay = createDesktopPromptOverlay(appRoot, (message) =>
 applyTheme();
 
 function shellConversationTemplate(): TemplateResult {
-  const startupPanelVisible = startupTeamPanel.isVisible();
   const projects = railProjects();
   const activeProject = activeRailProject(projects);
   // The sidebar is the only home for the rail's per-run pending-approval
@@ -395,13 +397,8 @@ function shellConversationTemplate(): TemplateResult {
     ? 'Show sidebar'
     : 'Hide sidebar';
   if (sidebarCollapsedWithPendingApproval) {
-    sidebarToggleLabel = 'Show sidebar - approval pending';
+    sidebarToggleLabel = 'Show sidebar (approval pending)';
   }
-  // One card at a time: with no folder open the walkthrough takes the
-  // open-folder panel's place instead of stacking on it.
-  const noWorkspaceContent = startupPanelVisible
-    ? startupTeamPanel.template()
-    : noWorkspacePlaceholder;
   const sidebarToggle = html`<span class="shell-header-button-slot">
     ${renderIconActionButton({
       id: 'shellSidebarToggle',
@@ -454,13 +451,16 @@ function shellConversationTemplate(): TemplateResult {
                   <section
                     class="shell-launcher-surface"
                     data-session=${activeProject ? activeProject.display.key : nothing}
-                    ?hidden=${startupPanelVisible}
                   >
-                    ${conversationView} ${conversationDockTemplate()}
+                    ${conversationView}
                   </section>
-                  ${startupTeamPanel.template()}
+                  ${
+                    // A modal over the window; with no folder open the
+                    // open-folder panel is the one card shown.
+                    startupTeamPanel.template()
+                  }
                 `
-              : noWorkspaceContent
+              : noWorkspacePlaceholder
           }
         </section>
       </div>
@@ -640,8 +640,7 @@ function shellTemplate(): TemplateResult {
                   collapsed: !shell.collapsed.includes(key),
                 }),
               ),
-            onOpenSettings: () =>
-              currentWorkbench().workbench.openKind('settings'),
+            onOpenSettings: () => settingsDialog.open(),
           },
         )}
       </div>
@@ -772,34 +771,13 @@ try {
 }
 
 // =============================================================================
-// Settings
-// =============================================================================
-//
-// Settings is a tab, not a modal dialog: configuring a run while watching it is
-// the common case, which an overlay would make mutually exclusive.
-
-type ShowSettingsArgs = Parameters<DesktopCommandActions['showSettings']>;
-
-function openSettingsTab(
-  tab?: ShowSettingsArgs[0],
-  agentSubTab?: ShowSettingsArgs[1],
-): void {
-  currentWorkbench().workbench.openKind('settings');
-  if (tab == null) return;
-  window.postMessage(
-    buildDesktopSettingsTabMessage(tab, agentSubTab),
-    resolvePostMessageTargetOrigin(window.location.origin),
-  );
-}
-
-// =============================================================================
 // Onboarding + command palette
 // =============================================================================
 
 const desktopRendererCommandActions: DesktopCommandActions = {
   showLauncher: returnToLauncher,
   openWorkbench: (kind) => currentWorkbench().workbench.openKind(kind),
-  showSettings: openSettingsTab,
+  showSettings: settingsDialog.open,
   openDesktopDocs: () => {
     postMessage(DESKTOP_LOCAL_COMMANDS.OPEN_DESKTOP_DOCS);
   },
@@ -867,9 +845,9 @@ const MESSAGE_ROUTES = createMessageRoutes({
     void projectWorkbenches.get(session)?.editorPane.refresh();
   },
   isBootstrapFailed: () => bootstrapFailed,
-  returnToLauncher,
   openKind: (kind) =>
     projectWorkbenches.get(shell.active)?.workbench.openKind(kind),
+  openSettings: () => settingsDialog.open(),
   toggleLayoutPanel: (panel) => {
     if (projectWorkbenches.has(shell.active)) LAYOUT_PANEL_TOGGLES[panel]();
   },
@@ -937,11 +915,8 @@ const MESSAGE_ROUTES = createMessageRoutes({
     // notifications from painting an intermediate owner during this adoption.
     applyingProjectList = true;
     try {
-      projectRoots = new Map(
-        message.projects.map((project) => [project.key, project.root] as const),
-      );
       projectsKnown = true;
-      const open = message.projects.map((project) => project.key);
+      const { open } = message;
       const sessions = [...new Set([...open, message.activeKey])];
       for (const [key, project] of projectWorkbenches) {
         if (sessions.includes(key)) continue;
@@ -953,11 +928,10 @@ const MESSAGE_ROUTES = createMessageRoutes({
         if (projectWorkbenches.has(key)) continue;
         const project = createProjectWorkbench({
           session: key,
-          root: projectRoots.get(key),
           surfaces: projectSessions,
-          settingsView,
           logsPane,
           isActive: () => shell.active === key,
+          isBrowserCovered: settingsDialog.isOpen,
           subagentsTemplate: () => {
             const session = projectSessions.get(key);
             return session
@@ -972,7 +946,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
         });
         projectWorkbenches.set(key, project);
         project.setTheme(currentTheme());
-        if (projectRoots.has(key)) void project.editorPane.refresh();
+        if (open.includes(key)) void project.editorPane.refresh();
       }
       setShell({
         ...shell,
@@ -985,6 +959,7 @@ const MESSAGE_ROUTES = createMessageRoutes({
     }
     rerenderShell();
     if (previousKey !== message.activeKey) {
+      settingsDialog.remount();
       currentWorkbench().workbench.layoutVisibleSurfaces({ focus: false });
       currentWorkbench().workbench.syncBrowserViewBounds();
     }

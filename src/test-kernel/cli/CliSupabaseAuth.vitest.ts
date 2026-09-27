@@ -4,9 +4,10 @@ import * as path from 'node:path';
 import { it } from '@effect/vitest';
 import { Effect, Exit, Fiber, Logger } from 'effect';
 import { beforeAll, beforeEach, describe, expect, vi } from 'vitest';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { UpdateCheckRecords } from '@shared/session/updateCheckRecords';
+import { FakeStateStore } from '@test/support/FakePlatform';
 
 // Local imports
 import {
@@ -95,10 +96,12 @@ let customAgentsDir: string;
 
 const bundledAgentDirectories = (): {
   readonly custom: () => Effect.Effect<string, never>;
+  readonly customConfigured: () => Effect.Effect<boolean, never>;
   readonly builtIn: () => Effect.Effect<string, never>;
   readonly builtInToolUse: () => Effect.Effect<string, never>;
 } => ({
   custom: () => Effect.succeed(customAgentsDir),
+  customConfigured: () => Effect.succeed(false),
   builtIn: () =>
     Effect.succeed(path.join(REPO_ROOT, 'packages/extension/resources/agents')),
   builtInToolUse: () =>
@@ -243,18 +246,6 @@ describe('CLI Supabase auth', () => {
     mocks.authCoordinator.loadSession.mockReturnValue(Effect.succeed(null));
   });
 
-  it('builds one account plane for the root secret store', async () => {
-    const { ensureCliSupabaseAuth } = await loadSupabaseAuth();
-
-    ensureCliSupabaseAuth(cliSecrets);
-    ensureCliSupabaseAuth(cliSecrets);
-
-    expect(mocks.createSupabaseAuth).toHaveBeenCalledTimes(1);
-    expect(mocks.createSupabaseAuth).toHaveBeenCalledWith(
-      expect.objectContaining({ secrets: cliSecrets }),
-    );
-  });
-
   it.effect(
     'does not store a device session when cancellation follows polling',
     () =>
@@ -320,6 +311,7 @@ describe('CLI Supabase auth', () => {
         Effect.provide(nodePlatformLayer),
         Effect.provide(testHttpClientLayer),
         Effect.provideService(AgentDirectories, bundledAgentDirectories()),
+        Effect.provideService(AppState, new FakeStateStore()),
       );
 
       expect(mocks.authCoordinator.clearSession).toHaveBeenCalledOnce();
@@ -368,6 +360,7 @@ describe('CLI Supabase auth', () => {
       // directory port dying mid-rebuild must not fail sign-out.
       const rebuildDies = {
         custom: () => Effect.die(new Error('local rebuild failed')),
+        customConfigured: () => Effect.succeed(false),
         builtIn: () => Effect.die(new Error('local rebuild failed')),
         builtInToolUse: () => Effect.die(new Error('local rebuild failed')),
       };
@@ -378,6 +371,7 @@ describe('CLI Supabase auth', () => {
           Effect.provide(nodePlatformLayer),
           Effect.provide(testHttpClientLayer),
           Effect.provideService(AgentDirectories, rebuildDies),
+          Effect.provideService(AppState, new FakeStateStore()),
           Effect.withLogger(capture),
         ),
       ).toBeUndefined();

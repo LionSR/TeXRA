@@ -179,7 +179,7 @@ With automatic extraction on, one source file fans out into one standalone docum
 
 <p class="hero-caption">The extract, compile, attach pipeline: each <code>tikzpicture</code> becomes its own standalone document and PDF. Rasterization to PNG, only for models without native PDF support, needs GraphicsMagick / ImageMagick + Ghostscript.</p>
 
-Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Dashboard → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
+Missing system dependencies show <wa-icon library="texra" name="warning"></wa-icon> on **Settings → LaTeX** (<wa-icon library="texra" name="file-code"></wa-icon>).
 
 ### Manual compilation
 
@@ -190,7 +190,7 @@ This compiles all extracted figures into standalone PDFs.
 
 ## <wa-icon library="texra" name="settings-gear"></wa-icon> Customizing TikZ processing
 
-Several settings tune how TeXRA handles TikZ. They have no control on the Dashboard, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
+Several settings tune how TeXRA handles TikZ. They have no control in Settings, so set the keys below as flat `texra.*` keys in `<project>/.texra/config.json` (project) or `~/.texra/global-storage/config.json` (user-wide). All three hosts read those files; TeXRA does not read VS Code settings.
 
 ### TikZ template
 

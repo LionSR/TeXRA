@@ -34,7 +34,6 @@ function settleReservation(
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
-  private readonly inFlight = new Map<RunId, AgentCliSessionEntry>();
 
   constructor(private readonly runs: RunRegistry) {}
 
@@ -67,11 +66,6 @@ export class AgentCliSessionRegistry {
     const previous = this.sessions.get(sessionId);
     this.sessions.set(sessionId, { kind: 'active', entry });
     settleReservation(previous, entry);
-  }
-
-  /** Track a launched loop before its SDK session id is safe to publish. */
-  trackInFlight(entry: AgentCliSessionEntry): void {
-    this.inFlight.set(entry.runId, entry);
   }
 
   lookup(sessionId: string): AgentCliSessionEntry | undefined {
@@ -107,36 +101,12 @@ export class AgentCliSessionRegistry {
     settleReservation(state, undefined);
   }
 
-  /** Release every alias and in-flight handle owned by one child run. */
+  /** Release every alias owned by one child run. */
   releaseByRunId(runId: RunId): void {
-    this.inFlight.delete(runId);
     for (const [sessionId, state] of this.sessions) {
       if (state.kind === 'active' && state.entry.runId === runId) {
         this.sessions.delete(sessionId);
       }
-    }
-  }
-
-  /**
-   * Interrupt every registered CLI-backed session. Registries are keyed by
-   * runtime session (`agentCliSessionStores`), so "every" is already scoped
-   * to one session's own agent-CLI children.
-   */
-  interruptAll(): void {
-    const interrupted = new Set<RunId>();
-    const interrupt = (entry: AgentCliSessionEntry): void => {
-      if (interrupted.has(entry.runId)) return;
-      // The run's stop is its fiber's interruption, reached through the
-      // child loop's activation when one is reserved — the loop's signal is
-      // what a strategy's in-flight turn observes — and the fiber directly
-      // wherever no loop is (a launch, or a settled loop's residue).
-      if (!this.runs.interruptActive(entry.runId)) return;
-      interrupted.add(entry.runId);
-    };
-
-    for (const entry of this.inFlight.values()) interrupt(entry);
-    for (const state of this.sessions.values()) {
-      if (state.kind === 'active') interrupt(state.entry);
     }
   }
 }

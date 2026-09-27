@@ -1,7 +1,7 @@
 /** Global, bounded CLI input history. Older entries are replaced, not archived. */
 import { Clock, Effect, Semaphore } from 'effect';
 
-import { warn as logWarning } from '@logger/logUtils';
+import { withLogChannel } from '@logger/effectLog';
 
 import {
   GlobalDatabase,
@@ -34,12 +34,11 @@ export const loadInputHistory: Effect.Effect<
     .readInputHistory()
     .pipe(
       Effect.catch((error) =>
-        Effect.sync(() => {
-          logWarning('cli.tui', 'Input history could not be read.', {
-            data: error,
-          });
-          return [];
-        }),
+        Effect.logWarning('Input history could not be read.').pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel('cli.tui'),
+          Effect.as([]),
+        ),
       ),
     );
   const pushes = Semaphore.makeUnsafe(1);

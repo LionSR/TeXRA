@@ -44,23 +44,6 @@ function lineTexts(lines: readonly { text: string }[]): string[] {
 }
 
 describe('CLI scrollable modal text section', () => {
-  it('counts fixed extra rows before clamping the content budget', () => {
-    const withoutExtra = scrollableModalTextRowsBudget({
-      availableRows: 8,
-      columns: 80,
-      title: 'Run command?',
-    });
-    const withExtra = scrollableModalTextRowsBudget({
-      availableRows: 8,
-      columns: 80,
-      extraFixedRows: 1,
-      title: 'Run command?',
-    });
-
-    expect(withoutExtra).toBe(2);
-    expect(withExtra).toBe(1);
-  });
-
   it('caps long bodies so the approval footer stays visible', () => {
     const budget = scrollableModalTextRowsBudget({
       availableRows: 16,

@@ -26,8 +26,6 @@ import {
   subscriptionProvider,
   type SubscriptionAccount,
 } from '@controllers/modelAccess/subscriptionProviders';
-import { planOnboardingFunnelTransition } from '@controllers/onboarding/onboardingFunnel';
-import { warn as logWarning } from '@logger/logUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
   API_PROVIDERS,
@@ -35,16 +33,11 @@ import {
   type ApiProvider,
 } from '@model/apiProviders';
 import type { ModelOptionStores } from '@model/computeModelOptions';
-import { hasUsableSetupCredential } from '@model/setupCredentialAccess';
-import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { StateWriteFailed } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  readOnboardingFlags,
-  setOnboardingDeclined,
-} from '@shared/state/onboardingState';
+import { setOnboardingDeclined } from '@shared/state/onboardingState';
 import {
   apiKeyEnvName,
   providerDisplayName,
@@ -63,7 +56,6 @@ import { signInCliSubscription } from '../runtime/subscriptionLogin';
 import { commitOnboardingProviderApiKey } from '../chat/tui/hosts/cliProviderKeys';
 import { writeTextStderr, writeTextStdout } from '../runtime/logSinks';
 import { isLikelyRemoteSession } from '../runtime/remoteSession';
-import { interactiveTerminalFailure } from '../runtime/terminalRequirements';
 
 /**
  * Human-facing "we stored your key here" line. Naming the exact secret entry
@@ -82,29 +74,17 @@ interface CliOnboardingResult {
    * handled by clearing the declined flag, never through this field).
    */
   readonly configured: boolean;
-  /** True when the picker was shown and the user chose "Skip for now" this run.
-   *  Lets `chat` exit cleanly (the skip summary already printed) instead of
-   *  falling through to the no-models resolution error. */
+  /** True when the picker was shown and the user chose "Skip for now". */
   readonly declined: boolean;
 }
 
-/** Minimal slice of CliContext the gate needs (keeps it cheaply testable). */
-interface OnboardingGateContext {
-  readonly mode: 'headless' | 'interactive';
-  readonly stdoutIsTty?: boolean;
-  readonly termIsDumb?: boolean;
-  readonly stdoutColorEnabled?: boolean;
-}
-
 const LOG_CHANNEL = 'CLI Onboarding';
-/**
- * The gate degrades to "not configured yet" when a state read or write fails,
- * which at worst re-prompts. Say why in the log so a read-only home directory
- * is diagnosable rather than looking like the gate's normal behavior.
- */
-function warnOnboardingFailure(action: string, error: unknown): void {
-  logWarning(LOG_CHANNEL, `${action} failed: ${toErrorMessage(error)}`);
-}
+/** A failed state write degrades to "not configured yet" (a re-prompt); log
+ *  why, so a read-only home directory is diagnosable. */
+const warnOnboardingFailure = (action: string, error: StateWriteFailed) =>
+  Effect.logWarning(`${action} failed: ${toErrorMessage(error)}`).pipe(
+    withLogChannel(LOG_CHANNEL),
+  );
 
 const SKIP_SUMMARY =
   "Setup skipped — run `texra login` or `texra setup` when you're ready.";
@@ -132,67 +112,6 @@ interface OnboardingResolution extends CliOnboardingResult {
 type CliOnboardingServices = ModelOptionStores & {
   readonly runtime: ProcessRuntime;
 };
-
-/**
- * Gate for the interactive chat entry point. Renders the
- * first-run picker only when interactive, with no usable credentials, and not
- * previously declined. Otherwise returns immediately without rendering or
- * emitting anything.
- */
-export const maybeRunCliOnboarding = Effect.fn('maybeRunCliOnboarding')(
-  function* (
-    services: CliOnboardingServices,
-    context: OnboardingGateContext,
-  ): Effect.fn.Return<CliOnboardingResult, Error, LanguageModel> {
-    // context.* carries the parsed intent (headless / non-TTY / dumb); the final
-    // `process.stdout.isTTY` is the authoritative "Ink can actually mount here"
-    // check at the call site (same guard runCliOnboarding uses for the
-    // context-less `texra setup` path). Defense-in-depth before we render.
-    if (interactiveTerminalFailure(context) || !process.stdout.isTTY) {
-      return NO_ONBOARDING_RESULT;
-    }
-    const { globalState } = services;
-    const hasCredential = yield* hasUsableSetupCredential(
-      services,
-      services.secrets,
-    ).pipe(withLogChannel('Setup Credentials'));
-    // Route through the same funnel-transition planner the extension/desktop
-    // hosts use, rather than a hand-copied precedence ladder. `selectSetupAgent`
-    // is discarded: the CLI has no launcher agent list to steer. Clearing a
-    // stale skip must stay decoupled from the 3-way state: an
-    // already-credentialed launch clears a stale skip (the PRD's "configuring a
-    // credential clears the flag") even when firstRunDone is also true, which
-    // `transition.clearDeclined` captures directly.
-    const flags = yield* readOnboardingFlags(globalState);
-    const transition = planOnboardingFunnelTransition(undefined, {
-      hasCredential,
-      ...flags,
-    });
-    if (transition.clearDeclined) {
-      yield* setOnboardingDeclined(globalState, false).pipe(
-        // The handler names the channel's whole error type, so a widened
-        // channel fails to compile rather than being absorbed unlogged.
-        Effect.catch((error: StateWriteFailed) =>
-          Effect.sync(() =>
-            warnOnboardingFailure('Clearing the stale skip flag', error),
-          ),
-        ),
-      );
-    }
-    // `configured` stays false for both 'done' and 'setup': an
-    // already-credentialed or already-completed launch is not a post-picker
-    // continuation, so the setup agent only takes the session right after the
-    // picker actually configures a credential in this process.
-    if (transition.state !== 'needs-credential') {
-      return NO_ONBOARDING_RESULT;
-    }
-    return yield* runOnboardingFlow({
-      stores: services,
-      firstRun: true,
-      colorEnabled: context.stdoutColorEnabled,
-    });
-  },
-);
 
 /**
  * `texra setup`'s State 0 step: show the picker unconditionally — the command
@@ -258,12 +177,15 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     yield* setOnboardingDeclined(options.stores.globalState, true).pipe(
       // Handler param names the whole channel, so widening it fails to compile.
       Effect.catch((error: StateWriteFailed) =>
-        Effect.sync(() => {
-          warnOnboardingFailure('Saving the skip flag', error);
-          writeTextStderr(
-            "Note: couldn't save your choice, so you may be asked again next time.",
-          );
-        }),
+        warnOnboardingFailure('Saving the skip flag', error).pipe(
+          Effect.andThen(
+            Effect.sync(() =>
+              writeTextStderr(
+                "Note: couldn't save your choice, so you may be asked again next time.",
+              ),
+            ),
+          ),
+        ),
       ),
     );
   } else if (resolution.configured) {
@@ -274,9 +196,7 @@ const runOnboardingFlow = Effect.fn('runOnboardingFlow')(function* (options: {
     yield* setOnboardingDeclined(options.stores.globalState, false).pipe(
       // Handler param names the whole channel, so widening it fails to compile.
       Effect.catch((error: StateWriteFailed) =>
-        Effect.sync(() =>
-          warnOnboardingFailure('Clearing the stale skip flag', error),
-        ),
+        warnOnboardingFailure('Clearing the stale skip flag', error),
       ),
     );
   }
@@ -504,6 +424,7 @@ function ChatGptProgressStep(props: {
       ? 'Requesting a ChatGPT device code...'
       : 'Preparing ChatGPT sign-in...',
   );
+  const [instructions, setInstructions] = useState<string>();
 
   useCancellableEffect(
     (isCancelled) =>
@@ -513,8 +434,9 @@ function ChatGptProgressStep(props: {
             'chatgpt',
             { device, noBrowser: false },
             {
-              writeProgress: (next) => {
-                if (!isCancelled()) setMessage(next);
+              writeProgress: (next, options) => {
+                if (!isCancelled())
+                  (options?.copyable ? setInstructions : setMessage)(next);
               },
             },
           );
@@ -543,9 +465,7 @@ function ChatGptProgressStep(props: {
       }
     >
       <Box marginTop={1} flexDirection="column">
-        {message.split('\n').map((line, index) => (
-          <Text key={`${index}:${line}`}>{line}</Text>
-        ))}
+        <Text>{[instructions, message].filter(Boolean).join('\n')}</Text>
       </Box>
     </BorderedPanel>
   );

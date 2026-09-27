@@ -27,6 +27,7 @@ import { tuiOutputStreamForColor } from '@cli/tui/noColorOutput';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import { DEFAULT_MODELS } from '@model/modelOptionsBasic';
 import { apiKeySecretName } from '@model/apiProviders';
+import { nodeFileServices } from '@platform/defaults/jsonStore';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import {
   formatTexraApprovalPolicy,
@@ -79,7 +80,6 @@ import {
 import { clearGoal, setGoalSessionAutoApproval, startGoal } from '@tools/goal';
 import { prepareToolEditApprovalPrompt } from '@tools/approval/toolEditApproval';
 import { FOCUSED_BACKGROUND_TASK } from '@ui/copy/nestedRuns';
-import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { App } from '../src/chat/tui/App';
@@ -117,7 +117,6 @@ import {
   TuiSession,
 } from '../src/chat/tui/state/sessionRunState';
 import { formatCliSessionStatus } from '../src/chat/tui/sessionStatus';
-import { notify } from '../src/chat/tui/notifications/terminalNotifier';
 import { createTuiViewportController } from '../src/chat/tui/render/tuiViewportController';
 import { notifyStaticTranscriptErased } from '../src/chat/tui/state/staticTranscriptRepaint';
 import {
@@ -133,7 +132,10 @@ import { clearTerminalScrollback } from '../src/tui/terminalCleanup';
 import { defaultShortcutModifierLabel } from '../src/runtime/shortcutLabels';
 import { updateCliModelAccess } from '../src/runtime/modelAccessSelection';
 import { installCliProcessRuntime } from '../src/runtime/cliProcessRuntime';
-import { initCliPlatform } from '../src/runtime/initPlatform';
+import {
+  cliPlatformShutdown,
+  initCliPlatform,
+} from '../src/runtime/initPlatform';
 import { resolveCliResourcesPath } from '../src/runtime/resourcesPath';
 import {
   createCliRuntimeHost,
@@ -141,7 +143,6 @@ import {
 } from '../src/runtime/cliPresentationHost';
 import { setCliToolEnabled } from '../src/runtime/tools';
 import type { CliContext } from '../src/runtime/cliContext';
-import type { CliModelAccess } from '../src/runtime/modelAccess';
 import type { InputHistory } from '../src/chat/tui/history/inputHistory';
 
 const HARNESS_RUN_ID = RunIdSchema.parse('aaaa0001f10e');
@@ -234,7 +235,9 @@ const HARNESS_CWD =
   HARNESS_CWD_INPUT || mkdtempSync(path.join(tmpdir(), 'texra-tui-harness-'));
 const HARNESS_STORAGE_ROOT = path.join(HARNESS_CWD, '.texra-storage');
 const HARNESS_COLOR_ENABLED = process.env.HARNESS_COLOR_ENABLED !== '0';
-const HARNESS_RESOURCES_PATH = resolveCliResourcesPath();
+const HARNESS_RESOURCES_PATH = await Effect.runPromise(
+  resolveCliResourcesPath().pipe(Effect.provide(nodeFileServices)),
+);
 const HARNESS_CLI_CONTEXT: CliContext = {
   storageRoot: HARNESS_STORAGE_ROOT,
   approvalPolicy: TEXRA_APPROVAL_POLICY_DEFAULT,
@@ -836,7 +839,7 @@ function seedSubagentFollowupTranscript(): void {
       level: LOG_LEVELS.INFO,
       timestamp: timestamp + index,
       messageType: MESSAGE_TYPES.USER_MESSAGE,
-      text: `<orchestrator-followup>${text}</orchestrator-followup>`,
+      text,
     });
   }
   seedRows(HARNESS_RUN_ID, entries);
@@ -939,6 +942,16 @@ function makeRetryApprovalPayload(): RetryPermission {
       provider: 'openai',
       statusCode: 429,
     },
+    // The invoker decides the offer (#13236); a subscription quota declines
+    // its route for the model's own key.
+    credentialSwitch: RETRY_APPROVAL_CHATGPT
+      ? {
+          kind: 'decline-route',
+          route: 'chatgpt-subscription',
+          provider: 'openai',
+          automatic: false,
+        }
+      : null,
   };
 }
 
@@ -1136,7 +1149,7 @@ publish(
     type: 'followup.queued' as const,
     aggregateId: qualifyAggregateId('run', HARNESS_RUN_ID),
     followUpId: `harness-follow-up-${index + 1}`,
-    content: { text, origin: 'user' as const },
+    content: { text, from: { kind: 'user' as const } },
   })),
 );
 const HARNESS_INITIAL_RUN_PHASE = harnessInitialRunStatus();
@@ -1166,17 +1179,14 @@ async function seedRunningWorkflow(): Promise<void> {
     userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
   });
   seedPhase(childRunId, RUN_PHASE.RUNNING);
-  const trace = new TraceEmitter();
-  const detachRunTrace = session().attachRunTrace(trace, childRunId);
+  const trace = new TraceEmitter((event) =>
+    session().publishRunEvent(childRunId, event),
+  );
   const runStage = trace.openStage(
     "Workflow script 'live-workflow-validation'",
-    {
-      id: 'harness-workflow-running-run',
-      kind: 'run',
-    },
+    { kind: 'run' },
   );
   const phaseStage = trace.openStage('Proofread', {
-    id: 'harness-workflow-running-phase',
     index: 0,
     kind: 'phase',
     parent: runStage,
@@ -1218,7 +1228,7 @@ async function seedRunningWorkflow(): Promise<void> {
   HARNESS_DISPOSERS.push(() => {
     phaseStage.end('cancelled');
     runStage.end('cancelled');
-    detachRunTrace();
+    trace.close();
   });
 }
 
@@ -1351,7 +1361,7 @@ if (SHOW_TODOS) {
 if (SHOW_EDIT_APPROVAL) {
   const showApproval = () => {
     const request = makeEditApprovalRequest();
-    const permission = prepareToolEditApprovalPrompt(session(), {
+    const { permission } = prepareToolEditApprovalPrompt(session(), {
       requestId: 'harness-edit-approval',
       request,
       relativePath: request.path,
@@ -1695,7 +1705,10 @@ registerBuiltinSlashCommands({
           HARNESS_PLATFORM_SERVICES,
           HARNESS_CLI_CONTEXT,
           selection,
-          { writeProgress: appendHarnessAssistantTranscript },
+          {
+            writeProgress: (message) =>
+              appendHarnessAssistantTranscript(message),
+          },
         ).pipe(
           Effect.map((access) => {
             appendHarnessAssistantTranscript(access.message);
@@ -1913,7 +1926,7 @@ async function exitHarness(exitCode: number): Promise<void> {
   ink.unmount();
   try {
     await Effect.runPromise(harnessRuntimeHost.close());
-    await Effect.runPromise(HARNESS_PLATFORM_SERVICES.lifecycle.runShutdown);
+    await Effect.runPromise(cliPlatformShutdown);
   } finally {
     process.exit(exitCode);
   }

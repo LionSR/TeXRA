@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { LifecycleHost } from '@platform/interfaces';
 import { createDeferred } from '@test/support/asyncTestUtils';
 
 const mocks = vi.hoisted(() => ({
@@ -28,20 +27,6 @@ function captureSignalHandlers(): Map<string, (...args: unknown[]) => void> {
   return handlers;
 }
 
-function fakeLifecycle(runShutdown: () => Promise<void>): LifecycleHost {
-  let shutdownRan = false;
-  return {
-    onShutdown: vi.fn(() => ({ dispose: vi.fn() })),
-    runShutdown: Effect.suspend(() => {
-      shutdownRan = true;
-      return Effect.promise(runShutdown);
-    }),
-    get shutdownRan() {
-      return shutdownRan;
-    },
-  };
-}
-
 describe('CLI platform signal handlers', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -59,69 +44,60 @@ describe('CLI platform signal handlers', () => {
     const killSpy = vi
       .spyOn(process, 'kill')
       .mockImplementation((() => true) as typeof process.kill);
-    const runShutdown = vi.fn(async () => {
-      events.push('shutdown');
-    });
     mocks.flushNdjsonStdout.mockImplementation(() =>
       Effect.sync(() => {
         events.push('flush');
       }),
     );
 
+    // No platform came up in this module instance, so the shutdown the
+    // sequence runs first is a no-op; the flush and exit still follow.
     const { installCliShutdownSignalHandlers } =
       await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(fakeLifecycle(runShutdown));
+    installCliShutdownSignalHandlers();
 
     expect(handlers.has('SIGINT')).toBe(true);
     expect(handlers.has('SIGTERM')).toBe(true);
 
     await handlers.get('SIGINT')?.();
     expect(exitSpy).toHaveBeenLastCalledWith(130);
-    expect(runShutdown).toHaveBeenCalledTimes(1);
-    expect(events).toEqual(['shutdown', 'flush', 'exit:130']);
+    expect(events).toEqual(['flush', 'exit:130']);
 
     events.length = 0;
     await handlers.get('SIGTERM')?.();
     expect(exitSpy).toHaveBeenLastCalledWith(143);
-    expect(runShutdown).toHaveBeenCalledTimes(2);
-    expect(events).toEqual(['shutdown', 'flush', 'exit:143']);
+    expect(events).toEqual(['flush', 'exit:143']);
     expect(killSpy).not.toHaveBeenCalled();
   }, 30_000);
 
-  it('handOffCliShutdownSignalHandlers removes exactly the listeners it installed', async () => {
+  it('defers SIGINT while a foreground command owns the terminal', async () => {
     vi.resetModules();
+    vi.doMock('@cli/runtime/foregroundCommand', async (importOriginal) => ({
+      ...(await importOriginal<
+        typeof import('@cli/runtime/foregroundCommand')
+      >()),
+      terminalForegroundHeld: () => true,
+    }));
     const handlers = captureSignalHandlers();
-    const removed: Array<[string | symbol, unknown]> = [];
-    vi.spyOn(process, 'removeListener').mockImplementation(((
-      event: string | symbol,
-      listener: (...args: unknown[]) => void,
-    ) => {
-      removed.push([event, listener]);
-      return process;
-    }) as typeof process.removeListener);
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit);
+    mocks.flushNdjsonStdout.mockImplementation(() => Effect.void);
 
-    const {
-      installCliShutdownSignalHandlers,
-      handOffCliShutdownSignalHandlers,
-    } = await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers(
-      fakeLifecycle(vi.fn(async () => undefined)),
-    );
-    expect(handlers.size).toBe(2);
+    const { installCliShutdownSignalHandlers } =
+      await import('@cli/runtime/initPlatform');
+    installCliShutdownSignalHandlers();
+    const sigint = handlers.get('SIGINT');
+    handlers.delete('SIGINT');
 
-    handOffCliShutdownSignalHandlers();
+    await sigint?.();
 
-    // The install-order disposers are released LIFO, so SIGTERM first.
-    expect(removed).toEqual([
-      ['SIGTERM', handlers.get('SIGTERM')],
-      ['SIGINT', handlers.get('SIGINT')],
-    ]);
-
-    // A second handoff (e.g. a stray second call) is a no-op, not a crash or
-    // a spurious removeListener call for listeners already handed off.
-    removed.length = 0;
-    handOffCliShutdownSignalHandlers();
-    expect(removed).toEqual([]);
+    // The pager (or installer) gets the Ctrl-C; the CLI keeps running and
+    // listens again, so the next SIGINT reaches it.
+    expect(mocks.flushNdjsonStdout).not.toHaveBeenCalled();
+    expect(exitSpy).not.toHaveBeenCalled();
+    expect(handlers.get('SIGINT')).toBe(sigint);
+    vi.doUnmock('@cli/runtime/foregroundCommand');
   });
 
   it('waits for persistent stderr writes before shutdown resolves', async () => {
@@ -150,38 +126,35 @@ describe('CLI platform signal handlers', () => {
     const { runCliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
     const { writeTextStderr } = await import('@cli/runtime/logSinks');
-    const runShutdown = vi.fn(async () => {
-      order.push('shutdown');
-      writeTextStderr('lifecycle diagnostic');
-    });
+    // A diagnostic written as the process goes down, still in flight when
+    // the sequence starts.
+    writeTextStderr('shutdown diagnostic');
 
     let resolved = false;
-    const shutdown = runCliPlatformShutdownSequence(
-      fakeLifecycle(runShutdown),
-    ).then(() => {
+    const shutdown = runCliPlatformShutdownSequence().then(() => {
       resolved = true;
     });
     await secondWriteCaptured.promise;
 
     expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
-      'lifecycle diagnostic\n',
+      'shutdown diagnostic\n',
       '',
     ]);
-    expect(order).toEqual(['shutdown']);
+    expect(order).toEqual([]);
     expect(resolved).toBe(false);
 
     stderrCallbacks[0]?.();
     await Promise.resolve();
-    expect(order).toEqual(['shutdown']);
+    expect(order).toEqual([]);
     expect(resolved).toBe(false);
 
     stderrCallbacks[1]?.();
     await shutdown;
-    expect(order).toEqual(['shutdown', 'ndjson']);
+    expect(order).toEqual(['ndjson']);
     expect(resolved).toBe(true);
   });
 
-  it('runCliPlatformShutdownSequence runs lifecycle shutdown then the NDJSON flush, best-effort', async () => {
+  it('runCliPlatformShutdownSequence still flushes NDJSON with no platform up', async () => {
     vi.resetModules();
     const order: string[] = [];
     mocks.flushNdjsonStdout.mockImplementation(() =>
@@ -192,28 +165,7 @@ describe('CLI platform signal handlers', () => {
     const { runCliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
 
-    const runShutdown = vi.fn(async () => {
-      order.push('shutdown');
-    });
-    await runCliPlatformShutdownSequence(fakeLifecycle(runShutdown));
-    expect(order).toEqual(['shutdown', 'flush']);
-
-    // Best-effort: a lifecycle shutdown failure must not skip the flush, and
-    // an undefined lifecycle must not throw.
-    order.length = 0;
-    const failingRunShutdown = vi.fn(async () => {
-      order.push('shutdown');
-      throw new Error('shutdown failed');
-    });
-    await expect(
-      runCliPlatformShutdownSequence(fakeLifecycle(failingRunShutdown)),
-    ).resolves.toBeUndefined();
-    expect(order).toEqual(['shutdown', 'flush']);
-
-    order.length = 0;
-    await expect(
-      runCliPlatformShutdownSequence(undefined),
-    ).resolves.toBeUndefined();
+    await expect(runCliPlatformShutdownSequence()).resolves.toBeUndefined();
     expect(order).toEqual(['flush']);
   });
 });

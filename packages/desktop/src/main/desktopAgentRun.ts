@@ -11,17 +11,14 @@
 import { Cause, Effect, Fiber, Stream } from 'effect';
 
 import {
-  validateRunRequest,
   type HostPresentation,
   type PresentationEventHandlers,
-  type RunRequest,
   type RuntimePresentationEvent,
   type RuntimePresentationEventPayloads,
   type SessionHandle,
   type ValidatedRunRequest,
 } from '@agent/runtime';
 import { ToolEditApprovalController } from '@controllers/approval/ToolEditApprovalController';
-import { RunLaunchFailed } from '@controllers/session/hostRunActions';
 import { withLogChannel } from '@logger/effectLog';
 import {
   type ProcessRuntime,
@@ -32,12 +29,6 @@ import type {
   RequestOpenFilePayload,
   RunId,
 } from '@shared/schemas';
-import {
-  isRequestRefusal,
-  Rejected,
-  type RequestRefusal,
-} from '@shared/session/requestErrors';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import {
   DesktopToolEditApprovalHost,
@@ -75,20 +66,9 @@ export interface DesktopAgentRunOptions {
 }
 
 export interface DesktopAgentRun {
-  /**
-   * Launch a request another host action built (a merge, a compile fix). The
-   * Effect settles with the launched run itself, as the port contract in
-   * `HostRunActionPorts.runAgentRequest` states, and fails in that port's
-   * channel: a refusal as itself, every other launch failure as
-   * `RunLaunchFailed` carrying the launch's own error.
-   */
-  runAgentRequest(
-    request: RunRequest,
-    options?: DesktopRunOptions,
-  ): Effect.Effect<void, RequestRefusal | RunLaunchFailed>;
-  /** The same launch for a request that is already validated. It still fails
-   *  with the launch's own bare `Error`; a caller that needs a named channel
-   *  names it, as `runAgentRequest` does. */
+  /** Launch a validated request, settling with the run itself
+   *  (`HostRunActionPorts.runValidated`). It fails with the launch's own
+   *  bare `Error`; a caller that needs a named channel names it. */
   runValidated(
     request: ValidatedRunRequest,
     options?: DesktopRunOptions,
@@ -223,30 +203,6 @@ export function createDesktopAgentRun(
   }
 
   return {
-    runAgentRequest(request, runOptions) {
-      const validated = validateRunRequest(request);
-      if (!validated.valid) {
-        return Effect.logError('Invalid desktop run request').pipe(
-          Effect.annotateLogs({ data: validated.issue }),
-          withLogChannel(CHANNEL),
-          Effect.andThen(
-            Effect.fail(new Rejected({ reason: validated.message })),
-          ),
-        );
-      }
-      // The launch program still fails with a bare `Error`, so the port's
-      // one channel is named here, as the extension's binding names it.
-      return runValidated(validated.request, runOptions).pipe(
-        Effect.mapError((cause) =>
-          isRequestRefusal(cause)
-            ? cause
-            : new RunLaunchFailed({
-                message: toErrorMessage(cause),
-                cause,
-              }),
-        ),
-      );
-    },
     runValidated,
     toolEditApprovals,
     dispose() {

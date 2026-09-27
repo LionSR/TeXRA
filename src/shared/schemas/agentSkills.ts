@@ -39,5 +39,11 @@ export const InstalledPluginSchema = z.object({
   path: z.string().min(1),
   /** Absolute skill roots inside `path`, each holding `<skill>/SKILL.md`. */
   skills: z.array(z.string().min(1)),
+  /**
+   * Whether the plugin's skills load (`texra plugin enable|disable`). A
+   * disabled plugin stays installed and pinned; everything it contributes
+   * is hidden. Rows written before the switch existed read as enabled.
+   */
+  enabled: z.boolean().default(true),
 });
 export type InstalledPlugin = z.infer<typeof InstalledPluginSchema>;

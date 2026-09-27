@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Cause, Deferred, Effect, Exit, Fiber, Queue, Result } from 'effect';
+import { Cause, Clock, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
@@ -9,7 +9,8 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
-import { RunInput, type QueuedFollowUp } from '@agent/followUp/RunInput';
+import { FollowUpContinuationOwned } from '@agent/followUp/RunInput';
+import type { RunInput } from '@agent/followUp/RunInput';
 import type {
   FollowUpConsumerLease,
   FollowUpQueueInput,
@@ -38,7 +39,7 @@ import {
   DatabaseNotOwner,
   type DatabaseWriteFailed,
 } from '@shared/session/database';
-import { foldRunState } from '@shared/session/runStateFold';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import { formatSubagentProgress } from '@shared/subagentFollowup';
 import { deriveRunOutcome } from '@shared/runs/runStatus';
 import { aggregateError, onAbort } from '@utils/core';
@@ -78,7 +79,7 @@ export interface ChildRunPorts {
  * Agent-CLI presentation and finalization. Native engines own their run
  * handle and terminal finalization and omit this port.
  */
-interface ChildRunPort {
+export interface ChildRunPort {
   readonly logger: AgentTrace;
   /** Show the handle to stops, once the loop has reserved their target. */
   track(): void;
@@ -119,8 +120,9 @@ export interface ChildRunStrategy<TTurn, R = never> {
   readonly stageLabel: string;
 
   /**
-   * This child's turns drive a live OS process: shutdown drain reaches it
-   * through `RunHandle.backgroundProcess` (#8155) without disturbing agent
+   * This child's turns drive a live OS process (a background bash command,
+   * an agent-CLI provider): shutdown drain reaches it through
+   * `RunHandle.backgroundProcess` (#8155) without disturbing native agent
    * children left running for restart recovery.
    */
   readonly ownsBackgroundProcess?: boolean;
@@ -171,9 +173,6 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /** The error message to log for a non-throwing failure, if it has one. */
   turnErrorMessage?(turn: TTurn): string | undefined;
-
-  /** After loop setup, before the initial turn starts. */
-  onLoopStart?(session: SessionHandle): void;
 
   /** After a successful turn: register the session/thread id, etc. */
   onTurnSuccess?(turn: TTurn, session: SessionHandle): void;
@@ -353,7 +352,7 @@ function attemptTurn<TTurn, R, RTurn>(
       Effect.gen(function* () {
         const turn = yield* runner(loop.signal);
         // The turn summary (duration + token usage) on the child stream.
-        const wallTimeMs = Date.now() - startedAt;
+        const wallTimeMs = (yield* Clock.currentTimeMillis) - startedAt;
         yield* loopLog(
           trace,
           'info',
@@ -583,7 +582,7 @@ const deliverTurn = Effect.fn('childRunLoop.deliverTurn')(function* <
   );
   const followUp: FollowUpQueueInput = {
     text: msg,
-    origin: 'subagent_result',
+    from: { kind: 'run', runId },
     deliveryId: turnDeliveryId(runId, turnKey, params.consumed),
   };
   let pending: PendingChildDelivery | undefined;
@@ -709,11 +708,11 @@ function onceAborted<A, E>(
 
 /**
  * Own admitted run cleanup until the child loop takes over. Failure or
- * interruption records the terminal outcome and releases the run's claim
- * before propagating the original cause. Post-handoff work stays outside
+ * interruption records the terminal outcome, commits the run's ending and
+ * releases its claim before propagating the original cause. Post-handoff work stays outside
  * this owner because the live child then owns its own settlement.
  */
-export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
+export function runWithLaunchGuard<A, E, R>(
   session: SessionHandle,
   runId: RunId,
   operation: Effect.Effect<A, E, R>,
@@ -730,7 +729,17 @@ export function runWithOwnedRunLeaseLaunchGuard<A, E, R>(
               : RUN_OUTCOME.FAILED,
           }),
         );
-        const released = yield* Effect.exit(session.releaseRunLease(runId));
+        // The run's ending, then its birth claim: a hold taken and let go at
+        // once releases it, since no driver ever took one.
+        const released = yield* Effect.exit(
+          session
+            .commitRunEnd(runId)
+            .pipe(
+              Effect.ensuring(
+                Effect.scoped(Effect.ignore(session.holdRunClaim(runId))),
+              ),
+            ),
+        );
         const failures: unknown[] = [];
         if (Exit.isFailure(finalized))
           failures.push(Cause.squash(finalized.cause));
@@ -837,22 +846,20 @@ export function startChildRunLoop<TTurn, R = never>(
 
     let input!: RunInput;
 
-    const created = yield* RunInput.make;
     // Fresh children already own their DB claim. Recovery retains its pending
     // queue until the run lane acquires the claim and transfers it below.
     const claimed = yield* Effect.exit(
-      Effect.sync(() => {
+      Effect.gen(function* () {
         // A stop sees the handle only from here, with its target reserved.
         childRun?.track();
         queueLease =
           params.queueLease ?? runSession.followUps.claimChildRun(runId);
-        if (!queueLease) {
-          throw new Error(
-            `Follow-up continuation already has an owner for child ${runId}.`,
-          );
-        }
+        if (!queueLease)
+          return yield* new FollowUpContinuationOwned({
+            message: `Follow-up continuation already has an owner for child ${runId}.`,
+          });
         if (!params.queueLease)
-          input = runSession.followUps.attachInput(runId, created, queueLease)!;
+          input = runSession.followUps.attachInput(runId, queueLease)!;
       }),
     );
     if (Exit.isFailure(claimed)) {
@@ -861,41 +868,16 @@ export function startChildRunLoop<TTurn, R = never>(
       );
     }
     const setup = yield* Effect.exit(
-      Effect.gen(function* () {
-        // An agent-CLI child has no flow to fold: its loop seeds the queue
-        // from the run's rows itself, so follow-ups a crash left queued (or a
-        // turn it never settled) reach the relaunched loop. A native child's
-        // resumed flow seeds the same queue from its own load.
-        const folded = !strategy.continuous
-          ? foldRunState(
-              null,
-              yield* runSession.readAggregate(aggregateId('run', runId)),
-            )
-          : null;
-        yield* Effect.sync(() => {
-          strategy.onLoopStart?.(runSession);
-          if (folded !== null) {
-            if (Result.isFailure(folded)) {
-              throw new Error(
-                `Child run ${runId} has rows its follow-up queue cannot be seeded from: ${folded.failure.detail}`,
-                { cause: folded.failure },
-              );
-            }
-            input.seed(
-              folded.success?.followUps ?? [],
-              folded.success?.followUpIds,
-            );
+      Effect.sync(() => {
+        if (strategy.ownsBackgroundProcess === true) {
+          // The one handle slot shutdown drain reads (#8155): kill the
+          // leaked OS process without touching the loop that reports it.
+          const handle = runs.getHandle(runId);
+          if (handle) {
+            handle.backgroundProcess = { kill: () => loop.interrupt() };
           }
-          if (strategy.ownsBackgroundProcess === true) {
-            // The one handle slot shutdown drain reads (#8155): kill the
-            // leaked OS process without touching the loop that reports it.
-            const handle = runs.getHandle(runId);
-            if (handle) {
-              handle.backgroundProcess = { kill: () => loop.interrupt() };
-            }
-          }
-          sessionStage = trace?.openStage(strategy.stageLabel);
-        });
+        }
+        sessionStage = trace?.openStage(strategy.stageLabel);
       }),
     );
     if (Exit.isFailure(setup)) {
@@ -936,7 +918,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 targetRunId,
                 {
                   text: formatSubagentProgress(runId, agentName, update),
-                  origin: 'subagent_result',
+                  from: { kind: 'run', runId },
                 },
                 'live_owner',
               ),
@@ -978,16 +960,27 @@ export function startChildRunLoop<TTurn, R = never>(
           };
 
     let runStarted = false;
+    // The loop's hold on the child's claim for the child's whole life: its
+    // birth claim, or — for a recovered child — the claim taken over after
+    // its prior owner is proved dead. Released once the child's ending has
+    // committed and before its final delivery, which the parent may answer
+    // at once by reading the child.
+    let releaseClaim: Effect.Effect<void> = Effect.void;
     const run = Effect.gen(function* () {
       runStarted = true;
+      releaseClaim = yield* runSession.acquireClaims(
+        aggregateId('run', runId),
+        {
+          ends: true,
+        },
+      );
       let turnIndex = 0;
       let result: TTurn | undefined;
       yield* Effect.scoped(
         Effect.gen(function* () {
           if (params.queueLease) {
-            // Only this lane's driver can adopt recovery; its terminal
-            // cleanup releases the DB claim after final delivery preparation.
-            yield* runSession.acquireClaims(aggregateId('run', runId));
+            // Only this lane's driver can adopt recovery, under the claim
+            // the loop took above.
             queueLease = runSession.followUps.claimChildRun(
               runId,
               params.queueLease,
@@ -996,11 +989,7 @@ export function startChildRunLoop<TTurn, R = never>(
               return yield* Effect.fail(
                 new Error(`Child recovery ownership was lost for ${runId}.`),
               );
-            input = runSession.followUps.attachInput(
-              runId,
-              created,
-              queueLease,
-            )!;
+            input = runSession.followUps.attachInput(runId, queueLease)!;
           }
           const runNotice = (notice: Effect.Effect<void, Error>) =>
             notice.pipe(
@@ -1038,10 +1027,10 @@ export function startChildRunLoop<TTurn, R = never>(
             ),
           );
           let consumed: readonly QueuedFollowUp[] = [];
-          let turnStartedAt = Date.now();
+          let turnStart = yield* Clock.currentTimeMillis;
           const beginTurn = Effect.gen(function* () {
             turnIndex += 1;
-            turnStartedAt = Date.now();
+            turnStart = yield* Clock.currentTimeMillis;
             const turnKey = { key: attemptId, index: turnIndex };
             yield* emitTurnDiagnostic(trace, 'turn.accepted', {
               runId,
@@ -1058,7 +1047,7 @@ export function startChildRunLoop<TTurn, R = never>(
           ) =>
             Effect.gen(function* () {
               const turnKey = { key: attemptId, index: turnIndex };
-              const wallTimeMs = Date.now() - turnStartedAt;
+              const wallTimeMs = (yield* Clock.currentTimeMillis) - turnStart;
               const turnFailed = err != null || turnIsError;
 
               if (turn != null) {
@@ -1156,7 +1145,7 @@ export function startChildRunLoop<TTurn, R = never>(
               strategy.continuous ? () => launchNative : gateTurn(runner),
               loop,
               trace,
-              turnStartedAt,
+              turnStart,
             );
             if (attempt.kind === 'interrupted') break;
             const turn = attempt.kind === 'completed' ? attempt.turn : null;
@@ -1231,7 +1220,7 @@ export function startChildRunLoop<TTurn, R = never>(
             yield* commitPark(runSession, runId, 'resumed');
             consumed = taken;
             const prompts: readonly FollowUpContent[] = batch.synthetic
-              ? [{ text: batch.text, origin: 'user' }]
+              ? [{ text: batch.text, from: { kind: 'user' } }]
               : taken.map((followUp) => followUp.content);
             runner = (signal) => nextRunTurn(prompts, ports, signal);
           }
@@ -1320,9 +1309,7 @@ export function startChildRunLoop<TTurn, R = never>(
                 }
               }),
             );
-            const released = yield* Effect.exit(
-              runSession.releaseRunLease(runId),
-            );
+            const released = yield* Effect.exit(runSession.commitRunEnd(runId));
             if (Exit.isFailure(released)) {
               yield* loopLog(
                 trace,
@@ -1332,6 +1319,7 @@ export function startChildRunLoop<TTurn, R = never>(
               );
             }
             // The parent may immediately read this child; release its claim first.
+            yield* releaseClaim;
             const delivery = yield* Effect.exit(
               submitPendingDelivery(pendingDelivery, runSession, runId, trace),
             );

@@ -3,7 +3,14 @@ import * as nodePath from 'node:path';
 
 // Third-party imports
 import { z } from 'zod';
-import { Cause, Effect, Exit, Fiber, FileSystem } from 'effect';
+import {
+  Cause,
+  Effect,
+  Exit,
+  Fiber,
+  FileSystem,
+  SynchronizedRef,
+} from 'effect';
 
 // Local imports
 import { getRunRecords } from '@agent/storage';
@@ -13,7 +20,7 @@ import {
 } from '@agent/workflowScript/checkpoint';
 import { parseWorkflowScript } from '@agent/workflowScript/parseScript';
 import { ToolCall } from '@agent/runtime/ToolCall';
-import { RunLive } from '@agent/runtime/runRoster';
+import { RunLive } from '@agent/runtime/runRegistry';
 import { registerRun } from '@agent/storage/runLifecycle';
 import {
   AgentConfigSchema,
@@ -31,12 +38,11 @@ import {
   USER_FOLLOW_UP_SUPPORT,
   WorkflowScriptFilesSchema,
 } from '@shared/schemas';
+import { heldElsewhereBy } from '@shared/session/database';
 import {
-  DatabaseClaimRefused,
-  DatabaseNotOwner,
-  DatabaseWriteFailed,
-} from '@shared/session/database';
-import { DELEGATE_MULTI_AGENTS_TOOL_NAME } from '@shared/constants/delegationTools';
+  DELEGATE_MULTI_AGENTS_TOOL_NAME,
+  formatWorkflowLaunchLead,
+} from '@shared/constants/delegationTools';
 import { configureDelegatedChildApprovals } from '@tools/approval';
 import {
   assertWritable,
@@ -58,6 +64,7 @@ import { childRunDescription, createChildRun } from './childRun';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { createWorkflowScriptAgentRunner } from './workflowScriptAgentRunner';
+import { WorkflowScriptReportMissing } from './workflowScriptRun';
 import {
   createWorkflowScriptStrategy,
   formatWorkflowScriptReference,
@@ -258,11 +265,7 @@ function executeWorkflowScriptTool(
       // The schema's exactly-one refinement guarantees source here.
       script = input.script as string;
       const submissionId =
-        parent.toolCallId ??
-        deriveRunId({
-          parentRunId,
-          script,
-        });
+        parent.toolCallId ?? deriveRunId({ parentRunId, script });
       scriptPath = yield* persistWorkflowScript(script, submissionId, parent);
     }
 
@@ -340,11 +343,11 @@ function executeWorkflowScriptTool(
       if (totalCost !== undefined) recordSubagentCost?.(totalCost);
     };
 
-    // The parent's model at the instant of dispatch. `run.config.model` is
-    // the live cell a parent model switch mutates, and a detached workflow
+    // The parent's model at the instant of dispatch. `run.model` is the
+    // live cell a parent model switch sets, and a detached workflow
     // resolves its `agent()` calls on a forked fiber after this call has
     // settled, so the value is read once, here, and threaded through.
-    const parentModel = parent.run.config.model;
+    const parentModel = (yield* SynchronizedRef.get(parent.run.model)).modelId;
 
     // Same availability gate as delegate_agent/delegate_workflow: a run model
     // the active credentials cannot serve fails here, with the available list,
@@ -460,29 +463,20 @@ function executeWorkflowScriptTool(
               if (Exit.isFailure(registration)) {
                 const error = Cause.squash(registration.cause);
                 // Another live TeXRA process holds the run this id names: the
-                // claim acquisition refuses rather than moving the aggregate.
-                if (
-                  error instanceof DatabaseWriteFailed &&
-                  error.cause instanceof DatabaseClaimRefused
-                ) {
-                  return alreadyRunning();
-                }
-                // A first launch of this id has no prior row to acquire, so
-                // its claim rides the birth append and a foreign winner
-                // refuses that append as `DatabaseNotOwner` (as a relaunch's
-                // claim race does). Only an open
-                // aggregate is a live run to wait for: a closed one is a
-                // tombstone this id can never start over, and calling that
-                // "already in progress" would send the model to wait on a
-                // run that never reports.
-                if (error instanceof DatabaseNotOwner && !error.closed) {
-                  return alreadyRunning();
-                }
-                throw workflowScriptToolError(
-                  new ToolError(
-                    `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                // claim acquisition refuses, or (a first launch having no prior
+                // row to acquire) a foreign winner refuses the birth append.
+                // Only a live holder is a run to wait for: a closed aggregate
+                // is a tombstone this id can never start over, and an ownerless
+                // one runs nowhere, so "already in progress" would send the
+                // model to wait on a run that never reports.
+                if (heldElsewhereBy(error) !== null) return alreadyRunning();
+                return yield* Effect.fail(
+                  workflowScriptToolError(
+                    new ToolError(
+                      `Failed to launch workflow script '${meta.name}': ${toErrorMessage(error)}`,
+                    ),
+                    scriptPath,
                   ),
-                  scriptPath,
                 );
               }
 
@@ -512,10 +506,7 @@ function executeWorkflowScriptTool(
                         kind: 'multiAgentWorkflow',
                         workflowName: meta.name,
                       },
-                      userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
-                      description: meta.description,
                       config: runConfig,
-                      checkpointId,
                     });
                   }),
                 buildLaunch: (childRun) =>
@@ -524,7 +515,7 @@ function executeWorkflowScriptTool(
                     // grant as delegate_agent/delegate_workflow. A human one-off approval
                     // inherits only the parent's ordinary per-kind bypass state.
                     configureDelegatedChildApprovals(
-                      childRun.childRunId,
+                      runId,
                       parentRunId,
                       proposalDecision.autoApproved
                         ? 'auto-approved'
@@ -600,9 +591,9 @@ function executeWorkflowScriptTool(
           runStore.readRunEnd(),
         ]);
         if (!report) {
-          throw new Error(
-            `Workflow script '${meta.name}' completed without a persisted report.`,
-          );
+          return yield* new WorkflowScriptReportMissing({
+            message: `Workflow script '${meta.name}' completed without a persisted report.`,
+          });
         }
         if (runEnd?.outcome !== RUN_OUTCOME.COMPLETED) {
           return errorResult(report, {
@@ -615,11 +606,9 @@ function executeWorkflowScriptTool(
       return withScriptReference(
         executed(
           [
-            `Workflow script '${meta.name}' launched. Its result and run log will be delivered automatically as a follow-up message when the run completes.`,
-            `Run ID: ${runId}`,
-            `Agent: ${defaultAgent.name} (part of the checkpoint identity with meta.name)`,
-            `The result arrives automatically. Continue other work meanwhile. To check progress: executions tool with path=/executions/${runId}; use action=wait only when you cannot proceed without it.`,
-            `To resume after a timeout or interruption: call this tool again with the same meta.name and agent.`,
+            `${formatWorkflowLaunchLead(meta.name, runId)} Its result and run log arrive automatically as a follow-up message when it ends; do not wait on it — continue other work.`,
+            `Default agent: ${defaultAgent.name}. To resume after a timeout or interruption, call this tool again with the same meta.name and agent.`,
+            `To look at progress without waiting: executions tool with path=/executions/${runId}.`,
           ].join('\n'),
           `Launched workflow script '${meta.name}' (async)`,
         ),
@@ -645,21 +634,22 @@ export const WorkflowScriptTool = defineTool({
   // roster is what the description advertises.
   availabilityCategory: 'workflow',
   slow: true,
-  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via agent().structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
+  description: `Run a deterministic JavaScript workflow that coordinates workflow agents and tool-use agents in parallel. Workflow agent calls (with inputFiles) resolve to a result envelope { category: 'workflow', outcome, outputs, diffs, compileFailures, cost } listing the files they produced, never prose. Tool-use agent calls (with agentName, model, schema) resolve to a structured JSON result via (yield* agent(...)).structured: use these for analysis, code edits, test runs, and any task that benefits from a focused interactive agent rather than a whole-document rewriter. Use \`delegate_multi_agents\` only when the complete fan-out, pipeline, and join structure is known before run and should resume safely after interruption. Keep using \`delegate_agent\` one call at a time when a later decision depends on reviewing an earlier result.
 
 Script input: every source submission is saved immediately as a unique, non-overwriting draft under .texra/workflow-scripts/. Every result returns that editable path; on an error, edit the file and retry with scriptPath instead of rewriting the source.
 
 Script rules:
-- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, phase, log, parallel, pipeline, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
+- Meta: start with an export const meta object containing name and description. No imports or require: only the injected primitives exist: agent, all, forEach, attempt, retry, timeout, phase, log, args, and files. Metadata and agent() options reject unknown fields, so typos fail at the saved script instead of being ignored. meta.phases accepts title strings such as ['Draft', 'Merge'] or objects such as [{ title: 'Draft' }].
 - Tasks: when the calls are known in advance, declare meta.tasks as { id, label, phase? } records so progress shows the pending plan before run. A task phase must name a title in meta.phases. Every agent() call must then reference one declared task with { id }; omit label and phase from the call because meta.tasks owns them (exact matching duplicates are accepted, but conflicts fail). Omit meta.tasks when the call set is data-dependent.
 - Files: the tool's files field binds workspace files to the whole run as files.inputFiles (editable), files.contextFiles (read-only documents), and files.mediaFiles (read-only visual or audio inputs). A workflow agent() call may use inputFiles, contextFiles, and mediaFiles; inputFiles is required unless the agent declares default outputs. Paths may name workspace files, launch files, or a previous call's outputs. Structured (tool-use) agent() calls do not accept file options.
 - Calls: every call may use agentName (another visible workflow or tool-use agent; defaults to this tool's agent field) and model (an available model short name for this call); omit model to follow ordinary delegation policy. A call without meta.tasks may also use id, label, and phase. Its logical identity is the explicit id when present, otherwise its call ordinal. Logical ids must be unique. Canonical labels prefer an explicit label, then a meaningful file and agent, then agent role and ordinal.
-- Awaiting: agent(), parallel(), and pipeline() return Promises: await them. parallel(thunks) is a barrier: it waits for every thunk. pipeline(items, stage1, stage2, ...) runs each item through the stages independently, so one item can reach a later stage while another is still in an earlier one; each stage receives (previousResult, originalItem, index), and a stage that returns null ends that item as null. Prefer pipeline() for multi-stage work and a parallel() barrier only when a stage needs every earlier result at once (dedup, early exit on zero findings, cross-item comparison). Inside pipeline stages without meta.tasks, pass { phase } on each call rather than relying on phase().
-- Failures: a failed agent call, including a workflow agent that produces no output files, and a call the user skips both resolve to null; filter nulls before synthesis. The run log reports which calls failed and which were skipped. JavaScript errors in parallel() thunks and pipeline() stages fail the workflow and preserve the editable script path rather than being silently converted to null.
+- Generators: the script body is a generator. agent(), all(), attempt(), retry() and timeout() build operations that run nothing until you write yield* before them: const r = yield* agent(...). Never await: await is a syntax error. Use ordinary JavaScript loops over yield* agent(...) for sequential stages.
+- Fan-out: yield* all([agent(...), agent(...)], { concurrency }) runs its items concurrently and returns their results in order; forEach(items, (item, index) => agent(...)) is all(items.map(fn)). A branch with several steps is a generator function: all(items.map((item) => function* () { const a = yield* agent(...); return yield* agent(...) })). Pass the function, not a call of it.
+- Failures: a failed agent call, including a workflow agent that produces no output files, throws an error named AgentFailed into the script; a call the user skips throws Skipped. all() is fail-fast: the first failure stops the other items and fails the all(). Wrap each item in attempt() to tolerate failures: attempt(op) never fails and returns { _tag: 'Success', value } or { _tag: 'Failure', error: { name, message } }. try/catch also works. retry(op, { times }) re-runs a failed call or branch (default once, at most 10; calls the branch already completed replay without running again); timeout(op, ms) fails it with TimedOut. JavaScript errors in the script fail the whole workflow and preserve the editable script path.
 
 Structured output: agent(prompt, { agentName, model, schema }) runs a tool-use agent that finishes by calling submit_output with a value matching the JSON Schema. Structured calls do not accept file options and must name the tool-use agent explicitly; model remains optional. The call resolves to an envelope whose .structured is the validated object rather than edited files.
 
-Async: this tool returns immediately with a run ID and runs the workflow as its own detached run. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Check intermediate progress with the executions tool (path=/executions/<id>, action=wait).
+Async: this tool returns immediately with a run ID and runs the workflow as its own detached run. The script's return value plus the run log (phases, log() lines, per-call outcomes with cost) are delivered back as a follow-up message when the run completes. Do not wait on it with the executions tool: the result arrives on its own. Read intermediate progress at path=/executions/<id>.
 
 Example:
 export const meta = {
@@ -673,24 +663,22 @@ export const meta = {
   ],
 }
 phase('Fix')
-const results = await parallel(files.inputFiles.slice(0, 2).map((file, index) => () =>
-  agent('Fix spelling errors only.', {
+const results = yield* all(files.inputFiles.slice(0, 2).map((file, index) =>
+  attempt(agent('Fix spelling errors only.', {
     id: index === 0 ? 'first' : 'second',
     inputFiles: [file],
-  })
+  }))
 ))
-const correctedFiles = results
-  .filter((result) => result != null)
-  .flatMap((result) => result.outputs.map((output) => output.absolutePath))
+const passed = results.filter((result) => result._tag === 'Success').map((result) => result.value)
+// inputFiles takes path strings: map each output record to its absolutePath.
+const correctedFiles = passed.flatMap((result) => result.outputs.map((output) => output.absolutePath))
 phase('Merge')
-return await agent('Merge the corrected drafts.', {
+return yield* agent('Merge the corrected drafts.', {
   id: 'merge',
   inputFiles: correctedFiles,
 })
 
-Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. Limits: the default whole-run wall clock is 60 minutes (set meta.timeoutMs, 1s to 24h, for longer runs); guest code separately gets 60s of CPU in total, and time spent waiting on agents does not count; at most 1000 live agent() calls per run and 4096 items per parallel() or pipeline() call.
-
-Patterns: for how to shape a run (adversarial verification, referee panels, loop until nothing new, completeness critic), read the multi-agent-orchestration skill's SKILL.md (listed in available_skills) before writing the script.`,
+Durability: the journal is keyed by meta.name and the agent field within this session. If the run times out or is interrupted, call this tool again with the SAME meta.name and the same agent: completed agent() calls replay for free (the script may be revised or reordered; only changed or unfinished calls execute). A different agent starts a new journal. Use a new meta.name to start over. The default whole-run wall clock is 10 minutes; set meta.timeoutMs (1s to 60min) for longer runs.`,
   schema: WorkflowScriptToolInputSchema,
   execute: executeWorkflowScriptTool,
 });

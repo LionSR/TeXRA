@@ -8,11 +8,7 @@ import { afterEach, beforeEach, describe, expect } from 'vitest';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { inquiryRecordsLayer } from '@controllers/session/inquiryRecords';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
-import {
-  ExternalInquiryPermissionSchema,
-  RunIdSchema,
-  ToolError,
-} from '@shared/schemas';
+import { RunIdSchema, ToolError } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';

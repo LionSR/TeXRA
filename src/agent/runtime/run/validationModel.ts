@@ -59,12 +59,12 @@ const schema = {
   },
 }
 phase('Solve')
-const results = await parallel([
-  () => agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', schema }),
-  () => agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', schema }),
-  () => agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema }),
+const results = yield* all([
+  attempt(agent('Find all integer solutions to x^2 - y^2 = 45.', { id: 'number-theory', agentName: 'prover', schema })),
+  attempt(agent('Classify a real 3 by 3 matrix with A^2 = A and trace(A) = 2.', { id: 'linear-algebra', agentName: 'prover', schema })),
+  attempt(agent('Compute whether HHT or THH appears first for a fair coin.', { id: 'probability', agentName: 'prover', schema })),
 ])
-return { solutions: results.map((result) => result?.structured ?? null) }`;
+return { solutions: results.map((result) => result._tag === 'Success' ? result.value.structured : null) }`;
 
 function mathematicalValidationOutput(prompt: string): {
   answer: string;
@@ -239,20 +239,11 @@ export function validationModel(config: ModelConfig): {
     });
   // The workflow-script switch is read per turn, so a validation run can flip
   // it between turns.
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
-      complete(turn, flag === '1'),
-    );
   const streamTurn: Model['streamTurn'] = (turn) =>
-    Stream.fromEffect(generateTurn(turn)).pipe(
-      Stream.map((result): TurnEvent => ({ kind: 'completed', result })),
-    );
-  return {
-    origin,
-    model: {
-      prepareTurn,
-      streamTurn,
-      generateTurn,
-    },
-  };
+    Stream.fromEffect(
+      Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
+        complete(turn, flag === '1'),
+      ),
+    ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
+  return { origin, model: { prepareTurn, streamTurn } };
 }

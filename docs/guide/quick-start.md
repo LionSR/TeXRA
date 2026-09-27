@@ -45,7 +45,7 @@ TeXRA panel offers the main access choices:
    (the <wa-icon library="texra" name="settings-gear"></wa-icon> gear icon at the top of the TeXRA panel) and
    set your provider's key in the **API keys** list, or place a `.env` file in your workspace with
    variables like `OPENAI_API_KEY`.
-2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Dashboard's **Models**
+2. **Use ChatGPT subscription**: Codex models through your ChatGPT plan. Open the Settings **Models**
    page and use the **ChatGPT subscription** sign-in section.
 3. **Use another provider subscription**: Grok (xAI), Kimi Code, and the GLM Coding Plan also run on a plan you
    already pay for. Connect them from the same **Models** page.
@@ -67,7 +67,8 @@ Once a credential is in place, the setup assistant takes it from here: one conve
 The terminal uses the same paths: provider env vars for your own keys,
 `texra auth chatgpt login` for a ChatGPT subscription, `texra auth grok login`
 for a Grok (xAI) subscription, or `/login` in a chat to pick among connected
-subscriptions. `texra setup` is the terminal counterpart of the setup
+subscriptions. Running `texra` without any of these opens the chat with a
+**Connect a model** panel instead of an error. `texra setup` is the terminal counterpart of the setup
 assistant: it walks you through sign-in, ChatGPT, or an API key, then your
 environment, agent roster, and first task. Read the
 [Authentication section](./texra-cli.md#authentication) of the CLI guide.

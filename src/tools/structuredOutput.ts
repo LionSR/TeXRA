@@ -11,7 +11,6 @@ import {
   type JsonValue,
   type ToolResult,
 } from '@shared/schemas';
-import { ensureError } from '@utils/errors/errorMessage';
 
 // Local file imports
 import { defineTool } from './core/define';

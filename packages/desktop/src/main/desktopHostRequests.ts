@@ -8,29 +8,19 @@
 import path from 'node:path';
 
 import { Cause, Effect, Exit, FileSystem, SubscriptionRef } from 'effect';
-import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
+import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
-import { prepareSurfaceLaunch } from '@controllers/mainView/backend/MainViewRunLaunchController';
+  launchApprovalOptions,
+  prepareSurfaceLaunch,
+} from '@controllers/mainView/backend/MainViewRunLaunchController';
 import type { ChatExportController } from '@controllers/progressView/ChatExportController';
-import {
-  ChatExportInputUnreadable,
-  exportRunTranscript,
-} from '@controllers/progressView/exportTranscript';
+import { exportRunTranscript } from '@controllers/progressView/exportTranscript';
 import { TranscriptExportFailed } from '@controllers/progressView/transcriptExportFailure';
 import { ApiKeyPromptFailed } from '@controllers/progressView/ProgressApiKeyRetryController';
 import { ProgressWorkflowFileActionsController } from '@controllers/progressView/ProgressWorkflowFileActionsController';
-import {
-  fromHost,
-  HostCallFailed,
-  hostFailure,
-} from '@controllers/session/hostCallFailure';
+import { fromHost, hostFailure } from '@controllers/session/hostCallFailure';
 import {
   createHostRunActions,
-  RunConfigUnreadable,
-  RunLaunchFailed,
   type WorkflowDiffRequest,
   type WorkflowFileOperationRequest,
 } from '@controllers/session/hostRunActions';
@@ -48,7 +38,11 @@ import {
   latexdiffPackMessage,
   runPackLatexdiffvc,
 } from '@housekeeping/packLatexdiffvc';
-import { packRunOutputs, runCleanRunDir } from '@housekeeping/runDirOps';
+import {
+  fileOpResultMessage,
+  packRunOutputs,
+  runCleanRunDir,
+} from '@housekeeping/runDirOps';
 import { LaTeXdiffService } from '@latex/latexdiff';
 import { withLogChannel } from '@logger/effectLog';
 import {
@@ -76,7 +70,6 @@ import {
   Rejected,
   Unavailable,
   type HostRequestFailure,
-  type RequestRefusal,
 } from '@shared/session/requestErrors';
 import type {
   HostOutcome,
@@ -95,10 +88,7 @@ import {
   vsCodeOnlyGettingStartedMessage,
 } from '../shared/desktopCommandSurface.js';
 import { DesktopProgressFileActions } from './desktopProgressFileActions.js';
-import {
-  OnboardingCallFailed,
-  type DesktopOnboardingIpc,
-} from './desktopOnboardingIpc.js';
+import type { DesktopOnboardingIpc } from './desktopOnboardingIpc.js';
 import type { PreviewUnavailable } from './desktopPreviewHost.js';
 import type { DesktopAgentRun } from './desktopAgentRun.js';
 import type { DesktopAgentRunHost } from './desktopAgentRunHost.js';
@@ -151,15 +141,6 @@ const CHANNEL = 'DesktopHostRequests';
 
 type WorkflowFileOperation = 'pack' | 'clean';
 
-function operationLabel(operation: WorkflowFileOperation): {
-  verb: string;
-  gerund: string;
-} {
-  return operation === 'pack'
-    ? { verb: 'pack', gerund: 'packing' }
-    : { verb: 'clean', gerund: 'cleaning' };
-}
-
 export function createDesktopHostRequests(
   options: DesktopHostRequestsOptions,
 ): DesktopHostRequests {
@@ -181,7 +162,7 @@ export function createDesktopHostRequests(
   const runActions = runtime.runSync(
     createHostRunActions({
       session,
-      runAgentRequest: run.runAgentRequest,
+      runValidated: run.runValidated,
       loadModelOptions: () =>
         withProcessServices(
           runtime,
@@ -193,7 +174,7 @@ export function createDesktopHostRequests(
       // Only the "ask the user for a key" step is host-specific: on the
       // desktop that means opening the Models tab rather than a modal prompt.
       // The controller re-reads the secret store after this returns.
-      promptForApiKey: () =>
+      promptForApiKey: (provider) =>
         Effect.gen(function* () {
           postDesktopSettingsView(options.postToRenderer, 'models/keys');
           yield* host.showInfoMessage(
@@ -205,7 +186,7 @@ export function createDesktopHostRequests(
             (failure): Effect.Effect<void, ApiKeyPromptFailed> =>
               Effect.fail(
                 new ApiKeyPromptFailed({
-                  provider: undefined,
+                  provider,
                   message:
                     'The desktop could not show the API key instruction.',
                   cause: failure.cause,
@@ -263,14 +244,10 @@ export function createDesktopHostRequests(
                       Effect.annotateLogs({ data: error }),
                       withLogChannel(CHANNEL),
                     );
-                    const primaryError = primaryAgentError(error);
-                    return yield* presentAgentFailure(
+                    return yield* presentRunFailure(
                       session.interactions,
-                      {
-                        kind: classifyAgentError(primaryError),
-                        message: `Merge failed: ${toErrorMessage(primaryError)}`,
-                      },
-                      { replayWhenAttached: true },
+                      error,
+                      'Merge failed: ',
                     );
                   }),
             ),
@@ -280,20 +257,6 @@ export function createDesktopHostRequests(
       listWorkspaceCandidateFiles,
     },
   );
-
-  const runLatexdiffFile = (
-    baseFile: string,
-    editedFile: string,
-    runId?: RunId,
-  ): Effect.Effect<void, HostCallFailed | RequestRefusal> =>
-    (runId === undefined
-      ? fileActions.runLatexdiffFile(baseFile, editedFile)
-      : fileActions.diffAcceptedFilePair(baseFile, editedFile, runId)
-    ).pipe(
-      Effect.mapError((cause) =>
-        hostFailure('fileActions.runLatexdiffFile', cause),
-      ),
-    );
 
   const workflowFileActions = new ProgressWorkflowFileActionsController({
     state: runOutputs,
@@ -306,7 +269,13 @@ export function createDesktopHostRequests(
       mergeFile: (baseFile, editedFile) =>
         fileActions.runMergeFile(baseFile, editedFile),
       latexdiffFile: (baseFile, editedFile) =>
-        runLatexdiffFile(baseFile, editedFile),
+        fileActions
+          .runLatexdiffFile(baseFile, editedFile)
+          .pipe(
+            Effect.mapError((cause) =>
+              hostFailure('fileActions.runLatexdiffFile', cause),
+            ),
+          ),
       openDirectory: (directory) => host.openPath(directory),
       // An accepted-edit backup names an absolute path the controller already
       // resolved, so this reads through the process filesystem rather than a
@@ -330,50 +299,35 @@ export function createDesktopHostRequests(
         ),
       );
 
+  /** Info results are shown; error results reject the request, which the
+   *  dispatcher surfaces. The wording is the shared `fileOpResultMessage`. */
   const reportFileOperationResult = (
     operation: WorkflowFileOperation,
     result: FileOpResult,
     inputFile: string,
-  ) =>
-    Effect.gen(function* () {
-      const { verb } = operationLabel(operation);
-      switch (result.status) {
-        case 'success': {
-          const folder = result.outputFolder;
-          let message = 'Output files cleaned.';
-          if (operation === 'pack') {
-            message = folder ? `Files packed into ${folder}` : 'Files packed.';
-          }
-          yield* host.showInfoMessage(message);
-          return;
-        }
-        case 'noFiles':
-          yield* host.showInfoMessage(
-            `No files found to ${verb} for ${inputFile}`,
-          );
-          return;
-        case 'error':
-          return yield* Effect.fail(
-            new Rejected({ reason: `Error during ${verb}: ${result.error}` }),
-          );
-      }
-    });
+  ) => {
+    const message = fileOpResultMessage(operation, result, inputFile);
+    return message.level === 'info'
+      ? host.showInfoMessage(message.text)
+      : Effect.fail(new Rejected({ reason: message.text }));
+  };
 
   const runWorkflowFileOperation = (
     operation: WorkflowFileOperation,
     request: WorkflowFileOperationRequest,
   ) =>
     Effect.gen(function* () {
-      const { verb, gerund } = operationLabel(operation);
       const { agent, model, inputFile, runId } = request;
       if (!agent || !model || !inputFile) {
-        return yield* Effect.fail(
-          new Rejected({ reason: `Select an input file before ${gerund}.` }),
+        return yield* reportFileOperationResult(
+          operation,
+          { status: 'missingParams' },
+          inputFile,
         );
       }
       if (!runId) {
         return yield* Effect.fail(
-          new Rejected({ reason: `Missing run identity for ${verb}.` }),
+          new Rejected({ reason: `Missing run identity for ${operation}.` }),
         );
       }
       const ran = yield* Effect.exit(
@@ -387,10 +341,10 @@ export function createDesktopHostRequests(
           Effect.annotateLogs({ data: error }),
           withLogChannel(CHANNEL),
         );
-        return yield* Effect.fail(
-          new Rejected({
-            reason: `Error during ${operation}: ${toErrorMessage(error)}`,
-          }),
+        return yield* reportFileOperationResult(
+          operation,
+          { status: 'error', error: toErrorMessage(error) },
+          inputFile,
         );
       }
       yield* reportFileOperationResult(operation, ran.value, inputFile);
@@ -524,22 +478,15 @@ export function createDesktopHostRequests(
     runWorkflowDiff,
     runWorkflowFileOperation,
     latexdiffAgainstCommit,
-    mergeFiles: (baseFile, editedFile) =>
-      fileActions.runMergeFile(baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      runLatexdiffFile(baseFile, editedFile),
-    openSettings: (section, sessionType) =>
+    openSettings: (section) =>
       Effect.sync(() =>
         postDesktopSettingsView(
           options.postToRenderer,
-          (
-            {
-              agents: 'agents/library',
-              teams: 'agents/teams',
-              models: 'models/models',
-            } as const
-          )[section],
-          sessionType === 'toolUse' ? 'toolUse' : undefined,
+          section
+            ? ({ teams: 'agents/teams', models: 'models/models' } as const)[
+                section
+              ]
+            : undefined,
         ),
       ),
     // Only the "ask the user for a key" step is host-specific: on the
@@ -659,13 +606,10 @@ export function createDesktopHostRequests(
             session.roots.workspaceState,
             session.roots.storage,
           );
+          const approval = launchApprovalOptions(request, session.approvals);
           yield* run
-            .runValidated(launch)
-            .pipe(
-              Effect.mapError((cause) =>
-                hostFailure('run.runValidated', cause),
-              ),
-            );
+            .runValidated(launch, approval)
+            .pipe(Effect.mapError((e) => hostFailure('run.runValidated', e)));
           return done;
         }
         case 'extractFigures':
@@ -675,10 +619,9 @@ export function createDesktopHostRequests(
   }
 
   /**
-   * The bridge's host-request port: the dispatch program plus the one dialog
-   * a failed request presents before it is answered. The cause is squashed to
-   * word the dialog and re-raised unchanged, so the bridge's
-   * refusal-versus-defect fold sees what the failing arm produced.
+   * The bridge's host-request port. A failure is answered as it is: the
+   * surface shows a refusal with its guide link, and a launch that fails has
+   * already been presented by the launch itself.
    */
   function handleHostRequest(
     request: HostRequest,
@@ -686,46 +629,7 @@ export function createDesktopHostRequests(
   ): Effect.Effect<HostOutcome, HostRequestFailure, ProcessServices> {
     // Over this paper's rooted filesystems: an arm that writes under the
     // session's storage takes the view the layer above built from its roots.
-    return Effect.provide(dispatch(request, port), sessionFiles).pipe(
-      Effect.catchCause((cause) => {
-        const error = Cause.squash(cause);
-        if (error instanceof Cancelled) return Effect.failCause(cause);
-        // Request-scoped operations do not present. Every rejection, including
-        // a capability refusal, reaches this one dialog before the response.
-        // A lifted member is presented as what it rejected with: the tag names
-        // the member, the classification reads the cause it carried, so the
-        // dialog words the launcher's or the record read's own error exactly
-        // as it did when that value reached here bare.
-        const primaryError = primaryAgentError(
-          error instanceof HostCallFailed ||
-            error instanceof OnboardingCallFailed ||
-            error instanceof RunLaunchFailed ||
-            error instanceof RunConfigUnreadable ||
-            error instanceof TranscriptExportFailed ||
-            error instanceof ChatExportInputUnreadable
-            ? error.cause
-            : error,
-        );
-        const refusal =
-          primaryError instanceof Rejected ||
-          primaryError instanceof Unavailable
-            ? primaryError
-            : undefined;
-        return presentAgentFailure(
-          session.interactions,
-          {
-            kind: classifyAgentError(primaryError),
-            message: refusal?.reason ?? toErrorMessage(primaryError),
-            // A refused request's guide link (e.g. the launch's
-            // file-management page) must survive into the host-owned
-            // dialog (#11959).
-            ...(refusal instanceof Rejected &&
-              refusal.docsCommand && { docsCommand: refusal.docsCommand }),
-          },
-          { replayWhenAttached: true },
-        ).pipe(Effect.andThen(Effect.failCause(cause)));
-      }),
-    );
+    return Effect.provide(dispatch(request, port), sessionFiles);
   }
 
   return {

@@ -1,33 +1,17 @@
 /**
- * LaTeX settings domain handlers.
- *
- * Handles LaTeX tool detection, recommended VS Code settings,
- * LaTeX Workshop installation, and install commands.
+ * The settings arms only VS Code answers: writing the recommended LaTeX
+ * editor settings and installing extensions. The rest of the Tools and LaTeX
+ * pages is the shared settings body's (`settingsToolCommands`).
  */
 import { Effect } from 'effect';
 import * as vscode from 'vscode';
+
+import type { LatexRecommendedStatus } from '@controllers/settingsView/LatexToolingController';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
-
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
+import type { createSettingsViewBody } from '@controllers/settingsView/sharedSettingsCommands';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
-import type { SettingsMessageFor } from '@shared/settingsView/settingsViewMessages';
-import {
-  LATEX_WORKSHOP_EXT_ID,
-  normalizePlatform,
-} from '@shared/constants/latexToolchain';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-
-import {
-  postToWebview,
-  withHandlerErrorHandling,
-  type SettingsHandlerContext,
-} from './SettingsHandlerContext';
-import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
+import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
+import { ensureError } from '@utils/errors/errorMessage';
 
 type LatexRecommendedSettingField = 'outDir' | 'autoRevealExclude';
 
@@ -129,136 +113,34 @@ function resolveUpdateValue(
   return { ...remaining, ...setting.value };
 }
 
-/** The LaTeX tab's inbound arms, spread into the settings-view registry. */
-type LatexTabHandlers = Pick<
+/** Which recommended settings are applied, for the LaTeX page's status. */
+export function latexRecommendedStatus(): LatexRecommendedStatus {
+  return {
+    outDir: isRecommendedValueSet('outDir'),
+    autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
+  };
+}
+
+/** The arms, spread into the settings-view registry. Each reports its own
+ *  failure in its own words and repaints the LaTeX status it changed. */
+export function vscodeLatexSettingsHandlers(
+  body: Pick<
+    ReturnType<typeof createSettingsViewBody>,
+    'postLatexStatus' | 'reported'
+  >,
+): Pick<
   SettingsViewInboundHandlerRegistry,
   | typeof SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS
   | typeof SETTINGS_VIEW_COMMANDS.INSTALL_LATEX_WORKSHOP
-  | typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND
->;
-
-/** LaTeX settings handler delegate. */
-export class LatexSettingsHandlers {
-  readonly handlers: LatexTabHandlers;
-
-  private readonly toolingController = new LatexToolingController({
-    checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-    findPath: findToolInCommonPaths,
-    detectPackageManager,
-    getPlatform: () => normalizePlatform(process.platform),
-    isLatexWorkshopInstalled: () =>
-      Boolean(vscode.extensions.getExtension(LATEX_WORKSHOP_EXT_ID)),
-    getRecommendedStatus: () => ({
-      outDir: isRecommendedValueSet('outDir'),
-      autoRevealExclude: isRecommendedValueSet('autoRevealExclude'),
-    }),
-    onDetectionError: (error) => {
-      this.ctx.log.error(
-        `LaTeX settings detection failed: ${toErrorMessage(error)}`,
-      );
-    },
-  });
-
-  constructor(private readonly ctx: SettingsHandlerContext) {
-    // Each arm is a settings-view message, so its program settles on the
-    // view's boundary here rather than in the view's own registry.
-    this.handlers = {
-      applyLatexSettings: (message) => this.handleApplyLatexSettings(message),
-      installLatexWorkshop: () => this.handleInstallLatexWorkshop(),
-      runInstallCommand: (message) => this.handleRunInstallCommand(message),
-    };
-  }
-
-  sendLatexSettingsStatus(webview: vscode.Webview) {
-    return Effect.flatMap(this.toolingController.detectStatus(), (settings) =>
-      postToWebview(webview, {
-        command: SETTINGS_VIEW_COMMANDS.UPDATE_LATEX_SETTINGS_STATUS,
-        settings,
-      }),
-    );
-  }
-
-  private handleApplyLatexSettings(
-    data: SettingsMessageFor<
-      typeof SETTINGS_VIEW_COMMANDS.APPLY_LATEX_SETTINGS
-    >,
-  ) {
-    return withHandlerErrorHandling(
-      this.ctx,
-      'Failed to update LaTeX settings',
-      Effect.gen({ self: this }, function* () {
-        const reset = data.reset ?? false;
-        const targets = data.field
-          ? LATEX_RECOMMENDED_SETTINGS.filter(
-              (setting) => setting.field === data.field,
-            )
-          : LATEX_RECOMMENDED_SETTINGS;
-        for (const setting of targets) {
-          yield* Effect.tryPromise({
-            try: () =>
-              vscode.workspace
-                .getConfiguration()
-                .update(
-                  setting.key,
-                  resolveUpdateValue(setting, reset),
-                  vscode.ConfigurationTarget.Global,
-                ),
-            catch: ensureError,
-          });
-        }
-
-        yield* this.ctx.withActiveWebview((w) =>
-          this.sendLatexSettingsStatus(w),
-        );
-        const verb = reset ? 'reset' : 'applied';
-        void vscode.window.showInformationMessage(
-          data.field
-            ? `LaTeX setting ${verb}`
-            : `All recommended LaTeX settings ${verb}`,
-        );
-      }),
-    );
-  }
-
-  private handleInstallLatexWorkshop() {
-    return this.installExtension(LATEX_WORKSHOP_EXT_ID, (w) =>
-      this.sendLatexSettingsStatus(w),
-    );
-  }
-
-  private handleRunInstallCommand(
-    data: SettingsMessageFor<typeof SETTINGS_VIEW_COMMANDS.RUN_INSTALL_COMMAND>,
-  ) {
-    return Effect.sync(() => {
-      if (
-        !this.toolingController.isAllowedInstallCommand(data.installCommand)
-      ) {
-        this.ctx.log.warn(
-          `Rejected unknown install command: ${data.installCommand}`,
-        );
-        return;
-      }
-
-      const terminal = vscode.window.createTerminal({
-        name: 'TeXRA Install',
-        hideFromUser: false,
-      });
-      terminal.show();
-      terminal.sendText(data.installCommand);
-    });
-  }
-
-  /** Install a VS Code extension and optionally refresh the given view data. */
-  installExtension(
+  | typeof SETTINGS_VIEW_COMMANDS.INSTALL_TOOL_EXTENSION
+> {
+  const installExtension = <E, R>(
     extensionId: string,
-    refresh?: (
-      w: vscode.Webview,
-    ) => Effect.Effect<void, Error, ChildProcessSpawner>,
-  ) {
-    return withHandlerErrorHandling(
-      this.ctx,
+    refresh: Effect.Effect<void, E, R>,
+  ) =>
+    body.reported(
       `Failed to install extension "${extensionId}"`,
-      Effect.gen({ self: this }, function* () {
+      Effect.gen(function* () {
         yield* Effect.tryPromise({
           try: () =>
             vscode.commands.executeCommand(
@@ -270,10 +152,47 @@ export class LatexSettingsHandlers {
         void vscode.window.showInformationMessage(
           `Extension "${extensionId}" installed`,
         );
-        if (refresh) {
-          yield* this.ctx.withActiveWebview(refresh);
-        }
+        yield* refresh;
       }),
     );
-  }
+
+  return {
+    applyLatexSettings: (data) =>
+      body.reported(
+        'Failed to update LaTeX settings',
+        Effect.gen(function* () {
+          const reset = data.reset ?? false;
+          const targets = data.field
+            ? LATEX_RECOMMENDED_SETTINGS.filter(
+                (setting) => setting.field === data.field,
+              )
+            : LATEX_RECOMMENDED_SETTINGS;
+          for (const setting of targets) {
+            yield* Effect.tryPromise({
+              try: () =>
+                vscode.workspace
+                  .getConfiguration()
+                  .update(
+                    setting.key,
+                    resolveUpdateValue(setting, reset),
+                    vscode.ConfigurationTarget.Global,
+                  ),
+              catch: ensureError,
+            });
+          }
+
+          yield* body.postLatexStatus;
+          const verb = reset ? 'reset' : 'applied';
+          void vscode.window.showInformationMessage(
+            data.field
+              ? `LaTeX setting ${verb}`
+              : `All recommended LaTeX settings ${verb}`,
+          );
+        }),
+      ),
+    installLatexWorkshop: () =>
+      installExtension(LATEX_WORKSHOP_EXT_ID, body.postLatexStatus),
+    installToolExtension: (message) =>
+      installExtension(message.extensionId, Effect.void),
+  };
 }

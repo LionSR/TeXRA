@@ -263,7 +263,7 @@ Two of those baselines budget the code itself rather than an import edge, and bo
 - `file-size-baseline.json` — a per-file line budget for every production file over 500 lines (`fileSizeRatchet.vitest.ts`): growth fails, a new oversized file fails, and an entry whose file is gone or has fallen to the threshold fails, which is the one way deleting lines breaks the suite: drop the entry in the same PR. A file that shrank but stayed over the threshold keeps its budget.
 - `refuted-candidates.json` — the refactor candidates that were investigated, costed and refused, with their ruling anchors (`refutedCandidatesRatchet.vitest.ts` pins each symbol's shape; `.github/workflows/refuted-candidates.yml` fails a PR whose diff touches one without citing its ruling id in the body). Re-proposing a refused candidate as specified is what it stops; landing one on new evidence cites the id and rewrites the entry.
 
-A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity); a combinator that absorbs any failure is generic in it.
+A third code budget reached zero and is now a hardcoded rule: `unknownErrorChannelRatchet.vitest.ts` fails on any production `Effect.Effect<A, unknown, R>` or `Effect.fn.Return<A, unknown, R>`. Type the channel with the tagged error the path already raises; a port whose hosts each fail with their own surface's error takes `Error`; a foreign rejection becomes an `Error` at its boundary with `ensureError` (`@utils/errors/errorMessage`), never a `catch: (e) => e` / `onError: (e) => e` pass-through (the same test fails one, outside its `IDENTITY_CATCH_JOINS` list of late-rejection joins that compare the raw value by identity), and never the thunk form `Effect.try(() => …)` / `Effect.tryPromise(() => …)`, whose `UnknownError` hides the real message behind a fixed one; a combinator that absorbs any failure is generic in it.
 
 - `packages/extension/src/frontend/` contains extension-host utilities that power shared UI flows (agent directories, file listers, instruction banners, tool workflows). Prefer these helpers over duplicating logic in commands or webviews.
   - `frontend/system/` - VS Code command utilities (`safeExecuteCommand`)
@@ -279,7 +279,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - `src/utils/` holds host-agnostic utilities. A subset of it must additionally stay **browser-safe**, because the webview frontends import it: exactly the four modules in the `BROWSER_SAFE_UTILS` allowlist in `eslint.config.mjs` (`@utils/core`, `@utils/errors/errorMessage`, `@utils/files/pastedImageName`, `@utils/text/stringUtils`). ESLint lets `progressView/frontend/` and `settingsView/frontend/` import only those at runtime, and holds the four to no Node built-ins and runtime imports of each other only. The rest of `src/utils/` is not browser-reachable and must not be assumed browser-safe.
 
   Do not read this as "everything in `utils/` is shared with the webviews": it is not, and an earlier version of this line said so incorrectly. What it does mean: if a helper is specific to one side, prefer `frontend/` or `common/`, and if you add an import to one of the four browser-reachable modules, check that it stays browser-safe.
-  - `utils/core/` - Async, type-guard, math, comparator, URL, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `tryParseUrl`, `normalizeFilePath`, `getBasename`, `getFileStem`)
+  - `utils/core/` - Async, type-guard, math, comparator, and path-basics primitives (`debounce`, `filterNotNull`, `clamp`, `byName`, `normalizeFilePath`, `getBasename`, `getFileStem`)
     - `utils/core/boundedIdSet.ts` - `createBoundedIdSet` (LRU-capped `Set<Id>` for "seen id" guards)
     - `utils/core/idHash.ts` - Node-only deterministic execution-ID derivation
     - `utils/core/perKeyQueue.ts` - `withPerKeyLane`, the one per-key serialization lane (Effect-based; `KeyedMutex` and `async-mutex` were retired by #12696)
@@ -298,7 +298,7 @@ A third code budget reached zero and is now a hardcoded rule: `unknownErrorChann
 - `packages/extension/resources/` - Packaged agents, tool-use agents, docs, templates, examples, and extension assets
 - `src/platform/` - Platform abstraction layer: the host ports and the process runtime types. Each host's composition root calls `installProcessRuntime()` once at startup; agnostic code reads the ports from the Effect context that runtime serves.
 - `src/hosts/` - Host capability interfaces for clipboard, prompts, terminals, diff views, and openers.
-- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types only; `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
+- `src/ui/` (`@ui/*`) - The host-neutral UI toolkit all three hosts render from: `ui/wa/` (Web Awesome and Lit building blocks, `waIcon()`), `ui/styles/` (shared `css` blocks), `ui/transcript/` (the transcript row model), `ui/markdown/` (the markdown/KaTeX pipeline) and `ui/copy/` (user-facing copy tables). It is a VS Code-free zone and takes no `@agent/*` imports. `src/shared/` keeps the wire contracts and UI-shared message types — plus `litControllers/`, `monaco/`, and `highlighting/`, rendering code that never made the move to `src/ui/` (consumers are webview/renderer UI code, plus one main-process diff-labeling caller, `packages/desktop/src/main/desktopDiffHost.ts`, and the UI toolkit's own markdown pipeline, `src/ui/markdown/katexHtmlProcessor.ts`; the three were shelved along with a broader, separately proposed regroup of six `src/shared/` subtrees into their own subdirectory that was rejected on cost — 235 import statements plus 9 hardcoded literal test paths for that six-directory regroup, not for these three alone — not because that code is a wire contract); `src/transcript/` (`@transcript`) is the unrelated run-transcript persistence layer.
 - `src/test-kernel/` - Centralized Vitest suites for shared and host-specific behavior, including extension, desktop, and CLI code.
 
 ### Pragmatic implementations
@@ -319,15 +319,80 @@ interfaces often and on purpose. A test pinned to a seam that is about to churn
 is not safety — it is merge friction the next refactor has to pay down. The
 default for a PR is **zero new tests**; a test must earn its place — protecting
 a consequential current contract, a difficult invariant, or a reproduced
-defect — and is never proof of work or PR padding. Concretely:
+defect — and is never proof of work or PR padding.
+
+Three rules come first and override anything below that seems to allow more:
+
+1. **Never write unit tests after you write code.** A unit test written to
+   fit code that already exists asserts what the code does, not what it
+   should do. It passes on day one, catches nothing, and pins the
+   implementation for the next refactor to pay down. If the code is already
+   written, the evidence is an E2E run, not a retrofitted unit suite. Keeping
+   an existing test is not writing one: when a cleanup deletes a suite, a live
+   helper keeps its last direct test that protects a real contract.
+2. **E2E tests are the preferred and default testing mechanism.** Verify a
+   complex feature by driving the real app (the Playwright suite in
+   `packages/desktop/tests/e2e/`, or the real `texra` binary for CLI
+   behavior) through the user-visible path. Every E2E test ends by producing
+   a **verifiable, repeatable artifact** — a screenshot compared against a
+   committed baseline, a saved transcript, run ledger, or output file —
+   written to a known path (`packages/desktop/tests/e2e/test-results/`), so a
+   reviewer can re-run the test and diff the artifact rather than trusting a
+   green checkmark.
+3. **If you must test a system in isolation, write down how it can fail
+   first, then write the code.** Before any implementation, list every way the
+   unit can fail — bad input, malformed persisted data, ordering and
+   cancellation races, partial writes, provider errors, boundary sizes — in the
+   PR body or at the top of the suite. Each isolated test encodes one entry
+   from that list; a test that maps to no listed failure mode does not get
+   written. This is the only route to a new unit test.
+
+Concretely:
 
 - A behavior-preserving refactor adds no new tests; the existing suite passing
   is the evidence.
 - A bug fix gets at most one regression test that reproduces the defect, at the
-  narrowest boundary that exhibits it.
-- A new feature gets a small number of behavioral tests at its durable
-  boundary — the wire contract, the schema, the user-visible output — not a
-  unit test for each internal layer the data passes through.
+  narrowest boundary that exhibits it — written to fail before the fix lands.
+  Prefer an E2E reproduction when the defect is reachable through the app.
+- A new feature gets E2E coverage of its user-visible path, ending in an
+  artifact. Isolated tests only under rule 3, at its durable boundary — the
+  wire contract, the schema, the parser — never a unit test for each internal
+  layer the data passes through.
+- Delete a unit test that would not catch a real bug the E2E suite misses:
+  mock echoes, call-count and call-order pins, snapshot tests of copy,
+  "renders without crashing", and re-assertions of a schema's defaults are
+  cost with no signal.
+
+How to write the tests that do earn a place (adapted from the testing guides
+in [opencode](https://github.com/sst/opencode/blob/dev/AGENTS.md)):
+
+- **Test the real implementation; avoid mocks.** Run the production code
+  against real resources: a temp directory, a real git repo, a real SQLite
+  file, a real child process. Fake only at an edge — the provider's HTTP
+  endpoint (a scripted local server replaying recorded responses), or a host
+  port through its shared fake (see "Test fixtures and fakes") — never a
+  repository module (see "Test tiers"). Never patch `globalThis`. When a test
+  must stub a service, stub only the methods it needs with `Layer.mock`: any
+  other method throws, so an unexpected dependency fails loudly rather than
+  returning a quiet placeholder.
+- **Do not duplicate logic into tests.** An expected value that the test
+  computes by re-running the algorithm passes whenever the code is wrong in
+  the same way. Write the expected output down as a literal, or check a
+  property the code has to satisfy.
+- **Synchronize on published signals, never wall-clock.** A fixed sleep that
+  waits "long enough" for a forked fiber, a process, or a render is a flake on
+  a slow CI host. Wait on the state the next step needs: a `Deferred`, a
+  session status, an event on the trace, a file appearing, a Playwright
+  web-first assertion. A real sleep is acceptable only where wall-clock time
+  is the thing under test (mtime resolution, a real subprocess timeout); an
+  Effect program's delays, retries, and debounces run on the test clock
+  instead (see "Test fixtures and fakes").
+- **E2E hygiene.** Drive the app through user-visible roles, labels, and text,
+  with isolated, deterministic data per test. Register an event or network wait
+  before the action that triggers it. Retry idempotent readiness checks, never
+  state-changing actions. Assert exact outcomes and identities, so stale state,
+  duplicate rendering, or the wrong element cannot pass. Never use
+  `waitForTimeout`.
 - Extend the module's existing suite rather than adding a new test file. Add
   one only when the module has no existing suite (one suite per module,
   path-mirrored under `src/test-kernel/`) or for one named cross-module
@@ -477,7 +542,8 @@ the owner ruled that 1.0's exports start fresh, so a document from an older
 build fails loudly at the parse boundary (#12359). The session database is
 the same stance made mechanical: `SESSION_EVENT_FORMAT`
 (`src/shared/schemas/sessionEvent.ts`) stamps every `texra.db`, `Database`
-clears a store of any other version at open, and
+moves a store of an older version aside at open (`texra.db.format<N>`, never
+read again) and refuses to open one of a newer version, and
 `sessionEventFormat.vitest.ts` pins the stored shape so a vocabulary change
 cannot land without bumping the version.
 
@@ -583,8 +649,8 @@ For good separation of concerns and platform independence, core business logic s
 
 **Logging and telemetry**
 
-- Route logging through `@logger/logUtils`. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
-- Always pass structured payloads via the `data` argument (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
+- Log with `Effect.log*` and name the channel with `withLogChannel` (`@logger/effectLog`). Only a synchronous publication point with no fiber (the trace emitter, pre-runtime and shutdown paths) writes `writeLogEntry` from `@logger/logSink` directly. Agent flows should use `AgentTrace` (`@agent/trace`) to get grouped output and tool-use aware channels.
+- Always pass structured payloads as raw `data` (`Effect.annotateLogs({ data })`) (file lists, missing outputs, latexdiff results, usage statistics) so the progress view can render rich entries without custom parsing.
 - Publish runtime progress through session events and `SessionHandle.interactions.emit`; keep non-agent logs on the shared `TeXRA` output channel.
 
 **Agent execution and tool-use**
@@ -598,13 +664,14 @@ For good separation of concerns and platform independence, core business logic s
 
 A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph:
 
-- **Two programs**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`) for tool-use agents and `runReflection` (`loop/reflection.ts`) for multi-round reflection agents. `loop/rows.ts` builds every ledger draft a loop appends. `core/tools/toolCallParsing.ts` is the one helper both use.
+- **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). Workflow agents run it in round mode (`loop/rounds.ts`): the documents plugin's continuation policy opens each round's turn and processes its output (`src/agent/output/documentRounds.ts`), and the agent is offered no tools. `loop/rows.ts` builds every ledger draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
 - **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
-- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), `FollowUps` (the run's lease over the follow-up queue), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
+- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
+- **A run's input queue is its own, never context.** A conversation run claims its lease over the follow-up queue in its own scope (`claimFollowUps` in `runtime/FollowUps.ts`, from `runToolUse`); a round-mode run takes no input and claims none. A child launched from a parent's tool call runs in that call's fiber, so a context-provided queue would hand it the parent's: never read another run's input from context.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `flow.step` for every wait and every halt; a `flow.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
 - **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`request.opened` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled; the helper path (`helperCompletion`) keeps its own bounded retry because it runs outside the invoker.
 - **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
-- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loops only execute and fail typed (`RunHalted`).
+- **Agent owns lifecycle**: `executeAgent` / `AgentRunLifecycle` handle init and finalize; the loop only executes and fails typed (`RunHalted`).
 
 **Webviews and UI**
 
@@ -641,10 +708,10 @@ one the view you're touching already uses:
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
   (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
   active-webview tracking, the `HandlerRegistry` build, and the toast for an
-  unsupported command — and delegates tab-shaped groups to focused handler
-  classes in `settingsView/handlers/` behind `SettingsHandlerContext`
-  (`AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
-  `GitHubSubscriptionHandlers`, `SubscriptionHandlers`). There is no abstract
+  unsupported command — over the shared settings body
+  (`src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
+  modules; only the VS Code-specific LaTeX arms live in
+  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,
@@ -674,6 +741,7 @@ one the view you're touching already uses:
 - **Trust Dependencies**: Use APIs as documented. When behavior is unclear, check the source in `node_modules/` first. Add a workaround only for a documented quirk, with a comment explaining it
 - **Dropdown Menus**: Should close when clicking outside, not just on toggle
 - **CSS Organization**: Keep per-component styles as TypeScript in each view's `frontend/` directory, shared tokens in `packages/extension/src/common/styles/common.css`
+- **Design system**: tokens, control skins, and the brand and human-in-the-loop rules are in `src/ui/README.md`. Read it before adding a control or a local style override
 
 ### UI anti-patterns
 

@@ -1,4 +1,4 @@
-import { Effect, Stream } from 'effect';
+import { Cause, Effect, Exit, Stream } from 'effect';
 import * as PlatformError from 'effect/PlatformError';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,19 +40,10 @@ const signalled = (method: string) =>
   });
 
 describe('resolvePagerCommand', () => {
-  it('defaults to less -FIRX when $PAGER is unset', () => {
-    expect(resolvePagerCommand({})).toBe('less -FIRX');
-  });
-
-  it('honors an explicit $PAGER', () => {
-    expect(resolvePagerCommand({ PAGER: 'more' })).toBe('more');
-    expect(resolvePagerCommand({ PAGER: '  less -R  ' })).toBe('less -R');
-  });
-
   it('treats empty $PAGER or PAGER=cat as "no pager"', () => {
-    expect(resolvePagerCommand({ PAGER: '' })).toBeUndefined();
-    expect(resolvePagerCommand({ PAGER: '   ' })).toBeUndefined();
-    expect(resolvePagerCommand({ PAGER: 'cat' })).toBeUndefined();
+    expect(resolvePagerCommand('')).toBeUndefined();
+    expect(resolvePagerCommand('   ')).toBeUndefined();
+    expect(resolvePagerCommand('cat')).toBeUndefined();
   });
 });
 
@@ -86,34 +77,25 @@ describe('pageStdout', () => {
   });
 
   it('pages through $PAGER only on an interactive TTY', async () => {
-    process.env.TEXRA_PAGER_TEST_ENV = 'inherited';
-    try {
-      const calls = await page('row1\nrow2', {
-        stdoutIsTty: true,
-        env: { PAGER: 'less -R' },
-      });
-      expect(calls).toHaveLength(1);
-      const [command] = calls;
-      expect(command.command).toBe('less -R');
-      expect(command.options).toMatchObject({
-        shell: true,
-        detached: false,
-        stdout: 'inherit',
-        stderr: 'inherit',
-      });
-      expect(await stdinText(command)).toBe('row1\nrow2\n');
-      expect(command.options.env).toMatchObject({
-        PAGER: 'less -R',
-        TEXRA_PAGER_TEST_ENV: 'inherited',
-      });
-      // Paging writes through the child; nothing is written directly to stdout.
-      expect(stdout).toBe('');
-    } finally {
-      delete process.env.TEXRA_PAGER_TEST_ENV;
-    }
+    const calls = await page('row1\nrow2', {
+      stdoutIsTty: true,
+      pager: 'less -R',
+    });
+    expect(calls).toHaveLength(1);
+    const [command] = calls;
+    expect(command.command).toBe('less -R');
+    expect(command.options).toMatchObject({
+      shell: true,
+      detached: false,
+      stdout: 'inherit',
+      stderr: 'inherit',
+    });
+    expect(await stdinText(command)).toBe('row1\nrow2\n');
+    // Paging writes through the child; nothing is written directly to stdout.
+    expect(stdout).toBe('');
   });
 
-  it('inherits the live environment when no explicit env override is passed', async () => {
+  it('reads the live $PAGER when no pager override is passed', async () => {
     const originalPager = process.env.PAGER;
     process.env.PAGER = 'less -R';
     try {
@@ -129,9 +111,7 @@ describe('pageStdout', () => {
   });
 
   it('writes directly (no pager) when $PAGER is disabled even on a TTY', async () => {
-    expect(
-      await page('row', { stdoutIsTty: true, env: { PAGER: '' } }),
-    ).toEqual([]);
+    expect(await page('row', { stdoutIsTty: true, pager: '' })).toEqual([]);
     expect(stdout).toBe('row\n');
   });
 
@@ -171,11 +151,7 @@ describe('pageStdout', () => {
       expected: '',
     },
   ])('$name', async ({ answer, pager, expected }) => {
-    const calls = await page(
-      'row',
-      { stdoutIsTty: true, env: { PAGER: pager } },
-      answer,
-    );
+    const calls = await page('row', { stdoutIsTty: true, pager }, answer);
     expect(calls).toHaveLength(1);
     expect(stdout).toBe(expected);
   });
@@ -183,5 +159,42 @@ describe('pageStdout', () => {
   it('never pages empty text', async () => {
     expect(await page('', { stdoutIsTty: true })).toEqual([]);
     expect(stdout).toBe('');
+  });
+
+  describe('Ctrl-C while the pager owns the terminal', () => {
+    /** Page on a TTY, pressing Ctrl-C while the pager runs; the pager then
+     *  answers `answer`. Returns how the paging program ended. */
+    async function pageWithCtrlC(answer: Answer): Promise<Exit.Exit<void>> {
+      const listeners: Array<() => void> = [];
+      const on = vi.spyOn(process, 'on');
+      on.mockImplementation(((event: string | symbol, listener: () => void) => {
+        if (event === 'SIGINT') listeners.push(listener);
+        return process;
+      }) as typeof process.on);
+      const spawner = scriptedSpawnerLayer(() => {
+        for (const listener of listeners) listener();
+        return answer;
+      });
+      const exit = await Effect.runPromiseExit(
+        pageStdout('long listing', { stdoutIsTty: true, pager: 'less' }).pipe(
+          Effect.provide(spawner.layer),
+        ),
+      );
+      expect(listeners).toHaveLength(1);
+      return exit;
+    }
+
+    it('keeps the CLI running when the pager handles Ctrl-C itself', async () => {
+      // `less` cancels a search on Ctrl-C and exits normally when quit.
+      expect(Exit.isSuccess(await pageWithCtrlC({ exitCode: 0 }))).toBe(true);
+    });
+
+    it('interrupts the command when the pager died of the Ctrl-C', async () => {
+      // The command boundary maps an interruption to exit 130.
+      const exit = await pageWithCtrlC({ exitCode: signalled('exitCode') });
+      expect(Exit.isFailure(exit) && Cause.hasInterruptsOnly(exit.cause)).toBe(
+        true,
+      );
+    });
   });
 });

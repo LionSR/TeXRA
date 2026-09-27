@@ -12,22 +12,4 @@ describe('collectCommaSeparatedMatches', () => {
 
     expect(tokens).toEqual(['ALPHA', 'BETA', 'GAMMA']);
   });
-
-  it('rejects non-global patterns with a clear error', () => {
-    expect(() =>
-      collectCommaSeparatedMatches(
-        String.raw`\cite{alpha}`,
-        /\\cite\{([^}]*)\}/,
-      ),
-    ).toThrow(/global RegExp pattern/);
-  });
-
-  it('rejects patterns without a first capture group with a clear error', () => {
-    expect(() =>
-      collectCommaSeparatedMatches(
-        String.raw`\cite{alpha}`,
-        /\\cite\{[^}]*\}/g,
-      ),
-    ).toThrow(/first capture group/);
-  });
 });

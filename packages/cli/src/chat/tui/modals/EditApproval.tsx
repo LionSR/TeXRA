@@ -60,7 +60,7 @@ export function editApprovalDiffRowsBudget({
 }
 
 export function EditApproval(props: EditApprovalProps): React.JSX.Element {
-  const title = `Apply edit to ${props.payload.data.path}?`;
+  const title = `Apply edit to ${props.payload.data.relativePath}?`;
   return (
     <ConfirmCard
       borderStyle="double"
@@ -108,7 +108,7 @@ function EditApprovalDiff({
 
   // Single diff pass shared between the summary line and the inline view.
   const hunks = useMemo(
-    () => buildDiffHunks(tui.originalContent, tui.proposedContent),
+    () => buildDiffHunks(tui.originalContent, tui.proposedContent).hunks,
     [tui.originalContent, tui.proposedContent],
   );
   const diffRows = useMemo(

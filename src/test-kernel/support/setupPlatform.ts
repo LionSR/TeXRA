@@ -31,8 +31,6 @@ import type { ProcessServices } from '@platform/processRuntime';
 import type {
   AgentDirectoriesPort,
   AgentResumePort,
-  AppState,
-  LifecycleHost,
   StateStore,
 } from '@platform/interfaces';
 import {
@@ -40,7 +38,7 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import { globalStorageFsLayer } from '@platform/rootedFs';
-import type { PlatformSecrets, Secrets } from '@platform/secrets';
+import type { PlatformSecrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
@@ -58,7 +56,7 @@ import {
   LeanLanguageServices,
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
-import type { SetupPlatform, SetupPlatformShape } from '@tools/setup/platform';
+import type { SetupPlatformShape } from '@tools/setup/platform';
 import { toolTableLayer } from '@tools/compositions';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
@@ -264,6 +262,8 @@ export const fakeHostAppState: StateStore = {
       installedHost().roots.globalState.get<T>(key, defaultValue),
     ),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
+  modify: (key, change) =>
+    Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),
 };
 
 /**
@@ -337,23 +337,11 @@ export const fakeHostAgentResume: AgentResumePort = {
  *  runtime does not. */
 export const fakeHostAgentDirectories: AgentDirectoriesPort = {
   custom: () => installedHost().platform.agentDirectories.custom(),
+  customConfigured: () =>
+    installedHost().platform.agentDirectories.customConfigured(),
   builtIn: () => installedHost().platform.agentDirectories.builtIn(),
   builtInToolUse: () =>
     installedHost().platform.agentDirectories.builtInToolUse(),
-};
-
-/** The `Lifecycle` service of every test runtime, delegating per call for the
- *  same reason `fakeHostSecrets` does: hosts change per test, the runtime
- *  does not. */
-export const fakeHostLifecycle: LifecycleHost = {
-  onShutdown: (phase, handler) =>
-    installedHost().platform.lifecycle.onShutdown(phase, handler),
-  get runShutdown() {
-    return installedHost().platform.lifecycle.runShutdown;
-  },
-  get shutdownRan() {
-    return installedHost().platform.lifecycle.shutdownRan;
-  },
 };
 
 /** The process services a fake host provides to a program. */
@@ -401,7 +389,7 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     { Layer, ManagedRuntime },
     { testHttpClientLayer },
     { Secrets },
-    { AgentDirectories, AgentResume, AppState, Lifecycle },
+    { AgentDirectories, AgentResume, AppState },
     { LanguageModel },
     { SetupPlatform },
     { SupabaseAuth },
@@ -470,7 +458,6 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     LanguageModel.layer(fakeHostLanguageModel),
     AgentResume.layer(fakeHostAgentResume),
     AgentDirectories.layer(fakeHostAgentDirectories),
-    Lifecycle.layer(fakeHostLifecycle),
     SetupPlatform.layer(fakeSetupPlatform),
     // The cross-workspace storage view the process runtime serves, over the
     // installed host's global root. A suite that exercises it directly

@@ -1,6 +1,13 @@
 import { css, type CSSResult } from 'lit';
 
+/**
+ * The one definition of the semantic tokens every host renders with. It
+ * matches `:root` as well as `:host`, so a host adopts it once on its
+ * document for light DOM and every component adopts it for its shadow root;
+ * hosts set only the `--wa-*` inputs and colors these read.
+ */
 export const designTokens: CSSResult = css`
+  :root,
   :host {
     /* Text colors */
     --color-text-secondary: var(--wa-color-text-quiet);
@@ -153,7 +160,16 @@ export const designTokens: CSSResult = css`
     --control-size-s: var(--wa-control-size-s, 24px);
     --control-size-m: var(--wa-control-size-m, 28px);
     --control-size-l: var(--wa-control-size-l, 32px);
-    --control-padding-inline: 6px;
+    --control-padding-inline: var(--wa-control-padding-inline, 6px);
+    /* The field (input, select, textarea, composer): one radius and one focus
+       treatment everywhere. Focus colors the border and adds a halo inside
+       the field's own footprint; the extension keeps a 1px ring, the desktop
+       a soft wider one. */
+    --field-radius: var(--wa-form-control-border-radius, var(--border-radius));
+    --field-focus-halo: var(
+      --wa-field-focus-halo,
+      0 0 0 1px var(--wa-color-focus)
+    );
     --control-fill: light-dark(rgb(0 0 0 / 5%), rgb(255 255 255 / 5%));
     --control-fill-hover: light-dark(rgb(0 0 0 / 8%), rgb(255 255 255 / 9%));
     --row-height: var(--wa-row-height, 36px);
@@ -173,9 +189,12 @@ export const designTokens: CSSResult = css`
     --opacity-normal: 0.85;
     --opacity-full: 1;
 
-    /* Transitions */
-    --transition-fast: 0.15s ease;
-    --transition-normal: 0.2s ease;
+    /* Motion. One easing, two durations; only paint and compositing
+       properties are transitioned: background-color, border-color, color,
+       box-shadow, opacity, filter and transform. */
+    --transition-ease: cubic-bezier(0.2, 0, 0, 1);
+    --transition-fast: 120ms var(--transition-ease);
+    --transition-normal: 180ms var(--transition-ease);
 
     /* Letter spacing. Caps for uppercase labels/badges, tight for display type
        (em scales with font-size). */

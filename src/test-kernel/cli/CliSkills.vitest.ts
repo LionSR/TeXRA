@@ -1,20 +1,23 @@
 import * as fs from 'node:fs/promises';
-import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
-import { afterEach, expect, vi } from 'vitest';
+import { afterEach, expect } from 'vitest';
 
-import { installPlugins, removePlugin } from '@cli/runtime/plugins';
+import {
+  installPlugins,
+  removePlugin,
+  setPluginEnabled,
+} from '@cli/runtime/plugins';
 import {
   formatCliSkillList,
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
 import {
-  loadEnabledRuntimeSkills,
   loadRuntimeSkillCatalog,
   readDisabledSkills,
   skillDisplayItem,
@@ -22,7 +25,6 @@ import {
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { installTestSkillRoots } from '@test/support/skillFixtures';
 import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
-import { spyOnStreamWrite } from '@test/cli/fixtures/streamWriteSpy';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { TOOL_PLUGINS } from '@tools/plugins';
@@ -31,15 +33,6 @@ const tempRoots = useTempDirs();
 
 /** The listing's own setting slots, carried as data by the caller. */
 const settings = makeFakeSettingsStores().stores;
-const commandMocks = vi.hoisted(() => ({ initCliPlatform: vi.fn() }));
-
-vi.mock('@cli/runtime/initPlatform', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@cli/runtime/initPlatform')>()),
-  initCliPlatform: commandMocks.initCliPlatform,
-}));
-
-const { runCli } = await import('@cli/commands/root');
-
 async function writeSkill(
   root: string,
   dirName: string,
@@ -55,7 +48,6 @@ async function writeSkill(
 
 afterEach(() => {
   installTestSkillRoots([]);
-  commandMocks.initCliPlatform.mockReset();
 });
 
 it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
@@ -73,6 +65,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
       resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
       options: { additionalPaths: ['.texra/skills'] },
       plugins: [],
+      disabledPlugins: new Set(),
     }).flatMap((tier) => tier.sources);
 
     expect(
@@ -91,6 +84,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         resourcesPath: path.resolve(path.sep, 'tmp', 'resources'),
         options: {},
         plugins: [],
+        disabledPlugins: new Set(),
       }),
     ).toThrow('Duplicate skill source contribution id: lean4');
   });
@@ -178,63 +172,6 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
   );
 
   it.effect(
-    'reports explicit custom skill sources that are not directories',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        const sourceFile = path.join(root, 'skills-file');
-        yield* Effect.promise(() =>
-          fs.writeFile(sourceFile, 'not a directory'),
-        );
-
-        initializeNodeRuntimeSkills({ resourcesPath: root }, []);
-        const result = yield* readCliSkillsEffect(root, settings, {
-          additionalPaths: [sourceFile],
-        });
-
-        expect(result.skills).toEqual([]);
-        expect(result.errors).toContainEqual(
-          expect.objectContaining({
-            severity: 'error',
-            code: 'invalid_source',
-            path: sourceFile,
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'reads the runtime skill source registry used by prompt injection',
-    () =>
-      Effect.gen(function* () {
-        const root = yield* Effect.promise(() =>
-          makeTempDir('texra-cli-skills-', tempRoots),
-        );
-        yield* Effect.promise(() =>
-          writeSkill(root, 'proof-audit', 'Review mathematical proof steps.'),
-        );
-        installTestSkillRoots([{ tier: 'project', path: root }]);
-
-        const result = yield* loadEnabledRuntimeSkills(root, settings);
-
-        const disabled = yield* readDisabledSkills(settings);
-        expect(
-          result.skills.map((entry) => skillDisplayItem(entry, disabled)),
-        ).toMatchObject([
-          {
-            name: 'proof-audit',
-            description: 'Review mathematical proof steps.',
-            scope: 'project',
-            label: 'project',
-          },
-        ]);
-        expect(result.errors).toEqual([]);
-      }),
-  );
-
-  it.effect(
     'discovers tool plugin skills in the bundled tier, in name order with the core bundle',
     () =>
       Effect.gen(function* () {
@@ -288,6 +225,18 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           path: path.join(resources, 'plugins', 'lean4', 'skills'),
         });
         expect(result.errors).toEqual([]);
+
+        // A switched-off plugin is one unit: its skills go with its tools.
+        const { stores } = makeFakeSettingsStores();
+        yield* stores.globalState.update(GlobalStateKey.DISABLED_TOOLS, [
+          'lean4',
+        ]);
+        const withLeanOff = yield* readCliSkillsEffect(workspace, stores, {});
+        expect(
+          withLeanOff.skills.some(
+            (entry) => entry.skill.name === 'lean-search',
+          ),
+        ).toBe(false);
       }),
   );
 
@@ -373,6 +322,18 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           '- load-paper: Load a published paper repository.\n  Source: plugin paper-protocol',
         );
         expect(catalog.catalog).not.toContain('The bundled copy.');
+
+        // Disabled, the plugin stays installed and contributes nothing.
+        yield* setPluginEnabled('paper-protocol', false, env);
+        const disabled = yield* loadRuntimeSkillCatalog(resources, stores);
+        expect(disabled.catalog).not.toContain('plugin paper-protocol');
+        expect(disabled.skills).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        );
+        yield* setPluginEnabled('paper-protocol', true, env);
+        expect(
+          (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
+        ).toContain('plugin paper-protocol');
 
         yield* removePlugin('paper-protocol', env);
         const after = yield* loadRuntimeSkillCatalog(resources, stores);

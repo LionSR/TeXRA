@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { ToolError } from '@shared/schemas';
 import { replaceLiteralMatches } from '@tools/fileEditFlow';
-import { ViewRangeSchema } from '@tools/formatting';
 
 describe('replaceLiteralMatches', () => {
   const notFoundError = () => 'missing';

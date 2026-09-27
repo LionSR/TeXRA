@@ -100,13 +100,11 @@ function userQuestionChoiceHints({
   ];
 }
 
-export function isCompactUserQuestionRows(
-  availableRows: number | undefined,
-): boolean {
+function isCompactUserQuestionRows(availableRows: number | undefined): boolean {
   return isCompactRows(availableRows, COMPACT_USER_QUESTION_MAX_ROWS);
 }
 
-export function userQuestionChoiceRowsBudget({
+function userQuestionChoiceRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -126,7 +124,7 @@ export function userQuestionChoiceRowsBudget({
   return Math.min(optionCount, maxRows);
 }
 
-export function userQuestionFreeTextOptionRowsBudget({
+function userQuestionFreeTextOptionRowsBudget({
   availableRows,
   optionCount,
 }: {
@@ -142,11 +140,11 @@ export function userQuestionFreeTextOptionRowsBudget({
   );
 }
 
-export function userQuestionFreeTextControlRows(optionRows: number): number {
+function userQuestionFreeTextControlRows(optionRows: number): number {
   return optionRows + 1 + (optionRows > 0 ? 1 : 0);
 }
 
-export function userQuestionPromptRowsBudget({
+function userQuestionPromptRowsBudget({
   availableRows,
   controlRows,
 }: {
@@ -289,7 +287,10 @@ function QuestionShell(props: QuestionShellProps): React.JSX.Element {
       borderStyle="single"
       color={COLOR_SUCCESS}
       width={columns}
-      title="Agent asks:"
+      // The question's own chip, as the other hosts show it: an agent's
+      // question names its topic, the run's own question (did an interrupted
+      // call run?) says so, and no heading claims the agent asked.
+      title={props.question.header ?? 'Question'}
       footer={<KeyHints hints={props.hints} confirmCancel={false} />}
       footerMarginTop={compact ? 0 : 1}
     >

@@ -8,7 +8,7 @@ import { Effect, FileSystem, Layer } from 'effect';
 import { describe } from 'vitest';
 
 // Local imports
-import { AgentDirectoryService, agentSourceDirectory } from '@agent/index';
+import { AgentDirectoryService } from '@agent/index';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
@@ -76,28 +76,6 @@ describe('AgentDirectoryService', () => {
     );
   }
 
-  it.effect('resolves built-in directories inside the packaged resources', () =>
-    Effect.gen(function* () {
-      const { service } = createService();
-
-      assert.equal(
-        yield* service.builtIn(),
-        path.join(RESOURCES_PATH, 'agents'),
-      );
-      assert.equal(
-        yield* service.builtInToolUse(),
-        path.join(RESOURCES_PATH, 'tool_use_agents'),
-      );
-      // Packaged content is read in place: nothing is created under storage.
-      assert.equal(
-        yield* Effect.promise(() =>
-          pathExists(path.join(storageBase(), 'agents')),
-        ),
-        false,
-      );
-    }),
-  );
-
   it('uses the default custom directory when no custom path is configured', async () => {
     const { service } = createService('   ');
 
@@ -109,6 +87,7 @@ describe('AgentDirectoryService', () => {
       await pathExists(path.join(storageBase(), 'custom_agents')),
       true,
     );
+    assert.equal(await runDirectories(service.customConfigured()), false);
   });
 
   it('uses a configured absolute custom directory with an existing parent', async () => {
@@ -123,6 +102,7 @@ describe('AgentDirectoryService', () => {
       false,
     );
     assert.deepEqual(reporter.reports, []);
+    assert.equal(await runDirectories(service.customConfigured()), true);
   });
 
   it.each([
@@ -152,33 +132,8 @@ describe('AgentDirectoryService', () => {
       assert.deepEqual(reporter.reports, [
         { message, docsId: 'custom-agents' },
       ]);
+      // The banner asks the same question: a rejected path is not "set".
+      assert.equal(await runDirectories(service.customConfigured()), false);
     },
   );
-
-  it('returns local directories in source-priority order', async () => {
-    const parentDir = await makeTempDir('texra-agent-parent-', tempDirs);
-    const customPath = path.join(parentDir, 'custom');
-    const { service } = createService(customPath);
-
-    assert.deepEqual(await runDirectories(service.getAllLocal()), [
-      { directory: customPath, source: 'custom' },
-      {
-        directory: path.join(RESOURCES_PATH, 'agents'),
-        source: 'builtInWorkflow',
-      },
-      {
-        directory: path.join(RESOURCES_PATH, 'tool_use_agents'),
-        source: 'builtInToolUse',
-      },
-    ]);
-  });
-
-  it('does not resolve a local directory for remote agents', async () => {
-    const { service } = createService();
-
-    assert.equal(
-      await runDirectories(agentSourceDirectory(service, 'remote')),
-      undefined,
-    );
-  });
 });

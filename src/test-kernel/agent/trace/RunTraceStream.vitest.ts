@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  emitToolUseCard,
   endToolUseCard,
   startToolUseCard,
+  TraceEmitter,
   type AgentTrace,
   type AgentEvent,
 } from '@agent/trace';
@@ -35,21 +35,11 @@ function streamFacts(
 function withTrace(
   run: (events: AgentEvent[], logger: AgentTrace) => void,
 ): void {
-  const handle = createTestRunTrace('stream' as RunId);
   const events: AgentEvent[] = [];
-  handle.trace.subscribe((event) => events.push(event));
-  try {
-    run(events, handle.trace);
-  } finally {
-    handle.dispose();
-  }
+  run(events, new TraceEmitter((event) => events.push(event)));
 }
 
 describe('AgentTrace stream output', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
   it('materializes runs at stream start, before any delta', () => {
     withTrace((events, logger) => {
       const thinking = logger.openRun(MESSAGE_TYPES.THINKING);
@@ -110,52 +100,6 @@ describe('AgentTrace stream output', () => {
         { type: 'stream.start', kind: MESSAGE_TYPES.THINKING },
         { type: 'stream.end', finalText: 'final reasoning' },
       ]);
-    });
-  });
-
-  it('announces phase boundaries without content for phase-only runs', () => {
-    withTrace((events, logger) => {
-      // Workflow runs hide the response text (it is extracted and logged
-      // separately) but still announce that the response phase started.
-      const output = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
-        deferStart: true,
-        phaseOnly: true,
-      });
-
-      expect(events).toEqual([]);
-
-      output.append('hidden partial output');
-
-      expect(streamFacts(events)).toEqual([
-        { type: 'stream.start', kind: MESSAGE_TYPES.MODEL_RESPONSE },
-      ]);
-      expect(events.some((event) => event.type === 'stream.chunk')).toBe(false);
-
-      // finalize returns the locally buffered text but never publishes it.
-      expect(output.finalize('full output')).toBe('full output');
-      expect(streamFacts(events).at(-1)).toEqual({
-        type: 'stream.end',
-        finalText: undefined,
-      });
-    });
-  });
-
-  it('accumulates disabled progress runs without scheduled updates', () => {
-    vi.useFakeTimers();
-
-    withTrace((events, logger) => {
-      const stream = logger.openRun(MESSAGE_TYPES.MODEL_RESPONSE, {
-        progressViewEnabled: false,
-      });
-
-      stream.append('a');
-      stream.append('b');
-      stream.append('c');
-
-      expect(events).toEqual([]);
-      expect(vi.getTimerCount()).toBe(0);
-      expect(stream.finalize()).toBe('abc');
-      expect(events).toEqual([]);
     });
   });
 });

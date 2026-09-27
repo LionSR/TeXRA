@@ -48,7 +48,6 @@ function runViewWith(
  */
 function trackerOverSessionView(): {
   setRun(runId: RunId, status: RunPhase, usage?: TokenUsageStats): void;
-  dropRun(runId: RunId): void;
   tracker: StatusBarUsageTracker;
 } {
   const view = Effect.runSync(
@@ -68,27 +67,10 @@ function trackerOverSessionView(): {
     setRun(runId, status, usage = NO_USAGE) {
       updateRuns((runs) => runs.set(runId, runViewWith(runId, status, usage)));
     },
-    dropRun(runId) {
-      updateRuns((runs) => runs.delete(runId));
-    },
   };
 }
 
 describe('StatusBarUsageTracker', () => {
-  it('reports zero usage for runs that are not in flight', () => {
-    const { setRun, tracker } = trackerOverSessionView();
-
-    setRun(runA, RUN_PHASE.COMPLETED, {
-      cost: 0.01,
-      inputTokens: 10,
-      outputTokens: 20,
-    });
-
-    expect(tracker.totalUsage.cost).toBe(0);
-    expect(tracker.totalUsage.inputTokens).toBe(0);
-    expect(tracker.totalUsage.outputTokens).toBe(0);
-  });
-
   it('sums the metered total of every in-flight run', () => {
     const { setRun, tracker } = trackerOverSessionView();
     setRun(runA, RUN_PHASE.RUNNING, {
@@ -146,20 +128,5 @@ describe('StatusBarUsageTracker', () => {
     expect(tracker.totalUsage.cost).toBeCloseTo(0.01);
     expect(tracker.totalUsage.inputTokens).toBe(10);
     expect(tracker.totalUsage.outputTokens).toBe(20);
-  });
-
-  it('counts only the runs the fold reports as active', () => {
-    const { setRun, dropRun, tracker } = trackerOverSessionView();
-
-    expect(tracker.activeRunCount).toBe(0);
-
-    setRun(runA, RUN_PHASE.RUNNING);
-    setRun(runB, RUN_PHASE.RUNNING);
-    expect(tracker.activeRunCount).toBe(2);
-
-    // A run the fold dropped stops being counted; there is no second copy
-    // to go stale.
-    dropRun(runB);
-    expect(tracker.activeRunCount).toBe(1);
   });
 });

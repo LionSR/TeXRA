@@ -1,8 +1,10 @@
 /** Pure foreground-surface and keyboard interaction policy for the root TUI. */
 
+import { isUnhandledControlInput, metaChordInput } from '@cli/tui/inputKeys';
 // Local imports - shared schemas and utilities
 import { type RunId } from '@shared/schemas';
 import type { SessionView } from '@shared/session/sessionView';
+import type { Key } from 'ink';
 
 // Local imports - TUI state
 import type {
@@ -33,6 +35,19 @@ export const APPROVAL_FOREGROUND_MAX_ROWS: Record<
 // tmux-style chord window so a human-paced chord still resolves before we
 // commit to interrupting.
 export const ESC_META_CHORD_INTERRUPT_DELAY_MS = 500;
+
+/** Text a pending `Esc` chord resolves: a key that types, not Enter, an
+ *  arrow, an editing chord or a Ctrl/Alt combination. */
+export function chordTextInput(input: string, key: Key): boolean {
+  return (
+    input.length > 0 &&
+    !key.ctrl &&
+    !key.meta &&
+    !key.return &&
+    metaChordInput(input, key) === undefined &&
+    [...input].every((character) => !isUnhandledControlInput(character))
+  );
+}
 
 export type ForegroundSurfaceKind = 'form' | 'infoPane' | 'approval' | 'reader';
 

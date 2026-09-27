@@ -1,3 +1,5 @@
+import { Effect } from 'effect';
+
 import type { ResumabilityDecision } from '@agent/storage';
 import type { RunId } from '@shared/schemas';
 
@@ -6,24 +8,30 @@ import { readCliCwd, type CliContext } from './cliContext';
 import { writeTextStderr, writeTextStderrAndWait } from './logSinks';
 
 /** The one resumability answer a hint can be advertised from. */
-export type ResumableCheckpoint = Extract<
+type ResumableCheckpoint = Extract<
   ResumabilityDecision,
   { kind: 'checkpoint' }
 >;
+
+/** A command's refinement of a checkpoint, read from the run's rows. */
+export type CheckpointRefinement = (
+  checkpoint: ResumableCheckpoint,
+  runId: RunId,
+) => Effect.Effect<boolean, Error>;
 
 /**
  * The one reading of "this decision advertises a resumable run": a checkpoint
  * the command's own refinement agrees to, where no refinement means yes. Each
  * probe on the interrupt path asks this at its own instant, and `refine` may
- * throw, so its caller decides whether that is fatal.
+ * fail, so its caller decides whether that is fatal.
  */
 export function advertisesInterruptedRun(
+  runId: RunId,
   resumability: ResumabilityDecision | undefined,
-  refine: ((checkpoint: ResumableCheckpoint) => boolean) | undefined,
-): boolean {
-  return (
-    resumability?.kind === 'checkpoint' && (refine?.(resumability) ?? true)
-  );
+  refine: CheckpointRefinement | undefined,
+): Effect.Effect<boolean, Error> {
+  if (resumability?.kind !== 'checkpoint') return Effect.succeed(false);
+  return refine?.(resumability, runId) ?? Effect.succeed(true);
 }
 
 /** Read the launch directory without making recovery depend on its lifetime. */

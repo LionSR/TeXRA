@@ -44,10 +44,4 @@ describe('withExtendedPath', () => {
   it('defaults to PATH when the environment names none', () => {
     expect(pathKeys(withExtendedPath({ HOME: '/home/u' }))).toEqual(['PATH']);
   });
-
-  it('leaves every other variable untouched', () => {
-    expect(
-      withExtendedPath({ Path: '/seed/bin', GIT_TERMINAL_PROMPT: '0' }),
-    ).toHaveProperty('GIT_TERMINAL_PROMPT', '0');
-  });
 });

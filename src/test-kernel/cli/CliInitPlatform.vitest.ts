@@ -5,18 +5,15 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 
 // Local imports
 import { installedProcessRuntime } from '@agent/runtime';
-import { initCliPlatform } from '@cli/runtime/initPlatform';
+import {
+  cliPlatformShutdown,
+  initCliPlatform,
+} from '@cli/runtime/initPlatform';
 import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
-import { withProcessServices } from '@platform/processRuntime';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { createTestSession } from '@test/support/sessionTestUtils';
-import {
-  claudeAgentSessionsFor,
-  codexThreadsFor,
-} from '@tools/agentCliSessionStores';
-import { SetupPlatform } from '@tools/setup/platform';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
 type SignalRegistration = {
@@ -71,12 +68,7 @@ const mocks = vi.hoisted(() => ({
     globalState: mocks.cliGlobalState,
   })),
   initializeNodeRuntimeSkills: vi.fn(),
-  getCliSecrets: vi.fn(() => ({ kind: 'cli-secrets' })),
   cliGlobalState: { get: vi.fn(), update: vi.fn() },
-  // Collects the programs registered via the (mocked) lifecycle host's
-  // onShutdown so a test can run them and assert the agent shutdown drain
-  // was wired.
-  shutdownHandlers: [] as Array<Effect.Effect<void, unknown>>,
 }));
 
 vi.mock('@cli/runtime/supabaseAuth', async () => {
@@ -106,19 +98,6 @@ vi.mock('@logger/logSink', () => ({
   writeLogEntry: vi.fn(),
 }));
 
-vi.mock('@logger/logUtils', () => ({
-  createLog: vi.fn(() => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-  })),
-  debug: vi.fn(),
-  error: vi.fn(),
-  info: vi.fn(),
-  warn: vi.fn(),
-}));
-
 // initCliPlatform delegates shared Node-host construction and runtime wiring to
 // nodeHost; stub it so the test exercises only the CLI-specific wiring and
 // feature registration does not run twice across cases.
@@ -130,19 +109,6 @@ vi.mock('@platform/defaults/nodeHost', () => ({
 // First-init dependencies: only exercised while no earlier init in the same
 // module instance installed its roots, so these stubs only drive the "first
 // init" tests below.
-vi.mock('@platform/defaults/lifecycleHost', async () => {
-  const { Effect: effect } = await import('effect');
-  return {
-    createLifecycleHost: () => ({
-      onShutdown: (_phase: unknown, handler: Effect.Effect<void, unknown>) => {
-        mocks.shutdownHandlers.push(handler);
-        return { dispose: vi.fn() };
-      },
-      runShutdown: effect.void,
-    }),
-  };
-});
-
 vi.mock('@platform/defaults/nodeWorkspace', () => ({
   canonicalizeWorkspacePath: vi.fn((workspacePath: string) => workspacePath),
 }));
@@ -156,7 +122,10 @@ vi.mock('@controllers/session/appStateStore', () => ({
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({
-  getCliSecrets: mocks.getCliSecrets,
+  CliSecrets: class {
+    readonly kind = 'cli-secrets';
+  },
+  cliSecretsPath: (storageRoot: string) => storageRoot,
 }));
 
 function cliContext(
@@ -206,7 +175,7 @@ function withFreshSignalCapture<E>(
 }
 
 /** Disposes whichever process runtime an earlier case installed, so the
- *  CLI init below builds its own runtime (and its own lifecycle/setup) instead
+ *  CLI init below builds its own runtime (and its own shutdown/setup) instead
  *  of joining the test kernel's session-graph runtime. */
 const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
   const runtime = installedProcessRuntime();
@@ -216,7 +185,6 @@ const disposeInstalledRuntime: Effect.Effect<void> = Effect.suspend(() => {
 describe('CLI platform init', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.shutdownHandlers.length = 0;
     mocks.cliGlobalState.get.mockReset();
     mocks.cliGlobalState.get.mockImplementation((_key, defaultValue) =>
       Effect.succeed(defaultValue),
@@ -291,55 +259,19 @@ describe('CLI platform init', () => {
       yield* disposeInstalledRuntime;
       yield* initCliPlatform(cliContext({ installSignalHandlers: false }));
       const session = createTestSession();
-      const interruptCodex = vi
-        .spyOn(codexThreadsFor(session.runs), 'interruptAll')
+      const drain = vi
+        .spyOn(session.runs, 'killBackgroundProcesses')
         .mockImplementation(() => {});
-      const interruptClaude = vi
-        .spyOn(claudeAgentSessionsFor(session.runs), 'interruptAll')
-        .mockImplementation(() => {});
-      yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
-          interruptCodex.mockRestore();
-          interruptClaude.mockRestore();
-        }),
-      );
+      yield* Effect.addFinalizer(() => Effect.sync(() => drain.mockRestore()));
 
-      // Registration alone must not interrupt anything; the drain belongs to
-      // the CLI lifecycle host every exit path runs (bin/texra.ts's finally,
-      // the signal handlers, the TUI's exitNow).
-      expect(interruptCodex).not.toHaveBeenCalled();
-      for (const handler of mocks.shutdownHandlers) yield* handler;
-      expect(interruptCodex).toHaveBeenCalledOnce();
-      expect(interruptClaude).toHaveBeenCalledOnce();
+      // Registration alone must not kill anything; the drain belongs to the
+      // CLI shutdown every exit path runs (bin/texra.ts's finally, the
+      // signal handlers, the TUI's exitNow), and runs once however many ask.
+      expect(drain).not.toHaveBeenCalled();
+      yield* cliPlatformShutdown;
+      yield* cliPlatformShutdown;
+      expect(drain).toHaveBeenCalledOnce();
     }),
-  );
-
-  it.effect(
-    'wires setup sign-in to the existing CLI login implementation',
-    () =>
-      Effect.gen(function* () {
-        mocks.authenticated = true;
-        mocks.signInCliSupabase.mockReturnValue(
-          Effect.succeed({ account: { label: 'User' } }),
-        );
-
-        // The runtime this root installed, as it hands it back: the root's own
-        // local, not a process-wide read. Disposing the kernel's runtime first
-        // makes this init the one that installs the CLI runtime.
-        yield* disposeInstalledRuntime;
-        const { runtime } = yield* initCliPlatform(cliContext());
-
-        const setup = yield* withProcessServices(
-          runtime,
-          Effect.service(SetupPlatform),
-        );
-        expect(setup.host).toBe('cli');
-        expect(yield* withProcessServices(runtime, setup.signIn())).toBe(true);
-        expect(mocks.signInCliSupabase).toHaveBeenCalledOnce();
-        expect(mocks.signInCliSupabase).toHaveBeenCalledWith(runtime, {
-          openBrowser: true,
-        });
-      }),
   );
 });
 

@@ -1,5 +1,3 @@
-import * as path from 'node:path';
-
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
@@ -15,7 +13,6 @@ import {
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
 import { buildUserVars as buildUserVarsEffect } from '@agent/prompt/userVars';
-import type { ConfigProvider } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -34,14 +31,6 @@ const buildUserVars = (...args: Parameters<typeof buildUserVarsEffect>) =>
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
-
-const callerDefaultConfig: ConfigProvider = {
-  get<T>(_key: string, defaultValue?: T): T {
-    return defaultValue as T;
-  },
-  update: () => Effect.void,
-  inspect: () => undefined,
-};
 
 setupPlatform({}, { config: fakeConfig });
 

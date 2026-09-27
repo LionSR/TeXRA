@@ -12,17 +12,8 @@ import {
   initializeDefaultSession,
   teardownDefaultSession,
 } from '@agent/runtime';
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
-import { rootRunId as rootRunIdSignal } from '@cli/chat/tui/state/cliState';
-import { currentView } from '@cli/chat/tui/state/sessionView';
-import {
-  aggregateId as qualifyAggregateId,
-  AgentCategory,
-  USER_FOLLOW_UP_SUPPORT,
-  type RunId,
-} from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createDeferred } from '@test/support/asyncTestUtils';
@@ -32,7 +23,6 @@ import {
   createTempDirPlatform,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
-import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 
 const cliRequire = createRequire(
   new URL('../../../packages/cli/package.json', import.meta.url),
@@ -50,7 +40,7 @@ const mocks = vi.hoisted(() => ({
   installCliProcessRuntime: vi.fn(),
   installTerminalTitleUpdates: vi.fn(),
   loadInputHistory: vi.fn(),
-  maybeRunCliOnboarding: vi.fn(),
+  hasUsableSetupCredential: vi.fn(),
   onSkillSelect: undefined as
     | ((selection: { name: string; activationPrompt: string }) => void)
     | undefined,
@@ -90,7 +80,6 @@ vi.mock('@latex/texraResponseTextProcessing', () => ({
   createTexraResponseTextProcessing: () => ({
     normalizeResponseText: (text: string) => text,
     postProcessResponse: (text: string) => Effect.succeed(text),
-    connectResponseText: () => Effect.succeed(' '),
   }),
 }));
 
@@ -106,8 +95,8 @@ vi.mock('@cli/runtime/cliProcessRuntime', () => ({
   disposeCliProcessRuntime: Effect.void,
 }));
 
-vi.mock('@cli/onboarding/runOnboarding', () => ({
-  maybeRunCliOnboarding: mocks.maybeRunCliOnboarding,
+vi.mock('@model/setupCredentialAccess', () => ({
+  hasUsableSetupCredential: mocks.hasUsableSetupCredential,
 }));
 
 vi.mock('@cli/runtime/chatDefaults', () => ({
@@ -298,12 +287,7 @@ describe('runChat signal ownership wiring', () => {
     });
     mocks.runCliPlatformShutdownSequence.mockResolvedValue(undefined);
     mocks.setCliHelperModel.mockReturnValue(Effect.void);
-    mocks.maybeRunCliOnboarding.mockReturnValue(
-      Effect.succeed({
-        configured: false,
-        declined: false,
-      }),
-    );
+    mocks.hasUsableSetupCredential.mockReturnValue(Effect.succeed(true));
     mocks.resolveChatDefaults.mockResolvedValue({
       agent: 'assistant',
       model: 'gpt-test',
@@ -412,6 +396,7 @@ describe('runChat signal ownership wiring', () => {
       expect(mocks.initCliPlatform).toHaveBeenCalledWith({
         ...INTERACTIVE_CONTEXT,
         quietLogs: true,
+        presentsStoreMovedAside: true,
       });
       expect(mocks.installTerminalTitleUpdates).toHaveBeenCalledWith(
         INTERACTIVE_CONTEXT.cwd,

@@ -4,13 +4,13 @@ import {
   type TeamAvailabilityChoice,
   type TeamCatalogPortFailed,
 } from '@common/teams/TeamAvailabilityPreflight';
+import { missingMemberNames } from '@common/teams/TeamPlan';
 import type {
   TeamRosterCatalog,
   TeamRosterResolution,
 } from '@common/teams/TeamRoster';
 import type { SignInFailed } from '@common/errors/signInFailed';
 import type { AgentModePreset } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface ResolvedTeam {
   readonly ok: true;
@@ -63,7 +63,7 @@ export function applyTeamRosterWithPreflight<R = never>(
 
     const preflight = yield* preflightTeamAvailability<ResolvedTeam, R>({
       initial,
-      unresolvedNames: (value) => value.resolution.unresolvedNames,
+      unresolvedNames: (value) => missingMemberNames(value.resolution),
       texraHostedNames: new Set(initial.preset.texraHostedAgents),
       canAccessRemoteCatalog: deps.canAccessRemoteCatalog,
       providedChoice: deps.providedChoice,

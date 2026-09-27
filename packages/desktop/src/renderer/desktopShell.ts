@@ -15,11 +15,11 @@ import { html, nothing, type TemplateResult } from 'lit';
 import type { ProjectDisplay } from '@shared/session/hostSnapshot';
 import type { SessionView } from '@shared/session/sessionView';
 import type { Shell } from '@shared/session/shell';
-import type { RunId } from '@shared/schemas';
 import type { Surface } from '@shared/session/surface';
-import { SessionUiEvents } from '@shared/session/uiEvents';
+import { unseenRuns } from '@shared/session/unseenRuns';
 import { renderIconActionButton } from '@ui/wa/actionButtons';
 import type { TeXRAIconName } from '@ui/wa/iconNames';
+import { nextTablistIndex } from '@ui/wa/tablistKeyboardNav';
 import { waIcon } from '@ui/wa/webAwesomeIcons';
 
 import {
@@ -34,8 +34,6 @@ export interface RailProject {
   readonly display: ProjectDisplay;
   readonly view: SessionView;
   readonly surface: Surface;
-  /** Its runs that finished since the user last had them on screen. */
-  readonly unseen: ReadonlySet<RunId>;
 }
 
 interface ShellSidebarModel {
@@ -99,7 +97,7 @@ function projectStatus(
   if (interrupted > 0)
     return { tone: 'interrupted', label: `${interrupted} interrupted` };
   if (running > 0) return { tone: 'running', label: `${running} running` };
-  const unseen = project.unseen.size;
+  const unseen = unseenRuns(project.surface, project.view).size;
   if (unseen > 0) return { tone: 'unseen', label: `${unseen} finished` };
   return undefined;
 }
@@ -189,7 +187,6 @@ function projectSection(
             <run-tabs
               .view=${project.view}
               .surface=${project.surface}
-              .unseen=${project.unseen}
               .topLevelOnly=${true}
             ></run-tabs>
           </div>`
@@ -204,7 +201,7 @@ export function shellSidebarTemplate(
   return html`
     <aside class="shell-sidebar" aria-label="Projects and tasks">
       <header class="shell-sidebar-brand">
-        <div class="shell-sidebar-logo" aria-hidden="true">T</div>
+        <div class="shell-sidebar-logo" aria-hidden="true"></div>
         <span class="shell-sidebar-product">TeXRA</span>
       </header>
 
@@ -287,7 +284,7 @@ export function subagentsButtonTemplate(
       class="shell-subagents-open btn-secondary"
       appearance="outlined"
       size="s"
-      title="Open the ${label} tab on this conversation's tree"
+      title="Show this task's subagents"
       @click=${onOpen}
     >
       ${waIcon(icon, { slot: 'start' })}
@@ -296,34 +293,6 @@ export function subagentsButtonTemplate(
         >${root.rollup.total}</span
       >
     </wa-button>
-  `;
-}
-
-/**
- * The dock under the composer: the project-level shortcut a running
- * conversation reaches for, dispatched as the surface arm it is. The
- * latexdiff chip opens the Tools sheet on the launcher's base file and
- * commit; the desktop host performs its commit verbs (desktopHostRequests).
- */
-export function conversationDockTemplate(): TemplateResult {
-  return html`
-    <div
-      class="shell-conversation-dock"
-      role="group"
-      aria-label="Project actions"
-    >
-      <wa-button
-        type="button"
-        appearance="outlined"
-        size="s"
-        @click=${(event: Event) =>
-          event.target?.dispatchEvent(
-            SessionUiEvents.surface({ kind: 'toolsSheet', open: true }),
-          )}
-      >
-        ${waIcon('code-compare', { slot: 'start' })} latexdiff vs last commit
-      </wa-button>
-    </div>
   `;
 }
 
@@ -382,23 +351,8 @@ function handleTablistKeydown(
     0,
     tabs.findIndex((tab) => tab.id === activeTabId),
   );
-  let nextIndex: number;
-  switch (event.key) {
-    case 'ArrowRight':
-      nextIndex = (currentIndex + 1) % tabs.length;
-      break;
-    case 'ArrowLeft':
-      nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-      break;
-    case 'Home':
-      nextIndex = 0;
-      break;
-    case 'End':
-      nextIndex = tabs.length - 1;
-      break;
-    default:
-      return;
-  }
+  const nextIndex = nextTablistIndex(event.key, currentIndex, tabs.length);
+  if (nextIndex === undefined) return;
   event.preventDefault();
   const next = tabs[nextIndex];
   if (!next) return;
@@ -458,7 +412,7 @@ export function workbenchTabsTemplate(
     <div
       class="shell-workbench-tabs"
       role="tablist"
-      aria-label=${`${placement} workbench tabs`}
+      aria-label=${`${placement === 'right' ? 'Side' : 'Bottom'} panel tabs`}
       @keydown=${(event: KeyboardEvent) =>
         handleTablistKeydown(event, tabs, activeTabId, callbacks)}
     >
@@ -588,8 +542,8 @@ export function workbenchTabsTemplate(
       ${renderIconActionButton({
         id: `${workbenchPanelDomId(placement, session)}-hide`,
         icon: hideDirection,
-        label: `Hide ${placement} panel`,
-        tooltip: `Hide ${placement} panel`,
+        label: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
+        tooltip: `Hide ${placement === 'right' ? 'side' : 'bottom'} panel`,
         className: 'shell-workbench-close icon-button focus-ring-inset',
         size: 'm',
         onClick: callbacks.onHide,

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   slashPaletteCommandLabelWidth,
-  slashPaletteEnterHintAction,
   slashPaletteOwnsArrows,
   slashPaletteWindow,
 } from '@cli/chat/tui/commands/SlashPalette';

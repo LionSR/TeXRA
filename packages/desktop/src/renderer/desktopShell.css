@@ -157,17 +157,14 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   padding-left: var(--macos-titlebar-safe-inset);
 }
 
+/* The TeXRA {T} mark (extension/resources/logo-128x128.svg) as a mask, so
+   it takes the brand accent in either theme. */
 .shell-sidebar-logo {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  border-radius: 8px;
-  background: var(--wa-color-text-normal);
-  color: var(--wa-color-surface-default);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: -0.04em;
+  width: 26px;
+  height: 26px;
+  background: var(--wa-color-brand-fill-loud);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23000' stroke-width='4.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c-5.2 0-8 3.4-8 8.5v5.3c0 3-1.5 4.8-4.7 5.7 3.2.9 4.7 2.7 4.7 5.7v5.3c0 5.1 2.8 8.5 8 8.5'/%3E%3Cpath d='M42 10c5.2 0 8 3.4 8 8.5v5.3c0 3 1.5 4.8 4.7 5.7-3.2.9-4.7 2.7-4.7 5.7v5.3c0 5.1-2.8 8.5-8 8.5'/%3E%3C/g%3E%3Cpath d='M25 17.5h14v5.6h-4.1V47h-5.8V23.1H25z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
   -webkit-app-region: no-drag;
 }
 
@@ -178,8 +175,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   font-weight: var(--font-weight-semibold);
   letter-spacing: -0.015em;
 }
-
-.shell-section-split-handle wa-icon,
 .shell-split-handle wa-icon,
 .shell-bottom-split-handle wa-icon,
 .shell-header-button wa-icon,
@@ -211,6 +206,9 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 .shell-sidebar-action::part(base) {
   justify-content: flex-start;
   width: 100%;
+  /* A nav row, not a call to action: the button default is semibold, which
+     made every sidebar row shout at the same volume. */
+  font-weight: var(--font-weight-normal);
   min-height: var(--row-height);
   padding: 0 10px;
 }
@@ -262,17 +260,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-focus);
 }
 
-.shell-section-split-handle {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
-  line-height: 1;
-  pointer-events: none;
-}
-
 .shell-sidebar-section {
   width: 100%;
   min-width: 0;
@@ -281,10 +268,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   box-sizing: border-box;
   overflow: auto;
   scrollbar-width: thin;
-}
-
-.shell-history-section {
-  padding-top: 4px;
 }
 
 .shell-sidebar-section-label {
@@ -310,7 +293,7 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 /* The shown project reads as selected; every other row keeps the same
    shape, so nothing about a row moves when the selection does. */
 .shell-project-item.is-active .shell-project-row::part(base) {
-  background: color-mix(in srgb, var(--wa-color-text-normal) 7%, transparent);
+  background: var(--wa-color-brand-fill-quiet);
 }
 
 .shell-project-item.is-active .shell-project-copy strong {
@@ -340,17 +323,17 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   background: var(--wa-color-brand-fill-loud);
 }
 
-/* The row's own actions, shown while the row is hovered or focused. */
+/* The row's own actions take room only while the row is hovered or
+   focused, so at rest the project name has the sidebar's whole width. */
 .shell-project-new,
 .shell-project-close {
   flex: 0 0 auto;
-  opacity: 0;
   color: var(--wa-color-text-quiet);
 }
 
-.shell-project-item:hover :is(.shell-project-new, .shell-project-close),
-.shell-project-item:focus-within :is(.shell-project-new, .shell-project-close) {
-  opacity: 1;
+.shell-project-item:not(:hover, :focus-within)
+  :is(.shell-project-new, .shell-project-close) {
+  display: none;
 }
 
 .shell-project-add {
@@ -571,19 +554,6 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   pointer-events: none;
 }
 
-.shell-header-spacer {
-  flex: 1 1 auto;
-}
-
-.shell-layout-controls {
-  display: flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 3px;
-  padding-left: 2px;
-  -webkit-app-region: no-drag;
-}
-
 .shell-layout-toggle {
   display: block;
 }
@@ -799,12 +769,6 @@ body[data-desktop-platform='darwin']
   overflow: auto;
 }
 
-.shell-workbench-surface > settings-app {
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-}
-
 .shell-workbench-placeholder {
   display: grid;
   align-content: center;
@@ -884,15 +848,6 @@ body[data-desktop-platform='darwin']
   color: var(--wa-color-text-quiet);
 }
 
-.shell-conversation-dock {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: min(760px, 100%);
-  margin: 0 auto;
-  padding: 8px 0;
-}
-
 /* The Subagents workbench tab. */
 .shell-subagents {
   display: flex;
@@ -954,33 +909,47 @@ body[data-desktop-platform='darwin']
 
 /* The Files tab: the tree alone; the tab names it, so its own heading
    keeps only the refresh control. */
-.shell-files {
+.shell-files,
+.shell-editor-tree {
   align-content: start;
   padding: 6px 4px;
 }
 
-.shell-files .desktop-editor-tree-header > span {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-header > span {
   visibility: hidden;
 }
 
-.shell-files .desktop-editor-tree-list {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-list {
   display: block;
   max-height: none;
   padding: 0;
   overflow: visible;
 }
 
-.shell-files .desktop-editor-tree-row {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row {
   --indent-size: 1.15em;
 }
 
-.shell-files .desktop-editor-tree-row::part(item) {
+/* An open file keeps the tree it came from beside it, so the next file is
+   one click away rather than a tab switch back to Files. */
+.shell-editor-with-tree {
+  grid-template-columns: minmax(150px, 28%) minmax(0, 1fr);
+}
+
+.shell-editor-tree {
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--wa-color-surface-border);
+}
+
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-row::part(item) {
   min-height: 26px;
   padding: 0 4px;
   border-radius: 6px;
 }
 
-.shell-files .desktop-editor-tree-empty {
+:is(.shell-files, .shell-editor-tree) .desktop-editor-tree-empty {
   padding: 8px;
   color: var(--wa-color-text-quiet);
   font-size: var(--font-size-sm);

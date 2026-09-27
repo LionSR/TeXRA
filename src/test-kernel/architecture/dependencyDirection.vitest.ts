@@ -111,7 +111,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // recovers every failure to `undefined`.
   'src/auth/SupabaseAuth.ts': 1,
   // The CLI platform shutdown sequence, which cannot run on the process
-  // runtime for the same reason the SDK entry cannot: `lifecycle.runShutdown`
+  // runtime for the same reason the SDK entry cannot: `cliPlatformShutdown`
   // disposes it (`disposeCliProcessRuntime`) before the stderr/stdout flushes
   // run, and a teardown path must not depend on the runtime it is tearing
   // down. The init itself is a program now, so the failed-init disposal is an
@@ -130,7 +130,7 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // ConfigProvider). `initCliPlatform` installs
   // that same provider as the workspace roots' config, so every post-init
   // reader resolves its rows through the roots rather than coming through
-  // here. Its four citty callers take the resolved context as a value.
+  // here. Its three citty callers take the resolved context as a value.
   'packages/cli/src/commands/_helpers/context.ts': 1,
   // The CLI's account-plane build, the same pre-runtime construction the VS
   // Code entry is pinned for below: `ensureCliSupabaseAuth` is called by the
@@ -151,27 +151,22 @@ const BARE_EFFECT_RUN_SITES: Readonly<Record<string, number>> = {
   // context the init hands back.
   'packages/cli/src/commands/doctor.ts': 1,
   // Electron's `before-quit`, the desktop host's shutdown entry: it holds the
-  // lifecycle host and no runtime — the drain it runs is what disposes the
-  // process runtime — so the quit follows the drain on the default runner.
+  // host's shutdown and no runtime — the shutdown it runs is what disposes
+  // the process runtime — so the quit follows it on the default runner.
   'packages/desktop/src/main/desktopWindowLifecycle.ts': 1,
   // The desktop entry: one program from `whenReady` to the wired window,
   // which builds the process runtime (its stores and account plane resolve
   // before `installProcessRuntime`, being the values that install is given)
   // and, when startup fails, runs the drain that disposes it.
   'packages/desktop/src/main/index.ts': 1,
-  // The VS Code entry's two pre-runtime folds, plus the account-plane
-  // resolution in `initVscodePlatform`: `activate` reports a failed
-  // activation and runs the cleanup that disposes the process runtime, so it
-  // cannot borrow the runtime it is tearing down (the reason
-  // `initPlatform.ts` above is pinned), the workspace `.env` load happens
-  // before `initVscodePlatform` installs a runtime at all, and the
-  // account-plane build degrades a missing-credentials throw to the
-  // unavailable shape BEFORE the runtime that will serve it exists. All three
-  // programs are service-free. The fourth is `deactivate`'s shutdown: the
-  // drain and the teardown that follows it dispose the process runtime, so
-  // that one program cannot settle on it either. Every other Effect in this
-  // file settles on the local `ProcessRuntime` the entry holds.
-  'packages/extension/src/extension.ts': 4,
+  // The VS Code entry: one program from `activate` to the last registration,
+  // which builds the process runtime (its account plane resolves before
+  // `installProcessRuntime`, being a value that install is given) and
+  // closes its scope when activation fails; and `deactivate`, which closes
+  // that same scope. The scope's finalizer is the shutdown drain that
+  // disposes the process runtime, so neither can settle on it. Every other
+  // Effect in this file settles on the local `ProcessRuntime` the entry holds.
+  'packages/extension/src/extension.ts': 2,
 };
 
 function sourceFilesUnder(

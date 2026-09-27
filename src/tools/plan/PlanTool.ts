@@ -14,7 +14,7 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Clock, Effect } from 'effect';
 import { z } from 'zod';
 
 // Local imports
@@ -27,7 +27,6 @@ import { refusalOf } from '@shared/session/approvalDecision';
 import {
   clearGoal,
   goalOf,
-  isGoalEnabled,
   pauseGoal,
   retargetGoal,
   setGoalSessionAutoApproval,
@@ -44,11 +43,11 @@ import { formatCompactDuration } from '@utils/text/stringUtils';
 
 const CHANNEL = 'PlanTool';
 
-function formatGoalView(goal: Goal): string {
+function formatGoalView(goal: Goal, nowMs: number): string {
   return [
     `Goal: ${goal.goalId}`,
     `Status: ${goal.status}`,
-    `Time elapsed: ${formatCompactDuration(goalElapsedMs(goal))}`,
+    `Time elapsed: ${formatCompactDuration(goalElapsedMs(goal, nowMs))}`,
   ].join('\n');
 }
 
@@ -101,8 +100,7 @@ function buildApprovedResult(): ToolResult {
 
 /**
  * Everything this tool's program needs from its invocation capability: the
- * call, whose workspace configuration the goal feature flag is read from,
- * and the run `execute` established — whose session owns this turn, its
+ * call, and the run `execute` established — whose session owns this turn, its
  * approval surface and its own `goalStateChanged` row, read and written
  * through `ports.run.session`.
  */
@@ -115,9 +113,8 @@ interface PlanPorts {
 
 /**
  * Start an autonomous goal whose objective is the just-approved plan
- * document, verbatim. Falls back explicitly if goal is disabled. If one
- * is already in flight for the run, retarget it so future
- * continuations follow the current user decision.
+ * document, verbatim. If one is already in flight for the run, retarget it
+ * so future continuations follow the current user decision.
  */
 const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   ports: PlanPorts,
@@ -125,21 +122,6 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
   runId: RunId,
   autoApprovalScope: GoalAutoApprovalScope,
 ) {
-  if (!isGoalEnabled(ports.call.roots.config)) {
-    yield* Effect.logWarning(
-      'Run as Goal requested but goal feature flag is off; ' +
-        'continuing without an autonomous goal.',
-    ).pipe(withLogChannel(CHANNEL));
-    return executed(
-      `The user selected Run as Goal, but the goal feature flag is ` +
-        `currently disabled. The plan is approved, but no autonomous ` +
-        `goal was started.\n\n` +
-        `Work toward the objective as a normal turn-by-turn workflow, ` +
-        `tracking concrete steps with the todo tool.`,
-      'Plan approved: autonomous run unavailable',
-    );
-  }
-
   const objective = plan.objective;
 
   // If a goal is already in flight on this run, retarget it at the
@@ -153,7 +135,7 @@ const startGoalForPlan = Effect.fn('PlanTool.startGoalForPlan')(function* (
         `The user approved a new plan while goal ${active.goalId} ` +
           `was already in flight. The goal has been retargeted to the ` +
           `new objective.\n\n` +
-          `${formatGoalView(active)}\n\n` +
+          `${formatGoalView(active, yield* Clock.currentTimeMillis)}\n\n` +
           `Discipline:\n` +
           `- Drop work that only served the previous objective.\n` +
           `- Track concrete steps with the todo tool as you work.\n` +
@@ -234,7 +216,6 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
   workPlanState: WorkPlanState,
 ) {
   const requestId = `plan-${generateShortId()}`;
-  const goalEnabled = isGoalEnabled(ports.call.roots.config);
 
   yield* Effect.logInfo('Requesting approval for plan objective').pipe(
     withLogChannel(CHANNEL),
@@ -242,7 +223,9 @@ const requestApproval = Effect.fn('PlanTool.requestApproval')(function* (
 
   const result = yield* ports.run.session.openRequest(runId, {
     kind: 'planApproval',
-    data: { requestId, runId, plan, goalEnabled },
+    // The tool is offered only while the goal plugin is on, so the user can
+    // always run an approved plan as a goal.
+    data: { requestId, runId, plan, goalEnabled: true },
   });
 
   if (result.action === 'approve') {
@@ -359,14 +342,14 @@ const executePause = Effect.fn('PlanTool.executePause')(function* (
   }
   if (goal.status !== 'active') {
     return executed(
-      `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal)}`,
+      `Goal is ${goal.status}; pause is a no-op.\n\n${formatGoalView(goal, yield* Clock.currentTimeMillis)}`,
       `Goal already ${goal.status}: pause is a no-op.`,
     );
   }
   const updated = (yield* pauseGoal(ports.run.session, runId)) ?? goal;
   setGoalSessionAutoApproval(ports.run.session, runId, false);
   return executed(
-    `Goal paused: ${reason}\n\n${formatGoalView(updated)}`,
+    `Goal paused: ${reason}\n\n${formatGoalView(updated, yield* Clock.currentTimeMillis)}`,
     'Goal paused.',
   );
 });

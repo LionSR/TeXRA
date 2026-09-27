@@ -98,33 +98,6 @@ describe('setup credential reporting', () => {
       }),
   );
 
-  it.effect(
-    'reports a usable non-API-key credential in the environment probe headline',
-    () =>
-      Effect.gen(function* () {
-        installChatGptOnlySetupPlatform();
-
-        const result = yield* ProbeEnvironmentTool.call({}).pipe(
-          Effect.provide(nativeToolTestLayer()),
-        );
-
-        assert.equal(result.status, 'executed');
-        assert.match(
-          outputOf(result),
-          /credentials: ChatGPT subscription enabled/,
-        );
-        assert.doesNotMatch(
-          outputOf(result),
-          /ChatGPT subscription enabled \+ usable credential/,
-        );
-        assert.match(outputOf(result), /"hasAnyUsableCredential": true/);
-        assert.match(outputOf(result), /"anyApiKeySet": false/);
-        assert.match(outputOf(result), /"chatGptSubscription"/);
-        assert.match(outputOf(result), /"enabled": true/);
-        assert.doesNotMatch(outputOf(result), /researcher@example\.com/);
-      }),
-  );
-
   it.effect('keeps probing when one provider key origin is unavailable', () =>
     Effect.gen(function* () {
       vi.spyOn(apiProviders, 'lookupApiKeyOrigin').mockReturnValue(

@@ -1,6 +1,6 @@
 // Third-party imports
 import * as assert from 'node:assert';
-import { afterEach, beforeEach, describe, vi, type MockInstance } from 'vitest';
+import { afterEach, beforeEach, describe, vi } from 'vitest';
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { Runs } from '@agent/runtime/runRegistry';
@@ -12,7 +12,7 @@ import {
   type RunOutcome,
   type SessionEventDraft,
 } from '@shared/schemas';
-import { DatabaseReadFailed } from '@shared/session/database';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import {
   createTestSession,
   publishTestRunStart,
@@ -22,21 +22,13 @@ import { testRunHandle } from '@test/support/runHandleFixtures';
 const RUN_ID = RunIdSchema.parse('ec1000000001');
 
 // Local imports
-import { resolveRunLiveness } from '@tools/executions/runLiveness';
+import { formatConversation } from '@tools/executions/conversationFormat';
 import { turnAttributionNote } from '@tools/executions/turnAttribution';
 
 let session: SessionHandle;
-/** The claim read the status ladder asks; stubbed per case. */
-let claimOwner: MockInstance<SessionHandle['claimOwner']>;
 beforeEach(() => {
   session = createTestSession();
-  claimOwner = vi.spyOn(session, 'claimOwner');
 });
-
-/** A foreign owner's recorded identity, as the database stores it. */
-function foreignOwner(pid: number): string {
-  return JSON.stringify(['other-host', pid, 'start-1']);
-}
 
 /** Run a status read on the suite session's runs. */
 function onSessionRuns<A, E>(
@@ -45,7 +37,7 @@ function onSessionRuns<A, E>(
   return effect.pipe(Effect.provideService(Runs, session.runs));
 }
 afterEach(async () => {
-  await Effect.runPromise(session.dispose());
+  await Effect.runPromise(closeSessionOf(session));
 });
 
 /**
@@ -67,97 +59,6 @@ async function endRun(outcome: RunOutcome): Promise<void> {
     assert.strictEqual(session.runView(RUN_ID)?.status, outcome);
   });
 }
-
-describe('resolveRunLiveness', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    // Unclaimed unless a case says otherwise: the claim is the only thing an
-    // outcome-less row has left to ask.
-    claimOwner.mockReturnValue(
-      Effect.succeed({ ownerId: null, liveness: null }),
-    );
-  });
-
-  it.effect('calls a run nobody owns and nothing recorded interrupted', () =>
-    Effect.gen(function* () {
-      claimOwner.mockReturnValue(
-        Effect.succeed({ ownerId: null, liveness: null }),
-      );
-
-      const liveness = yield* onSessionRuns(
-        resolveRunLiveness(RUN_ID, session),
-      );
-
-      // The two facts the arm was decided from, and nothing about whether
-      // there is anything left to continue.
-      assert.deepStrictEqual(liveness, { kind: 'interrupted' });
-    }),
-  );
-
-  it.effect('does not settle a run while another process holds it', () =>
-    Effect.gen(function* () {
-      claimOwner.mockReturnValue(
-        Effect.succeed({ ownerId: foreignOwner(4242), liveness: 'alive' }),
-      );
-
-      const liveness = yield* onSessionRuns(
-        resolveRunLiveness(RUN_ID, session),
-      );
-
-      assert.strictEqual(liveness.kind, 'unsettled');
-      assert.match(
-        liveness.kind === 'unsettled' ? liveness.reason : '',
-        /pid 4242 on other-host/,
-      );
-    }),
-  );
-
-  it.effect(
-    'does not settle a run whose claim this process holds with no run',
-    () =>
-      Effect.gen(function* () {
-        claimOwner.mockReturnValue(
-          Effect.succeed({
-            ownerId: foreignOwner(process.pid),
-            liveness: 'self',
-          }),
-        );
-
-        const liveness = yield* onSessionRuns(
-          resolveRunLiveness(RUN_ID, session),
-        );
-
-        assert.strictEqual(liveness.kind, 'unsettled');
-        assert.match(
-          liveness.kind === 'unsettled' ? liveness.reason : '',
-          /no live run/,
-        );
-      }),
-  );
-
-  it.effect('reports an unreadable claim rather than a terminal reading', () =>
-    Effect.gen(function* () {
-      claimOwner.mockReturnValue(
-        Effect.fail(
-          new DatabaseReadFailed({
-            path: 'session.db',
-            cause: new Error('claim unreadable'),
-          }),
-        ),
-      );
-
-      const liveness = yield* onSessionRuns(
-        resolveRunLiveness(RUN_ID, session),
-      );
-
-      assert.strictEqual(liveness.kind, 'unsettled');
-      assert.match(
-        liveness.kind === 'unsettled' ? liveness.reason : '',
-        /cannot read \(claim unreadable\)/,
-      );
-    }),
-  );
-});
 
 describe('turnAttributionNote', () => {
   beforeEach(() => {
@@ -201,4 +102,17 @@ describe('turnAttributionNote', () => {
         assert.doesNotMatch(note ?? '', /still running/);
       }),
   );
+});
+
+describe('formatConversation', () => {
+  // The executions conversation view stays pure ASCII: a long message is cut
+  // with `...`, never the Unicode ellipsis the shared truncation helper uses.
+  it('truncates long conversation text with an ASCII ellipsis', () => {
+    const output = formatConversation([
+      { kind: 'assistant-text', text: 'x'.repeat(501) },
+    ]);
+
+    assert.ok(output.includes(`${'x'.repeat(497)}...`));
+    assert.ok(!output.includes('…'));
+  });
 });

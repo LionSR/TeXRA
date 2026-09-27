@@ -32,24 +32,11 @@ import { RunFileService } from '@utils/files/runStorage';
 
 const mocks = vi.hoisted(() => ({
   compileLatex2Pdf: vi.fn(),
-  resolveLatexDir: vi.fn(),
 }));
 
 vi.mock('@latex/texTools', () => ({
   compileLatex2Pdf: mocks.compileLatex2Pdf,
 }));
-
-// Spy on resolveLatexDir while preserving its real behavior, so tests can
-// assert *how many times* the (async) baseDir resolution runs per file
-// without changing what it resolves to. This is the regression guard for
-// issue #7228: extractFiguresFromFiles and mirrorFigureDependencies used to
-// each independently resolve the same baseDir.
-vi.mock('@latex/latexParsingUtils', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@latex/latexParsingUtils')>();
-  mocks.resolveLatexDir.mockImplementation(actual.resolveLatexDir);
-  return { ...actual, resolveLatexDir: mocks.resolveLatexDir };
-});
 
 type DiffFileProcessorInternals = {
   processLineByLine(content: string): string;
@@ -184,7 +171,7 @@ type LatexMediaManagerFigureInternals = {
   ): Effect.Effect<void, never, FileSystem.FileSystem>;
 };
 
-describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
+describe('LatexMediaManager figure extraction', () => {
   async function writeFixture(): Promise<{
     texPath: string;
     figurePath: string;
@@ -235,10 +222,10 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
   }
 
   it.effect(
-    'extractFiguresFromFiles reuses its resolved baseDir instead of re-resolving it in mirrorFigureDependencies',
+    'extractFiguresFromFiles records and mirrors an included figure',
     () =>
       Effect.gen(function* () {
-        const runId = 'extract-basedir-dedup' as RunId;
+        const runId = 'extract-figure' as RunId;
         const { texPath, figurePath } = yield* Effect.promise(writeFixture);
 
         const workspaceState = AgentWorkspaceState.create();
@@ -251,12 +238,6 @@ describe('LatexMediaManager figure baseDir resolution (issue #7228)', () => {
           [createWorkspaceLocation(texPath, 'main.tex')],
           workspaceState,
         );
-
-        // Before the fix this was 3: once inside extractFigurePathsFromLatex,
-        // once in extractFiguresFromFiles, and once more (redundantly) in
-        // mirrorFigureDependencies. The mirror call now reuses the baseDir
-        // extractFiguresFromFiles already resolved.
-        expect(mocks.resolveLatexDir).toHaveBeenCalledTimes(2);
 
         expect(workspaceState.media.files.map((f) => f.absolutePath)).toEqual([
           figurePath,

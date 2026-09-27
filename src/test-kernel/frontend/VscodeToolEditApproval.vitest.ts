@@ -259,26 +259,6 @@ describe('VS Code tool edit approval', () => {
     expect(getText).toHaveBeenCalledOnce();
   });
 
-  it('accepts the current edited document content', async () => {
-    const { controller, decide, requestId } = await startApproval();
-    const getText = vi.fn(() => 'beta edited\r\n');
-    vscodeMocks.textDocuments.push({
-      uri: currentProposedUri(),
-      getText,
-    });
-
-    await onRuntime(controller.handleAction({ requestId, action: 'approve' }));
-
-    await vi.waitFor(() =>
-      expect(decide).toHaveBeenCalledWith('run-approval', requestId, {
-        action: 'approve',
-        content: 'beta edited\n',
-      }),
-    );
-    expect(getText).toHaveBeenCalledOnce();
-    expect(vscodeMocks.showErrorMessage).not.toHaveBeenCalled();
-  });
-
   it('previews a non-LaTeX proposal by opening the proposed file', async () => {
     const { controller, decide, requestId } = await startApproval();
     const proposedUri = currentProposedUri();

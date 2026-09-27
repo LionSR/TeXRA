@@ -7,7 +7,7 @@
  * of two inputs ordered by the same transcript seq, so a row the fold's
  * residency cap drops never shifts a notice.
  */
-import { signal } from '@lit-labs/signals';
+import { computed, signal } from '@lit-labs/signals';
 import { Cause, Effect } from 'effect';
 
 import { withLogChannel } from '@logger/effectLog';
@@ -19,11 +19,25 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import {
   CLI_LOCAL_RUN_ID,
   focusRun,
+  foregroundReader,
   selectedRunId,
   rootRunId,
   registerCliStateResetHook,
+  sessionRunIds,
 } from './cliState';
 import { currentView, runViewOf } from './sessionView';
+
+/**
+ * The runs whose transcript tier this terminal keeps resident: its
+ * conversation, the runs it owns, and an open reader's run. The view also
+ * lists every earlier run of the workspace, hydrated from the listing;
+ * subscribing all of those folded every past transcript into memory for the
+ * life of the TUI.
+ */
+export const paintedRunIds = computed((): readonly RunId[] => {
+  const reader = foregroundReader.get()?.runId;
+  return [...sessionRunIds.get(), ...(reader ? [reader] : [])];
+});
 
 export interface LocalNotice {
   readonly runId: RunId;
@@ -172,10 +186,12 @@ export function noticesFor(
 
 /**
  * The run's folded rows with its notices inserted after the last row
- * whose seq is at or below their `afterSeq`, in notice order; a notice
- * takes that row's settlement key so the pane's settlement ordering keeps it
- * in place. The merged `settledRows` is the folded prefix plus every notice
- * anchored inside it (a notice is immutable the moment it is written).
+ * whose seq is at or below their `afterSeq`, in notice order. A notice's
+ * settlement key is its `afterSeq`: the pane re-sorts by that key with a
+ * local-after-folded tiebreak, so the key alone keeps the notice after the
+ * row it follows. A notice written before the run's first row keys at 0 and
+ * sorts ahead of it. The merged `settledRows` is the folded prefix plus every
+ * notice anchored inside it (a notice is immutable the moment it is written).
  */
 export function mergeLocalNotices(
   run: RunView | undefined,
@@ -195,13 +211,11 @@ export function mergeLocalNotices(
   };
   for (const notice of runNotices.toSorted((a, b) => a.afterSeq - b.afterSeq)) {
     flushThrough(notice.afterSeq);
-    const previous = out.at(-1);
-    const seq = previous?.settlementSeqNo ?? previous?.seqNo;
-    out.push(
-      seq === undefined
-        ? notice.row
-        : { ...notice.row, seqNo: seq, settlementSeqNo: seq },
-    );
+    out.push({
+      ...notice.row,
+      seqNo: notice.afterSeq,
+      settlementSeqNo: notice.afterSeq,
+    });
   }
   for (; next < rows.length; next += 1) out.push(rows[next]!);
   return {

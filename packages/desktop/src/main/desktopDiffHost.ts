@@ -14,9 +14,13 @@ import {
 } from '@platform/processRuntime';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import { monacoLanguageForPath } from '@shared/monaco/monacoLanguage';
-import { computeLineChangeSummary } from '@tools/approval/toolEditApproval';
+import { countLineChanges } from '@tools/approval/toolEditApproval';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-import { unifiedDiffText } from '@utils/text/unifiedDiff';
+import {
+  buildDiffHunks,
+  reportDiffTimeout,
+  unifiedDiffText,
+} from '@utils/text/unifiedDiff';
 
 import {
   DESKTOP_DIFF_COMMANDS,
@@ -144,10 +148,11 @@ export function createDesktopDiffHost(
           ],
           { concurrency: 2 },
         );
-        const lineChanges = computeLineChangeSummary(
-          originalContent,
-          proposedContent,
-        );
+        // Compare opens pairs no approval diffed, so this diff reports its
+        // own timeout; the counts fold the same hunks.
+        const diff = buildDiffHunks(originalContent, proposedContent);
+        yield* reportDiffTimeout(diff.timeout);
+        const lineChanges = countLineChanges(diff.hunks);
 
         // Prefer the in-app Review workbench when wired. A `false` return value
         // or a thrown error opts into the external-editor fallback (covers the
@@ -174,7 +179,11 @@ export function createDesktopDiffHost(
         if (shownInRenderer) return;
 
         // External-editor fallback: write a unified patch file and open it.
-        const diffBody = unifiedDiffText(originalContent, proposedContent);
+        const { text: diffBody, timeout } = unifiedDiffText(
+          originalContent,
+          proposedContent,
+        );
+        yield* reportDiffTimeout(timeout);
         const patch = diffBody
           ? `--- ${original.filePath}\n+++ ${proposed.filePath}\n${diffBody}\n`
           : `No textual changes for ${path.basename(proposed.filePath)}.\n`;

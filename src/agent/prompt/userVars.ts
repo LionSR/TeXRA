@@ -185,7 +185,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
   }
 
   // The resolved output list is also the run's normalized `config.outputFiles`:
-  // the reflection flow, output validation, and the XML manager all read it
+  // the documents plugin, output validation, and the XML manager all read it
   // back off the config after this point, so the write happens here in the
   // open rather than inside a helper the spread below hides.
   const { outputFiles, vars: outputFileVars } = resolveOutputFiles(

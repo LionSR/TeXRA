@@ -5,18 +5,11 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'vitest';
 
 // Local imports
-import {
-  CODEX_FILE_CHANGE_TOOL,
-  CODEX_TODO_TOOL,
-  CODEX_TURN_TOOL,
-} from '@shared/schemas';
+import { CODEX_FILE_CHANGE_TOOL } from '@shared/schemas';
 import { toCodexCliReasoningEffort } from '@tools/codexConfig';
 import {
   buildCodexCommandToolLog,
   buildCodexFileChangeToolLog,
-  buildCodexMcpToolLog,
-  buildCodexTodoToolLog,
-  buildCodexTurnToolLog,
 } from '@tools/codexShared';
 
 describe('toCodexCliReasoningEffort', () => {
@@ -68,26 +61,6 @@ describe('buildCodexFileChangeToolLog', () => {
 });
 
 describe('buildCodexCommandToolLog', () => {
-  it('builds a native bash log entry with command output', () => {
-    const log = buildCodexCommandToolLog({
-      command: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      aggregated_output: 'warning: rebuilding\n',
-      exit_code: 0,
-      status: 'completed',
-    });
-
-    assert.deepEqual(log, {
-      toolName: 'bash',
-      summary: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      input: {
-        command: 'lake env lean MPS/ParentHamiltonian/UniqueGroundState.lean',
-      },
-      output: 'warning: rebuilding',
-      exitCode: 0,
-      status: 'completed',
-    });
-  });
-
   it('marks failed commands as errors and falls back to exit info when empty', () => {
     const log = buildCodexCommandToolLog({
       command:

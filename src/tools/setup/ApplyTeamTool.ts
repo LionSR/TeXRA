@@ -24,10 +24,8 @@ import {
 } from '@agent/index/agentRegistry';
 import { TeamCatalogPortFailed } from '@common/teams/TeamAvailabilityPreflight';
 import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
-import {
-  resolveTeamRoster,
-  type TeamRosterCatalog,
-} from '@common/teams/TeamRoster';
+import { missingMemberNames, planTeamRun } from '@common/teams/TeamPlan';
+import type { TeamRosterCatalog } from '@common/teams/TeamRoster';
 import { applyTeamRosterWithPreflight } from '@common/teams/TeamRosterApplication';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { agentName, ToolError } from '@shared/schemas';
@@ -86,7 +84,10 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
         return {
           ok: true,
           preset,
-          resolution: resolveTeamRoster(roster, preset),
+          resolution: planTeamRun(preset, {
+            resolveAgent: (category, identifier) =>
+              roster.resolveAgent(category, identifier),
+          }),
         };
       }),
     commitPreset: (preset) =>
@@ -153,18 +154,18 @@ const applyTeam = Effect.fn('ApplyTeamTool.execute')(function* (
   }
 
   const { preset } = result;
-  const { keys, unresolvedNames } = result.resolution;
+  const { workflow: activeWorkflow, toolUse: activeToolUse } =
+    result.resolution.agentKeys;
+  const unresolvedNames = missingMemberNames(result.resolution);
   const texraHostedNames = new Set(preset.texraHostedAgents);
 
-  // `keys` holds only the agent keys that resolved in the registry. Names
+  // `agentKeys` holds only the agent keys that resolved in the registry. Names
   // that didn't resolve are not dropped: the roster stores the team
   // reference and re-resolves `preset.agents` on every read, so a member
   // activates the moment it appears. `unresolvedNames` is preflight
   // evidence, not stored state. Account-served members are absent until
   // sign-in — say so instead of letting it read as a silent failure; check
   // registry resolution, never auth.
-  const activeWorkflow = keys.workflow;
-  const activeToolUse = keys.toolUse;
   const pendingRemoteMembers = unresolvedNames.filter((name) =>
     texraHostedNames.has(name),
   );

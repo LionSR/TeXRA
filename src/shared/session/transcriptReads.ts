@@ -1,13 +1,11 @@
 /**
  * Reads and live inputs over a run's transcript working state: live text
- * chunks, compaction settlement, the activity flags, the run model's inputs,
- * and what the run left open.
+ * chunks, compaction settlement, the activity flags, and the run model's
+ * inputs.
  */
 import {
-  isTerminalWorkflowCallProgress,
   type TaskGroup,
   type TextChunk,
-  type WorkflowCallLiveProgress,
   type WorkflowDeclaredPlan,
 } from '@shared/schemas';
 import { settleCompactionActivities } from '@shared/runs/compactionActivityProjection';
@@ -195,38 +193,4 @@ export function runModelInputs(transcript: TranscriptView): {
     plan,
     workflowAttemptId,
   };
-}
-
-/** What a run left open, in first-appearance order: what closes it when its
- *  host exits or it parks. */
-export type OpenWork =
-  | { readonly kind: 'stage'; readonly id: string }
-  | { readonly kind: 'stream'; readonly id: string; readonly text: string }
-  | {
-      readonly kind: 'call';
-      readonly id: string;
-      readonly stageId: string | undefined;
-      readonly call: WorkflowCallLiveProgress;
-    };
-
-export function openWork(transcript: TranscriptView): OpenWork[] {
-  const open: { readonly seqNo: number; readonly work: OpenWork }[] = [];
-  for (const slot of indexesOf(transcript).slots.values()) {
-    const seqNo = slot.base.seqNo ?? 0;
-    const { id } = slot.base;
-    if (slot.kind === 'stage' && slot.open) {
-      open.push({ seqNo, work: { kind: 'stage', id } });
-    } else if (slot.kind === 'text' && slot.running && slot.rowKind) {
-      open.push({ seqNo, work: { kind: 'stream', id, text: slot.text } });
-    } else if (
-      slot.kind === 'call' &&
-      !isTerminalWorkflowCallProgress(slot.call)
-    ) {
-      open.push({
-        seqNo,
-        work: { kind: 'call', id, stageId: slot.base.groupId, call: slot.call },
-      });
-    }
-  }
-  return open.sort((a, b) => a.seqNo - b.seqNo).map(({ work }) => work);
 }

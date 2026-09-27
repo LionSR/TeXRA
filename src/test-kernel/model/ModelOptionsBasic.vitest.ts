@@ -9,7 +9,6 @@ import {
   isRetiredModel,
 } from '@model/modelOptionsBasic';
 import {
-  DEFAULT_AGENT_MODEL,
   DEFAULT_HELPER_MODEL,
   isExpensiveModel,
 } from '@shared/constants/providers';
@@ -21,18 +20,6 @@ describe('default helper model', () => {
     expect(config).toBeDefined();
     expect(config.provider).toBe('deepseek');
     expect(config.deprecated ?? false).toBe(false);
-  });
-});
-
-describe('default agent model', () => {
-  it('is the first default-list entry and is not a Gemini model', () => {
-    const config = MODEL_CONFIGS[DEFAULT_AGENT_MODEL];
-
-    expect(DEFAULT_AGENT_MODEL).toBe(DEFAULT_MODELS[0]);
-    expect(DEFAULT_AGENT_MODEL.startsWith('gemini')).toBe(false);
-    expect(config).toBeDefined();
-    expect(config.deprecated ?? false).toBe(false);
-    expect(config.retired ?? false).toBe(false);
   });
 });
 

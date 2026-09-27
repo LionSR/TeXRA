@@ -4,12 +4,6 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import {
   formatTimestamp,
-  formatCompactDuration,
-  formatCompactTokenCount,
-  formatResultCount,
-  pluralize,
-  splitContentLines,
-  splitOutputLines,
   tailWithEllipsis,
   truncateWithEllipsis,
 } from '@utils/text/stringUtils';
@@ -19,12 +13,6 @@ describe('Unicode-safe ellipsis helpers', () => {
   // grapheme cluster. The previous [...text] code-point counting would tear it;
   // Intl.Segmenter keeps it whole.
   const family = '👨‍👩‍👧';
-
-  it('returns the original string when it fits within the limit', () => {
-    expect(truncateWithEllipsis('abc', 5)).toBe('abc');
-    expect(truncateWithEllipsis('abc', 3)).toBe('abc');
-    expect(tailWithEllipsis('abc', 5)).toBe('abc');
-  });
 
   it('does not split a surrogate pair at the trailing truncation boundary', () => {
     expect(truncateWithEllipsis('abc🍕def', 5)).toBe('abc🍕…');

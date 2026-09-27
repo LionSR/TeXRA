@@ -2,10 +2,10 @@
  * The host diagnostic port: one structured entry in, one host surface out.
  *
  * Hosts install a sink here (VS Code output channels, the desktop log file,
- * the CLI's console). Both diagnostic producers write the same entry through
- * it — `Effect.log*` via the logger layer in `@logger/effectDiagnostics`, and
- * the channel-keyed writers in `@logger/logUtils` that pre-Effect subsystems
- * still call. Neither producer decides presentation: severity, timestamp,
+ * the CLI's console). Producers write the same entry through it: `Effect.log*`
+ * via the logger layer in `@logger/effectDiagnostics`, and a few synchronous
+ * publication points (the trace emitter, pre-runtime and shutdown paths) that
+ * call `writeLogEntry` directly. No producer decides presentation: severity, timestamp,
  * identity, and payload stay separate fields the whole way, and the write
  * path below renders the one field that is not already a string — the `data`
  * payload — once, before redaction, then bounds the redacted value, so a host renders its entries
@@ -39,7 +39,7 @@ export const LOG_CHANNEL = 'channel';
  * option); the write path below renders it once, for every host surface, so
  * no producer decides how much detail a surface shows.
  */
-export const LOG_DATA = 'data';
+const LOG_DATA = 'data';
 
 /** The rendered payload bound: one bound, at the one owner of rendering, so
  * an always-attached payload cannot flood a host surface. */
@@ -183,4 +183,29 @@ export function setLogSink(
 export function writeLogEntry(entry: LogEntry): void {
   const rendered = renderLogData(entry);
   sink.write(truncateLogData(sinkTrusted ? rendered : redactEntry(rendered)));
+}
+
+/**
+ * One channel line, for the few synchronous publication points with no fiber
+ * to run `Effect.log*` on (the trace emitter, pre-runtime and shutdown paths).
+ * The entry has the shape the logger layer writes; `data` rides raw.
+ */
+export function writeLogLine(
+  level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR',
+  channel: string,
+  message: string,
+  data?: unknown,
+): void {
+  writeLogEntry({
+    level,
+    fiberId: '',
+    timestamp: new Date().toISOString(),
+    message,
+    cause: undefined,
+    annotations:
+      data === undefined
+        ? { [LOG_CHANNEL]: channel }
+        : { [LOG_CHANNEL]: channel, [LOG_DATA]: data },
+    spans: {},
+  });
 }

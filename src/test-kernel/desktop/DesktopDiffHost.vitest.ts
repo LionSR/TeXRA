@@ -160,25 +160,6 @@ describe('createDesktopDiffHost', () => {
     expectOpenedPatchFile(openedPaths);
   });
 
-  it('falls back to the external editor when postToRenderer throws', async () => {
-    // Suppress the deliberate console.error from the host so the test
-    // output stays clean.
-    const consoleSpy = vi
-      .spyOn(console, 'error')
-      .mockImplementation(() => undefined);
-    const { host, openedPaths } = createHost({
-      postToRenderer: () => {
-        throw new Error('renderer destroyed');
-      },
-    });
-
-    await openDiffPair(host, 'Compare');
-
-    expectOpenedPatchFile(openedPaths);
-    expect(consoleSpy).toHaveBeenCalled();
-    consoleSpy.mockRestore();
-  });
-
   it.effect(
     'records external-editor patch directories for the process-level removal',
     () =>

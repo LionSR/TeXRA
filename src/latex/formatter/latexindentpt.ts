@@ -2,11 +2,9 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
 
-import { sync as globSync } from 'glob';
-
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import { normalizeFilePath } from '@utils/core';
+import { entryTypeIn } from '@utils/files/fsEntryExists';
 import { runToolWithCheck } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '../latexLogging';
@@ -41,19 +39,47 @@ const cleanupIndentLog = Effect.fn('latex.cleanupIndentLog')(function* (
   }
 });
 
-/** Delete all files matching backup glob patterns in a directory. */
+/**
+ * Delete latexindent's `<base>.tex.bak*` and `<base>.bak*` backups in a
+ * directory, found by a plain name prefix over one listing so a directory or
+ * base name holding glob metacharacters still names its own backups.
+ */
 const cleanupBackupFiles = Effect.fn('latex.cleanupBackupFiles')(function* (
   fileBaseName: string,
   fileDir: string,
 ) {
   const fs = yield* FileSystem.FileSystem;
-  const backupFiles = [
-    `${fileBaseName}.tex.bak*`,
-    `${fileBaseName}.bak*`,
-  ].flatMap((pattern) =>
-    globSync(normalizeFilePath(path.join(fileDir, pattern)), {
-      nodir: true,
-    }),
+  const names = yield* fs
+    .readDirectory(fileDir)
+    .pipe(
+      Effect.catch((err) =>
+        err.reason._tag === 'NotFound'
+          ? Effect.succeed<ReadonlyArray<string>>([])
+          : Effect.logWarning(
+              `Error listing ${fileDir} for backup files: ${toErrorMessage(err)}`,
+            ).pipe(
+              withLogChannel(CHANNEL),
+              Effect.as<ReadonlyArray<string>>([]),
+            ),
+      ),
+    );
+  // Files only, as glob's nodir did: a non-recursive remove of an empty
+  // directory would succeed (rmdir) and delete it.
+  const backupFiles = yield* Effect.filter(
+    names
+      .filter(
+        (name) =>
+          name.startsWith(`${fileBaseName}.tex.bak`) ||
+          name.startsWith(`${fileBaseName}.bak`),
+      )
+      .map((name) => path.join(fileDir, name)),
+    (candidate) =>
+      entryTypeIn(fs, candidate).pipe(
+        Effect.map((type) => type !== undefined && type !== 'Directory'),
+        // An entry that cannot be typed is still offered to the remove,
+        // which reports its own failure.
+        Effect.catch(() => Effect.succeed(true)),
+      ),
   );
 
   for (const backupFile of backupFiles) {

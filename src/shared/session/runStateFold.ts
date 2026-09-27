@@ -21,7 +21,6 @@ import {
   RunUsageTotalsSchema,
   requestParksItsCaller,
   type CommitOrdinal,
-  type FlowSnapshotPayload,
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
@@ -39,9 +38,10 @@ import { isObject } from '@utils/core';
 import {
   applyRunRow,
   byId,
-  freshRunRows,
+  freshRunPosition,
+  isFollowUpRow,
   isSharedRunRow,
-  type RunRows,
+  type RunPosition,
   type SharedRunRow,
 } from './runRows';
 import type { z } from 'zod';
@@ -49,17 +49,16 @@ import type { z } from 'zod';
 /**
  * The rows `RunLedger.appendBatch` commits: the six ledger arms plus the
  * display arms a batch has to commit atomically with them. A tool call's card
- * settles with its `tool.result` — `tool.end` for a card the dispatcher
- * already opened, both card rows for a fast tool whose card opens and closes
- * in that one batch; an approval's recovery binding is the `tool.binding`
- * committed in the same batch; a streaming row still open when the loop
- * parks closes with the `waiting` step, in that step's batch. Publishing
- * those companions separately is the
- * crash window where a settled tool keeps an active card, or a terminal card
- * claims a result no row holds, or an approval survives with nothing to
- * recover it by. An explicit list narrowed from `SessionEventDraft`, never
- * `SessionEventDraft` itself: a card the ledger opens is one a settlement in
- * the same batch closes, and no other row type reaches `appendBatch`.
+ * settles with its `tool.result` (`tool.end` for a card the dispatcher already
+ * opened, both card rows for a fast tool whose card opens and closes in that
+ * batch); an approval's recovery binding is the `tool.binding` committed in
+ * the same batch; a streaming row open when the loop parks closes with the
+ * `waiting` step; a model switch's `run.record` and `run.config` restate the
+ * snapshot's model id. Publishing those companions separately is the crash
+ * window where a settled tool keeps an active card, or a terminal card claims
+ * a result no row holds, or an approval survives with nothing to recover it
+ * by, or a listing names a model the ledger does not. An explicit list
+ * narrowed from `SessionEventDraft`, never `SessionEventDraft` itself.
  */
 export type RunLedgerDraft = Extract<
   SessionEventDraft,
@@ -79,7 +78,9 @@ export type RunLedgerDraft = Extract<
       | 'stream.end'
       | 'request.opened'
       | 'request.decided'
-      | 'followup.consumed';
+      | 'followup.consumed'
+      | 'run.record'
+      | 'run.config';
   }
 >;
 
@@ -96,24 +97,13 @@ export class RunLedgerInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The family state a `flow.snapshot` restores, keyed by its family. */
-const FlowStateSchema = FlowSnapshotPayloadSchema.options.map((arm) =>
-  arm.pick({ family: true, state: true }),
-);
-type FlowState = z.output<(typeof FlowStateSchema)[number]>;
+/** The flow state a `flow.snapshot` restores. */
+const FlowStateSchema = FlowSnapshotPayloadSchema.pick({
+  family: true,
+  state: true,
+});
+type FlowState = z.output<typeof FlowStateSchema>;
 type Message = z.output<typeof MessageSchema>;
-
-/**
- * The family state of a snapshot, keeping the family/state correlation. The
- * two arms are spelled out deliberately, though the text is the same: the
- * test narrows the discriminated payload so that `state` keeps the arm its
- * `family` names. Collapsing them widens the pair to a shape `FlowState`
- * does not accept, so the identical arms are load-bearing, not a leftover.
- */
-const flowOf = (p: FlowSnapshotPayload): FlowState =>
-  p.family === 'toolUse'
-    ? { family: p.family, state: p.state }
-    : { family: p.family, state: p.state };
 
 type OpenAttempt = {
   readonly invocation: InvocationRef;
@@ -154,7 +144,7 @@ type PendingIntent = {
  * because giving it one invites persisting it (C10). Every field is derived
  * from the row that produced it.
  */
-export type RunState = RunRows & {
+export type RunState = RunPosition & {
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
@@ -186,15 +176,15 @@ export type RunState = RunRows & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** The round of the last `context-window` compaction: a turn that
-   *  overflowed the window is retried once per round against it. */
-  readonly overflowRecoveredAtRound: number | null;
+  /** The turn the last `context-window` compaction (one per round) landed
+   *  in. */
+  readonly overflowRecoveredAtTurn: number | null;
   readonly flow: FlowState | null;
 };
 
-/** The card rows a batch commits beside its settlement or its `waiting`
- *  step: the ledger row beside each is the fact, so the loop ignores them. */
-type CardRowType = 'tool.start' | 'tool.end' | 'stream.end';
+/** Companions committed beside the ledger fact; the loop ignores them. */
+type CardRowType =
+  'tool.start' | 'tool.end' | 'stream.end' | 'run.record' | 'run.config';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
@@ -251,9 +241,9 @@ const IGNORED_ROW_TYPES: Readonly<
 const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
 
 /** The state a run starts from: every field at its zero, no family bound
- *  yet. Both run programs open from this and stamp their own family. */
+ *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
-  ...freshRunRows(),
+  ...freshRunPosition(),
   commit,
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
@@ -271,21 +261,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
-  overflowRecoveredAtRound: null,
+  overflowRecoveredAtTurn: null,
 });
-
-/** The recovery bindings the rows carry (R5): the `model.retry` permit's
- *  request and every pending intent's `tool.binding`. */
-function requestBindings(state: RunState): ReadonlySet<string> {
-  const bindings = new Set<string>();
-  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
-  for (const intent of Object.values(state.pendingIntents)) {
-    if (intent.approvalRequestId !== null) {
-      bindings.add(intent.approvalRequestId);
-    }
-  }
-  return bindings;
-}
 
 /**
  * The undecided requests nothing can recover: no binding names them, and
@@ -299,7 +276,12 @@ function requestBindings(state: RunState): ReadonlySet<string> {
  * snapshot its run writes.
  */
 export function unboundRequests(state: RunState): readonly string[] {
-  const bindings = requestBindings(state);
+  // The recovery bindings the rows carry (R5): the `model.retry` permit's
+  // request and every pending intent's `tool.binding`.
+  const bindings = new Set<string | null>(
+    Object.values(state.pendingIntents).map((i) => i.approvalRequestId),
+  );
+  if (state.pendingRetry !== null) bindings.add(state.pendingRetry.requestId);
   return Object.entries(state.requests).flatMap(([requestId, request]) =>
     request.resolved ||
     bindings.has(requestId) ||
@@ -356,7 +338,7 @@ function mutate(
 
 /**
  * Apply a settlement's operations over the run's mutable slices, `usage` and
- * the family `state`, and re-validate both through their schemas so the
+ * the flow `state`, and re-validate both through their schemas so the
  * state stays typed without a cast.
  */
 function applyMutations(
@@ -385,23 +367,16 @@ function applyMutations(
   }
   if (state.flow === null) {
     if (document.state !== null) {
-      return refuse('invalid-mutation', 'no family state to mutate', commit);
+      return refuse('invalid-mutation', 'no flow state to mutate', commit);
     }
     return Result.succeed({ ...state, usage: usage.data });
   }
-  const arm = FlowStateSchema.find(
-    (candidate) => candidate.shape.family.value === state.flow?.family,
-  );
-  const flow = arm?.safeParse({
+  const flow = FlowStateSchema.safeParse({
     family: state.flow.family,
     state: document.state,
   });
-  if (flow === undefined || !flow.success) {
-    return refuse(
-      'invalid-mutation',
-      flow === undefined ? 'unknown family' : flow.error.message,
-      commit,
-    );
+  if (!flow.success) {
+    return refuse('invalid-mutation', flow.error.message, commit);
   }
   return Result.succeed({ ...state, usage: usage.data, flow: flow.data });
 }
@@ -427,6 +402,11 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
     commit,
     rowsBeforeSnapshot: state.rowsBeforeSnapshot + 1,
   });
+  // Pending input is the publisher's: a queued row only opens an empty run.
+  if (isFollowUpRow(row))
+    return current === null && row.type === 'followup.queued'
+      ? Result.succeed(freshRunState(commit))
+      : null;
   if (isSharedRunRow(row)) {
     // The rows `sessionFold` reads too: applied once, in `runRows.ts`.
     // `unresolved` is a malformed aggregate here: this fold reads a run's
@@ -459,20 +439,17 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
   }
   switch (row.type) {
     case 'flow.snapshot': {
-      // Family state and the coordinates the loop owns, and nothing else: no
+      // Flow state and the coordinates the loop owns, and nothing else: no
       // reference set to reconcile, so there is no way for a snapshot to
       // disagree with the rows below it (single-owner note, section 3.3).
       const p = row.payload;
       const state = current ?? freshRunState(commit);
-      if (state.family !== null && state.family !== p.family) {
-        return refuse('out-of-order', 'a snapshot of another family', commit);
-      }
       return Result.succeed({
         ...advance(state),
         snapshotCommit: commit,
         family: p.family,
         ...p.runtime,
-        flow: flowOf(p),
+        flow: { family: p.family, state: p.state },
       });
     }
     case 'model.message': {
@@ -629,7 +606,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         messages: [...current.messages.slice(0, p.keepPrefix), ...p.messages],
         continuation: p.continuation,
         ...(p.cause === 'context-window'
-          ? { overflowRecoveredAtRound: current.round }
+          ? { overflowRecoveredAtTurn: current.turn }
           : {}),
       });
     }

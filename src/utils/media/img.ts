@@ -2,6 +2,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
+import { PDFDocument } from '@cantoo/pdf-lib';
 import { Data, Effect, FileSystem } from 'effect';
 import { imageSize } from 'image-size';
 
@@ -12,8 +13,6 @@ import { getMimeType, isImageMimeType } from '@utils/files/mimeUtils';
 import { detectImageTool } from '@utils/system/toolUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { executeCommand } from '@utils/system/execUtils';
-
-import { countPdfPagesInBuffer } from './pdfPageCount';
 
 const CHANNEL = 'ImgUtils';
 
@@ -43,6 +42,16 @@ const conversionStep = <A>(
   evaluate: () => PromiseLike<A>,
 ): Effect.Effect<A, MediaConversionFailed> =>
   Effect.tryPromise({ try: evaluate, catch: conversionFailure });
+
+/** The page count of an in-memory PDF; fails when the bytes or the lazily walked page tree do not parse. */
+const pdfPageCount = (bytes: Uint8Array) =>
+  conversionStep(async () => {
+    const doc = await PDFDocument.load(bytes, {
+      updateMetadata: false,
+      ignoreEncryption: true,
+    });
+    return doc.getPageCount();
+  });
 
 /** Base64 of file bytes, without copying them. */
 function toBase64(bytes: Uint8Array): string {
@@ -206,7 +215,7 @@ export const countPdfPages = Effect.fn('img.countPdfPages')(
       return 0;
     }
     const bytes = yield* fs.readFile(pdfPath);
-    return yield* conversionStep(() => countPdfPagesInBuffer(bytes));
+    return yield* pdfPageCount(bytes);
   },
   Effect.catchTag(['PlatformError', 'MediaConversionFailed'], (error) =>
     Effect.logError(`Error counting PDF pages: ${error.message}`).pipe(
@@ -291,7 +300,7 @@ export const processPdf2Png = Effect.fn('img.processPdf2Png')(
     }
 
     const bytes = yield* fs.readFile(pdfPath);
-    const pageCount = yield* conversionStep(() => countPdfPagesInBuffer(bytes));
+    const pageCount = yield* pdfPageCount(bytes);
     if (pageCount === 0) {
       return null;
     }

@@ -5,7 +5,6 @@ const ratchet = await import(
   '../../../scripts/check-dead-code-ratchet-core.mjs'
 );
 const {
-  compareFindings,
   countByCategory,
   diffFindings,
   extractFindings,

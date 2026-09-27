@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   listFormSelectWindow,
-  listFormShortcutLabel,
   pendingListFormChoice,
 } from '@cli/chat/tui/forms/_shared/ListForm';
 

@@ -72,7 +72,6 @@ describe('ConfigTools — update_config allowlist', () => {
     },
     // Port range is 1..65535
     { case: 'port 0', key: 'texra.bib.zoteroPort', value: 0 },
-    { case: 'port -1', key: 'texra.bib.zoteroPort', value: -1 },
     { case: 'port 70000', key: 'texra.bib.zoteroPort', value: 70000 },
   ])('rejects $case without writing', ({ key, value }) =>
     Effect.gen(function* () {

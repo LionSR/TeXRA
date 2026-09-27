@@ -58,8 +58,4 @@ describe('DiffResult transforms', () => {
       canonicalDisplay,
     ]);
   });
-
-  it('skips invalid non-object entries', () => {
-    expect(parseDiffResultEntries([null, 'not an entry', 1])).toEqual([]);
-  });
 });

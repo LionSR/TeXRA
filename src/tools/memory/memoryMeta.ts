@@ -101,17 +101,19 @@ export function buildFile(
 /**
  * Create a fresh MemoryFileMeta for the current agent / run.
  * Returns null when agentName is not available (attribution skipped).
+ * `modifiedAt` is the caller's `Clock` reading as an ISO string.
  */
 export function createMeta(
   agentName: string | undefined,
   runId: string | undefined,
+  modifiedAt: string,
   existingMeta?: MemoryFileMeta | null,
 ): MemoryFileMeta | null {
   if (!agentName) return null;
   return {
     modifiedBy: agentName,
     runId,
-    modifiedAt: new Date().toISOString(),
+    modifiedAt,
     pinned: existingMeta?.pinned,
   };
 }
@@ -120,15 +122,17 @@ export function createMeta(
 
 /**
  * Create a new MemoryFileMeta with the pinned flag toggled.
- * If no existing meta is provided, creates a default attribution.
+ * If no existing meta is provided, creates a default attribution stamped
+ * `modifiedAt` (the caller's `Clock` reading as an ISO string).
  */
 export function setPinnedMeta(
   meta: MemoryFileMeta | null,
   pinned: boolean,
+  modifiedAt: string,
 ): MemoryFileMeta {
   const base = meta ?? {
     modifiedBy: 'user',
-    modifiedAt: new Date().toISOString(),
+    modifiedAt,
   };
   return {
     ...base,

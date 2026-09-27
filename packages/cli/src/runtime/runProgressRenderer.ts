@@ -252,7 +252,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root) return { line: '', state: '' };
     // The loop's own coordinate off the fold's `flow`, in the one its family
     // counts; a run that has not stepped yet carries none.
-    const position = flowPosition(root.flow);
+    const position = flowPosition(root.flow, root.category);
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const plannedRounds =

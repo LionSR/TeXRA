@@ -52,7 +52,7 @@ If you don't have elan yet, follow the [Lean community install guide](https://le
 There is **no switch to flip**. Lean support turns on the moment a Lean-capable agent runs a Lean tool on a `.lean` file in a Lake project. Pick a Lean-capable agent (see below) and ask it to work on your proof.
 
 ::: tip Check that it's working
-Open **Dashboard → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers.
+Open **Settings → Tools** (<wa-icon library="texra" name="tools"></wa-icon>) → **Lean 4 Proof Assistant** (<wa-icon library="texra" name="beaker"></wa-icon>) to confirm your setup is detected. The panel shows whether the Lean 4 extension is available (VS Code) or whether `lake` was found (CLI), and lists any active language servers.
 :::
 
 ## Choosing an agent
@@ -70,7 +70,7 @@ All the Lean agents ship with TeXRA and need no sign-in. The `lean` agent handle
 To load the full set, open the **Teams** tab and select the **Lean Project** team. If you're formalizing a paper that is also part LaTeX, the **Mathematician** team bundles the `lean` agent alongside the LaTeX and research agents.
 
 ::: tip
-Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Dashboard → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see which tools each one has enabled.
+Pick any agent from the **Agent** dropdown (<wa-icon library="texra" name="sparkle"></wa-icon>). Check **Settings → Agents** (<wa-icon library="texra" name="sparkle"></wa-icon>) to see which tools each one has enabled.
 :::
 
 ## What you can do

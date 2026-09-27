@@ -1,10 +1,8 @@
 /**
- * Wait-coordination helpers for the executions tool's blocking `wait` action.
- * Decides which executions are worth blocking on and lets a follow-up message
- * break a blocking wait early.
+ * Wait coordination for the executions tool's blocking `wait` action:
+ * decides which executions are worth blocking on.
  */
 
-import type { RunRegistry } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { RUN_PHASE, type RunId } from '@shared/schemas';
 import { isInFlightPhase } from '@shared/runs/runStatus';
@@ -20,13 +18,17 @@ import { isInFlightPhase } from '@shared/runs/runStatus';
  *   childRunLoop.ts). Workflow subagents in WAITING may still be awaiting
  *   retry/user action and should keep blocking.
  *
- * One getHandle + one getStatus per call — no redundant lookups.
+ * One handle lookup and one view read per call — no redundant lookups.
  */
-export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
-  const handle = runs.getHandle(runId);
+export function shouldSkipWait(session: SessionHandle, runId: RunId): boolean {
+  const handle = session.runs.getHandle(runId);
   if (!handle) return true;
 
-  const { status } = runs.getStatus(handle);
+  // A tracked run whose activation has not folded yet is running: the
+  // handle exists because its process is live.
+  const viewed = session.runView(runId)?.status;
+  const status =
+    viewed === undefined || viewed === 'ready' ? RUN_PHASE.RUNNING : viewed;
   if (!isInFlightPhase(status)) return true;
 
   // Tool-use subagent in WAITING = job delivered by the child-run loop, don't block.
@@ -38,29 +40,6 @@ export function shouldSkipWait(runs: RunRegistry, runId: RunId): boolean {
     status === RUN_PHASE.WAITING &&
     handle.identity.kind === 'agent' &&
     handle.category === 'toolUse' &&
-    handle.isChild
+    handle.parent !== null
   );
-}
-
-/**
- * Listen for follow-up messages on the current run and call `onFollowUp`
- * when one arrives. This lets users break out of a blocking
- * `executions wait` by sending a follow-up message.
- *
- * Observes the owning session's follow-up queue (`ToolUseFollowUpQueue.onSent`,
- * what `notifyFollowUpSent` fires), so follow-up delivery has exactly one
- * in-process channel and no plane row.
- *
- * Returns a cleanup function that removes the listener.
- */
-export function listenForFollowUp(
-  session: SessionHandle,
-  runId: RunId | undefined,
-  onFollowUp: () => void,
-): () => void {
-  if (!runId) return () => {};
-
-  return session.followUps.onSent((sentRunId) => {
-    if (sentRunId === runId) onFollowUp();
-  });
 }

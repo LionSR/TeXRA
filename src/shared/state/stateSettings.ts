@@ -73,7 +73,7 @@ const DEFAULT_GIT_WORKTREE_SUPPORT = false;
  * Keep file-oriented tools inside the active working directory unless the
  * user explicitly grants them access to arbitrary filesystem paths.
  */
-export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
+const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
 
 /**
  * Host-neutral catalog for every TeXRA setting a host can store, honor, or render.
@@ -103,16 +103,15 @@ export const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  * `settingSlot(entry, host)`.
  */
 
-/** Hosts that may store, honor, or surface a setting. */
-export type SettingHost = 'vscode' | 'cli' | 'desktop';
+/** The product hosts, spelled once: for settings and `unavailableHosts`. */
+export const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
+export type SettingHost = (typeof SETTING_HOSTS)[number];
 
 /** Storage slot a setting is read from / written to. */
 export type SettingStore = 'config' | 'workspaceState' | 'globalState';
 
 /** Storage slot per host. Absent means the host does not store the key. */
-type SettingSlots = {
-  readonly [H in SettingHost]?: SettingStore;
-};
+type SettingSlots = { readonly [H in SettingHost]?: SettingStore };
 
 export type SettingsViewSnapshot =
   | 'approval'
@@ -415,12 +414,6 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/childRunBudget.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  'goal.enabled': {
-    schema: z.boolean().prefault(true),
-    description:
-      'Enable Goal, a per-stream autonomous-continuation mode for tool-use agents. When on, an active Goal lets the agent keep working across turns toward a stated objective until it calls plan(command="complete"). On by default; set to false to require manual continuation.',
-    honoredBy: everyHost('src/tools/goal/goalFeatureFlag.ts'),
-  },
   // The provider toggles below are `configTarget: 'global'`:
   // they describe how you talk to a provider, not a property of one project,
   // and that is the scope they were written at before the catalog collapse
@@ -501,13 +494,11 @@ const CORE_SETTING_ROWS: Record<
     honoredBy: everyHost('src/agent/runtime/ModelInvoker.ts'),
     surfaces: { settingsView: 'multi-agent', cliConfig: true },
   },
-  // Thin provider modules own the public prefer-switch surface; the shared
-  // factory in subscriptionPreference.ts is not a separate consumer key.
   'chatgptCodex.preferSubscription': {
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in ChatGPT subscription for Codex-eligible OpenAI models instead of API-key routing. Experimental. Subscription routing defaults to a 272K-token input budget; use chatgptCodex.contextWindowK to override it.',
-    honoredBy: everyHost('src/model/codex/codexSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   'chatgptCodex.contextWindowK': {
     schema: ChatgptCodexContextWindowSchema,
@@ -524,7 +515,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(false),
     description:
       'Prefer your signed-in Grok (xAI SuperGrok) account for xAI models instead of API-key routing. Experimental. Uses the public Grok CLI OAuth client; xAI may change or revoke that registration without notice.',
-    honoredBy: everyHost('src/model/xai/xaiSubscription.ts'),
+    honoredBy: everyHost('src/model/subscriptionAccess.ts'),
   },
   maxImageDimension: {
     schema: z.int().min(100).max(10000).prefault(2000),
@@ -638,17 +629,6 @@ const CORE_SETTING_ROWS: Record<
       cli: { writer: 'src/tools/setup/ConfigTools.ts' },
     },
   },
-  'agentReview.runOnCommit': {
-    schema: z.boolean().prefault(false),
-    description:
-      'Automatically review your changes for issues after each commit.',
-    honoredBy: {
-      vscode: {
-        reader:
-          'packages/extension/src/frontend/review/agentReviewCommitWatcher.ts',
-      },
-    },
-  },
   'audio.soxPath': {
     schema: z.string().prefault(''),
     description: 'Path to the SoX executable. Overrides automatic detection.',
@@ -668,7 +648,7 @@ const CORE_SETTING_ROWS: Record<
     schema: z.boolean().prefault(TELEMETRY_ENABLED_DEFAULT),
     title: 'Share usage telemetry',
     description:
-      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops reporting for rounds billed to your own API keys; rounds covered by a subscription are still recorded, because they meter your usage against your plan.',
+      'Send model, token, cost, timing, route, and host metadata. TeXRA never sends prompt text, document content, or file names. Turning this off stops all reporting.',
     category: 'account',
     configTarget: 'global',
     honoredBy: everyHost('src/telemetry/UsageLogService.ts'),
@@ -691,18 +671,17 @@ const CORE_SETTING_ROWS: Record<
   },
   'toolUse.requireEditApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for file edits',
+    title: 'Require approval for file edits',
     description:
-      'When approval policy is Ask, show a diff before an agent changes workspace files. Inert under Never and Auto-approve.',
+      'Show a diff and wait for your approval before an agent changes a project file.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/toolEditApproval.ts'),
     surfaces: { settingsView: 'approval' },
   },
   'toolUse.requireBashApproval': {
     schema: z.boolean().prefault(true),
-    title: 'Under Ask: require approval for shell commands',
-    description:
-      'When approval policy is Ask, pause before an agent runs a shell command. Inert under Never and Auto-approve.',
+    title: 'Require approval for shell commands',
+    description: 'Wait for your approval before an agent runs a shell command.',
     category: 'tools',
     honoredBy: everyHost('src/tools/approval/bashApproval.ts'),
     surfaces: { settingsView: 'approval' },
@@ -763,7 +742,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
     schema: TexraApprovalPolicySchema.prefault(TEXRA_APPROVAL_POLICY_DEFAULT),
     title: 'Approval policy',
     description:
-      'Deny, ask, or auto-approve Bash and tool edits for this workspace. Under Ask, the two toggles below control each kind independently.',
+      'Whether agents ask before running shell commands and editing files in this project. Under Ask, the toggles below choose which of the two need your approval.',
     category: 'tools',
     slots: sameSlot('config'),
     honoredBy: {
@@ -771,7 +750,7 @@ const CORE_SETTINGS: readonly StateSettingEntry[] = [
       desktop: { reader: 'src/utils/config/platformSettings.ts' },
       cli: { reader: 'packages/cli/src/runtime/cliConfig.ts' },
     },
-    enumLabels: ['Never', 'Ask', 'Auto-approve'],
+    enumLabels: ['Block', 'Ask', 'Auto-approve'],
     surfaces: { settingsView: 'approval', cliConfig: true },
   }),
 ];
@@ -1063,11 +1042,11 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'After auto-compile, open the PDF when it succeeds or the LaTeX log when it fails.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    // Read by the reflection flow, but the emitted `requestOpenFile` has no CLI
-    // handler (headless), so the CLI does not honor it.
+    // Read by the documents plugin, but the emitted `requestOpenFile` has no
+    // CLI handler (headless), so the CLI does not honor it.
     honoredBy: {
-      vscode: { reader: 'src/agent/runtime/loop/reflection.ts' },
-      desktop: { reader: 'src/agent/runtime/loop/reflection.ts' },
+      vscode: { reader: 'src/agent/output/documentRounds.ts' },
+      desktop: { reader: 'src/agent/output/documentRounds.ts' },
     },
     surfaces: { settingsView: 'latex' },
   }),
@@ -1081,14 +1060,14 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       'When the automatic compile fails, spend the next planned round repairing the output from the compile log.',
     category: 'workflow',
     slots: sameSlot('workspaceState'),
-    honoredBy: everyHost('src/agent/runtime/loop/reflection.ts'),
+    honoredBy: everyHost('src/agent/output/documentRounds.ts'),
     surfaces: { settingsView: 'latex', cliConfig: true },
   }),
 
   // --- LaTeXdiff -------------------------------------------------------------
-  // Run by the reflection flow, so every host honors them. The timeout is kept
-  // out of the settings view (an insider knob) and edited from CLI `/config`;
-  // the rest are deferred from `/config` by product decision.
+  // Run by the documents plugin, so every host honors them. The timeout is
+  // kept out of the settings view (an insider knob) and edited from CLI
+  // `/config`; the rest are deferred from `/config` by product decision.
   surfacedSetting({
     key: WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
     schema: z.boolean().prefault(LATEX_CONFIG_DEFAULTS.latexdiffBetweenRounds),
@@ -1325,7 +1304,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(z.string()).prefault([]),
     title: 'Tool integrations',
     description:
-      'Enable or disable external tool integration groups used by agent tool resolution.',
+      'Enable or disable tool plugins. A disabled plugin withholds its tools, its bundled skills and its bundled agents.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/tools/toolAvailability.ts'),
@@ -1361,7 +1340,7 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
     schema: z.array(InstalledPluginSchema).prefault([]),
     title: 'Installed plugins',
     description:
-      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads their skills as user skills.',
+      'Claude Code and Codex plugins installed with `texra plugin install`. TeXRA loads the skills of each enabled one as user skills; `texra plugin disable` hides a plugin without removing it.',
     category: 'tools',
     slots: sameSlot('globalState'),
     honoredBy: everyHost('src/skills/runtimeSkills.ts'),

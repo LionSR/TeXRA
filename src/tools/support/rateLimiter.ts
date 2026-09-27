@@ -31,42 +31,45 @@ const limiters = new Map<string, Limiter>();
  * `minDelayMs`, waiters run in arrival order, and an interrupted waiter
  * gives its place back instead of consuming a slot nobody uses.
  */
-export const acquireRateLimitSlot = Effect.fn(
-  'rateLimiter.acquireRateLimitSlot',
-)(function* (apiName: string, minDelayMs: number) {
-  let limiter = limiters.get(apiName);
-  if (!limiter || limiter.minDelayMs !== minDelayMs) {
-    limiter = { minDelayMs, gate: Semaphore.makeUnsafe(1), nextSlotAt: 0 };
-    limiters.set(apiName, limiter);
-  }
-  const slot = limiter;
-  yield* Semaphore.withPermit(slot.gate)(
-    Effect.gen(function* () {
-      const now = yield* Clock.currentTimeMillis;
-      if (now < slot.nextSlotAt) {
-        yield* Effect.sleep(Duration.millis(slot.nextSlotAt - now));
-      }
-      slot.nextSlotAt = (yield* Clock.currentTimeMillis) + minDelayMs;
-    }),
-  );
-});
+const acquireRateLimitSlot = Effect.fn('rateLimiter.acquireRateLimitSlot')(
+  function* (apiName: string, minDelayMs: number) {
+    let limiter = limiters.get(apiName);
+    if (!limiter || limiter.minDelayMs !== minDelayMs) {
+      limiter = { minDelayMs, gate: Semaphore.makeUnsafe(1), nextSlotAt: 0 };
+      limiters.set(apiName, limiter);
+    }
+    const slot = limiter;
+    yield* Semaphore.withPermit(slot.gate)(
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        if (now < slot.nextSlotAt) {
+          yield* Effect.sleep(Duration.millis(slot.nextSlotAt - now));
+        }
+        slot.nextSlotAt = (yield* Clock.currentTimeMillis) + minDelayMs;
+      }),
+    );
+  },
+);
 
 /**
  * A rate-limited request against an external metadata API with uniform
  * error wrapping — the exact pattern every arXiv/Crossref lookup repeats.
  *
  * Waits for the API's next slot ({@link acquireRateLimitSlot}), runs the
- * request, and fails with a `ToolError` prefixed with `failureMessage` (a
- * `ToolError` the request throws itself passes through unchanged).
- * Interruption stops the slot wait; these clients expose no AbortSignal
- * hook, so an interrupted in-flight request is *abandoned*: it settles in
- * the background and its result is discarded. Only safe for the idempotent,
- * read-only lookups these tools perform — never abandon a write.
+ * request under a `timeoutMs` deadline, and fails with a `ToolError`
+ * prefixed with `failureMessage` (a `ToolError` the request throws itself
+ * passes through unchanged). The deadline covers the request only, not the
+ * slot wait. Interruption stops the slot wait; these clients expose no
+ * AbortSignal hook, so an interrupted or timed-out in-flight request is
+ * *abandoned*: it settles in the background and its result is discarded.
+ * Only safe for the idempotent, read-only lookups these tools perform —
+ * never abandon a write.
  */
 export const rateLimitedApiCall = Effect.fn('rateLimiter.rateLimitedApiCall')(
   <T>(
     apiName: string,
     minDelayMs: number,
+    timeoutMs: number,
     failureMessage: string,
     request: () => Promise<T>,
   ) =>
@@ -80,6 +83,16 @@ export const rateLimitedApiCall = Effect.fn('rateLimiter.rateLimitedApiCall')(
             : new ToolError(`${failureMessage}: ${toErrorMessage(cause)}`, {
                 cause,
               }),
-      });
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: Duration.millis(timeoutMs),
+          orElse: () =>
+            Effect.fail(
+              new ToolError(
+                `${failureMessage}: timed out after ${timeoutMs} ms`,
+              ),
+            ),
+        }),
+      );
     }),
 );

@@ -12,7 +12,7 @@ import {
   type FileLocation,
   type RunStorageFileLocation,
 } from '@shared/schemas';
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { normalizeFilePath } from '@utils/core';
 import { hasExtension } from '@utils/core/pathCore';
@@ -35,22 +35,12 @@ function normalizePdfRelativePath(pdfPath: string): string {
   return hasExtension(normalized, '.pdf') ? normalized : `${normalized}.pdf`;
 }
 
-function stripRoundPrefix(relativePath: string, round: number): string {
-  const normalizedPath = normalizeFilePath(relativePath);
-  const separatorIndex = normalizedPath.indexOf('/');
-  if (separatorIndex === -1) return normalizedPath;
-  const firstSegment = normalizedPath.slice(0, separatorIndex);
-  return parseWorkflowOutputRoundDir(firstSegment) === round
-    ? normalizedPath.slice(separatorIndex + 1)
-    : normalizedPath;
-}
-
 function toPdfRelativePath(options: PublishCompiledPdfOptions): string {
   const comparablePath =
     options.source.kind === 'external'
       ? path.basename(options.displayName)
-      : stripRoundPrefix(
-          fileLocationDisplayPath(options.source),
+      : stripWorkflowRoundDir(
+          normalizeFilePath(fileLocationDisplayPath(options.source)),
           options.round,
         );
   const parsed = path.parse(comparablePath || options.displayName);

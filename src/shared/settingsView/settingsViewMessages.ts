@@ -227,9 +227,6 @@ const UpdateAgentSelectionMessageSchema = z.object({
   agents: z.record(AgentCategorySchema, z.array(AgentSelectionItemSchema)),
   customAgentIssues: z.array(AgentScanIssueSchema).prefault([]),
 });
-export type UpdateAgentSelectionMessage = z.infer<
-  typeof UpdateAgentSelectionMessageSchema
->;
 
 // ============================================================
 // Model selection data schema
@@ -346,9 +343,6 @@ const UpdateAgentModePresetsMessageSchema = z.object({
    */
   activePresetId: z.string().nullable().prefault(null),
 });
-export type UpdateAgentModePresetsMessage = z.infer<
-  typeof UpdateAgentModePresetsMessageSchema
->;
 
 // ============================================================
 // Tool dashboard data schemas
@@ -472,9 +466,6 @@ const UpdateSubscriptionAuthStatusMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_AUTH_STATUS),
   status: SubscriptionAuthStatusSchema,
 });
-export type UpdateSubscriptionAuthStatusMessage = z.infer<
-  typeof UpdateSubscriptionAuthStatusMessageSchema
->;
 
 const UpdateSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.UPDATE_SUBSCRIPTION_USAGE),
@@ -574,7 +565,7 @@ const SettingsViewOutboundMessageSchema = z.discriminatedUnion('command', [
   UpdateProfileMessageSchema,
 ]);
 
-type SettingsViewOutboundMessage = z.infer<
+export type SettingsViewOutboundMessage = z.infer<
   typeof SettingsViewOutboundMessageSchema
 >;
 
@@ -584,11 +575,6 @@ export type SettingsViewOutboundHandlerRegistry =
 export const dispatchSettingsViewOutbound = createDispatcher(
   SettingsViewOutboundMessageSchema,
 );
-
-/** Inbound message carrying a single boolean `enabled` toggle. */
-function enabledFlag<T extends string>(command: T) {
-  return z.object({ command: z.literal(command), enabled: z.boolean() });
-}
 
 /** Inbound message addressed to a provider by name. */
 function providerCommand<T extends string>(command: T) {
@@ -742,26 +728,20 @@ const RemoveGitHubTokenMessageSchema = commandOnly(
 const OpenGitHubTokenUrlMessageSchema = commandOnly(
   SETTINGS_VIEW_COMMANDS.OPEN_GITHUB_TOKEN_URL,
 );
-// ChatGPT subscription (Codex) sign-in messages
-const SignInChatGptMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_IN_CHATGPT,
-);
-const SignOutChatGptMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_OUT_CHATGPT,
-);
-const SetChatGptPreferSubscriptionMessageSchema = enabledFlag(
-  SETTINGS_VIEW_COMMANDS.SET_CHATGPT_PREFER_SUBSCRIPTION,
-);
-// Grok (xAI) subscription sign-in messages
-const SignInGrokMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_IN_GROK,
-);
-const SignOutGrokMessageSchema = commandOnly(
-  SETTINGS_VIEW_COMMANDS.SIGN_OUT_GROK,
-);
-const SetGrokPreferSubscriptionMessageSchema = enabledFlag(
-  SETTINGS_VIEW_COMMANDS.SET_GROK_PREFER_SUBSCRIPTION,
-);
+// Subscription sign-in messages, addressed by provider
+const SignInSubscriptionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_IN_SUBSCRIPTION),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+});
+const SignOutSubscriptionMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SIGN_OUT_SUBSCRIPTION),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+});
+const SetSubscriptionPreferenceMessageSchema = z.object({
+  command: z.literal(SETTINGS_VIEW_COMMANDS.SET_SUBSCRIPTION_PREFERENCE),
+  provider: z.enum(SUBSCRIPTION_AUTH_PROVIDERS),
+  enabled: z.boolean(),
+});
 const GetSubscriptionUsageMessageSchema = z.object({
   command: z.literal(SETTINGS_VIEW_COMMANDS.GET_SUBSCRIPTION_USAGE),
   forceRefresh: z.boolean().optional(),
@@ -868,14 +848,10 @@ export const SettingsViewInboundMessageSchema = z.discriminatedUnion(
     SetGitHubTokenMessageSchema,
     RemoveGitHubTokenMessageSchema,
     OpenGitHubTokenUrlMessageSchema,
-    // ChatGPT subscription sign-in messages
-    SignInChatGptMessageSchema,
-    SignOutChatGptMessageSchema,
-    SetChatGptPreferSubscriptionMessageSchema,
-    // Grok subscription sign-in messages
-    SignInGrokMessageSchema,
-    SignOutGrokMessageSchema,
-    SetGrokPreferSubscriptionMessageSchema,
+    // Subscription sign-in messages
+    SignInSubscriptionMessageSchema,
+    SignOutSubscriptionMessageSchema,
+    SetSubscriptionPreferenceMessageSchema,
     GetSubscriptionUsageMessageSchema,
     GetPRSubscriptionsMessageSchema,
     UnsubscribePRMessageSchema,

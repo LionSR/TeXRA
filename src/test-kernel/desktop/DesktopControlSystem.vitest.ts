@@ -1,18 +1,8 @@
-// Node imports
-import { readFileSync } from 'node:fs';
-
 // Third-party imports
 import { describe, expect, it, vi } from 'vitest';
 
 // Local imports
 import { installDesktopUnsavedCloseWiring } from '@desktop/renderer/desktopUnsavedClose';
-
-// Local imports - desktop test paths
-import { repoPath } from './desktopTestPaths.ts';
-
-function read(relativePath: string): string {
-  return readFileSync(repoPath(relativePath), 'utf8');
-}
 
 function createBeforeUnloadWindow() {
   let listener:

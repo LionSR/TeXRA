@@ -62,7 +62,6 @@ const OpenRouterReasoningSchema = z
         ]),
       )
       .readonly()
-      .nullable()
       .optional(),
   })
   .refine(
@@ -73,27 +72,6 @@ const OpenRouterReasoningSchema = z
         'OpenRouter reasoning preserves a reported plain or details field.',
     },
   )
-  .readonly();
-export const OpenRouterFileAnnotationSchema = z
-  .strictObject({
-    kind: z.literal('file-annotation'),
-    hash: z.string(),
-    name: z.string().optional(),
-    content: z
-      .array(
-        z.discriminatedUnion('kind', [
-          TextPartSchema,
-          z
-            .strictObject({ kind: z.literal('image-url'), url: z.string() })
-            .readonly(),
-        ]),
-      )
-      .readonly()
-      .optional(),
-    evidence: z
-      .strictObject({ kind: z.literal('openrouter-file-annotation') })
-      .readonly(),
-  })
   .readonly();
 const MiniMaxReasoningSchema = z
   .strictObject({
@@ -194,20 +172,6 @@ const LocalCallPartSchema = z.strictObject({
 });
 
 const OutputPartSchema = z.discriminatedUnion('kind', [
-  OpenRouterFileAnnotationSchema,
-  z
-    .strictObject({
-      kind: z.literal('url-citation'),
-      url: z.string(),
-      title: z.string().optional(),
-      startIndex: z.number().optional(),
-      endIndex: z.number().optional(),
-      content: z.string().optional(),
-      evidence: z
-        .strictObject({ kind: z.literal('openrouter-url-citation') })
-        .readonly(),
-    })
-    .readonly(),
   MessagePartSchema.readonly(),
   z
     .strictObject({
@@ -274,8 +238,6 @@ export const EVIDENCE_PROTOCOL = {
   'anthropic-thinking-signature': 'anthropic-messages',
   'anthropic-redacted-thinking': 'anthropic-messages',
   'openrouter-reasoning': 'openrouter-chat',
-  'openrouter-file-annotation': 'openrouter-chat',
-  'openrouter-url-citation': 'openrouter-chat',
   'minimax-reasoning': 'minimax-chat',
   'minimax-message': 'minimax-chat',
   'minimax-function-call': 'minimax-chat',

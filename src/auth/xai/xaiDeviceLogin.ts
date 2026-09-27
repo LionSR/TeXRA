@@ -17,6 +17,7 @@ import { Effect } from 'effect';
 import {
   completeDeviceSession,
   pollDeviceAuthorization,
+  type SubscriptionDeviceCodePrompt,
 } from '@auth/oauth/deviceAuthorization';
 
 // Local imports - xai
@@ -25,22 +26,14 @@ import {
   XAI_DEVICE_DEFAULT_INTERVAL_SEC,
   XAI_DEVICE_SLOW_DOWN_INCREMENT_SEC,
 } from './xaiConstants';
-import { type XaiSessionCoordinator } from './XaiSessionCoordinator';
 import { pollDeviceToken, requestDeviceCode } from './xaiOAuthClient';
-
-interface XaiDevicePrompt {
-  /** The one-time code the user types at the verification URL. */
-  userCode: string;
-  /** Where the user enters the code. */
-  verificationUrl: string;
-  /** Prefill URL when the server supplies `verification_uri_complete`. */
-  verificationUrlComplete?: string;
-}
+import type { XaiSession } from './xaiSessionTypes';
+import type { SubscriptionOAuthCoordinator } from '../oauth/SubscriptionOAuthCoordinator';
 
 export interface XaiDeviceLoginOptions {
-  coordinator: XaiSessionCoordinator;
+  coordinator: SubscriptionOAuthCoordinator<XaiSession>;
   /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: XaiDevicePrompt) => void;
+  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
 }
 
 /**

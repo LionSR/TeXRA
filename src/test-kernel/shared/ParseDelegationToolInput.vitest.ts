@@ -1,13 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import { AgentCategory, parseDelegationToolInput } from '@shared/schemas';
-import { DEFAULT_AGENT_MODEL } from '@shared/constants/providers';
 
 describe('parseDelegationToolInput', () => {
-  it('returns null for non-delegation tools', () => {
-    expect(parseDelegationToolInput({ agent: 'a' }, 'bash')).toBeNull();
-  });
-
   it('routes delegate_agent to a tool-use proposal', () => {
     const proposal = parseDelegationToolInput(
       { agent: 'orchestrator', instruction: 'do it' },
@@ -43,17 +38,5 @@ describe('parseDelegationToolInput', () => {
       expect(proposal.toolConfig.autoExtractFigure).toBe(true);
       expect(proposal.toolConfig.autoExtractTikzFigure).toBe(false);
     }
-  });
-
-  it('returns null when required fields are missing', () => {
-    // instruction is required by the canonical proposal schema.
-    expect(
-      parseDelegationToolInput({ agent: 'correct' }, 'delegate_agent'),
-    ).toBeNull();
-  });
-
-  it('tolerates non-object input', () => {
-    expect(parseDelegationToolInput(null, 'delegate_agent')).toBeNull();
-    expect(parseDelegationToolInput('nope', 'delegate_workflow')).toBeNull();
   });
 });

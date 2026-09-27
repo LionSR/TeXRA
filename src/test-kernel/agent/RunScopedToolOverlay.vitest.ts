@@ -11,7 +11,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -22,6 +21,7 @@ import {
 } from '@platform/languageModel';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
+import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
@@ -88,12 +88,9 @@ function runLayer(
 ) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
-    followUpsLayer,
     nativeToolTestLayer(),
   ).pipe(
-    Layer.provideMerge(
-      agentRunLayer(ctx, { tools, callbacks: { onModelChanged: () => {} } }),
-    ),
+    Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),
     Layer.provideMerge(Layer.succeed(RunLedger, ctx.session.ledger)),
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
@@ -156,7 +153,7 @@ describe('run-scoped tool resolution', () => {
         // did not offer is unknown, however the model came to name it.
         expect(dispatch.get('bash')).toBe(shadowing);
         expect(dispatch.has('grep')).toBe(false);
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 
@@ -207,7 +204,7 @@ describe('run-scoped tool resolution', () => {
         expect(warn).toHaveBeenCalledWith(
           'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
         );
-        yield* session.dispose();
+        yield* closeSessionOf(session);
       }),
   );
 

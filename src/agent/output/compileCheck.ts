@@ -19,7 +19,7 @@ import {
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { LATEX_CONFIG_RANGES } from '@shared/constants/latexConfig';
-import { parseWorkflowOutputRoundDir } from '@shared/constants/workflowOutput';
+import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
 import { createRunStorageLocation } from '@utils/files/fileLocation';
 import { readNormalizedFile } from '@utils/files/fsDurability';
 import { runDirUnder } from '@utils/files/runStorageFs';
@@ -35,6 +35,7 @@ import {
   publishCompiledPdfArtifact,
   publishCompiledPdfArtifactBestEffort,
 } from './compiledPdfArtifacts';
+import { combineFailureLogExcerpts } from './compileFailureRoundContext';
 import { getOutputFilesByRound, type OutputState } from './outputState';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
@@ -47,7 +48,6 @@ interface CompileCheckContext {
   runId: RunId;
 }
 
-const COMPILE_LOG_EXCERPT_CHAR_LIMIT = 12000;
 const MIN_TIMEOUT_MS = LATEX_CONFIG_RANGES.workflowAutoCompileTimeoutMs.min;
 
 interface CompileCheckResult {
@@ -101,19 +101,17 @@ export function resolveWorkspaceSourceDir(
   const workspaceRoot = roots.workspace;
   if (!workspaceRoot || location.kind === 'external') return undefined;
 
-  const runStorageRelative =
+  const runRelative =
     location.kind === 'runStorage'
       ? path.relative(
           runDirUnder(roots.storage, location.runId),
           location.absolutePath,
         )
-      : null;
-  const separatorMatch = runStorageRelative
-    ? /^([^/\\]+)[/\\]/.exec(runStorageRelative)
-    : null;
+      : undefined;
   const workspaceRelative =
-    separatorMatch && parseWorkflowOutputRoundDir(separatorMatch[1]) !== null
-      ? location.relativePath.slice(separatorMatch[0].length)
+    runRelative !== undefined &&
+    stripWorkflowRoundDir(runRelative) !== runRelative
+      ? stripWorkflowRoundDir(location.relativePath)
       : location.relativePath;
 
   return path.join(workspaceRoot, path.dirname(workspaceRelative));
@@ -125,7 +123,7 @@ export function resolveWorkspaceSourceDir(
  * `<runDir>/compile/r<round>_<safe>.log`. Missing toolchains and non-root
  * fragments are skipped gracefully.
  */
-export const runCompileCheck = Effect.fn('reflection.runCompileCheck')(
+export const runCompileCheck = Effect.fn('documents.runCompileCheck')(
   function* (ctx: CompileCheckContext, currentRound: number) {
     const empty: CompileCheckResult = { artifacts: [] };
     if (
@@ -242,10 +240,8 @@ interface PerFileOptions {
 }
 
 /**
- * Per-file compile context shared by the failure-persistence and
- * artifact-publish helpers. Constructed once inside {@link compileOne} and
- * spread into each helper's args so a new derived value only needs adding
- * here (and to the helper that consumes it), not to every call site.
+ * Per-file compile context for the failure-persistence helper, constructed
+ * once inside {@link compileOne} and spread into each call's args.
  */
 interface CompileTarget {
   ctx: CompileCheckContext;
@@ -286,7 +282,7 @@ type CompileAttempt =
   | { readonly kind: 'errored'; readonly message: string }
   | { readonly kind: 'compiled'; readonly result: CompileLatex2PdfResult };
 
-const compileOne = Effect.fn('reflection.compileOne')(function* (
+const compileOne = Effect.fn('documents.compileOne')(function* (
   ctx: CompileCheckContext,
   outputFile: OutputFileInfo,
   currentRound: number,
@@ -298,12 +294,10 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   // (ch1/main.tex vs ch2/main.tex). Strip the leading r<N>/ segment because
   // it is already added explicitly as `r${currentRound}_` below — without
   // this, a location like `r0/main.tex` would produce `r0_r0_main.tex.log`.
-  const rawComparablePath = fileLocationDisplayPath(outputFile.location);
-  const comparablePath = rawComparablePath.replaceAll('\\', '/');
-  const roundPrefix = `r${currentRound}/`;
-  const pathForSafeName = comparablePath.startsWith(roundPrefix)
-    ? comparablePath.slice(roundPrefix.length)
-    : comparablePath;
+  const pathForSafeName = stripWorkflowRoundDir(
+    fileLocationDisplayPath(outputFile.location).replaceAll('\\', '/'),
+    currentRound,
+  );
   // Sanitizing to a filesystem-safe name is lossy: two distinct paths that
   // differ only in characters outside [a-zA-Z0-9._-] (e.g. "a:b.tex" and
   // "a_b.tex") both collapse to the same string, so a second file's log
@@ -425,10 +419,28 @@ const compileOne = Effect.fn('reflection.compileOne')(function* (
   if (compileResult.ok) {
     ctx.logger.debug(`Compile check: ${displayName} built successfully`);
     yield* clearStaleLogs;
-    const artifact = yield* tryPublishArtifact({
-      ...target,
-      compiledPdfPath: compileResult.pdfPath,
-    });
+    // Publishing the PDF is best effort: a failed copy must not turn a
+    // document that genuinely compiled into a reported compile failure.
+    const artifact = yield* publishCompiledPdfArtifactBestEffort(
+      publishCompiledPdfArtifact({
+        runDirectory: opts.runDirectory,
+        runId,
+        round: currentRound,
+        displayName,
+        source: outputFile.location,
+        compiledPdfPath: compileResult.pdfPath,
+      }),
+      (err) =>
+        ctx.logger.warn(
+          `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
+          { data: err },
+        ),
+    );
+    if (artifact) {
+      ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
+        data: artifact.relativePath,
+      });
+    }
     return { failure: null, failureLogExcerpt: '', artifact };
   }
 
@@ -457,7 +469,7 @@ interface WriteCompileFailureArgs extends CompileTarget {
  * a persistence error is logged at `warn` and recovered, so a failure is
  * always counted even when the log itself couldn't be written to disk.
  */
-const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
+const writeCompileFailure = Effect.fn('documents.writeCompileFailure')(
   function* ({
     ctx,
     opts,
@@ -502,61 +514,3 @@ const writeCompileFailure = Effect.fn('reflection.writeCompileFailure')(
     } satisfies PerFileOutcome;
   },
 );
-
-interface TryPublishArtifactArgs extends CompileTarget {
-  compiledPdfPath: string;
-}
-
-/**
- * Publish the compiled PDF as a best-effort side effect of a successful
- * compile. A failure here (e.g. copying the PDF into run storage) must not
- * turn a document that genuinely compiled into a reported compile failure.
- */
-const tryPublishArtifact = ({
-  ctx,
-  opts,
-  displayName,
-  currentRound,
-  outputFile,
-  compiledPdfPath,
-  runId,
-}: TryPublishArtifactArgs): Effect.Effect<
-  RunStorageFileLocation | null,
-  never,
-  FileSystem.FileSystem
-> =>
-  publishCompiledPdfArtifactBestEffort(
-    publishCompiledPdfArtifact({
-      runDirectory: opts.runDirectory,
-      runId,
-      round: currentRound,
-      displayName,
-      source: outputFile.location,
-      compiledPdfPath,
-    }),
-    (err) =>
-      ctx.logger.warn(
-        `Compile check: ${displayName} PDF publish failed: ${toErrorMessage(err)}`,
-        { data: err },
-      ),
-  ).pipe(
-    Effect.tap((artifact) =>
-      Effect.sync(() => {
-        if (artifact) {
-          ctx.logger.debug(`Compile check: ${displayName} PDF persisted`, {
-            data: artifact.relativePath,
-          });
-        }
-      }),
-    ),
-  );
-
-function combineFailureLogExcerpts(excerpts: string[]): string {
-  const combined = excerpts.filter(Boolean).join('\n\n');
-  if (combined.length <= COMPILE_LOG_EXCERPT_CHAR_LIMIT) return combined;
-
-  return [
-    `[truncated to last ${COMPILE_LOG_EXCERPT_CHAR_LIMIT} characters]`,
-    combined.slice(-COMPILE_LOG_EXCERPT_CHAR_LIMIT),
-  ].join('\n');
-}

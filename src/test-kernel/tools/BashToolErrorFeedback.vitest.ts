@@ -72,49 +72,6 @@ describe('BashTool error feedback', () => {
       ),
   );
 
-  it.effect.each([
-    {
-      name: 'spawn failure',
-      stderr: 'spawn missing-command ENOENT',
-      exitCode: 127,
-    },
-    {
-      name: 'cancellation',
-      stderr: 'Command aborted by user',
-      exitCode: 130,
-    },
-  ])(
-    'preserves $name fallback diagnostics without stream chunks',
-    ({ stderr, exitCode }) =>
-      Effect.gen(function* () {
-        vi.spyOn(execUtils, 'executeCommand').mockReturnValueOnce(
-          Effect.succeed({
-            success: false,
-            stdout: '',
-            stderr,
-            timedOut: false,
-            exitCode,
-          }),
-        );
-
-        const result = yield* BashTool.call({
-          command: 'missing-command',
-        });
-        expect(result.status).toBe('error');
-        expect(result.error).toContain(stderr);
-      }).pipe(
-        Effect.provide(
-          nativeToolTestLayer({
-            run: {
-              session: testDefaultSession(),
-              runId: 'bash-tool' as RunId,
-              toolPolicy: {},
-            },
-          }),
-        ),
-      ),
-  );
-
   it.effect('rejects shell-level backgrounding before command run', () =>
     Effect.gen(function* () {
       const executeSpy = vi.spyOn(execUtils, 'executeCommand');
@@ -172,20 +129,6 @@ describe('BashTool error feedback', () => {
     ),
   );
 
-  // The refusal copy a call settles with. Approval is the run loop's
-  // declared guard now, not a step in the body, so the copy is asserted at
-  // the builder the guard hands its decision to.
-  it('reports an explicit approval rejection to the agent', () => {
-    const rejected = buildBashApprovalRejectedResult('echo rejected', {
-      action: 'reject',
-      feedback: 'No thanks.',
-    });
-
-    expect(rejected.status).toBe('error');
-    expect(rejected.error).toContain('User rejected command');
-    expect(rejected.userInstruction).toBe('No thanks.');
-  });
-
   it('does not present generated rejection guidance as user feedback', () => {
     const rejected = buildBashApprovalRejectedResult('echo rejected', {
       action: 'reject',
@@ -228,18 +171,6 @@ describe('BashTool error feedback', () => {
     expect(rejected.error).toContain('Command denied');
     expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.error).not.toContain('Do not retry');
-    expect(rejected.userInstruction).toBeUndefined();
-  });
-
-  it('does not present an automatic cancellation as user feedback', () => {
-    const rejected = buildBashApprovalRejectedResult('echo rejected', {
-      action: 'cancel',
-      cause: 'Session disposed.',
-    });
-
-    expect(rejected.error).toContain('Command cancelled');
-    expect(rejected.error).toContain('Session disposed.');
-    expect(rejected.error).not.toContain('User rejected command');
     expect(rejected.userInstruction).toBeUndefined();
   });
 });

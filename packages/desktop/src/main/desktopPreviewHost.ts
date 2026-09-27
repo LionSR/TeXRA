@@ -9,11 +9,7 @@ import {
 } from 'effect';
 
 import { isLatexFile } from '@common/files/fileTypeUtils';
-import {
-  ExternalOpenFailed,
-  type ExternalOpener,
-  type MessageHost,
-} from '@hosts/uiHosts';
+import { ExternalOpenFailed, type MessageHost } from '@hosts/uiHosts';
 import {
   type ProcessRuntime,
   withProcessServices,

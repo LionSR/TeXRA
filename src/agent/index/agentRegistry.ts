@@ -1,6 +1,6 @@
 /** Agent Registry - Flat agent metadata cache with source-priority lookup. */
 
-import { Cause, Data, Effect } from 'effect';
+import { Cause, Clock, Data, Effect } from 'effect';
 import { AgentRosterController } from '@agent/roster/AgentRosterController';
 import { withLogChannel } from '@logger/effectLog';
 import { AgentDirectories, type StateReadFailed } from '@platform/interfaces';
@@ -28,7 +28,7 @@ import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
-import { builtInToolUseRoots } from './BundledAgentDirectories';
+import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { loadRemoteAgents } from './remoteAgentMeta';
 import type { AgentEntry } from './agentEntry';
 
@@ -142,7 +142,7 @@ function queueLoad(
 > {
   return Effect.gen(function* () {
     if (loadEpoch !== epoch) return;
-    const startTime = Date.now();
+    const startTime = yield* Clock.currentTimeMillis;
 
     const dirs = yield* AgentDirectories;
     const [customDir, builtInDir, toolUseDir] = yield* Effect.all(
@@ -159,21 +159,20 @@ function queueLoad(
           }),
       ),
     );
-
+    const toolUseRoots = yield* enabledToolUseRoots(toolUseDir);
     const [customScan, builtInScan, toolUseScan, remoteEntries] =
       yield* Effect.all(
         [
           scanDirectory([customDir], 'custom'),
           scanDirectory([builtInDir], 'builtInWorkflow'),
-          scanDirectory(builtInToolUseRoots(toolUseDir), 'builtInToolUse'),
+          scanDirectory(toolUseRoots, 'builtInToolUse'),
           includeRemote
             ? loadRemoteAgents()
             : Effect.succeed([] as AgentEntry[]),
         ],
         { concurrency: 'unbounded' },
       );
-    // builtInScan.issues and toolUseScan.issues are intentionally unused:
-    // only custom-agent scan failures are a product surface.
+    // Only custom-agent scan issues are a product surface; the rest go unused.
 
     // Register all entries.
     const allEntries = [
@@ -201,7 +200,7 @@ function queueLoad(
     };
 
     yield* Effect.logInfo(
-      `Loaded ${cache.size} agents in ${Date.now() - startTime}ms`,
+      `Loaded ${cache.size} agents in ${(yield* Clock.currentTimeMillis) - startTime}ms`,
     ).pipe(withLogChannel(CHANNEL));
   });
 }

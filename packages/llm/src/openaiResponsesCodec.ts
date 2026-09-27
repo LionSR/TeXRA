@@ -116,11 +116,11 @@ export function agreesWithCompleted(
       (candidate.content === undefined ||
         isDeepStrictEqual(completed.content, candidate.content)) &&
       completed.evidence.itemId === candidate.evidence.itemId &&
+      // No `encryptedContent` check: OpenAI re-encrypts the same reasoning
+      // between the item's done event and the terminal snapshot, so the two
+      // opaque blobs differ byte for byte. The completed item's blob is kept.
       (candidate.evidence.status === undefined ||
-        completed.evidence.status === candidate.evidence.status) &&
-      (candidate.evidence.encryptedContent === undefined ||
-        completed.evidence.encryptedContent ===
-          candidate.evidence.encryptedContent)
+        completed.evidence.status === candidate.evidence.status)
     );
   }
   if (completed.kind === 'local-call' && candidate.kind === 'local-call') {

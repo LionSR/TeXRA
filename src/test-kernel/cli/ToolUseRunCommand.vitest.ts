@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // the mocked modules — keep these imports immediately after the vitest
 // import (enforced by architecture/supportMockImportOrder.vitest.ts).
 import { cliInitPlatformMock } from '@test/support/cliInitPlatformMock';
-import { cliLogSinksMock } from '@test/support/cliLogSinksMock';
 import { cliOutputMock } from '@test/support/cliOutputMock';
 
 import { it } from '@effect/vitest';

@@ -95,21 +95,6 @@ describe('desktop file selection', () => {
     }),
   );
 
-  it.effect('lists nothing without a workspace', () =>
-    Effect.gen(function* () {
-      const files = yield* Effect.promise(() =>
-        createFileSelection({ workspacePath: undefined }),
-      );
-
-      expect(yield* withProcessServices(runtime, files.fileOptions())).toEqual({
-        baseFile: [],
-        editedFile: [],
-        commit: ['HEAD'],
-      });
-      expect(yield* Effect.promise(() => files.pickFiles('input'))).toBeNull();
-    }),
-  );
-
   it.effect(
     'opens the native picker and returns workspace-relative paths',
     () =>
@@ -124,14 +109,15 @@ describe('desktop file selection', () => {
           createFileSelection({ showOpenFileDialog }),
         );
 
-        expect(
-          yield* Effect.promise(() => files.pickFiles('input', 'main.tex')),
-        ).toEqual(['main.tex', 'sections/main_r1.tex']);
+        expect(yield* Effect.promise(() => files.pickFiles('input'))).toEqual([
+          'main.tex',
+          'sections/main_r1.tex',
+        ]);
         expect(showOpenFileDialog).toHaveBeenCalledWith(
           expect.objectContaining({
             title: 'Select input files',
             allowMultiple: true,
-            defaultPath: join(workspacePath, 'main.tex'),
+            defaultPath: workspacePath,
           }),
         );
       }),

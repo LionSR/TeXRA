@@ -7,26 +7,28 @@
  * generation supersede, and serialized storage writes.
  *
  * Every method is an Effect program the caller yields or settles at its own
- * edge. Inside, the shared-machine {@link SubscriptionOAuthError} is the typed
- * failure and a port rejection travels as {@link AuthPortError}; the mutating
- * and refreshing programs re-mint both as the provider's own error type, so a
- * caller sees the same error vocabulary the retired Promise methods threw.
+ * edge. Inside, {@link SubscriptionOAuthError} is the typed failure and a port
+ * rejection travels as {@link AuthPortError}; the mutating and refreshing
+ * programs fail with the former as is and the latter unwrapped to its cause.
  */
 // Third-party imports
-import { Deferred, Effect, Result } from 'effect';
+import { Effect, Result } from 'effect';
 
 // Local imports
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import { withLogChannel } from '@logger/effectLog';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { SharedAttempt } from '@utils/core/sharedAttempt';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
 import { AuthPortError, SerializedWrites } from '../authProgram';
-import { generateOAuthState, generatePkcePair } from './pkce';
 import {
-  toProviderAuthError,
-  type ProviderAuthErrorCtor,
-} from './providerAuthBridge';
+  exchangeAuthorizationCode,
+  refreshOAuthTokens,
+  type OAuthFormEndpoint,
+} from './formTokenClient';
+import { generateOAuthState, generatePkcePair } from './pkce';
 import { SubscriptionOAuthError } from './subscriptionOAuthError';
+import type { OAuthRequestError } from './oauthRequest';
 import type { SubscriptionSessionBase } from './subscriptionSessionSchema';
 import type { HttpClient } from 'effect/unstable/http';
 import type { z } from 'zod';
@@ -96,6 +98,8 @@ export interface SubscriptionSessionStatus {
 export interface SubscriptionOAuthPolicy<S extends SubscriptionSession> {
   /** Zod schema for the persisted session bundle. */
   readonly sessionSchema: z.ZodType<S>;
+  /** Form token endpoint the default client grants against. */
+  readonly tokenEndpoint: OAuthFormEndpoint;
   /** Proactive refresh window (ms before expiresAtMs). */
   readonly refreshBufferMs: number;
   readonly notSignedInMessage: string;
@@ -119,7 +123,8 @@ export interface SubscriptionOAuthCoordinatorInit<
 > {
   storage: SubscriptionSessionStorage;
   policy: SubscriptionOAuthPolicy<S>;
-  client: SubscriptionOAuthClient;
+  /** Token grants; defaults to the policy's form endpoint. */
+  client?: SubscriptionOAuthClient;
   /**
    * Wall clock for the expiry decision. It is not `Clock` (PRD R8) because
    * `isExpiringSoon` is a public synchronous method and the coordinator
@@ -128,21 +133,51 @@ export interface SubscriptionOAuthCoordinatorInit<
    * runtime's clock is injectable from a test.
    */
   now?: () => number;
-  /**
-   * Provider error type. The mutating/refreshing programs (loginWithCode,
-   * storeTokens, getFreshAccessToken, getFreshSession) re-mint
-   * {@link SubscriptionOAuthError} as this type so callers see the provider's
-   * own error vocabulary.
-   */
-  errorType: ProviderAuthErrorCtor;
 }
 
 type MachineFailure = SubscriptionOAuthError | AuthPortError;
 
 /**
- * A policy throw: the provider's own error (a
- * {@link SubscriptionOAuthError} subclass) stays first-class so the machine
- * can read its `kind`; anything else is that call's rejection.
+ * A token-grant request failure as the machine's error: the same message,
+ * kind, and status the grant's Promise API always threw.
+ */
+function grantFailure(error: OAuthRequestError): SubscriptionOAuthError {
+  switch (error._tag) {
+    case 'OAuthHttpError':
+      return new SubscriptionOAuthError(
+        error.message,
+        error.kind,
+        error.status,
+      );
+    case 'OAuthNetworkError':
+    case 'OAuthUnexpectedResponse':
+      return new SubscriptionOAuthError(error.message, 'transient', undefined, {
+        cause: error.cause,
+      });
+  }
+}
+
+/** The form-grant client over a policy's token endpoint. */
+function formGrantClient(endpoint: OAuthFormEndpoint): SubscriptionOAuthClient {
+  return {
+    exchangeAuthorizationCode: (params) =>
+      Effect.mapError(
+        exchangeAuthorizationCode(endpoint, params),
+        grantFailure,
+      ),
+    refreshTokens: (refreshToken) =>
+      Effect.mapError(refreshOAuthTokens(endpoint, refreshToken), grantFailure),
+  };
+}
+
+/** A program failure as its caller sees it: a port rejection is its cause. */
+function callerFailure(error: MachineFailure): Error {
+  return error instanceof AuthPortError ? ensureError(error.cause) : error;
+}
+
+/**
+ * A policy throw: a {@link SubscriptionOAuthError} stays first-class so the
+ * machine can read its `kind`; anything else is that call's rejection.
  */
 function asMachineFailure(cause: unknown): MachineFailure {
   return cause instanceof SubscriptionOAuthError
@@ -155,25 +190,16 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   private readonly policy: SubscriptionOAuthPolicy<S>;
   private readonly client: SubscriptionOAuthClient;
   private readonly now: () => number;
-  private readonly errorType: ProviderAuthErrorCtor;
-  private refreshInFlight: Deferred.Deferred<S, MachineFailure> | null = null;
+  private readonly refreshes = new SharedAttempt<S, MachineFailure>();
   private readonly sessionMutations = new SerializedWrites();
   private sessionGeneration = 0;
 
   constructor(init: SubscriptionOAuthCoordinatorInit<S>) {
     this.storage = init.storage;
     this.policy = init.policy;
-    this.client = init.client;
+    this.client = init.client ?? formGrantClient(init.policy.tokenEndpoint);
     this.now = init.now ?? Date.now;
-    this.errorType = init.errorType;
   }
-
-  /** A program failure as the provider's own error type. */
-  private readonly toProviderError = (error: MachineFailure): Error =>
-    toProviderAuthError(
-      error instanceof AuthPortError ? error.cause : error,
-      this.errorType,
-    );
 
   /** The stored session, or null when signed out or unreadable. */
   readonly loadSession = Effect.fn('SubscriptionOAuthCoordinator.loadSession')(
@@ -220,21 +246,20 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
 
   /**
    * The code exchange as a program: the loopback login yields it, so
-   * interrupting that login reaches the exchange and the store. A machine
-   * failure is re-minted as the provider's own error type; a port rejection
-   * travels as its own cause.
+   * interrupting that login reaches the exchange and the store. A port
+   * rejection travels as its own cause.
    */
   loginWithCode(params: {
     code: string;
     verifier: string;
     redirectUri: string;
   }): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return Effect.mapError(this.exchangeCode(params), this.toProviderError);
+    return Effect.mapError(this.exchangeCode(params), callerFailure);
   }
 
   /** Persist tokens from a successful device-code (or other) grant. */
   storeTokens(tokens: SubscriptionTokenResponse): Effect.Effect<S, Error> {
-    return Effect.mapError(this.adoptTokens(tokens), this.toProviderError);
+    return Effect.mapError(this.adoptTokens(tokens), callerFailure);
   }
 
   isExpiringSoon(session: S): boolean {
@@ -245,13 +270,13 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   getFreshAccessToken(): Effect.Effect<string, Error, HttpClient.HttpClient> {
     return Effect.mapError(
       Effect.map(this.freshSession(), (session) => session.accessToken),
-      this.toProviderError,
+      callerFailure,
     );
   }
 
   /** The stored session, refreshed when expiring soon. */
   getFreshSession(): Effect.Effect<S, Error, HttpClient.HttpClient> {
-    return Effect.mapError(this.freshSession(), this.toProviderError);
+    return Effect.mapError(this.freshSession(), callerFailure);
   }
 
   private store(session: S): Effect.Effect<void, AuthPortError> {
@@ -286,7 +311,7 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   /** Passed to `SerializedWrites.run` so it shares the queueing segment. */
   private readonly supersedeInFlightRefresh = (): void => {
     this.sessionGeneration += 1;
-    this.refreshInFlight = null;
+    this.refreshes.clear();
   };
 
   /**
@@ -376,31 +401,16 @@ export class SubscriptionOAuthCoordinator<S extends SubscriptionSession> {
   });
 
   /**
-   * Single-flight refresh: concurrent callers share the in-flight result. The
-   * check and the claim share one synchronous segment — no `yield*` between
-   * them, since the runtime may yield the fiber at any op boundary — so a
-   * second caller can never mint a second refresh.
+   * Single-flight refresh: concurrent callers share one attempt, which runs
+   * detached ({@link SharedAttempt}), so an interrupted caller abandons only
+   * its own wait and a rotated refresh token is still stored.
    */
-  private readonly refresh = Effect.fn('SubscriptionOAuthCoordinator.refresh')(
-    function* (
-      this: SubscriptionOAuthCoordinator<S>,
-      previous: S,
-      generation: number,
-    ) {
-      const existing = this.refreshInFlight;
-      if (existing) return yield* Deferred.await(existing);
-      const inFlight = Deferred.makeUnsafe<S, MachineFailure>();
-      this.refreshInFlight = inFlight;
-      return yield* this.performRefresh(previous, generation).pipe(
-        Effect.onExit((exit) =>
-          Effect.sync(() => {
-            Deferred.doneUnsafe(inFlight, exit);
-            if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
-          }),
-        ),
-      );
-    },
-  );
+  private refresh(
+    previous: S,
+    generation: number,
+  ): Effect.Effect<S, MachineFailure, HttpClient.HttpClient> {
+    return this.refreshes.run(() => this.performRefresh(previous, generation));
+  }
 
   private readonly performRefresh = Effect.fn(
     'SubscriptionOAuthCoordinator.performRefresh',

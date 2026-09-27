@@ -5,7 +5,6 @@ import {
   editApprovalDiffRowsBudget,
 } from '@cli/chat/tui/modals/EditApproval';
 import { confirmCardFeedbackRows } from '@cli/chat/tui/modals/confirmCardRowsBudget';
-import { formatResultCount } from '@utils/text/stringUtils';
 
 type BudgetInput = Parameters<typeof editApprovalDiffRowsBudget>[0];
 

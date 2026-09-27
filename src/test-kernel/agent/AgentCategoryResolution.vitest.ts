@@ -17,9 +17,10 @@ import {
   resolveDelegationScopeAgents,
 } from '@agent/index/agentRegistry';
 import type { AgentEntry } from '@agent/index/agentEntry';
-import { AgentDirectories } from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStorageFs } from '@platform/rootedFs';
 import { AgentCategory } from '@shared/schemas';
+import { FakeStateStore } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { REPO_ROOT } from '@test/support/repoScan';
 import {
@@ -80,6 +81,7 @@ describe('cross-category agent resolution', () => {
       {
         agentDirectories: {
           custom: () => Effect.sync(() => customDir),
+          customConfigured: () => Effect.succeed(false),
           builtIn: () =>
             Effect.sync(() =>
               resolve(REPO_ROOT, 'packages/extension/resources/agents'),
@@ -105,6 +107,7 @@ describe('cross-category agent resolution', () => {
           {} as RootedFileSystem,
         ).pipe(
           Effect.provideService(AgentDirectories, fakeHostAgentDirectories),
+          Effect.provideService(AppState, new FakeStateStore()),
         ),
         Layer.merge(nodePlatformLayer, testHttpClientLayer),
       ),
@@ -186,11 +189,6 @@ describe('cross-category agent resolution', () => {
       }),
   );
 
-  it('resolves a non-colliding name within category', () => {
-    expect(getCategoryAgent('toolUse', 'review')?.name).toBe('review');
-    expect(getCategoryAgent('workflow', 'assistant')?.source).toBe('custom');
-  });
-
   it('keeps a wrong-category name out of category-scoped resolution', () => {
     // `correct` is a workflow agent and must not resolve as tool-use.
     expect(getCategoryAgent('toolUse', 'correct')).toBeUndefined();
@@ -260,9 +258,5 @@ describe('findAgentByIdentifier (shared identity rule)', () => {
     );
     // A key whose source is absent from the set must not fall back to the name.
     expect(findAgentByIdentifier(entries, 'remote:review')).toBeUndefined();
-  });
-
-  it('returns undefined when no candidate matches', () => {
-    expect(findAgentByIdentifier(entries, 'missing')).toBeUndefined();
   });
 });

@@ -6,9 +6,7 @@ import { describe, expect } from 'vitest';
 
 import {
   acceptEditedFileReplace,
-  commitAcceptedFile,
   type AcceptEditedFileReplacePorts,
-  type CommitAcceptedFilePorts,
 } from '@latex/acceptedFileTarget';
 import type { FileLocation } from '@shared/schemas';
 import { createWorkspaceLocation } from '@utils/files/fileLocation';
@@ -155,42 +153,6 @@ describe('acceptEditedFileReplace', () => {
 
         expect(accepted).toBe(true);
         expect(filesystem.removed).toEqual([]);
-      }),
-  );
-});
-
-describe('commitAcceptedFile', () => {
-  it.effect(
-    'writes the edited content into the resolved target and reports success',
-    () =>
-      Effect.gen(function* () {
-        const { base, edited } = paperPair();
-        const copy = createWorkspaceLocation(
-          absolutePath('ws', 'paper_copy.tex'),
-          'paper_copy.tex',
-        );
-        const filesystem = fakeFilesystem();
-        const infoMessages: string[] = [];
-        const ports: CommitAcceptedFilePorts = {
-          emitWritten: () => undefined,
-          showInfo: (message) =>
-            Effect.sync(() => {
-              infoMessages.push(message);
-            }),
-        };
-
-        yield* commitAcceptedFile(
-          base,
-          edited,
-          { targetLocation: copy, targetFileName: 'paper_copy.tex' },
-          false,
-          ports,
-        ).pipe(Effect.provide(filesystem.layer));
-
-        expect(filesystem.written).toEqual([
-          { absolutePath: copy.absolutePath, content: 'edited content' },
-        ]);
-        expect(infoMessages).toEqual([expect.stringMatching(/created/)]);
       }),
   );
 });

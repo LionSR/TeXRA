@@ -6,7 +6,6 @@ import { afterEach, describe, expect } from 'vitest';
 
 // Local imports
 import { apiKeySecretName } from '@model/apiProviders';
-import { codingPlanSubscriptionRuntimes } from '@model/codingPlanSubscriptions';
 import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { decideModelRoute, readRouteFacts } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';

@@ -7,7 +7,6 @@ import {
   type RunStorageFileLocation,
 } from '@shared/schemas';
 import { normalizeFilePath } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import {
   inspectRunStorageEntryUnder,
   runStorageLocationUnder,

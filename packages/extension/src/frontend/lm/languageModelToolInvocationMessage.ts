@@ -1,5 +1,5 @@
 // Local imports - core
-import { isObject, tryParseUrl } from '@utils/core';
+import { isObject } from '@utils/core';
 import { isNonEmptyString, truncateSummary } from '@utils/text/stringUtils';
 
 export type LanguageModelResearchToolName =
@@ -38,7 +38,7 @@ export function buildLanguageModelToolInvocationMessage(
     }
     case 'web_fetch': {
       const rawUrl = readInputString(input, 'url');
-      const url = rawUrl ? tryParseUrl(rawUrl) : undefined;
+      const url = rawUrl ? URL.parse(rawUrl) : undefined;
       const host =
         url?.protocol === 'http:' || url?.protocol === 'https:'
           ? url.host

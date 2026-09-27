@@ -32,17 +32,16 @@ import type { createReviewPane } from './reviewPane';
 interface WorkbenchControllerDeps {
   session: string;
   isActive(): boolean;
+  /** A modal (Settings) covers the shell; the native browser view stays hidden. */
+  isBrowserCovered(): boolean;
   editorPane: ReturnType<typeof createEditorPane>;
   terminalPane: ReturnType<typeof createTerminalPane>;
   reviewPane: ReturnType<typeof createReviewPane>;
   pdfPane: ReturnType<typeof createPdfPane>;
   /** The Subagents tab's content, read from the active project's view. */
   subagentsTemplate(): TemplateResult | typeof nothing;
-  settingsView: HTMLElement;
   logsPane: HTMLElement;
   getState(): DesktopShellState;
-  /** Root of the project this window shows; new terminals start there. */
-  getWorkspacePath(): string | undefined;
   updateShell(next: DesktopShellState): void;
   postMessage(command: string, payload?: Record<string, unknown>): void;
 }
@@ -64,15 +63,14 @@ interface WorkbenchController {
 export function createWorkbenchController({
   session,
   isActive,
+  isBrowserCovered,
   editorPane,
   terminalPane,
   reviewPane,
   pdfPane,
   subagentsTemplate,
-  settingsView,
   logsPane,
   getState,
-  getWorkspacePath,
   updateShell,
   postMessage,
 }: WorkbenchControllerDeps): WorkbenchController {
@@ -93,7 +91,7 @@ export function createWorkbenchController({
     const tab = WORKBENCH_PLACEMENTS.map((placement) =>
       activeWorkbenchTab(getState(), placement),
     ).find((candidate) => candidate?.kind === 'browser');
-    if (tab?.kind !== 'browser') {
+    if (tab?.kind !== 'browser' || isBrowserCovered()) {
       postMessage(DESKTOP_WORKSPACE_COMMANDS.BROWSER_HIDE);
       return;
     }
@@ -101,7 +99,7 @@ export function createWorkbenchController({
     // Measure after layout settles; a workbench that just appeared has no box
     // until the browser has flushed the style change.
     requestAnimationFrame(() => {
-      if (!isActive()) return;
+      if (!isActive() || isBrowserCovered()) return;
       const slot = document.querySelector(
         `[data-session="${CSS.escape(session)}"] [data-browser-slot="${CSS.escape(tabId)}"]`,
       );
@@ -162,10 +160,8 @@ export function createWorkbenchController({
   function openKind(kind: WorkbenchKind): void {
     if (kind === 'terminal') {
       updateShell(
-        openWorkbenchTab(getState(), {
-          kind,
-          target: getWorkspacePath() ?? '',
-        }),
+        // The main process starts it in the project's folder.
+        openWorkbenchTab(getState(), { kind }),
       );
       return;
     }
@@ -192,7 +188,6 @@ export function createWorkbenchController({
     const next = openWorkbenchTab(getState(), {
       kind: 'terminal',
       placement: 'bottom',
-      target: getWorkspacePath() ?? '',
     });
     const terminal = activeWorkbenchTab(next, 'bottom');
     if (terminal?.kind !== 'terminal') return;
@@ -223,10 +218,10 @@ export function createWorkbenchController({
 
   /**
    * Content for one tab. Every surface stays mounted once opened and is hidden when
-   * its tab is inactive, so Monaco models, terminal scrollback, and in-flight
-   * settings edits survive both tab switches and layout changes.
+   * its tab is inactive, so Monaco models and terminal scrollback survive both
+   * tab switches and layout changes.
    *
-   * The editor, terminal, settings, and logs surfaces are single shared instances,
+   * The editor, terminal, and logs surfaces are single shared instances,
    * so they render in whichever pane currently holds their tab — Lit moves the DOM
    * node rather than duplicating it.
    */
@@ -245,6 +240,22 @@ export function createWorkbenchController({
     return html`<div class="shell-workbench-surface">${content}</div>`;
   }
 
+  /**
+   * Which surface holds the project tree, a single node that can be mounted
+   * in one place only: the Files tab while it is showing, otherwise the
+   * editor beside the file it opened, so picking the next file does not mean
+   * switching tabs back to Files.
+   */
+  function treeSurface(): 'files' | 'editor' {
+    const shown = WORKBENCH_PLACEMENTS.map((side) =>
+      activeWorkbenchTab(getState(), side),
+    );
+    if (shown.some((active) => active?.kind === 'files')) return 'files';
+    return shown.some((active) => active?.kind === 'editor' && active.target)
+      ? 'editor'
+      : 'files';
+  }
+
   function workbenchContentTemplate(
     tab: WorkbenchTab,
   ): TemplateResult | typeof nothing {
@@ -254,12 +265,18 @@ export function createWorkbenchController({
           class="shell-workbench-surface shell-files"
           data-scroll="true"
         >
-          ${editorPane.treeElement}
+          ${treeSurface() === 'files' ? editorPane.treeElement : nothing}
         </div>`;
       case 'editor':
-        return tab.target
-          ? workbenchSurfaceTemplate(editorPane.element)
-          : workbenchPlaceholderTemplate();
+        if (!tab.target) return workbenchPlaceholderTemplate();
+        return treeSurface() === 'editor'
+          ? html`<div class="shell-workbench-surface shell-editor-with-tree">
+              <div class="shell-editor-tree" data-scroll="true">
+                ${editorPane.treeElement}
+              </div>
+              ${editorPane.element}
+            </div>`
+          : workbenchSurfaceTemplate(editorPane.element);
       case 'terminal':
         return workbenchSurfaceTemplate(terminalPane.element);
       case 'browser':
@@ -269,8 +286,6 @@ export function createWorkbenchController({
         ></div>`;
       case 'review':
         return workbenchSurfaceTemplate(reviewPane.element);
-      case 'settings':
-        return isActive() ? workbenchSurfaceTemplate(settingsView) : nothing;
       case 'logs':
         return isActive() ? workbenchSurfaceTemplate(logsPane) : nothing;
       case 'pdf':
@@ -317,12 +332,12 @@ export function createWorkbenchController({
         state.workbenchTabs.findLast((entry) => entry.kind === candidate.kind);
       return candidate.id === owner?.id;
     });
-    const placementLabel = placement === 'right' ? 'Right' : 'Bottom';
+    const placementLabel = placement === 'right' ? 'Side' : 'Bottom';
     return html`
       <aside
         class="shell-workbench"
         data-placement=${placement}
-        aria-label=${`${placementLabel} workbench`}
+        aria-label=${`${placementLabel} panel`}
       >
         ${workbenchTabsTemplate(
           workbenchTabsForPlacement(getState(), placement),

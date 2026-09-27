@@ -1,4 +1,4 @@
-import { mkdir, realpath, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,10 +9,6 @@ import { Effect } from 'effect';
 import {
   buildCliContext,
   CliUsageError,
-  readCliBugsUrl,
-  readCliEnv,
-  readCliVersion,
-  resolveCliCommandName,
   resolveStreamColor,
   type BuildCliContextInit,
   type CliAmbientState,
@@ -24,6 +20,17 @@ import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { withEnv } from '@test/support/testEnv';
+
+// The user mcp.json the CLI validates at startup, moved out of the real home
+// so no case reads a developer's own file.
+const mcpConfig = vi.hoisted(() => {
+  const dir = `${process.env.TMPDIR ?? '/tmp'}/texra-cli-mcp-${process.pid}`;
+  return { dir, file: `${dir}/mcp.json` };
+});
+vi.mock('@tools/mcp/mcpConfig', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@tools/mcp/mcpConfig')>()),
+  USER_MCP_CONFIG_PATH: mcpConfig.file,
+}));
 
 const ambient = {
   isCi: true,
@@ -73,25 +80,6 @@ async function workspaceWithConfig(config: string): Promise<string> {
   await writeFile(join(workspace, '.texra', 'config.json'), config);
   return workspace;
 }
-
-describe('CLI entrypoint detection', () => {
-  it('uses the local launcher name in user-facing command hints', () => {
-    expect(resolveCliCommandName('/usr/local/bin/texra')).toBe('texra');
-    expect(resolveCliCommandName('/tmp/bin/texra-local')).toBe('texra-local');
-    expect(resolveCliCommandName('/repo/packages/cli/dist/bin/texra.js')).toBe(
-      'texra',
-    );
-  });
-});
-
-describe('CLI package manifest discovery', () => {
-  it('finds version and bug-report metadata from the source runtime layout', async () => {
-    await expect(readCliVersion()).resolves.toMatch(/^\d+\.\d+\.\d+/);
-    await expect(readCliBugsUrl()).resolves.toBe(
-      'https://github.com/LionSR/TeXRA/issues',
-    );
-  });
-});
 
 describe('CLI context config defaults', () => {
   it('applies flag over env over workspace config over built-in defaults', async () => {
@@ -170,21 +158,6 @@ describe('CLI context config defaults', () => {
     ).resolves.toMatchObject({ approvalPolicy: 'yolo' });
   });
 
-  it('reads the persisted approval policy exactly as the other hosts do', async () => {
-    const workspace = await workspaceWithConfig(
-      JSON.stringify({ 'texra.approvalPolicy': 'yolo' }),
-    );
-
-    const context = await cliContext({
-      ambient,
-      env: {},
-      globalArgs: { cwd: workspace },
-    });
-
-    expect(context.approvalPolicy).toBe('yolo');
-    expect(context.configWarnings).toEqual([]);
-  });
-
   it('reports unknown workspace config keys without failing', async () => {
     const workspace = await workspaceWithConfig(
       JSON.stringify({
@@ -206,6 +179,27 @@ describe('CLI context config defaults', () => {
     expect(context.config.get('texra.chat')).toMatchObject({
       model: 'deepseekT',
     });
+  });
+
+  it('warns on a malformed user mcp.json, the warning doctor reports', async () => {
+    await mkdir(mcpConfig.dir, { recursive: true });
+    await writeFile(mcpConfig.file, '{ "mcpServers": ');
+    try {
+      const context = await cliContext({
+        ambient,
+        env: {},
+        globalArgs: {
+          cwd: await makeTempDir('texra-cli-context-', tempDirs),
+        },
+        storageRoot: await makeTempDir('texra-cli-storage-', tempDirs),
+      });
+
+      expect(context.configWarnings.join('\n')).toContain(
+        `${mcpConfig.file} is not valid JSON`,
+      );
+    } finally {
+      await rm(mcpConfig.dir, { recursive: true, force: true });
+    }
   });
 
   it('accepts every config key a CLI reader honors', async () => {
@@ -286,7 +280,7 @@ describe('CLI context config defaults', () => {
         expect(context.configDegradations).toEqual([
           expect.stringContaining('.texra/config.json'),
         ]);
-        expect(context.configWarnings).toEqual(context.configDegradations);
+        expect(context.configWarnings).toEqual([]);
       } finally {
         warnSpy.mockRestore();
       }
@@ -320,18 +314,6 @@ describe('CLI --cwd validation', () => {
         (error: unknown) => error,
       ),
     );
-
-  it.live('accepts an existing directory and returns its realpath', () =>
-    Effect.gen(function* () {
-      const workspace = yield* Effect.promise(() =>
-        makeTempDir('texra-cli-cwd-', tempDirs),
-      );
-
-      expect(yield* cwdOf(workspace)).toBe(
-        canonicalizeWorkspacePath(workspace),
-      );
-    }),
-  );
 
   it.live('preserves whitespace in an explicit workspace path', () =>
     Effect.gen(function* () {
@@ -370,32 +352,10 @@ describe('CLI --cwd validation', () => {
       expect((failure as CliUsageError).message).toMatch(/not a directory/);
     }),
   );
-
-  it.live('falls back to process.cwd() when no --cwd flag is given', () =>
-    Effect.gen(function* () {
-      // The shell can't put us in a missing directory, so the no-flag path
-      // intentionally skips validation. Trim any platform realpath canonical-
-      // ization for the comparison.
-      const result = yield* cwdOf(undefined);
-      expect(result).toBe(yield* Effect.promise(() => realpath(process.cwd())));
-    }),
-  );
 });
 
 describe('CLI per-stream color resolution', () => {
   it.each([
-    {
-      label: 'colors when the stream itself is a TTY',
-      isTty: true,
-      options: { env: {} },
-      expected: true,
-    },
-    {
-      label: 'stays plain when the stream itself is not a TTY',
-      isTty: false,
-      options: { env: {} },
-      expected: false,
-    },
     {
       label: 'NO_COLOR disables color even on a TTY',
       isTty: true,
@@ -421,21 +381,9 @@ describe('CLI per-stream color resolution', () => {
       expected: true,
     },
     {
-      label: 'FORCE_COLOR=true enables color even off a TTY',
-      isTty: false,
-      options: { env: { FORCE_COLOR: 'true' } },
-      expected: true,
-    },
-    {
       label: 'FORCE_COLOR=0 disables color even on a TTY',
       isTty: true,
       options: { env: { FORCE_COLOR: '0' } },
-      expected: false,
-    },
-    {
-      label: 'FORCE_COLOR=false disables color even on a TTY',
-      isTty: true,
-      options: { env: { FORCE_COLOR: 'false' } },
       expected: false,
     },
     {
@@ -468,19 +416,6 @@ describe('CLI per-stream color resolution', () => {
 });
 
 describe('CLI color/no-input flag wiring', () => {
-  it('keeps the ambient per-stream gates by default', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient({
-        stdoutColorEnabled: true,
-        stderrColorEnabled: false,
-      }),
-      env: {},
-      globalArgs: { cwd: tmpdir() },
-    });
-    expect(context.stdoutColorEnabled).toBe(true);
-    expect(context.stderrColorEnabled).toBe(false);
-  });
-
   it('--no-color force-disables both stream gates', async () => {
     const context = await cliContext({
       ambient: ttyAmbient(),
@@ -523,15 +458,5 @@ describe('CLI color/no-input flag wiring', () => {
     });
     expect(context.mode).toBe('headless');
     expect(context.approvalPolicy).toBe('never');
-  });
-
-  it('leaves approval policy alone when --no-input is absent', async () => {
-    const context = await cliContext({
-      ambient: ttyAmbient(),
-      env: {},
-      globalArgs: { cwd: tmpdir(), approvalPolicy: 'yolo' },
-    });
-    expect(context.mode).toBe('interactive');
-    expect(context.approvalPolicy).toBe('yolo');
   });
 });

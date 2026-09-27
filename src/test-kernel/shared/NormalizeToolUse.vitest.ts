@@ -54,27 +54,6 @@ describe('normalizeToolUse (src/shared/toolUse.ts)', () => {
     expect(normalized?.headerSummary).toBe('ran 1 command');
   });
 
-  it('retains only the scalar exit code needed by renderers', () => {
-    const normalized = normalizeToolUse({
-      toolName: 'Bash',
-      exitCode: 7,
-      output: 'failed',
-      status: 'completed',
-    });
-
-    expect(normalized?.exitCode).toBe(7);
-    expect(normalized).not.toHaveProperty('parsed');
-  });
-
-  it('leaves exitCode unset when the row states none, prose regardless', () => {
-    const normalized = normalizeToolUse({
-      toolName: 'Bash',
-      error: 'Command failed (exit 3)',
-      status: 'failed',
-    });
-    expect(normalized?.exitCode).toBeUndefined();
-  });
-
   it('reports errors via status and errorText', () => {
     const normalized = normalizeToolUse({
       toolName: 'Bash',

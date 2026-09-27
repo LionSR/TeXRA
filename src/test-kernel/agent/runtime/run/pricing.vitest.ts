@@ -58,6 +58,7 @@ const boundAnthropic: BoundModel = {
       credentialScope: 'anthropic',
     },
   },
+  route: { kind: 'api-key', provider: 'anthropic', usageRoute: 'api-key' },
   usageRoute: 'api-key',
   contextWindow: 200_000,
   supportsVision: false,

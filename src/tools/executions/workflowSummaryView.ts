@@ -64,11 +64,8 @@ function callPriority(call: WorkflowCallProgress): number {
 
 /** Phases still working lead, phases with a failure follow, then plan order. */
 function phasePriority(phase: WorkflowPhaseModel): number {
-  if (
-    phase.opened &&
-    phase.tally.done < phase.tally.total + phase.tally.declared
-  )
-    return 0;
+  const { running, queued, planned } = phase.tally;
+  if (phase.opened && running + queued + planned > 0) return 0;
   if (phase.tasks.some((row) => isAttentionCall(row.call))) return 1;
   return 2;
 }

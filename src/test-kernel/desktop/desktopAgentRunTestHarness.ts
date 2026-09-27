@@ -1,14 +1,8 @@
 // Third-party imports
 import { Effect } from 'effect';
-import { onTestFinished } from 'vitest';
 
 // Local imports
 import type { DesktopAgentRunHost } from '@desktop/main/desktopAgentRunHost';
-
-export function disposeAfterTest<T extends { dispose(): void }>(value: T): T {
-  onTestFinished(() => value.dispose());
-  return value;
-}
 
 export function createStubDesktopAgentRunHost(
   overrides: Partial<DesktopAgentRunHost> = {},

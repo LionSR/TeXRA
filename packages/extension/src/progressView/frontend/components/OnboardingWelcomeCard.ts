@@ -13,6 +13,7 @@ import {
   ONBOARDING_CHOICE_API_KEY,
   ONBOARDING_CHOICE_CHATGPT,
   ONBOARDING_CHOICE_SKIP_LABEL,
+  TEXRA_TAGLINE,
 } from '@ui/copy/onboarding';
 
 const { openWalkthrough: OPEN_WALKTHROUGH } =
@@ -275,8 +276,8 @@ export class OnboardingWelcomeCard extends LitElement {
             <div class="welcome-heading">
               <h1 class="card-title">${ONBOARDING_CARD_TITLE}</h1>
               <p class="card-copy">
-                Start with one credential. TeXRA then checks this project, picks
-                the right agent team, and starts your first useful edit.
+                ${TEXRA_TAGLINE} Connect a model, and TeXRA checks this project,
+                picks the right agent team, and starts your first edit.
               </p>
             </div>
           </div>

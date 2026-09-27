@@ -121,17 +121,15 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
     config: OpenAIResponsesConfiguration,
     origin: ResponseOrigin,
     transport: ResponsesTransport,
-    input: ResolvedTurn,
+    turn: ResolvedTurn,
     mode: 'foreground' | 'background',
     uploads: UploadCache | null,
   ) {
-    const parsed = ResolvedTurnSchema.safeParse(input);
     if (
-      !parsed.success ||
-      parsed.data.protocol !== 'openai-responses' ||
-      parsed.data.mode !== mode ||
-      !isDeepStrictEqual(parsed.data.transport, transport) ||
-      !sameModelOrigin(parsed.data, origin) ||
+      turn.protocol !== 'openai-responses' ||
+      turn.mode !== mode ||
+      !isDeepStrictEqual(turn.transport, transport) ||
+      !sameModelOrigin(turn, origin) ||
       (mode === 'background' && config.background !== 'supported')
     ) {
       return yield* new ModelError({
@@ -140,7 +138,6 @@ export const responseParameters = Effect.fn('llm.responses.parameters')(
           'The prepared invocation belongs to another model, protocol or execution mode.',
       });
     }
-    const turn = parsed.data;
     if (
       (!config.supportsTemperature && turn.controls.temperature !== null) ||
       (!config.supportsMaxOutputTokens &&

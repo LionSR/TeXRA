@@ -55,12 +55,86 @@ test.afterAll(async () => {
   if (workspacePath) cleanupDirectory(workspacePath);
 });
 
-/** Opens one of the workbench actions permanently exposed in the sidebar. */
-async function openSidebarWorkbench(label: string): Promise<void> {
-  await launched.page
+const SETTINGS_DIALOG = 'wa-dialog.desktop-settings-overlay';
+
+/** Opens the Settings popup from the sidebar footer. */
+async function openSettings(): Promise<void> {
+  const { page } = launched;
+  await page
     .locator('.shell-sidebar-footer .shell-sidebar-action')
-    .filter({ hasText: label })
+    .filter({ hasText: 'Settings' })
     .click();
+  await expect(page.locator(SETTINGS_DIALOG)).toHaveJSProperty('open', true);
+}
+
+/**
+ * Closes the Settings popup (its × or Escape) and waits for `wa-after-hide`:
+ * the dialog keeps `open === true` until its hide animation ends, so the
+ * event, registered before the close, is the completion signal.
+ */
+async function closeSettings(via: 'button' | 'escape'): Promise<void> {
+  const dialog = launched.page.locator(SETTINGS_DIALOG);
+  // Install the listener in its own awaited step so the close cannot fire
+  // before it is registered.
+  await dialog.evaluate((element) => {
+    const host = element as HTMLElement & { hidden$?: Promise<void> };
+    host.hidden$ = new Promise<void>((resolve) => {
+      const onHide = (event: Event) => {
+        if (event.target !== element) return;
+        element.removeEventListener('wa-after-hide', onHide);
+        resolve();
+      };
+      element.addEventListener('wa-after-hide', onHide);
+    });
+  });
+  if (via === 'escape') await launched.page.keyboard.press('Escape');
+  else await dialog.locator('.desktop-settings-close').click();
+  await dialog.evaluate(
+    (element) => (element as HTMLElement & { hidden$?: Promise<void> }).hidden$,
+  );
+  await expect(dialog).toHaveJSProperty('open', false);
+}
+
+/**
+ * Opens a tool from a visible workbench's "+" menu. With no workbench
+ * showing, the side-panel toggle opens one first (on Files).
+ */
+async function openTool(
+  kind: 'files' | 'terminal' | 'browser' | 'logs',
+): Promise<void> {
+  const { page } = launched;
+  const add = page.locator('.shell-workbench-add:visible').first();
+  if ((await add.count()) === 0) {
+    await page.locator('#shellToggleSidePanel').click();
+  }
+  await add.locator('wa-button[slot="trigger"]').click();
+  await add.locator(`wa-dropdown-item[value="${kind}"]`).click();
+}
+
+/** The hide control of one workbench placement. */
+function hideWorkbench(placement: 'right' | 'bottom'): string {
+  return `.shell-workbench[data-placement="${placement}"] [id$="-${placement}-hide"]`;
+}
+
+const ACTIVE_PROJECT_ROW = '.shell-project-row[aria-current="true"]';
+
+/**
+ * Opens a file from the project tree: the Files tab's, or the column beside
+ * an open editor. With neither showing, Files is brought forward first.
+ */
+async function clickTreeRow(path: string): Promise<void> {
+  const { page } = launched;
+  const row = page.locator(
+    `.shell-project-workbench:not([hidden]) .desktop-editor-tree-row[data-path="${path}"]`,
+  );
+  if (!(await row.isVisible())) {
+    const filesTab = page.locator(
+      '.shell-project-workbench:not([hidden]) .shell-workbench-tab[data-kind="files"] .shell-workbench-tab-activate',
+    );
+    if ((await filesTab.count()) === 0) await openTool('files');
+    else await filesTab.click();
+  }
+  await row.click();
 }
 
 function activeWorkbenchTab(kind: string): string {
@@ -70,22 +144,6 @@ function activeWorkbenchTab(kind: string): string {
 const BOTTOM_PANE = 'xpath=ancestor::aside[@data-placement="bottom"]';
 const BOTTOM_WORKBENCH_TABS =
   '.shell-workbench[data-placement="bottom"] .shell-workbench-tab';
-
-/** Resize the native window and report the resulting content bounds. */
-async function setContentSize(
-  width: number,
-  height: number,
-): Promise<{ width: number; height: number }> {
-  return launched.app.evaluate(
-    ({ BrowserWindow }, size) => {
-      const window = BrowserWindow.getAllWindows().at(0);
-      if (!window) throw new Error('TeXRA window was not found.');
-      window.setContentSize(size.width, size.height);
-      return window.getContentBounds();
-    },
-    { width, height },
-  );
-}
 
 test('opens with a permanent task conversation and no workbench', async () => {
   const { page } = launched;
@@ -116,6 +174,7 @@ test('opens with a permanent task conversation and no workbench', async () => {
 test('loads the project tree before an editor panel is opened', async () => {
   const { page } = launched;
 
+  await openTool('files');
   await expect(
     page.locator('.desktop-editor-tree-row:has-text("sample.tex")'),
   ).toBeVisible({ timeout: 15_000 });
@@ -154,12 +213,15 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   const brand = await page.locator('.shell-sidebar-brand').boundingBox();
   const brandLogo = await page.locator('.shell-sidebar-logo').boundingBox();
   const shellHeader = await page
-    .locator('.shell-conversation > .shell-header')
+    .locator('progress-app .shell-header')
     .boundingBox();
   expect(brand).not.toBeNull();
   expect(brandLogo).not.toBeNull();
   expect(shellHeader).not.toBeNull();
-  expect(brand?.height).toBe(shellHeader?.height);
+  // The conversation header carries a 1px bottom border the brand row lacks.
+  expect(
+    Math.abs((brand?.height ?? 0) - (shellHeader?.height ?? 0)),
+  ).toBeLessThanOrEqual(1);
   expect(brand?.y).toBe(shellHeader?.y);
 
   const toggle = page.locator('.shell-header-button[aria-label$="sidebar"]');
@@ -178,51 +240,39 @@ test('aligns titlebar content and keeps the collapsed toggle clear of macOS cont
   await expect(page.locator('.shell-sidebar')).toBeVisible();
 });
 
-test('opens settings beside the permanent conversation', async () => {
+test('opens settings as a popup over the permanent conversation', async () => {
   const { page } = launched;
 
-  await openSidebarWorkbench('Settings');
+  await openSettings();
 
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
-  await expect(
-    page.locator('.shell-workbench[data-placement="right"]'),
-  ).toBeVisible();
   await expect(
     page.locator(
-      '.shell-workbench-surface settings-app[data-desktop-view="settings"]',
+      `${SETTINGS_DIALOG} settings-app[data-desktop-view="settings"]`,
     ),
   ).toBeVisible();
-  await expect(page.locator('.shell-conversation')).toBeVisible();
+  // Settings is not a workbench tab: nothing opens beside the conversation.
+  await expect(
+    page.locator('.shell-workbench-tab[data-kind="settings"]'),
+  ).toHaveCount(0);
 
-  // Hiding the workbench must leave the task canvas mounted and visible.
-  await page
-    .locator('.shell-workbench[data-placement="right"] .shell-workbench-close')
-    .click();
-  await expect(page.locator('.shell-frame')).toHaveAttribute(
-    'data-workbench-open',
-    'false',
-  );
-  await expect(page.locator('.shell-workbench:visible')).toHaveCount(0);
+  // Closing the popup leaves the task canvas mounted and visible.
+  await closeSettings('escape');
   await expect(page.locator('.shell-conversation')).toBeVisible();
 });
 
 test('toggles and restores the bottom and side bars', async () => {
   const { page } = launched;
 
-  await openSidebarWorkbench('Settings');
-  const bottomToggle = page.locator('#shellToggleBottomBar');
+  await openTool('logs');
   const sideToggle = page.locator('#shellToggleSidePanel');
-
-  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
 
-  await bottomToggle.click();
+  await openTool('terminal');
   const bottomWorkbench = page.locator(
     '.shell-workbench[data-placement="bottom"]',
   );
   await expect(bottomWorkbench).toBeVisible();
   await expect(page.locator(activeWorkbenchTab('terminal'))).toBeVisible();
-  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'true');
 
   const initialBottomHeight = (await bottomWorkbench.boundingBox())?.height;
   expect(initialBottomHeight).toBeDefined();
@@ -237,9 +287,8 @@ test('toggles and restores the bottom and side bars', async () => {
       .toBeGreaterThan(initialBottomHeight + 40);
   }
 
-  await bottomToggle.click();
+  await page.locator(hideWorkbench('bottom')).click();
   await expect(bottomWorkbench).toBeHidden();
-  await expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.shell-sidebar-footer')).toBeVisible();
 
   await sideToggle.click();
@@ -247,15 +296,14 @@ test('toggles and restores the bottom and side bars', async () => {
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
   await expect(sideToggle).toBeVisible();
   await sideToggle.click();
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
   await expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('moves tabs between Bottom and Right from the context menu', async () => {
   const { page } = launched;
-  const bottomToggle = page.locator('#shellToggleBottomBar');
 
-  await bottomToggle.click();
+  await openTool('terminal');
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   await expect(terminalTab).toBeVisible();
   await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
@@ -275,9 +323,9 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
   await terminalTab.click({ button: 'right' });
   await terminalTab.locator('wa-dropdown-item[value="move-bottom"]').click();
   await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
-  await expect(page.locator(activeWorkbenchTab('settings'))).toBeVisible();
+  await expect(page.locator(activeWorkbenchTab('logs'))).toBeVisible();
 
-  await openSidebarWorkbench('Terminal');
+  await openTool('terminal');
   const bottomTabs = page.locator(BOTTOM_WORKBENCH_TABS);
   const countBeforeContextClose = await bottomTabs.count();
   const closeCandidate = page.locator(activeWorkbenchTab('terminal'));
@@ -289,13 +337,13 @@ test('moves tabs between Bottom and Right from the context menu', async () => {
 test('loads tools, centers every compact nav icon, and customizes shortcuts', async () => {
   const { app, page } = launched;
 
-  await openSidebarWorkbench('Settings');
-  const workbenchSplit = page.locator('.shell-main-split');
-  await workbenchSplit.evaluate((element) => {
-    const split = element as HTMLElement & { positionInPixels: number };
-    split.positionInPixels = 440;
-    split.dispatchEvent(new CustomEvent('wa-reposition', { bubbles: true }));
-  });
+  await openSettings();
+  // Narrow the popup so the settings view takes its compact layout.
+  await page
+    .locator(SETTINGS_DIALOG)
+    .evaluate((dialog) =>
+      (dialog as HTMLElement).style.setProperty('--width', '480px'),
+    );
   await expect
     .poll(async () => {
       const bounds = await page.locator('settings-app').boundingBox();
@@ -361,7 +409,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   });
   const shortcuts = page.locator('shortcuts-tab');
   await expect(
-    shortcuts.getByText('Toggle Bottom Bar', { exact: true }),
+    shortcuts.getByText('Toggle Bottom Panel', { exact: true }),
   ).toBeVisible();
   await expect(
     shortcuts.getByText('Toggle Side Panel', { exact: true }),
@@ -378,6 +426,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
   );
 
   await recorder.evaluate((element) => (element as HTMLElement).blur());
+  await closeSettings('button');
   await page.keyboard.press(customShortcut);
   await expect(
     page.locator('wa-dialog.desktop-command-palette'),
@@ -388,6 +437,7 @@ test('loads tools, centers every compact nav icon, and customizes shortcuts', as
 test('loads a workspace file into the Monaco editor workbench', async () => {
   const { page } = launched;
 
+  await openTool('files');
   const latexRow = page.locator(
     '.desktop-editor-tree-row[data-path="sample.tex"]',
   );
@@ -397,11 +447,12 @@ test('loads a workspace file into the Monaco editor workbench', async () => {
   await expect(latexRow).toBeVisible({ timeout: 15_000 });
   await expect(typescriptRow).toBeVisible();
 
-  // Hit the cold Monaco path with two immediate selections. Both requests
-  // share one editor load, and the last click must remain the visible model
-  // even if the first file read resolves later.
-  await latexRow.click();
-  await typescriptRow.click();
+  // Hit the cold Monaco path with two immediate selections: the tree stays
+  // beside the editor it opened, so the second click needs no tab switch.
+  // Both requests share one editor load, and the last click must remain the
+  // visible model even if the first file read resolves later.
+  await clickTreeRow('sample.tex');
+  await clickTreeRow('sample.ts');
   await expect(page.locator(activeWorkbenchTab('editor'))).toBeVisible();
   await expect(page.locator(activeWorkbenchTab('editor'))).toContainText(
     'sample.ts',
@@ -410,7 +461,7 @@ test('loads a workspace file into the Monaco editor workbench', async () => {
     page.locator('.desktop-editor-surface .view-lines'),
   ).toContainText('projectTreeLoaded', { timeout: 20_000 });
 
-  await latexRow.click();
+  await clickTreeRow('sample.tex');
   await expect(
     page.locator('.desktop-editor-surface .view-lines'),
   ).toContainText('documentclass', { timeout: 20_000 });
@@ -425,7 +476,7 @@ test('reloads a clean cached editor model after an external file change', async 
     '.desktop-editor-tree-row[data-path="sample.tex"]',
   );
 
-  await typescriptRow.click();
+  await clickTreeRow('sample.ts');
   await expect(
     page.locator('.desktop-editor-surface .view-lines'),
   ).toContainText('projectTreeLoaded', { timeout: 20_000 });
@@ -435,7 +486,7 @@ test('reloads a clean cached editor model after an external file change', async 
     '\\documentclass{article}\n\\begin{document}\nexternal update\n\\end{document}\n',
     'utf8',
   );
-  await latexRow.click();
+  await clickTreeRow('sample.tex');
 
   await expect(
     page.locator('.desktop-editor-surface .view-lines'),
@@ -445,7 +496,7 @@ test('reloads a clean cached editor model after an external file change', async 
 test('runs an interactive shell in a terminal workbench tab', async () => {
   const { page } = launched;
 
-  await openSidebarWorkbench('Terminal');
+  await openTool('terminal');
   const terminalTab = page.locator(activeWorkbenchTab('terminal'));
   await expect(terminalTab).toBeVisible();
   await expect(terminalTab.locator(BOTTOM_PANE)).toBeVisible();
@@ -477,7 +528,7 @@ test('runs host-requested setup commands in a new bottom terminal', async () => 
       {
         command: 'desktop:terminal:openCommand',
         session: document
-          .querySelector('.shell-project-row.is-active')
+          .querySelector('.shell-project-row[aria-current="true"]')
           ?.getAttribute('title'),
         initialCommand: 'printf "texra-integrated-command-ok\\n"',
       },
@@ -501,8 +552,8 @@ test('closes a bottom tab and falls back within the same pane', async () => {
 
   // Establish two terminal tabs in Bottom so the fallback cannot accidentally
   // select a tab from Right.
-  await openSidebarWorkbench('Terminal');
-  await openSidebarWorkbench('Terminal');
+  await openTool('terminal');
+  await openTool('terminal');
 
   const tabs = page.locator(BOTTOM_WORKBENCH_TABS);
   const before = await tabs.count();
@@ -536,12 +587,10 @@ test('keeps project workbenches alive across selection and releases them on clos
   const hiddenPidPath = join(workspacePath, 'hidden-project-process.pid');
   try {
     const projectA = await page
-      .locator('.shell-project-row.is-active')
+      .locator(ACTIVE_PROJECT_ROW)
       .getAttribute('title');
     expect(projectA).toBeTruthy();
-    await page
-      .locator('.desktop-editor-tree-row[data-path="paper-retention.tex"]')
-      .click();
+    await clickTreeRow('paper-retention.tex');
     const editor = page.locator(
       '.desktop-editor-surface .monaco-editor:visible',
     );
@@ -552,7 +601,7 @@ test('keeps project workbenches alive across selection and releases them on clos
     await expect(editor.locator('.view-lines')).toContainText(
       'paper-a-unsaved',
     );
-    await openSidebarWorkbench('Terminal');
+    await openTool('terminal');
     const terminal = page.locator(
       '.shell-project-workbench:not([hidden]) .desktop-terminal-surface:not([hidden])',
     );
@@ -583,7 +632,7 @@ test('keeps project workbenches alive across selection and releases them on clos
     await page.keyboard.press(platform === 'darwin' ? 'Meta+o' : 'Control+o');
     await expect(page.locator('.shell-project-row')).toHaveCount(2);
     const projectB = await page
-      .locator('.shell-project-row.is-active')
+      .locator(ACTIVE_PROJECT_ROW)
       .getAttribute('title');
     expect(projectB).not.toBe(projectA);
     expect(process.kill(pid, 0)).toBe(true);
@@ -595,9 +644,7 @@ test('keeps project workbenches alive across selection and releases them on clos
         '.shell-project-workbench:not([hidden]) .shell-workbench-tab[data-kind="terminal"]',
       ),
     ).toHaveCount(0);
-    await page
-      .locator('.desktop-editor-tree-row[data-path="sample.tex"]')
-      .click();
+    await clickTreeRow('sample.tex');
     await expect(
       page.locator('.desktop-editor-surface .view-lines:visible'),
     ).toContainText('A different paper.');
@@ -621,7 +668,7 @@ test('keeps project workbenches alive across selection and releases them on clos
       )
       .toBe(true);
     const hiddenPid = Number.parseInt(readFileSync(hiddenPidPath, 'utf8'), 10);
-    await expect(page.locator('.shell-project-row.is-active')).toHaveAttribute(
+    await expect(page.locator(ACTIVE_PROJECT_ROW)).toHaveAttribute(
       'title',
       projectB!,
     );
@@ -656,11 +703,12 @@ test('keeps project workbenches alive across selection and releases them on clos
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBoxSync = () => 1;
     });
-    await page
-      .locator(
-        `.shell-project-item:has(.shell-project-row[title="${projectA}"]) .shell-project-close`,
-      )
-      .click();
+    // The row's actions take room only while it is hovered.
+    const itemA = page.locator(
+      `.shell-project-item:has(.shell-project-row[title="${projectA}"])`,
+    );
+    await itemA.hover();
+    await itemA.locator('.shell-project-close').click();
     await expect(
       page.locator(`.shell-project-row[title="${projectA}"]`),
     ).toHaveCount(0);

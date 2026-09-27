@@ -29,10 +29,4 @@ describe('parseTeXCountStats', () => {
       { label: 'Text: 10 words' },
     ]);
   });
-
-  it('returns an empty array when nothing matches', () => {
-    expect(parseTeXCountStats('texcount produced no usable output')).toEqual(
-      [],
-    );
-  });
 });

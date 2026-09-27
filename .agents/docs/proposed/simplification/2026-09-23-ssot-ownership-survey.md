@@ -149,8 +149,11 @@ These parts of the twelve candidates were refuted by at least one skeptic at
   bytes are redacted on read.
 - **UI folds.** `taskGroupDisplayStatus` is already one shared projection with
   three callers, and `sessionView.ts` D5 forbids a settled-groups rewrite.
-  `UsageMonitor.lastSeenTotals` is the only source on the interrupt arm.
-  `ToolRowModel.showOutput` renamed is churn (R5).
+  `ToolRowModel.showOutput` renamed is churn (R5). (The
+  `UsageMonitor.lastSeenTotals` refutation that stood here is reopened by
+  section 4, finding 1, and reversed 2026-09-25: `finalizeRun` reads the
+  ledger's `RunState.usage` on every terminal path and the cache is
+  deleted.)
 - **Pass-throughs.** `requireDelegationParent` was refuted in wave 8, because
   `requireToolRun` returns a `ToolRun`, not a `DelegationParent`.
 - **Platform singleton.** The ESLint composition-root rule is the only lint
@@ -169,3 +172,95 @@ These parts of the twelve candidates were refuted by at least one skeptic at
 - **Agent creation.** Desktop parity for the creator agent, a `TOOL_CATALOG`
   prompt variable, and deleting the `@agent/templates` barrel on its own,
   which would widen `host-agent-import-baseline`.
+
+## 4. Re-verification on `main` at `b4569d4ba` (2026-09-25)
+
+A second pass with the same charter, run after the
+[fold events straight to rows](../../implemented/architecture/2026-09-25-fold-events-straight-to-rows.md)
+series (S1 #13197, S2 #13199, S3 #13213, S4 #13212, the compaction decode
+#13210) and liveness-a/b (#13117, #13216) landed. Every claim below was
+re-read on `b4569d4ba`.
+
+**Closed by that series.** `StreamLogEntry`, `StreamLog`, `StreamLogStore`,
+`createTranscriptFold`, the residency leases and `acceptCommitted` have no
+production reference. One reducer (`src/shared/session/transcriptFold.ts`)
+serves the live view and cold reads (`foldRunTranscript`). The points the
+first review of that proposal flagged all held in S3: `seqNo` is assigned at
+row creation and `settlementSeqNo` once (`transcriptState.ts:301`, `:324`),
+compaction is interrupted only by a row's creation
+(`compactionActivityProjection.ts:106`), and `domain` shares the `log` decoder
+(`transcriptFold.ts:85`, `recordLogRow`). Since #13166, `runRows.ts` owns
+`output.produced`, so no shared row has a case arm in either fold.
+
+**Still open.** No open PR on 2026-09-25 covers any of these. The one
+related proposal, #13203 (one run program), moves reflection onto the
+tool-use loop; finding 1's fix sits in the shared `AgentRunLifecycle`
+finalizer and holds either way.
+
+1. **`run.end.usage` has a process-local authority.** The terminal finalizer
+   reads `ctx.usageMonitor.lastTotals()` (`AgentRunLifecycle.ts:385`), set
+   only by `recordUsage` in this process (`UsageMonitor.ts:124`); the monitor
+   is constructed empty at every launch (`AgentLaunchContext.ts:476`). A run
+   resumed in a new process that fails, is stopped or is cancelled before its
+   first successful round writes `run.end` with no usage although
+   `RunState.usage` holds the totals. Parents bill from it
+   (`nativeSubagentStrategy.ts:124`, and `workflowScriptAgentRunner.ts:872`,
+   which reads a missing value as `0`). The durable source is reachable on
+   that arm: `RunLedger.load` (`RunLedger.ts:336`) folds the run's rows.
+   Severity: bug (under-billing after resume).
+
+2. **Approval bypass after a resume.** Enforcement lives in the session's
+   in-memory policy; rows are its per-run projection, published on `run.start`
+   or a policy change (`SessionHandle.ts:365-374`). A resume writes no
+   `run.start`, so the view keeps the last published bypasses while
+   enforcement starts from the host-seeded policy. Since #13146 the store is
+   three-state (`ownBypass`, `undefined` defers to ancestors), so a
+   re-snapshot must carry the run's own value. Severity: bug (view disagrees
+   with enforcement).
+
+3. **Park-time closure folds the whole run cold.** `streamClosureFacts`
+   (`SessionHandle.ts:640`) calls `readRunTranscript`, a full `readRunEvents`
+   plus `foldRunTranscript`, on every park (`toolUse.ts:742`) and on terminal
+   finalize (`runLifecycle.ts:260`) to learn which stream ids are open. The
+   park site is the per-turn cost; finalize runs once per run. Correct (the
+   resident view is subscription-scoped and may not hold the run), but linear
+   per turn and so quadratic over a long chat. The publisher already sees
+   every `stream.start`/`stream.end` (`SessionHandle.runEventPublication`),
+   and an extra `stream.end` for a closed stream is a no-op in the fold.
+   Severity: cost.
+
+4. **The phase-move rule is written four times.**
+   `transcriptFold.boundaryPhase` (`:304`), `sessionFold`
+   `withPosition`/`parked` (`:1022-1034`) and its list at `:1221`,
+   `SessionHandle.receiveFoldedEvent` `phaseMoved` (`:1140`, which counts only
+   `waiting` and `turn.begin` steps), and the chunk drop in
+   `sessionLayer.ts:578-596`. One `runRows` predicate would serve all four.
+   Severity: duplication.
+
+5. **Request and follow-up rows folded by hand.** `SessionHandle.decisionRow`
+   (`:807`) toggles open/decided over raw rows, beside `applyRunRow`, which
+   refuses a request opened twice. `ToolUseFollowUpQueueManager` (`:569-581`)
+   re-reads follow-up rows for id membership; its outcome matches `runRows`,
+   only the code is a second copy. Severity: duplication.
+
+6. **The model has four holders.** `RunState.modelId` (snapshot), `run.record`
+   (overwritten by a detached `session.publish` after the ledger batch,
+   `toolUse.ts:298`, so the two writes are not atomic), `run.config`, and
+   `ctx.config.model`. Since #13143 `/model` reaches a parked run, widening
+   the window. `packages/cli/src/runtime/history.ts:570` says the listing
+   shows "the model the run started under", which the overwrite contradicts.
+   Severity: duplication, stale comment.
+
+7. **Tool-call badge.** `conversationProgress.toolCallCount` resets on every
+   `run.activate` (`sessionFold.ts:938`) and is republished only at turn end,
+   so a resumed run reads 0 until its first turn completes. Derivable from
+   `tool.result` rows. Severity: display.
+
+**Not recommended.** Merging `runStateFold` with the transcript reducer. The
+first is strict and `Result`-returning because resume depends on it; the
+second is tolerant, debug-flag dependent and subscription-scoped. Joining them
+would tie resume correctness to display policy. Findings 4 and 5 get the
+sharing that matters through `runRows` helpers instead.
+
+**Order.** 1 first (small, billing). 2 and 6 build on #13146 and #13137, both
+landed. 3, 4, 5 and 7 are independent.

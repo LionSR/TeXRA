@@ -1,10 +1,6 @@
 import { Cause, Effect } from 'effect';
 
-import { presentAgentFailure, type SessionHandle } from '@agent/runtime';
-import {
-  classifyAgentError,
-  primaryAgentError,
-} from '@common/errors/agentErrorClassification';
+import { presentRunFailure, type SessionHandle } from '@agent/runtime';
 import {
   resumeCancellationLatch,
   resumeRunWithRefusalNotice,
@@ -19,7 +15,6 @@ import {
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
-import { toErrorMessage } from '@utils/errors/errorMessage';
 import { launchDesktopAgent } from './desktopAgentLaunch.js';
 
 /**
@@ -113,18 +108,14 @@ export class DesktopProcessResumeOwner {
         Effect.suspend(() => {
           const error = Cause.squash(cause);
           if (isCancellationRequested()) return Effect.succeed(false);
-          const primaryError = primaryAgentError(error);
           return Effect.logError(`Failed to resume desktop run ${runId}`).pipe(
             Effect.annotateLogs({ data: error }),
             withLogChannel('DesktopAgentResume'),
             Effect.andThen(
-              presentAgentFailure(
+              presentRunFailure(
                 session.interactions,
-                {
-                  kind: classifyAgentError(primaryError),
-                  message: `Resume failed: ${toErrorMessage(primaryError)}`,
-                },
-                { replayWhenAttached: true },
+                error,
+                'Resume failed: ',
               ).pipe(Effect.as(false)),
             ),
           );

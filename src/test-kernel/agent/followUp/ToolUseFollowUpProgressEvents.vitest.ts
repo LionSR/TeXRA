@@ -1,20 +1,17 @@
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 
-import { afterEach, describe, expect, vi } from 'vitest';
+import { afterEach, describe, expect } from 'vitest';
 
 import { SessionHandle } from '@agent/runtime/SessionHandle';
-import { RunInput } from '@agent/followUp/RunInput';
-import {
-  notifyFollowUpSent,
-  submitFollowUp,
-} from '@agent/followUp/ToolUseFollowUp';
+import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   RUN_OUTCOME,
   type RunId,
 } from '@shared/schemas';
+import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
@@ -24,12 +21,9 @@ import {
   publishTestRunStart,
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
-import { listenForFollowUp } from '@tools/executions/waitCoordination';
 
 import {
   createRecordingHost,
-  recordFollowUpsSent,
-  recordSessionEvents,
   seedActiveRun,
   seedTerminalRun,
 } from '../progressTestUtils';
@@ -48,7 +42,6 @@ function paperRoots() {
 }
 
 describe('tool-use follow-up progress events', () => {
-  const unsubscribeFollowUpObservers: Array<() => void> = [];
   const trackedRuns: Array<{
     readonly session: SessionHandle;
     readonly runId: RunId;
@@ -56,14 +49,11 @@ describe('tool-use follow-up progress events', () => {
   const sessions = new Set<SessionHandle>();
 
   afterEach(async () => {
-    for (const unsubscribe of unsubscribeFollowUpObservers.splice(0)) {
-      unsubscribe();
-    }
     for (const { session, runId } of trackedRuns.splice(0)) {
-      session.runs.untrack(runId);
+      untrackRun(session.runs, runId);
     }
     for (const session of sessions) {
-      await Effect.runPromise(session.dispose());
+      await Effect.runPromise(closeSessionOf(session));
     }
     sessions.clear();
   });
@@ -100,44 +90,33 @@ describe('tool-use follow-up progress events', () => {
         const session = trackSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const sent = recordFollowUpsSent(session);
         const lease = session.followUps.claimLive(runId, 'flow')!;
 
         trackToolUseFlow({ session });
 
-        const result = yield* submitFollowUp(runId, 'please continue', {
-          session,
-        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        const result = yield* submitFollowUp(
+          runId,
+          { text: 'please continue', from: { kind: 'user' as const } },
+          {
+            session,
+          },
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
         expect(result).toEqual({ status: 'sent' });
-        const input = session.followUps.attachInput(
-          runId,
-          yield* RunInput.make,
-          lease,
-        )!;
-        input.seed([]);
+        const input = session.followUps.attachInput(runId, lease)!;
         expect(yield* input.take).toMatchObject({
-          followUps: [{ content: { text: 'please continue', origin: 'user' } }],
+          followUps: [
+            {
+              content: {
+                text: 'please continue',
+                from: { kind: 'user' as const },
+              },
+            },
+          ],
         });
-        expect(sent.sent).toEqual([runId]);
         expect(run.events).toEqual([]);
       }),
   );
-
-  it('breaks a blocking wait when the owning session emits followUpSent', () => {
-    const session = trackSession();
-    const onFollowUp = vi.fn();
-    const otherRun = 'fa0003' as RunId;
-
-    const cleanup = listenForFollowUp(session, runId, onFollowUp);
-    unsubscribeFollowUpObservers.push(cleanup);
-
-    notifyFollowUpSent(otherRun, session);
-    expect(onFollowUp).not.toHaveBeenCalled();
-
-    notifyFollowUpSent(runId, session);
-    expect(onFollowUp).toHaveBeenCalledOnce();
-  });
 
   it.effect(
     'does not append through stale active contexts after final status',
@@ -146,16 +125,19 @@ describe('tool-use follow-up progress events', () => {
         yield* Effect.promise(() =>
           seedTerminalRun(testDefaultSession(), runId, RUN_OUTCOME.COMPLETED),
         );
-        // A finished run's driver gave its claim back with its last drain; these
-        // rows stand in for that driver, so the claim goes back here too.
-        yield* testDefaultSession().releaseClaims(
-          qualifyAggregateId('run', runId),
-        );
+        // A finished run's driver released its claim when its scope closed;
+        // these rows stand in for that driver, so the claim they took goes
+        // back here too: a hold taken and let go releases it.
+        yield* Effect.scoped(testDefaultSession().holdRunClaim(runId));
         trackToolUseFlow();
 
-        const result = yield* submitFollowUp(runId, 'late follow-up', {
-          session: testDefaultSession(),
-        }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        const result = yield* submitFollowUp(
+          runId,
+          { text: 'late follow-up', from: { kind: 'user' as const } },
+          {
+            session: testDefaultSession(),
+          },
+        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
 
         // The run's own terminal row is the refusal: it finished.
         expect(result).toEqual({ status: 'failed', reason: 'finished' });
@@ -183,7 +165,7 @@ describe('tool-use follow-up progress events', () => {
 
         const result = yield* submitFollowUp(
           resumingRunId,
-          'queued while resuming',
+          { text: 'queued while resuming', from: { kind: 'user' as const } },
           {
             session: testDefaultSession(),
           },
