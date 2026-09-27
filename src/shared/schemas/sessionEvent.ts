@@ -349,19 +349,18 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('output.produced', { rounds: z.array(RoundOutputSchema) }),
   durable('run.fact', { fact: RunFactSchema }),
   /**
-   * An agent-CLI child's park across its turns (one run model, 3.3):
-   * `parked` before the loop blocks on its queue, `resumed` when the taken
-   * batch starts the next turn. Its own row, because a run this loop is the
-   * only driver of has no ledger, no family and no rounds: borrowing
-   * `flow.step` meant inventing a `toolUse` family and a round that never
-   * existed. The phase is the whole of it — the fold parks the run on
-   * `parked` and runs it on `resumed`, which is what
-   * `getToolUseFollowUpTarget` reads to admit the next turn. A listing key
-   * of its own (`listingTypeOf`'s default), for the same reason `flow.step`
-   * is one: a cold listing that dropped it would paint every parked child
-   * as busy.
+   * A child driven by the child loop, which has no ledger or rounds, parks
+   * on its own row (one run model, 3.3): `parked` before the loop blocks on
+   * its queue, `resumed` when a batch starts the next turn (what
+   * `getToolUseFollowUpTarget` reads to admit a turn), `paused` when a stop
+   * rests it with no `run.end`, keeping the `resumeId` a tool call continues
+   * it by. A listing key of its own (`listingTypeOf`'s default): a cold
+   * listing that dropped it would paint every parked child as busy.
    */
-  durable('child.park', { phase: z.enum(['parked', 'resumed']) }),
+  durable('child.park', {
+    phase: z.enum(['parked', 'resumed', 'paused']),
+    resumeId: z.string().optional(),
+  }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),
@@ -586,7 +585,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 26;
+export const SESSION_EVENT_FORMAT = 27;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

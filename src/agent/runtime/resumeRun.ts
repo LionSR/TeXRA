@@ -30,8 +30,8 @@ import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { claimStanding, heldElsewhereBy } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
 import { foldRunRows } from '@shared/session/runRows';
-import { createNativeSubagentStrategy } from '@tools/delegation/nativeSubagentStrategy';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
 import { type AgentFlowResult } from './AgentFlowResult';
 import {

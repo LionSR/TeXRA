@@ -33,6 +33,10 @@ import {
   type SessionHandle,
 } from '@agent/runtime/SessionHandle';
 import { Runs, type AgentRunServices } from '@agent/runtime/runRegistry';
+import {
+  createNativeSubagentStrategy,
+  type ChildRunLaunchOptions,
+} from '@agent/runtime/nativeSubagentStrategy';
 import { withLogChannel } from '@logger/effectLog';
 import {
   RUN_OUTCOME,
@@ -51,10 +55,6 @@ import {
   startDetachedChildRunLoop,
   type DetachedChildRunInput,
 } from './detachedChildRun';
-import {
-  createNativeSubagentStrategy,
-  type ChildRunLaunchOptions,
-} from './nativeSubagentStrategy';
 
 const CHANNEL = 'inBandSubagentRun';
 

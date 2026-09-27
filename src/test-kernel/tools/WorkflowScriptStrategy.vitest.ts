@@ -101,6 +101,7 @@ function strategyParams(
   return {
     runId,
     parentRunId: runId,
+    agent: 'polish',
     session: testDefaultSession(),
     fingerprintAgentDependencies: (options) =>
       fingerprintWorkflowAgentDependencies(

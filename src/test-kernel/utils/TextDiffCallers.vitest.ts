@@ -8,13 +8,13 @@ import { Effect, FileSystem } from 'effect';
 import { describe, expect } from 'vitest';
 
 // Local imports
+import { buildSubagentResult } from '@agent/runtime/subagentResults';
 import { type RunId } from '@shared/schemas';
 import { installPlatform } from '@test/support/setupPlatform';
 import { fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
-import { buildSubagentResult } from '@tools/delegation/subagentResults';
 import {
   approvedWriteConflict,
   writeApprovedContent,

@@ -415,10 +415,10 @@ type WorkflowChildCall = Omit<InBandSubagentLaunchOptions, 'runId'> & {
  * turn's settle, so a settled turn is where the delivery that records them
  * ended. Those two facts decide every existing id, in this order:
  *
- * - An active turn refuses. Its tools may already have edited files and
- *   nothing recorded what they did — the shape a stop leaves, a CANCELLED row
- *   with no manifest — so no attempt with one advances, with an outcome or
- *   without one, unless a user's retry superseded it above.
+ * - An active turn under a CANCELLED row advances: a stop pauses the workflow,
+ *   and continuing it reruns what the stop cut short. Any other refuses — its
+ *   tools may have edited files nothing recorded — unless a retry superseded
+ *   it above.
  * - A settled turn with no manifest refuses, whether or not the run recorded
  *   an outcome. The delivery can roll back after the model and the tools have
  *   finished: the turn still settles, the loop still records a FAILED — or, a
@@ -635,11 +635,11 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
       const meta = yield* probeChild(runId, records.readResultMeta());
       const delivered = meta?.producer === 'subagent';
       if (turns.active !== null) {
-        // A turn accepted and never settled: the acceptance row commits
-        // immediately before the turn dispatches, so its tools may already
-        // have edited files, and a stop that landed in that window leaves
-        // exactly this shape — a CANCELLED row with no manifest. Work that
-        // began is not repeated, whatever the row beside it says.
+        // A turn accepted and never settled may have edited files. A stop's
+        // CANCELLED row authorizes the rerun, as a retry does: the stop paused
+        // the workflow and continuing it reruns what the stop cut short. With
+        // no such row the owner was lost mid-turn, and that is not repeated.
+        if (end?.outcome === RUN_OUTCOME.CANCELLED) continue;
         return yield* abortWorkflow(
           `Workflow child ${runId} accepted a turn it never settled; refusing to repeat it. That run needs operator attention.`,
         );

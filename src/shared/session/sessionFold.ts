@@ -425,9 +425,8 @@ function setRun(view: SessionView, run: RunView): void {
   if (previous?.ownerId !== run.ownerId) {
     reindexOwner(view, run.id, previous?.ownerId ?? null, run.ownerId);
   }
-  if (previous?.group !== run.group) {
+  if (previous?.group !== run.group)
     countGroups(view, previous?.group, run.group);
-  }
 }
 
 function dropRun(view: SessionView, run: RunView): void {
@@ -579,13 +578,13 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
   const held = own || heldElsewhere;
+  const paused = run.substate === RUN_SUBSTATE.PAUSED;
   // Only a request that parks its tool is a wait: a dispatched inquiry left
-  // its run working, so it stays listed for the panel without moving the run
-  // out of Running.
+  // its run working, listed for the panel but still Running.
   const pendingOwn = view.requests.some(
     (r) => r.runId === run.id && requestParksItsCaller(r.payload),
   );
-  const interrupted = !isTerminalOutcomePhase(run.status) && !held;
+  const interrupted = !isTerminalOutcomePhase(run.status) && !held && !paused;
   const waiting = pendingOwn && held;
   const durableOutcome =
     isTerminalOutcomePhase(run.status) &&
@@ -599,10 +598,11 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   for (const childId of run.childIds) {
     const child = view.runs.get(childId);
     if (!child) continue;
-    // A held child parked between turns, nothing asked of the user, has
-    // delivered its turn: it counts as finished, not running.
+    // A child parked between turns (held) or paused, nothing asked of the
+    // user, has delivered its turn: it counts as finished, not running.
     const idle =
-      child.status === RUN_PHASE.WAITING && child.group === 'running';
+      child.status === RUN_PHASE.WAITING &&
+      (child.group === 'running' || child.substate === RUN_SUBSTATE.PAUSED);
     rollup.total += 1 + child.rollup.total;
     rollup.running +=
       (isLiveRun(child) && !idle ? 1 : 0) + child.rollup.running;
@@ -615,7 +615,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   let group: RunView['group'] = 'recent';
   if (interrupted) group = 'interrupted';
   else if (waiting) group = 'waiting';
-  else if (isInFlightPhase(run.status)) group = 'running';
+  else if (isInFlightPhase(run.status) && !paused) group = 'running';
   let approval: RunView['approval'] = 'none';
   if (waiting) approval = 'own';
   else if (descendantWaiting) approval = 'descendant';
@@ -1004,9 +1004,10 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         ? { ...run, goal: event.state }
         : wrongArm(run, 'goalStateChanged');
     case 'child.park':
-      // An agent-CLI child's park, on the row the child protocol owns.
-      // `flow` stays null: a run with no ledger has no position to paint.
-      return parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
+      // A loop-driven child's park or pause; no ledger, so `flow` stays null.
+      return event.phase === 'paused'
+        ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
+        : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
@@ -1249,9 +1250,8 @@ function foldDurable(
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'run.removed') {
+  if (event.type === 'run.removed')
     return foldRunRemoved(view, runId, deferred);
-  }
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 

@@ -36,6 +36,8 @@ export interface CliRunFacts {
   /** The run's folded status; a terminal outcome phase is its durable
    *  outcome, anything else means no outcome has landed. */
   readonly phase?: RunLifecycleStatus;
+  /** A stop rested the run instead of ending it (a paused child). */
+  readonly paused?: boolean;
 }
 
 /** A run's CLI history standing: the frozen `status` and the `resumable`
@@ -79,6 +81,9 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
   facts: CliRunFacts,
   session: SessionHandle,
 ): Effect.fn.Return<CliRunStanding> {
+  // A paused child is continued by its parent's model, never by `resume`.
+  if (facts.paused)
+    return { status: HISTORY_RUN_STATUS.PAUSED, resumable: false };
   const outcome = isTerminalOutcomePhase(facts.phase) ? facts.phase : undefined;
   let resumable = facts.agentCategory !== null && facts.checkpointPresent;
   if (

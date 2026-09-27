@@ -44,10 +44,16 @@ vi.mock('@agent/storage', () => ({
   registerRun: mocks.registerRun,
 }));
 
-vi.mock('@tools/delegation/childRun', () => ({
-  createChildRun: mocks.createChildRun,
-  childRunDescription: (raw: string) => raw,
-}));
+vi.mock('@tools/delegation/childRun', async () => {
+  const { Effect } = await import('effect');
+  const { generateRunId } = await import('@utils/core');
+  return {
+    createChildRun: mocks.createChildRun,
+    childRunDescription: (raw: string) => raw,
+    // No paused child to reactivate here: every launch takes a fresh id.
+    agentCliChildRunId: () => Effect.sync(generateRunId),
+  };
+});
 
 vi.mock('@agent/runtime/runLaunchGuard', () => ({
   runWithLaunchGuard: (

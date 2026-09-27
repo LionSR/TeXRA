@@ -32,6 +32,7 @@ import {
   RunFlowSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
+  RUN_SUBSTATE,
   RunPhaseSchema,
   RunSubstateSchema,
   RunIdSchema,
@@ -222,7 +223,10 @@ export type RunView = z.infer<typeof RunViewSchema>;
  * Not `group` alone: a spawned child that has not activated yet is `ready`
  * and sorts under `recent`, yet it is live.
  */
-export function isLiveRun(run: Pick<RunView, 'group' | 'status'>): boolean {
+export function isLiveRun(
+  run: Pick<RunView, 'group' | 'status' | 'substate'>,
+): boolean {
+  if (run.substate === RUN_SUBSTATE.PAUSED) return false;
   return run.group !== 'interrupted' && !isTerminalOutcomePhase(run.status);
 }
 

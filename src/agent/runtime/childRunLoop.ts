@@ -79,6 +79,14 @@ export interface ChildRunPorts {
   recordCost(totalCost: number | undefined): void;
 }
 
+/** A stopped child's pause: the notice its parent reads, and the id a
+ *  tool call names to continue it (a Codex thread, a Claude session), which
+ *  the `child.park` row keeps so that call reactivates this same run. */
+export interface ChildRunPause {
+  readonly text: string;
+  readonly resumeId?: string;
+}
+
 /**
  * Agent-CLI presentation and finalization. Native engines own their run
  * handle and terminal finalization and omit this port.
@@ -102,6 +110,8 @@ export interface ChildRunPort {
     stopped?: boolean;
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
+    /** The strategy's {@link ChildRunStrategy.pauseNotice}, read on a stop. */
+    pauseNotice?: () => ChildRunPause | undefined;
   }): Effect.Effect<void, Error, Runs>;
 }
 
@@ -138,6 +148,10 @@ export interface ChildRunStrategy<TTurn, R = never> {
   /** `persistOnly` records the report without routing it to a parent, for
    *  a headless caller that awaits and reads it itself. */
   readonly deliveryMode?: 'persistOnly';
+
+  /** A stop pauses this child rather than cancelling it: what it had done
+   *  and how the parent's model continues it; undefined cancels it. */
+  pauseNotice?(): ChildRunPause | undefined;
 
   /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the
@@ -406,29 +420,6 @@ function turnDeliveryId(
 }
 
 type ChildLoopTerminationCause = 'interrupted' | 'turn_failed' | 'terminal';
-
-/**
- * Debug-only turn identity, owner and interruption facts (#9531). These are
- * driver diagnostics; the child's output remains its provider's narrative.
- */
-function emitTurnDiagnostic(
-  trace: AgentTrace | undefined,
-  event: 'turn.accepted' | 'turn.delivered' | 'loop.terminated',
-  params: {
-    runId: RunId;
-    turn?: AttemptKey;
-    queueOwner?: FollowUpConsumerLease;
-    interruptionCause?: ChildLoopTerminationCause;
-  },
-): Effect.Effect<void> {
-  const { runId, turn, queueOwner, interruptionCause } = params;
-  return loopLog(trace, 'debug', `childRunLoop ${event}`, {
-    runId,
-    ...(turn ? { attemptId: turn.key, turnIndex: turn.index } : {}),
-    ...(queueOwner ? { queueOwner: queueOwner.kind } : {}),
-    ...(interruptionCause ? { interruptionCause } : {}),
-  });
-}
 
 /**
  * Commit one turn's `child.turn` row (#9531), the fact the report/result
@@ -987,11 +978,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             turnIndex += 1;
             turnStart = yield* Clock.currentTimeMillis;
             const turnKey = { key: attemptId, index: turnIndex };
-            yield* emitTurnDiagnostic(trace, 'turn.accepted', {
-              runId,
-              turn: turnKey,
-              queueOwner: queueLease,
-            });
             yield* commitChildTurn(runSession, runId, turnKey, 'accepted');
           });
           const settleTurn = (
@@ -1130,12 +1116,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
               turnIsError,
               finalizing,
             );
-            const turnKey = { key: attemptId, index: turnIndex };
-            yield* emitTurnDiagnostic(trace, 'turn.delivered', {
-              runId,
-              turn: turnKey,
-              queueOwner: queueLease,
-            });
 
             if (turnFailed) {
               sawTurnFailure = true;
@@ -1207,14 +1187,14 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 let terminationCause: ChildLoopTerminationCause = 'terminal';
                 if (stopped) terminationCause = 'interrupted';
                 else if (sawTurnFailure) terminationCause = 'turn_failed';
-                yield* emitTurnDiagnostic(trace, 'loop.terminated', {
+                // Debug-only driver diagnostic (#9531): how the loop ended.
+                yield* loopLog(trace, 'debug', 'childRunLoop loop.terminated', {
                   runId,
-                  queueOwner: queueLease,
+                  ...(queueLease ? { queueOwner: queueLease.kind } : {}),
                   interruptionCause: terminationCause,
                 });
                 if (queueLease)
                   runSession.followUps.release(queueLease, 'terminal');
-                releaseSessionOwnershipOnce();
                 yield* Effect.forkDetach(
                   Effect.try({
                     try: () => params.recordCost?.(bestCostUsd),
@@ -1245,6 +1225,11 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                     error: lastTurnErr,
                     stopped: stoppedAtExit,
                     stage: sessionStage,
+                    // A persist-only child routes nothing to a parent,
+                    // so nobody could continue it: its stop cancels it.
+                    ...(strategy.deliveryMode !== 'persistOnly' && {
+                      pauseNotice: strategy.pauseNotice,
+                    }),
                   });
                 } else if (
                   (stoppedAtExit || sawTurnFailure) &&
@@ -1263,6 +1248,11 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 }
               }),
             );
+            // Provider ids stay reserved until the terminal (or pause) row
+            // is written, so a call naming one finds this run, not a gap.
+            const owned = yield* Effect.exit(
+              Effect.sync(releaseSessionOwnershipOnce),
+            );
             const released = yield* Effect.exit(runSession.commitRunEnd(runId));
             if (Exit.isFailure(released)) {
               yield* loopLog(
@@ -1280,9 +1270,14 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),
             );
-            const failures = [terminal, released, delivery, activation].flatMap(
-              (exit) =>
-                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+            const failures = [
+              terminal,
+              owned,
+              released,
+              delivery,
+              activation,
+            ].flatMap((exit) =>
+              Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
             );
             // The body's own failure or interruption propagates past this
             // finalizer as itself; only the cleanup's failures join it.
