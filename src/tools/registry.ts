@@ -9,7 +9,7 @@ import {
   DELEGATE_MULTI_AGENTS_TOOL_NAME,
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
-import { toolTableLayer } from '@tools/compositions';
+import { toolTableLayer } from '@tools/liveTools';
 import { mcpPluginLoader, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import type {
   PluginToolName,
@@ -224,7 +224,7 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
 export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
 
 /**
- * The process's `ToolRegistry` and the `Compositions` built over it and the
+ * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it and the
  * MCP servers of the user's `~/.texra/mcp.json`, which
  * `installProcessRuntime` provides. The layer takes the process
  * `FileSystem` that `installProcessRuntime` serves, to read that file.

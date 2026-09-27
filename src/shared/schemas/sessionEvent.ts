@@ -58,6 +58,7 @@ import {
   ToolIntentPayloadSchema,
   ToolResultPayloadSchema,
 } from './runLedgerEvent';
+import { ToolsOfferedPayloadSchema } from './offeredTools';
 import { UserFollowUpSupportSchema, WorktreeInfoSchema } from './run';
 import { ApprovalBypassesSchema, ConversationProgressSchema } from './runState';
 import { TranscriptEventSchemas } from './traceEvent';
@@ -460,6 +461,7 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
    *  (`ModelInvoker`): the gate a restart reads back. */
   durable('model.retry', { payload: ModelRetryPayloadSchema }),
   durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
+  durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   /**
    * One child turn's identity and fate: the child loop's own bookkeeping,
    * never a renderer's. The key is structural, (run, attempt, turn index),
@@ -584,7 +586,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 23;
+export const SESSION_EVENT_FORMAT = 24;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -660,18 +662,16 @@ export function listingTypeOf(
     case 'tool.result':
     case 'model.retry':
     case 'flow.snapshot':
+    case 'tools.offered':
     case 'child.turn':
     case 'workflow.script':
     case 'workflow.journal':
     case 'workflow.attempt':
-      // A priced turn is never "latest of type" (`listingKeyOf`). The run
-      // ledger's private rows stay out of the listing: a cold hydrate
-      // must never pull a run's latest `flow.snapshot` into every renderer.
-      // `flow.step` and `output.produced` are listing rows (their own keys, the
-      // `default` below). The keyed private records and the checkpoint
-      // journal are folded by their readers over the whole aggregate, so
-      // "latest of type" is not a fact about them. Not compiler-enforced
-      // (the switch ends in `default`); the fold suite pins it.
+      // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
+      // rows stay out, so a cold hydrate never pulls a `flow.snapshot` into
+      // every renderer (`flow.step` and `output.produced` are listing rows).
+      // Keyed records and the checkpoint journal are folded whole by their
+      // readers. Not compiler-enforced; the fold suite pins it.
       return null;
     case 'request.opened':
     case 'request.decided':

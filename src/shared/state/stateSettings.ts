@@ -104,7 +104,7 @@ const DEFAULT_TOOL_PATH_PROTECTION_ENABLED = true;
  */
 
 /** The product hosts, spelled once: for settings and `unavailableHosts`. */
-export const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
+const SETTING_HOSTS = ['vscode', 'cli', 'desktop'] as const;
 export type SettingHost = (typeof SETTING_HOSTS)[number];
 
 /** Storage slot a setting is read from / written to. */

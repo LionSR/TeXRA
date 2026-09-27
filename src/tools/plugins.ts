@@ -11,7 +11,7 @@
  * Derived from this list: the Tools dashboard (in list order) and each
  * card's inline settings rows, the agent creator's tool groups, availability
  * probes, the first-install toggle seed, switched-off plugins, a run's
- * injected tools (`@tools/composition`), install/auth actions, `texra tools`
+ * injected tools (`@agent/runtime/agentToolResolution`), install/auth actions, `texra tools`
  * guides, and the bundled skills and agents the bootstrap installs, which a
  * switched-off plugin withholds with its tools.
  *
@@ -67,10 +67,10 @@ export interface ToolPlugin {
   readonly onByDefault?: true;
   /** Decides what a parked tool-use run does next: a policy in
    *  `PLUGIN_CONTINUATIONS` (`@agent/runtime/loop/continuationPolicy`), which
-   *  a run gets only while its pinned composition includes the plugin. */
+   *  a run gets only while the plugin is switched on when the run opens. */
   readonly continuation?: true;
-  /** Owns resources: a layer in `@tools/registry`, built while an open
-   *  composition includes the plugin (`@tools/compositions`). */
+  /** Owns resources: a layer in `@tools/registry`, built while a pinned
+   *  catalog generation includes the plugin (`@tools/liveTools`). */
   readonly layer?: true;
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
@@ -147,4 +147,14 @@ type _ToggleablePluginsAreProbed = AssertNever<
 /** Look up a plugin by id. */
 export function findToolPlugin(id: string): ToolPlugin | undefined {
   return TOOL_PLUGINS.find((plugin) => plugin.id === id);
+}
+
+/** The plugins the user's switches hold off: only a probed plugin has a
+ *  switch, so a stored id of any other plugin switches nothing. */
+export function switchedOffPlugins(
+  disabled: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(
+    [...disabled].filter((id) => findToolPlugin(id)?.availability != null),
+  );
 }

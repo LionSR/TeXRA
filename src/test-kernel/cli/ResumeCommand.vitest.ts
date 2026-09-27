@@ -87,7 +87,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+  state: { stateSlices: null },
 };
 
 /**
@@ -109,7 +109,7 @@ const workflowSnapshot = (
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+  state: { stateSlices: null },
 });
 
 /** The session the seeded run lives in, as the command resolves it. */

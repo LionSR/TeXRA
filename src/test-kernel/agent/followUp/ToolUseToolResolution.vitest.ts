@@ -2,23 +2,20 @@ import { it } from '@effect/vitest';
 import { describe, expect } from 'vitest';
 import { Effect, Exit, Layer, Scope } from 'effect';
 
-import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
-import type { ToolDefinition } from '@shared/schemas';
+import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
-import type { CompositionKey } from '@tools/compositions';
-import { toolTableLayer } from '@tools/compositions';
+import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { toolTableLayer } from '@tools/liveTools';
 import { toolRegistryLayer } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
 import { setToolEnabled } from '@utils/config/constants';
-
-const logger = { warn: () => {} };
 
 function toolDefs(names: readonly string[]): ToolDefinition[] {
   return names.map((name) => ({ name }));
@@ -33,9 +30,8 @@ describe('tool-use tool resolution', () => {
       injectTools?: boolean;
     },
   ) {
-    return resolveAgentTools({
+    return resolveTestStep({
       tools: toolDefs(names),
-      logger,
       injectTools: false,
       stores: hostStores(),
       workspaceRoot: undefined,
@@ -142,28 +138,27 @@ describe('tool-use tool resolution', () => {
         const resolve = (
           names: readonly string[],
           approvalPromptsUnavailable: boolean,
-          inherited?: CompositionKey,
+          parentOffered?: readonly OfferedTool[],
         ) =>
-          resolveAgentTools({
+          resolveTestStep({
             tools: toolDefs(names),
-            logger,
             injectTools: false,
             stores: hostStores(),
             workspaceRoot: undefined,
             host: 'vscode',
             approvalPromptsUnavailable,
-            inherited,
+            parentOffered,
           });
         const parent = yield* resolve(['grep'], true);
         // The child's own host could answer approvals; its parent's could not.
         const child = yield* resolve(
           ['bash', 'grep', 'write_file'],
           false,
-          parent.pinned.key,
+          parent.offered,
         );
         expect(child.definitions.map((tool) => tool.name)).toEqual(['grep']);
         const refused = yield* Effect.flip(
-          resolve(['grep', 'mcp__candidate__*'], false, parent.pinned.key),
+          resolve(['grep', 'mcp__candidate__*'], false, parent.offered),
         );
         expect(refused.message).toContain('mcp__candidate__*');
         expect(refused.message).toContain('MCP server "candidate"');
@@ -178,7 +173,7 @@ describe('tool-use tool resolution', () => {
   );
 
   it.effect(
-    'a run keeps its composition across a switch change, and its plugin layer closes with the last run holding it',
+    'a switch reaches the next pin; a pinned generation keeps its plugin layer until it drains',
     () => {
       const events: string[] = [];
       // One plugin whose layer records its lifetime.
@@ -202,47 +197,43 @@ describe('tool-use tool resolution', () => {
       );
       return Effect.gen(function* () {
         const stores = hostStores();
-        const resolve = (inherited?: CompositionKey) =>
-          resolveAgentTools({
+        const resolve = (parentOffered?: readonly OfferedTool[]) =>
+          resolveTestStep({
             tools: toolDefs(['zotero_search']),
-            logger,
             injectTools: false,
             stores,
             workspaceRoot: undefined,
             host: 'vscode',
-            inherited,
+            parentOffered,
           }).pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
-            Effect.provide(nodeSpawnerLayer),
           );
         const names = (resolved: Effect.Success<ReturnType<typeof resolve>>) =>
           resolved.definitions.map((tool) => tool.name);
 
-        const parentScope = yield* Scope.make();
-        const parent = yield* Scope.provide(resolve(), parentScope);
-        expect(names(parent)).toEqual(['zotero_search']);
+        const firstScope = yield* Scope.make();
+        const first = yield* Scope.provide(resolve(), firstScope);
+        expect(names(first)).toEqual(['zotero_search']);
         expect(events).toEqual(['open']);
 
         yield* setToolEnabled('zotero', false, stores.globalState);
-        // A new run gets the new composition; a child joins its parent's.
-        const laterScope = yield* Scope.make();
-        const later = yield* Scope.provide(resolve(), laterScope);
-        expect(names(later)).toEqual([]);
-        expect(later.pinned.key.hash).not.toBe(parent.pinned.key.hash);
-        const childScope = yield* Scope.make();
-        const child = yield* Scope.provide(
-          resolve(parent.pinned.key),
-          childScope,
-        );
-        expect(names(child)).toEqual(['zotero_search']);
+        // The next pin is a new generation without the plugin, and a child
+        // reads the same catalog: it cannot keep what its parent's step was
+        // offered once the tool has left.
+        const nextScope = yield* Scope.make();
+        const next = yield* Scope.provide(resolve(), nextScope);
+        expect(names(next)).toEqual([]);
+        expect(next.generation.digest).not.toBe(first.generation.digest);
+        const child = yield* Scope.provide(resolve(first.offered), nextScope);
+        expect(names(child)).toEqual([]);
 
-        yield* Scope.close(parentScope, Exit.void);
+        // The first generation still holds the layer until it drains.
         expect(events).toEqual(['open']);
-        yield* Scope.close(childScope, Exit.void);
+        yield* Scope.close(firstScope, Exit.void);
         expect(events).toEqual(['open', 'close']);
-        yield* Scope.close(laterScope, Exit.void);
+        yield* Scope.close(nextScope, Exit.void);
       }).pipe(
         Effect.provide(toolTableLayer(table)),
         Effect.provide(nodeSpawnerLayer),

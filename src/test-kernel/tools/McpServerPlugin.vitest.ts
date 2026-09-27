@@ -17,7 +17,6 @@ import {
 } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import { guardedToolCall } from '@agent/runtime/loop/toolGuard';
 import {
   LanguageModel,
@@ -29,7 +28,8 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { hostStores } from '@test/support/setupPlatform';
-import { toolTableLayer } from '@tools/compositions';
+import { resolveTestStep } from '@test/support/stepToolsTestUtils';
+import { toolTableLayer } from '@tools/liveTools';
 import { mcpPluginLoader } from '@tools/mcp/mcpConfig';
 import { toolTable } from '@tools/toolTable';
 import {
@@ -130,11 +130,9 @@ describe('MCP server plugins', () => {
             LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
           ),
         );
-        const warnings: string[] = [];
         const open = (pin: Scope.Scope) =>
-          resolveAgentTools({
+          resolveTestStep({
             tools: [{ name: 'mcp__fixture__*' }],
-            logger: { warn: (message) => warnings.push(message) },
             injectTools: false,
             stores: hostStores(),
             workspaceRoot: undefined,
@@ -142,7 +140,7 @@ describe('MCP server plugins', () => {
           }).pipe(Scope.provide(pin), Effect.provideContext(services));
         const pin = yield* Scope.make();
         const resolved = yield* open(pin);
-        expect(warnings).toEqual([]);
+        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([]);
         expect(resolved.definitions).toEqual([
           expect.objectContaining({
             name: 'mcp__fixture__echo',
@@ -152,14 +150,15 @@ describe('MCP server plugins', () => {
         const pid = Number(readFileSync(pidFile, 'utf8'));
         expect(isAlive(pid)).toBe(true);
 
-        // An edited env value is a new composition: a run opened now gets its
-        // own server, while the open run keeps the one it started with.
+        // An edited env value is a new revision: a run opened now gets its
+        // own server, whose tools supersede the old revision's in the catalog
+        // while the open run keeps the server it started with.
         writeConfig('b');
         const editedPin = yield* Scope.make();
         const edited = yield* open(editedPin);
         const editedPid = Number(readFileSync(pidFile, 'utf8'));
         expect(editedPid).not.toBe(pid);
-        expect(edited.pinned.key.hash).not.toBe(resolved.pinned.key.hash);
+        expect(edited.generation.digest).not.toBe(resolved.generation.digest);
         yield* Scope.close(editedPin, Exit.void);
 
         // The call goes through the loop's guard: a bash request the
@@ -209,8 +208,8 @@ describe('MCP server plugins', () => {
           output: 'echo: hi (key: unset)',
         });
 
-        // The run's pin was the composition's last holder: closing it stops
-        // the server.
+        // The run's pin was the server's last holder: closing it stops the
+        // server.
         yield* Scope.close(pin, Exit.void);
         yield* Effect.gen(function* () {
           while (isAlive(pid) || isAlive(editedPid))
@@ -238,10 +237,8 @@ describe('MCP server plugins', () => {
             },
           }),
         );
-        const warnings: string[] = [];
-        const resolved = yield* resolveAgentTools({
+        const resolved = yield* resolveTestStep({
           tools: [{ name: 'mcp__broken__*' }, { name: 'grep' }],
-          logger: { warn: (message) => warnings.push(message) },
           injectTools: false,
           stores: hostStores(),
           workspaceRoot: undefined,
@@ -255,7 +252,7 @@ describe('MCP server plugins', () => {
           ),
         );
         expect(resolved.definitions).toEqual([]);
-        expect(warnings).toEqual([
+        expect([...resolved.held.warnings, ...resolved.warnings]).toEqual([
           expect.stringContaining('MCP server "bad name!"'),
           expect.stringContaining('MCP server "broken" did not start'),
           'Declared tool not found in registry: grep',

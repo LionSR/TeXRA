@@ -49,94 +49,62 @@ errors: a missing or extra tool name, an unknown or duplicate plugin id, a
 tool name claimed by two plugins, empty `toolNames`, and a toggleable plugin
 without `availability`.
 
-## The Composition value
+## The live catalog and the step
 
-A run's toolset is a function of one value, `Composition`
-(`src/tools/composition.ts`, #13089):
+Superseded on 2026-09-27: the owner ruled that setup changes apply live at
+every step boundary and are recorded
+([core concepts](../../proposed/architecture/2026-09-26-core-concepts.md),
+"Central primitives" and invariants 6 and 7). The `Composition` value, the
+`Compositions` `LayerMap` and the run-lifetime pin are deleted; tools are the
+first kind on the two central primitives.
 
-- `plugins`: enabled plugin ids, sorted (switches and probes applied);
-- `disabled`: ids the user switched off;
-- `loaded`: loadable plugins the declared tools name, each with its spec and a
-  revision (see MCP below);
-- `host` and `approvalPromptsUnavailable`;
-- `tools`: the agent's declared tools, in order;
-- `injected`: the manifest's `injectedWhen` tools whose setting is on.
+- **Registry** (`src/tools/liveRegistry.ts`). A generic generational
+  catalog: `contribute(owner, entries)` adds entries until the caller's
+  scope closes, every change rebuilds one immutable generation published on
+  `current` (a `SubscriptionRef`), a name another owner holds is refused
+  with `RegistryConflict`, and an owner's later contribution supersedes its
+  earlier one while both are open. `pin` holds a generation for the
+  caller's scope; generations are refcounted by digest in an `RcMap`, so a
+  generation no one pins drains even after `current` moved on.
+- **The tool catalog** (`LiveTools`, `src/tools/liveTools.ts`). Each
+  built-in plugin contributes its manifest table while its switch is on;
+  `sync(disabled)` opens or closes those contributions, so toggling a plugin
+  changes `current`. Each loaded MCP server contributes the tools it listed
+  while some run holds it (`hold`, refcounted per spec and revision, so runs
+  naming one server share one process). Every entry carries its identity:
+  the sha256 of its definition as the model is shown it (name, description,
+  schema) and its plugin's revision (a digest of the plugin's tools for a
+  built-in, the keyed env revision for MCP). Plugin layers are built per
+  pinned generation through one `MemoMap`, so generations that share a
+  plugin share one build of its layer.
+- **Step** (`src/agent/runtime/loop/step.ts`). Every model request opens a
+  step: it syncs the switches from the run's global state, pins the current
+  generation (hand over hand: the previous step's pin closes once the new
+  one holds), and resolves the offered tools from it
+  (`resolveStepTools`, `src/agent/runtime/agentToolResolution.ts`: declared
+  tools, MCP expansion, probes, host and approval gates, injections,
+  delegation annotation, the run's own tools). When the offered set differs
+  from the run's last record, the step returns a `tools.offered` row (each
+  tool's name, digest, plugin and revision), which the loop appends through
+  `RunLedger.appendBatch` before the request. A fresh run records its first
+  set in its opening batch.
+- **Stale calls.** A response's calls run against the step that offered
+  them, restricted to the tools whose identity still matches the latest
+  `tools.offered` row. A call to a tool that left or changed settles as
+  `tool_unavailable` and the turn continues.
+- **Resume.** The first step a resumed activation opens offers the recorded
+  tools that are still in the catalog as the same tool, in recorded order,
+  and names each one gone or changed (warn log and transcript). Later steps
+  are live again. A missing tool is still a loud warning, not a blocked run.
+- **Children.** A delegated child receives what its parent's step offered
+  (`ToolPolicy.parentOffered`) and is narrowed to those names with the same
+  identity, on the same catalog; a child naming an MCP server none of whose
+  tools its parent was offered is refused before it starts
+  (`childToolRefusal`). A resumed child is held to its own record.
+- **Round mode.** A workflow agent's rounds open no step and offer no tools.
 
-`compositionHash` is a sha256 over the key-sorted JSON. The offered registry
-is rebuilt from the composition's plugin list over the process table, never
-narrowed from a larger registry in place. Run-local tools such as the
-structured-output terminal tool are added on top in
-`src/agent/runtime/agentToolResolution.ts`, which warns if one shadows a
-table tool.
-
-## Compositions LayerMap, run pinning and subagent join
-
-```mermaid
-flowchart LR
-  M["TOOL_PLUGINS + PLUGIN_TOOLS<br/>(static manifest)"] --> T["ToolRegistry<br/>(process table)"]
-  L["~/.texra/mcp.json<br/>(loaded plugins)"] --> C
-  T --> C["Composition value<br/>+ compositionHash"]
-  C --> LM["Compositions LayerMap<br/>(entry per hash, refcounted)"]
-  LM --> P["Run pins entry<br/>in AgentRun layer scope"]
-  P --> CH["Child run joins<br/>parent's key"]
-  P --> D["Tool dispatch<br/>(entry services provided)"]
-  P --> R["Ledger: flow.snapshot<br/>offeredTools + toolsetHash"]
-```
-
-`ToolRegistry` and `Compositions` (`src/tools/toolTable.ts`,
-`src/tools/compositions.ts`) are process services provided by
-`installProcessRuntime` (`src/controllers/session/sessionLayer.ts`), which
-installs `toolRegistryLayer` from `src/tools/registry.ts`: `toolTableLayer`
-applied to `TOOL_TABLE` and the MCP loader (#13089, #13090). `Compositions` is a `LayerMap` keyed by
-`CompositionKey` (hash plus value).
-
-- **Pin.** `resolveAgentTools` pins the run's composition in the caller's
-  scope; `AgentRun` (`src/agent/runtime/run/AgentRun.ts`) resolves in its
-  layer scope, so the pin lasts until the run's layer is released. Switching
-  a plugin on or off affects only runs opened after the switch.
-- **Join.** A delegated child (LLM delegation, workflow-script `agent()`, the
-  native subagent strategy) receives the parent's key through its launch
-  options beside `approvalPromptsUnavailable` and joins that entry instead of
-  resolving switches again. It keeps its own declared tools, injections and
-  gates. A resumed run resolves its own composition.
-- **Lifetime.** An entry closes when the last run holding it releases it
-  (`LayerMap` over `RcMap`, no idle TTL). A failed build caches nothing. A
-  composition with different switches builds beside the one in use.
-- **Plugin layers.** A plugin that owns resources sets `layer: true` and puts
-  one static layer in `PLUGIN_LAYERS` (`src/tools/registry.ts`, empty today).
-  All entries build through the map's one `MemoMap`, so compositions that
-  share a plugin share one build of its layer. Tool dispatch provides the
-  pinned entry's services to each call
-  (`src/agent/runtime/loop/toolUseDispatch.ts`).
-
-Nothing about the pin is persisted. The composition is the fourth lifetime
-(process, composition, run, call); the rulings ledger entry "A run pins one
-composition from a process `Compositions` `LayerMap`; plugins may own layers"
-records it and forbids a second composition cache, an idle TTL, `Layer.fresh`
-on a plugin layer and a child re-resolving its parent's plugins.
-
-The Lean server pool stays a process service, not the lean4 plugin's layer:
-its port differs by host, the dashboard and the lean4 probe read it outside
-any run, the probe decides whether lean4 is in a composition at all, and idle
-servers are meant to outlive a run.
-
-## Offered-tool record and the resume rule
-
-A tool-use run records `offeredTools` (names in offer order) and
-`toolsetHash` on `ToolUseSnapshotStateSchema`
-(`src/shared/schemas/runFlowState.ts`), written by the opening `flow.snapshot`
-through the one ledger writer (#13088). The hash covers each tool's
-`{ name, parameters }` with every `description` keyword removed: the tool's
-own and, since #13111, each schema node's. Rewording a tool's or a
-parameter's documentation is therefore not drift.
-
-On resume, `agentRunLayer` offers **recorded ∩ available** in recorded order.
-A resume never gains a tool it was not offered. Each missing tool is logged
-at warn and reaches the run transcript; a hash mismatch with all tools present
-warns the same way. A call to a tool not in the offered set gets a
-model-visible `tool_unavailable` error result and the turn continues
-(`src/agent/runtime/loop/toolUseDispatch.ts`). Reflection runs advertise no
-tools and record none.
+The continuation policy is still chosen once, when the loop is set up, from
+the plugins switched on then.
 
 ## Loadable plugins: MCP servers
 
@@ -149,11 +117,11 @@ server becomes a `LoadedPlugin` with id `mcp:<name>`, a `spec` and an
 - An agent gets a server's tools by naming `mcp__<server>__<tool>` or
   `mcp__<server>__*` in its YAML `tools:`. A run that names no MCP tool reads
   no file and starts no server.
-- `Composition.loaded` carries the spec (command, args, env names) and a
-  revision: an HMAC of env values under a per-process key, so values never
-  enter the composition but an edit still yields a new composition. Open runs
-  keep the old server; compositions naming the same spec and revision share
-  one process, which stops with the last composition holding it.
+- A hold is keyed by the spec (command, args, env names) and a revision: an
+  HMAC of env values under a per-process key, so values never enter a row
+  but an edit still yields a new revision. Open runs keep the old server;
+  runs naming the same spec and revision share one process, which stops
+  with the last run holding it.
 - The client is the repo's Effect JSON-RPC connection (`src/tools/jsonRpc.ts`,
   moved from the Lean code, with newline framing and a `ping` answer).
 - Every MCP call goes through the one approval authority: the tool declares a
@@ -162,7 +130,7 @@ server becomes a `LoadedPlugin` with id `mcp:<name>`, a `spec` and an
   (`src/tools/approval/bashApproval.ts`). MCP tools require approval, are
   `slow`, and are not `parallelSafe`.
 - A server that fails to start yields no tools and a transcript warning; the
-  composition still builds.
+  run still opens.
 
 Deferred: project-level `.texra/mcp.json` (needs a content-hash trust prompt),
 HTTP/SSE transports, `tools/list_changed`, resources/prompts/sampling, and a

@@ -409,8 +409,6 @@ describe('completedRunArchive facade', () => {
               },
               state: {
                 stateSlices: null,
-                offeredTools: [],
-                toolsetHash: '0'.repeat(64),
               },
             }),
           },

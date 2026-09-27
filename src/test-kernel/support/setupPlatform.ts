@@ -57,7 +57,7 @@ import {
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatformShape } from '@tools/setup/platform';
-import { toolTableLayer } from '@tools/compositions';
+import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
 import {

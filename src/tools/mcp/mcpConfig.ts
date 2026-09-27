@@ -9,9 +9,10 @@
  * lists), and only the servers the declarations name become plugins, so a
  * run that declares none reads nothing and starts nothing. Each is plugin
  * `mcp:<server>`; its spec (name, command, args and env names) and a keyed
- * digest of its env values are what the run's composition records, so an
- * edited entry is a new composition and a new process beside the one open
- * runs keep.
+ * digest of its env values key its process, so an edited entry is a new
+ * process beside the one open runs keep. The spec's digest is its recorded
+ * revision: an edited spec gives its tools a new identity, edited env
+ * values alone do not.
  *
  * An entry that does not validate is skipped with a warning the resolving
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
@@ -68,8 +69,8 @@ const McpConfigFileSchema = z.object({
 
 /**
  * The key a server's env values are digested under for its revision: fresh
- * per process, so the digest (which the composition records and a debug log
- * may show) cannot be checked against a guessed value.
+ * per process, so the digest (which a debug log may show) cannot be checked
+ * against a guessed value.
  */
 const REVISION_KEY = randomBytes(32);
 

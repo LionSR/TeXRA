@@ -1324,7 +1324,7 @@ const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   },
 });
 

@@ -80,7 +80,7 @@ import { testRuntime } from '@test/support/testProcessRuntime';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  noStep,
   testModelCell,
 } from '@test/support/nativeToolTestLayer';
 import {
@@ -596,7 +596,7 @@ async function launchWaitingChild(options: {
       toolPolicy: {
         approvalPromptsUnavailable: false,
       },
-      composition: emptyPinnedComposition,
+      steps: noStep(),
     },
   };
   const launch = await testRuntime().runPromise(

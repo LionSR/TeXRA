@@ -25,10 +25,7 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import {
-  emptyPinnedComposition,
-  testModelCell,
-} from '@test/support/nativeToolTestLayer';
+import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
@@ -301,6 +298,7 @@ function parentContext(): DelegationParent {
     run: {
       runId: parentRunId,
       session,
+      steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
@@ -315,7 +313,6 @@ function parentContext(): DelegationParent {
       toolPolicy: {
         approvalPromptsUnavailable: true,
       },
-      composition: emptyPinnedComposition,
     },
   };
 }

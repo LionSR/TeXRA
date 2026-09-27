@@ -15,6 +15,7 @@ import '@test/support/defaultSessionTestSetup';
 import {
   Cause,
   Deferred,
+  Context,
   Exit,
   Effect,
   Fiber,
@@ -79,7 +80,7 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { createTestSession } from '@test/support/sessionTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
@@ -225,6 +226,7 @@ const freshState = (): RunState => ({
   flow: null,
   roundOutputs: [],
   overflowRecoveredAtTurn: null,
+  offeredTools: null,
 });
 
 const INVOCATION = {
@@ -237,7 +239,6 @@ function agentRun(
   runId: RunId,
   session: SessionHandle,
   logger: AgentTrace,
-  tools: RuntimeToolRegistry,
   model: SynchronizedRef.SynchronizedRef<BoundModel>,
   rootUserInstruction: string | undefined,
   pendingSwitch: string | null = null,
@@ -265,10 +266,8 @@ function agentRun(
     userVarChannels: {},
     initialUserMessageForTranscript: undefined,
     fileService: new RunFileService(runId, session.roots),
-    tools,
+    ...testRunTools(hostStores()),
     finalToolName: null,
-    toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-    composition: emptyPinnedComposition,
     structured: { value: undefined },
     model,
     scope: Scope.makeUnsafe(),
@@ -293,6 +292,8 @@ interface DispatchKit {
   /** The folded state with the turn's response pending and unsettled. */
   readonly state: RunState;
   readonly workspace: AgentWorkspaceState;
+  /** The tools the dispatch's step offers. */
+  readonly tools: RuntimeToolRegistry;
   readonly layer: Layer.Layer<
     AgentRun | RunLedger | Exclude<ToolServices, Scope.Scope>
   >;
@@ -342,8 +343,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       phase: 'initial',
       state: {
         stateSlices: options.stateSlices ?? null,
-        offeredTools: [],
-        toolsetHash: '0'.repeat(64),
       },
     }),
   ]);
@@ -381,7 +380,6 @@ const openDispatch = Effect.fn('openDispatch')(function* (
         runId,
         session,
         logger,
-        tools,
         model,
         options.rootUserInstruction,
         options.pendingSwitch ?? null,
@@ -394,6 +392,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     session,
     state,
     workspace: AgentWorkspaceState.create(),
+    tools,
     layer,
   } satisfies DispatchKit;
 });
@@ -402,10 +401,16 @@ const openDispatch = Effect.fn('openDispatch')(function* (
 const dispatch = (kit: DispatchKit, userInstruction?: string) =>
   makeRunCell(kit.runId, kit.state).pipe(
     Effect.flatMap((cell) =>
-      dispatchPendingResponse(cell, {
-        workspace: kit.workspace,
-        userInstruction,
-      }),
+      dispatchPendingResponse(
+        cell,
+        { workspace: kit.workspace, userInstruction },
+        {
+          definitions: [],
+          registry: kit.tools,
+          offered: [],
+          services: Context.empty(),
+        },
+      ),
     ),
     Effect.provide(kit.layer),
   );

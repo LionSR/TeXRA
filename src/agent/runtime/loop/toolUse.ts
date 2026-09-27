@@ -21,17 +21,12 @@
  * A workflow agent's run is this loop in round mode (`./rounds`): the same
  * turn, run once per round by the round loop, with no tools and no input.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
 import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
-import {
-  resolveModelRoute,
-  routeCompatibilityKey,
-} from '@agent/runtime/modelRoutes';
 import { logUserMessage } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
@@ -72,18 +67,15 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
+import { stepFor } from './step';
 import { continuationFor } from './continuationPolicy';
-import { applyPendingModelSwitch } from './modelSwitch';
+import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
-const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
-  'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.';
-const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
-  'different conversation format; start new chat';
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
@@ -166,7 +158,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
       userChannels,
     },
-    ...run.toolset,
     ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
@@ -205,39 +196,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
-    modelSwitchDisabledReason: Effect.fn('toolUse.modelSwitchDisabledReason')(
-      function* (model: string) {
-        const current = SynchronizedRef.getUnsafe(run.model);
-        if (current.modelId === model) return undefined;
-        const nextConfig = MODEL_CONFIGS[model];
-        if (!nextConfig) return `Model ${model} is not registered`;
-        const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
-          Effect.provideService(LanguageModel, languageModel),
-        );
-        const nextKey = yield* routeCompatibilityKey(nextConfig, route);
-        if (!nextKey)
-          return `Unsupported model provider: ${nextConfig.provider}`;
-        return current.compatibilityKey === nextKey
-          ? undefined
-          : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
-      },
-    ),
-    switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const disabledReason =
-        yield* flowContext.modelSwitchDisabledReason(model);
-      if (disabledReason !== undefined) {
-        return yield* Effect.fail(
-          new Error(
-            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
-              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : disabledReason,
-          ),
-        );
-      }
-      // Bound and recorded by the loop at its next model boundary: the rows
-      // that record the switch belong to the fiber holding the run's state.
-      run.pendingModelSwitch.value = model;
-    }),
+    ...modelSwitchPort(run, languageModel),
   };
   const attach = (): void => {
     if (live) return;
@@ -255,13 +214,14 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     opening: RunState,
   ): Effect.fn.Return<RunState, Error, ProcessServices> {
     // Keep preparation interruptible inside the masked acquire.
-    const { bound, content } = yield* Effect.interruptible(
+    const { bound, content, offered } = yield* Effect.interruptible(
       Effect.gen(function* () {
         const bound = yield* SynchronizedRef.get(run.model);
-        // A round-mode run opens with no message: each round's opening
-        // carries its prompt.
-        if (rounds) return { bound, content: null };
-        const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
+        // A round-mode run opens with no message and offers no tools. A
+        // tool-use run's first step is recorded with its opening.
+        if (rounds) return { bound, content: null, offered: [] };
+        const step = yield* stepFor(run, opening, false);
+        const resolvedToolNames = step.tools.definitions.map((t) => t.name);
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -315,11 +275,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (userRequest) content.push({ kind: 'text', text: userRequest });
         userChannels[USER_VAR_MODEL] = bound.modelId;
         workspace = AgentWorkspaceState.create();
-        return { bound, content };
+        return { bound, content, offered: step.rows };
       }),
     );
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
+      ...offered,
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
@@ -497,6 +458,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const dispatched = yield* dispatchPendingResponse(
             cell,
             turnContext,
+            (yield* stepFor(run, state, rounds !== null, false)).tools,
             joined?.rows,
           );
           state = dispatched.state;
@@ -526,7 +488,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
         }
         const bound = yield* SynchronizedRef.get(run.model);
-        const tools = toolDefinitionsFor(run.setting.tools);
+        // The step this request opens, its offered set recorded when changed.
+        const step = yield* stepFor(run, state, rounds !== null);
+        if (step.rows.length > 0) state = yield* cell.append(step.rows);
+        const tools = toolDefinitionsFor(step.tools.definitions);
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.

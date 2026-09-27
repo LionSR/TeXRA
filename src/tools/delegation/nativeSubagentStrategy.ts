@@ -20,12 +20,12 @@ import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFor
 import {
   AgentCategory,
   emptyRunEndOutput,
+  type OfferedTool,
   RUN_OUTCOME,
   type RunId,
   type UserFollowUpSupport,
 } from '@shared/schemas';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
-import type { CompositionKey } from '@tools/compositions';
 import { ensureError } from '@utils/errors/errorMessage';
 import {
   buildSubagentResult,
@@ -48,10 +48,10 @@ export interface ChildRunLaunchOptions {
   readonly session: SessionHandle;
   readonly approvalPromptsUnavailable?: boolean;
   /**
-   * The parent's composition, which a fresh child joins; a resumed child
-   * resolves its own.
+   * What the parent's step offered, which a fresh child can only narrow; a
+   * resumed child is held to its own record.
    */
-  readonly composition?: CompositionKey;
+  readonly parentOffered?: readonly OfferedTool[];
   readonly onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /** Fires with the resolved child run id — the caller inherits approvals onto it. */
   readonly onRunResolved?: (runId: RunId) => void;
@@ -78,7 +78,7 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
     | {
         readonly definition: PreparedAgentDefinition;
         readonly resume?: never;
-        readonly composition: CompositionKey;
+        readonly parentOffered: readonly OfferedTool[];
       }
     | {
         readonly definition?: never;
@@ -171,7 +171,7 @@ export function createNativeSubagentStrategy(
             ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,
-            composition: params.composition,
+            parentOffered: params.parentOffered,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             onRunResolved: params.onRunResolved,
             onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
