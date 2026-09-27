@@ -144,10 +144,10 @@ export const MANIFEST = [
     keywords: ['plan', 'goal', 'autonomous', 'objective'],
     description:
       'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
-    setup: {
+    setup: Object.freeze({
       configNotes:
         "No local install required. Turning this off removes the plan tool from every agent and stops goal turns, from each run's next step.",
-    },
+    }),
     toggleable: true,
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,
@@ -160,7 +160,7 @@ export const MANIFEST = [
     category: 'latex',
     description:
       'Count words, headers, figures, and other elements in LaTeX documents.',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'TeXcount is a Perl script for counting words in LaTeX files.\n\n' +
         'Installation:\n' +
@@ -169,7 +169,7 @@ export const MANIFEST = [
         '  Windows: Install via MiKTeX or TeX Live package manager',
       installUrl: 'https://app.uio.no/ifi/texcount/',
       configNotes: 'Part of most TeX Live distributions.',
-    },
+    }),
     hidden: true, // Shown in LaTeX settings tab instead
     availability: TEXCOUNT_AVAILABILITY,
   },
@@ -188,11 +188,11 @@ export const MANIFEST = [
     ],
     description:
       'Execute Wolfram Language code for symbolic math, computation, and data analysis.',
-    setup: {
+    setup: Object.freeze({
       installGuide: WOLFRAM_INSTALL_GUIDE,
       installUrl: 'https://www.wolfram.com/engine/',
       configNotes: 'Requires the free Wolfram Engine (provides wolframscript).',
-    },
+    }),
     availability: WOLFRAM_AVAILABILITY,
   },
   {
@@ -208,7 +208,7 @@ export const MANIFEST = [
     keywords: ['zotero', 'citation', 'reference', 'bibliography', 'endnote'],
     description:
       'Search, add items to, and export citations from your Zotero library. Requires Better BibTeX plugin.',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'Requires Zotero with the Better BibTeX plugin installed.\n\n' +
         'Setup:\n' +
@@ -222,7 +222,7 @@ export const MANIFEST = [
       installUrl: 'https://retorque.re/zotero-better-bibtex/installation/',
       configNotes:
         'Zotero must be running with Better BibTeX installed. Port configurable via texra.bib.zoteroPort.',
-    },
+    }),
     toggleable: true,
     availability: ZOTERO_AVAILABILITY,
   },
@@ -239,7 +239,7 @@ export const MANIFEST = [
     keywords: ['lean', 'proof', 'theorem', 'formal', 'verification'],
     description:
       'Interact with Lean 4 projects: check diagnostics, inspect terms, and manage files. Active language servers are listed below. (lean_loogle needs only network access and is always available.)',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'TeXRA can drive Lean 4 in two ways:\n\n' +
         '  • VS Code build: uses the "lean4" extension\n' +
@@ -263,7 +263,7 @@ export const MANIFEST = [
       configNotes:
         'VS Code build: requires the leanprover.lean4 extension. ' +
         'CLI / desktop builds: requires `lake` on PATH; each Lake project can have its own language server, and idle ones stop after thirty minutes, surfaced below.',
-    },
+    }),
     availability: LEAN4_AVAILABILITY,
     skills: true,
     agents: true,
@@ -276,10 +276,10 @@ export const MANIFEST = [
     keywords: ['orchestrat', 'pipeline', 'multi-agent', 'fan out', 'parallel'],
     description:
       'Run deterministic JavaScript workflow scripts that fan out, pipeline, and join calls to sub-agents, resuming safely after interruption. An agent only gets this tool if its own configuration names it: this switch is an additional kill switch on top of that per-agent opt-in.',
-    setup: {
+    setup: Object.freeze({
       configNotes:
         'No local install required. Turning this off removes delegate_multi_agents from every agent tool list, even agents whose configuration names it explicitly.',
-    },
+    }),
     toggleable: true,
     availability: ALWAYS_AVAILABLE,
     skills: true,
@@ -295,7 +295,7 @@ export const MANIFEST = [
     keywords: ['github', 'pull request'],
     description:
       'Poll GitHub for pull request, issue, and repository activity. Path mirrors GitHub URL shape: "owner/repo" for coarse repo-wide events, "owner/repo/pulls/N" for per-PR comments/reviews/CI, "owner/repo/issues/N" for issue comments and lifecycle.',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'Requires a git-tracked workspace and a GitHub personal access token:\n\n' +
         '  1. Open the folder as a git repo (or `git init` + set a github.com remote).\n' +
@@ -305,7 +305,7 @@ export const MANIFEST = [
       installUrl: 'https://github.com/settings/tokens',
       configNotes: `Token stored in host secret storage or read from GITHUB_TOKEN/GH_TOKEN. The CLI /config → GitHub token row and Settings → General in VS Code both manage the stored token. Requires a git repository in the workspace. Polls every ${GITHUB_POLL_INTERVAL_MS / 1000}s; cap: ${MAX_CONCURRENT_PR_SUBSCRIPTIONS} concurrent PRs and ${MAX_CONCURRENT_REPO_SUBSCRIPTIONS} concurrent repos. Bot-authored events are dropped end-to-end by policy.`,
       authNote: 'Uses personal access token',
-    },
+    }),
     toggleable: true,
     availability: GITHUB_AVAILABILITY,
   },
@@ -317,11 +317,11 @@ export const MANIFEST = [
     keywords: ['second opinion', 'chatgpt', 'gemini', 'grok', 'deep think'],
     description:
       'Use premium chat subscriptions such as ChatGPT Pro, Claude Opus, Gemini Deep Think, and Grok without an API key. The agent drafts a question, you paste the answer back, and the run continues. Useful for the deep-reasoning tiers that aren’t available through the API.',
-    setup: {
+    setup: Object.freeze({
       configNotes:
         'No local install required. Uses your own external chat subscription through a human-in-the-loop copy/paste flow.',
       authNote: 'Uses your premium chat subscription',
-    },
+    }),
     toggleable: true,
     availability: ALWAYS_AVAILABLE,
   },
@@ -338,7 +338,7 @@ export const MANIFEST = [
     ],
     description:
       'OpenAI Codex agent runtime. Required by the Codex SDK for local code generation and analysis.',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'Install the Codex CLI (choose one):\n\n' +
         '  npm install -g @openai/codex\n' +
@@ -361,7 +361,7 @@ export const MANIFEST = [
         'Requires @openai/codex npm package with platform binaries. Used by @openai/codex-sdk. ' +
         'Supports OAuth via `codex login` or OPENAI_API_KEY env var.',
       authNote: 'Uses ChatGPT subscription (free with Plus/Pro)',
-    },
+    }),
     toggleable: true,
     availability: CODEX_AVAILABILITY,
   },
@@ -382,7 +382,7 @@ export const MANIFEST = [
     ],
     description:
       'Spin off a Claude Code CLI agent that works in your workspace. It can read files, run commands, edit code, and search the web on your behalf. Use it to delegate focused exploration or implementation while another agent stays in charge.',
-    setup: {
+    setup: Object.freeze({
       installGuide:
         'Install the Claude Code CLI (choose one):\n\n' +
         '  npm install -g @anthropic-ai/claude-code\n' +
@@ -407,7 +407,7 @@ export const MANIFEST = [
       configNotes:
         'Requires the native `claude` binary. Supports OAuth (`claude login`), long-lived tokens (`claude setup-token` → CLAUDE_CODE_OAUTH_TOKEN), or ANTHROPIC_API_KEY (resolved from TeXRA Settings → API Keys or the environment).',
       authNote: 'OAuth, OAuth token, or API key',
-    },
+    }),
     toggleable: true,
     availability: CLAUDE_CODE_AVAILABILITY,
   },

@@ -75,8 +75,8 @@ export interface ToolPlugin {
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
   readonly agents?: true;
-  /** Install and sign-in copy and actions for the dashboard and `texra
-   *  tools`; only a probed plugin (one with `availability`) has any. */
+  /** Install and sign-in copy and actions for the dashboard and
+   *  `texra tools`; only a probed plugin (one with `availability`) has any. */
   readonly setup?: ToolPluginSetup;
 }
 
