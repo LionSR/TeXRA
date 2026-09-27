@@ -242,13 +242,17 @@ Adopted from pi Pico5:
 - stable plugin ids, used as persisted keys;
 - tool names unique across plugins, a clash failing loudly (here at compile
   time for the static table, at startup for slash commands and skill sources);
-- no hooks, task kinds, plugin-owned state or event channels in v1;
 - code re-registers everything at startup, and contribution registries are
   rebuilt rather than mutated;
 - the run pins its composition, a child joins its parent's, and a changed
   composition builds beside the old one with refcounted revisions;
 - resume offers what was recorded and is still available, loudly naming what
   is gone (adapted in #13088 to a model-visible error result).
+
+TeXRA's own ruling, not taken from Pico5: no hooks, task kinds,
+plugin-owned state or event channels in v1. Pico5 has all three (task kinds,
+hooks per kind, and Documents). The continuation policy and the documents
+plugin's after-turn handler are single-contributor hooks in Pico's terms.
 
 Adopted from deepseek-harness: presets reduced to data (the `Composition`
 value, so a named preset can later be a stored composition) and the
