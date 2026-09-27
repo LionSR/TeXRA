@@ -1,6 +1,6 @@
 ## Adversarial critique of the proposed TeXRA core-concept set
 
-Everything below was read against `origin/main` at 4311c54176, PR #13350's session-core note, the implemented architecture notes, deepseek-harness and Pico5. Nothing was edited.
+Everything below was read against `origin/main` at 4311c54176, PR #13350's session-core note, the implemented architecture notes, deepseek-harness and Pico5. Nothing was edited. Re-checked on a53db0e, after #13348 and #13359 merged: items they fixed are marked as such and kept as history, and drifted citations are updated.
 
 ### (a) Verdict
 
@@ -27,9 +27,9 @@ The set has the right direction but the wrong grain, and four of its definitions
    - Claims live per aggregate in `event_sequence.owner_id`.
 
 3. **"One writer" is false as stated.**
-   - A run aggregate has two producers, both going through the one per-process publisher (`SessionEvents` inbox): `RunLedger.appendBatch` writes ledger rows, validated and pre-folded (`src/agent/runtime/RunLedger.ts`), and trace facts arrive via `runEventDraft` and `detach` (`SessionEvents.ts:400`, `SessionHandle.ts:993`).
+   - A run aggregate has two producers, both going through the one publisher per (process, root), that is, the session's `SessionEvents` inbox: `RunLedger.appendBatch` writes ledger rows, validated and pre-folded (`src/agent/runtime/RunLedger.ts`), and trace facts arrive via `runEventDraft` and `detach` (`SessionEvents.ts:400`, `SessionHandle.ts:993`).
    - Two processes on one root each have a publisher; SQLite and claims arbitrate between them.
-   - Two writes bypass the publisher today: `Database.removeRun` (`Database.ts:1048`) and `appStateStore` calling `database.appendAll` (`appStateStore.ts:76`).
+   - Two writes bypass the publisher today: `Database.removeRun` (`Database.ts:1013`, which drafts `run.removed` at `:1045`) and `appStateStore` calling `database.appendAll` (`appStateStore.ts:76`).
    - Claims and GC stay in SQL by ruling ("Every write is a command" was withdrawn in #13350).
 
 4. **Run is not "one program."**
@@ -39,7 +39,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 
 5. **Host decides things today.**
    - The CLI applies the approval policy for the retry, human-input and executable request kinds (`packages/cli/src/runtime/approval/settleApprovals.ts:86-153`).
-   - The host hook `openWorkflowOutput` can replace a run's outcome (`src/agent/runtime/executeAgent.ts:234-243`), in both the CLI (`packages/cli/src/commands/workflow.ts:375`, `resolveWorkflowOutput` with `tryCommitPublication`) and desktop (`desktopAgentLaunch.ts:61`).
+   - The host hook `openWorkflowOutput` can replace a run's outcome (`src/agent/runtime/executeAgent.ts:224-231`), in both the CLI (`packages/cli/src/commands/workflow.ts:375`, `resolveWorkflowOutput` with `tryCommitPublication`) and desktop (`desktopAgentLaunch.ts:61`).
    - `prepareSurfaceLaunch` needs host dialogs mid-launch.
    - Post-auth invalidation is a ruled permanent host boundary.
    - The CLI keeps follow-ups typed after Ctrl-C in host memory and auto-resumes.
@@ -89,7 +89,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 
 - **Input / inbox: add.** This is the largest omission.
   - `followup.queued` carries user input, child reports, peer messages and subscription notices (#13306).
-  - Its in-process owner is a 713-line second owner (`ToolUseFollowUpQueueManager.ts`), and it caused the parent-cancel bug (#13348).
+  - Its in-process owner is a 713-line second owner (`ToolUseFollowUpQueueManager.ts`, held at `SessionHandle.ts:274`). The parent-cancel bug fixed by #13348 did not come from the manager: `FollowUps` was a context tag that a child inherited in its parent's tool-call fiber (`FollowUps.ts:20-24`).
   - The harness has an inbox, Pico5 has Submission and inbox, and move 10 is about exactly this.
 - **Agent (definition + catalog): add.**
   - Catalog: module state in `src/agent/index/agentRegistry.ts:63-70`. Three loaders exist. Definition pinning is open (decision 10).
@@ -116,7 +116,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Process              | One `ManagedRuntime` plus process services (tables, `Compositions`, `Sessions` map, catalog)                                                                       | OS process                                                                                     | `installProcessRuntime` in `src/controllers/session/sessionLayer.ts:1154`; `src/platform/processRuntime.ts`                                                                                                                 |
 | Session              | One storage root: its log, publisher, folds, live runs, requests; conversations are root runs in it                                                                | `Sessions` LayerMap entry, explicit close                                                      | `sessionLayer.ts` + `src/agent/runtime/SessionHandle.ts`                                                                                                                                                                    |
-| Log                  | Append-only rows per aggregate, root-wide commit order, one publisher per process, claim per aggregate; RunState and SessionView are its two folds                 | Durable (format-stamped)                                                                       | `src/shared/schemas/sessionEvent.ts` (vocabulary), `src/agent/runtime/SessionEvents.ts` (publisher), `src/controllers/session/Database.ts` (claims), `src/shared/session/runRows.ts` / `runStateFold.ts` / `sessionFold.ts` |
+| Log                  | Append-only rows per aggregate, root-wide commit order, one publisher per (process, root), claim per aggregate; RunState and SessionView are its two folds         | Durable (format-stamped)                                                                       | `src/shared/schemas/sessionEvent.ts` (vocabulary), `src/agent/runtime/SessionEvents.ts` (publisher), `src/controllers/session/Database.ts` (claims), `src/shared/session/runRows.ts` / `runStateFold.ts` / `sessionFold.ts` |
 | Run                  | One `run` aggregate with identity, parent edge and driver; native driver = the tool-use program; turn ⊃ step                                                       | run.start → run.end; fiber scope while live; resume re-enters from rows                        | `loop/toolUse.ts`, `run/AgentRun.ts`, `RunLedger.ts`, `runRegistry.ts`                                                                                                                                                      |
 | Input                | Every message to a run is a `followup.queued` row on its aggregate (user, child report, peer, subscription, continuation-made turn)                                | Row durable until `followup.consumed`                                                          | `src/agent/followUp/`, `src/agent/runtime/FollowUps.ts`, `loop/continuationPolicy.ts`                                                                                                                                       |
 | Delegation           | A run opening a child through a driver; the child joins or narrows the parent composition, reports via Input, and shares the session budget; lineage ≠ supervision | Child run's lifetime, under the parent's supervision until detach                              | `childRunLoop.ts`, `childRunBudget.ts`, `src/shared/session/runRelation.ts`                                                                                                                                                 |
@@ -143,18 +143,18 @@ The set has the right direction but the wrong grain, and four of its definitions
 3. **One owner.** Every piece of mutable state is a Layer or scoped value at exactly one lifetime: process, session, composition, run, attempt/call, or host scope. No module variables or WeakMaps keyed by another concept's handle.
 4. **No ambient reads.**
    - Effect context carries services of the reader's own lifetime or an enclosing one.
-   - A forked child gets its own run layer and never inherits another run's run-lifetime services (the #13348 `FollowUps` bug).
+   - A forked child gets its own run layer and never inherits another run's run-lifetime services (the `FollowUps` bug that #13348 fixed).
    - Session-level state is read through the session handle, not module slots.
 5. **Plugins.**
    - A plugin is an id plus rows in static seam tables owned by the seam's layer and `satisfies`-checked against the manifest.
    - Each seam has one fixed core call site and resolves at most one contributor per run from the pinned composition, so there is no chain and no register/unregister.
    - Function contributions write only through the run's ledger or publisher.
    - The plugin's switch gates every contribution it makes. Skills and bundled agents currently escape this.
-6. **Changes at run open.**
+6. **Changes at run open or a recorded step boundary.**
    - A root run resolves its composition (and, once decision 10 lands, its definition) at open and records the offered set and digest on its opening snapshot.
    - A child joins its parent's entry and may only narrow.
    - Resume offers recorded ∩ available and names loudly what is missing.
-   - Nothing changes inside a run.
+   - A change inside a run takes effect only at a recorded step boundary, never mid-step.
 7. **Core decides.**
    - Any decision whose result is recorded (request decision, admission, outcome) is made in core and committed as a row.
    - A host may supply a human's answer as a Command and run effects that cannot change a verdict: open file, dialog, toast.
@@ -169,13 +169,13 @@ The set has the right direction but the wrong grain, and four of its definitions
    - Where: `packages/cli/src/runtime/approval/settleApprovals.ts:86-153` decides retry, human-input and executable requests. The GUI hosts don't, so `yolo` and `never` mean different things per host.
    - Rule that prevents it: "Request is decided by the session's one authority in core, atomically with `request.opened`; hosts only present and send the human's decision."
 2. **Output and verdict logic in host hooks, and presentation inside runs.**
-   - Where: `openWorkflowOutput` changes a run's outcome from the CLI or desktop (`executeAgent.ts:234-243`, `cli/commands/workflow.ts:375`, `desktop/main/desktopAgentLaunch.ts:61`). Meanwhile file-open and PDF presentation run inside every documents run, children included.
+   - Where: `openWorkflowOutput` changes a run's outcome from the CLI or desktop (`executeAgent.ts:224-231`, `cli/commands/workflow.ts:375`, `desktop/main/desktopAgentLaunch.ts:61`). Meanwhile file-open and PDF presentation run inside every documents run, children included.
    - Rule that prevents it: "Output is the documents plugin's facts; a verdict is committed in core before `run.end`; hosts react to `output.produced`."
 3. **Session or run state in module slots and WeakMaps.**
-   - Where: goal grants in a module WeakMap (`src/tools/goal/goalAutoApproval.ts:25`, lost on resume), the Codex/Claude registries (`src/tools/agentCliSessionStores.ts:14`), and the agent catalog as module variables (`src/agent/index/agentRegistry.ts:63-70`, with 22 defensive loads).
+   - Where: goal grants in a module WeakMap (`src/tools/goal/goalAutoApproval.ts:25`, lost on resume), the Codex/Claude registries (a `WeakMap` keyed by `RunRegistry`, `src/tools/agentCliSessionStores.ts:14`), and the agent catalog as module variables (`src/agent/index/agentRegistry.ts:63-70`, with about 21 defensive loads).
    - Rule that prevents it: "State has exactly one lifetime owner and is a Layer there (process / session / composition / run)."
 4. **Runner-up: a run's input.**
-   - Where: `ToolUseFollowUpQueueManager` is a second in-process owner of a run's input, and `FollowUps` read from context let a workflow child release its parent's lease (#13348).
+   - Where: `ToolUseFollowUpQueueManager` is a second in-process owner of a run's input, and, until #13348 made the claim per run, `FollowUps` read from context let a workflow child release its parent's lease.
    - Rule that prevents it: "Input belongs to its run's entry, passed explicitly."
 
 ### Comparison with the reference designs
