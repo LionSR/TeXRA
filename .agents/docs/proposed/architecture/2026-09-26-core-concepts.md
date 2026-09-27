@@ -8,7 +8,9 @@ status: proposed
 Baseline: `origin/main` at `4311c54176`, **with #13359 assumed merged** (see
 "Assumes #13359"). This note defines the vocabulary the
 rest of the architecture is checked against. It does not replace
-[the session-core programme](./2026-09-26-effect-native-session-core.md) (#13350).
+[the session-core programme (#13350)](https://github.com/LionSR/TeXRA/pull/13350).
+Its note lands at `./2026-09-26-effect-native-session-core.md` when that PR
+merges.
 Each of that programme's moves fixes the owner of one concept below, and this
 note says which concept each move serves.
 
@@ -71,6 +73,39 @@ Not concepts in their own right:
 - **Workspace roots** are the Session key plus a Host port.
 - **Output** is the documents plugin's facts, which hosts present.
 
+### Refinements from the reference comparison
+
+Comparing the target with OpenCode v2, pi Pico v5 and deepseek-harness adds
+these details to the concepts above:
+
+- **Input has lanes and settles.**
+  - A `steer` input arrives at the next step boundary; a `queue` input waits
+    until the run is idle.
+  - Every input ends either answered, with a link to the answer row, or
+    unanswered with a reason (withdrawn, stale, run failed).
+  - A queued input can be withdrawn.
+  - Admission is idempotent on a caller-supplied ID.
+  - All three references have this.
+- **Run has two edges.**
+  - `parent` is lineage: who started it; it keeps history and forks.
+  - `owner` is supervision: who controls it, abort cascade and idle
+    traversal.
+  - Both are recorded at creation, and detaching changes the owner and keeps
+    the parent.
+  - An abort is a durable mark that cascades along owner edges.
+  - Pico v5 and deepseek-harness have this.
+- **A tool declares replay safety separately from parallel safety.** After a
+  crash, a call is re-run automatically only if the tool was declared safe to
+  replay when it was offered. `parallelSafe` no longer implies it.
+- **Request uses one action × resource ruleset** for every tool kind (deny
+  wins, patterns can be saved), so no tool is approved "as bash". A delegated
+  child defaults to `never`, bounded by what its parent was allowed.
+- **The SDK exposes two streams:**
+  - a durable one, resumable from a commit cursor;
+  - a live one, which may drop.
+
+  Presenters start from a snapshot and then follow with no gaps.
+
 ## Invariants
 
 1. **One writer.**
@@ -85,8 +120,16 @@ Not concepts in their own right:
    - A fact is one row type.
    - A persisted derivation is admissible only as a checkpoint that rows
      rebuild and that loses every conflict with them.
-   - What reached the model (prompt, offered tools, composition, agent
-     definition) can be rebuilt from the run's rows.
+   - What reached the model can be rebuilt from the run's rows: the rendered
+     system prompt (text or digest plus text), the exact tool declarations
+     offered, the composition with plugin revisions, and the agent definition.
+     Names plus a description-stripped hash are not enough.
+   - This is asserted at runtime, not only in a test: in development and CI,
+     `ModelInvoker` fails a request that cannot be rebuilt from the rows
+     (deepseek-harness does this on every request).
+   - An uncertain storage failure (the commit may or may not have landed) is
+     fatal for the session. Nothing inside the publisher's write line does
+     I/O, so one slow check cannot stall every append (Pico v5).
 3. **Decisions read the run projection or the publisher, never the session
    view.** The view is for display.
 4. **One owner, one lifetime.** Every piece of mutable state is a Layer or a
@@ -102,14 +145,38 @@ Not concepts in their own right:
    - There is no register or unregister, and no hook.
    - A plugin's switch gates every contribution it makes: tools, skills,
      agents, continuation and layers.
-7. **Changes apply at run open.** A root run records its composition and
-   definition at open. A child joins its parent's pin and may only narrow.
-   Resume re-pins what was recorded and names loudly what is missing. Nothing
-   changes inside a run.
+7. **Changes apply at run open; the durable run and its activations are
+   separate contracts.**
+   - A root run records its composition (plugin set and revisions) and its
+     definition at open. A child joins its parent's composition entry and may
+     only narrow; it records its own narrower offered set.
+   - A run can have several activations (a live fiber, a model binding, a
+     composition hold). The recorded facts belong to the durable run; the
+     resources belong to the activation.
+   - **Resume offers the recorded tools that are still available and still
+     the same tool.** A tool is the same when its definition digest and its
+     plugin revision match what was recorded. A changed or missing tool is not
+     offered, and a call to it gets `tool_unavailable`.
+   - **Blocked, not failed.** If the run's driver, agent or a required plugin
+     is missing, the resume leaves the run blocked with a recorded reason. It
+     ends only by an explicit stop.
+   - Nothing changes inside an activation. How a long conversation sees a
+     change is open (see Open).
 8. **Core decides; hosts present.** Any decision whose result is recorded
    (request decisions, admission, outcomes) is made in core and committed as a
-   row. A host supplies a human's answer as a Command, and runs only effects
-   that cannot change a verdict.
+   row. A host supplies a human's answer as a Command. A host port may do
+   fallible work, such as publishing output, and return a fact that core needs
+   before it commits the outcome. Pure presentation subscribes afterwards and
+   cannot change a verdict.
+9. **One authority per kind of fact.** Resumable execution facts live in
+   history. Settings and other current values live in `CurrentValues`.
+   Transient observations such as stream chunks live on the live trace and are
+   never rows.
+10. **One shutdown protocol, owned by core.** Core stops admission, drains
+    accepted deliveries, settles runs and releases resources, in that order.
+    Explicit session close while the process keeps running follows the same
+    protocol. Hosts invoke it. Plugins acquire and release their resources in
+    their typed layers, ordered by layer dependencies, not hooks.
 
 ## Effect rules
 
@@ -222,9 +289,12 @@ Four dependency cycles exist today and are cut by the programme:
 
 ## Where main stands
 
-The audit counts violations per concept against the invariants above: Process
-12, Session 8, History 10, Projection 14, Run 11, Plugin 15, Composition 8, Pin
-6, Continuation 7, Request 22, Host 20.
+The audit counts violations per concept against the invariants above, on
+`4311c54176` **before** #13359 and #13348: Process 12, Session 8, History 10,
+Projection 14, Run 11, Plugin 15, Composition 8, Pin 6, Continuation 7,
+Request 22, Host 20. "Assumes #13359" below lists the items those two PRs
+settle. The audit records were written before #13348 merged, so their notes
+that it has not landed are out of date.
 
 The full list, with `file:line` for each item, is in
 [`2026-09-26-core-concepts/audit.md`](./2026-09-26-core-concepts/audit.md).
@@ -239,7 +309,7 @@ behavior rather than structure:
 | 2   | Five tools are approved as `bash` (MCP, codex, claude_code, wolfram, send_to_terminal), so approve-for-session on one is blanket shell approval | `toolGuard.ts:74-91`                                                                                         | 8         |
 | 3   | Every approval bypass is lost on resume in a new process, and the resume republishes an empty snapshot over the durable row                     | `AgentLaunchContext.ts:378-391`                                                                              | 2         |
 | 4   | CLI `never` auto-approves workflow-script proposals                                                                                             | `settleApprovals.ts:69-71`, `proposalFlow.ts:200-202`                                                        | 8         |
-| 5   | A workflow child inherits its parent's follow-up lease (fixed by #13348)                                                                        | `toolUse.ts:149`                                                                                             | 5         |
+| 5   | A workflow child inherits its parent's follow-up lease (**fixed**: #13348 merged)                                                               | `toolUse.ts:149`                                                                                             | 5         |
 | 6   | Nothing is pinned across resume: the composition and the definition are re-read live                                                            | `executeAgent.ts:403`, `agentLoad.ts`                                                                        | 7         |
 | 7   | `removeRun` and app-state rows append outside the publisher                                                                                     | `Database.ts:1013-1083`, `appStateStore.ts:72-87`                                                            | 1         |
 | 8   | The composition key depends on a module cache, and the CLI never probes                                                                         | `toolAvailability.ts:174,347`                                                                                | 7         |
@@ -273,16 +343,16 @@ note's open requests:
 Each invariant gets a guard in the same programme. A concept with no guard
 will drift back.
 
-| Invariant                    | Guard                                                                                                                                                                             |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 One writer                 | an architecture test: only `SessionEvents.ts` and `RunLedger.ts` reference `appendAll` / `appendPrepared`; one writing module per row type (a table over `SessionEvent['type']`)  |
-| 2 History is truth           | the `sessionEventFormat` fingerprint already exists; add "model-visible means recorded", checked by a round-trip test that the snapshot rebuilds the offered tools and definition |
-| 3 Decisions read projections | an architecture test forbidding `runView(`, `readView(` and `getUnsafe(…view)` in `src/agent/**` and `src/tools/**` outside an allowlist that only shrinks                        |
-| 4 One owner                  | a ratchet on module-level `let`, `new Map(` and `new WeakMap(` in `src/**` production files (baseline about 30, shrink only)                                                      |
-| 5 No ambient reads           | a lint rule: `Effect.serviceOption` only on the process-port allowlist; `forkDetach` banned in `src/agent/**` except the allowlisted foreign boundaries                           |
-| 6 Plugins                    | the existing `satisfies` tables, plus a test that every contribution kind reads the plugin's switch                                                                               |
-| 7 Changes at open            | a test that resume re-pins the recorded composition key and definition digest                                                                                                     |
-| 8 Core decides               | the existing approval-authority ratchet, extended to bypass writes and to host packages deciding request kinds                                                                    |
+| Invariant                    | Guard                                                                                                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 One writer                 | an architecture test: only `SessionEvents.ts` and `RunLedger.ts` reference `appendAll` / `appendPrepared`; one writing module per row type (a table over `SessionEvent['type']`)   |
+| 2 History is truth           | the `sessionEventFormat` fingerprint already exists; a runtime assertion in `ModelInvoker` (development and CI) that each request is rebuildable from rows, plus a round-trip test |
+| 3 Decisions read projections | an architecture test forbidding `runView(`, `readView(` and `getUnsafe(…view)` in `src/agent/**` and `src/tools/**` outside an allowlist that only shrinks                         |
+| 4 One owner                  | a ratchet on module-level `let`, `new Map(` and `new WeakMap(` in `src/**` production files (baseline about 30, shrink only)                                                       |
+| 5 No ambient reads           | a lint rule: `Effect.serviceOption` only on the process-port allowlist; `forkDetach` banned in `src/agent/**` except the allowlisted foreign boundaries                            |
+| 6 Plugins                    | the existing `satisfies` tables, plus a test that every contribution kind reads the plugin's switch                                                                                |
+| 7 Changes at open            | a test that resume offers only recorded tools whose digest and plugin revision still match, and leaves a run blocked when its driver or agent is missing                           |
+| 8 Core decides               | the existing approval-authority ratchet, extended to bypass writes and to host packages deciding request kinds                                                                     |
 
 ## How the #13350 moves map onto the concepts
 
@@ -302,8 +372,27 @@ will drift back.
 ## Open
 
 - **Names.** History and Projection, or others. Owner's call.
-- **Presets.** Stored switches only, or stored compositions? The critique
-  argues switches only, because a composition also carries the agent's tools
-  and probe results.
-- **Settings read mid-run.** Retry limit, compaction threshold and binding
-  knobs are read live today. Pin them at open, or rule them live explicitly.
+- **Presets.** Recommended: a preset records the user's selection of
+  switches. Availability is resolved when resources are acquired. A
+  composition also carries the agent's tools and probe results, so it is not a
+  preset. deepseek-harness and the joint review agree.
+- **Long conversations and mid-run changes.** A root chat run pinned at open
+  never sees a newly added tool, MCP server or instruction edit, and it keeps
+  old plugin resources alive. Every reference design rejects "fixed forever"
+  for this case. Choose one:
+  1. a Command that opens a new run carrying the history forward;
+  2. admitting a change at a step boundary as a recorded row, as
+     deepseek-harness does with `request/header` and OpenCode with context
+     epochs.
+
+  The same choice settles the settings read mid-run (retry limit, compaction
+  threshold, binding knobs): pin them at open, or record a row when they
+  change. No third option.
+
+- **Goal mode after resume.** Recommended: autonomous continuation does not
+  survive a resume without a human re-arming it, as in deepseek-harness.
+  #13350 move 2 currently keeps the goal's grant across resume.
+- **Format policy after 1.0.** Before users keep sessions across versions,
+  choose per-arm versions with lazy migration (Pico v5 documents) or immutable
+  format generations (deepseek-harness). The whole-store stamp resets
+  everything when any plugin's schema changes.
