@@ -216,6 +216,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **OpenAI reasoning models no longer fail with "The terminal snapshot
+  conflicts with completed output items"** — when a GPT reasoning model
+  reasoned before answering, OpenAI could send the same reasoning twice with
+  different encrypted contents, and TeXRA rejected the response as
+  malformed, failing every retry. The encrypted reasoning is opaque and is no
+  longer compared; the item's identity and status still are.
+
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it
   was killed (a force-quit, an out-of-memory kill, or a crash), so it could

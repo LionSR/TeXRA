@@ -1907,7 +1907,7 @@ describe('native OpenAI Responses protocol', () => {
               }),
           ),
         );
-        if (variant === 'changed' || variant === 'sparse') {
+        if (variant === 'sparse') {
           assert(exit._tag === 'Failure');
           expect(
             exit.cause.reasons.find(Cause.isFailReason)?.error,
@@ -2585,10 +2585,6 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect.each([
-    {
-      name: 'changed encrypted content',
-      final: snapshot([{ ...REASONING, encrypted_content: 'changed' }]),
-    },
     {
       name: 'changed message phase',
       final: snapshot([REASONING, { ...MESSAGE, phase: 'final_answer' }]),
