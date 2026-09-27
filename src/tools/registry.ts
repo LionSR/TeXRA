@@ -357,14 +357,8 @@ export const toolRegistryLayer = (
           );
           // Nothing stays pinned: a pin here only applies the switches. A
           // failed apply changes nothing, so what is off stays off.
-          const apply = (retry: boolean) =>
-            Effect.scoped(
-              live.pinSwitched(
-                retry
-                  ? off.pipe(Effect.retry({ schedule: SWITCH_READ, times: 6 }))
-                  : off,
-              ),
-            ).pipe(
+          const apply = (read: typeof off) =>
+            Effect.scoped(live.pinSwitched(read)).pipe(
               Effect.catchCause((cause) =>
                 Effect.logError(
                   `Tool switches were not applied to the catalog; the plugins they switch stay as they were (off, before the first read): ${toErrorMessage(Cause.squash(cause))}`,
@@ -383,10 +377,14 @@ export const toolRegistryLayer = (
             subscribed,
           ).pipe(Effect.forkScoped);
           yield* Deferred.await(subscribed).pipe(
-            Effect.andThen(apply(true)),
+            Effect.andThen(
+              apply(
+                off.pipe(Effect.retry({ schedule: SWITCH_READ, times: 6 })),
+              ),
+            ),
             Effect.andThen(
               Effect.forever(
-                Queue.take(flips).pipe(Effect.andThen(apply(false))),
+                Queue.take(flips).pipe(Effect.andThen(apply(off))),
               ),
             ),
             Effect.forkScoped,

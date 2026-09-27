@@ -21,6 +21,7 @@ import {
   Effect,
   Exit,
   Equal,
+  FiberSet,
   Hash,
   Layer,
   LayerMap,
@@ -46,7 +47,6 @@ import {
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
-import { makeRunFork } from '@agent/runtime/runLaunchGuard';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
@@ -69,6 +69,7 @@ import {
 import {
   withForkFailureReporting,
   type ProcessRuntime,
+  type ProcessServices,
 } from '@platform/processRuntime';
 import {
   AgentDirectories,
@@ -585,7 +586,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
       // The runs' fork, the gate's probes and the history store end with this scope.
-      const fork = yield* makeRunFork();
+      const fork = yield* FiberSet.makeRuntime<ProcessServices>();
       const pinPlugins = yield* sessionPluginLayers(() => session.runs);
       const services = {
         modelRetries: yield* ModelRetryGate.make,
@@ -632,9 +633,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       // The presentation host an opener hands over is attached here, as its
       // own step: `use` replays what is queued for it, which is a program,
       // and a constructor cannot run one.
-      if (key.open.interactions) {
+      if (key.open.interactions)
         yield* session.interactions.use(key.open.interactions);
-      }
       // Registered after the owners, so it is unwound first: `current` stops
       // answering with this session before its owners unwind.
       yield* Effect.acquireRelease(

@@ -159,7 +159,7 @@ export interface RunRegistryInit {
   readonly borrowRunClaim: (
     runId: RunId,
   ) => Effect.Effect<void, Error, Scope.Scope>;
-  /** The fork every run starts on (`makeRunFork`). */
+  /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services (#13348); a child's parent is data (`parentRunId`), not fiber ancestry. */
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
@@ -454,7 +454,7 @@ export class RunRegistry {
 
   /**
    * The one launch door (R2): every run starts here, at once, on the
-   * session's context (`makeRunFork`), never its caller's. It runs after
+   * session's context (the `fork` port), never its caller's. It runs after
    * earlier work on the run's lane and refuses with `RunLive` in the step
    * that claims it; a claim that survives lifts the run's stop marks.
    * `settle` wraps the admission, so a refusal reaches the caller's own exit.

@@ -163,7 +163,7 @@ const LANE_SESSION = {
 
 function resumeToolUseFromResumeData(
   resume: Parameters<typeof resumeOnLane>[0],
-  options: ResumeToolUseFromResumeDataOptions = {},
+  options: Partial<ResumeToolUseFromResumeDataOptions> = {},
 ) {
   return Effect.provide(
     resumeOnLane(resume, { session: LANE_SESSION, ...options }),

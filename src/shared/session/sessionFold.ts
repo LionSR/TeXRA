@@ -61,6 +61,7 @@ import {
   requestParksItsCaller,
   runIdentityDisplayName,
   emptyUsageStats,
+  sumUsageStats,
   type AggregateId,
   type FoldInput,
   type ExistenceReconciliation,
@@ -97,7 +98,6 @@ import {
   type RunRows,
   type SharedRunRow,
 } from './runRows';
-import { withTurn, type RunTurns } from './runSpend';
 import { foldTranscriptEvent } from './transcriptFold';
 import {
   clearLiveText,
@@ -255,8 +255,9 @@ interface SessionIndexes {
    *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
-  /** Each run's priced turns (`runSpend.ts`); `RunView.usage` sums them. */
-  readonly turns: RunTurns;
+  /** Each run's priced turns by seq: a `usage` row the listing and an
+   *  aggregate replay both deliver counts once; `RunView.usage` sums them. */
+  readonly turns: Map<RunId, Set<number>>;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
@@ -1261,7 +1262,12 @@ function foldDurable(
   if (isSharedRunRow(event)) {
     own = applyRowFacts(view, before, event);
   } else if (event.type === 'usage') {
-    own = withTurn(sessionIndexesOf(view).turns, before, event);
+    const { turns } = sessionIndexesOf(view);
+    const priced = turns.get(runId) ?? new Set<number>();
+    own = priced.has(event.seq)
+      ? before
+      : { ...before, usage: sumUsageStats([before.usage, event.usage]) };
+    turns.set(runId, priced.add(event.seq));
   } else {
     applySessionSlices(view, runId, event);
     own = applyOwnArm(before, event);
@@ -1273,22 +1279,16 @@ function foldDurable(
     clearLiveText(own.transcript);
   }
   // A fresh incarnation can end again.
-  if (event.type === 'run.activate') {
-    sessionIndexesOf(view).ended.delete(runId);
-  }
-  let next: RunView = {
-    ...own,
-    lastTimestamp: event.at,
-  };
+  if (event.type === 'run.activate') sessionIndexesOf(view).ended.delete(runId);
+  let next: RunView = { ...own, lastTimestamp: event.at };
   setRun(view, next);
 
   if (created || next.parentId !== before.parentId) {
     relink(view, next, created ? null : before.parentId);
     if (!created) walkUp(view, before.parentId, before.parentId, deferred);
   }
-  if (next.label !== before.label) {
+  if (next.label !== before.label)
     for (const childId of next.childIds) refreshAncestors(view, childId);
-  }
   next = view.runs.get(next.id)!;
   const statusMoved = own.status !== before.status;
   const aggregated = statusMoved

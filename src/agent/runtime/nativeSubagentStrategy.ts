@@ -165,9 +165,7 @@ export function createNativeSubagentStrategy(
         ports,
         Effect.gen(function* () {
           const engine = yield* AgentEngine;
-          const executeOptions: ExecuteAgentOptions & {
-            session: SessionHandle;
-          } = {
+          const executeOptions: ExecuteAgentOptions = {
             ...params.resume?.options,
             session: params.session,
             approvalPromptsUnavailable: params.approvalPromptsUnavailable,

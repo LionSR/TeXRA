@@ -223,14 +223,11 @@ export function filterDiscoveredSkills(
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   stores: SettingsStores,
-  disabled?: DisabledSkills,
+  disabled: DisabledSkills,
 ) {
   return Effect.gen(function* () {
     const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
-    const enabled = filterDiscoveredSkills(
-      result,
-      disabled ?? (yield* readDisabledSkills(stores)),
-    );
+    const enabled = filterDiscoveredSkills(result, disabled);
     for (const { skill } of enabled.skills) {
       // Hosts hand the workspace root over already canonical, and a
       // discovered skill directory exists, so its realpath is its physical

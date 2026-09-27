@@ -5,27 +5,16 @@
  * end through {@link runWithLaunchGuard}; a child loop's own tail writes the
  * same backstop row.
  */
-import { Cause, Effect, Exit, FiberSet } from 'effect';
+import { Cause, Effect, Exit } from 'effect';
 
 import { finalizeRun } from '@agent/storage/runLifecycle';
 import { classifyAgentError } from '@common/errors';
 import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import type { ProcessServices } from '@platform/processRuntime';
 import { RUN_OUTCOME, type RunId, type RunOutcome } from '@shared/schemas';
 import { aggregateError } from '@utils/core';
 import { ensureError } from '@utils/errors/errorMessage';
 
 import type { SessionHandle } from './SessionHandle';
-
-/**
- * The fork every run of a session starts on (`RunRegistry.launch`), made
- * once by the session layer in the session's scope over the session's
- * context. Every Effect fork starts with its parent's context, so a run
- * forked from a tool call read that call's run-scoped services as its own
- * (#13348). A child's link to its parent is data (`parentRunId`), never
- * fiber ancestry.
- */
-export const makeRunFork = FiberSet.makeRuntime<ProcessServices>;
 
 /**
  * End a run its lifecycle did not end: the one backstop writer of `run.end`
