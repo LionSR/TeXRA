@@ -470,7 +470,7 @@ interface AgentCliLoopParams<TTurn> {
 export function buildAgentCliLaunch<TTurn>(
   params: AgentCliLoopParams<TTurn>,
 ): Effect.Effect<DetachedChildRunLaunch<TTurn>, never, Runs> {
-  return Effect.sync(() => {
+  return Effect.gen(function* () {
     const {
       childRun,
       runId,
@@ -488,6 +488,8 @@ export function buildAgentCliLaunch<TTurn>(
       loopFailedMessage,
     } = params;
     const { logger } = childRun;
+    // Released with the child's aliases (`releaseSessionOwnership`).
+    yield* registry.holdWhileLive(runId);
 
     // The one entry this loop registers and tracks: the child run's identity
     // and follow-up address. Live handles are resolved by the registry itself.

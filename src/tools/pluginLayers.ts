@@ -20,7 +20,7 @@ import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginServices } from '@platform/processRuntime';
 import type { LiveTools } from '@tools/liveTools';
-import { ToolRegistry } from '@tools/toolTable';
+import { PluginHold, ToolRegistry } from '@tools/toolTable';
 
 /**
  * A plugin layer built in the caller's scope, its services typed as the
@@ -45,17 +45,35 @@ export const buildPluginLayer = <R>(
  * standing builds with the plugins a step found switched on (each on plugin
  * holds its build, an off one lets go) and pins those plugins' services for
  * the step's scope, so a plugin switched off keeps its services until the
- * last step that pinned them releases.
+ * last step that pinned them, and the last work holding them
+ * (`PluginHold`), releases.
  */
 export const sessionPluginLayers = Effect.fnUntraced(function* (
   runs: () => RunRegistry,
 ) {
   const layers = (yield* ToolRegistry).sessionLayers;
   const scope = yield* Effect.scope;
-  const built = yield* RcMap.make({
+  // A hold on one plugin's build, taken now, released when `until` ends (or
+  // the session closes).
+  const holdFor =
+    (id: string) =>
+    (until: Effect.Effect<void>): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        const hold = yield* Scope.fork(scope);
+        yield* RcMap.get(built, id).pipe(Scope.provide(hold));
+        yield* until.pipe(
+          Effect.ensuring(Scope.close(hold, Exit.void)),
+          Effect.forkIn(scope),
+        );
+      });
+  const built: RcMap.RcMap<
+    string,
+    Context.Context<PluginServices>
+  > = yield* RcMap.make({
     lookup: (id: string) =>
       buildPluginLayer(id, layers.get(id)!).pipe(
         Effect.provideService(Runs, runs()),
+        Effect.provideService(PluginHold, holdFor(id)),
       ),
   });
   const standing = new Map<string, Scope.Closeable>();

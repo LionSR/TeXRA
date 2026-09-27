@@ -3,6 +3,7 @@ import { Context, Effect, Layer } from 'effect';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type { RunId } from '@shared/schemas';
+import { ensureError } from '@utils/errors/errorMessage';
 
 export type GoalAutoApprovalScope = 'commands' | 'allAgentWork';
 
@@ -27,11 +28,51 @@ const bypassOf = (approvals: SessionApprovals, kind: GoalGrantKind) =>
  */
 export class GoalGrants extends Context.Service<
   GoalGrants,
-  Map<RunId, Map<GoalGrantKind, boolean | undefined>>
+  Map<RunId, Grants>
 >()('@texra/tools/GoalGrants') {}
 
-/** One session's goal grants, empty when the session opens. */
-export const goalGrantsLayer = Layer.sync(GoalGrants, () => new Map());
+/** One run's grants: each kind with the run's own value before it. */
+interface Grants {
+  readonly approvals: SessionApprovals;
+  readonly kinds: Map<GoalGrantKind, boolean | undefined>;
+}
+
+/** Restore each kind a run's goal granted to the value before it. */
+const restore = (runId: RunId, grants: Grants, keep: readonly string[]) => {
+  for (const [kind, previous] of grants.kinds) {
+    if (keep.includes(kind)) continue;
+    bypassOf(grants.approvals, kind).setBypass(runId, previous);
+    grants.kinds.delete(kind);
+  }
+};
+
+/**
+ * One session's goal grants, empty when the session opens. Releasing the
+ * layer (the goal plugin switched off and unpinned, or the session closing)
+ * revokes every grant it holds: no goal grant outlives the plugin.
+ */
+export const goalGrantsLayer = Layer.effect(
+  GoalGrants,
+  Effect.acquireRelease(
+    Effect.sync(() => new Map<RunId, Grants>()),
+    (byRun) =>
+      Effect.forEach(
+        byRun,
+        ([runId, grants]) =>
+          Effect.try({
+            try: () => restore(runId, grants, []),
+            catch: ensureError,
+          }).pipe(
+            Effect.catch((error) =>
+              Effect.logWarning(
+                `A goal grant on run ${runId} was not revoked: ${error.message}`,
+              ),
+            ),
+          ),
+        { discard: true },
+      ),
+  ),
+);
 
 /**
  * Apply one goal's selected approval scope, or revoke every grant the goal
@@ -47,17 +88,13 @@ export const setGoalSessionAutoApproval = (
 ): Effect.Effect<void, never, GoalGrants> =>
   Effect.map(GoalGrants, (byRun) => {
     const approvals = session.approvals;
-    const granted =
-      byRun.get(runId) ?? new Map<GoalGrantKind, boolean | undefined>();
+    const grants = byRun.get(runId) ?? { approvals, kinds: new Map() };
+    const granted = grants.kinds;
     const wanted = scope === false ? [] : SCOPE_KINDS[scope];
     // Revoke before granting, and keep a kind both scopes share: retargeting
     // from all-agent-work to commands must not publish a transient command
     // revocation immediately before re-enabling it.
-    for (const [kind, previous] of granted) {
-      if (wanted.includes(kind)) continue;
-      bypassOf(approvals, kind).setBypass(runId, previous);
-      granted.delete(kind);
-    }
+    restore(runId, grants, wanted);
     for (const kind of wanted) {
       const bypass = bypassOf(approvals, kind);
       // Only the run's own value counts as already granted: a value inherited
@@ -70,5 +107,5 @@ export const setGoalSessionAutoApproval = (
       granted.set(kind, own);
     }
     if (granted.size === 0) byRun.delete(runId);
-    else byRun.set(runId, granted);
+    else byRun.set(runId, grants);
   });

@@ -34,8 +34,28 @@ function settleReservation(
 
 export class AgentCliSessionRegistry {
   private readonly sessions = new Map<string, AgentCliSessionState>();
+  /** Each live child's hold on this registry, ended by `releaseByRunId`. */
+  private readonly holds = new Map<RunId, Deferred.Deferred<void>>();
 
-  constructor(private readonly runs: RunRegistry) {}
+  constructor(
+    private readonly runs: RunRegistry,
+    /** The plugin layer's hold (`PluginHold`) on this registry. */
+    private readonly hold: (until: Effect.Effect<void>) => Effect.Effect<void>,
+  ) {}
+
+  /**
+   * Keep this registry up while the child `runId` lives, released with its
+   * aliases: a plugin switched off and on while the child runs keeps the
+   * registry that routes the child's follow-ups, instead of building an
+   * empty one that would launch a second loop for the same thread.
+   */
+  holdWhileLive(runId: RunId): Effect.Effect<void> {
+    return Effect.suspend(() => {
+      const done = Deferred.makeUnsafe<void>();
+      this.holds.set(runId, done);
+      return this.hold(Deferred.await(done));
+    });
+  }
 
   /**
    * Atomically reserve an unowned SDK session id. Returns a release handle
@@ -101,12 +121,15 @@ export class AgentCliSessionRegistry {
     settleReservation(state, undefined);
   }
 
-  /** Release every alias owned by one child run. */
+  /** Release every alias owned by one child run, and its hold. */
   releaseByRunId(runId: RunId): void {
     for (const [sessionId, state] of this.sessions) {
       if (state.kind === 'active' && state.entry.runId === runId) {
         this.sessions.delete(sessionId);
       }
     }
+    const hold = this.holds.get(runId);
+    this.holds.delete(runId);
+    if (hold) Deferred.doneUnsafe(hold, Effect.void);
   }
 }

@@ -13,6 +13,10 @@ import {
 } from '@tools/agentCliSessionStores';
 import { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
 import { goalGrantsLayer } from '@tools/goal/goalAutoApproval';
+import { PluginHold } from '@tools/toolTable';
+
+/** A test session's services live for the test: a hold holds nothing. */
+export const noPluginHold = () => Effect.void;
 
 /**
  * The GitHub plugin's subscription tables, unread. A registry is a live
@@ -41,6 +45,24 @@ export const testPluginServicesLayer = Layer.mergeAll(
   goalGrantsLayer,
   codexThreadsLayer,
   claudeAgentSessionsLayer,
+  Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
+).pipe(Layer.provide(Layer.succeed(PluginHold)(noPluginHold)));
+
+/**
+ * The plugin services of the session whose `Runs` a call is served, as a
+ * step pins them: the session's own builds, which outlive the call (a goal
+ * grant is revoked only when its layer is released), beside the unread
+ * GitHub tables, which are process services.
+ */
+export const testCallPluginServices = Layer.merge(
+  Layer.effectContext(
+    Effect.flatMap(Runs, (runs) =>
+      // A suite's stand-in `Runs` has no session: the call gets its own.
+      typeof runs.pinPlugins === 'function'
+        ? runs.pinPlugins(new Set(['goal', 'codex', 'claude-agent']))
+        : Layer.build(testPluginServicesLayer),
+    ),
+  ),
   Layer.succeed(GitHubSubscriptions)(unreadGitHubSubscriptions),
 );
 

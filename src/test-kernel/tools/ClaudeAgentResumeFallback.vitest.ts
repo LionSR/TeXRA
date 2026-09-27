@@ -18,6 +18,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testRunHandle } from '@test/support/runHandleFixtures';
+import { noPluginHold } from '@test/support/testPluginServices';
 import { ClaudeAgentSessions as ClaudeAgentSessionsService } from '@tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
@@ -47,7 +48,10 @@ const testSession = {
     getHandle: () => sessionHandles.byRunId,
   },
 } as unknown as SessionHandle;
-const ClaudeAgentSessions = new AgentCliSessionRegistry(testSession.runs);
+const ClaudeAgentSessions = new AgentCliSessionRegistry(
+  testSession.runs,
+  noPluginHold,
+);
 /** The tool's call layer, serving the suite's one registry as the step would. */
 const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
   Layer.merge(

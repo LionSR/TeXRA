@@ -13,6 +13,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunId } from '@shared/schemas';
 import { createFakeWorkspaceRoots } from '@test/support/FakePlatform';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
+import { noPluginHold } from '@test/support/testPluginServices';
 import { CodexThreads as CodexThreadsService } from '@tools/agentCliSessionStores';
 import { AgentCliSessionRegistry } from '@tools/agentCliSessionRegistry';
 
@@ -39,7 +40,10 @@ const testSession = {
     getHandle: () => undefined,
   },
 } as unknown as SessionHandle;
-const CodexThreads = new AgentCliSessionRegistry(testSession.runs);
+const CodexThreads = new AgentCliSessionRegistry(
+  testSession.runs,
+  noPluginHold,
+);
 /** The tool's call layer, serving the suite's one registry as the step would. */
 const toolLayer = (...options: Parameters<typeof nativeToolTestLayer>) =>
   Layer.merge(

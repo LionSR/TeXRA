@@ -32,11 +32,22 @@ export interface ProcessPluginLayer {
 
 /**
  * A plugin's session-lifetime services (`PLUGIN_SESSION_LAYERS`): one build
- * per open session, up while the plugin is switched on or a step of that
- * session pins it, and closed with the session. It may read the session's
- * `Runs`.
+ * per open session, up while the plugin is switched on, a step of that
+ * session pins it, or work it started holds it (`PluginHold`), and closed
+ * with the session. It may read the session's `Runs`.
  */
-export type SessionPluginLayer = Layer.Layer<never, never, Runs>;
+export type SessionPluginLayer = Layer.Layer<never, never, Runs | PluginHold>;
+
+/**
+ * Keep the session layer that provides this service up until `until` ends:
+ * for work a plugin starts that outlives the step that started it (an agent
+ * CLI's detached child), so switching the plugin off does not drop state
+ * that work still owns. The hold is taken before this returns.
+ */
+export class PluginHold extends Context.Service<
+  PluginHold,
+  (until: Effect.Effect<void>) => Effect.Effect<void>
+>()('@texra/tools/PluginHold') {}
 
 /** What a loaded plugin's resources answer once up: its tools, or why none. */
 export interface LoadedPluginTools {

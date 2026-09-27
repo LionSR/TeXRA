@@ -15,7 +15,7 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { testRunRegistry } from '@test/support/runHandleFixtures';
-import { testPluginServicesLayer } from '@test/support/testPluginServices';
+import { testCallPluginServices } from '@test/support/testPluginServices';
 
 type CallRun = NonNullable<ToolCallShape['run']>;
 
@@ -81,7 +81,7 @@ export function nativeToolTestLayer(
     })),
     // The session's plugin services, over the same `Runs`, as a step pins
     // them for the call.
-    testPluginServicesLayer.pipe(
+    testCallPluginServices.pipe(
       Layer.provideMerge(
         Layer.sync(Runs, () => run?.session.runs ?? testRunRegistry()),
       ),
