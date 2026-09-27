@@ -108,7 +108,7 @@ const askUserQuestion = Effect.fn('AskUserQuestionTool.execute')(function* (
 
 export const AskUserQuestionTool = defineTool({
   name: 'ask_user_question',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description: `Ask the user one to three short clarification questions and wait for their answers.
 
 Use this when the task has several reasonable paths and continuing without the user's preference would be guesswork. Provide two to four concrete options for each question. Use allowFreeText only when the listed options may not cover the user's answer.

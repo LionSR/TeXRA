@@ -237,7 +237,7 @@ Code extension. Running bare `texra` in a terminal opens this same session.
 ```bash
 texra chat                          # default chat agent and model
 texra chat --agent research         # pick a tool-use agent for the session
-texra chat --model deepseekT        # override the session model
+texra chat --model deepseek41T      # override the session model
 # headless tool-use run for scripts and CI
 texra run review --input main.tex --instruction "Check the proof." --print
 ```

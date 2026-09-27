@@ -10,6 +10,13 @@ All notable changes to this project will be documented in this file.
   read.** Every agent's system prompt gets the `AGENTS.md` at the workspace
   root, or `~/.texra/AGENTS.md` when the workspace has none, the same file
   other coding agents read. Rename an existing `.texrarules` to `AGENTS.md`.
+- **Some models now need OpenRouter instead of a direct vendor key** —
+  models reached with a DeepSeek, Kimi/Kimi Code, GLM, DashScope, MiniMax or
+  xAI key use that vendor's newer API. A model the vendor does not offer
+  there is no longer available with the vendor's key; select it through
+  OpenRouter instead. GLM keeps its China (BigModel) and international
+  (Z.AI) regions, and a Coding Plan key reaches the same endpoint as an API
+  key. MiniMax's China region moves to `api.minimax.cn`.
 - **`delegate_agent` no longer takes `execution_id`** — send a subagent
   follow-up instructions with the `executions` tool instead (`action: "send"`
   on `/executions/<run id>`). A custom agent whose prompt tells it to resume a
@@ -194,6 +201,9 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   has one row with a status dot (waiting on you, running, or finished while
   you were elsewhere), a `+` that starts a task in that project, and a `×`
   that closes it; tasks are listed under their project and nowhere else.
+  Every sidebar row is one line: a task's agent, branch, age and model are
+  in its hover tooltip, and a project's status is its dot, whose tooltip
+  says it in words.
   The conversation header
   is one row: the task, its stop control and `⋯`. Files, Terminal, Browser
   and Logs open as tabs from the workbench's `+`. A run that needs you or finishes in a project
@@ -234,6 +244,18 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   malformed, failing every retry. The encrypted reasoning is opaque and is no
   longer compared; the item's identity and status still are.
 
+- **Security: setup tools ask before they act, and approving a tool call for
+  the session no longer approves every shell command** — `update_config`,
+  `unset_api_key`, `invoke_command` and `install_vscode_extension` were marked
+  as needing approval but ran without a prompt in the VS Code extension and
+  the desktop app; they now ask under the `ask` policy, run under `yolo`, and
+  are refused under `never`, like shell commands. Approving an MCP tool,
+  `codex`, `claude_code`, `wolfram` or `send_to_terminal` call went through
+  the shell's approval, so "approve commands for session" on one of them
+  approved every later shell command, and an existing shell grant approved
+  them unasked. Those calls now ask each time (the auto-approve policy and
+  "approve all delegated work" still cover them), their prompt no longer
+  offers a session grant, and a shell grant no longer answers them.
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it
   was killed (a force-quit, an out-of-memory kill, or a crash), so it could

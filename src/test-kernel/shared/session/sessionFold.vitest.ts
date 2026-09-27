@@ -1228,7 +1228,7 @@ describe('sessionFold', () => {
 const LEDGER_RUN = RunIdSchema.parse('ab12cd');
 const LEDGER_AGGREGATE = qualifyAggregateId('run', LEDGER_RUN);
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   requestedModel: 'gpt-test',
   deployment: {
     endpoint: 'https://api.example.test/v1',
@@ -1303,7 +1303,7 @@ const TURN_USAGE = {
   outputTokens: 5,
   cost: 0.25,
   responseTimeMs: 1200,
-  provider: 'openai-chat',
+  provider: 'openai-responses',
   cachedInputTokens: 4,
   cacheMissInputTokens: 6,
   serverToolRequests: 1,

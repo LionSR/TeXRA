@@ -210,7 +210,7 @@ setupPlatform({
 });
 
 const ORIGIN = {
-  protocol: 'deepseek-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',
   deployment: {

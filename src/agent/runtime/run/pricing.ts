@@ -307,19 +307,18 @@ export function priceTurnUsage(
           ? provider.costInUsdTicks / 1e10
           : standardCost(usage, rates, true);
       break;
-    case 'minimax':
     case undefined:
-      // Keyed on the wire surface, not the vendor: the OpenAI chat-completions
-      // surface reports reasoning tokens outside its output count, so they
-      // bill on top. An editor (`vscode-lm`) turn never reaches here with a
-      // usage record — the editor model reports `usage: null` and this
-      // function returns above — so no editor turn is silently billing
-      // reasoning at zero; a future editor model that starts reporting usage
-      // needs its own arm rather than this flag.
+      // Reasoning is part of the reported output everywhere but where a
+      // receipt's total counts it beside the output (xAI Responses without
+      // its cost field); there it bills on top. An editor (`vscode-lm`) turn
+      // never reaches here: the editor model reports `usage: null`.
       cost = standardCost(
         usage,
         rates,
-        bound.origin.protocol === 'openai-chat',
+        usage.reasoningTokens !== null &&
+          usage.reasoningTokens > 0 &&
+          usage.totalTokens ===
+            inputTokens + outputTokens + usage.reasoningTokens,
       );
       break;
   }

@@ -110,7 +110,7 @@ function executeWorkflowAgentTool(
 export const WorkflowAgentTool = defineTool({
   name: 'delegate_workflow',
   availabilityCategory: 'workflow',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   // A synchronous delegation (headless) runs for the child's whole run: its
   // card opens when the attempt is admitted, not only at settlement. An
   // asynchronous one settles at once, so its card closes right after opening.
@@ -212,7 +212,7 @@ function executeDelegateAgentTool(
 export const DelegateAgentTool = defineTool({
   name: 'delegate_agent',
   availabilityCategory: 'toolUse',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   // Card at admission, as for `delegate_workflow` above.
   slow: true,
   // Static base text; the "Available agents:", "Available models:", and "Git

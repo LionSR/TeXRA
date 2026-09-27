@@ -91,7 +91,7 @@ import { recordSessionEvents } from './progressTestUtils';
 setupPlatform({ workspacePath: '/workspace' });
 
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'gpt-test',
   deployment: {

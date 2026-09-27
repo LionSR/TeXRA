@@ -403,7 +403,7 @@ function planCommand(
 
 export const PlanTool = defineTool({
   name: 'plan',
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description: `Manage the plan document and (optionally) the autonomous goal pursuing it.
 
 Commands:

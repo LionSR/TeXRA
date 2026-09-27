@@ -38,7 +38,7 @@ covers, which the operation handle deliberately does not copy.
 
 ## The tree
 
-Nineteen files, about 10 750 lines. No file exceeds 1 500 lines, and the
+Eighteen files, about 8 600 lines. No file exceeds 1 500 lines, and the
 file-size ratchet holds every one of them at or under its current count.
 
 | File                          | What it owns                                                                                                                                              |
@@ -47,11 +47,10 @@ file-size ratchet holds every one of them at or under its current count.
 | `protocol.ts`                 | the protocol enum, binding identity (`BindingSchema`, `OriginSchema`, `ModelOriginSchema`) and JSON materialization                                       |
 | `message.ts`                  | the wire message and history schemas, the content parts, and the continuation prefixes                                                                    |
 | `errors.ts`                   | `ModelError` and the failure classification along it, `RemoteOperation` included                                                                          |
-| `transport.ts`                | SSE decode, stream pull, tool-argument parsing, the abort-safe request helper                                                                             |
-| `openaiChat.ts`               | `openaiChatModel`: `openai-chat` and the direct `deepseek-chat`, `kimi-chat`, `glm-chat`, `xai-chat`, `dashscope-chat` and `minimax-chat` branches        |
-| `openaiChatChunks.ts`         | the OpenAI-compatible chunk vocabulary and the MiniMax-only decode helpers                                                                                |
+| `transport.ts`                | stream pull, tool-argument parsing, the abort-safe request helper                                                                                         |
 | `openaiResponses.ts`          | `openaiResponsesModel`, and the subpath's re-exports of the continuation and the WebSocket model                                                          |
 | `openaiResponsesCodec.ts`     | the response-side schemas and normalization, content lowering, event decoding                                                                             |
+| `openaiResponsesUsage.ts`     | the usage receipt schema and its normalization, xAI's settled cost included                                                                               |
 | `openaiResponsesLower.ts`     | input lowering and the continuation anchor                                                                                                                |
 | `openaiResponsesRequest.ts`   | preparing a turn, its parameters, the abort classification, the input estimate                                                                            |
 | `openaiResponsesWebSocket.ts` | the experimental WebSocket transport                                                                                                                      |

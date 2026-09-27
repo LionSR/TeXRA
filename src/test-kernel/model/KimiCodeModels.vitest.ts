@@ -51,7 +51,7 @@ describe('Kimi Code routing', () => {
   );
 
   it('does not divert other moonshot models off their normal routes', () => {
-    expect(route('kimi25T', false)).toEqual({
+    expect(route('kimi3', false)).toEqual({
       kind: 'api-key',
       provider: 'moonshot',
       usageRoute: 'api-key',

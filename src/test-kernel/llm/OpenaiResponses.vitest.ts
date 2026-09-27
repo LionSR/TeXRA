@@ -20,7 +20,6 @@ import {
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { admittedFingerprint } from '@texra-ai/llm/prefix-fingerprint';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import type {
   BackgroundEvent,
@@ -54,6 +53,9 @@ const CONFIG: OpenAIResponsesConfiguration = {
     'max',
   ],
   instructions: { kind: 'optional' },
+  continuationInheritsInstructions: false,
+  supportsForcedToolChoice: true,
+  requestDialect: 'openai',
   webSocketStreamParameter: 'implicit',
   background: 'unsupported',
   defaults: {
@@ -1200,34 +1202,16 @@ describe('native OpenAI Responses protocol', () => {
       }),
   );
 
-  it.effect.each(['Chat', 'Responses'] as const)(
-    '%s rejects ambient header overrides and disables SDK diagnostic logging',
-    (protocol) =>
+  it.effect(
+    'rejects ambient header overrides and disables SDK diagnostic logging',
+    () =>
       Effect.gen(function* () {
         const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
           new Response('data: malformed-provider-data\n\n', {
             headers: { 'content-type': 'text/event-stream' },
           }),
         );
-        const construct = () =>
-          protocol === 'Responses'
-            ? modelWith(fetch)
-            : openaiChatModel(
-                {
-                  protocol: 'openai-chat',
-                  requestedModel: CONFIG.requestedModel,
-                  deployment: CONFIG.deployment,
-                  supportsTemperature: true,
-                  supportedEfforts: [],
-                  defaults: {
-                    temperature: 0,
-                    effort: null,
-                    maxOutputTokens: 100,
-                    parallelToolCalls: true,
-                  },
-                },
-                { apiKey: 'synthetic-not-a-secret', fetch },
-              );
+        const construct = () => modelWith(fetch);
         vi.stubEnv(
           'OPENAI_CUSTOM_HEADERS',
           'Authorization: Bearer other-account',
@@ -1637,6 +1621,144 @@ describe('native OpenAI Responses protocol', () => {
         for (const [url] of retrievals)
           expect(String(url)).toContain('reasoning.encrypted_content');
         expect(fetch).toHaveBeenCalledTimes(4);
+      }),
+  );
+
+  it.effect(
+    'reads an xAI receipt and chains without resending instructions',
+    () =>
+      Effect.gen(function* () {
+        const message = {
+          ...MESSAGE,
+          phase: undefined,
+          content: [
+            {
+              type: 'output_text',
+              text: 'Done.',
+              annotations: [],
+              logprobs: null,
+            },
+          ],
+        };
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementation(async () =>
+            response(
+              events(
+                [message],
+                snapshot([message], {
+                  service_tier: 'default',
+                  usage: {
+                    input_tokens: 32,
+                    output_tokens: 9,
+                    total_tokens: 151,
+                    input_tokens_details: { cached_tokens: 8 },
+                    output_tokens_details: { reasoning_tokens: 110 },
+                    cost_in_usd_ticks: 70,
+                  },
+                }),
+              ),
+            ),
+          );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          continuationInheritsInstructions: true,
+          defaults: { ...CONFIG.defaults, store: true },
+        });
+        const first = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+        });
+        assert(first.mode === 'foreground');
+        const result = yield* completedTurn(model.streamTurn(first));
+        assert(result.kind === 'http');
+        expect(result.usage?.providerUsage).toEqual({
+          kind: 'xai',
+          costInUsdTicks: 70,
+          serviceTier: 'default',
+        });
+        assert(result.continuation !== undefined);
+        const next = yield* model.prepareTurn({
+          ...REQUEST,
+          system: 'policy',
+          continuation: result.continuation,
+          messages: [
+            ...first.messages,
+            {
+              role: 'assistant',
+              origin: result.requestedOrigin,
+              content: result.content,
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
+          ],
+        });
+        assert(next.mode === 'foreground');
+        yield* completedTurn(model.streamTurn(next));
+        const [opening, chained] = fetch.mock.calls.map(([, init]) =>
+          JSON.parse(String(init?.body)),
+        );
+        expect(opening).toMatchObject({ instructions: 'policy' });
+        expect(chained).toMatchObject({ previous_response_id: 'resp_1' });
+        expect(chained).not.toHaveProperty('instructions');
+      }),
+  );
+
+  it.effect(
+    'sends a compatible route only its documented fields and reads Zhipu output',
+    () =>
+      Effect.gen(function* () {
+        const reasoning = {
+          type: 'reasoning',
+          id: 'rs_1',
+          content: { type: 'reasoning_text', text: 'think' },
+        };
+        const message = {
+          type: 'message',
+          id: 'msg_1',
+          role: 'assistant',
+          status: 'completed',
+          content: [{ type: 'output_text', text: 'Done.' }],
+        };
+        const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+          response(
+            events(
+              [reasoning, message],
+              snapshot([reasoning, message], {
+                usage: { input_tokens: 5, output_tokens: 3 },
+              }),
+            ),
+          ),
+        );
+        const model = modelWith(fetch, {
+          ...CONFIG,
+          supportsForcedToolChoice: false,
+          requestDialect: 'compatible',
+        });
+        expect(
+          (yield* Effect.flip(
+            model.prepareTurn({
+              ...REQUEST,
+              toolChoice: { name: 'read_file' },
+            }),
+          )).kind,
+        ).toBe('unsupported');
+        const turn = yield* model.prepareTurn(REQUEST);
+        assert(turn.mode === 'foreground');
+        const result = yield* completedTurn(model.streamTurn(turn));
+        const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
+        expect(body).not.toHaveProperty('include');
+        expect(body).not.toHaveProperty('store');
+        expect(body.tools[0]).not.toHaveProperty('strict');
+        expect(result.content[0]).toMatchObject({
+          kind: 'reasoning',
+          summary: [],
+          content: [{ kind: 'text', text: 'think' }],
+        });
+        expect(result.usage).toMatchObject({
+          inputTokens: 5,
+          outputTokens: 3,
+          totalTokens: null,
+        });
       }),
   );
 

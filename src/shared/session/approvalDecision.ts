@@ -95,7 +95,13 @@ export function approvalDecisionArms(
     case APPROVE_SESSION_ACTION:
     case APPROVE_ALL_DELEGATED_WORK_ACTION: {
       const bypass = BYPASS_OF_KIND[permission.kind];
-      if (bypass === undefined) {
+      // A command prompt for another tool's call (an MCP tool, codex) does
+      // not offer the grant: the only bypass a bash request names is the
+      // shell's, and enabling it for that call would approve every command.
+      if (
+        bypass === undefined ||
+        (permission.kind === 'bash' && !permission.data.allowBypass)
+      ) {
         throw new Error(
           `A ${permission.kind} request has no session bypass to enable.`,
         );

@@ -124,6 +124,7 @@ export class RunTab extends LitElement {
       ? 'Needs approval'
       : run.statusLabel;
     const runTitle = run.description || run.label;
+    const tooltip = buildTooltip(run);
     const childCountLabel = formatResultCount(
       run.rollup.total,
       BACKGROUND_TASK.countNoun,
@@ -173,7 +174,8 @@ export class RunTab extends LitElement {
             class="tab focus-ring-inset"
             data-run=${run.id}
             data-action="select"
-            aria-label=${buildTooltip(run)}
+            aria-label=${tooltip}
+            title=${tooltip}
           >
             <div class="tab-header">
               ${

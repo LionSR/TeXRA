@@ -53,7 +53,11 @@ export function BashApproval(props: BashApprovalProps): React.JSX.Element {
       color={COLOR_WARNING}
       title={COMMAND_APPROVAL_TITLE}
       rejectionMode="feedback"
-      alwaysAllowLabel="approve commands for session"
+      // Another tool's call offers no grant: the one this prompt could turn
+      // on is the run's shell bypass.
+      alwaysAllowLabel={
+        props.payload.allowBypass ? 'approve commands for session' : undefined
+      }
       onDecide={props.onDecide}
     >
       {cwdLine && <Text dimColor>{cwdLine}</Text>}

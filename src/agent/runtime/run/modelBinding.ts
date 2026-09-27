@@ -12,22 +12,15 @@
 import { createHash } from 'node:crypto';
 
 import { Context, Effect, Option, type Scope } from 'effect';
-import {
-  MODEL_CONFIGS,
-  ModelProvider,
-  ReasoningEffort,
-  type ModelConfig,
-} from 'llm-zoo';
+import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
-import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   openaiResponsesModel,
   openaiResponsesWebSocketModel,
 } from '@texra-ai/llm/openai-responses';
 import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 import {
-  type ChatConfiguration,
   type Model,
   type ModelConfiguration,
   type ModelError,
@@ -176,14 +169,14 @@ const PROTOCOL_BY_KEY: Record<ModelCompatibilityKey, Protocol | 'validation'> =
     OpenRouterNative: 'openrouter-chat',
     VscodeLm: 'vscode-lm',
     Anthropic: 'anthropic-messages',
-    OpenAI: 'openai-chat',
+    OpenAI: 'openai-responses',
     GoogleInteractions: 'google-interactions',
-    DeepSeek: 'deepseek-chat',
-    XAI: 'xai-chat',
-    Kimi: 'kimi-chat',
-    DashScope: 'dashscope-chat',
-    MiniMax: 'minimax-chat',
-    GLM: 'glm-chat',
+    DeepSeek: 'openai-responses',
+    XAI: 'openai-responses',
+    Kimi: 'openai-responses',
+    DashScope: 'openai-responses',
+    MiniMax: 'openai-responses',
+    GLM: 'openai-responses',
     Meta: 'openai-responses',
   };
 
@@ -235,70 +228,6 @@ function anthropicThinking(
   };
 }
 
-/**
- * Moonshot API `fullName`s shared by a reasoning and a non-reasoning registry
- * entry (`kimi26`/`kimi26T` both wire to `kimi-k2.6`), distinguished only by
- * TeXRA's `supportsReasoning`. Moonshot defaults these wire names to thinking
- * on, so both entries send the toggle explicitly; every other Kimi model
- * leaves thinking to the wire default. Computed from the live catalog so a
- * later shared-name family needs no new literal.
- */
-const AMBIGUOUS_MOONSHOT_FULL_NAMES: ReadonlySet<string> = (() => {
-  const supportsReasoningByFullName = new Map<string, boolean>();
-  const ambiguous = new Set<string>();
-  for (const config of Object.values(MODEL_CONFIGS)) {
-    if (config.provider !== ModelProvider.MOONSHOT) continue;
-    const seen = supportsReasoningByFullName.get(config.fullName);
-    if (seen !== undefined && seen !== config.capabilities.supportsReasoning) {
-      ambiguous.add(config.fullName);
-    }
-    supportsReasoningByFullName.set(
-      config.fullName,
-      config.capabilities.supportsReasoning,
-    );
-  }
-  return ambiguous;
-})();
-
-type KimiThinkingControl = Extract<
-  ModelConfiguration,
-  { protocol: 'kimi-chat' }
->['thinkingControl'];
-
-function kimiThinkingControl(config: ModelConfig): KimiThinkingControl {
-  if (AMBIGUOUS_MOONSHOT_FULL_NAMES.has(config.fullName)) return 'toggle';
-  return config.capabilities.supportsReasoning ? 'always' : 'toggle';
-}
-
-/**
- * Sampling Moonshot fixes per wire name, thinking on and off: `null` is a
- * temperature the API requires omitted. Applies to direct requests and to
- * requests forwarded through OpenRouter alike.
- */
-const KIMI_FIXED_TEMPERATURES: ReadonlyMap<
-  string,
-  { readonly enabled: number | null; readonly disabled: number | null }
-> = new Map([
-  ['kimi-k2.5', { enabled: 1, disabled: 0.6 }],
-  ['kimi-k2.7-code', { enabled: 1, disabled: 1 }],
-  ['kimi-for-coding', { enabled: 1, disabled: 1 }],
-  ['kimi-for-coding-highspeed', { enabled: 1, disabled: 1 }],
-  ['kimi-k3', { enabled: null, disabled: null }],
-  ['k3', { enabled: null, disabled: null }],
-]);
-
-function kimiTemperatureByThinking(
-  config: ModelConfig,
-  temperature: number,
-): { readonly enabled: number | null; readonly disabled: number | null } {
-  return (
-    KIMI_FIXED_TEMPERATURES.get(config.fullName) ?? {
-      enabled: 1,
-      disabled: temperature,
-    }
-  );
-}
-
 /** Instructions the Codex backend requires when the request carries none. */
 const CODEX_DEFAULT_INSTRUCTIONS = "Follow the user's instructions.";
 
@@ -326,14 +255,6 @@ function responsesAuthentication(
         accountId: credential.accountId,
       }
     : { kind: 'api-key', apiKey: routeBearer(credential) };
-}
-
-/** The seven OpenAI-compatible chat protocols share one package factory. */
-function chatModel(
-  configuration: ChatConfiguration,
-  credential: RouteCredential,
-): Model {
-  return openaiChatModel(configuration, { apiKey: routeBearer(credential) });
 }
 
 /**
@@ -393,6 +314,135 @@ interface ProtocolDescriptor<P extends HttpProtocol> {
   readonly background: BackgroundRule<P>;
 }
 
+type ResponsesConfiguration = ConfigurationOf<'openai-responses'>;
+
+/**
+ * The Responses route of a vendor serving OpenAI's format on its own
+ * endpoint: stateless unless the vendor stores and chains, no background,
+ * socket, files or token count, and only the request fields it documents.
+ * `null` for OpenAI, Meta and xAI, which the arm below binds.
+ */
+function vendorResponses(facts: BindingFacts): ResponsesConfiguration | null {
+  const { base, config, capabilities, controls, effort, thinkingMode } = facts;
+  const route = (
+    fields: Pick<
+      ResponsesConfiguration,
+      | 'supportsTemperature'
+      | 'supportsForcedToolChoice'
+      | 'allowedReasoningEfforts'
+    > & {
+      readonly stores: boolean;
+      readonly temperature: number | null;
+      readonly reasoning: ResponsesConfiguration['defaults']['reasoning'];
+    },
+  ): ResponsesConfiguration => ({
+    ...base,
+    protocol: 'openai-responses',
+    background: 'unsupported',
+    supportsInputTokenEstimation: false,
+    supportsTemperature: fields.supportsTemperature,
+    supportsMaxOutputTokens: true,
+    supportsStorage: fields.stores,
+    supportsResponseChaining: fields.stores,
+    supportsDocumentInput: false,
+    webSocketStreamParameter: 'implicit',
+    allowedReasoningEfforts: fields.allowedReasoningEfforts,
+    instructions: { kind: 'optional' },
+    continuationInheritsInstructions: false,
+    supportsForcedToolChoice: fields.supportsForcedToolChoice,
+    requestDialect: 'compatible',
+    defaults: {
+      maxOutputTokens: controls.maxOutputTokens,
+      temperature: fields.temperature,
+      store: fields.stores,
+      parallelToolCalls: controls.parallelToolCalls,
+      reasoning: fields.reasoning,
+      serviceTier: null,
+    },
+  });
+  const reasoning = (
+    value: ResponsesConfiguration['allowedReasoningEfforts'][number] | null,
+  ) => ({ effort: value, mode: null, summary: null });
+  switch (config.provider) {
+    case ModelProvider.DEEPSEEK: {
+      // `none` turns thinking off; thinking refuses a temperature.
+      const thinkingEffort =
+        effort === ReasoningEffort.LOW || effort === ReasoningEffort.MAX
+          ? effort
+          : ReasoningEffort.HIGH;
+      return route({
+        supportsTemperature: facts.supportsTemperature,
+        supportsForcedToolChoice: true,
+        allowedReasoningEfforts: ['none', 'low', 'high', 'max'],
+        stores: false,
+        temperature: controls.temperature,
+        reasoning: reasoning(
+          thinkingMode === 'disabled' ? 'none' : thinkingEffort,
+        ),
+      });
+    }
+    case ModelProvider.MOONSHOT:
+      // Kimi fixes its sampling, always thinks, and takes only `auto`.
+      return route({
+        supportsTemperature: false,
+        supportsForcedToolChoice: false,
+        allowedReasoningEfforts: ['low', 'high', 'max'],
+        stores: false,
+        temperature: null,
+        reasoning: reasoning(
+          effort === ReasoningEffort.LOW ||
+            effort === ReasoningEffort.HIGH ||
+            effort === ReasoningEffort.MAX
+            ? effort
+            : null,
+        ),
+      });
+    case ModelProvider.GLM:
+      // Zhipu stores for seven days; `none` turns thinking off.
+      return route({
+        supportsTemperature: facts.supportsTemperature,
+        supportsForcedToolChoice: false,
+        allowedReasoningEfforts: [
+          'none',
+          'minimal',
+          'low',
+          'medium',
+          'high',
+          'xhigh',
+          'max',
+        ],
+        stores: true,
+        temperature:
+          controls.temperature === null
+            ? null
+            : Math.min(1, controls.temperature),
+        reasoning: reasoning(thinkingMode === 'disabled' ? 'none' : effort),
+      });
+    case ModelProvider.DASHSCOPE:
+      // DashScope stores by default; Qwen keeps its own thinking default.
+      return route({
+        supportsTemperature: facts.supportsTemperature,
+        supportsForcedToolChoice: false,
+        allowedReasoningEfforts: [],
+        stores: true,
+        temperature: controls.temperature,
+        reasoning: null,
+      });
+    case ModelProvider.MINIMAX:
+      // M3 reasons only when asked; its temperature range is (0, 1].
+      return route({
+        supportsTemperature: true,
+        supportsForcedToolChoice: false,
+        allowedReasoningEfforts: ['high'],
+        stores: false,
+        temperature: Math.min(1, Math.max(0.01, facts.input.temperature)),
+        reasoning: capabilities.supportsReasoning ? reasoning('high') : null,
+      });
+    default:
+      return null;
+  }
+}
+
 /**
  * One entry per protocol the package speaks. The mapped key set is the
  * exhaustiveness the three switches used to carry: a protocol added to
@@ -430,41 +480,21 @@ const PROTOCOL_DESCRIPTORS: {
       }),
     background: false,
   },
-  'openai-chat': {
-    configure: ({
-      base,
-      capabilities,
-      controls,
-      supportsTemperature,
-      supportedEfforts,
-    }) => ({
-      ...base,
-      protocol: 'openai-chat',
-      supportsTemperature,
-      supportedEfforts: [...supportedEfforts],
-      defaults: {
-        ...controls,
-        effort: capabilities.supportsReasoningEffort
-          ? capabilities.reasoningEffort
-          : null,
-      },
-    }),
-    construct: chatModel,
-    background: false,
-  },
   'openai-responses': {
-    configure: ({
-      base,
-      config,
-      capabilities,
-      controls,
-      credential,
-      input,
-      supportsTemperature,
-      effort,
-      supportedEfforts,
-      gpt5ReasoningSummary,
-    }) => {
+    configure: (facts) => {
+      const vendor = vendorResponses(facts);
+      if (vendor !== null) return vendor;
+      const {
+        base,
+        config,
+        capabilities,
+        controls,
+        credential,
+        supportsTemperature,
+        effort,
+        supportedEfforts,
+        gpt5ReasoningSummary,
+      } = facts;
       // GPT-5 asks for a reasoning summary only when the user turned the
       // toggle on; every other reasoning-capable Responses model keeps
       // asking, as the retired Responses handler did. `null` omits the
@@ -495,6 +525,9 @@ const PROTOCOL_DESCRIPTORS: {
             kind: 'required',
             fallback: CODEX_DEFAULT_INSTRUCTIONS,
           },
+          continuationInheritsInstructions: false,
+          supportsForcedToolChoice: true,
+          requestDialect: 'openai',
           defaults: {
             maxOutputTokens: null,
             temperature: controls.temperature,
@@ -513,10 +546,15 @@ const PROTOCOL_DESCRIPTORS: {
           },
         };
       }
+      // xAI stores and chains responses too, but has no background mode,
+      // `max` effort or summary control, and a chained request reuses the
+      // stored instructions.
+      const xai = config.provider === ModelProvider.XAI;
+      const routeEffort = xai && effort === ReasoningEffort.MAX ? null : effort;
       return {
         ...base,
         protocol: 'openai-responses',
-        background: 'supported',
+        background: xai ? 'unsupported' : 'supported',
         supportsInputTokenEstimation: false,
         supportsTemperature,
         supportsMaxOutputTokens: true,
@@ -525,9 +563,14 @@ const PROTOCOL_DESCRIPTORS: {
         supportsDocumentInput: capabilities.supportsNativePdf,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: supportedEfforts.length
-          ? [...supportedEfforts]
+          ? supportedEfforts.filter(
+              (value) => !xai || value !== ReasoningEffort.MAX,
+            )
           : ['low', 'medium', 'high'],
         instructions: { kind: 'optional' },
+        continuationInheritsInstructions: xai,
+        supportsForcedToolChoice: true,
+        requestDialect: 'openai',
         defaults: {
           maxOutputTokens: controls.maxOutputTokens,
           temperature: controls.temperature,
@@ -538,9 +581,11 @@ const PROTOCOL_DESCRIPTORS: {
           parallelToolCalls: controls.parallelToolCalls,
           reasoning: capabilities.supportsReasoning
             ? {
-                effort: capabilities.supportsReasoningEffort ? effort : null,
+                effort: capabilities.supportsReasoningEffort
+                  ? routeEffort
+                  : null,
                 mode: capabilities.reasoningMode ?? null,
-                summary,
+                summary: xai ? null : summary,
               }
             : null,
           serviceTier: config.serviceTier ?? null,
@@ -585,134 +630,6 @@ const PROTOCOL_DESCRIPTORS: {
     // Google retrieves a background result through server-side state.
     background: (configuration) =>
       configuration.background === 'supported' && configuration.defaults.store,
-  },
-  'deepseek-chat': {
-    configure: ({ base, controls, supportedEfforts, thinkingMode }) => ({
-      ...base,
-      protocol: 'deepseek-chat',
-      supportedEfforts: [...supportedEfforts],
-      supportsForcedToolChoice: true,
-      defaults: {
-        ...controls,
-        thinking: { mode: thinkingMode },
-        effort: null,
-      },
-    }),
-    construct: chatModel,
-    background: false,
-  },
-  'kimi-chat': {
-    configure: ({
-      base,
-      config,
-      credential,
-      capabilities,
-      controls,
-      input,
-      supportedEfforts,
-      thinkingMode,
-    }) => ({
-      ...base,
-      protocol: 'kimi-chat',
-      supportsImageInput: capabilities.supportsVision,
-      // Moonshot's own endpoint counts tokens; a managed coding endpoint
-      // opts in through the catalog.
-      supportsInputTokenEstimation:
-        credential.provider !== 'kimiCode' ||
-        capabilities.supportsTokenCounting,
-      thinkingControl: kimiThinkingControl(config),
-      supportedEfforts: [...supportedEfforts],
-      supportsForcedToolChoice: true,
-      temperatureByThinking: kimiTemperatureByThinking(
-        config,
-        input.temperature,
-      ),
-      defaults: {
-        maxOutputTokens: controls.maxOutputTokens,
-        parallelToolCalls: controls.parallelToolCalls,
-        thinking: { mode: thinkingMode },
-        effort: null,
-        preserveThinking: true,
-      },
-    }),
-    construct: chatModel,
-    background: false,
-  },
-  'glm-chat': {
-    configure: ({
-      base,
-      capabilities,
-      controls,
-      input,
-      supportsTemperature,
-      supportedEfforts,
-      thinkingMode,
-    }) => ({
-      ...base,
-      protocol: 'glm-chat',
-      supportsImageInput: capabilities.supportsVision,
-      supportsThinkingDisabled: true,
-      supportedEfforts: [...supportedEfforts],
-      defaults: {
-        ...controls,
-        temperature: supportsTemperature
-          ? Math.min(1, input.temperature)
-          : null,
-        thinking: { mode: thinkingMode },
-        effort: null,
-        clearThinking: false,
-      },
-    }),
-    construct: chatModel,
-    background: false,
-  },
-  'xai-chat': {
-    configure: ({ base, capabilities, controls, effort, supportedEfforts }) => {
-      const xaiEffort = effort === ReasoningEffort.MAX ? null : effort;
-      return {
-        ...base,
-        protocol: 'xai-chat',
-        supportsImageInput: capabilities.supportsVision,
-        supportedEfforts: supportedEfforts.filter(
-          (value): value is Exclude<RouteEffort, ReasoningEffort.MAX> =>
-            value !== ReasoningEffort.MAX,
-        ),
-        defaults: {
-          ...controls,
-          effort: capabilities.supportsReasoningEffort ? xaiEffort : null,
-        },
-      };
-    },
-    construct: chatModel,
-    background: false,
-  },
-  'dashscope-chat': {
-    configure: ({ base, controls, input }) => ({
-      ...base,
-      protocol: 'dashscope-chat',
-      defaults: {
-        ...controls,
-        temperature: Math.min(1.99, input.temperature),
-        stopSequences: [],
-        thinking: { mode: 'disabled' },
-      },
-    }),
-    construct: chatModel,
-    background: false,
-  },
-  'minimax-chat': {
-    configure: ({ base, capabilities, controls, input }) => ({
-      ...base,
-      protocol: 'minimax-chat',
-      reasoningSplit: capabilities.supportsReasoning,
-      defaults: {
-        ...controls,
-        temperature: input.temperature,
-        stopSequences: [],
-      },
-    }),
-    construct: chatModel,
-    background: false,
   },
   'openrouter-chat': {
     configure: ({
@@ -1108,8 +1025,10 @@ export const bindModel = Effect.fn('bindModel')(function* (
     supportsNativePdf: config.capabilities.supportsNativePdf,
     supportsNativeAudio: config.capabilities.supportsNativeAudio,
     supportsForcedToolChoice:
-      protocol !== 'google-interactions' ||
-      config.capabilities.supportsFunctionCalling,
+      configuration.protocol === 'openai-responses'
+        ? configuration.supportsForcedToolChoice
+        : protocol !== 'google-interactions' ||
+          config.capabilities.supportsFunctionCalling,
     ...routeKeys(
       [
         config.provider,

@@ -78,15 +78,12 @@ GPT-5 reasoning summaries require account verification. Enable them with `texra.
 
 ## DeepSeek models
 
-| Model ID         | Use Case                           | Cost | Speed  |
-| :--------------- | :--------------------------------- | :--- | :----- |
-| `deepseek41`     | V4.1 Flash chat mode               | $    | Fast   |
-| `deepseek41T`    | V4.1 Flash with reasoning          | $    | Medium |
-| `deepseek`       | V4 Flash chat mode                 | $    | Fast   |
-| `deepseekT`      | V4 Flash with reasoning            | $    | Medium |
-| `deepseekvision` | V4 Flash Vision (Exp), image input | $    | Fast   |
-| `deepseekpro`    | V4 Pro chat mode                   | $    | Medium |
-| `deepseekproT`   | V4 Pro with reasoning              | $    | Medium |
+| Model ID       | Use Case                  | Cost | Speed  |
+| :------------- | :------------------------ | :--- | :----- |
+| `deepseek41`   | V4.1 Flash chat mode      | $    | Fast   |
+| `deepseek41T`  | V4.1 Flash with reasoning | $    | Medium |
+| `deepseekpro`  | V4 Pro chat mode          | $    | Medium |
+| `deepseekproT` | V4 Pro with reasoning     | $    | Medium |
 
 ## Moonshot Kimi models
 
@@ -107,7 +104,7 @@ GPT-5 reasoning summaries require account verification. Enable them with `texra.
 | :---------- | :--------------------------------------------- | :--- | :----- |
 | `minimaxM3` | Flagship with interleaved thinking, 1M context | $    | Medium |
 
-MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimaxi.com) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
+MiniMax uses interleaved thinking (chain-of-thought woven into responses). API keys are region-specific: international keys (api.minimax.io) and China keys (api.minimax.cn) are not interchangeable. Expand the MiniMax row in **Models → API keys** and toggle **MiniMax China region** (GLM, Kimi/Moonshot, and Qwen have matching toggles; GLM's is on by default).
 
 - **International**: Get your API key at [platform.minimax.io](https://platform.minimax.io/)
 - **China**: Get your API key at [platform.minimaxi.com](https://platform.minimaxi.com/)
@@ -115,19 +112,17 @@ MiniMax uses interleaved thinking (chain-of-thought woven into responses). API k
 
 ## GLM (Zhipu AI / Z.AI) models
 
-| Model ID     | Use Case                                     | Cost | Speed  |
-| :----------- | :------------------------------------------- | :--- | :----- |
-| `glm53`      | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
-| `glm53flash` | Flagship fast variant, 1M context            | $    | Fast   |
-| `glm52`      | Previous flagship (deprecated)               | $$   | Medium |
-| `glm5turbo`  | Fast inference, agent-optimized              | $$$  | Medium |
-| `glm5vturbo` | Multimodal vision model                      | $$   | Medium |
+| Model ID    | Use Case                                     | Cost | Speed  |
+| :---------- | :------------------------------------------- | :--- | :----- |
+| `glm53`     | Flagship, 1M context, reasoning-effort tiers | $$   | Medium |
+| `glm5turbo` | Fast inference, agent-optimized              | $$$  | Medium |
 
-GLM models support thinking mode (reasoning is shown inline). The API uses a non-standard base path (`/api/paas/v4`), which TeXRA handles automatically.
+GLM models support thinking mode (reasoning is shown inline). TeXRA uses the
+Responses API each region serves at `/api/v1`.
 
 - **International (Z.AI)**: Get your API key at [z.ai](https://z.ai/); endpoint: api.z.ai
 - **China (BigModel)**: Get your API key at [open.bigmodel.cn](https://open.bigmodel.cn/); endpoint: open.bigmodel.cn (default)
-- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. Coding Plan uses a separate endpoint (`/api/coding/paas/v4`). Turn on the **Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
+- **Coding Plan**: GLM offers monthly subscription plans as an alternative to pay-as-you-go, with access to all GLM models. A Coding Plan key uses the same endpoint as an API key in its region. Turn on the **Coding Plan** toggle on the GLM row of the Models page. [Subscribe to the GLM Coding Plan](https://z.ai/subscribe).
 
 ## Meta (Muse Spark) models
 
@@ -148,6 +143,13 @@ developers.
 | Model ID | Use Case           | Cost | Speed  |
 | :------- | :----------------- | :--- | :----- |
 | `grok47` | Reasoning + vision | $$$  | Medium |
+
+Direct xAI models (API key or Grok subscription) use xAI's Responses API. xAI
+keeps each response for 30 days, so a tool-use round sends only the new turn
+rather than the whole conversation.
+
+Every direct provider route uses its vendor's Responses API (or Anthropic's
+and Google's own APIs); only OpenRouter still uses Chat Completions.
 
 ## Choosing a model
 

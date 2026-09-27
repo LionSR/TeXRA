@@ -28,16 +28,9 @@ export const BindingSchema = z.strictObject({
  * usage record's provider is the protocol of the turn that produced it.
  */
 export const TurnProtocolSchema = z.enum([
-  'openai-chat',
   'google-interactions',
   'openai-responses',
   'anthropic-messages',
-  'deepseek-chat',
-  'kimi-chat',
-  'glm-chat',
-  'xai-chat',
-  'dashscope-chat',
-  'minimax-chat',
   'openrouter-chat',
   'vscode-lm',
 ]);

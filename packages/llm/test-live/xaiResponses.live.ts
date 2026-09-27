@@ -3,39 +3,39 @@ import { openaiResponsesModel } from '../src/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({
-  protocol: 'openai-responses',
-  apiKeyEnv: 'OPENAI_API_KEY',
-  // Stored responses plus response chaining: the codec returns an anchor the
-  // next turn sends in place of the prefix it covers.
+  protocol: 'openai-responses (xAI)',
+  apiKeyEnv: 'XAI_API_KEY',
+  // xAI stores responses and chains on their ids; a chained request carries
+  // no instructions, since xAI refuses them beside `previous_response_id`.
   continuation: 'supported',
   bind: (apiKey) =>
     openaiResponsesModel(
       {
         protocol: 'openai-responses',
-        requestedModel: 'gpt-4.1-mini-2025-04-14',
+        requestedModel: 'grok-4.3',
         deployment: {
-          endpoint: 'https://api.openai.com/v1',
+          endpoint: 'https://api.x.ai/v1',
           credentialScope: 'live',
         },
         background: 'unsupported',
         supportsInputTokenEstimation: false,
-        supportsTemperature: true,
+        supportsTemperature: false,
         supportsMaxOutputTokens: true,
         supportsStorage: true,
         supportsResponseChaining: true,
-        supportsDocumentInput: true,
+        supportsDocumentInput: false,
         webSocketStreamParameter: 'implicit',
-        allowedReasoningEfforts: [],
+        allowedReasoningEfforts: ['low', 'high'],
         instructions: { kind: 'optional' },
-        continuationInheritsInstructions: false,
+        continuationInheritsInstructions: true,
         supportsForcedToolChoice: true,
         requestDialect: 'openai',
         defaults: {
-          temperature: 0,
+          temperature: null,
           maxOutputTokens: 2048,
           store: true,
           parallelToolCalls: true,
-          reasoning: null,
+          reasoning: { effort: 'low', mode: null, summary: null },
           serviceTier: null,
         },
       },
