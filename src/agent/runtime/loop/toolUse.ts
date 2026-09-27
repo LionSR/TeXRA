@@ -35,6 +35,7 @@ import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
 import {
+  AgentCategory,
   RUN_OUTCOME,
   type JsonValue,
   type RetryErrorInfo,
@@ -70,9 +71,8 @@ import {
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
 import { stepFor } from './step';
-import { continuationFor } from './continuationPolicy';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
-import { roundLoop } from './rounds';
+import { roundLoop, roundsContinuation } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
@@ -138,8 +138,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
-  const continuation = yield* continuationFor(run);
-  const rounds = continuation?.rounds ?? null;
+  // A workflow run is round mode for its whole life; a conversation's
+  // continuation is pinned by each step instead.
+  const roundPolicy =
+    run.config.agentCategory === AgentCategory.Workflow
+      ? yield* roundsContinuation(run)
+      : null;
+  const rounds = roundPolicy?.rounds ?? null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = rounds ? null : yield* claimFollowUps(run, ledger);
 
@@ -183,6 +188,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ]);
   };
 
+  // A resumed root's first step that pins a continuation stands it down,
+  // before anything this activation decides can re-arm it.
+  let resumeUnseen = start.resume;
+  const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
+    Effect.tap(stepFor(run, state, rounds !== null, kind), (step) => {
+      if (!resumeUnseen || step.continuation === null || isChild())
+        return Effect.void;
+      resumeUnseen = false;
+      return step.continuation.onResume({ session, runId });
+    });
+
   // ------------------------------------------------------------ host port
   let live = false;
   const flowContext: ToolUseFlowContext = {
@@ -222,7 +238,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A round-mode run opens with no message and offers no tools. A
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
-        const step = yield* stepFor(run, opening, false);
+        const step = yield* openStep(opening, 'request');
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -456,7 +472,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const dispatched = yield* dispatchPendingResponse(
             cell,
             turnContext,
-            (yield* stepFor(run, state, rounds !== null, false)).tools,
+            (yield* openStep(state, 'dispatch')).tools,
             joined?.rows,
           );
           state = dispatched.state;
@@ -487,7 +503,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }
         const bound = yield* SynchronizedRef.get(run.model);
         // The step this request opens, its offered set recorded when changed.
-        const step = yield* stepFor(run, state, rounds !== null);
+        const step = yield* openStep(state, 'request');
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         const tools = toolDefinitionsFor(step.tools.definitions);
         // The system text this request sends: the run's recorded prompt and
@@ -606,10 +622,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
-          const next =
-            isChild() || continuation === null
-              ? null
-              : yield* continuation.atIdle(state, canContinue);
+          // A park opens a step, which pins (and records) its continuation.
+          let next: string | null = null;
+          if (!isChild()) {
+            const step = yield* openStep(state, 'park');
+            if (step.rows.length > 0) state = yield* cell.append(step.rows);
+            if (step.continuation !== null) {
+              next = yield* step.continuation.atIdle({
+                session,
+                runId,
+                state,
+                canContinue,
+              });
+            }
+          }
           // Every park is idle, a failed turn's included: a resume
           // acknowledges at the first one.
           run.callbacks.onIdle?.();
@@ -621,8 +647,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           // A queued follow-up outranks the policy's synthetic turn.
           let batch: FollowUpBatch | null =
-            next !== null && 'turn' in next && !followUps.hasQueued()
-              ? { synthetic: true, text: next.turn }
+            next !== null && !followUps.hasQueued()
+              ? { synthetic: true, text: next }
               : null;
           if (batch === null) {
             // The host port stays attached: `/model`, `/compact` land here.
@@ -718,9 +744,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         yield* Effect.sync(attach);
         return yield* Effect.acquireUseRelease(
           enter,
-          continuation?.rounds
-            ? roundLoop(continuation, continuation.rounds, runTurn, snapshot)
-            : loopBody,
+          roundPolicy ? roundLoop(roundPolicy, runTurn, snapshot) : loopBody,
           (cell, exit) => settleRun(cell, logger, followUps)(exit),
         );
       }),

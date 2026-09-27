@@ -57,6 +57,7 @@ import {
   type LeanLanguageServicesShape,
 } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatformShape } from '@tools/setup/platform';
+import { goalContinuation } from '@tools/goal/goalContinuation';
 import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { nodeSpawnerLayer } from './childProcessTestLayer';
@@ -426,10 +427,10 @@ export async function installFakeHost(host: FakeHost): Promise<void> {
     ConfigProvider.layer(ConfigProvider.fromEnvRecord(harnessEnv)),
     Layer.mock(UpdateCheckRecords, {}),
     Layer.mock(AgentEngine, {}),
-    // An empty tool table (the real one loads every tool): a suite that
-    // resolves a run's tools runs on the session graph's runtime or provides
-    // `toolRegistryLayer`.
-    toolTableLayer(toolTable({})),
+    // An empty tool table (the real one loads every tool), with goal mode's
+    // continuation: a suite that resolves a run's tools runs on the session
+    // graph's runtime or provides `toolRegistryLayer`.
+    toolTableLayer(toolTable({}, {}, { goal: goalContinuation })),
     // The records above are mocked, so the bare runtime's global-root handle
     // is too: a suite that reads it provides its own innermost.
     Layer.mock(GlobalDatabase, {}),

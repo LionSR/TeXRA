@@ -337,6 +337,7 @@ const freshState = (): RunState => ({
   roundOutputs: [],
   overflowRecoveredAtTurn: null,
   offeredTools: null,
+  offeredContinuation: null,
 });
 
 interface InvokerKit {

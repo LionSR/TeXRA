@@ -1,18 +1,21 @@
 /**
- * The step: the one boundary where a run's tools change, and where the
- * change is recorded (`2026-09-26-core-concepts.md`, invariant 7).
+ * The step: the one boundary where a run's tools and continuation change,
+ * and where the change is recorded (`2026-09-26-core-concepts.md`,
+ * invariant 7).
  *
- * Each model request opens a step. It applies the user's plugin switches to
- * the live catalog (`@tools/liveTools`), pins the catalog's current
- * generation, and resolves the tools the run is offered from it
- * (`resolveStepTools`). The pin is held hand over hand: a step's generation,
+ * Each model request opens a step, and so does a conversation's park. It
+ * applies the user's plugin switches to the live catalog
+ * (`@tools/liveTools`), pins its current generations, and resolves from them
+ * the tools the run is offered (`resolveStepTools`) and the continuation for
+ * its agent category, if any plugin on contributes one. The pin is held hand over hand: a step's generation,
  * and its plugins' layers, stay up until the run's next step has pinned its
  * own, so the calls a response makes run against the tools its request
  * offered, and a generation no step holds drains.
  *
- * When the offered set differs from the one the run last recorded, the step
- * returns a `tools.offered` row, which the loop appends before the request
- * through the run's one ledger writer. A resumed run's first request step is
+ * When the offered set or the continuation differs from what the run last
+ * recorded, the step returns a `tools.offered` row, which the loop appends
+ * before the request (or the park's decision) through the run's one ledger
+ * writer. A resumed run's first step is
  * held to what it recorded: it offers the recorded tools that are still in
  * the catalog as the same tool (the digest of its name and input schema, and
  * its plugin's id and revision), and names each one that is gone or changed.
@@ -31,7 +34,7 @@ import {
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import { LiveTools } from '@tools/liveTools';
+import { LiveTools, type ContinuationEntry } from '@tools/liveTools';
 import { switchedOffPlugins } from '@tools/plugins';
 import { getDisabledToolIds } from '@utils/config/constants';
 
@@ -50,12 +53,16 @@ export interface StepTools {
   readonly services: Context.Context<never>;
 }
 
-/** The run's current step, the scope that holds its pin, and the tools
- *  it withheld for approval. */
+/** The run's current step, the scope that holds its pin, the tools it
+ *  withheld for approval, and its continuation. `holding` while only parks
+ *  have opened steps in a resumed activation: its hold on the record is not
+ *  spent yet. */
 export interface OpenStep {
   readonly tools: StepTools;
   readonly scope: Scope.Closeable;
   readonly withheld: readonly string[];
+  readonly continuation: ContinuationEntry | null;
+  readonly holding: boolean;
 }
 
 /** A round-mode run's step: it offers no tools. */
@@ -122,7 +129,8 @@ function heldToRecord(
  * Open the run's next step: apply the switches and pin the generation they
  * produce, as one step (`LiveTools.pinSwitched`), release the previous
  * step's pin, and resolve what it offers.
- * `recorded` holds a resumed activation's first step to it. The rows
+ * `recorded` holds a resumed activation's first step to it; `holding` says
+ * the hold outlives this step (a park's). The rows
  * are what the loop appends before a request: the new offered set, when it
  * differs from `state`'s.
  */
@@ -130,6 +138,7 @@ const openStep = Effect.fn('Step.open')(function* (
   run: AgentRunShape,
   state: RunState,
   recorded: readonly OfferedTool[] | null,
+  holding: boolean,
 ) {
   const live = yield* LiveTools;
   const scope = yield* Scope.fork(run.scope);
@@ -148,22 +157,28 @@ const openStep = Effect.fn('Step.open')(function* (
       tools: { ...(held?.tools ?? resolved), services: pinned.resources },
       warnings: [...resolved.warnings, ...(held?.notes ?? [])],
       withheld: resolved.withheldForApproval,
+      continuation:
+        pinned.continuations.entries.get(run.config.agentCategory) ?? null,
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
     tools: step.tools,
     scope,
     withheld: step.withheld,
+    continuation: step.continuation,
+    holding,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
-  const changed = !sameSet(state.offeredTools, step.tools.offered);
+  const continuation = step.continuation?.plugin ?? null;
+  const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
+  const changed = toolsChanged || state.offeredContinuation !== continuation;
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
   const warnings = [
-    ...(changed ? step.warnings : []),
+    ...(toolsChanged ? step.warnings : []),
     ...(withheldChanged
       ? [
           `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
@@ -182,18 +197,22 @@ const openStep = Effect.fn('Step.open')(function* (
     });
   return {
     tools: step.tools,
-    rows: changed ? [offeredRow(run.runId, step.tools.offered)] : [],
+    continuation: step.continuation?.continuation ?? null,
+    rows: changed
+      ? [offeredRow(run.runId, step.tools.offered, continuation)]
+      : [],
   };
 });
 
 function offeredRow(
   runId: RunId,
   tools: readonly OfferedTool[],
+  continuation: string | null,
 ): RunLedgerDraft {
   return {
     type: 'tools.offered',
     aggregateId: rowAggregate(runId),
-    payload: { tools },
+    payload: { tools, continuation },
   };
 }
 
@@ -204,25 +223,34 @@ function offeredRow(
  * pending, against a step pinned for the dispatch and held to the record,
  * which records nothing. A call to a tool whose identity changed or that
  * left since it was offered is stale: it settles as `tool_unavailable`,
- * like a name the run was never offered, and the step names the tool. The
- * first step a resumed activation opens is held to the record. A round-mode
- * run offers no tools.
+ * like a name the run was never offered, and the step names the tool. A
+ * park opens a step for its continuation, recorded like a request's. The
+ * first request or dispatch step a resumed activation opens is held to the
+ * record, and so is every park before it, which leaves the hold unspent. A
+ * round-mode run offers no tools, and its rounds are its own continuation.
  */
 export const stepFor = Effect.fn('Step.for')(function* (
   run: AgentRunShape,
   state: RunState,
   roundMode: boolean,
-  request = true,
+  kind: 'request' | 'dispatch' | 'park',
 ) {
-  if (roundMode) return { tools: NO_TOOLS, rows: [] };
+  if (roundMode) return { tools: NO_TOOLS, continuation: null, rows: [] };
   const open = yield* SynchronizedRef.get(run.steps);
-  if (open !== null && !request) return { tools: open.tools, rows: [] };
+  if (open !== null && kind === 'dispatch')
+    return {
+      tools: open.tools,
+      continuation: open.continuation?.continuation ?? null,
+      rows: [],
+    };
+  const held = open === null || open.holding;
   const step = yield* openStep(
     run,
     state,
-    open === null ? state.offeredTools : null,
+    held ? state.offeredTools : null,
+    held && kind === 'park',
   );
-  return request ? step : { tools: step.tools, rows: [] };
+  return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });
 
 /** What `run`'s current step offers: the most a child it launches now may

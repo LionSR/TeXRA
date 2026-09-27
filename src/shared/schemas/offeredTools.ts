@@ -1,6 +1,7 @@
 /**
  * The payload of a run ledger's `tools.offered` arm (`sessionEvent.ts`):
- * what one step of a run offered the model, and each tool's identity.
+ * what one step of a run offered the model, each tool's identity, and the
+ * continuation the step pinned.
  */
 import { z } from 'zod';
 
@@ -26,13 +27,15 @@ const OfferedToolSchema = z.strictObject({
 export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 
 /**
- * The tools a step offers, in offer order: the whole set, appended before
- * the step's model request whenever it differs from the set the run's
- * previous request was offered. The latest one is what the run was last
- * offered, which a resume and every call are checked against.
+ * The tools a step offers, in offer order, and the plugin whose continuation
+ * decides what the run does when it parks (null: it parks): the whole set,
+ * appended at the step whenever it differs from the one the run's previous
+ * step recorded. The latest one is what the run was last offered, which a
+ * resume and every call are checked against.
  */
 export const ToolsOfferedPayloadSchema = z.strictObject({
   tools: z.array(OfferedToolSchema).readonly(),
+  continuation: z.string().min(1).nullable(),
 });
 
 /** Whether two offered tools are the same tool: a call made to one may run

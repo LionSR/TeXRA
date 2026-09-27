@@ -21,7 +21,12 @@ import type {
   ToolPluginEntry,
   ToolPluginId,
 } from '@tools/plugins';
-import { toolTable, type PluginLayer } from '@tools/toolTable';
+import { goalContinuation } from '@tools/goal/goalContinuation';
+import {
+  toolTable,
+  type Continuation,
+  type PluginLayer,
+} from '@tools/toolTable';
 
 // Local file imports
 import { BashTool } from './bash';
@@ -143,7 +148,6 @@ const PLUGIN_TOOLS = {
     accept_run_files: AcceptRunFilesTool,
   },
   goal: { plan: PlanTool },
-  documents: {},
   texcount: { texcount: TexcountTool },
   wolfram: { wolfram: WolframTool },
   zotero: {
@@ -199,6 +203,15 @@ const PLUGIN_LAYERS = {} as const satisfies {
   ]: PluginLayer;
 };
 
+/** The continuation of each plugin whose manifest entry declares one. */
+const PLUGIN_CONTINUATIONS = {
+  goal: goalContinuation,
+} as const satisfies {
+  readonly [
+    Id in Extract<ToolPluginEntry, { readonly continuation: true }>['id']
+  ]: Continuation;
+};
+
 type PluginTools = typeof PLUGIN_TOOLS;
 
 /** Union of all registered tool names. */
@@ -226,7 +239,11 @@ type _CanonicalDelegationNamesAreRegistered = AssertNever<
  * `ToolRegistry` service. Flattening cannot overwrite a tool: the manifest
  * rules out a name two plugins share.
  */
-export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
+export const TOOL_TABLE = toolTable(
+  PLUGIN_TOOLS,
+  PLUGIN_LAYERS,
+  PLUGIN_CONTINUATIONS,
+);
 
 /**
  * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it and the
