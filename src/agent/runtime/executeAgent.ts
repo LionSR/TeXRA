@@ -30,10 +30,7 @@ import {
   type PreparedAgentDefinition,
   type AgentLaunchContext,
 } from './AgentLaunchContext';
-import {
-  runFlowWithLifecycle,
-  type RunFlowLifecycleOptions,
-} from './AgentRunLifecycle';
+import { runFlowWithLifecycle } from './AgentRunLifecycle';
 import {
   type AgentFlowResult,
   type WorkflowFlowResult,
@@ -200,9 +197,8 @@ function launchWorkflowRun(
     Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
   resumed: boolean,
 ): Effect.Effect<AgentFlowResult, Error, AgentRunServices> {
-  const start = { resume: resumed };
   const program = Effect.gen(function* () {
-    const result = yield* runToolUse(start).pipe(
+    const result = yield* runToolUse({ resume: resumed }).pipe(
       Effect.provide(runLayerFor(ctx, options, undefined)),
     );
     const flowResult: WorkflowFlowResult = {
@@ -237,21 +233,6 @@ function launchWorkflowRun(
   return options.turns ? options.turns.turnPermit(program) : program;
 }
 
-/**
- * The lifecycle options every entry point that drives one run passes. The
- * parent edge is an argument because resume reads it from the persisted
- * `run.start` rather than from the caller's options.
- */
-function buildLifecycleOptions(
-  options: SubagentRunOptions,
-  parentRunId: RunId | undefined,
-): RunFlowLifecycleOptions {
-  return {
-    parentRunId,
-    onRun: options.onRun,
-  };
-}
-
 /** Toast payload shown when the progress view cannot be opened. */
 type FallbackNotification = NonNullable<
   RequestEnsureProgressViewPayload['fallbackNotification']
@@ -279,10 +260,9 @@ function buildFallbackNotification(config: AgentConfig): FallbackNotification {
 
 /**
  * Callback and host-context fields shared by every entry point that drives one
- * subagent run (`executeAgent`, `resumeToolUseFromResumeData`, and
- * `resumeQueuedToolUseFromResumeData`). Extracted so the three option bags describing
- * the same run can't silently drift out of sync or re-declare the same field
- * under a different name.
+ * subagent run (`executeAgent` and `resumeToolUseFromResumeData`). Extracted
+ * so the option bags describing the same run can't silently drift out of sync
+ * or re-declare the same field under a different name.
  */
 interface SubagentRunOptions {
   /** The child-run policy: each turn's permit, each completed turn's boundary. */
@@ -309,7 +289,7 @@ interface SubagentRunOptions {
   onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
   /** Session owning this run's coordination state; run entry points require it. */
   session?: SessionHandle;
-  /** Fires once with the run's id right after its handle is tracked (F-2). */
+  /** Fires once with the run's id right after its handle is tracked. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
 
@@ -384,91 +364,88 @@ export function executeAgent(
         parentOffered: options.parentOffered,
       },
     });
-    return yield* Effect.gen(function* () {
-      const { setting, config } = ctx;
-      const { runId, session: runSession } = ctx;
+    const { setting, config, session: runSession } = ctx;
 
-      // Start description generation concurrently with the run, and settle
-      // it before the run ends (`settleDescriptionOnExit`), so the metadata
-      // write cannot recreate a run deleted by another host.
-      // A child of the run's fiber, so the run's stop interrupts it, as it
-      // interrupts the run.
-      const sessionDescription = yield* Effect.forkChild(
-        generateSessionDescription(
-          runId,
-          config,
-          ctx.resolvedAgentDescription,
-          runSession,
-          ctx.stores,
-        ),
-      );
-      // The backstop wait is `ensuring`, not a generator `finally`: the driver
-      // skips a `finally` after a failed `yield*`, ending the run early.
-      return yield* runFlowWithLifecycle(
-        ctx,
-        (handle) =>
-          Effect.gen(function* () {
-            // This run's lineage, derived once, from the live handle the
-            // registry admitted: the caller's own parent.
-            const parentRunId = handle.parent ?? undefined;
-            // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
-            yield* ensureRunDirUnder(runSession.roots.storage, runId);
-            yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
-              withLogChannel(CHANNEL),
+    // Start description generation concurrently with the run, and settle
+    // it before the run ends (`settleDescriptionOnExit`), so the metadata
+    // write cannot recreate a run deleted by another host.
+    // A child of the run's fiber, so the run's stop interrupts it, as it
+    // interrupts the run.
+    const sessionDescription = yield* Effect.forkChild(
+      generateSessionDescription(
+        runId,
+        config,
+        ctx.resolvedAgentDescription,
+        runSession,
+        ctx.stores,
+      ),
+    );
+    // The backstop wait is `ensuring`, not a generator `finally`: the driver
+    // skips a `finally` after a failed `yield*`, ending the run early.
+    return yield* runFlowWithLifecycle(
+      ctx,
+      (handle) =>
+        Effect.gen(function* () {
+          // This run's lineage, derived once, from the live handle the
+          // registry admitted: the caller's own parent.
+          const parentRunId = handle.parent ?? undefined;
+          // Pre-run UI setup (RUNNING is set by runFlowWithLifecycle)
+          yield* ensureRunDirUnder(runSession.roots.storage, runId);
+          yield* Effect.logInfo(`Starting run (runId: ${runId})`).pipe(
+            withLogChannel(CHANNEL),
+          );
+          yield* Effect.logInfo(
+            `Input file: ${config.inputFiles[0] ?? '(none)'}`,
+          ).pipe(withLogChannel(CHANNEL));
+          yield* Effect.logDebug('Run details').pipe(
+            Effect.annotateLogs({
+              data: {
+                runId,
+                agent: config.agent,
+                model: config.model,
+              },
+            }),
+            withLogChannel(CHANNEL),
+          );
+          yield* Effect.logDebug(
+            `Output files: ${config.outputFiles?.length ?? 0}`,
+          ).pipe(withLogChannel(CHANNEL));
+          // Subagents don't need to force-open the progress board or show notifications;
+          // the orchestrator's run is already visible.
+          if (parentRunId === undefined) {
+            yield* runSession.interactions.emit(
+              'requestEnsureProgressView',
+              {
+                fallbackNotification: buildFallbackNotification(config),
+              },
+              { replayWhenAttached: true },
             );
-            yield* Effect.logInfo(
-              `Input file: ${config.inputFiles[0] ?? '(none)'}`,
-            ).pipe(withLogChannel(CHANNEL));
-            yield* Effect.logDebug('Run details').pipe(
-              Effect.annotateLogs({
-                data: {
-                  runId,
-                  agent: config.agent,
-                  model: config.model,
-                },
-              }),
-              withLogChannel(CHANNEL),
-            );
-            yield* Effect.logDebug(
-              `Output files: ${config.outputFiles?.length ?? 0}`,
-            ).pipe(withLogChannel(CHANNEL));
-            // Subagents don't need to force-open the progress board or show notifications;
-            // the orchestrator's run is already visible.
-            if (parentRunId === undefined) {
-              yield* runSession.interactions.emit(
-                'requestEnsureProgressView',
-                {
-                  fallbackNotification: buildFallbackNotification(config),
-                },
-                { replayWhenAttached: true },
-              );
-            }
-            yield* Effect.logInfo('Executing agent').pipe(
-              Effect.annotateLogs({
-                data: { agent: config.agent, model: config.model },
-              }),
-              withLogChannel(CHANNEL),
-            );
+          }
+          yield* Effect.logInfo('Executing agent').pipe(
+            Effect.annotateLogs({
+              data: { agent: config.agent, model: config.model },
+            }),
+            withLogChannel(CHANNEL),
+          );
 
-            if (setting.agentCategory === AgentCategory.ToolUse) {
-              return yield* launchToolUseRun(
-                ctx,
-                handle,
-                { ...options, parentRunId },
-                { kind: 'fresh' },
-              );
-            }
-            return yield* launchWorkflowRun(
+          if (setting.agentCategory === AgentCategory.ToolUse) {
+            return yield* launchToolUseRun(
               ctx,
+              handle,
               { ...options, parentRunId },
-              false,
+              { kind: 'fresh' },
             );
-          }).pipe(settleDescriptionOnExit(sessionDescription)),
-        // The edge the lifecycle's handle is born with: the caller's own
-        // parent for a fresh child.
-        buildLifecycleOptions(options, options.parentRunId),
-      ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
-    });
+          }
+          return yield* launchWorkflowRun(
+            ctx,
+            { ...options, parentRunId },
+            false,
+          );
+        }).pipe(settleDescriptionOnExit(sessionDescription)),
+      // The edge the lifecycle's handle is born with: the caller's own
+      // parent for a fresh child.
+      { parentRunId: options.parentRunId, onRun: options.onRun },
+    ).pipe(Effect.ensuring(Fiber.await(sessionDescription)));
   }).pipe(
     // The run's scope: the launch acquires the run trace into it and the
     // finalizer drops its subscribers once the run has ended. No mask: the
@@ -562,7 +539,8 @@ export function resumeToolUseFromResumeData(
                   options.onCancellationAtFlowAttachment,
               },
             ),
-      buildLifecycleOptions(options, parentRunId),
+      // Resume reads the parent edge from the persisted `run.start`.
+      { parentRunId, onRun: options.onRun },
     );
   }).pipe(Effect.scoped);
   return (

@@ -66,7 +66,6 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = canonicalizeWorkspacePath(
     options.workspaceDir ?? process.cwd(),
   );
-  const storageRoot = options.storageDir;
   const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
@@ -76,7 +75,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       tryResumeRun: () => Effect.succeed(false),
     },
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    mcpConfigPath: mcpConfigPathOf(storageRoot),
+    mcpConfigPath: mcpConfigPathOf(options.storageDir),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),
@@ -85,8 +84,8 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
     },
     roots: createNodeWorkspaceRoots({
       workspacePath: workspaceDir,
-      storage: resolveWorkspaceStoragePath(storageRoot, workspaceDir),
-      globalStorage: resolveGlobalStoragePath(storageRoot),
+      storage: resolveWorkspaceStoragePath(options.storageDir, workspaceDir),
+      globalStorage: resolveGlobalStoragePath(options.storageDir),
       // Process-local configuration: an embedder's settings must not be read
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),

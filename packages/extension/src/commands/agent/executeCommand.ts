@@ -78,7 +78,7 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     },
   );
   // Presentation reacts to the committed outcome; it never runs inside the run,
-  // and its failure never fails the launch or resume that produced the run.
+  // and its failure never fails the launch that produced the run.
   yield* openFinalOutputIfAvailable(session.roots)(result).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning('Opening the final output failed', cause).pipe(

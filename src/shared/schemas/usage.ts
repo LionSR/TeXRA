@@ -134,7 +134,7 @@ export type ExtendedTokenUsageStats = z.infer<
 >;
 
 /** One priced model turn, as a `usage` row carries it. */
-export type TurnUsage = Omit<ExtendedTokenUsageStats, 'percentageCached'>;
+type TurnUsage = Omit<ExtendedTokenUsageStats, 'percentageCached'>;
 
 /** The model facts a statistics row reads. */
 interface StatisticsCapabilities {

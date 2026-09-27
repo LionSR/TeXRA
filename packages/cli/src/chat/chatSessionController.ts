@@ -13,7 +13,6 @@ import {
   runAgent,
   type AgentConfig,
   type AgentConfigPayload,
-  type ResumeRunOptions,
   type SessionHandle,
 } from '@agent/runtime';
 import {
@@ -551,17 +550,6 @@ export function createChatSessionController(
     ),
   );
 
-  /** The CLI chat's tool-use run policy, shared by every resume path. */
-  const toolUseResumeOptions = (
-    approval: ReturnType<typeof cliToolUseApprovalOptions>,
-  ): Pick<
-    ResumeRunOptions,
-    'session' | 'approvalPromptsUnavailable' | 'onApprovalPolicyDenial'
-  > => ({
-    session: runtimeSession,
-    ...approval,
-  });
-
   // Per launch: attach the root's terminal-result presenter until it
   // finalizes. The root terminal result is
   // published before its run promise settles, and children (runs with a
@@ -778,7 +766,8 @@ export function createChatSessionController(
           Effect.gen(function* () {
             recoveryHandedOff = true;
             const result = yield* agentRuns.resume(id, {
-              ...toolUseResumeOptions(approval),
+              session: runtimeSession,
+              ...approval,
               recovery,
               extraFollowUps: supersededRecovery?.followUps,
               onResumeResolved: adoptResumedRun,
@@ -934,7 +923,8 @@ export function createChatSessionController(
         yield* setCliHelperModel(stores.globalState, config.model);
         recoveryHandedOff = true;
         const result = yield* agentRuns.resume(runId, {
-          ...toolUseResumeOptions(runHost.approval),
+          session: runtimeSession,
+          ...runHost.approval,
           recovery,
           extraFollowUps: options.extraFollowUps,
           onFollowUpQueueReady: options.onFollowUpQueueReady,

@@ -174,14 +174,6 @@ export function childToolRefusal(
   ].join(' ');
 }
 
-/** The identity of a tool only this run holds. */
-const runToolIdentity = (tool: ITool): OfferedTool => ({
-  name: tool.definition.name,
-  ...toolDigests(tool),
-  plugin: 'run',
-  revision: 'run',
-});
-
 /** Resolve the tools one step offers from the generation it pinned. */
 export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   generation: ToolGeneration,
@@ -352,16 +344,21 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
     const { name } = definition;
     const own = overlay.get(name);
     const entry = enabled.get(name);
-    const { shown } = toolDigests({ definition });
     if (own) {
+      // A tool only this run holds; `definition` is its own.
       offeredTools.set(name, own);
-      offered.push({ ...runToolIdentity(own), shown });
+      offered.push({
+        name,
+        ...toolDigests(own),
+        plugin: 'run',
+        revision: 'run',
+      });
     } else if (entry) {
       offeredTools.set(name, entry.tool);
       offered.push({
         name,
         digest: entry.digest,
-        shown,
+        shown: toolDigests({ definition }).shown,
         plugin: entry.plugin,
         revision: entry.revision,
       });

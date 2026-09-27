@@ -119,8 +119,8 @@ interface AgentLaunchInput {
    * live event stream, `stream.chunk` text included, which no row carries.
    */
   onTraceEvent?: (event: AgentEvent) => void;
-  /** Session owning this run's coordination state; every launch supplies it. */
-  session?: SessionHandle;
+  /** Session owning this run's coordination state. */
+  session: SessionHandle;
   /** Resume using this persisted provider-message format instead of today's default route. */
   modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
@@ -219,13 +219,12 @@ function beginRunStage(
 }
 
 export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
-  function* (
-    input: {
-      config: AgentConfig;
-      enforceCategory?: boolean;
-      suppressErrorNotification?: boolean;
-    } & { session: SessionHandle },
-  ) {
+  function* (input: {
+    config: AgentConfig;
+    session: SessionHandle;
+    enforceCategory?: boolean;
+    suppressErrorNotification?: boolean;
+  }) {
     const fullConfig = input.config;
     const interactions = input.session.interactions;
     // Single launch resolution rule (see resolveAgentForLaunch): pinned
@@ -330,7 +329,7 @@ export type PreparedAgentDefinition = Effect.Success<
  */
 export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (
-    input: AgentLaunchInput & { session: SessionHandle },
+    input: AgentLaunchInput,
   ): Effect.fn.Return<
     AgentLaunchContext,
     Error,
