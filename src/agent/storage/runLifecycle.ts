@@ -51,7 +51,9 @@ function pinRunWorkingDirectory(
  * The `run.config` row an activation owes, or null when the run's newest
  * row already says it. A run's configuration is written with its
  * registration and afterwards only when it changes, so the newest row is the
- * configuration and no activation restates it.
+ * configuration and no activation restates it. Its callers hold the run's
+ * claim (an activation after registration, the loop's model switch), so no
+ * other writer can move the row between the read and the write.
  */
 export const configChange = Effect.fn('configChange')(function* (
   session: SessionHandle,
@@ -162,14 +164,14 @@ export const registerRun = Effect.fn('registerRun')(function* (
     }
     const pinned = pinRunWorkingDirectory(record, session.roots.workspace);
     const target = aggregateId('run', runId);
-    // A re-registration writes the configuration only when it changed.
-    const config = prior
-      ? yield* configChange(session, runId, record)
-      : ({
-          type: 'run.config',
-          aggregateId: target,
-          config: RunRecordFieldsSchema.parse(pinned),
-        } satisfies SessionEventDraft);
+    // A registration, first or again, opens the run with its configuration
+    // in the batch that takes the claim: nothing is compared before the
+    // claim is held, so a takeover never skips the row on a stale read.
+    const config = {
+      type: 'run.config',
+      aggregateId: target,
+      config: RunRecordFieldsSchema.parse(pinned),
+    } satisfies SessionEventDraft;
     const category = isAgentRunRecord(pinned)
       ? pinned.agentCategory
       : (options.category ?? AgentCategory.ToolUse);
@@ -200,7 +202,7 @@ export const registerRun = Effect.fn('registerRun')(function* (
         checkpointId: options.checkpointId,
       });
     }
-    if (config !== null) events.push(config);
+    events.push(config);
     events.push({
       type: 'run.activate',
       aggregateId: target,

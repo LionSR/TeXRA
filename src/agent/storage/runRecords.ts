@@ -6,7 +6,7 @@
  * writes the run ledger.
  */
 
-import { Effect } from 'effect';
+import { Effect, Result } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -21,6 +21,7 @@ import type {
   DatabaseWriteFailed,
 } from '@shared/session/database';
 import { foldAttempts, type AttemptKey } from '@shared/session/attemptFold';
+import { foldRunState } from '@shared/session/runStateFold';
 import {
   ResultMetaSchema,
   storedResultMeta,
@@ -168,17 +169,18 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     Effect.gen(function* () {
       const end = runEndFromEvents(rows, runId);
       if (!end) return null;
-      const usage = yield* session.ledger.load(runId).pipe(
-        Effect.map((state) => state?.usage),
-        Effect.catchTag('RunLedgerRefused', (refused) =>
-          Effect.logWarning(
-            'Failed to read the run usage from its ledger',
-          ).pipe(
-            Effect.annotateLogs({ runId, error: refused.message }),
-            Effect.as(undefined),
-          ),
-        ),
-      );
+      // The usage is folded from these same rows, so the terminal fact and
+      // the totals come from one read and a resume can never pair them
+      // across two.
+      const folded = foldRunState(null, rows);
+      if (Result.isFailure(folded)) {
+        yield* Effect.logWarning(
+          'Failed to fold the run usage from its ledger rows',
+        ).pipe(Effect.annotateLogs({ runId, error: folded.failure.message }));
+      }
+      const usage = Result.isSuccess(folded)
+        ? folded.success?.usage
+        : undefined;
       const { outcome, error, output } = end;
       return {
         outcome,
@@ -188,6 +190,13 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           output.category === 'workflow' ? workflowOutputOf(rows) : output,
       } satisfies RunEnd;
     });
+  /** Every row of the run, in one read; none for a closed (tombstoned) run,
+   *  which the record reads report as absent too. */
+  const runRows = session
+    .readAggregate(id)
+    .pipe(
+      Effect.map((rows) => (rows.at(-1)?.type === 'run.removed' ? [] : rows)),
+    );
   const read = <A>(
     select: (rows: readonly SessionEvent[]) => A,
   ): Effect.Effect<A, DatabaseReadFailed> =>
@@ -254,7 +263,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
     /** The run's terminal result ({@link runEndOf}), or null while the
      *  lifecycle it is in has not ended. */
     readRunEnd: (): Effect.Effect<RunEnd | null, DatabaseReadFailed> =>
-      session.readRunRecords(runId).pipe(Effect.flatMap(runEndOf)),
+      runRows.pipe(Effect.flatMap(runEndOf)),
     /**
      * The run's result endpoint: its producer record joined to its terminal
      * result, carrying the output as the delivery reported it
@@ -266,7 +275,7 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
      */
     readResult: (): Effect.Effect<RunResult | null, DatabaseReadFailed> =>
       Effect.gen(function* () {
-        const rows = yield* session.readRunRecords(runId);
+        const rows = yield* runRows;
         const meta = latestOfType(rows, id, 'run.result')?.result ?? null;
         if (meta === null || meta.producer === 'backgroundBash') return meta;
         const end = yield* runEndOf(rows);

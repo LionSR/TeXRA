@@ -97,7 +97,7 @@ import {
   type RunRows,
   type SharedRunRow,
 } from './runRows';
-import { statisticsContext, withTurn, type RunTurns } from './runSpend';
+import { withTurn, type RunTurns } from './runSpend';
 import { foldTranscriptEvent } from './transcriptFold';
 import {
   clearLiveText,
@@ -962,8 +962,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       };
     }
     case 'run.config': {
-      // A background process has no model, and its record names none. Every
-      // other identity carries the model its launch routed, so it is shown.
+      // A background process has no model; every other run shows its own.
       const { config } = event;
       const model =
         run.identity.kind === 'process' ? null : (config.model ?? null);
@@ -1222,7 +1221,9 @@ function foldDurable(
 ): boolean {
   const traceChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
+    (isTranscriptEvent(event) ||
+      phaseMoveOf(event) !== null ||
+      event.type === 'run.config')
       ? foldTraceEvent(view, event, deferred)
       : false;
   const listingType = listingKeyOf(event);
@@ -1329,7 +1330,9 @@ function foldTraceEvent(
     debug: view.debug,
     lifecycleToTaskGroups: lifecycleToTaskGroups(run),
     runLabels: view.runs,
-    ...statisticsContext(sessionIndexesOf(view).turns, run, event),
+    ...(run.category === AgentCategory.Workflow
+      ? { statistics: { model: run.model } }
+      : {}),
   });
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and

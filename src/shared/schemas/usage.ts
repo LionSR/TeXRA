@@ -143,41 +143,61 @@ interface StatisticsCapabilities {
   readonly supportsReasoning: boolean;
 }
 
+/** A run's priced turns so far, summed as they arrive. */
+export interface TurnTotals {
+  readonly input: number;
+  readonly output: number;
+  readonly cost: number;
+  readonly elapsed: number;
+  readonly read: number;
+  readonly miss: number;
+  readonly creation: number;
+  readonly reasoning: number;
+  readonly tool: number;
+  readonly latest: TurnUsage | undefined;
+}
+
+export const EMPTY_TURN_TOTALS: TurnTotals = Object.freeze({
+  input: 0,
+  output: 0,
+  cost: 0,
+  elapsed: 0,
+  read: 0,
+  miss: 0,
+  creation: 0,
+  reasoning: 0,
+  tool: 0,
+  latest: undefined,
+});
+
+/** The totals with one more priced turn. */
+export function addTurnTotals(sum: TurnTotals, turn: TurnUsage): TurnTotals {
+  return {
+    input: sum.input + turn.inputTokens,
+    output: sum.output + turn.outputTokens,
+    cost: sum.cost + turn.cost,
+    elapsed: sum.elapsed + (turn.elapsedTime ?? 0),
+    read: sum.read + (turn.cacheReadInputTokens ?? 0),
+    miss: sum.miss + (turn.cacheMissInputTokens ?? 0),
+    creation: sum.creation + (turn.cacheCreationInputTokens ?? 0),
+    reasoning: sum.reasoning + (turn.reasoningTokens ?? 0),
+    tool: sum.tool + (turn.toolUseTokens ?? 0),
+    latest: turn,
+  };
+}
+
 /**
- * A run's statistics after one of its priced turns: the totals of every turn
- * so far, as a workflow transcript's statistics row shows them. Derived from
- * the turns, never stored. The cache percentage and the reasoning count
- * appear only for a model that caches or reasons; the route and plan are the
- * latest turn's, since that is what the run is on now.
+ * A run's statistics after one of its priced turns: the totals so far, as a
+ * workflow transcript's statistics row shows them. Derived from the turns,
+ * never stored. The cache percentage and the reasoning count appear only for
+ * a model that caches or reasons; the route and plan are the latest turn's,
+ * since that is what the run is on now.
  */
 export function runStatistics(
-  turns: Iterable<TurnUsage>,
+  sum: TurnTotals,
   capabilities: StatisticsCapabilities | undefined,
 ): ExtendedTokenUsageStats {
-  const sum = {
-    input: 0,
-    output: 0,
-    cost: 0,
-    elapsed: 0,
-    read: 0,
-    miss: 0,
-    creation: 0,
-    reasoning: 0,
-    tool: 0,
-  };
-  let latest: TurnUsage | undefined;
-  for (const turn of turns) {
-    sum.input += turn.inputTokens;
-    sum.output += turn.outputTokens;
-    sum.cost += turn.cost;
-    sum.elapsed += turn.elapsedTime ?? 0;
-    sum.read += turn.cacheReadInputTokens ?? 0;
-    sum.miss += turn.cacheMissInputTokens ?? 0;
-    sum.creation += turn.cacheCreationInputTokens ?? 0;
-    sum.reasoning += turn.reasoningTokens ?? 0;
-    sum.tool += turn.toolUseTokens ?? 0;
-    latest = turn;
-  }
+  const { latest } = sum;
   const caching =
     capabilities !== undefined &&
     (capabilities.supportsPromptCaching ||

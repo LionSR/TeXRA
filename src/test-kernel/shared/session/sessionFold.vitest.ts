@@ -739,7 +739,7 @@ describe('sessionFold', () => {
     expect(listed.runs.has(ROOT)).toBe(true);
   });
 
-  it('sums a run\'s priced turns once each, on a cold read and on replay', () => {
+  it("sums a run's priced turns once each, on a cold read and on replay", () => {
     // Each `usage` row is one priced turn, and the listing reads every one,
     // so the fold sums them, keyed by seq so a row both reads bring counts
     // once.

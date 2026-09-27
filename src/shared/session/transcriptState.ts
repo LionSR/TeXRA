@@ -10,8 +10,9 @@ import {
   AgentCategory,
   TOOL_CALL_STATUS,
   isPlainAgentIdentity,
-  type ExtendedTokenUsageStats,
+  EMPTY_TURN_TOTALS,
   type LogLevel,
+  type TurnTotals,
   type MessageType,
   type ToolUseLog,
   type WorkflowCallProgress,
@@ -50,10 +51,11 @@ export interface TranscriptContext {
   readonly lifecycleToTaskGroups: boolean;
   /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: RunLabels;
-  /** A workflow run's statistics after the priced turn being folded, which
-   *  its transcript shows under the run's stage; absent for any other row
-   *  or run. Derived by the session fold from the run's turns. */
-  readonly statistics?: ExtendedTokenUsageStats | null;
+  /** A workflow run's transcript shows its statistics after each priced
+   *  turn; absent for any other run. Both the session fold and the cold
+   *  `foldRunTranscript` supply it. `model` is the run's model, for a turn
+   *  whose `run.config` the fold has not read. */
+  readonly statistics?: { readonly model: string | null };
 }
 
 /**
@@ -145,6 +147,11 @@ export interface TranscriptIndexes {
   workflowAttemptId: string | undefined;
   /** The newest run stage, the home of a workflow run's statistics rows. */
   runStage: string | undefined;
+  /** The run's priced turns so far, which its statistics rows show. */
+  spend: TurnTotals;
+  /** The model of the newest `run.config` folded, the one a later turn ran
+   *  on; undefined before the fold has read one. */
+  model: string | undefined;
 }
 
 const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
@@ -191,6 +198,8 @@ export function emptyTranscript(): TranscriptView {
     plan: undefined,
     workflowAttemptId: undefined,
     runStage: undefined,
+    spend: EMPTY_TURN_TOTALS,
+    model: undefined,
   });
   return transcript;
 }
