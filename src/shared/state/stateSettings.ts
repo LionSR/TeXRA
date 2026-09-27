@@ -287,11 +287,11 @@ function surfacedSetting(entry: SurfacedSettingInput): SurfacedSettingEntry {
  * a profile row and as one per-provider control on the Models tab. These rows
  * differ only in their default, copy, honoring reader, and Models-tab control,
  * so the uniform framing is written once here: the `category: 'model'` /
- * `settingsView: 'profile'` / Models-tab surface the region toggles already
- * share through `PROVIDER_ROUTING_SETTINGS`, plus the `configTarget: 'global'`
- * these config-tree rows require (the region toggles instead live in
- * `globalState` and set `cliConfig`). Returns a `CORE_SETTING_ROWS` body (key
- * and slot are added by the config-tree mapping).
+ * `settingsView: 'profile'` / Models-tab surface `globalProviderToggle` gives
+ * the GlobalState toggles, plus the `configTarget: 'global'` these config-tree
+ * rows require (the GlobalState toggles instead set `cliConfig`). Returns a
+ * `CORE_SETTING_ROWS` body (key and slot are added by the config-tree
+ * mapping).
  */
 function modelProviderToggle(opts: {
   readonly default: boolean;
@@ -309,6 +309,36 @@ function modelProviderToggle(opts: {
     honoredBy: opts.honoredBy,
     surfaces: { settingsView: 'profile', models: [opts.model] },
   };
+}
+
+/**
+ * The `globalState` analog of `modelProviderToggle`: a boolean every host
+ * stores in GlobalState, rendered as a profile row, a CLI `/config` row, and
+ * one Models-tab control. The control's label and description are the row's
+ * title and description, so the copy is written once.
+ */
+function globalProviderToggle(opts: {
+  readonly key: string;
+  readonly default: boolean;
+  readonly honoredBy: SettingHonoredBy;
+  readonly onWrite?: SettingWriteEffects;
+  readonly model: ModelsTabSurface;
+}): SurfacedSettingEntry {
+  return surfacedSetting({
+    key: opts.key,
+    schema: z.boolean().prefault(opts.default),
+    title: opts.model.label,
+    description: opts.model.description,
+    category: 'model',
+    slots: sameSlot('globalState'),
+    honoredBy: opts.honoredBy,
+    ...(opts.onWrite && { onWrite: opts.onWrite }),
+    surfaces: {
+      settingsView: 'profile',
+      cliConfig: true,
+      models: [opts.model],
+    },
+  });
 }
 
 // ============================================================================
@@ -816,19 +846,11 @@ const PROVIDER_ROUTING_SETTINGS = MODEL_PROVIDER_PLUGINS.flatMap(
     region === undefined
       ? []
       : [
-          surfacedSetting({
+          globalProviderToggle({
             key: region.key,
-            schema: z.boolean().prefault(region.default),
-            title: region.control.label,
-            description: region.control.description,
-            category: 'model',
-            slots: sameSlot('globalState'),
+            default: region.default,
             honoredBy: everyHost(ROUTE_ENDPOINT_READER),
-            surfaces: {
-              settingsView: 'profile',
-              cliConfig: true,
-              models: [{ provider, ...region.control }],
-            },
+            model: { provider, ...region.control },
           }),
         ],
 );
@@ -1215,39 +1237,23 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
   }),
 
   // --- OpenRouter routing ----------------------------------------------------
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.USE_OPENROUTER,
-    schema: z.boolean().prefault(false),
-    title: 'Use OpenRouter for all models',
-    description:
-      'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost(PROVIDER_CONFIG_READER),
     onWrite: { invalidatesModelOptions: true },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'openRouter',
-          label: 'Use OpenRouter for all models',
-          description:
-            'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
-        },
-      ],
+    model: {
+      provider: 'openRouter',
+      label: 'Use OpenRouter for all models',
+      description:
+        'Route all API calls through OpenRouter instead of direct provider APIs. Requires an OpenRouter API key; your OpenRouter key is always used directly.',
     },
   }),
 
   // --- Provider routing & region toggles --------------------------------------
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.KIMI_CODE_PREFER,
-    schema: z.boolean().prefault(false),
-    title: 'Prefer Kimi Code',
-    description:
-      'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost('src/agent/runtime/run/modelBinding.ts'),
     // Kimi Code and OpenRouter are alternative routes for the same dual-backend
     // models, so enabling one clears the other on every write path.
@@ -1255,43 +1261,26 @@ export const STATE_SETTINGS: readonly StateSettingEntry[] = [
       disablesWhenEnabled: [GlobalStateKey.USE_OPENROUTER],
       invalidatesModelOptions: true,
     },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'kimiCode',
-          label: 'Prefer Kimi Code',
-          description:
-            'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
-        },
-      ],
+    model: {
+      provider: 'kimiCode',
+      label: 'Prefer Kimi Code',
+      description:
+        'Route dual-backend Kimi models (K3) through the Kimi Code coding endpoint when a Kimi Code API key is set. The two coding-only models always use the key. When off, K3 uses the Moonshot open platform.',
     },
   }),
   ...PROVIDER_ROUTING_SETTINGS,
-  surfacedSetting({
+  globalProviderToggle({
     key: GlobalStateKey.GLM_CODING_PLAN,
-    schema: z.boolean().prefault(false),
-    title: 'GLM Coding Plan',
-    description:
-      'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-    category: 'model',
-    slots: sameSlot('globalState'),
+    default: false,
     honoredBy: everyHost(ROUTE_ENDPOINT_READER),
     onWrite: { invalidatesModelOptions: true },
-    surfaces: {
-      settingsView: 'profile',
-      cliConfig: true,
-      models: [
-        {
-          provider: 'glm',
-          label: 'GLM Coding Plan',
-          description:
-            'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
-          warningUrl: 'https://z.ai/subscribe',
-          warningUrlLabel: 'Subscribe',
-        },
-      ],
+    model: {
+      provider: 'glm',
+      label: 'GLM Coding Plan',
+      description:
+        'Use a Coding Plan subscription key instead of pay-as-you-go. Routes requests through the coding-specific endpoint with monthly quota limits.',
+      warningUrl: 'https://z.ai/subscribe',
+      warningUrlLabel: 'Subscribe',
     },
   }),
 
