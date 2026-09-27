@@ -66,7 +66,7 @@ test('first launch shows a usable launcher chrome', async () => {
   const workspaceDirectory =
     launched.workspacePath.split(/[\\/]/).at(-1) ?? launched.workspacePath;
   const directoryLabel = await launched.page
-    .locator('.shell-project-copy strong')
+    .locator('.shell-project-name')
     .first()
     .innerText();
   expect(directoryLabel).toContain(workspaceDirectory);
@@ -184,9 +184,7 @@ test('rapid settings-tab switching does not crash the renderer', async () => {
     await setSettingsTab(launched, tab);
   }
   // The chrome must still be alive after the burst.
-  await expect(
-    launched.page.locator('.shell-project-copy strong'),
-  ).toBeVisible();
+  await expect(launched.page.locator('.shell-project-name')).toBeVisible();
   await expect(launched.page.locator('.shell-conversation')).toBeVisible();
 });
 

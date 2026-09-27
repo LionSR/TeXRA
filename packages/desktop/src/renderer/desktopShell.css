@@ -290,13 +290,11 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   margin-top: 4px;
 }
 
-/* The shown project reads as selected; every other row keeps the same
-   shape, so nothing about a row moves when the selection does. */
-.shell-project-item.is-active .shell-project-row::part(base) {
-  background: var(--wa-color-brand-fill-quiet);
-}
-
-.shell-project-item.is-active .shell-project-copy strong {
+/* The shown project reads as selected by weight alone: the selected task
+   under it carries the fill, and two stacked fills read as one heavy block.
+   Every other row keeps the same shape, so nothing moves when the selection
+   does. */
+.shell-project-item.is-active .shell-project-name {
   font-weight: var(--font-weight-semibold);
 }
 
@@ -373,14 +371,14 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
 
 .shell-project-row::part(base) {
   width: 100%;
-  min-height: 36px;
-  padding: 5px 8px;
+  min-height: 28px;
+  padding: 2px 6px;
 }
 
 .shell-project-row::part(label) {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   min-width: 0;
   text-align: left;
@@ -393,29 +391,14 @@ body[data-desktop-platform='darwin'] .shell-sidebar-brand {
   box-shadow: var(--desktop-shadow-sm);
 }
 
-.shell-project-copy {
-  display: flex;
+.shell-project-name {
   flex: 1 1 auto;
-  flex-direction: column;
   min-width: 0;
-}
-
-.shell-project-copy strong,
-.shell-project-copy small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.shell-project-copy strong {
   font-size: var(--font-size);
   font-weight: var(--font-weight-medium);
-}
-
-.shell-project-copy small {
-  margin-top: 1px;
-  color: var(--wa-color-text-quiet);
-  font-size: var(--font-size-xs);
 }
 
 .shell-sidebar-sessions {
@@ -839,8 +822,12 @@ body[data-desktop-platform='darwin']
   scrollbar-width: thin;
 }
 
+/* The rail is one line per task, the way a page tree is: agent, branch,
+   time and model live in the row's tooltip, not a second line that appears
+   under the selected row. */
 .shell-project-runs {
   margin: 2px 0 4px 10px;
+  --run-tab-meta-display: none;
 }
 
 .shell-subagents-open-count {

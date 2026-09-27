@@ -141,21 +141,20 @@ function projectSection(
         aria-current=${active ? 'true' : nothing}
         @click=${() => callbacks.onSelectProject(key)}
       >
-        <span class="shell-project-mark icon-surface is-size-m"
+        <span class="shell-project-mark icon-surface is-size-s"
           >${initials}</span
         >
-        <span class="shell-project-copy">
-          <strong>${name}</strong>
-          ${status ? html`<small>${status.label}</small>` : nothing}
-        </span>
+        <span class="shell-project-name">${name}</span>
       </wa-button>
       ${
+        // The dot is the row's whole status line; its words are the tooltip.
         status
           ? html`<span
               class="shell-project-status"
               data-tone=${status.tone}
               role="img"
               aria-label=${status.label}
+              title=${status.label}
             ></span>`
           : nothing
       }
