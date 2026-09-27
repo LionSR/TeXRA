@@ -5,14 +5,14 @@
  * (`AppState.changes`), the catalog reloads and every roster view repaints
  * (`agentRosterChanged`). The one path: no writer refreshes it itself.
  *
- * The layer also registers the directories of the tool plugins that ship
- * agents, before its first reload: they sit beside the packaged tool-use
- * directory (`<resources>/plugins/<id>/agents` next to
- * `<resources>/tool_use_agents`), so the agent directories it is built over
- * name them, and no reload can scan without them.
+ * It follows a host's packaged catalog, so it runs only where the agent
+ * directories name a packaged resources root: an embedder, and the CLI
+ * entries that load no agents and must create nothing under a possibly
+ * read-only storage root (`texra clone`), get no follower. As it is built,
+ * before its first reload, it registers the tool plugins' agent directories
+ * under that root (`<resources>/plugins/<id>/agents`), so no load or reload
+ * scans without them.
  */
-import * as path from 'node:path';
-
 import { Cause, Effect, Layer, Schedule, Stream } from 'effect';
 
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
@@ -26,22 +26,14 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;
-    const directories = yield* AgentDirectories;
-    // Built before the runtime runs anything, so before any catalog load.
-    const toolUse = yield* Effect.exit(
-      Effect.suspend(() => directories.builtInToolUse()),
+    const { resourcesRoot } = yield* AgentDirectories;
+    if (resourcesRoot === undefined || resourcesRoot === '') return;
+    installPluginAgentDirectories(
+      resourcesRoot,
+      TOOL_PLUGINS.flatMap((plugin) =>
+        plugin.agents === true ? [plugin.id] : [],
+      ),
     );
-    if (toolUse._tag === 'Failure')
-      yield* Effect.logError(
-        `The tool plugins' agent directories are not registered, so their agents are not listed: ${toErrorMessage(Cause.squash(toolUse.cause))}`,
-      );
-    else
-      installPluginAgentDirectories(
-        path.dirname(toolUse.value),
-        TOOL_PLUGINS.flatMap((plugin) =>
-          plugin.agents === true ? [plugin.id] : [],
-        ),
-      );
     const reload = Effect.suspend(() => refreshAgentCatalog()).pipe(
       Effect.andThen(
         Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),

@@ -217,6 +217,12 @@ export interface AgentDirectoriesPort {
   >;
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed>;
   builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed>;
+  /**
+   * The packaged resources root a TeXRA host ships its bundled agents under,
+   * the tool plugins' agent directories among them. Absent where none ships:
+   * an embedder's own directories, or the CLI entries that load no agents.
+   */
+  readonly resourcesRoot?: string;
 }
 
 /**

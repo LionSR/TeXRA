@@ -18,8 +18,8 @@ export const BUNDLED_AGENT_DIRECTORY_NAMES = [
  * `<resources>/plugins/<id>/agents`, by plugin id. Their agents are bundled
  * tool-use agents like the core ones and keep the `builtInToolUse` source, so
  * their keys do not change. The process's agent-catalog follower
- * (`@tools/agentCatalogFollower`) installs them as it is built, before any
- * reload; the plugin ids cross as strings, so `@agent/index` takes no edge
+ * (`@tools/agentCatalogFollower`) installs them under the host's packaged
+ * resources root as it is built, before any reload; the plugin ids cross as strings, so `@agent/index` takes no edge
  * to `@tools`. The default installs none.
  */
 let pluginAgentDirectories: ReadonlyMap<string, string> = new Map();
