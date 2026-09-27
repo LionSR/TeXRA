@@ -140,7 +140,11 @@ export const registerLanguageModelTools = Effect.fn(
     const { entries } = yield* SubscriptionRef.get(live.registry.current);
     const off = switchedOffPlugins(yield* getDisabledToolIds(appState));
     for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-      const entry = off.has('copilot') ? undefined : entries.get(toolName);
+      // The catalog applies switches only at a step, so a plugin switched
+      // off since the last step is still in it; the switch read here wins.
+      const found = off.has('copilot') ? undefined : entries.get(toolName);
+      const entry =
+        found === undefined || off.has(found.plugin) ? undefined : found;
       const held = registered.get(lmName);
       if (entry !== undefined && held === undefined) {
         registered.set(lmName, register(lmName, toolName, entry.tool));
