@@ -517,9 +517,7 @@ function executeWorkflowScriptTool(
                     configureDelegatedChildApprovals(
                       runId,
                       parentRunId,
-                      proposalDecision.autoApproved
-                        ? 'auto-approved'
-                        : 'inherit',
+                      proposalDecision.childApproval,
                       session,
                     );
 

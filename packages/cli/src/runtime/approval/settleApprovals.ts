@@ -16,6 +16,7 @@ import {
   texraApprovalDenialMessage,
   texraHumanInputDenialMessage,
   texraRetryDenialMessage,
+  type ApprovalPolicyDenial,
   type TexraApprovalPolicy,
   type TexraApprovalPolicyDecision,
 } from '@shared/approvalPolicy';
@@ -63,21 +64,14 @@ export function cliToolUseApprovalOptions(
   runId?: RunId,
 ): {
   readonly approvalPromptsUnavailable: boolean;
-  readonly onApprovalPolicyDenial: (withheldTools?: readonly string[]) => void;
+  readonly onApprovalPolicyDenial: (denial: ApprovalPolicyDenial) => void;
 } {
   return {
     approvalPromptsUnavailable: isTexraApprovalDenied(
       executableDecision(context, session.approvalPolicy),
     ),
-    onApprovalPolicyDenial: (withheldTools) =>
-      warnApprovalDenied(
-        session,
-        context,
-        withheldTools
-          ? { kind: 'withheldTools', tools: withheldTools }
-          : { kind: 'executable' },
-        runId,
-      ),
+    onApprovalPolicyDenial: (denial) =>
+      warnApprovalDenied(session, context, denial, runId),
   };
 }
 

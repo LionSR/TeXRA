@@ -26,7 +26,10 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { configureDelegatedChildApprovals } from '@tools/approval';
+import {
+  configureDelegatedChildApprovals,
+  type DelegatedChildApproval,
+} from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -71,6 +74,8 @@ function describeSubagentProgress(
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {
   autoApproved: boolean;
+  /** How the child's own grants record the approval; `inherit` when absent. */
+  childApproval?: DelegatedChildApproval;
   modelOverride?: string;
   requestedModel?: string;
   agentOverride?: string;
@@ -118,9 +123,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     configureDelegatedChildApprovals(
       resolvedRunId,
       parentRunId,
-      options?.approvalMeta?.autoApproved === true
-        ? 'auto-approved'
-        : 'inherit',
+      options?.approvalMeta?.childApproval ?? 'inherit',
       parentSession,
     );
   };

@@ -326,7 +326,7 @@ beforeEach(async () => {
     Effect.succeed('parent-model'),
   );
   mocks.requestDelegationProposal.mockReturnValue(
-    Effect.succeed({ result: { action: 'approve' }, autoApproved: false }),
+    Effect.succeed({ result: { action: 'approve' }, childApproval: 'inherit' }),
   );
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((_stores, name) => {
@@ -367,7 +367,7 @@ describe('WorkflowScriptTool', () => {
       const asked = yield* Deferred.make<void>();
       const decided = yield* Deferred.make<{
         result: { action: 'approve' };
-        autoApproved: boolean;
+        childApproval: 'inherit' | 'auto-approved';
       }>();
       mocks.requestDelegationProposal.mockReturnValueOnce(
         Deferred.succeed(asked, undefined).pipe(
@@ -383,7 +383,7 @@ describe('WorkflowScriptTool', () => {
 
       yield* Deferred.succeed(decided, {
         result: { action: 'approve' as const },
-        autoApproved: false,
+        childApproval: 'inherit' as const,
       });
       yield* Fiber.join(pending);
       expect(mocks.registerRun).toHaveBeenCalledOnce();
@@ -396,7 +396,10 @@ describe('WorkflowScriptTool', () => {
     () =>
       Effect.gen(function* () {
         mocks.requestDelegationProposal.mockReturnValueOnce(
-          Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
+          Effect.succeed({
+            result: { action: 'approve' },
+            childApproval: 'auto-approved',
+          }),
         );
 
         yield* callTool();
@@ -419,7 +422,7 @@ describe('WorkflowScriptTool', () => {
   ])('does not execute after $decision.action', ({ decision, status }) =>
     Effect.gen(function* () {
       mocks.requestDelegationProposal.mockReturnValueOnce(
-        Effect.succeed({ result: decision, autoApproved: false }),
+        Effect.succeed({ result: decision, childApproval: 'inherit' }),
       );
 
       const result = yield* callTool();

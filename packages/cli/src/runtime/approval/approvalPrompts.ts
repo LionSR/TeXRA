@@ -2,7 +2,10 @@ import { Effect } from 'effect';
 
 import { type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
-import type { TexraRetryApprovalDecision } from '@shared/approvalPolicy';
+import type {
+  ApprovalPolicyDenial,
+  TexraRetryApprovalDecision,
+} from '@shared/approvalPolicy';
 import type { RequestDecision, RunId } from '@shared/schemas';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
@@ -38,10 +41,9 @@ function onCliPromptLane(context: CliContext) {
 
 /** What the policy closed, as the operator warning names it. */
 type CliApprovalDenial =
-  /** A Bash command or tool edit settled as denied. */
-  | { readonly kind: 'executable' }
-  /** Approval-gated tools withheld from the model when the run started. */
-  | { readonly kind: 'withheldTools'; readonly tools: readonly string[] }
+  /** A command, edit or proposal denied, or approval-gated tools withheld
+   *  from the model when the run started. */
+  | ApprovalPolicyDenial
   /** The human retry permit after a model error. */
   | {
       readonly kind: 'retry';
@@ -90,6 +92,8 @@ function approvalDenialMessage(
   switch (denial.kind) {
     case 'executable':
       return `Command or edit denied: ${reason}. ${allow} it.`;
+    case 'proposal':
+      return `Delegation denied: ${reason}. ${allow} it.`;
     case 'withheldTools':
       return `Not offering ${denial.tools.join(', ')} to the model: they need approval, and ${reason}. ${allow} them.`;
     case 'retry':

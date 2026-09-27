@@ -45,6 +45,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
+import { setGoalSessionAutoApproval } from '@tools/goal';
 
 import { createRecordingHost, recordSessionEvents } from '../progressTestUtils';
 
@@ -375,6 +376,63 @@ describe('AgentLaunchContext', () => {
         expect(
           (yield* Effect.promise(() => recording.read()))[1],
         ).toMatchObject({ seq: 3 });
+      }),
+  );
+
+  it.effect(
+    "restores a resumed run's human grants from its durable policy, not its goal's",
+    () =>
+      Effect.gen(function* () {
+        // Failure modes: a resume in a new process forgets an
+        // approve-for-session grant; its re-stamp overwrites the durable
+        // grant with an empty snapshot; a goal's auto-approval comes back
+        // on without a human re-arming it.
+        const session = createTestSession();
+        yield* Effect.addFinalizer(() => closeSessionOf(session));
+        const config = AgentConfigSchema.parse({
+          agent: 'chat',
+          model: 'gpt55',
+          agentCategory: AgentCategory.ToolUse,
+        });
+        const definitionMocks = () => {
+          mocks.resolve.mockReturnValueOnce(
+            Effect.succeed({ path: '/agents/chat.yaml' }),
+          );
+          mocks.load.mockReturnValueOnce(
+            Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
+          );
+          mocks.buildVars.mockReturnValueOnce(
+            Effect.succeed({ ATTACHED_MEMORY_MISSES: [] }),
+          );
+        };
+        yield* registerRun(session, EXECUTION_ID, config, {
+          identity: { kind: 'agent', agent: 'chat' },
+        });
+        // A human approves edits for the session; the run's goal then
+        // auto-approves its commands.
+        session.approvals.toolEdit.bypass.setBypass(EXECUTION_ID, true);
+        setGoalSessionAutoApproval(session, EXECUTION_ID, 'commands');
+        yield* session.settlePublications();
+        // A new process: nothing of the run's approval state is in memory.
+        session.approvals.clearAll();
+
+        definitionMocks();
+        yield* buildAgentLaunchContext({
+          config,
+          runId: EXECUTION_ID,
+          session,
+          resumed: true,
+          modelCompatibilityKey: 'OpenAIResponse',
+        });
+
+        const restored = { bash: false, toolEdit: true, superYolo: false };
+        expect(session.approvals.bypassesFor(EXECUTION_ID)).toEqual(restored);
+        expect((yield* session.readView([])).policy.get(EXECUTION_ID)).toEqual(
+          expect.objectContaining({
+            bypasses: restored,
+            own: { toolEdit: 'on' },
+          }),
+        );
       }),
   );
 

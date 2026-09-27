@@ -406,7 +406,7 @@ export class SessionHandle {
   approvalPolicySnapshotFor(runId: RunId): ApprovalPolicySnapshot {
     return {
       policy: this.texraApprovalPolicy,
-      bypasses: this.approvals.bypassesFor(runId),
+      ...this.approvals.grantsFor(runId),
     };
   }
 

@@ -55,6 +55,7 @@ import {
 import type { LanguageModel } from '@platform/languageModel';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { AgentDelegationScope, ToolDefinition } from '@shared/schemas';
+import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   compositionFor,
@@ -83,7 +84,7 @@ interface ResolveAgentToolsInput {
   /** When true, approval-gated tools are filtered out before model invocation. */
   approvalPromptsUnavailable?: boolean;
   /** Told the names {@link approvalPromptsUnavailable} withheld, once. */
-  onApprovalPolicyDenial?: (withheldTools?: readonly string[]) => void;
+  onApprovalPolicyDenial?: (denial: ApprovalPolicyDenial) => void;
   /**
    * The product host this process is; tools excluded from it are dropped.
    * `undefined` (no composition root named one) drops every host-bound tool.
@@ -382,7 +383,11 @@ export const resolveAgentTools = Effect.fn('resolveAgentTools')(function* ({
       `Not offering ${names.join(', ')}: these tools need approval, and ${owner} can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
     );
   }
-  if (withheld.length > 0) onApprovalPolicyDenial?.(withheld.map(([n]) => n));
+  if (withheld.length > 0)
+    onApprovalPolicyDenial?.({
+      kind: 'withheldTools',
+      tools: withheld.map(([n]) => n),
+    });
 
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
