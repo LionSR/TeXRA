@@ -21,7 +21,7 @@ import { toolTableLayer } from '@tools/liveTools';
 import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toolRegistryLayer } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
-import { setToolEnabled } from '@utils/config/constants';
+import { setToolEnabled } from '@tools/toolAvailability';
 
 function toolDefs(names: readonly string[]): ToolDefinition[] {
   return names.map((name) => ({ name }));

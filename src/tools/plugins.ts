@@ -23,6 +23,7 @@
 
 // Local imports
 import type { ToolCategory } from '@shared/settingsView/settingsViewMessages';
+import type { SettingHost } from '@shared/state/stateSettings';
 import type { ToolAvailabilityChecks } from '@tools/toolProbes';
 import { MANIFEST } from '@tools/pluginManifest';
 
@@ -31,8 +32,8 @@ export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
   /** The registered tools this plugin provides; `@tools/registry` checks
-   *  them. */
-  readonly toolNames: readonly [string, ...string[]];
+   *  them. Empty for a plugin whose contribution is not a tool. */
+  readonly toolNames: readonly string[];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -46,6 +47,8 @@ export interface ToolPlugin {
   /** Checked for availability but listed on no Tools dashboard, and offered
    *  as no agent-creator tool group. */
   readonly hidden?: boolean;
+  /** Product hosts whose Tools dashboard does not list the plugin. */
+  readonly unavailableHosts?: readonly SettingHost[];
   /** Lowercase substrings of a new agent's description that make the agent
    *  creator preselect this plugin's tool group. */
   readonly keywords?: readonly string[];

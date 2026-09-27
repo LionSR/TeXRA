@@ -439,4 +439,21 @@ export const MANIFEST = [
       'Probe and verify the environment, manage API keys and settings, and apply a team.',
     hidden: true,
   },
+  {
+    // Contributes no tool of its own: while it is on, the VS Code host exposes
+    // the research tools of the other plugins on in the live catalog to
+    // Copilot (`registerLanguageModelTools` in packages/extension).
+    id: 'copilot',
+    toolNames: [],
+    name: 'Copilot Chat Tools',
+    category: 'ai-agents',
+    description:
+      'Expose arXiv search, web fetch, and Crossref search to GitHub Copilot Chat and agent mode as #texra_arxiv_search, #texra_web_fetch, and #texra_crossref_search. Each is exposed while its own plugin is on.',
+    configNotes:
+      'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
+    unavailableHosts: ['cli', 'desktop'],
+    toggleable: true,
+    onByDefault: true,
+    availability: ALWAYS_AVAILABLE,
+  },
 ] as const satisfies readonly ToolPlugin[];

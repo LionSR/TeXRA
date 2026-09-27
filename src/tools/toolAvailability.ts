@@ -20,7 +20,7 @@
  */
 
 // Third-party imports
-import { Cause, Duration, Effect } from 'effect';
+import { Cause, Duration, Effect, Result } from 'effect';
 
 // Local imports
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -91,6 +91,26 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
  * user's choices are already recorded, so re-seeding would silently disable
  * tools they had enabled.
  */
+/**
+ * Switch a tool plugin on or off in the global state store the caller
+ * holds, and tell this process's listeners outside a run (the extension's
+ * Copilot tools); runs read the switch at their next step.
+ */
+export function setToolEnabled(
+  toolId: string,
+  enabled: boolean,
+  store: StateStore,
+) {
+  return store
+    .modify(GlobalStateKey.DISABLED_TOOLS, (stored) => {
+      const disabled = new Set((stored as string[] | undefined) ?? []);
+      if (enabled) disabled.delete(toolId);
+      else disabled.add(toolId);
+      return Result.succeed([...disabled]);
+    })
+    .pipe(Effect.map(() => emitAppSignal('toolSwitchesChanged', undefined)));
+}
+
 export const seedDisabledToolDefaults = Effect.fn('seedDisabledToolDefaults')(
   function* (state: StateStore) {
     const disabledTools = yield* state.get<string[]>(

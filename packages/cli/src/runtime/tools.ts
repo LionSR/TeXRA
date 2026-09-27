@@ -10,7 +10,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
 import { findToolPlugin, type ToolPlugin } from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
-import { setToolEnabled } from '@utils/config/constants';
+import { setToolEnabled } from '@tools/toolAvailability';
 
 type CliToolGuideKind = 'install' | 'auth';
 

@@ -3,24 +3,33 @@
  * Model Tool API (`vscode.lm.registerTool`), so they can be referenced in
  * Copilot Chat (e.g. `#texra_arxiv_search`) and invoked by agent mode.
  *
+ * This is the `copilot` plugin's contribution (`@tools/pluginManifest`),
+ * VS Code only: while its switch is on, Copilot sees each of these tools
+ * that the live catalog's current generation (`@tools/liveTools`) holds;
+ * switched off, every registration is disposed. It re-reads on each
+ * generation the catalog publishes and on each switch flipped in this
+ * process.
+ *
  * Only context-free, read-only research tools are surfaced — they need no
  * agent runtime state and are safe to call from an arbitrary chat session.
- * They follow the live catalog's current generation (`@tools/liveTools`): a
- * tool whose plugin is switched off is unregistered when the catalog next
- * applies the switches, and registered again when it is back.
  * Registration is guarded at this multi-host boundary because compatible
  * non-VS Code hosts can expose only part of the `vscode.lm` namespace.
  */
 
 import * as vscode from 'vscode';
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Queue, Stream, SubscriptionRef } from 'effect';
 
 import { Runs, ToolCall, type SessionHandle } from '@agent/runtime';
+import { onAppSignal } from '@eventBus/AppSignals';
+import { withLogChannel } from '@logger/effectLog';
+import { AppState } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import { sessionFsLayer } from '@platform/rootedFs';
 
 import type { ToolResult } from '@shared/schemas';
 import { LiveTools, type ToolEntry } from '@tools/liveTools';
+import { switchedOffPlugins } from '@tools/plugins';
+import { getDisabledToolIds } from '@utils/config/constants';
 
 // Local imports - language model tools
 import {
@@ -55,6 +64,7 @@ export const registerLanguageModelTools = Effect.fn(
   if (typeof lm?.registerTool !== 'function') return;
   const registerTool = lm.registerTool.bind(lm);
   const live = yield* LiveTools;
+  const appState = yield* AppState;
   const registered = new Map<string, vscode.Disposable>();
   yield* Effect.addFinalizer(() =>
     Effect.sync(() => registered.forEach((disposable) => disposable.dispose())),
@@ -126,22 +136,36 @@ export const registerLanguageModelTools = Effect.fn(
         ]);
       },
     });
-  // Each generation the catalog publishes, the current one first.
-  yield* SubscriptionRef.changes(live.registry.current).pipe(
-    Stream.runForEach(({ entries }) =>
-      Effect.sync(() => {
-        for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
-          const entry = entries.get(toolName);
-          const held = registered.get(lmName);
-          if (entry !== undefined && held === undefined) {
-            registered.set(lmName, register(lmName, toolName, entry.tool));
-          } else if (entry === undefined && held !== undefined) {
-            held.dispose();
-            registered.delete(lmName);
-          }
-        }
-      }),
+  const follow = Effect.gen(function* () {
+    const { entries } = yield* SubscriptionRef.get(live.registry.current);
+    const off = switchedOffPlugins(yield* getDisabledToolIds(appState));
+    for (const [lmName, toolName] of Object.entries(LM_TOOL_NAMES)) {
+      const entry = off.has('copilot') ? undefined : entries.get(toolName);
+      const held = registered.get(lmName);
+      if (entry !== undefined && held === undefined) {
+        registered.set(lmName, register(lmName, toolName, entry.tool));
+      } else if (entry === undefined && held !== undefined) {
+        held.dispose();
+        registered.delete(lmName);
+      }
+    }
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.logWarning(
+        `Copilot tools were not updated: ${error.message}`,
+      ).pipe(withLogChannel('LanguageModelTools')),
     ),
+  );
+  // The current generation first, then each change and each switch.
+  yield* Stream.merge(
+    SubscriptionRef.changes(live.registry.current),
+    Stream.callback<void>((queue) =>
+      onAppSignal('toolSwitchesChanged', () =>
+        Queue.offerUnsafe(queue, undefined),
+      ),
+    ),
+  ).pipe(
+    Stream.runForEach(() => follow),
     Effect.forkScoped,
   );
 });

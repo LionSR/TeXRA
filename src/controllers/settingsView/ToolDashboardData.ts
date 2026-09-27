@@ -73,8 +73,9 @@ function settingRows(plugin: ToolPlugin): Pick<ToolDashboardItem, 'settings'> {
 // ============================================================
 
 /**
- * Whether a plugin belongs on `host`'s dashboard. A hidden plugin, or one
- * whose every tool declares itself unavailable on the asking host, is not
+ * Whether a plugin belongs on `host`'s dashboard. A hidden plugin, one that
+ * names the host in its `unavailableHosts`, or one whose every tool declares
+ * itself unavailable on the asking host, is not
  * shown there and cannot be installed, authed or toggled from it: host
  * exclusion removes those tools from the resolved roster, so they can never
  * be called there.
@@ -85,7 +86,9 @@ export function isToolPluginVisible(
 ): boolean {
   return (
     plugin.hidden !== true &&
-    !plugin.toolNames.every((name) => isToolUnavailableOnHost(name, host))
+    plugin.unavailableHosts?.includes(host) !== true &&
+    (plugin.toolNames.length === 0 ||
+      plugin.toolNames.some((name) => !isToolUnavailableOnHost(name, host)))
   );
 }
 

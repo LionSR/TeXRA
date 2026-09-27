@@ -23,8 +23,8 @@ import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessage
 import {
   getLastCheckResults,
   refreshToolAvailability,
+  setToolEnabled,
 } from '@tools/toolAvailability';
-import { setToolEnabled } from '@utils/config/constants';
 
 import {
   SETTINGS_LOG_CHANNEL,

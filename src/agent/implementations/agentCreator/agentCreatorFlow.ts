@@ -129,8 +129,11 @@ interface ToolGroup {
  *  agent. */
 const BASELINE_PLUGIN_ID = 'file-ops';
 
-/** Every plugin the Tools dashboard lists; hidden ones are not offered. */
-const GROUP_PLUGINS = TOOL_PLUGINS.filter((plugin) => plugin.hidden !== true);
+/** Every plugin the Tools dashboard lists that has tools; hidden ones are
+ *  not offered. */
+const GROUP_PLUGINS = TOOL_PLUGINS.filter(
+  (plugin) => plugin.hidden !== true && plugin.toolNames.length > 0,
+);
 
 /** The agent creator's tool groups, keyed by plugin name in manifest order. */
 export const TOOL_GROUPS: Readonly<Record<string, ToolGroup>> =

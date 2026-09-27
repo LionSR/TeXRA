@@ -166,6 +166,7 @@ const PLUGIN_TOOLS = {
   'external-inquiry': { inquiry: ExternalInquiryTool },
   codex: { codex: CodexTool },
   'claude-agent': { [CLAUDE_AGENT_NAME]: ClaudeAgentTool },
+  copilot: {},
   core: {
     inline_comment: InlineCommentTool,
     open_pdf: OpenPdfTool,
