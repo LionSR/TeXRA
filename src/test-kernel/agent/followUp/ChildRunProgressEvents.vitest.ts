@@ -57,7 +57,8 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     session: SessionHandle,
     runId: RunId,
     parentRunId: RunId,
-    options: Parameters<typeof createChildRun>[3] & {
+    options: Omit<Parameters<typeof createChildRun>[3], 'category'> & {
+      readonly config: typeof config;
       readonly userFollowUpSupport: UserFollowUpSupport;
       readonly description: string;
     },
@@ -70,7 +71,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     });
     const child = yield* createChildRun(session, runId, parentRunId, {
       run: options.run,
-      config: options.config,
+      category: options.config.agentCategory,
     }).pipe(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),

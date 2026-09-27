@@ -21,23 +21,21 @@
  * A workflow agent's run is this loop in round mode (`./rounds`): the same
  * turn, run once per round by the round loop, with no tools and no input.
  */
-import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
-import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
-import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import {
-  resolveModelRoute,
-  routeCompatibilityKey,
-} from '@agent/runtime/modelRoutes';
+  buildInitialToolUsePrompts,
+  toolInstructions,
+} from '@agent/prompt/PromptBuilder';
+import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { logUserMessage } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
+  AgentCategory,
   RUN_OUTCOME,
   type JsonValue,
   type RetryErrorInfo,
@@ -72,18 +70,14 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
-import { continuationFor } from './continuationPolicy';
-import { applyPendingModelSwitch } from './modelSwitch';
-import { roundLoop } from './rounds';
+import { stepFor } from './step';
+import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
+import { roundLoop, roundsContinuation } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
   'The user requested immediate context compaction. Do not start a new task; continue only far enough for the runtime to process any available context compaction, and do not claim that compaction has completed.';
-const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
-  'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.';
-const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
-  'different conversation format; start new chat';
 const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
@@ -144,8 +138,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const languageModel = yield* LanguageModel;
   const { runId, session, logger } = run;
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
-  const continuation = yield* continuationFor(run);
-  const rounds = continuation?.rounds ?? null;
+  // A workflow run is round mode for its whole life; a conversation's
+  // continuation is pinned by each step instead.
+  const roundPolicy =
+    run.config.agentCategory === AgentCategory.Workflow
+      ? yield* roundsContinuation(run)
+      : null;
+  const rounds = roundPolicy?.rounds ?? null;
   // A conversation claims its own input lease, never a parent's (FollowUps).
   const followUps = rounds ? null : yield* claimFollowUps(run, ledger);
 
@@ -166,7 +165,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }),
       userChannels,
     },
-    ...run.toolset,
     ...(systemPrompt !== undefined ? { systemPrompt } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
@@ -190,6 +188,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     ]);
   };
 
+  // A resumed root's first step that pins a continuation stands it down,
+  // before anything this activation decides can re-arm it.
+  let resumeUnseen = start.resume;
+  const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
+    Effect.tap(stepFor(run, state, rounds !== null, kind), (step) => {
+      if (!resumeUnseen || step.continuation === null || isChild())
+        return Effect.void;
+      resumeUnseen = false;
+      return step.continuation.onResume({ session, runId });
+    });
+
   // ------------------------------------------------------------ host port
   let live = false;
   const flowContext: ToolUseFlowContext = {
@@ -205,39 +214,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         followUps.appendSynthetic(IMMEDIATE_COMPACTION_FOLLOW_UP);
       }
     },
-    modelSwitchDisabledReason: Effect.fn('toolUse.modelSwitchDisabledReason')(
-      function* (model: string) {
-        const current = SynchronizedRef.getUnsafe(run.model);
-        if (current.modelId === model) return undefined;
-        const nextConfig = MODEL_CONFIGS[model];
-        if (!nextConfig) return `Model ${model} is not registered`;
-        const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
-          Effect.provideService(LanguageModel, languageModel),
-        );
-        const nextKey = yield* routeCompatibilityKey(nextConfig, route);
-        if (!nextKey)
-          return `Unsupported model provider: ${nextConfig.provider}`;
-        return current.compatibilityKey === nextKey
-          ? undefined
-          : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
-      },
-    ),
-    switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
-      const disabledReason =
-        yield* flowContext.modelSwitchDisabledReason(model);
-      if (disabledReason !== undefined) {
-        return yield* Effect.fail(
-          new Error(
-            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
-              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
-              : disabledReason,
-          ),
-        );
-      }
-      // Bound and recorded by the loop at its next model boundary: the rows
-      // that record the switch belong to the fiber holding the run's state.
-      run.pendingModelSwitch.value = model;
-    }),
+    ...modelSwitchPort(run, languageModel),
   };
   const attach = (): void => {
     if (live) return;
@@ -255,13 +232,13 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     opening: RunState,
   ): Effect.fn.Return<RunState, Error, ProcessServices> {
     // Keep preparation interruptible inside the masked acquire.
-    const { bound, content } = yield* Effect.interruptible(
+    const { bound, content, offered } = yield* Effect.interruptible(
       Effect.gen(function* () {
         const bound = yield* SynchronizedRef.get(run.model);
-        // A round-mode run opens with no message: each round's opening
-        // carries its prompt.
-        if (rounds) return { bound, content: null };
-        const resolvedToolNames = run.setting.tools.map((tool) => tool.name);
+        // A round-mode run opens with no message and offers no tools. A
+        // tool-use run's first step is recorded with its opening.
+        if (rounds) return { bound, content: null, offered: [] };
+        const step = yield* openStep(opening, 'request');
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -273,9 +250,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           {
             workspace: session.roots.workspace,
             settings: session.roots,
-            resolvedToolNames,
-            hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isChild: isChild(),
           },
         );
         systemPrompt = prompts.systemPrompt
@@ -315,11 +289,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (userRequest) content.push({ kind: 'text', text: userRequest });
         userChannels[USER_VAR_MODEL] = bound.modelId;
         workspace = AgentWorkspaceState.create();
-        return { bound, content };
+        return { bound, content, offered: step.rows };
       }),
     );
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
+      ...offered,
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
@@ -497,6 +472,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           const dispatched = yield* dispatchPendingResponse(
             cell,
             turnContext,
+            (yield* openStep(state, 'dispatch')).tools,
             joined?.rows,
           );
           state = dispatched.state;
@@ -526,7 +502,23 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
         }
         const bound = yield* SynchronizedRef.get(run.model);
-        const tools = toolDefinitionsFor(run.setting.tools);
+        // The step this request opens, its offered set recorded when changed.
+        const step = yield* openStep(state, 'request');
+        if (step.rows.length > 0) state = yield* cell.append(step.rows);
+        const tools = toolDefinitionsFor(step.tools.definitions);
+        // The system text this request sends: the run's recorded prompt and
+        // what the step's offered tools add, rebuilt from the offered set.
+        // A round sends its own system text and offers no tools.
+        const addedByTools = rounds
+          ? ''
+          : toolInstructions(
+              step.tools.definitions.map((t) => t.name),
+              isChild(),
+            );
+        const system =
+          systemPrompt === undefined || addedByTools === ''
+            ? systemPrompt
+            : `${systemPrompt}\n${addedByTools}`;
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
@@ -542,7 +534,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 logger,
                 bound,
                 stores: session.roots,
-                system: systemPrompt,
+                system,
                 tools,
                 force,
               }),
@@ -562,7 +554,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ...(rounds
             ? yield* rounds.request(index)
             : {
-                system: systemPrompt,
+                system,
                 round: state.round,
                 debugName: 'tooluse',
               }),
@@ -630,10 +622,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
             !run.toolPolicy.stopAfterCycle && !followUps.hasQueued();
-          const next =
-            isChild() || continuation === null
-              ? null
-              : yield* continuation.atIdle(state, canContinue);
+          // A park opens a step, which pins (and records) its continuation.
+          let next: string | null = null;
+          if (!isChild()) {
+            const step = yield* openStep(state, 'park');
+            if (step.rows.length > 0) state = yield* cell.append(step.rows);
+            if (step.continuation !== null) {
+              next = yield* step.continuation.atIdle({
+                session,
+                runId,
+                state,
+                canContinue,
+              });
+            }
+          }
           // Every park is idle, a failed turn's included: a resume
           // acknowledges at the first one.
           run.callbacks.onIdle?.();
@@ -645,8 +647,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           // A queued follow-up outranks the policy's synthetic turn.
           let batch: FollowUpBatch | null =
-            next !== null && 'turn' in next && !followUps.hasQueued()
-              ? { synthetic: true, text: next.turn }
+            next !== null && !followUps.hasQueued()
+              ? { synthetic: true, text: next }
               : null;
           if (batch === null) {
             // The host port stays attached: `/model`, `/compact` land here.
@@ -742,9 +744,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         yield* Effect.sync(attach);
         return yield* Effect.acquireUseRelease(
           enter,
-          continuation?.rounds
-            ? roundLoop(continuation, continuation.rounds, runTurn, snapshot)
-            : loopBody,
+          roundPolicy ? roundLoop(roundPolicy, runTurn, snapshot) : loopBody,
           (cell, exit) => settleRun(cell, logger, followUps)(exit),
         );
       }),

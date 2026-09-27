@@ -139,7 +139,7 @@ describe('assembleTrace', () => {
       // producer, no siblings and no writable host.
       expect(trace.events[0]).toMatchObject({
         type: 'run.start',
-        ownerId: null,
+        origin: null,
         parent: null,
         checkpointId: null,
         userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.UNSUPPORTED,
@@ -173,9 +173,10 @@ describe('assembleTrace', () => {
 
       const result = yield* assembleTrace(runId, session);
 
-      // Only the creation row: a run that recorded nothing still exports.
+      // Only the creation rows: a run that recorded nothing still exports.
       expect(unwrapOk(result).trace.events.map((event) => event.type)).toEqual([
         'run.start',
+        'run.config',
       ]);
     }),
   );

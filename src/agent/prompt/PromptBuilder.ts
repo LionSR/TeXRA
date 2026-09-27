@@ -6,6 +6,7 @@ import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
 import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
 import type { SettingsStores } from '@shared/config/settingsAccess';
+import { hasDelegationTool } from '@shared/constants/delegationTools';
 
 // Local imports - utilities
 import { ensureArray } from '@utils/core';
@@ -68,6 +69,24 @@ For continuation or delegation-heavy work, consult relevant memories instead of 
 const SUBAGENT_MEMORY_INSTRUCTIONS = `<subagent_memory_protocol>
 The /memories directory is shared with the orchestrator and other subagents. Check it when your delegated task may depend on context from prior sessions or sibling agents. Write to memory for information that should persist beyond this session (e.g., discovered conventions, useful references). Your primary results should go in your response, not in memory.
 </subagent_memory_protocol>`;
+
+/**
+ * The system-prompt instructions a request's offered tools add: the memory
+ * protocol while `memory` is offered, with the orchestrator's variant when a
+ * delegation tool is too, or the subagent's in a child run. A step computes
+ * them from the tools it offers, so they follow a tool switched on or off
+ * mid-conversation, and the recorded offered set rebuilds them.
+ */
+export function toolInstructions(
+  offered: readonly string[],
+  isChild: boolean,
+): string {
+  if (!offered.includes('memory')) return '';
+  const parts = [MEMORY_TOOL_INSTRUCTIONS];
+  if (hasDelegationTool(offered)) parts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
+  else if (isChild) parts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
+  return parts.join('\n');
+}
 
 /**
  * Combine the base system prompt with the project's `AGENTS.md`, if any.
@@ -210,9 +229,6 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
       workspace: string | undefined;
       /** The same session's setting slots, for the `<workspace_info>` git reads. */
       settings: SettingsStores;
-      resolvedToolNames?: readonly string[];
-      hasDelegationTools?: boolean;
-      isChild?: boolean;
     },
   ): Effect.fn.Return<
     InitialPrompts & { instructionSuffix: string },
@@ -227,23 +243,12 @@ export const buildInitialToolUsePrompts = Effect.fn('prompt.initialToolUse')(
     );
     const initial = yield* builder.buildInitialPrompts();
 
-    const memoryEnabled =
-      options.resolvedToolNames?.includes('memory') ?? false;
-
-    // Build instruction suffix: always include tool-use instructions,
-    // optionally append memory instructions and workspace info
-    const suffixParts = [TOOL_USE_INSTRUCTIONS];
-    if (memoryEnabled) {
-      suffixParts.push(MEMORY_TOOL_INSTRUCTIONS);
-      if (options.hasDelegationTools) {
-        suffixParts.push(ORCHESTRATOR_MEMORY_INSTRUCTIONS);
-      } else if (options.isChild) {
-        suffixParts.push(SUBAGENT_MEMORY_INSTRUCTIONS);
-      }
-    }
-    suffixParts.push(
+    // The instruction suffix: tool-use instructions and workspace info. What
+    // the offered tools add is appended per request (`toolInstructions`).
+    const suffixParts = [
+      TOOL_USE_INSTRUCTIONS,
       yield* buildWorkspaceInfoBlock(options.workspace, options.settings),
-    );
+    ];
 
     return {
       ...initial,

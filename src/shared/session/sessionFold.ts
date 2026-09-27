@@ -61,7 +61,6 @@ import {
   requestParksItsCaller,
   runIdentityDisplayName,
   emptyUsageStats,
-  sumUsageStats,
   type AggregateId,
   type FoldInput,
   type ExistenceReconciliation,
@@ -98,6 +97,7 @@ import {
   type RunRows,
   type SharedRunRow,
 } from './runRows';
+import { withTurn, type RunTurns } from './runSpend';
 import { foldTranscriptEvent } from './transcriptFold';
 import {
   clearLiveText,
@@ -255,6 +255,8 @@ interface SessionIndexes {
    *  `view.requests`, `view.queuedFollowUps`, `RunView.flow` and the run's
    *  output rounds project it. */
   readonly rows: Map<RunId, RunRows>;
+  /** Each run's priced turns (`runSpend.ts`); `RunView.usage` sums them. */
+  readonly turns: RunTurns;
   /** One entry per `${aggregate}/${listing type}`: the commit of the latest
    *  listing fact folded for it, so a replayed older one is ignored. The
    *  lifecycle entry outlives its run: it is what keeps a tombstone
@@ -283,6 +285,7 @@ function sessionIndexesOf(view: SessionView): SessionIndexes {
       byOwner: new Map(),
       claims: new Map(),
       rows: new Map(),
+      turns: new Map(),
       latest: new Map(),
       local: { self: [], dead: [], unreadable: [] },
       head: null,
@@ -912,8 +915,8 @@ function wrongArm(run: RunView, name: string): never {
   );
 }
 
-/** A durable event `runRows.ts` does not own. */
-type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow>;
+/** A durable event `runRows.ts` does not own, bar a priced turn. */
+type OwnEvent = Exclude<DisplaySessionEvent, SharedRunRow | { type: 'usage' }>;
 
 /** The event's own arm applied to its run (topology, session slices and the
  *  transcript tier are the caller's). */
@@ -959,31 +962,20 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
       };
     }
     case 'run.config': {
-      // A background process has no model: its `run.config` is the
-      // fabricated `AgentConfig` that feeds the live wire, whose `model` is
-      // the schema's prefault. Every other identity carries the model its
-      // launch routed, so it is shown.
-      const model = run.identity.kind === 'process' ? null : event.config.model;
+      // A background process has no model; every other run shows its own.
+      const { config } = event;
+      const model =
+        run.identity.kind === 'process' ? null : (config.model ?? null);
       return {
         ...run,
         model,
         modelLabel: model === null ? null : getModelLabel(model),
-        command:
-          run.identity.kind === 'process' ? event.config.instruction : null,
-        inputFiles: event.config.inputFiles,
+        command: run.identity.kind === 'process' ? config.instruction : null,
+        inputFiles: config.inputFiles ?? [],
       };
     }
     case 'conversation.progress':
       return { ...run, conversationProgress: event.progress };
-    case 'usage':
-      // A latest-only listing key, so a cold read delivers one row per run,
-      // and that row is the run's cumulative total from its single reporter
-      // (`UsageMonitor`, or the agent-CLI loop for its own child run). The
-      // newest row replaces the total; summing would double-count every
-      // earlier round an aggregate replay brings on top of the listing row.
-      // The one-element sum normalizes the extended payload down to the
-      // view's `TokenUsageStats` shape.
-      return { ...run, usage: sumUsageStats([event.usage]) };
     case 'context.state':
       return {
         ...run,
@@ -1087,7 +1079,7 @@ function applySessionSlices(
         aggregateId: _aggregateId,
         seq: _seq,
         commit: _commit,
-        ownerId: _ownerId,
+        origin: _origin,
         at: _at,
         ...thread
       } = event;
@@ -1229,7 +1221,9 @@ function foldDurable(
 ): boolean {
   const traceChanged =
     read !== 'listing' &&
-    (isTranscriptEvent(event) || phaseMoveOf(event) !== null)
+    (isTranscriptEvent(event) ||
+      phaseMoveOf(event) !== null ||
+      event.type === 'run.config')
       ? foldTraceEvent(view, event, deferred)
       : false;
   const listingType = listingKeyOf(event);
@@ -1266,6 +1260,8 @@ function foldDurable(
   let own: RunView;
   if (isSharedRunRow(event)) {
     own = applyRowFacts(view, before, event);
+  } else if (event.type === 'usage') {
+    own = withTurn(sessionIndexesOf(view).turns, before, event);
   } else {
     applySessionSlices(view, runId, event);
     own = applyOwnArm(before, event);
@@ -1334,6 +1330,9 @@ function foldTraceEvent(
     debug: view.debug,
     lifecycleToTaskGroups: lifecycleToTaskGroups(run),
     runLabels: view.runs,
+    ...(run.category === AgentCategory.Workflow
+      ? { statistics: { model: run.model } }
+      : {}),
   });
   writableMap(view, 'folded').set(event.aggregateId, event.seq);
   // A filtered fact still advances its source cursor. Keep the run and
@@ -1373,6 +1372,7 @@ function foldRunRemoved(
     writableMap(view, 'queuedFollowUps').delete(run.id);
   }
   sessionIndexesOf(view).rows.delete(run.id);
+  sessionIndexesOf(view).turns.delete(run.id);
   writableMap(view, 'folded').delete(qualifyAggregateId('run', run.id));
   if (view.requests.some((r) => r.runId === run.id)) {
     view.requests = view.requests.filter((r) => r.runId !== run.id);

@@ -12,35 +12,17 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { withLogChannel } from '@logger/effectLog';
 import type { ModelCompatibilityKey, RunId } from '@shared/schemas';
-import { AgentCategory } from '@shared/schemas';
 
 const CHANNEL = 'SessionResumeRetrieval';
 
-interface ResumeIdentity {
+/** What resuming a run needs, whichever category it is. */
+export interface ResumeData {
   /** The run's configuration, its model being the one the snapshot names. */
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
   /** The conversation format the run's rows are in. */
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
 }
-
-export type ToolUseResumeData = ResumeIdentity & { readonly type: 'toolUse' };
-
-type WorkflowResumeData = ResumeIdentity & { readonly type: 'workflow' };
-
-type SessionResumeData = ToolUseResumeData | WorkflowResumeData;
-
-/**
- * Each category's resume type, in one exhaustive table: a new category fails
- * to compile here rather than resolving to nothing at runtime.
- */
-const RESUME_TYPE_BY_CATEGORY: Record<
-  AgentConfig['agentCategory'],
-  SessionResumeData['type']
-> = {
-  [AgentCategory.ToolUse]: 'toolUse',
-  [AgentCategory.Workflow]: 'workflow',
-};
 
 /**
  * Retrieve resume data for a run.
@@ -55,8 +37,8 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     runId: RunId,
     agentConfig: AgentConfig,
     session: SessionHandle,
-  ): Effect.fn.Return<SessionResumeData | null, Error> {
-    const type = RESUME_TYPE_BY_CATEGORY[agentConfig.agentCategory];
+  ): Effect.fn.Return<ResumeData | null, Error> {
+    const type = agentConfig.agentCategory;
     const resumability = yield* deriveResumability(runId, session);
     if (resumability.kind === 'unreadable') {
       return yield* Effect.fail(
@@ -85,7 +67,6 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
       withLogChannel(CHANNEL),
     );
     return {
-      type,
       runId,
       agentConfig: { ...agentConfig, model: snapshot.runtime.modelId },
       modelCompatibilityKey: snapshot.runtime.modelCompatibilityKey,

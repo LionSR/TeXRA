@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit } from 'effect';
 
 import { logSdkError, type ResultEvent, type StageHandle } from '@agent/trace';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import { configChange, finalizeRun } from '@agent/storage/runLifecycle';
 import {
   AGENT_ERROR_OUTCOME,
   AgentError,
@@ -453,14 +453,12 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
     });
     const run = Effect.gen(function* () {
       // `run.start` is already out: the launch context published it at its
-      // reservation commit point. Publish the run config before the RUNNING
-      // transition so the fold already carries the run's real category when
-      // the transition-owned run-start side effects fire.
-      ctx.logger.emit({
-        type: 'run.config',
-        runId,
-        config: ctx.config,
-      });
+      // reservation commit point, with the run's configuration. An
+      // activation writes it again only when it changed (a resume on
+      // another model), before the RUNNING transition so the fold already
+      // carries it when the transition-owned run-start side effects fire.
+      const config = yield* configChange(ctx.session, runId, ctx.config);
+      if (config !== null) yield* ctx.session.commit([config]);
       // The flow is an Effect: a fiber interruption reaches its provider work
       // directly, and its finalizers settle before the resources below are
       // disposed.
@@ -508,7 +506,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       const err = ensureError(Cause.squash(cause));
       if (!Cause.hasInterrupts(cause)) return finalizeFailedRun(err, undefined);
       // A stop that met a failure (a finalizer that died or failed as the
-      // stop unwound it) is still a stop, as `runVerdict` keys it: the row
+      // stop unwound it) is still a stop, as `failureOutcome` keys it: the row
       // says CANCELLED and carries the failure, which is logged, not lost.
       return logLifecycleWarning('A stopped run also failed', {
         runId,

@@ -227,7 +227,7 @@ const candidates = (
     ...row,
     seq: index + 1,
     commit: (state === null ? 0 : state.commit) + index + 1,
-    ownerId: null,
+    origin: null,
     at: 0,
   }));
 

@@ -19,7 +19,7 @@ function trace(message = 'hello'): TraceDocument {
         aggregateId: aggregateId('run', RUN_ID),
         seq: 1,
         commit: 1,
-        ownerId: null,
+        origin: null,
         at: 1_767_225_600_000,
         type: 'log',
         level: LOG_LEVELS.INFO,

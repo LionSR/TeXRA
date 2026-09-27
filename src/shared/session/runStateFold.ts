@@ -24,6 +24,7 @@ import {
   type DispatchFacts,
   type InvocationRef,
   type ModelCompatibilityKey,
+  type OfferedTool,
   type PendingRetry,
   type RetryErrorInfo,
   type RunLoopPhase,
@@ -44,6 +45,7 @@ import {
   type RunPosition,
   type SharedRunRow,
 } from './runRows';
+import { mutate } from './stateOperation';
 import type { z } from 'zod';
 
 /**
@@ -53,8 +55,8 @@ import type { z } from 'zod';
  * opened, both card rows for a fast tool whose card opens and closes in that
  * batch); an approval's recovery binding is the `tool.binding` committed in
  * the same batch; a streaming row open when the loop parks closes with the
- * `waiting` step; a model switch's `run.record` and `run.config` restate the
- * snapshot's model id. Publishing those companions separately is the crash
+ * `waiting` step; a model switch's `run.config` restates the snapshot's
+ * model id. Publishing those companions separately is the crash
  * window where a settled tool keeps an active card, or a terminal card claims
  * a result no row holds, or an approval survives with nothing to recover it
  * by, or a listing names a model the ledger does not. An explicit list
@@ -72,6 +74,7 @@ export type RunLedgerDraft = Extract<
       | 'tool.result'
       | 'model.retry'
       | 'flow.snapshot'
+      | 'tools.offered'
       | 'output.produced'
       | 'tool.start'
       | 'tool.end'
@@ -79,7 +82,6 @@ export type RunLedgerDraft = Extract<
       | 'request.opened'
       | 'request.decided'
       | 'followup.consumed'
-      | 'run.record'
       | 'run.config';
   }
 >;
@@ -180,11 +182,14 @@ export type RunState = RunPosition & {
    *  in. */
   readonly overflowRecoveredAtTurn: number | null;
   readonly flow: FlowState | null;
+  /** The latest `tools.offered` row's set; `null` before the first. */
+  readonly offeredTools: readonly OfferedTool[] | null;
+  /** The plugin whose continuation the latest `tools.offered` row pinned. */
+  readonly offeredContinuation: string | null;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
-type CardRowType =
-  'tool.start' | 'tool.end' | 'stream.end' | 'run.record' | 'run.config';
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end' | 'run.config';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
@@ -226,7 +231,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'stream.start': true,
   'response.finalized': true,
   domain: true,
-  'run.record': true,
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,
@@ -262,6 +266,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   usage: EMPTY_RUN_USAGE_TOTALS,
   flow: null,
   overflowRecoveredAtTurn: null,
+  offeredTools: null,
+  offeredContinuation: null,
 });
 
 /**
@@ -302,39 +308,6 @@ const refuse = (
 
 const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
-
-/** One state operation over a JSON document, immutably. */
-function mutate(
-  node: unknown,
-  path: readonly string[],
-  op: StateOperation,
-): Result.Result<unknown, string> {
-  if (!isObject(node)) {
-    return Result.fail(`path ${op.path.join('.')} crosses a non-object`);
-  }
-  const [key, ...rest] = path;
-  if (key === undefined) return Result.fail('empty path');
-  if (rest.length > 0) {
-    if (!Object.hasOwn(node, key)) {
-      return Result.fail(`path ${op.path.join('.')} names no ${key}`);
-    }
-    return Result.map(mutate(node[key], rest, op), (child) => ({
-      ...node,
-      [key]: child,
-    }));
-  }
-  switch (op.op) {
-    case 'set':
-      return Result.succeed({ ...node, [key]: op.value });
-    case 'add': {
-      const current = node[key];
-      if (typeof current !== 'number') {
-        return Result.fail(`add targets a non-number ${op.path.join('.')}`);
-      }
-      return Result.succeed({ ...node, [key]: current + op.amount });
-    }
-  }
-}
 
 /**
  * Apply a settlement's operations over the run's mutable slices, `usage` and
@@ -675,6 +648,12 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ]),
       });
     }
+    case 'tools.offered': // a fresh run's comes in its opening batch
+      return Result.succeed({
+        ...advance(current ?? freshRunState(commit)),
+        offeredTools: row.payload.tools,
+        offeredContinuation: row.payload.continuation,
+      });
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;

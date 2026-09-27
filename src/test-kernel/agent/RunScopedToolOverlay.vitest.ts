@@ -1,7 +1,7 @@
 import '@test/support/defaultSessionTestSetup';
 
 import { it } from '@effect/vitest';
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -10,28 +10,34 @@ import {
   AgentToolUseSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
-import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
+import { stepFor } from '@agent/runtime/loop/step';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, agentRunLayer } from '@agent/runtime/run/AgentRun';
 import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAppState,
+  hostStores,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
+import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { toolRegistryLayer } from '@tools/registry';
-import { toolTableLayer } from '@tools/compositions';
+import { toolTableLayer } from '@tools/liveTools';
 import { toolTable } from '@tools/toolTable';
 import { generateRunId } from '@utils/core';
 
@@ -95,7 +101,11 @@ function runLayer(
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
-      toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
+      toolRegistryLayer.pipe(
+        Layer.provide(
+          Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+        ),
+      ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
   );
@@ -130,7 +140,8 @@ describe('run-scoped tool resolution', () => {
 
         const dispatch = yield* Effect.gen(function* () {
           yield* runToolUse({ resume: false });
-          return (yield* AgentRun).tools;
+          const step = yield* SynchronizedRef.get((yield* AgentRun).steps);
+          return step!.tools.registry;
         }).pipe(
           // Run-scoped tools, one of them shadowing a registered tool.
           Effect.provide(runLayer(ctx, [shadowing, tool('second')], seen)),
@@ -158,7 +169,7 @@ describe('run-scoped tool resolution', () => {
   );
 
   it.effect(
-    'resumes with the recorded tools that still resolve and names each one gone',
+    'a resumed step offers the recorded tools that are still the same tool, and names each one gone',
     () =>
       Effect.gen(function* () {
         const session = sessionWithInteractions({ emit: () => {} });
@@ -182,25 +193,31 @@ describe('run-scoped tool resolution', () => {
 
         // `gone` vanished and `added` appeared since the run opened.
         const resumed = yield* Effect.gen(function* () {
-          return yield* AgentRun;
+          const state = yield* session.ledger.load(runId);
+          const step = yield* stepFor(
+            yield* AgentRun,
+            state!,
+            false,
+            'request',
+          );
+          return { state: state!, step };
         }).pipe(
           Effect.provide(runLayer(ctx, [tool('kept'), tool('added')])),
           Effect.orDie,
         );
 
-        expect(resumed.setting.tools.map(({ name }) => name)).toEqual([
-          'memory',
-          'plan',
-          'kept',
-        ]);
-        expect(resumed.tools.has('gone')).toBe(false);
-        expect(resumed.tools.has('added')).toBe(false);
-        expect(resumed.toolset.offeredTools).toEqual([
+        expect(resumed.state.offeredTools?.map(({ name }) => name)).toEqual([
           'memory',
           'plan',
           'gone',
           'kept',
         ]);
+        const offered = resumed.step.tools.definitions.map(({ name }) => name);
+        expect(offered).toEqual(['memory', 'plan', 'kept']);
+        expect(resumed.step.tools.registry.has('gone')).toBe(false);
+        expect(resumed.step.tools.registry.has('added')).toBe(false);
+        // The narrower set is recorded before the resumed request.
+        expect(resumed.step.rows).toHaveLength(1);
         expect(warn).toHaveBeenCalledWith(
           'Tool "gone" was offered to this run but is no longer available; the resumed run continues without it.',
         );
@@ -212,7 +229,7 @@ describe('run-scoped tool resolution', () => {
     Effect.gen(function* () {
       // The run's tool policy carries both gates; `AgentRun` hands them to the
       // resolver when it builds the model-facing list.
-      const resolved = yield* resolveAgentTools({
+      const resolved = yield* resolveTestStep({
         tools: AgentToolUseSettingSchema.parse({
           tools: [
             { name: 'bash' },
@@ -222,7 +239,6 @@ describe('run-scoped tool resolution', () => {
             { name: 'wolfram' },
           ],
         }).tools,
-        logger: noopTrace,
         approvalPromptsUnavailable: true,
         host: 'cli',
         // No conditional injections: this pins the declared-tool gates alone.

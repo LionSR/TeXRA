@@ -58,16 +58,19 @@ import {
   type RequestError,
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
+import type { SessionEventsShape } from '@shared/session/sessionEvents';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const done: Outcome = Object.freeze({ kind: 'done' } as const);
 
+/** The log's reads, and removal through the session's publisher. */
 type SessionRequestLog = Pick<
   Context.Service.Shape<typeof Database>,
-  'aggregateState' | 'readAll' | 'removeRun'
->;
+  'aggregateState' | 'readAll'
+> &
+  Pick<SessionEventsShape, 'removeRun'>;
 
 /**
  * The session's requests: its approval state and the handler that admits

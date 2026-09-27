@@ -23,7 +23,7 @@ const defaultOutputFilesField = z.array(z.string());
 /**
  * Tool reference: a YAML name, parsed here into the bare `{ name }` entry
  * whose contract (description, parameters) the registry applies once per run
- * in `resolveAgentTools`; or, for definitions registered as values rather
+ * in `resolveStepTools`; or, for definitions registered as values rather
  * than YAML, a whole tool definition, which may carry runtime-only fields no
  * YAML can express.
  */

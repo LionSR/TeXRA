@@ -6,9 +6,7 @@
  * own; a call whose name and arguments repeat an earlier one in the same
  * window is a duplicate that never executes.
  */
-import { createHash } from 'node:crypto';
 import { Result } from 'effect';
-import stableStringify from 'safe-stable-stringify';
 import {
   JsonObjectSchema,
   type TurnRequest,
@@ -19,7 +17,6 @@ import { partitionDuplicateCalls } from '@agent/core/tools/toolCallParsing';
 import type { AgentTrace } from '@agent/trace';
 import { safeParseJson } from '@common/parsing/safeParseJson';
 import type { DispatchFacts, ToolDefinition } from '@shared/schemas';
-import { isObject } from '@utils/core';
 
 import { convertToolSchema } from './toolSchema';
 
@@ -36,88 +33,6 @@ export function toolDefinitionsFor(
       convertToolSchema(definition) ?? { type: 'object', properties: {} },
     ),
   }));
-}
-
-/** Keywords whose value is one schema, or an array of schemas. */
-const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
-  'items',
-  'prefixItems',
-  'additionalProperties',
-  'additionalItems',
-  'unevaluatedProperties',
-  'unevaluatedItems',
-  'contains',
-  'contentSchema',
-  'propertyNames',
-  'not',
-  'if',
-  'then',
-  'else',
-  'anyOf',
-  'oneOf',
-  'allOf',
-]);
-
-/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
-const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
-  'properties',
-  '$defs',
-  'definitions',
-  'patternProperties',
-  'dependentSchemas',
-  'dependencies',
-]);
-
-/**
- * A JSON Schema node with the `description` keyword dropped at every schema
- * position. It walks keywords, not keys: a property named `description` is a
- * name in a `properties` map and stays, and `enum`/`const`/`default` values
- * are data and are not entered.
- */
-function withoutSchemaDescriptions(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
-  if (!isObject(node)) return node;
-  const out: Record<string, unknown> = {};
-  for (const [keyword, value] of Object.entries(node)) {
-    if (keyword === 'description') continue;
-    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
-      out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isObject(value)) {
-      out[keyword] = Object.fromEntries(
-        Object.entries(value).map(([name, schema]) => [
-          name,
-          withoutSchemaDescriptions(schema),
-        ]),
-      );
-    } else {
-      out[keyword] = value;
-    }
-  }
-  return out;
-}
-
-/**
- * The toolset a tool-use run records at open: the offered names in offer
- * order, and a sha256 over the canonical (key-sorted) JSON of each offered
- * name and input schema. Every description is left out, the tool's own and
- * each schema node's: delegation annotations and plugin docs rewrite them
- * between launches without changing what a call may carry.
- */
-export function offeredToolset(definitions: readonly ToolDefinition[]): {
-  readonly offeredTools: readonly string[];
-  readonly toolsetHash: string;
-} {
-  const offered = toolDefinitionsFor(definitions);
-  const canonical = offered.map(({ name, parameters }) => ({
-    name,
-    parameters: withoutSchemaDescriptions(parameters),
-  }));
-  return {
-    offeredTools: offered.map(({ name }) => name),
-    toolsetHash: createHash('sha256')
-      .update(stableStringify(canonical))
-      .digest('hex'),
-  };
 }
 
 /** One local call of a completed turn. */
@@ -165,7 +80,8 @@ export function parseCallArguments(
  */
 export function dispatchFactsFor(
   turn: TurnResult,
-  registry: IToolRegistry,
+  /** The request's step's tools; none in round mode. */
+  registry: IToolRegistry | undefined,
   logger: AgentTrace,
   mintLogId: () => string,
 ): readonly DispatchFacts[] {
@@ -176,7 +92,7 @@ export function dispatchFactsFor(
     input: parseCallArguments(call, logger),
   }));
   const isParallelSafe = (call: { readonly name: string }) =>
-    registry.get(call.name)?.parallelSafe === true;
+    registry?.get(call.name)?.parallelSafe === true;
   const duplicates =
     parsed.length > 1 ? partitionDuplicateCalls(parsed, isParallelSafe) : null;
   if (duplicates !== null && duplicates.size > 0) {

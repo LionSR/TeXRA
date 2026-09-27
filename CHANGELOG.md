@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Session history starts over again with this build.** The first time it
+  opens a workspace, the history an earlier build wrote is moved aside
+  (`texra.db.format<N>`) and TeXRA says so; runs from those builds cannot be
+  resumed. Project documents and research files are unchanged.
+- **Scripts reading `--output-format ndjson` progress see each model call's
+  spend on its own.** A `usage` event now reports one model call rather than
+  the run's total so far, so a run's cost is the sum of its `usage` events.
+  The `run.end` event no longer repeats the run's usage or a workflow's
+  output files; the final result record still lists the output files.
 - **Project instructions come from `AGENTS.md`; `.texrarules` is no longer
   read.** Every agent's system prompt gets the `AGENTS.md` at the workspace
   root, or `~/.texra/AGENTS.md` when the workspace has none, the same file
@@ -134,6 +143,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
+- **Tool changes reach open conversations** — switching Memory or a Tools
+  plugin on or off (in the settings, or with `texra tools enable|disable`
+  from another shell) now takes effect at the conversation's next step
+  instead of only in conversations started afterwards. The conversation's
+  history records each change, and the instructions that go with a tool
+  (such as Memory's) follow it in and out. Calls the model already made
+  finish with the tools they were made against. A resumed conversation
+  keeps the tools that are still compatible; a pending call to a tool that
+  is no longer available is answered as unavailable and the conversation
+  continues. A reworded tool description alone does not interrupt anything.
+  The `texra run` result no longer reports a tool-composition hash.
 - **Workflow scripts get longer default limits and an orchestration
   skill** — the whole-run wall clock defaults to 60 minutes
   (`meta.timeoutMs` up to 24 hours), a run may make 1000 live `agent()`
@@ -237,12 +257,44 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Resuming a stopped workflow in the desktop app continues it instead of
+  marking it failed** — Resume on a halted workflow run started the run over
+  under its old id, which the app refused, so the run was recorded as failed.
+  A workflow run now resumes from where it stopped, on the same path a
+  conversation resumes on.
+
+- **A completed workflow is no longer recorded as failed when opening its
+  final output fails** — in the VS Code extension and the desktop app, the
+  preview of a workflow's final revised file ran inside the run, so a failure
+  there ended a finished run as failed. The preview now opens after the run
+  has recorded its outcome, and a failure to open it no longer changes that
+  outcome. In the CLI, an `--output` or `--output-dir` copy that fails still
+  reports the same error and exit code.
+
+- **Approvals you granted for a session survive resuming it after a
+  restart, and `never` now blocks workflow scripts** — resuming an
+  interrupted conversation in a new window or terminal forgot every "approve
+  for session" grant and asked again for commands and edits you had already
+  approved. The run's saved approvals are restored on resume. Approvals an
+  autonomous goal turned on stay off after a resume until you approve a plan
+  again. Separately, under the `never` approval policy a workflow script
+  (`delegate_multi_agents`) launched its sub-agents anyway; it is now denied,
+  like every other approval request. Session history from earlier builds is
+  cleared the first time this build opens a workspace.
+
 - **OpenAI reasoning models no longer fail with "The terminal snapshot
   conflicts with completed output items"** — when a GPT reasoning model
   reasoned before answering, OpenAI could send the same reasoning twice with
   different encrypted contents, and TeXRA rejected the response as
   malformed, failing every retry. The encrypted reasoning is opaque and is no
   longer compared; the item's identity and status still are.
+
+- **Security: one project's skill folders no longer open file access in
+  another project** — the desktop app keeps several projects open in one
+  process, and every skill folder a project's run loaded outside its
+  workspace became readable by file tools in every project's sessions,
+  including skills another project had disabled. A skill folder is now
+  readable only from sessions of the project that loaded it.
 
 - **Security: setup tools ask before they act, and approving a tool call for
   the session no longer approves every shell command** — `update_config`,

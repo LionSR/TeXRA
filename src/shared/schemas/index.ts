@@ -44,11 +44,15 @@ export * from './workflowScriptDelivery';
 export {
   emptyRunEndOutput,
   NonAgentRunRecordSchema,
+  RunRecordFieldsSchema,
   ResultMetaSchema,
   RunEndSchema,
+  storedResultMeta,
+  storedRunOutput,
   ToolUseRunEndOutputSchema,
   WorkflowRunEndOutputSchema,
   type ResultDiffSummary,
+  type DeliveredResult,
   type ResultMeta,
   type RunEnd,
   type RunEndOutput,
@@ -84,6 +88,7 @@ export * from './runState';
 export * from './runFlowState';
 export * from './rowValues';
 export * from './runLedgerEvent';
+export * from './offeredTools';
 export * from './followUp';
 export * from './sessionEvent';
 export * from './traceEvent';

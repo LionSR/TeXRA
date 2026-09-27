@@ -26,10 +26,7 @@ import {
   queuedFollowUps,
 } from '@test/support/sessionTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
-import {
-  nativeToolTestLayer,
-  emptyPinnedComposition,
-} from '@test/support/nativeToolTestLayer';
+import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import {
   executeSubagentInBand as executeSubagentInBandEffect,
@@ -53,6 +50,17 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@agent/runtime/AgentLaunchContext', () => ({
   prepareAgentDefinition: mocks.prepareAgentDefinition,
+}));
+
+// A child run starts at the session's launch door, on the session's context:
+// the process engine it reads there is this suite's engine.
+vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime/executeAgent')>()),
+  executeAgent: (...args: Parameters<AgentEngine['Service']['executeAgent']>) =>
+    testEngine.executeAgent(...args),
+  resumeToolUseFromResumeData: (
+    ...args: Parameters<AgentEngine['Service']['resumeToolUseFromResumeData']>
+  ) => testEngine.resumeToolUseFromResumeData(...args),
 }));
 
 // Delegation resolves targets through the scope resolver; with no active run
@@ -270,7 +278,7 @@ function delegationOptions(
     },
     parentRunId: IN_BAND_PARENT_RUN_ID,
     session: inBandSession,
-    composition: emptyPinnedComposition.key,
+    parentOffered: [],
     ...overrides,
   };
 }
@@ -843,7 +851,9 @@ describe('headless delegation', () => {
 
         const running = yield* Effect.forkChild(runInBand(delegationOptions()));
         yield* Deferred.await(persisting);
-        const interrupting = yield* Effect.forkChild(Fiber.interrupt(running));
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(running), {
+          startImmediately: true,
+        });
         finishPersistence();
 
         yield* Fiber.join(interrupting);
@@ -1033,6 +1043,31 @@ describe('headless delegation', () => {
             expect.any(String),
             expect.anything(),
           );
+        }),
+      ),
+  );
+
+  it.effect(
+    'denies a proposal under the never policy, as every other request kind',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Failure modes: `never` approves the proposal because the run
+          // cannot present prompts, or opens a prompt nobody may answer.
+          const session = createTestSession();
+          session.setApprovalPolicy('never');
+          const decider = answerOpenedRequests(session, { action: 'approve' });
+          yield* Effect.addFinalizer(() =>
+            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
+          );
+          const result = yield* callDelegateReview(
+            parentRunContext({ session, approvalPromptsUnavailable: true }),
+          );
+
+          expect(decider.openedKinds).toEqual([]);
+          expect(result.status).toBe('error');
+          expect(result.summary).toBe("Delegation denied for 'review'");
+          expect(mocks.executeAgent).not.toHaveBeenCalled();
         }),
       ),
   );

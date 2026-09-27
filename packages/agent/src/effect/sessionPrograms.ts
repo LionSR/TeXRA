@@ -288,7 +288,7 @@ function start(
       Effect.gen(function* () {
         const runFiber = yield* Effect.forkDetach(
           runValidatedAgent(
-            { kind: 'fresh', config, runId },
+            { config, runId },
             {
               approvalPromptsUnavailable: true,
               // The run's trace is built with this tap, so it hears the run

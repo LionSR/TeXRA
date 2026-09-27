@@ -584,6 +584,14 @@ describe('CLI terminal outcome resolution', () => {
             }),
           ),
         );
+        vi.spyOn(session, 'readAggregate').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'run-records',
+              cause: new Error('metadata read failed'),
+            }),
+          ),
+        );
 
         expect(
           yield* readCliRunOutcomeState(

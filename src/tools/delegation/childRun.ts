@@ -3,7 +3,6 @@ import { Cause, Effect, Exit } from 'effect';
 
 // Local imports
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { RunHandle } from '@agent/runtime/RunHandle';
@@ -11,14 +10,14 @@ import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { classifyAgentError } from '@common/errors';
 import { RUN_OUTCOME } from '@shared/schemas';
-import type { RunId, RunIdentity } from '@shared/schemas';
+import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildRunOptions {
   /** What owns this run — the launch site declares the truth once. */
   run: RunIdentity;
-  config: AgentConfig;
+  category: AgentCategory;
 }
 
 /**
@@ -55,19 +54,15 @@ export const createChildRun = Effect.fn('createChildRun')(function* (
     {
       runId,
       identity: options.run,
-      category: options.config.agentCategory,
+      category: options.category,
     },
     parentRunId,
     trace,
   );
-  // Registration already committed the launch and activation together. The
-  // handle is tracked by the loop (`track`) once its stop target exists, so
-  // a stop never finds this handle with nothing to interrupt.
-  trace.emit({
-    type: 'run.config',
-    runId,
-    config: options.config,
-  });
+  // Registration already committed the launch, its configuration and its
+  // activation together. The handle is tracked by the loop (`track`) once
+  // its stop target exists, so a stop never finds this handle with nothing
+  // to interrupt.
   return {
     logger: trace,
     track: () => runs.track(handle),

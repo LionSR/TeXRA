@@ -2,7 +2,7 @@
 import { Cause, Effect, FileSystem, type Scope } from 'effect';
 
 // Local imports
-import { getRunRecords } from '@agent/storage';
+import { deliveredOutput, getRunRecords } from '@agent/storage';
 import { readChildTurnState } from '@agent/storage/runRecords';
 import {
   readWorkflowCallAttempt,
@@ -12,8 +12,8 @@ import { WorkflowRunAbortError } from '@agent/workflowScript/runWorkflowScript';
 import type { WorkflowAgentInvocation } from '@agent/workflowScript/types';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import { Runs } from '@agent/runtime/runRegistry';
-import { RunLive } from '@agent/runtime/runRegistry';
+import { RunLive, Runs } from '@agent/runtime/runRegistry';
+import { offeredBy } from '@agent/runtime/loop/step';
 import type { AgentConfigPayload } from '@agent/core/definition/AgentConfig';
 import { formatError } from '@common/errors';
 import type { AppState } from '@platform/interfaces';
@@ -682,7 +682,7 @@ const recoverOrLaunchWorkflowChild = Effect.fn('recoverOrLaunchWorkflowChild')(
           }
           return {
             runId,
-            result: { ...end, output: meta.output },
+            result: { ...end, output: deliveredOutput(meta, end.output) },
             recovered: true,
           };
         }
@@ -795,7 +795,7 @@ export function createWorkflowScriptAgentRunner(
               session,
               approvalPromptsUnavailable:
                 parent.run.toolPolicy.approvalPromptsUnavailable,
-              composition: parent.run.composition.key,
+              parentOffered: yield* offeredBy(parent.run),
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
               // Live inherited bypass values, matching LLM delegation: each
               // approval follows the parent's corresponding bypass. The run's own

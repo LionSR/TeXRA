@@ -32,7 +32,7 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
     lastError: null,
     declinedRoutes: [],
   },
-  state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+  state: { stateSlices: null },
 };
 
 describe('deriveResumability', () => {
@@ -138,6 +138,14 @@ describe('deriveResumability', () => {
         yield* Effect.promise(() => writeMeta(runId, {}));
         yield* Effect.promise(() => writeSnapshot(runId));
         vi.spyOn(session, 'readRunRecords').mockReturnValue(
+          Effect.fail(
+            new DatabaseReadFailed({
+              path: 'session.db',
+              cause: new Error('corrupt run metadata'),
+            }),
+          ),
+        );
+        vi.spyOn(session, 'readAggregate').mockReturnValue(
           Effect.fail(
             new DatabaseReadFailed({
               path: 'session.db',

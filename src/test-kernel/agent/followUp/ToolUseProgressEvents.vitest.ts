@@ -42,7 +42,7 @@ import type { RunState } from '@shared/session/runStateFold';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -241,7 +241,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
                   turn,
                   calls: dispatchFactsFor(
                     turn,
-                    run.tools,
+                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
                   ),
@@ -314,10 +314,8 @@ function agentRunTestLayer(init: LoopInit) {
             ? init.initialUserMessageForTranscript
             : 'Do the thing.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry(tools),
+        ...testRunTools(hostStores(), tools),
         finalToolName: init.finalToolName ?? null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
         structured: init.structured ?? { value: undefined },
         model,
         scope,
@@ -327,7 +325,6 @@ function agentRunTestLayer(init: LoopInit) {
           {
             logger,
             runId: init.runId,
-            runStageId: undefined,
             config: testWorkspaceRoots().config,
             usageLog: { log: () => {} },
           },

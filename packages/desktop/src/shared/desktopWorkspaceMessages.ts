@@ -235,3 +235,22 @@ export const DesktopWorkspaceInboundMessageSchema = z.discriminatedUnion(
     DesktopBrowserCloseMessageSchema,
   ],
 );
+
+type WorkspaceOutbound =
+  | z.infer<typeof DesktopFilesListedMessageSchema>
+  | z.infer<typeof DesktopFilesListErrorMessageSchema>
+  | z.infer<typeof DesktopFileReadMessageSchema>
+  | z.infer<typeof DesktopFileWrittenMessageSchema>
+  | z.infer<typeof DesktopFileErrorMessageSchema>
+  | z.infer<typeof DesktopWorkspaceFilesChangedMessageSchema>
+  | z.infer<typeof DesktopTerminalDataMessageSchema>
+  | z.infer<typeof DesktopTerminalExitMessageSchema>
+  | z.infer<typeof DesktopTerminalErrorMessageSchema>
+  | z.infer<typeof DesktopBrowserStateMessageSchema>;
+
+/** A workspace reply before the project transport stamps its `session`. */
+export type DesktopWorkspaceReply = WorkspaceOutbound extends infer M
+  ? M extends WorkspaceOutbound
+    ? Omit<M, 'session'>
+    : never
+  : never;

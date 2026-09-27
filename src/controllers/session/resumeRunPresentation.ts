@@ -1,11 +1,12 @@
-import { Effect } from 'effect';
-import { describeFollowUpFailure } from '@agent/runtime';
+import { Cause, Effect } from 'effect';
+import { describeFollowUpFailure, type AgentFlowResult } from '@agent/runtime';
 import {
   resumeClaimedRun,
   type ResumeRunOptions,
 } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { FollowUpFailureReason } from '@agent/followUp/ToolUseFollowUp';
+import type { ProcessServices } from '@platform/processRuntime';
 import type { RunId } from '@shared/schemas';
 
 /**
@@ -33,16 +34,38 @@ export function resumeCancellationLatch(
   };
 }
 
-/** Resume a host-owned stream and present an ordinary refusal consistently. */
+/**
+ * Resume a host-owned stream and present an ordinary refusal consistently.
+ * A resumed workflow settles with its whole run; `presentResult` reacts to
+ * that committed result (opening its output), and never changes it.
+ */
 export const resumeRunWithRefusalNotice = Effect.fn(
   'resumeRunWithRefusalNotice',
 )(function* (
   runId: RunId,
-  options: ResumeRunOptions & { readonly session: SessionHandle },
+  options: ResumeRunOptions & {
+    readonly session: SessionHandle;
+    readonly presentResult?: (
+      result: AgentFlowResult,
+    ) => Effect.Effect<void, Error, ProcessServices>;
+  },
   onRefused?: (failure: FollowUpFailureReason) => void,
 ) {
   const result = yield* resumeClaimedRun(runId, options);
-  if ('started' in result) return result.delivered;
+  if ('started' in result) {
+    if (result.result && options.presentResult) {
+      yield* options
+        .presentResult(result.result)
+        .pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning('Presenting the resumed run failed').pipe(
+              Effect.annotateLogs({ data: Cause.squash(cause) }),
+            ),
+          ),
+        );
+    }
+    return result.delivered;
+  }
   if (options.isCancellationRequested?.() === true) return false;
 
   onRefused?.(result.failed);

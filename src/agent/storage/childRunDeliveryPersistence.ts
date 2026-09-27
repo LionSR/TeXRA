@@ -8,7 +8,8 @@ import type {
 } from '@shared/session/database';
 import {
   aggregateId,
-  type ResultMeta,
+  storedResultMeta,
+  type DeliveredResult,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -16,7 +17,7 @@ export function persistChildRunDelivery(
   session: SessionHandle,
   runId: RunId,
   message: string,
-  resultMeta: ResultMeta | undefined,
+  resultMeta: DeliveredResult | undefined,
 ): Effect.Effect<void, DatabaseNotOwner | DatabaseWriteFailed> {
   const target = aggregateId('run', runId);
   const events: SessionEventDraft[] = [
@@ -26,7 +27,7 @@ export function persistChildRunDelivery(
     events.push({
       type: 'run.result',
       aggregateId: target,
-      result: resultMeta,
+      result: storedResultMeta(resultMeta),
     });
   return session.commit(events).pipe(Effect.asVoid);
 }

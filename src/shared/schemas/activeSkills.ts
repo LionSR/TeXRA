@@ -1,6 +1,10 @@
+import stripAnsi from 'strip-ansi';
 import { z } from 'zod';
 
-import { collapseWhitespace } from '@utils/text/stringUtils';
+import {
+  collapseWhitespace,
+  stripControlCharacters,
+} from '@utils/text/stringUtils';
 
 import { SkillNameSchema } from './skillName';
 
@@ -23,9 +27,6 @@ export type ActiveSkillSourceScope = z.infer<
   typeof ActiveSkillSourceScopeSchema
 >;
 
-const ANSI_ESCAPE_SEQUENCE =
-  // eslint-disable-next-line no-control-regex -- untrusted summaries may contain terminal escapes
-  /\u001b\][\s\S]*?(?:\u0007|\u001b\\|\u009c)|[\u001b\u009b][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;
 const ORDINARY_URL_VALUE = /\b(?!file:)[a-z][a-z0-9+.-]*:\/\/[^\s<>{}]+/gi;
 const ORDINARY_SLASH_PROSE = /\binput\/output\b/gi;
 
@@ -44,10 +45,9 @@ function containsFilesystemShapedValue(description: string): boolean {
  * transcript recorders parse raw skills without a parallel scrub.
  */
 function sanitizeActiveSkillDescription(description: string): string {
-  const withoutAnsi = description.replaceAll(ANSI_ESCAPE_SEQUENCE, '');
-  // eslint-disable-next-line no-control-regex -- persisted UI text excludes C0/C1 controls
-  const withoutControls = withoutAnsi.replaceAll(/[\x00-\x1f\x7f-\x9f]/g, ' ');
-  const normalized = collapseWhitespace(withoutControls).trim();
+  const normalized = collapseWhitespace(
+    stripControlCharacters(stripAnsi(description), ' '),
+  );
   const safeDescription =
     normalized && !containsFilesystemShapedValue(normalized)
       ? normalized

@@ -182,11 +182,16 @@ function runIdFor(name: string): RunId {
 }
 
 /** The exact durable run record a launch of `name` must preserve. */
-function registrationRecordFor(name: string, model = 'parent-model') {
+function registrationRecordFor(
+  name: string,
+  model = 'parent-model',
+  inputFiles: readonly string[] = [],
+) {
   return {
     name,
     instruction: `Workflow script '${name}'`,
     model,
+    inputFiles,
   };
 }
 
@@ -326,7 +331,7 @@ beforeEach(async () => {
     Effect.succeed('parent-model'),
   );
   mocks.requestDelegationProposal.mockReturnValue(
-    Effect.succeed({ result: { action: 'approve' }, autoApproved: false }),
+    Effect.succeed({ result: { action: 'approve' }, childApproval: 'inherit' }),
   );
   mocks.startChildRunLoop.mockReturnValue(Effect.forkDetach(Effect.void));
   mocks.requireWorkflowOrToolUseAgent.mockImplementation((_stores, name) => {
@@ -367,7 +372,7 @@ describe('WorkflowScriptTool', () => {
       const asked = yield* Deferred.make<void>();
       const decided = yield* Deferred.make<{
         result: { action: 'approve' };
-        autoApproved: boolean;
+        childApproval: 'inherit' | 'auto-approved';
       }>();
       mocks.requestDelegationProposal.mockReturnValueOnce(
         Deferred.succeed(asked, undefined).pipe(
@@ -383,7 +388,7 @@ describe('WorkflowScriptTool', () => {
 
       yield* Deferred.succeed(decided, {
         result: { action: 'approve' as const },
-        autoApproved: false,
+        childApproval: 'inherit' as const,
       });
       yield* Fiber.join(pending);
       expect(mocks.registerRun).toHaveBeenCalledOnce();
@@ -396,7 +401,10 @@ describe('WorkflowScriptTool', () => {
     () =>
       Effect.gen(function* () {
         mocks.requestDelegationProposal.mockReturnValueOnce(
-          Effect.succeed({ result: { action: 'approve' }, autoApproved: true }),
+          Effect.succeed({
+            result: { action: 'approve' },
+            childApproval: 'auto-approved',
+          }),
         );
 
         yield* callTool();
@@ -419,7 +427,7 @@ describe('WorkflowScriptTool', () => {
   ])('does not execute after $decision.action', ({ decision, status }) =>
     Effect.gen(function* () {
       mocks.requestDelegationProposal.mockReturnValueOnce(
-        Effect.succeed({ result: decision, autoApproved: false }),
+        Effect.succeed({ result: decision, childApproval: 'inherit' }),
       );
 
       const result = yield* callTool();
@@ -794,19 +802,14 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ files });
 
       expect(result.status).toBe('executed');
-      // The durable record stays honest (no file lists); the binding rides the
-      // checkpoint and the live run config the agent steps consume.
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      // The durable record names the input files the run view lists; the
+      // full binding rides the checkpoint and the live run config the agent
+      // steps consume.
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('tool-test'),
-        expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
+        registrationRecordFor('tool-test', 'parent-model', ['paper.tex']),
+        registrationOptionsFor('tool-test'),
       );
     }),
   );
@@ -870,17 +873,11 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ script: resumeScript });
 
       expect(result.status).toBe('executed');
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('resume'),
+        expect.objectContaining({ inputFiles: ['paper.tex'] }),
         expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
       );
     }),
   );

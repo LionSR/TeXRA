@@ -12,6 +12,7 @@
  * (`transcriptLogRows.ts`). The working state lives in `transcriptState.ts`.
  */
 import {
+  AgentCategory,
   MESSAGE_TYPES,
   RUN_PHASE,
   TOOL_CALL_STATUS,
@@ -95,6 +96,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       if (event.kind === 'round' || event.kind === 'session') {
         ix.pendingModelResponseId = undefined;
       }
+      if (event.kind === 'run') ix.runStage = event.id;
       const index = event.index ?? undefined;
       const total = event.total ?? undefined;
       write(d, {
@@ -350,6 +352,9 @@ export function foldTranscriptEvent(
   };
   const phase = phaseMoveOf(event);
   if (phase !== null) moveBoundary(d, phase);
+  // The model a later priced turn ran on, in row order: a statistics row
+  // reads the model of its own turn, not the run's newest.
+  else if (event.type === 'run.config') d.ix.model = event.config.model;
   else if (isTranscriptEvent(event)) {
     record(d, event);
     // A transcript event writes at most one slot; its position is the row's
@@ -394,6 +399,9 @@ export function foldRunTranscript(
   const ctx: TranscriptContext = {
     debug,
     lifecycleToTaskGroups: lifecycleToTaskGroups(start),
+    ...(start.category === AgentCategory.Workflow
+      ? { statistics: { model: null } }
+      : {}),
   };
   for (const event of events) {
     transcript = foldTranscriptEvent(transcript, event, ctx);

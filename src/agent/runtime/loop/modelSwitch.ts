@@ -7,10 +7,15 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Scope, SynchronizedRef } from 'effect';
 
 import { USER_VAR_MODEL } from '@agent/prompt/userVars';
-import type { LanguageModel } from '@platform/languageModel';
+import { configChange } from '@agent/storage/runLifecycle';
+import {
+  resolveModelRoute,
+  routeCompatibilityKey,
+} from '@agent/runtime/modelRoutes';
+import { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
-import { AgentRun } from '../run/AgentRun';
+import { AgentRun, type AgentRunShape } from '../run/AgentRun';
 import { bindModel, releaseBindingUploads } from '../run/modelBinding';
 import { rowAggregate, type SnapshotPatch } from './rows';
 import type { HttpClient } from 'effect/unstable/http';
@@ -53,10 +58,14 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
       temperature: run.setting.temperature,
     }).pipe(Scope.provide(run.scope));
     userChannels[USER_VAR_MODEL] = next.modelId;
-    // The snapshot's model id is the run's one model fact. The record a
-    // listing or a resume reads and the display row both restate it in
-    // the same batch, so no reader sees one without the other.
-    const config = { ...run.config, model: next.modelId };
+    // The snapshot's model id is the loop's model fact; the run's
+    // configuration row, which a listing, a resume and every renderer read,
+    // changes with it in the same batch, so no reader sees one without the
+    // other.
+    const config = yield* configChange(run.session, run.runId, {
+      ...run.config,
+      model: next.modelId,
+    });
     const switched = yield* cell.append([
       {
         type: 'model.compaction',
@@ -70,12 +79,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
             state.continuation === null ? null : 'history-replaced',
         },
       },
-      {
-        type: 'run.record',
-        aggregateId: rowAggregate(run.runId),
-        record: config,
-      },
-      { type: 'run.config', aggregateId: rowAggregate(run.runId), config },
+      ...(config === null ? [] : [config]),
       snapshot(state, {
         phase: state.phase ?? 'model.ready',
         runtime: {
@@ -89,3 +93,50 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     return switched;
   },
 );
+
+const MODEL_SWITCH_DIFFERENT_FORMAT_ERROR =
+  'Cannot switch this conversation to a model with a different conversation format. Start a new chat to use that model.';
+const MODEL_SWITCH_DIFFERENT_FORMAT_REASON =
+  'different conversation format; start new chat';
+
+/** The host port's switch methods: whether `model` can replace the run's,
+ *  and the admission the loop applies at its next model boundary. */
+export function modelSwitchPort(
+  run: AgentRunShape,
+  languageModel: LanguageModel['Service'],
+) {
+  const modelSwitchDisabledReason = Effect.fn(
+    'toolUse.modelSwitchDisabledReason',
+  )(function* (model: string) {
+    const current = SynchronizedRef.getUnsafe(run.model);
+    if (current.modelId === model) return undefined;
+    const nextConfig = MODEL_CONFIGS[model];
+    if (!nextConfig) return `Model ${model} is not registered`;
+    const route = yield* resolveModelRoute(run.stores, nextConfig).pipe(
+      Effect.provideService(LanguageModel, languageModel),
+    );
+    const nextKey = yield* routeCompatibilityKey(nextConfig, route);
+    if (!nextKey) return `Unsupported model provider: ${nextConfig.provider}`;
+    return current.compatibilityKey === nextKey
+      ? undefined
+      : MODEL_SWITCH_DIFFERENT_FORMAT_REASON;
+  });
+  return {
+    modelSwitchDisabledReason,
+    switchModel: Effect.fn('toolUse.switchModel')(function* (model: string) {
+      const disabledReason = yield* modelSwitchDisabledReason(model);
+      if (disabledReason !== undefined) {
+        return yield* Effect.fail(
+          new Error(
+            disabledReason === MODEL_SWITCH_DIFFERENT_FORMAT_REASON
+              ? MODEL_SWITCH_DIFFERENT_FORMAT_ERROR
+              : disabledReason,
+          ),
+        );
+      }
+      // Bound and recorded by the loop at its next model boundary: the rows
+      // that record the switch belong to the fiber holding the run's state.
+      run.pendingModelSwitch.value = model;
+    }),
+  };
+}

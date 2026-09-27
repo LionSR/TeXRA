@@ -59,13 +59,17 @@ SELECT
   CASE WHEN l.type = 'run.end' THEN l.at END AS ended_at,
   CASE WHEN l.type = 'run.end' THEN json_extract(l.data, '$.outcome') END AS outcome,
   CASE WHEN l.type = 'run.end' THEN json_extract(l.data, '$.error.message') END AS error,
-  CASE WHEN l.type = 'run.end' THEN json_extract(l.data, '$.usage.totalCost') END AS cost,
-  CASE WHEN l.type = 'run.end'
-    THEN json_extract(l.data, '$.usage.totalInputTokens') END AS input_tokens,
-  CASE WHEN l.type = 'run.end'
-    THEN json_extract(l.data, '$.usage.totalOutputTokens') END AS output_tokens
+  CASE WHEN l.type = 'run.end' THEN u.cost END AS cost,
+  CASE WHEN l.type = 'run.end' THEN u.input_tokens END AS input_tokens,
+  CASE WHEN l.type = 'run.end' THEN u.output_tokens END AS output_tokens
 FROM events s
 LEFT JOIN lifecycle l ON l.run_id = s.run_id AND l.latest = 1
+LEFT JOIN (
+  SELECT run_id, total(json_extract(data, '$.usage.cost')) AS cost,
+    total(json_extract(data, '$.usage.inputTokens')) AS input_tokens,
+    total(json_extract(data, '$.usage.outputTokens')) AS output_tokens
+  FROM events WHERE type = 'usage' GROUP BY run_id
+) u ON u.run_id = s.run_id
 WHERE s.type = 'run.start';
 `;
 
@@ -110,11 +114,11 @@ LEFT JOIN events e ON e.run_id = s.run_id AND e.type = 'tool.end'
 WHERE s.type = 'tool.start';
 `;
 
-/** Spend is attributed to `usage.runId`, which may name an agent-CLI child
- *  its parent logged the turn for. */
+/** One row per priced model turn of the run it is on (`usage` rows are
+ *  never running totals), so a run's spend is their sum. */
 const USAGE = `
 CREATE VIEW usage AS
-SELECT position, json_extract(data, '$.runId') AS run_id, at,
+SELECT position, run_id, at,
   json_extract(data, '$.usage.inputTokens') AS input_tokens,
   json_extract(data, '$.usage.outputTokens') AS output_tokens,
   json_extract(data, '$.usage.cacheReadInputTokens') AS cache_read_input_tokens,
@@ -154,7 +158,7 @@ export const HISTORY_INSERT_SQL =
 export const HISTORY_REMOVE_SQL = 'DELETE FROM events WHERE run_id = ?';
 
 /** What the tool description tells the model it can query. */
-export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category, model, description, started_at, lifecycle, ended_at, outcome, error, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; ended_at/outcome/error/cost/tokens are set only when ended. parent_id is NULL for a top-level or detached run.
+export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category, model, description, started_at, lifecycle, ended_at, outcome, error, cost, input_tokens, output_tokens) - one row per run. lifecycle is 'created', 'activated' (launched or resumed; it may still be running or may have died) or 'ended'; ended_at/outcome/error/cost/tokens are set only when ended, and cost/tokens are the sums of the run's usage rows. parent_id is NULL for a top-level or detached run.
 - run_tree(ancestor_id, id, depth) - every ancestor of every run; depth 1 is the direct parent.
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.

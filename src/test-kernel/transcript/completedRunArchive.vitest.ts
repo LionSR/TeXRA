@@ -409,8 +409,6 @@ describe('completedRunArchive facade', () => {
               },
               state: {
                 stateSlices: null,
-                offeredTools: [],
-                toolsetHash: '0'.repeat(64),
               },
             }),
           },
@@ -443,7 +441,6 @@ describe('completedRunArchive facade', () => {
           yield* Effect.flip(
             resumeRun(runId, {
               session,
-              executeWorkflow: vi.fn(() => Effect.void),
             }),
           ),
         ).toBe(launchFailure);

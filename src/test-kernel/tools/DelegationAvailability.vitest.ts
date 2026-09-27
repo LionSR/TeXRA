@@ -48,10 +48,9 @@ const {
   readDelegationAnnotationState,
   selectAvailableDelegationModel,
 } = await import('@tools/delegation/delegationAvailability');
-const { resolveAgentTools } =
-  await import('@agent/runtime/agentToolResolution');
+const { resolveTestStep } = await import('@test/support/stepToolsTestUtils');
 const { toolTable } = await import('@tools/toolTable');
-const { toolTableLayer } = await import('@tools/compositions');
+const { toolTableLayer } = await import('@tools/liveTools');
 
 const DELEGATE_AGENT_DESCRIPTION = [
   'Delegate a task to a tool-use agent.',
@@ -125,7 +124,7 @@ function rewriteRoster(
 }
 
 /**
- * A tool table holding exactly these definitions: `resolveAgentTools`
+ * A tool table holding exactly these definitions: `resolveStepTools`
  * advertises the table's own contract, not the one the declaration carries.
  */
 function delegationRegistry(tools: readonly ToolInput[]) {
@@ -150,9 +149,8 @@ function resolveToolList(
   stores: ModelOptionStores = hostStores(),
 ) {
   return Effect.suspend(() => {
-    return resolveAgentTools({
+    return resolveTestStep({
       tools,
-      logger: { warn: () => {} },
       host: 'vscode',
       injectTools: false,
       stores,
@@ -313,7 +311,7 @@ describe('delegation model availability', () => {
   );
 });
 
-describe('resolveAgentTools delegation annotation', () => {
+describe('resolveStepTools delegation annotation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.isWorktreeSupportEnabled.mockReturnValue(Effect.succeed(false));

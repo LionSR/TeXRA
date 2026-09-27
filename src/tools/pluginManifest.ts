@@ -134,7 +134,8 @@ export const MANIFEST = [
   {
     // The `plan` tool owns planning and the goal lifecycle (update, pause,
     // complete), so any tool-use agent can drive the goal loop while the
-    // plugin is on; the synthetic turns are its continuation policy.
+    // plugin is on; the synthetic turns are its continuation
+    // (`@tools/goal/goalContinuation`).
     id: 'goal',
     toolNames: ['plan'],
     injectedWhen: { plan: true },
@@ -145,26 +146,11 @@ export const MANIFEST = [
       'Propose a plan for approval and, when you run it as a goal, let the agent keep working turn after turn until the objective is done or it needs you.',
     setup: {
       configNotes:
-        'No local install required. Turning this off removes the plan tool from every agent, and runs started afterwards open no goal turns.',
+        "No local install required. Turning this off removes the plan tool from every agent and stops goal turns, from each run's next step.",
     },
     toggleable: true,
     onByDefault: true,
     availability: ALWAYS_AVAILABLE,
-    continuation: true,
-  },
-  {
-    // A workflow agent's rounds: its continuation policy opens each round
-    // and its documents pipeline turns the round's text into output files
-    // (`@agent/runtime/loop/rounds`). Built in and always on, so every
-    // composition holds it, as a delegated workflow child's parent's does;
-    // its policy serves the workflow category only.
-    id: 'documents',
-    toolNames: [],
-    name: 'Documents',
-    category: 'workflow',
-    description:
-      'Run a workflow agent round by round and write its output documents.',
-    hidden: true,
     continuation: true,
   },
   {

@@ -61,7 +61,6 @@ function createMonitorWithEvents() {
     {
       logger,
       runId,
-      runStageId: undefined,
       config: testWorkspaceRoots().config,
       usageLog: { log },
     },
@@ -89,8 +88,8 @@ async function withMonitor<T>(
 }
 
 describe('UsageMonitor', () => {
-  it('forwards the ChatGPT subscription route to session usage facts', async () => {
-    await withMonitor(async ({ monitor, events }) => {
+  it('forwards the ChatGPT subscription route to the usage log', async () => {
+    await withMonitor(async ({ monitor, log }) => {
       const state = freshUsage();
       recordRound(state, {
         inputTokens: 10,
@@ -103,17 +102,14 @@ describe('UsageMonitor', () => {
 
       monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
-      const usageEvent = traceEventsOfType(events, 'usage').at(0);
-      expect(usageEvent).toMatchObject({
-        usage: {
-          usageRoute: 'chatgpt-subscription',
-        },
-      });
-      expect(usageEvent?.usage).not.toHaveProperty('viaChatGptSubscription');
+      expect(log).toHaveBeenCalledWith(
+        expect.objectContaining({ usageRoute: 'chatgpt-subscription' }),
+        expect.anything(),
+      );
     });
   });
 
-  it('publishes the run total on every usage row while billing the round', async () => {
+  it('bills each round and writes no session row', async () => {
     await withMonitor(async ({ monitor, events, log }) => {
       const state = freshUsage();
       const round = {
@@ -128,13 +124,8 @@ describe('UsageMonitor', () => {
       recordRound(state, round);
       monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
-      // The session row is a snapshot of the run's spend (the fold replaces
-      // the run's total with the newest row), so the second round's row
-      // carries both rounds.
-      const rows = traceEventsOfType(events, 'usage');
-      expect(rows.map((row) => row.usage.inputTokens)).toEqual([100, 200]);
-      expect(rows.map((row) => row.usage.outputTokens)).toEqual([10, 20]);
-      expect(rows.map((row) => row.usage.cost)).toEqual([0.01, 0.02]);
+      // The round's usage is its response row; the monitor publishes none.
+      expect(traceEventsOfType(events, 'usage')).toHaveLength(0);
 
       // Backend billing stays per round: two calls, one round each.
       expect(log).toHaveBeenCalledTimes(2);
@@ -145,7 +136,7 @@ describe('UsageMonitor', () => {
   });
 
   it('does not replay prior usage during a usage-less tool-use continuation', async () => {
-    await withMonitor(async ({ monitor, events, log }) => {
+    await withMonitor(async ({ monitor, log }) => {
       const state = freshUsage();
       const usage = {
         inputTokens: 10,
@@ -161,7 +152,6 @@ describe('UsageMonitor', () => {
       expect(state.latestUsage).toBeNull();
       monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
 
-      expect(traceEventsOfType(events, 'usage')).toHaveLength(1);
       expect(log).toHaveBeenCalledTimes(1);
       expect(state.totals).toMatchObject({
         totalInputTokens: 10,
