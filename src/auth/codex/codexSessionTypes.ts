@@ -7,12 +7,6 @@
  */
 import { z } from 'zod';
 
-import { CHATGPT_AUTH } from '@ui/copy/accountAuth';
-
-import {
-  SubscriptionOAuthError,
-  type SubscriptionOAuthErrorKind,
-} from '../oauth/subscriptionOAuthError';
 import { SubscriptionSessionBaseSchema } from '../oauth/subscriptionSessionSchema';
 
 /** Raw response from the OAuth token endpoint (code exchange + refresh). */
@@ -24,7 +18,6 @@ export const CodexTokenResponseSchema = z.object({
   id_token: z.string().min(1).nullish(),
   expires_in: z.number(),
 });
-export type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 /** The persisted OAuth session bundle (stored as JSON under one secret key). */
 export const CodexSessionSchema = SubscriptionSessionBaseSchema.extend({
@@ -71,26 +64,3 @@ export const CodexDeviceTokenSchema = z.object({
   code_verifier: z.string().min(1),
   code_challenge: z.string().min(1).nullish(),
 });
-
-export class CodexAuthError extends SubscriptionOAuthError {
-  constructor(
-    message: string,
-    kind: SubscriptionOAuthErrorKind,
-    status?: number,
-    options?: ErrorOptions,
-  ) {
-    super(message, kind, status, options);
-    this.name = 'CodexAuthError';
-  }
-}
-
-/** User-facing message shared by preflight and request-time auth failures. */
-export function formatCodexAuthUnavailableMessage(
-  error: CodexAuthError,
-): string {
-  const turnOff = `turn off "${CHATGPT_AUTH.preferLabel}".`;
-  const action = error.needsReauth
-    ? `${CHATGPT_AUTH.signInLabel} again, or ${turnOff}`
-    : `Try again in a moment, or ${turnOff}`;
-  return `${CHATGPT_AUTH.subscriptionLabel} unavailable: ${error.message} ${action}`;
-}

@@ -1,10 +1,10 @@
 import { Effect, type Scope } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
+import type { SubscriptionDeviceCodePrompt } from '@auth/oauth/deviceAuthorization';
 import { LoopbackTransportUnavailableError } from '@auth/oauth/loopbackLogin';
 import {
   subscriptionProvider,
-  type SubscriptionDeviceCodePrompt,
   type SubscriptionProviderId,
 } from '@controllers/modelAccess/subscriptionProviders';
 import type { SettingsViewInboundHandlerRegistry } from '@controllers/settingsView/settingsViewDispatch';
@@ -25,15 +25,14 @@ import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import type { DesktopMessageHandler } from './desktopIpcTypes.js';
-import type { DesktopToolingSettingsController } from './desktopToolingSettingsController.js';
+
+const NO_EXTENSION_HOSTING =
+  'TeXRA Desktop runs standalone and cannot host VS Code extensions.';
 
 export interface DesktopSettingsIpcOptions {
   /** This window's half of the shared settings body; the subscription
-   *  sign-in and the Tools and LaTeX pages' opening data are built here. */
-  readonly bindings: Omit<
-    SettingsHostBindings,
-    'signInSubscription' | 'postHostStartup'
-  >;
+   *  sign-in is built here. */
+  readonly bindings: Omit<SettingsHostBindings, 'signInSubscription'>;
   /** How a subscription sign-in reaches the user: the loopback browser, and
    *  the device code shown when no browser can carry the callback. */
   readonly signInPresentation: {
@@ -57,7 +56,6 @@ export interface DesktopSettingsIpcOptions {
     signIn(): Effect.Effect<void, Error>;
     signOut(): Effect.Effect<void, Error>;
   };
-  readonly toolingSettingsController: DesktopToolingSettingsController;
   /** The session of the paper this settings surface serves. The desktop has
    *  no process-default session, so it must be passed. */
   readonly session: SessionHandle;
@@ -86,7 +84,6 @@ export function createDesktopSettingsIpc(
   options: DesktopSettingsIpcOptions,
 ): Effect.Effect<DesktopSettingsIpc, never, Scope.Scope | ProcessServices> {
   const { bindings, runtime, signInPresentation } = options;
-  const tooling = options.toolingSettingsController;
 
   /**
    * Show one informational part of a sign-in without waiting for it: failing
@@ -177,7 +174,6 @@ export function createDesktopSettingsIpc(
     bindings: {
       ...bindings,
       signInSubscription,
-      postHostStartup: tooling.postStartupData(),
     },
   });
 
@@ -190,8 +186,11 @@ export function createDesktopSettingsIpc(
     signOut: () => options.auth.signOut(),
     requestModelAccess: unsupported('Copilot models require VS Code.'),
     clearCopilotRoute: unsupported('Copilot models require VS Code.'),
-    ...tooling.toolHandlers,
-    ...tooling.latexHandlers,
+    installToolExtension: unsupported(NO_EXTENSION_HOSTING),
+    installLatexWorkshop: unsupported(NO_EXTENSION_HOSTING),
+    applyLatexSettings: unsupported(
+      'Recommended VS Code settings can only be applied from the TeXRA VS Code extension.',
+    ),
   };
 
   const { repaintOn, settle } = body;
@@ -202,7 +201,6 @@ export function createDesktopSettingsIpc(
         if (work) runtime.runFork(settle(work));
       }),
     ),
-    tooling.followToolAvailability,
     // Outside VS Code a rejected token left the pollers failing in silence.
     // The dialog is the whole fix: the token status reports only which store
     // holds a token, and rejection leaves the secret in place, so re-posting

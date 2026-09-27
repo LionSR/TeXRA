@@ -12,7 +12,9 @@ import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
   JsonValue,
+  PersistedJsonValue,
   CommitOrdinal,
+  DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
@@ -199,6 +201,11 @@ export class Database extends Context.Service<
       fromCommit: CommitOrdinal,
       throughCommit?: CommitOrdinal,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** {@link readAll} filtered to display types in SQL: a tail never decodes
+     *  a run's private records only to drop them. */
+    readonly readDisplay: (
+      fromCommit: CommitOrdinal,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     readonly readListing: () => Effect.Effect<
       readonly SessionEvent[],
       DatabaseReadFailed
@@ -234,6 +241,17 @@ export class Database extends Context.Service<
     readonly readAppStateKey: (
       key: string,
     ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
+    /** Change one key from its latest value while the write transaction is
+     *  held; a refusal writes nothing. */
+    readonly updateAppStateKey: <E>(
+      key: string,
+      change: (
+        current: JsonValue | undefined,
+      ) => Result.Result<PersistedJsonValue, E>,
+    ) => Effect.Effect<
+      Result.Result<PersistedJsonValue, E>,
+      DatabaseWriteFailed
+    >;
     readonly readUpdateCheck: (
       host: UpdateCheckHost,
     ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
@@ -340,6 +358,7 @@ export class GlobalDatabase extends Context.Service<
     Context.Service.Shape<typeof Database>,
     | 'appendAll'
     | 'readAppStateKey'
+    | 'updateAppStateKey'
     | 'readInputHistory'
     | 'appendInputHistory'
     | 'readDesktopProjects'

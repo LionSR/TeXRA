@@ -9,31 +9,34 @@ import {
   getSubscriptionSessionStatus,
   type SessionSecretStore,
 } from '../oauth/sessionAccess';
-import { XAI_SESSION_SECRET_KEY } from './xaiConstants';
 import {
-  XaiSessionCoordinator,
-  type XaiSessionStatus,
-} from './XaiSessionCoordinator';
+  SubscriptionOAuthCoordinator,
+  type SubscriptionSessionStatus,
+} from '../oauth/SubscriptionOAuthCoordinator';
+import { XAI_SESSION_SECRET_KEY } from './xaiConstants';
+import { XAI_POLICY } from './xaiSessionPolicy';
+import type { XaiSession } from './xaiSessionTypes';
 import type { Effect } from 'effect';
 
 const CHANNEL = 'xaiAuth';
 
 const coordinatorFor = createSecretBackedCoordinator({
   secretKey: XAI_SESSION_SECRET_KEY,
-  makeCoordinator: (storage) => new XaiSessionCoordinator({ storage }),
+  makeCoordinator: (storage) =>
+    new SubscriptionOAuthCoordinator({ storage, policy: XAI_POLICY }),
 });
 
 /** The coordinator for the caller's secret store. */
 export function xaiCoordinator(
   secrets: SessionSecretStore,
-): XaiSessionCoordinator {
+): SubscriptionOAuthCoordinator<XaiSession> {
   return coordinatorFor(secrets);
 }
 
 /** Signed-in status, read from the caller's secret store. */
 export function getXaiStatus(
   secrets: SessionSecretStore,
-): Effect.Effect<XaiSessionStatus> {
+): Effect.Effect<SubscriptionSessionStatus> {
   return getSubscriptionSessionStatus(
     () => xaiCoordinator(secrets),
     CHANNEL,

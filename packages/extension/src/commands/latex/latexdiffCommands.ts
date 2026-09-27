@@ -25,7 +25,7 @@ import {
 import { LaTeXdiffService, type LaTeXdiffResult } from '@latex/latexdiff';
 import { LATEX_COMMANDS_CHANNEL as CHANNEL } from '@latex/latexLogging';
 import type { DiffRunResult } from '@latex/latexdiff/types';
-import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
+import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
 import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
@@ -286,10 +286,10 @@ const runDiffAndOpen = Effect.fnUntraced(function* (
 });
 
 /**
- * The file a latexdiff run compares against: the picked base file. It
- * arrives as a bare `z.string()` wire field and clearing the base picker
- * writes `''`, so an empty string counts as unset. Reports once and returns
- * undefined when it is.
+ * The file a latexdiff run compares against: the picked base file. It arrives
+ * as a bare `z.string()` wire field and clearing the base picker writes `''`,
+ * so emptiness — not `undefined` — is the unset case. Reports once and returns
+ * undefined when it is unset.
  */
 const resolveDiffBase = Effect.fnUntraced(function* (baseFile: string) {
   if (baseFile) return baseFile;
@@ -396,12 +396,6 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
 
       yield* Effect.logInfo(`Running latexdiff, math markup: ${mathMarkup}`);
 
-      const generateBetweenRoundDiffs = yield* readSettingFrom<boolean>(
-        session.roots,
-        WorkspaceStateKey.LATEXDIFF_BETWEEN_ROUNDS,
-      );
-      yield* Effect.logDebug(`Between rounds: ${generateBetweenRoundDiffs}`);
-
       const { results } = yield* withVSCodeProgress(
         {
           location: vscode.ProgressLocation.Notification,
@@ -415,14 +409,10 @@ const handleRunLatexdiff = Effect.fnUntraced(function* (
           });
           return runLatexdiffForRun({
             runId: request.runId,
-            workspaceRoot: session.roots.workspace,
+            roots: session.roots,
             mathMarkup,
-            generateBetweenRoundDiffs,
             runDiscovery: createLatexRunDiscovery(session),
-            latexdiff: {
-              channel: CHANNEL,
-              service: new LaTeXdiffService(CHANNEL, session.roots),
-            },
+            channel: CHANNEL,
             progress,
           });
         },

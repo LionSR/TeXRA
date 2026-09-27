@@ -156,8 +156,16 @@ import {
 setupPlatform(
   {},
   {
-    globalState: { get: mocks.globalGet, update: () => Effect.void },
-    workspaceState: { get: mocks.workspaceGet, update: () => Effect.void },
+    globalState: {
+      get: mocks.globalGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
+    workspaceState: {
+      get: mocks.workspaceGet,
+      update: () => Effect.void,
+      modify: () => Effect.die(new Error('unused')),
+    },
   },
 );
 

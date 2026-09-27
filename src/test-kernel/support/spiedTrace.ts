@@ -9,7 +9,7 @@ interface SpiedTraceOptions {
 }
 
 /**
- * `noopTrace` with `debug`/`info`/`warn`/`error`/`domain` replaced by
+ * `noopTrace` with `emit`/`debug`/`info`/`warn`/`error` replaced by
  * `vi.fn()` spies, for tests that assert on trace calls. Pass `overrides`
  * to spy on additional members or stub others. Strict mode preserves the
  * narrower contract of a minimal test double: only explicitly supplied
@@ -21,11 +21,11 @@ export function spiedTrace(
 ): AgentTrace {
   const trace: AgentTrace = {
     ...noopTrace,
+    emit: vi.fn(),
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
-    domain: vi.fn(),
     ...overrides,
   };
 

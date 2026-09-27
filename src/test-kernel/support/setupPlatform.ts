@@ -262,6 +262,8 @@ export const fakeHostAppState: StateStore = {
       installedHost().roots.globalState.get<T>(key, defaultValue),
     ),
   update: (key, value) => installedHost().roots.globalState.update(key, value),
+  modify: (key, change) =>
+    Effect.suspend(() => installedHost().roots.globalState.modify(key, change)),
 };
 
 /**

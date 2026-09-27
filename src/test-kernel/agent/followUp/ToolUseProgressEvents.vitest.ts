@@ -14,7 +14,6 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import {
   rowAggregate,
@@ -347,7 +346,6 @@ const runScript = Effect.fn('test.runScript')(function* (init: LoopInit) {
     Effect.provide(
       Layer.mergeAll(
         invokerLayer(init.script, requests),
-        followUpsLayer,
         nativeToolTestLayer(),
       ).pipe(
         Layer.provideMerge(agentRunTestLayer(init)),
@@ -398,8 +396,10 @@ describe('the tool-use turn', () => {
     () =>
       Effect.gen(function* () {
         const session = quietSession();
-        const logger = new TraceEmitter();
-        const responseFinalized = vi.spyOn(logger, 'responseFinalized');
+        const finalized: string[] = [];
+        const logger = new TraceEmitter((event) => {
+          if (event.type === 'response.finalized') finalized.push(event.text);
+        });
 
         const { state } = yield* runScript({
           runId: startedRun(session),
@@ -414,9 +414,7 @@ describe('the tool-use turn', () => {
 
         // The tool-calling round is not the end of the turn, so only the
         // text round's response is finalized, once, with its text.
-        expect(responseFinalized).toHaveBeenCalledExactlyOnceWith(
-          'Done \\checkmark',
-        );
+        expect(finalized).toEqual(['Done \\checkmark']);
         expect(state?.messages.at(-1)?.role).toBe('assistant');
       }),
   );

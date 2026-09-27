@@ -18,7 +18,6 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
 import { sameModelOrigin, type ModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
@@ -1277,8 +1276,6 @@ export function openaiChatModel(
       );
     });
 
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const estimateInputTokens =
     config.protocol === 'kimi-chat' && config.supportsInputTokenEstimation
       ? Effect.fn('llm.estimateInputTokens')(function* (
@@ -1369,7 +1366,6 @@ export function openaiChatModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(estimateInputTokens === undefined ? {} : { estimateInputTokens }),
   });
 }

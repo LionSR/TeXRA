@@ -477,8 +477,6 @@ describe('childRunLoop E2E fixtures', () => {
         // listener is not guaranteed to observe.
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -602,8 +600,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep a background child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -918,8 +914,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -965,8 +959,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1003,8 +995,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn, turnStarted } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1077,8 +1067,6 @@ describe('childRunLoop E2E fixtures', () => {
         const { strategy, resolveTurn } = createFakeStrategy();
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Keep an agent-CLI child running',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1189,8 +1177,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Finalize before the wake',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1300,8 +1286,6 @@ describe('childRunLoop E2E fixtures', () => {
         publishTestRunStart(session, runId);
         const childRun = yield* createChildRun(session, runId, PARENT_RUN_ID, {
           run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-          userFollowUpSupport: 'terminalBacked',
-          description: 'Fail a turn, then take an interrupt',
           config: childRunConfig,
         }).pipe(Effect.provideService(Runs, session.runs));
         trackedRunIds.add(runId);
@@ -1383,8 +1367,6 @@ describe('childRunLoop E2E fixtures', () => {
             PARENT_RUN_ID,
             {
               run: { kind: 'agent', agent: 'fake-cli', tool: 'codex' },
-              userFollowUpSupport: 'terminalBacked',
-              description: 'Wait for a budget slot',
               config: childRunConfig,
             },
           ).pipe(Effect.provideService(Runs, session.runs));

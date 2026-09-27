@@ -5,15 +5,15 @@ import { describe, expect } from 'vitest';
 
 // Local imports
 import {
-  isPreferCodexSubscription,
-  setPreferCodexSubscription,
-} from '@model/codex/codexSubscription';
+  isPreferSubscription,
+  setPreferSubscription,
+} from '@model/subscriptionAccess';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform } from '@test/support/setupPlatform';
 
 const CODEX_PREFER_SUBSCRIPTION_KEY = 'texra.chatgptCodex.preferSubscription';
 
-describe('Codex subscription preference (src/model/codex/codexSubscription.ts)', () => {
+describe('Codex subscription preference (src/model/subscriptionAccess.ts)', () => {
   it.effect(
     'writes workspace preference when workspace config already controls it',
     () =>
@@ -24,9 +24,11 @@ describe('Codex subscription preference (src/model/codex/codexSubscription.ts)',
           }),
         );
 
-        yield* setPreferCodexSubscription(testWorkspaceRoots(), true);
+        yield* setPreferSubscription('chatgpt', testWorkspaceRoots(), true);
 
-        expect(isPreferCodexSubscription(testWorkspaceRoots())).toBe(true);
+        expect(isPreferSubscription('chatgpt', testWorkspaceRoots())).toBe(
+          true,
+        );
         expect(
           testWorkspaceRoots().config.inspect(CODEX_PREFER_SUBSCRIPTION_KEY),
         ).toMatchObject({

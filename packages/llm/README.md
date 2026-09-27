@@ -19,11 +19,11 @@ and fails only with `ModelError`.
 ```ts
 prepareTurn(request) -> ResolvedTurn // freeze the binding and the controls
 streamTurn(turn)     -> Stream<TurnEvent>
-generateTurn(turn)   -> Effect<TurnResult>
 ```
 
-`generateTurn` is a fold over `streamTurn`'s events (`completedTurn`), so the
-streaming and non-streaming paths cannot diverge. Preparation is where a
+A caller that wants only the result folds the stream with
+`completedTurn(model.streamTurn(turn))`; there is no separate non-streaming
+member, so the two paths cannot diverge. Preparation is where a
 request is admitted or rejected: an unsupported control, an unrepresentable
 history or an unsupported media part fails there, before transport. Execution
 never rewrites an admitted request.

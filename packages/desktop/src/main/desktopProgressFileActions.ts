@@ -18,11 +18,8 @@ import {
   latexdiffAllFailedMessage,
   NO_LATEXDIFF_OPERATIONS_MESSAGE,
 } from '@latex/latexdiff/latexdiffCopy';
-import { runLatexdiffForRun } from '@latex/latexdiff/runLatexdiff';
-import type {
-  DiffProgressReporter,
-  DiffRunOutcome,
-} from '@latex/latexdiff/types';
+import { runLatexdiffForRun } from '@latex/latexdiff/diffOperations';
+import type { DiffRunOutcome } from '@latex/latexdiff/types';
 import type { StateReadFailed } from '@platform/interfaces';
 import {
   type ProcessRuntime,
@@ -156,38 +153,31 @@ export class DesktopProgressFileActions {
     );
   }
 
-  diffAcceptedFilePair(
-    baseFile: string,
-    editedFile: string,
-    runId: RunId,
-  ): Effect.Effect<void, Error> {
-    return Effect.gen({ self: this }, function* () {
-      const outcome = yield* this.runSharedLatexdiff(runId);
-      if (outcome && (yield* this.openSharedLatexdiffResults(outcome))) return;
-
-      // No round-aware diff was produced (the run recorded no outputs, the shared core
-      // failed, or every operation failed) — fall back to a single-file diff
-      // so the user still gets a comparison.
-      yield* this.runLatexdiffFile(baseFile, editedFile);
-    });
-  }
-
   /**
    * Stream-toolbar "diff" action: run the round-aware latexdiff for a whole run
    * and open every diff it produced.
    *
-   * This is the counterpart of `diffAcceptedFilePair`, which exists to diff one
-   * accepted file pair and therefore has a single-file fallback. Here there is
-   * no such pair to fall back to — the request is scoped to a run — so an empty
-   * or failed outcome reports instead, matching what the VS Code command shows
-   * when a run yields no diff operations. This host has no quick-pick to
-   * choose a markup mode with, so every desktop diff runs with the configured
+   * An empty outcome reports instead, matching what the VS Code command shows
+   * when a run yields no diff operations; a failure of the core itself travels
+   * on to the caller. This host has no quick-pick to choose a markup mode
+   * with, so every desktop diff runs with the configured
    * `texra.latexdiff.mathMarkup`.
    */
   diffStreamToolbarAction(runId: RunId): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
-      const outcome = yield* this.runSharedLatexdiff(runId);
-      if (!outcome?.results.length) {
+      // The single host-neutral core shared with the VS Code command.
+      // Desktop has no per-operation progress UI.
+      const outcome = yield* withProcessServices(
+        this.host.runtime,
+        runLatexdiffForRun({
+          runId,
+          roots: this.host.session.roots,
+          runDiscovery: createLatexRunDiscovery(this.host.session),
+          channel: DESKTOP_LATEXDIFF_CHANNEL,
+          progress: { report: () => undefined },
+        }),
+      );
+      if (!outcome.results.length) {
         yield* this.ui.showInfoMessage(NO_LATEXDIFF_OPERATIONS_MESSAGE);
         return;
       }
@@ -249,53 +239,10 @@ export class DesktopProgressFileActions {
     );
   }
 
-  private runSharedLatexdiff(
-    runId: RunId,
-  ): Effect.Effect<DiffRunOutcome | undefined> {
-    // Delegate the read + dispatch to the single host-neutral core shared
-    // with the VS Code command, instead of re-implementing it here.
-    // Desktop has no per-operation progress UI.
-    const progress: DiffProgressReporter = { report: () => undefined };
-    return runLatexdiffForRun({
-      runId,
-      workspaceRoot: this.host.session.roots.workspace,
-      generateBetweenRoundDiffs: true,
-      runDiscovery: createLatexRunDiscovery(this.host.session),
-      latexdiff: {
-        channel: DESKTOP_LATEXDIFF_CHANNEL,
-        service: new LaTeXdiffService(
-          DESKTOP_LATEXDIFF_CHANNEL,
-          this.host.session.roots,
-        ),
-      },
-      progress,
-    }).pipe(
-      // The core can fail (e.g. no workspace path). Don't abort the whole
-      // action — answer undefined so the caller falls back to single-file —
-      // but log the cause so a systematic round-aware failure isn't silently
-      // downgraded to single-file diffs with no trace. An interrupt (the
-      // runtime disposing at shutdown) is not a diff failure to fall back
-      // from: it is not a failure of this channel, so it travels on and the
-      // request settles as interrupted instead of scheduling more diff work
-      // on a closing window.
-      Effect.catch((error) =>
-        Effect.sync(() => {
-          console.error(
-            `Round-aware LaTeX diff failed; falling back to single-file diff: ${toErrorMessage(
-              error,
-            )}`,
-          );
-          return undefined;
-        }),
-      ),
-      (program) => withProcessServices(this.host.runtime, program),
-    );
-  }
-
   /**
    * Open every successful diff (between-round runs produce many), mirroring the
    * VS Code command. Answers whether at least one diff was opened, so the
-   * caller can fall back to a single-file diff when none were.
+   * caller can report when none were.
    */
   private openSharedLatexdiffResults(
     outcome: DiffRunOutcome,

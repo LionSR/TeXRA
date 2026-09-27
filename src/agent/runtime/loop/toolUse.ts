@@ -22,7 +22,7 @@
  * turn, run once per round by the round loop, with no tools and no input.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Effect, Exit, Option, SynchronizedRef } from 'effect';
+import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
@@ -51,7 +51,7 @@ import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
 import { toolDefinitionsFor } from '../run/tools';
-import { FollowUps, type ConsumedFollowUps } from '../FollowUps';
+import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
@@ -135,6 +135,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   | ModelInvoker
   | WorkspaceFs
   | StorageFs
+  | Scope.Scope
 > {
   const run = yield* AgentRun;
   const ledger = yield* RunLedger;
@@ -145,8 +146,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const isChild = () => (runs.getHandle(runId)?.parent ?? null) !== null;
   const continuation = yield* continuationFor(run);
   const rounds = continuation?.rounds ?? null;
-  // A conversation holds the run's input lease; rounds take no input.
-  const followUps = Option.getOrNull(yield* Effect.serviceOption(FollowUps));
+  // A conversation claims its own input lease, never a parent's (FollowUps).
+  const followUps = rounds ? null : yield* claimFollowUps(run, ledger);
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
@@ -431,7 +432,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           | WorkspaceFs
           | StorageFs
         > {
-          if (rounds) return yield* rounds.afterResponse(at, cell, index);
+          if (rounds) return yield* rounds.afterResponse(at, cell, index, live);
           let next = at;
           const previous = next.messages.at(-2);
           if (
@@ -455,7 +456,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           }
           if (text) {
             workspace.assembly.lastResponse = text;
-            if (live) logger.responseFinalized(text);
+            if (live) logger.emit({ type: 'response.finalized', text });
           }
           workspace.resetReasoning();
           if (
@@ -608,8 +609,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   const loopBody = (cell: RunCell) =>
     Effect.gen(function* () {
-      if (followUps === null)
-        return yield* Effect.die(new Error(`Run ${runId} has no input lease.`));
+      if (!followUps) return yield* Effect.die(new Error(`${runId}: no lease`));
       let restoring = start.resume;
       for (;;) {
         let state = yield* cell.current;
@@ -753,4 +753,4 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     Effect.map((loop) => result(loop.outcome, loop.state)),
     Effect.catchCause(stoppedBy(logger, `Tool-use run ${runId}`)),
   );
-});
+}, Effect.scoped);

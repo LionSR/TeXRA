@@ -57,6 +57,7 @@ const write = Effect.fn('WriteFileTool.execute')(function* (
   return yield* applyApprovedFileEdit({
     path,
     displayPath,
+    exists,
     originalContent,
     proposedContent,
     sourceTool: 'write_file',

@@ -11,15 +11,9 @@
  * `toolUseHelpers.ts` that operate on this interface — there is no host
  * subtype. SDK consumers program directly against `AgentTrace`.
  */
-import type { RunOutcome, ToolCallStatus, ToolUseLog } from '@shared/schemas';
+import type { RunOutcome } from '@shared/schemas';
 
-import type {
-  AgentEvent,
-  ContextStateData,
-  ResponseFinalizedEvent,
-  StreamKind,
-  UsageReport,
-} from './events';
+import type { AgentEvent, StreamKind } from './events';
 
 /** A sink the trace was built with: it receives every event emitted on the
  *  trace until the trace closes. */
@@ -27,29 +21,19 @@ export type AgentTraceSink = (event: AgentEvent) => void;
 
 /** Options accepted by `openStage`. */
 export interface StageOptions {
-  /** Explicit id; otherwise a fresh one is generated. */
-  readonly id?: string;
-  /** Parent stage id; otherwise the stage opens as a root. */
-  readonly parentId?: string;
   /** Semantic stage kind consumed by host progress surfaces. */
   readonly kind?: 'run' | 'round' | 'phase' | 'session';
   /** Zero-based stage index, currently used for round stages. */
   readonly index?: number;
   /** Planned total count, when known, currently used for workflow rounds. */
   readonly total?: number;
-  /**
-   * Skip stage creation but propagate parent context to nested calls.
-   * `handle.id` is undefined; `handle.child(...)` parents to this handle's
-   * own parent. Used by output sub-stages that don't need their own group.
-   */
-  readonly skip?: boolean;
-  /** Parent handle for nested-stage chains. */
+  /** Parent handle for nested stages; without one the stage opens as a root. */
   readonly parent?: StageHandle;
 }
 
 /** Handle returned by `openStage` — wraps a stage with end/child ops. */
 export interface StageHandle {
-  /** Stage id; undefined for skipped (passthrough) stages. */
+  /** Stage id. */
   readonly id: string | undefined;
   /** Emit `stage.end` with the given outcome. Idempotent. */
   end(status?: RunOutcome): void;
@@ -59,15 +43,6 @@ export interface StageHandle {
 
 /** Options accepted by `openRun`. */
 export interface StreamOptions {
-  /** Explicit id; otherwise a fresh one is generated. */
-  readonly id?: string;
-  /** Stage id stamped on the start event; none stamps no stage. */
-  readonly stageId?: string;
-  /**
-   * When false, chunks are accumulated locally without emitting. `finalize`
-   * still returns the buffered text. Useful for tests / off-progress paths.
-   */
-  readonly progressViewEnabled?: boolean;
   /**
    * Defer the `stream.start` emission until the first non-empty chunk (or a
    * finalize that carries text). Subscribers treat `stream.start` as "this
@@ -77,15 +52,6 @@ export interface StreamOptions {
    * content emits nothing at all.
    */
   readonly deferStart?: boolean;
-  /**
-   * Emit only the phase boundaries (`stream.start` / `stream.end`); chunk
-   * text and the finalize text never reach subscribers (`finalize` still
-   * returns the locally buffered text). Used when a phase should be visible
-   * as liveness — "the model response has started" — while its content is
-   * withheld, e.g. workflow runs that extract and log the output separately
-   * instead of streaming it.
-   */
-  readonly phaseOnly?: boolean;
 }
 
 /** Handle returned by `openRun` — append chunks then finalize. */
@@ -94,18 +60,10 @@ export interface StreamHandle {
   /** Append a chunk of text; emits `stream.chunk`. */
   append(text: string): void;
   /**
-   * Close the stream and emit its complete text in `stream.end`, except for
-   * phase-only streams. Idempotent. Returns that text to the caller as well.
+   * Close the stream and emit its complete text in `stream.end`. Idempotent.
+   * Returns that text to the caller as well.
    */
   finalize(finalText?: string): string;
-}
-
-/** Domain event input shared between `domain()` and emit helpers. */
-export interface DomainEventInput {
-  readonly key: string;
-  readonly data?: unknown;
-  readonly text?: string;
-  readonly stageId?: string;
 }
 
 /** Sugar passed to debug/info/warn/error. */
@@ -124,15 +82,6 @@ export interface LogOptions {
   readonly stageId?: string;
 }
 
-/** Options accepted by usage / contextState convenience emitters. */
-export interface StagedEmitOptions {
-  readonly stageId?: string;
-}
-
-export interface UsageEmitOptions extends StagedEmitOptions {
-  readonly recordTranscript?: boolean;
-}
-
 /**
  * Agent-general SDK surface. Every method ultimately reduces to `emit()` so
  * the trace channel is a single source of truth. TeXRA-specific helpers are
@@ -147,30 +96,6 @@ export interface AgentTrace {
   info(message: string, options?: LogOptions): void;
   warn(message: string, options?: LogOptions): void;
   error(message: string, options?: LogOptions): void;
-
-  // ─── First-class agent-general union arms ───────────────────────────
-  usage(report: UsageReport, options?: UsageEmitOptions): void;
-  contextState(snapshot: ContextStateData, options?: StagedEmitOptions): void;
-  toolStart(
-    input: { logId: string; toolName: string; input: unknown },
-    options?: StagedEmitOptions,
-  ): void;
-  toolEnd(
-    input: {
-      logId: string;
-      status: ToolCallStatus;
-      result?: Omit<ToolUseLog, 'status'>;
-    },
-    options?: StagedEmitOptions,
-  ): void;
-  domain(input: DomainEventInput): void;
-  /**
-   * Authoritative final assistant text for the round that just ended the
-   * turn (see {@link ResponseFinalizedEvent}). Call once, at the flow
-   * boundary where the final text is decided, for both a mid-run turn
-   * boundary and the terminal round.
-   */
-  responseFinalized(text: string, options?: StagedEmitOptions): void;
 
   // ─── Stage + stream handles ─────────────────────────────────────────
   openStage(label: string, options?: StageOptions): StageHandle;

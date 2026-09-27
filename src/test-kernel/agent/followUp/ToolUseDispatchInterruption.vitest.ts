@@ -22,7 +22,6 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
@@ -271,11 +270,7 @@ function agentRunTestLayer(init: HarnessInit) {
 }
 
 function loopLayer(init: HarnessInit) {
-  return Layer.mergeAll(
-    invokerLayer(init.turns),
-    followUpsLayer,
-    nativeToolTestLayer(),
-  ).pipe(
+  return Layer.mergeAll(invokerLayer(init.turns), nativeToolTestLayer()).pipe(
     Layer.provideMerge(agentRunTestLayer(init)),
     Layer.provideMerge(Layer.succeed(RunLedger)(init.session.ledger)),
   );

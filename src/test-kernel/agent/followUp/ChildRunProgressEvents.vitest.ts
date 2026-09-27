@@ -8,8 +8,12 @@ import { beforeEach, describe, expect, vi } from 'vitest';
 // Local imports
 import { getRunRecords, registerRun } from '@agent/storage';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
+import type {
+  ChildRunPort,
+  ChildRunStrategy,
+} from '@agent/runtime/childRunLoop';
 import { Runs } from '@agent/runtime/runRegistry';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
@@ -17,6 +21,7 @@ import {
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  type UserFollowUpSupport,
   AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -26,7 +31,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { launchAgentCliSession } from '@tools/agentCliShared';
-import { createChildRun, type ChildRun } from '@tools/delegation/childRun';
+import { createChildRun } from '@tools/delegation/childRun';
 
 // Local file imports
 import {
@@ -39,6 +44,7 @@ const runId = 'c11111' as RunId;
 const parentRunId = 'c11112' as RunId;
 const stoppedRunId = 'c11114' as RunId;
 const failedRunId = 'c11116' as RunId;
+const unformattableRunId = 'c11117' as RunId;
 const workflowRelaunchRunId = 'c11119' as RunId;
 const config = AgentConfigSchema.parse({
   agentCategory: AgentCategory.ToolUse,
@@ -47,15 +53,25 @@ const config = AgentConfigSchema.parse({
 });
 
 const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
-  function* (...args: Parameters<typeof createChildRun>) {
-    const [session, runId, parentRunId, options] = args;
+  function* (
+    session: SessionHandle,
+    runId: RunId,
+    parentRunId: RunId,
+    options: Parameters<typeof createChildRun>[3] & {
+      readonly userFollowUpSupport: UserFollowUpSupport;
+      readonly description: string;
+    },
+  ) {
     yield* registerRun(session, runId, options.config, {
       identity: options.run,
       userFollowUpSupport: options.userFollowUpSupport,
       parentRunId,
       description: options.description,
     });
-    const child = yield* createChildRun(...args).pipe(
+    const child = yield* createChildRun(session, runId, parentRunId, {
+      run: options.run,
+      config: options.config,
+    }).pipe(
       Effect.provideService(Runs, session.runs),
       Effect.onError(() => session.commitRunEnd(runId).pipe(Effect.orDie)),
     );
@@ -64,7 +80,7 @@ const createRegisteredChildRun = Effect.fn('createRegisteredChildRun')(
     return {
       ...child,
       finalize: (
-        input: Parameters<ChildRun['finalize']>[0],
+        input: Parameters<ChildRunPort['finalize']>[0],
       ): Effect.Effect<void, Error> =>
         child
           .finalize(input)
@@ -122,8 +138,6 @@ describe('child run progress events', () => {
         const recorded = recordSessionEvents(testDefaultSession());
 
         const childRun = yield* Effect.promise(() => startBashChild(runId));
-
-        expect(childRun.childRunId).toBe(runId);
 
         yield* childRun.finalize({
           outcome: RUN_OUTCOME.COMPLETED,
@@ -412,7 +426,7 @@ describe('child run progress events', () => {
       Effect.gen(function* () {
         const setupError = new Error('child loop setup failed');
         const session = testDefaultSession();
-        let childRun: ChildRun | undefined;
+        let childRun: ChildRunPort | undefined;
         let childRunId: RunId | undefined;
         let visibleBeforeLoop = true;
 
@@ -452,9 +466,7 @@ describe('child run progress events', () => {
           throw new Error('expected the failed child launch to be captured');
         }
         expect(session.runs.getHandle(childRunId)).toBeUndefined();
-        expect(session.runView(childRun.childRunId)?.status).toBe(
-          RUN_PHASE.FAILED,
-        );
+        expect(session.runView(childRunId)?.status).toBe(RUN_PHASE.FAILED);
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
@@ -511,6 +523,34 @@ describe('child run progress events', () => {
           kind: 'unexpected',
           message: 'child process exited 1',
         },
+      });
+    }),
+  );
+
+  // `error` is `unknown`: a value with no primitive conversion throws when
+  // formatted, and the child must still settle with its `run.end` row.
+  it.effect('settles a failed child whose error cannot be formatted', () =>
+    Effect.gen(function* () {
+      const childRun = yield* Effect.promise(() =>
+        startCodexChild(unformattableRunId, 'Run an unformattable failure'),
+      );
+
+      yield* childRun.finalize({
+        outcome: RUN_OUTCOME.FAILED,
+        error: Object.create(null),
+      });
+
+      expect(
+        testDefaultSession().runs.getHandle(unformattableRunId),
+      ).toBeUndefined();
+      expect(
+        yield* getRunRecords(
+          testDefaultSession(),
+          unformattableRunId,
+        ).readRunEnd(),
+      ).toMatchObject({
+        outcome: 'failed',
+        error: { message: 'Child run finalize prologue failed' },
       });
     }),
   );

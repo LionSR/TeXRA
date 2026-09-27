@@ -8,8 +8,8 @@
  *
  * A host spreads the body's `handlers` into its
  * `SettingsViewInboundHandlerRegistry`, keeps its own entries for the
- * commands only it answers (its account sign-in, the Copilot routes, the
- * Tools and LaTeX pages), and routes every inbound message through the
+ * commands only it answers (its account sign-in, the Copilot routes, and
+ * installing a VS Code extension or writing VS Code's settings), and routes every inbound message through the
  * body's `handleMessage`, the one parse and report boundary. The binding
  * table is `settingsHostBindings.ts`.
  */
@@ -33,6 +33,7 @@ import {
 } from '@controllers/settingsView/settingsHostBindings';
 import { settingsGitCommands } from '@controllers/settingsView/settingsGitCommands';
 import { settingsMemoryCommands } from '@controllers/settingsView/settingsMemoryCommands';
+import { settingsToolCommands } from '@controllers/settingsView/settingsToolCommands';
 import {
   settingsViewProgram,
   type SettingsViewInboundHandlerRegistry,
@@ -136,6 +137,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
   const usage = new SubscriptionUsageService({ secrets, stores: roots });
   const memoryPage = settingsMemoryCommands({ bindings, present });
   const gitPage = settingsGitCommands({ bindings, present, secrets });
+  const toolsPage = settingsToolCommands({ host: ports.host, roots, bindings });
   const agents = settingsAgentCommands({
     roots,
     resourcesPath: ports.resourcesPath,
@@ -339,7 +341,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     gitPage.postTokenStatus,
     gitPage.postSubscriptions,
     ...SUBSCRIPTION_AUTH_PROVIDERS.map(postAuthStatus),
-    bindings.postHostStartup,
+    toolsPage.postStartup,
   ]);
 
   const handlers = {
@@ -380,7 +382,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
         })
         .pipe(Effect.andThen(postModelSelection)),
     // The Tools page repaints on the `toolAvailabilityChanged` signal this
-    // re-probe emits.
+    // re-probe emits (`repaintOn`).
     recheckToolStatus: () =>
       refreshToolAvailability({
         workspaceRoot: roots.workspace,
@@ -390,18 +392,15 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
       updateStateSetting(message.key, message.value),
 
     // ── Subscriptions ──
-    signInChatGpt: () => signInSubscription('chatgpt'),
-    signOutChatGpt: () => signOutSubscription('chatgpt'),
-    setChatGptPreferSubscription: (message) =>
-      setPreferSubscription('chatgpt', message.enabled),
-    signInGrok: () => signInSubscription('grok'),
-    signOutGrok: () => signOutSubscription('grok'),
-    setGrokPreferSubscription: (message) =>
-      setPreferSubscription('grok', message.enabled),
+    signInSubscription: (message) => signInSubscription(message.provider),
+    signOutSubscription: (message) => signOutSubscription(message.provider),
+    setSubscriptionPreference: (message) =>
+      setPreferSubscription(message.provider, message.enabled),
     getSubscriptionUsage: (message) => postUsage(message.forceRefresh ?? false),
 
     ...memoryPage.handlers,
     ...gitPage.handlers,
+    ...toolsPage.handlers,
   } satisfies Partial<SettingsArms>;
 
   // ── The boundary every settings program settles on ──
@@ -438,6 +437,9 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     /** Every page's opening data. */
     postAll: withSessionFs(roots, postAll),
     postModelSelection,
+    /** The LaTeX page's status, for the host's own LaTeX arms. */
+    postLatexStatus: toolsPage.postLatexStatus,
+    reported,
     refreshAfterProviderKeyChange,
     signInSubscription,
     /** A TeXRA account change: the profile, the models it unlocks, and the
@@ -461,7 +463,8 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
      * What each app signal this view follows repaints: a run that binds a
      * GitHub subscription, the setup agent's `apply_team`, a provider key
      * written by any writer (the setup agent's `unset_api_key`, another
-     * window), and the editor's language models. OAuth tokens and other
+     * window), the editor's language models, and a tool re-probe, whoever
+     * triggered it. OAuth tokens and other
      * secrets are not provider keys, so they repaint nothing. The host
      * subscribes (controllers do not import the signal bus) and settles
      * each repaint through {@link settle}.
@@ -477,6 +480,7 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
           : refreshAfterProviderKeyChange(provider);
       },
       languageModelsChanged: () => postModelSelection,
+      toolAvailabilityChanged: () => toolsPage.postToolDashboard,
     },
   };
 }

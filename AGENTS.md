@@ -666,7 +666,8 @@ A run is one Effect program in `src/agent/runtime/loop/`, no cursor and no graph
 
 - **One program**: `runToolUse` (`loop/toolUse.ts`, with `loop/toolUseDispatch.ts`). Workflow agents run it in round mode (`loop/rounds.ts`): the documents plugin's continuation policy opens each round's turn and processes its output (`src/agent/output/documentRounds.ts`), and the agent is offered no tools. `loop/rows.ts` builds every ledger draft the loop appends. `core/tools/toolCallParsing.ts` parses the response's tool calls.
 - **State is row data.** The loop never holds its own copy of the conversation: it continues from the folded `RunState` (`src/shared/session/runStateFold.ts`) that `RunLedger.appendBatch` returns, so the live path and the resume path are one function. Resume reads only the fold; `flow_<id>.json` is never read.
-- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), `FollowUps` (the run's lease over the follow-up queue), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
+- **Services come from context**, provided once at the `executeAgent` boundary: `AgentRun` (`runtime/run/AgentRun.ts`, everything one run owns), `ModelInvoker` (the only service that calls the `packages/llm` `Model`), and the session-root `RunLedger` and `Runs` (`runtime/runRegistry.ts`: admission, lanes, live handles, waiting termination; built by the session layer, provided from the session each entry is handed by `executeAgent`, the resume entries, `SessionRequests` and the session layer's sweep). No services bag, no node fields.
+- **A run's input queue is its own, never context.** A conversation run claims its lease over the follow-up queue in its own scope (`claimFollowUps` in `runtime/FollowUps.ts`, from `runToolUse`); a round-mode run takes no input and claims none. A child launched from a parent's tool call runs in that call's fiber, so a context-provided queue would hand it the parent's: never read another run's input from context.
 - **Write points are the contract**: a `model.message attempt` before a billed request leaves the process; the `response` row before any tool dispatches; `tool.intent` before every barrier call; `tool.result` before the loop continues; a `flow.step` for every wait and every halt; a `flow.snapshot` authored only from the state the ledger returned (reconcile-never-overwrite).
 - **Retry has two owners**, both inside `ModelInvoker`: an automatic route-scoped batch under the session's `ModelRetryGate`, and a durable human permit (`request.opened` bound through the snapshot's `pendingRetry`: `waiting` -> `authorized` -> `started`). Nothing else retries a model call; provider SDK retries stay disabled; the helper path (`helperCompletion`) keeps its own bounded retry because it runs outside the invoker.
 - **Interruption is the fiber's.** Each activity/append pair runs under `Effect.uninterruptibleMask` with only the handoff and the durable append masked; there is no `AbortSignal` threading inside the loop.
@@ -707,10 +708,10 @@ one the view you're touching already uses:
 - **`settingsView`** is request/response: `SettingsViewMessageHandler`
   (`packages/extension/src/settingsView/`) owns its inbound dispatch directly —
   active-webview tracking, the `HandlerRegistry` build, and the toast for an
-  unsupported command — and delegates tab-shaped groups to focused handler
-  classes in `settingsView/handlers/` behind `SettingsHandlerContext`
-  (`AgentHandlers`, `LatexSettingsHandlers`, `MemoryHandlers`,
-  `GitHubSubscriptionHandlers`, `SubscriptionHandlers`). There is no abstract
+  unsupported command — over the shared settings body
+  (`src/controllers/settingsView/sharedSettingsCommands.ts`) and its page
+  modules; only the VS Code-specific LaTeX arms live in
+  `settingsView/handlers/latexSettingsHandlers.ts`. There is no abstract
   base: this is the only view on the pattern, so the machinery lives in the one
   class that uses it.
   Commands are named constants in `src/shared/ipc.ts` (`COMMON_COMMANDS`,

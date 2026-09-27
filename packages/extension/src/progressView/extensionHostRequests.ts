@@ -57,7 +57,6 @@ import {
   type SharedHostRequestBindings,
   type SharedHostRequestPorts,
 } from '@controllers/session/sharedHostRequests';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { runSignInCommand } from '@frontend/auth/signInCommand';
 import { signInWithSubscription } from '@frontend/auth/subscriptionSignIn';
@@ -70,10 +69,11 @@ import {
   modelOptionsFrom,
   readModelAvailabilityInputs,
 } from '@model/computeModelOptions';
-import type {
-  StateStore,
-  StateReadFailed,
-  StateWriteFailed,
+import {
+  AgentDirectories,
+  type StateStore,
+  type StateReadFailed,
+  type StateWriteFailed,
 } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -600,10 +600,6 @@ export function createExtensionHostRequests(
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
       commandVerb(`texra.${action}`, baseFile, commit),
-    mergeFiles: (baseFile, editedFile) =>
-      commandVerb('texra.merge', baseFile, editedFile),
-    latexdiffFiles: (baseFile, editedFile) =>
-      commandVerb('texra.latexdiff', baseFile, editedFile),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');
@@ -629,7 +625,7 @@ export function createExtensionHostRequests(
         sessionType === 'toolUse' ? 'toolUse' : undefined,
       ),
     openCustomAgentDirectory: Effect.gen(function* () {
-      const dir = yield* agentDirectories.custom();
+      const dir = yield* (yield* AgentDirectories).custom();
       if (dir) {
         yield* fromHost('revealFileInOS', () =>
           vscode.commands.executeCommand(

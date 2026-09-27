@@ -48,11 +48,11 @@ import {
   initializeLatexSupport,
   registerAgentDirectoryRoots,
 } from '@frontend/setup';
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { FileLister } from '@frontend/files/fileLister';
 import { StatusBarUsageTracker } from '@frontend/statusBar/StatusBarUsageTracker';
 import { refreshStatusBarOnViewChanges } from '@frontend/statusBar/statusBarSessionEvents';
 import { vscodeSetupPlatform } from '@frontend/vscodeSetupPlatform';
+import { agentDirectoriesLayer } from '@frontend/agents/AgentDirectoryManager';
 import { disposeDiffRefresh } from '@frontend/ui/diffView';
 import { registerFileDecorations } from '@frontend/ui/fileDecorations';
 import { registerWelcomeView } from '@frontend/ui/welcomeView';
@@ -234,7 +234,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
     agentResume,
-    agentDirectories: AgentDirectories.layer(agentDirectories),
+    agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,
     // The editor's language models, so the run layer binds `vscode-lm`
@@ -316,19 +316,11 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
       // Everything this process installs once after its roots exist, in the
       // order the shared bootstrap owns for all three hosts.
       yield* bootstrapHost({
-        host: 'vscode',
         roots,
-        secrets,
         skills: {
           resourcesPath: path.join(context.extensionPath, 'resources'),
         },
       });
-      // After the runtime, which the manager settles its watcher rebuilds on.
-      agentDirectories.initialize(
-        globalState,
-        path.join(context.extensionPath, 'resources'),
-        runtime,
-      );
       yield* registerSupabaseAuth(
         context,
         secrets,

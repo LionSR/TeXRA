@@ -19,7 +19,6 @@ import {
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
-  completedTurn,
 } from './turn.js';
 import {
   ModelError,
@@ -226,8 +225,6 @@ export function openaiResponsesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
 
   const submit: NonNullable<Model['background']>['submit'] = Effect.fn(
     'llm.responses.submit',
@@ -769,7 +766,6 @@ export function openaiResponsesModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(uploads !== null
       ? {
           uploadFile: uploads.uploadFile,
