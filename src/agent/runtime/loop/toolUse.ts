@@ -43,6 +43,7 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
+  type UserVariableChannels,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
@@ -151,7 +152,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  const userChannels: Record<string, unknown> = { ...run.userVarChannels };
+  const userChannels: UserVariableChannels = { ...run.userVarChannels };
   let systemPrompt: string | undefined;
   let response = '';
   // A `/compact` the host admitted: honoured at the next model boundary,
@@ -373,8 +374,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const turnContext: TurnContext = {
       workspace,
       get userInstruction() {
-        const instruction = userChannels[USER_VAR_INSTRUCTION];
-        return typeof instruction === 'string' ? instruction : undefined;
+        return userChannels[USER_VAR_INSTRUCTION];
       },
     };
     let continuedAt: number | null = null;
