@@ -21,10 +21,6 @@ const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
       summary: 'Full message history (subagents)',
     },
     {
-      path: '/executions/{id}/todos',
-      summary: 'Task list (tool-use subagents)',
-    },
-    {
       path: '/executions/{id}/report',
       summary: 'Result report (persists after context compaction)',
     },
@@ -38,7 +34,6 @@ const EXECUTION_PATH_CATALOG: ReadonlyArray<{ path: string; summary: string }> =
       summary:
         'stdout/stderr of a background command, readable WHILE IT RUNS (report/result only exist once it finishes)',
     },
-    { path: '/executions/{id}/children', summary: 'Child executions' },
     {
       path: '/executions/{id}/files',
       summary: 'Generated files (workflows only)',

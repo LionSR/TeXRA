@@ -2,7 +2,7 @@
 
 Date: 2026-09-26
 
-Status: proposed
+Status: accepted 2026-09-27; phase 1 is in [#13344](https://github.com/LionSR/TeXRA/pull/13344), phase 2 is open
 
 Baseline: `origin/main` at `b865508` (`SESSION_EVENT_FORMAT = 19`).
 
@@ -87,72 +87,88 @@ connection sits next to the base tables and does not hide them. Checking the
 statement's text cannot tell a base-table name from a view name. In the query
 store, those tables do not exist.
 
-- **Where it lives.** A worker thread owns the query store. `node:sqlite` is
-  synchronous and has no interrupt or progress handler (on Node 22.22 the
-  `DatabaseSync` prototype has `open close prepare exec function aggregate
-createSession applyChangeset enableLoadExtension loadExtension`). An
-  Effect timeout cannot preempt a statement already on the main thread, so one
-  runaway recursive CTE would freeze the extension host. In a worker, the
-  timeout, or interrupting the calling fiber, terminates the worker.
-  Acquiring and releasing the worker is scoped to the session.
-- **How it is fed.** One table, `display_event(run_id, type, at, data)`. It has
-  no `seq`, `commit` or `owner_id`, and the type has no `.1` suffix. Before
-  each query, the session side reads the tail since its cursor with
-  `Database.readDisplay(cursor)` and posts it to the worker, which appends it.
-  The query then sees a consistent prefix through that commit.
-  - `readDisplay` is the existing C7 read family. Rows arrive decoded by the
-    one read authority, so the worker never opens the session file. It works
-    the same for persistent and ephemeral sessions.
-  - A `run.removed` row deletes that run's rows, and those of its dependents,
-    from the store (`runIds` is on the row).
-  - A store cleared by a format reset (`Database.cleared`) drops the query
-    store, which is rebuilt from commit 0 on the next query.
-  - A terminated worker is rebuilt the same way.
+- **Where it lives.** A child process owns the query store: `node -e` on the
+  host's own binary (`ELECTRON_RUN_AS_NODE=1` for the Electron hosts),
+  spawned through Effect's `ChildProcessSpawner` in a scope forked from the
+  session's. `node:sqlite` is synchronous and has no interrupt or progress
+  handler (on Node 22.22 the `DatabaseSync` prototype has `open close prepare
+exec function aggregate createSession applyChangeset enableLoadExtension
+loadExtension`). The first draft put the store in a worker thread, but
+  `Worker.terminate()` only takes effect when control returns to
+  JavaScript: a `WITH RECURSIVE … SELECT count(*)` runs entirely inside one
+  native `step()` and would keep a core busy after its caller gave up. A
+  process takes `SIGKILL`. The process exits when its stdin closes, so it
+  never outlives its host.
+- **How it is fed.** One table, `events(position, run_id, type, at, data)`
+  (`src/agent/runtime/historyQuery/views.ts`). It has no `seq`, `commit` or
+  `owner_id`, the type has no `.1` suffix, and `at` is ISO-8601 text. Before
+  each query, the store reads the session's display tail from its cursor,
+  `SessionEvents.all(cursor, drained)`, until `drained` reaches the commit
+  the query was asked at (`session.now()`), and sends those rows to the
+  process. The query then sees a consistent prefix through that commit.
+  - `SessionEvents.all` is the display tail over `Database.readDisplay`, the
+    existing C7 read family. Rows arrive decoded by the one read authority,
+    so the process never opens the session file. Persistent and ephemeral
+    sessions are served the same way.
+  - A `run.removed` row deletes that run's rows, and those of its dependents
+    (`runIds` is on the row).
+  - A current commit below the store's cursor means the database was cleared.
+    The store is dropped and rebuilt from commit 0, as it is after a killed
+    process.
 - **Nothing is persisted.** The query store is a cache of public rows in
   memory, so §5 and C10 (no projection tables; nothing derived is stored
-  except `flow.snapshot`) still hold.
-- **What the worker refuses.** The model's statement runs with
+  except `flow.snapshot`) still hold. SQLite's own memory in the store is
+  capped with `PRAGMA hard_heap_limit` (1 GiB).
+- **What the store refuses.** The model's statement runs with
   `PRAGMA query_only = ON`; the feed turns it off only while appending.
-  - A statement must be exactly one statement starting with `SELECT`, `WITH`
-    or `EXPLAIN`. The prefix gives a clear message, and it also blocks
-    `PRAGMA`, the only way to turn `query_only` off.
+  - The session side admits exactly one statement starting with `SELECT`,
+    `WITH`, `EXPLAIN` or `VALUES`, read with comments and quoted text blanked.
+    The prefix gives a clear message and keeps out `PRAGMA`, the only way to
+    turn `query_only` off.
   - `prepare()` compiles only the first statement and ignores the rest
-    (checked on Node 22.22), so a trailing statement never runs. The worker
-    refuses input that has one rather than dropping it silently.
+    (checked on Node 22.22), so a second statement is refused rather than
+    silently dropped.
   - `query_only` catches `WITH … INSERT/DELETE`, which passes the prefix check
-    (checked: it fails with `attempt to write a readonly database`).
+    (tested: SQLite answers `attempt to write a readonly database`).
   - Extension loading stays disabled, which is the `node:sqlite` default.
   - Even a write that got through would only reach the query store, which
-    holds public rows the next rebuild restores. The session database is
-    never reachable from the worker.
-- **The error.** `DatabaseQueryRefused { reason: 'syntax' | 'not-a-read' |
-'timeout', message }` is a `Data.TaggedError`. The error channel is never
-  `unknown`.
+    holds public rows the next rebuild restores.
+- **The errors.** `HistoryQueryRefused { reason: 'not-a-read' | 'rejected' |
+'timeout', message }` is the model's to correct; `HistoryQueryFailed` is the
+  store's own failure (would not start, exited, unreadable reply), logged at
+  `warn` as the store is dropped. Both are `Data.TaggedError`s.
+- **Deadline and interruption.** A query gets 5 seconds. Past that, or when
+  its caller is interrupted, the process is killed and the next query
+  rebuilds the store; a late reply can never be paired with the next request.
 
-The service surface is one method on the session handle's database, served
-from the session layer:
+The surface is one class, `HistoryQuery` (`src/agent/runtime/historyQuery/`),
+built in the session layer's scope beside `ModelRetryGate` and carried as
+`SessionHandle.history`:
 
 ```ts
-query: (sql: string, params: ReadonlyArray<SqlParam>) =>
-  Effect.Effect<QueryPage, DatabaseQueryRefused | DatabaseReadFailed>;
+query: (sql: string, params: readonly HistoryCell[]) =>
+  Effect.Effect<
+    HistoryPage,
+    HistoryQueryRefused | HistoryQueryFailed | DatabaseReadFailed
+  >;
 ```
 
-`QueryPage` is `{ columns, rows, more: boolean }`. The worker steps the
-statement with `iterate()` and stops at the row cap plus one, so `more` is
-known without running the whole result.
+`HistoryPage` is `{ columns, rows, more }`. The process steps the statement
+with `iterate()` and stops at 200 rows plus one, so `more` is known without
+running the whole result. Queries on one session run one at a time.
 
-**Ratchet amendment.** `persistenceWriteBoundary.vitest.ts` excludes a single
-module, `DATABASE_MODULE`, from both of its scans: the SQLite-import scan and
-the event-table write scan. The worker entry (for example
-`src/controllers/session/queryStoreWorker.ts`) must import `node:sqlite`, so
-the two scans need separate allowlists:
+**Ratchet amendment.** `persistenceWriteBoundary.vitest.ts` excluded a single
+module, `DATABASE_MODULE`, from both of its scans. The process source
+(`src/agent/runtime/historyQuery/childSource.ts`) requires `node:sqlite`, so
+the two scans now take separate allowlists:
 
-- The import allowlist becomes `Database.ts` plus the worker.
+- The import allowlist is `Database.ts` plus the process source.
 - The write-SQL scan still excludes only `Database.ts`.
 
 The ratchet exists so there is never a second owner of the ordinals. The
-worker opens no session file, assigns no `seq` or `commit`, and claims
-nothing, so it is not a second owner.
+process opens no session file, assigns no `seq` or `commit`, and claims
+nothing, so it is not a second owner. The ratchet also asserts the process
+source still matches the import pattern, so the entry cannot go stale.
 
 ### 2. The views are the contract
 
@@ -205,24 +221,20 @@ Other rules:
 
 ### 3. The tool: a fifth arm
 
-Add the arm to `ExecutionsToolActionSchema`:
+The arm on `ExecutionsToolActionSchema` (`src/tools/executions/toolInput.ts`):
 
 ```ts
 const QueryActionSchema = z.strictObject({
   path: PathFieldSchema, // required, as on every arm; must be /executions
-  action: z
-    .literal('query')
-    .describe(
-      'Run one read-only SQL statement over the views (use on /executions).',
-    ),
-  sql: z
-    .string()
-    .min(1)
-    .describe('One SELECT/WITH statement over the views below.'),
-  params: z.array(z.union([z.string(), z.number(), z.null()])).nullish(),
+  action: z.literal('query'),
+  sql: z.string().min(1),
+  params: nullishWithDefault(z.array(z.string()), []),
 });
 ```
 
+- **`params` are text.** An array of one type keeps the provider-facing
+  schema free of an `anyOf` in array items; a number is written as a literal
+  in the SQL.
 - **`path` stays required.** `flattenTopLevelUnion` keeps a field in
   `required` only if every arm requires it (`src/agent/runtime/run/toolSchema.ts`).
   A nullish `path` on this arm would drop `path` from the advertised schema
@@ -232,16 +244,16 @@ const QueryActionSchema = z.strictObject({
 - **The handler** is `Effect.fn('ExecutionsTool.query')`. It reaches the query
   store through the session it already resolves and returns
   `executed(table, summary)`.
-- **Errors.** `DatabaseQueryRefused` becomes a `ToolError` carrying SQLite's
-  message (`syntax`, `not-a-read`) or the limit that was hit (`timeout`), so
-  the model can correct the query.
+- **Errors.** `HistoryQueryRefused` becomes a `ToolError`: SQLite's own
+  message for `rejected`, the rule for `not-a-read`, the deadline for
+  `timeout`, so the model can correct the query.
 - **Output: one behavior past the row cap.** The result is always a page: the
   first 200 rows (the existing `limit` maximum), with per-cell truncation.
-  When `more` is true, it ends with `More rows exist; add LIMIT/OFFSET to
-page.`. A large result is never an error and never silently cut.
+  When `more` is true, it ends with a line saying more rows exist and how to
+  page. A large result is never an error and never silently cut.
 - **Rendering.** It stays one tool, so the existing `executionsDisplay.ts` and
-  `toolRowSections.ts` tool cards apply; they gain only a `query` preview
-  (showing the SQL).
+  `toolRowSections.ts` tool cards apply; a `query` call shows its SQL in the
+  preview and an `SQL:` section.
 
 ### 4. What it deletes
 
@@ -312,52 +324,53 @@ This follows AGENTS.md "Testing discipline": a new feature gets E2E coverage
 of its user-visible path, ending in an artifact, and isolated tests only at a
 durable boundary, from a failure-mode list written first.
 
-- **E2E.** Drive the real `texra` binary headless through one run whose agent
-  calls `executions` with `action: 'query'`. The artifact is the run's saved
-  transcript (NDJSON) at a known path, containing the query card and its
-  result table. This exercises the real tool-schema conversion (including
-  union flattening), worker packaging in the bundled binary, and the host
-  boundary, none of which an isolated suite reaches. It needs a deterministic
-  model route for the CLI; see Open questions.
-- **Isolated, at the durable boundary: the view contract.** The failure modes
-  are written before the code:
+- **E2E.** `packages/cli/scripts/validate-run.mjs`
+  (`validateHistoryQueryRunCommand`) runs the real bundled `texra` binary
+  headless with a custom tool-use agent that has only `executions`. The
+  internal validation model (`validationModel.ts`, under
+  `TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY=1`) calls `executions` with a
+  `query`, then answers with the tool result verbatim. The check asserts the
+  page for the run's own row. The NDJSON the run printed is saved to
+  `packages/cli/.texra-validate-run/artifacts/history-query-run.ndjson`. This
+  covers the provider-facing schema (union flattening included), the real
+  session, and the store's process spawned from the bundled binary.
+- **Isolated, at the durable boundary: the view contract.**
+  `src/test-kernel/agent/runtime/HistoryQuery.vitest.ts` (kernel tier) runs
+  over a real ephemeral session. Its failure modes were written before the
+  store:
   1. a vocabulary change leaves a view that no longer compiles;
-  2. a resumed run shows its previous outcome;
+  2. a resumed run shows its previous lifecycle's outcome;
   3. a detached child still appears under its former parent;
-  4. a runaway statement blocks the caller instead of timing out;
-  5. a ledger or private row reaches the query store.
+  4. a runaway statement holds the store instead of stopping at its deadline,
+     or the store stays dead after it;
+  5. a ledger row, a private record, or the session database's own tables are
+     reachable from a query;
+  6. a statement writes to the store or runs a second statement.
+- The two `/todos` cases in `ExecutionsToolWorkspaceFiles.vitest.ts` now read
+  the task list through the query.
+- `persistenceWriteBoundary.vitest.ts`: the split allowlists from §1.
 
-  Each gets one case, in one kernel-tier suite next to the session database
-  tests (`src/test-kernel/controllers/session/`). It feeds `readDisplay` rows
-  from a real ephemeral `Database`. The suite imports the query store and
-  `node:sqlite`, so it belongs in the kernel tier. It is not added to
-  `sessionEventFormat.vitest.ts`, which is a pure-tier suite whose imports
-  must stay SQLite-free.
+## Landed
 
-- `persistenceWriteBoundary.vitest.ts`: the split allowlists from §1, with the
-  argument in the comment.
+Phase 1 (§1 to §5), in [#13344](https://github.com/LionSR/TeXRA/pull/13344):
+the query store, the views, the `query` action, the SQL on the executions
+card, and the removal of `/children` and `/todos` (the orchestrator, Lean
+orchestrator and progress-check prompts now use the query).
 
-## Open questions
+## Open
 
-1. **Deterministic model route for the CLI E2E.** No scripted or recorded
-   model route exists for the `texra` binary today. Landing one is a
-   prerequisite every tool-level E2E shares. The alternative, a real provider
-   behind a key, is not repeatable.
-2. **Worker mechanism.** Use Effect 4's worker module or `node:worker_threads`
-   under `Effect.acquireRelease`. Check against the pinned `4.0.0-rc.117`
-   before implementing.
-3. **Query store memory.** The store copies every display row of the project
-   database into worker memory. Measure a large real database. If the copy is
-   too large, options are an idle-evicted worker, per-view lazy loading, or
-   scoping the feed to the current session (question 5).
-4. **`messages` after the view-state collapse.** C3's named residue says the
+1. **Phase 2** (§6): `query()` as a workflow-script operation, with the
+   journal discriminant and the format bump.
+2. **Query store memory.** The store copies every display row of the project
+   database into the process. Measure a large real database. If the copy is
+   too large, options are an idle-evicted process, per-view lazy loading, or
+   scoping the feed.
+3. **`messages` after the view-state collapse.** C3's named residue says the
    collapse deletes the trace copy of message text, after which the display
-   fold reads `model.message` with redaction applied. At that point
-   `readDisplay` no longer carries message text. `messages` must then be fed
+   fold reads `model.message` with redaction applied. At that point the
+   display rows no longer carry message text. `messages` must then be fed
    from a projection that `RunLedger` owns, and `/conversation` can retire.
-5. **Scope across sessions.** One project database holds every session in
-   the workspace. `runs` should probably default to what `/executions` lists
-   today. Should cross-session history be reachable deliberately, through a
-   `session_id` column, or not at all?
-6. **Time and size budgets.** Proposed: 200 rows per page, 2 s wall clock,
-   2,000 chars per cell. These need measuring before they are fixed.
+4. **Budgets.** 200 rows per page, 5 s per query, 2,000 characters per cell
+   and a 1 GiB SQLite heap are first guesses, not measurements.
+5. **`/config`** could move onto the `runs` view once the query has proven
+   itself.

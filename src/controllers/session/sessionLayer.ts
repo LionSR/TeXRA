@@ -49,6 +49,7 @@ import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
+import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
 import { ModelRetryGate } from '@agent/runtime/ModelRetryGate';
 import {
   SessionHandle,
@@ -583,10 +584,13 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      // The gate's probe fibers and waiting calls end with this scope, after
-      // the handle below has unwound its runs.
-      const modelRetries = yield* ModelRetryGate.make;
-      const session = new SessionHandle({ ...key.open, graph, modelRetries });
+      // The gate's probe fibers and waiting calls, and the history store's
+      // process, end with this scope, after the handle below has unwound its runs.
+      const services = {
+        modelRetries: yield* ModelRetryGate.make,
+        history: yield* HistoryQuery.make(() => session),
+      };
+      const session = new SessionHandle({ ...key.open, graph, ...services });
       // The session's teardown is this scope's finalizers, run in the reverse
       // of their registration: the handle's own doors shut last, after every
       // owner below has unwound, with the publications they left settled

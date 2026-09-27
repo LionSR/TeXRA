@@ -159,6 +159,7 @@ export function validationModel(config: ModelConfig): {
   const complete = (
     turn: ResolvedTurn,
     workflowScript: boolean,
+    historyQuery: boolean,
   ): TurnResult => {
     responses += 1;
     const toolNames = new Set(turn.tools.map((tool) => tool.name));
@@ -190,6 +191,31 @@ export function validationModel(config: ModelConfig): {
           agent: 'correct',
           script: WORKFLOW_SCRIPT_VALIDATION_SOURCE,
         }),
+      ];
+    } else if (historyQuery && !hasToolResult && toolNames.has('executions')) {
+      content = [
+        call('executions', {
+          path: '/executions',
+          action: 'query',
+          sql: 'SELECT name, kind, lifecycle FROM runs ORDER BY started_at',
+        }),
+      ];
+    } else if (historyQuery) {
+      // Hand the page back verbatim, so the run's result shows what the
+      // query returned.
+      const results = turn.messages.flatMap((message) =>
+        message.role === 'tool' ? message.results : [],
+      );
+      content = [
+        {
+          kind: 'message',
+          content: [
+            {
+              kind: 'text',
+              text: `History query result: ${JSON.stringify(results)}`,
+            },
+          ],
+        },
       ];
     } else {
       content = [
@@ -237,12 +263,17 @@ export function validationModel(config: ModelConfig): {
         effort: null,
       },
     });
-  // The workflow-script switch is read per turn, so a validation run can flip
-  // it between turns.
+  // The scenario switches are read per turn, so a validation run can flip
+  // them between turns.
   const streamTurn: Model['streamTurn'] = (turn) =>
     Stream.fromEffect(
-      Effect.map(envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'), (flag) =>
-        complete(turn, flag === '1'),
+      Effect.all([
+        envVar('TEXRA_INTERNAL_VALIDATE_WORKFLOW_SCRIPT'),
+        envVar('TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY'),
+      ]).pipe(
+        Effect.map(([workflowScript, historyQuery]) =>
+          complete(turn, workflowScript === '1', historyQuery === '1'),
+        ),
       ),
     ).pipe(Stream.map((result): TurnEvent => ({ kind: 'completed', result })));
   return { origin, model: { prepareTurn, streamTurn } };

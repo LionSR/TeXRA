@@ -845,6 +845,92 @@ function validateToolUseAgentRunCommand() {
   }
 }
 
+/**
+ * The executions `query` action end to end: a tool-use agent whose (canned)
+ * model asks the run history one SQL question through the real tool schema,
+ * the real session, and the history store's own process, spawned from this
+ * binary. The NDJSON the run printed is kept as the artifact.
+ */
+function validateHistoryQueryRunCommand() {
+  const cwd = mkdtempSync(path.join(tmpdir(), 'texra-cli-history-query-'));
+  try {
+    const home = path.join(cwd, 'home');
+    const customAgents = path.join(
+      home,
+      '.texra',
+      'v1',
+      'global-storage',
+      'custom_agents',
+    );
+    const validationFlagPath = path.join(cwd, validationFlagName);
+    mkdirSync(customAgents, { recursive: true });
+    writeFileSync(
+      path.join(customAgents, 'history-query-validation.yaml'),
+      `name: history_query_validation
+description: Ask the run history one SQL question from the headless CLI.
+
+settings:
+  agentCategory: toolUse
+  tools:
+    - executions
+
+prompts:
+  systemPrompt: |
+    Query the run history once, then report what it returned.
+  userRequest: |
+    {{ INSTRUCTION }}
+`,
+    );
+    writeFileSync(validationFlagPath, validationFlagContent);
+
+    const result = run(
+      process.execPath,
+      [
+        binaryPath,
+        'run',
+        'history_query_validation',
+        '--model',
+        'gpt56',
+        '--instruction',
+        'List the runs in this project.',
+        '--cwd',
+        cwd,
+        '--approval-policy',
+        'never',
+        '--output-format',
+        'ndjson',
+        '--print',
+      ],
+      {
+        cwd: repoRoot,
+        validationModel: true,
+        validationFlagPath,
+        env: isolatedCliHomeEnv(home, {
+          TEXRA_INTERNAL_VALIDATE_HISTORY_QUERY: '1',
+        }),
+      },
+    );
+    const artifactDir = path.join(validationRoot, 'artifacts');
+    mkdirSync(artifactDir, { recursive: true });
+    const artifactPath = path.join(artifactDir, 'history-query-run.ndjson');
+    writeFileSync(artifactPath, result.stdout);
+    assertSuccess(result, 'texra run history query NDJSON');
+
+    const records = parseNdjson(result.stdout, 'history query run NDJSON');
+    const agentResult = records.find(
+      (record) => record.kind === 'agent-result',
+    );
+    const response = String(agentResult?.result?.output?.response ?? '');
+    assert(
+      response.includes('name | kind | lifecycle') &&
+        response.includes('history_query_validation | agent | activated'),
+      `history query run should return the query page for its own run (artifact: ${artifactPath})\nresponse:\n${response}`,
+    );
+  } finally {
+    rmSync(cwd, { recursive: true, force: true });
+  }
+}
+
 function validateWorkflowScriptAgentRunCommand() {
   const cwd = mkdtempSync(
     path.join(tmpdir(), 'texra-cli-workflow-script-run-'),
@@ -1116,6 +1202,7 @@ async function validateCliRunArtifacts(options = {}) {
   await validateChatOnboardingPickers();
   validateRunCommand();
   validateToolUseAgentRunCommand();
+  validateHistoryQueryRunCommand();
   validateWorkflowScriptAgentRunCommand();
   validateMultiAgentRunCommand();
   console.log('CLI run validation passed');

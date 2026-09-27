@@ -280,6 +280,8 @@ function buildExecutionsSections(ctx: SectionContext): ToolSection[] {
     sections.push(textSection('Action:', 'kill'));
   } else if (action === 'send' && typeof input.message === 'string') {
     sections.push(textSection('Message:', input.message));
+  } else if (action === 'query' && typeof input.sql === 'string') {
+    sections.push(textSection('SQL:', input.sql));
   }
 
   const viewRange = input.view_range;

@@ -10,7 +10,6 @@
 
 import {
   AgentCategory,
-  countByStatus,
   STATUS_DISPLAY,
   type RunId,
   type RunIdentity,
@@ -105,17 +104,8 @@ export function formatChildLine(child: RunView): string {
 }
 
 /** Format todo items as a checklist. */
-export function formatTodoSection(todos: readonly TodoItem[]): string[] {
+function formatTodoSection(todos: readonly TodoItem[]): string[] {
   return todos.map((t) => `${STATUS_DISPLAY[t.status].icon} ${t.content}`);
-}
-
-/** Format a todo header with counts. */
-export function formatTodoHeader(
-  runId: RunId,
-  todos: readonly TodoItem[],
-): string {
-  const { completed, inProgress, pending } = countByStatus(todos);
-  return `Tasks for ${runId} (${completed} done, ${inProgress} active, ${pending} pending):`;
 }
 
 // ============================================================================
