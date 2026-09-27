@@ -133,12 +133,17 @@ export function runWithLaunchGuard<A, E, R>(
               Exit.isSuccess(exit) ? Effect.void : terminal(exit),
             ),
           )
-        : Effect.scoped(
-            Effect.gen(function* () {
-              yield* session.holdRunClaim(runId);
-              owner.onRunClaimed?.(runId);
-              return yield* operation.pipe(Effect.onExit(terminal));
-            }),
+        : // No interrupt lands between taking the hold and attaching the
+          // terminal, so a claimed run always gets its ending; a refused hold
+          // still fails as itself.
+          Effect.scoped(
+            Effect.uninterruptibleMask((restore) =>
+              Effect.gen(function* () {
+                yield* session.holdRunClaim(runId);
+                owner.onRunClaimed?.(runId);
+                return yield* restore(operation).pipe(Effect.onExit(terminal));
+              }),
+            ),
           );
     return Effect.exit(guarded).pipe(
       Effect.flatMap((exit) => {
