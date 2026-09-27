@@ -39,6 +39,9 @@ import {
   sessionWithInteractions,
 } from '../agent/progressTestUtils';
 
+/** The per-install key env values are digested under, fixed. */
+const TEST_REVISION_KEY = Effect.succeed('00'.repeat(32));
+
 /** A stdio MCP server listing one tool, `echo`, that answers one call. */
 const FIXTURE_SERVER = `
 const fs = require('node:fs');
@@ -85,7 +88,7 @@ const mcpToolTableLayer = (dir: string) =>
     FileSystem.FileSystem.useSync((fs) =>
       toolTableLayer(
         toolTable({}),
-        mcpPluginLoader(fs, path.join(dir, 'mcp.json')),
+        mcpPluginLoader(fs, path.join(dir, 'mcp.json'), TEST_REVISION_KEY),
       ),
     ),
   ).pipe(Layer.provide(nodePlatformLayer));
@@ -276,6 +279,7 @@ describe('MCP server plugins', () => {
       const { plugins, warnings } = yield* mcpPluginLoader(
         fs,
         file,
+        TEST_REVISION_KEY,
       )(['mcp__s__*']);
       expect(plugins).toEqual([]);
       expect(warnings).toEqual([`${file} is not valid JSON: Unexpected token`]);

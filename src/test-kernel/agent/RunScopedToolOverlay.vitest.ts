@@ -19,13 +19,18 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { noopTrace } from '@test/support/noopTrace';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
-import { hostStores, setupPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAppState,
+  hostStores,
+  setupPlatform,
+} from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
@@ -96,7 +101,11 @@ function runLayer(
     Layer.provideMerge(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
     Layer.provideMerge(testHttpClientLayer),
     Layer.provideMerge(
-      toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
+      toolRegistryLayer.pipe(
+        Layer.provide(
+          Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+        ),
+      ),
     ),
     Layer.provideMerge(nodeSpawnerLayer),
   );

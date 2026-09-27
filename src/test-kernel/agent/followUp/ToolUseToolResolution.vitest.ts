@@ -6,10 +6,15 @@ import {
   LanguageModel,
   UNAVAILABLE_LANGUAGE_MODEL_PORT,
 } from '@platform/languageModel';
+import { AppState } from '@platform/interfaces';
 import type { OfferedTool, ToolDefinition } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { hostStores, installPlatform } from '@test/support/setupPlatform';
+import {
+  fakeHostAppState,
+  hostStores,
+  installPlatform,
+} from '@test/support/setupPlatform';
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolTableLayer } from '@tools/liveTools';
@@ -43,7 +48,13 @@ describe('tool-use tool resolution', () => {
       // The delegation-annotation availability read yields `LanguageModel`;
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
-      Effect.provide(toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer))),
+      Effect.provide(
+        toolRegistryLayer.pipe(
+          Layer.provide(
+            Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+          ),
+        ),
+      ),
       Effect.provide(nodeSpawnerLayer),
     );
   }
@@ -166,7 +177,11 @@ describe('tool-use tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          toolRegistryLayer.pipe(Layer.provide(nodePlatformLayer)),
+          toolRegistryLayer.pipe(
+            Layer.provide(
+              Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
+            ),
+          ),
         ),
         Effect.provide(nodeSpawnerLayer),
       ),

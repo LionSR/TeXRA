@@ -63,9 +63,14 @@ export interface ToolEntry {
   /** The plugin's revision, which rows record. `builtin` for a built-in
    *  plugin, whose code cannot change under a process: each tool's digest
    *  covers its own schema. A loaded plugin's is a digest of its spec and
-   *  of which env-value edit this process runs (`envEdit`), never of the
-   *  values themselves, so a run moved onto an edited server records it. */
+   *  of its env values' keyed digest (`LoadedPlugin.revision`, keyed per
+   *  install), so the same entry records the same revision across restarts
+   *  and an edited one records a change, and no value can be read back. */
   readonly revision: string;
+  /** The loaded server process the tool dispatches through, by its hold
+   *  key; never recorded. A pinned generation holds each such process, so
+   *  nothing it can dispatch to stops before its pin closes. */
+  readonly server?: string;
   /** The tool's identity: sha256 over its name and input schema, every
    *  description left out. A call runs only while its tool still has it. */
   readonly digest: string;
@@ -196,28 +201,14 @@ export const toolDigests = (
 const entriesOf = (
   plugin: string,
   tools: ReadonlyMap<string, ITool>,
-  revision = 'builtin',
+  loaded?: { readonly revision: string; readonly server: string },
 ): ReadonlyMap<string, ToolEntry> =>
   new Map(
     [...tools].map(([name, tool]) => [
       name,
-      { tool, plugin, revision, ...toolDigests(tool) },
+      { tool, plugin, revision: 'builtin', ...loaded, ...toolDigests(tool) },
     ]),
   );
-
-/** One spec revision of a loaded plugin: the key its holds are counted by. */
-class LoadedKey implements Equal.Equal {
-  readonly id: string;
-  constructor(readonly plugin: LoadedPlugin) {
-    this.id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}`;
-  }
-  [Equal.symbol](that: Equal.Equal): boolean {
-    return that instanceof LoadedKey && that.id === this.id;
-  }
-  [Hash.symbol](): number {
-    return Hash.string(this.id);
-  }
-}
 
 const liveToolsLayer = (
   loader: PluginLoader,
@@ -235,6 +226,37 @@ const liveToolsLayer = (
         lookup: (id: string) =>
           Layer.build(table.layers.get(id) ?? Layer.empty),
       });
+      // Each held server process by hold key, with its count of holds (runs
+      // and pins). Read and written only under the catalog's lock.
+      const servers = new Map<
+        string,
+        {
+          count: number;
+          readonly scope: Scope.Closeable;
+          readonly failure: string | undefined;
+        }
+      >();
+      // Each built-in plugin's open contribution, by id: its scope closes
+      // when the plugin is switched off. The ref is the catalog's lock.
+      const builtIns = yield* SynchronizedRef.make(
+        new Map<string, Scope.Closeable>(),
+      );
+      const locked = <A, E>(effect: Effect.Effect<A, E>) =>
+        SynchronizedRef.modifyEffect(builtIns, (open) =>
+          Effect.map(effect, (a) => [a, open] as const),
+        );
+      /** Drop one hold of a server; the last withdraws its tools and stops
+       *  its process. */
+      const release = (id: string) =>
+        locked(
+          Effect.gen(function* () {
+            const open = servers.get(id)!;
+            open.count -= 1;
+            if (open.count > 0) return;
+            servers.delete(id);
+            yield* Scope.close(open.scope, Exit.void);
+          }),
+        );
       const registry = yield* makeRegistry<
         string,
         ToolEntry,
@@ -253,23 +275,38 @@ const liveToolsLayer = (
               .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
           ),
         acquire: (generation) =>
-          Effect.reduce(
-            [...new Set(generation.owners.values())].filter((id) =>
-              table.layers.has(id),
-            ),
-            () => Context.empty(),
-            (merged, id) =>
-              Effect.map(RcMap.get(layers, id), (services) =>
-                Context.merge(merged, services),
+          Effect.andThen(
+            // The server processes the generation dispatches through, held
+            // for the pin. Pins are taken only under the catalog's lock
+            // (`pinSwitched`), where a server in `current` is still up.
+            Effect.forEach(
+              new Set(
+                [...generation.entries.values()].flatMap(
+                  (entry) => entry.server ?? [],
+                ),
               ),
+              (server) =>
+                Effect.acquireRelease(
+                  Effect.sync(() => {
+                    servers.get(server)!.count += 1;
+                  }),
+                  () => release(server),
+                ),
+              { discard: true },
+            ),
+            Effect.reduce(
+              [...new Set(generation.owners.values())].filter((id) =>
+                table.layers.has(id),
+              ),
+              () => Context.empty(),
+              (merged, id) =>
+                Effect.map(RcMap.get(layers, id), (services) =>
+                  Context.merge(merged, services),
+                ),
+            ),
           ),
       });
 
-      // Each built-in plugin's open contribution, by id: its scope closes
-      // when the plugin is switched off.
-      const builtIns = yield* SynchronizedRef.make(
-        new Map<string, Scope.Closeable>(),
-      );
       /** Open and close the built-in contributions to match `off`. */
       const reconcile = (
         open: ReadonlyMap<string, Scope.Closeable>,
@@ -306,52 +343,74 @@ const liveToolsLayer = (
           }),
         );
 
-      // Per spec digest, each keyed env revision's ordinal.
-      const envEdits = new Map<string, Map<string, number>>();
-      const servers = yield* RcMap.make({
-        lookup: (key: LoadedKey) =>
-          Effect.gen(function* () {
-            const answered = yield* key.plugin.acquire.pipe(
-              Effect.provideService(ChildProcessSpawner, spawner),
-            );
-            if (answered.failure !== undefined) return answered.failure;
-            // The recorded revision: the spec, and which env-value edit of
-            // it this is, counted in the order this process met them.
-            const spec = sha256(key.plugin.spec);
-            const seen = envEdits.get(spec) ?? new Map<string, number>();
-            envEdits.set(spec, seen);
-            const envEdit = seen.get(key.plugin.revision) ?? seen.size;
-            seen.set(key.plugin.revision, envEdit);
-            // Withdrawn when the last hold of this revision closes.
-            return yield* registry
-              .contribute(
-                key.plugin.id,
-                entriesOf(
-                  key.plugin.id,
-                  answered.tools,
-                  sha256({ spec: key.plugin.spec, envEdit }),
-                ),
-              )
-              .pipe(
-                Effect.as(undefined),
-                Effect.catchTag('RegistryConflict', (conflict) =>
-                  Effect.succeed(
-                    `${key.plugin.id} was not loaded: ${conflict.message}`,
-                  ),
-                ),
-              );
-          }),
-      });
+      /** Hold a loaded plugin's server: the process it runs, its tools'
+       *  contribution while it runs, or why it offers none. */
+      const acquireServer = (plugin: LoadedPlugin) =>
+        Effect.gen(function* () {
+          const id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}`;
+          const held = yield* locked(
+            Effect.sync(() => {
+              const open = servers.get(id);
+              if (open) open.count += 1;
+              return open;
+            }),
+          );
+          if (held) return { id, failure: held.failure };
+          // Started outside the lock: a slow server does not hold up every
+          // run's step. A concurrent hold of the same key keeps the first.
+          const serverScope = yield* Scope.fork(scope);
+          const answered = yield* plugin.acquire.pipe(
+            Effect.provideService(ChildProcessSpawner, spawner),
+            Scope.provide(serverScope),
+          );
+          const failure = yield* locked(
+            Effect.gen(function* () {
+              const open = servers.get(id);
+              if (open) {
+                open.count += 1;
+                yield* Scope.close(serverScope, Exit.void);
+                return open.failure;
+              }
+              const failure =
+                answered.failure ??
+                (yield* registry
+                  .contribute(
+                    plugin.id,
+                    entriesOf(plugin.id, answered.tools, {
+                      revision: sha256({
+                        spec: plugin.spec,
+                        env: plugin.revision,
+                      }),
+                      server: id,
+                    }),
+                  )
+                  .pipe(
+                    Scope.provide(serverScope),
+                    Effect.as(undefined),
+                    Effect.catchTag('RegistryConflict', (conflict) =>
+                      Effect.succeed(
+                        `${plugin.id} was not loaded: ${conflict.message}`,
+                      ),
+                    ),
+                  ));
+              servers.set(id, { count: 1, scope: serverScope, failure });
+              return failure;
+            }),
+          );
+          return { id, failure };
+        });
       const hold = Effect.fn('LiveTools.hold')(function* (
         declared: readonly string[],
       ) {
         const read = yield* loader(declared);
         const loaded = new Map<string, string | undefined>();
-        for (const plugin of read.plugins)
-          loaded.set(
-            plugin.id,
-            yield* RcMap.get(servers, new LoadedKey(plugin)),
+        for (const plugin of read.plugins) {
+          const { failure } = yield* Effect.acquireRelease(
+            acquireServer(plugin),
+            ({ id }) => release(id),
           );
+          loaded.set(plugin.id, failure);
+        }
         return { warnings: read.warnings, loaded };
       });
       return { registry, pinSwitched, hold };

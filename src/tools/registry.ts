@@ -1,8 +1,9 @@
 // Third-party imports
-import { FileSystem, Layer } from 'effect';
+import { Effect, FileSystem, Layer } from 'effect';
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import { AppState } from '@platform/interfaces';
 import type { SettingHost } from '@shared/state/stateSettings';
 import type { CanonicalToolDisplayName } from '@shared/tools/toolKind';
 import {
@@ -10,7 +11,11 @@ import {
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 import { toolTableLayer } from '@tools/liveTools';
-import { mcpPluginLoader, USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
+import {
+  mcpPluginLoader,
+  mcpRevisionKey,
+  USER_MCP_CONFIG_PATH,
+} from '@tools/mcp/mcpConfig';
 import type {
   PluginToolName,
   ToolPluginEntry,
@@ -227,12 +232,22 @@ export const TOOL_TABLE = toolTable(PLUGIN_TOOLS, PLUGIN_LAYERS);
  * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it and the
  * MCP servers of the user's `~/.texra/mcp.json`, which
  * `installProcessRuntime` provides. The layer takes the process
- * `FileSystem` that `installProcessRuntime` serves, to read that file.
+ * `FileSystem` that `installProcessRuntime` serves, to read that file, and
+ * its `AppState`, which holds the key MCP env values are digested under.
  */
 export const toolRegistryLayer = Layer.unwrap(
-  FileSystem.FileSystem.useSync((fs) =>
-    toolTableLayer(TOOL_TABLE, mcpPluginLoader(fs, USER_MCP_CONFIG_PATH)),
-  ),
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const appState = yield* AppState;
+    return toolTableLayer(
+      TOOL_TABLE,
+      mcpPluginLoader(
+        fs,
+        USER_MCP_CONFIG_PATH,
+        mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
+      ),
+    );
+  }),
 );
 
 /** Whether a registered tool declares itself unavailable on a product host. */

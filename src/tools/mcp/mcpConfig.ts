@@ -10,9 +10,9 @@
  * run that declares none reads nothing and starts nothing. Each is plugin
  * `mcp:<server>`; its spec (name, command, args and env names) and a keyed
  * digest of its env values key its process, so an edited entry is a new
- * process beside the one open runs keep. The spec's digest is its recorded
- * revision: an edited spec gives its tools a new identity, edited env
- * values alone do not.
+ * process beside the one open runs keep, and both are its recorded
+ * revision: an edited entry gives its tools a new identity, and an
+ * unchanged one keeps it across restarts.
  *
  * An entry that does not validate is skipped with a warning the resolving
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
@@ -21,11 +21,13 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
-import { Effect, type FileSystem } from 'effect';
+import { Effect, Result, type FileSystem } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
+import { AppState } from '@platform/interfaces';
+import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { LoadedPlugin, PluginLoader } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -67,12 +69,34 @@ const McpConfigFileSchema = z.object({
   mcpServers: z.record(z.string(), z.unknown()),
 });
 
+/** A revision key as app state stores it: 32 random bytes, hex. */
+const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
+
 /**
- * The key a server's env values are digested under for its revision: fresh
- * per process, so the digest (which a debug log may show) cannot be checked
- * against a guessed value.
+ * The key a server's env values are digested under for its revision: random
+ * per install, created once in app state (create-if-absent, one `modify` at
+ * the store's authority), never written to history. The same env values
+ * digest the same across restarts, and the digest a run records cannot be
+ * checked against a guessed value. A stored value that is not a key is
+ * replaced, loudly: every server then records a new revision once.
  */
-const REVISION_KEY = randomBytes(32);
+export const mcpRevisionKey = Effect.gen(function* () {
+  let replaced = false;
+  const key = yield* (yield* AppState).modify(
+    GlobalStateKey.MCP_REVISION_KEY,
+    (current) => {
+      if (typeof current === 'string' && REVISION_KEY_PATTERN.test(current))
+        return Result.succeed(current);
+      replaced = current !== undefined;
+      return Result.succeed(randomBytes(32).toString('hex'));
+    },
+  );
+  if (replaced)
+    yield* Effect.logWarning(
+      'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',
+    );
+  return key;
+});
 
 /** One configured stdio server, as the plugin spawns it. */
 export interface McpServerConfig {
@@ -189,8 +213,8 @@ export const mcpConfigWarnings = (
     Effect.catch((error) => Effect.succeed([error.message])),
   );
 
-/** The plugin one configured server is. */
-function mcpPlugin(config: McpServerConfig): LoadedPlugin {
+/** The plugin one configured server is, its env digested under `key`. */
+function mcpPlugin(config: McpServerConfig, key: string): LoadedPlugin {
   return {
     id: mcpPluginId(config.name),
     spec: {
@@ -199,16 +223,22 @@ function mcpPlugin(config: McpServerConfig): LoadedPlugin {
       args: [...config.args],
       envKeys: Object.keys(config.env).toSorted(),
     },
-    revision: createHmac('sha256', REVISION_KEY)
+    revision: createHmac('sha256', Buffer.from(key, 'hex'))
       .update(stableStringify(config.env))
       .digest('hex'),
     acquire: acquireMcpServer(config),
   };
 }
 
-/** The loader over the MCP config file at `file`, read through `fs`. */
+/** The loader over the MCP config file at `file`, read through `fs`, with
+ *  env values digested under the key `revisionKey` reads (`mcpRevisionKey`),
+ *  read only when a run declares an MCP tool. */
 export const mcpPluginLoader =
-  (fs: FileSystem.FileSystem, file: string): PluginLoader =>
+  (
+    fs: FileSystem.FileSystem,
+    file: string,
+    revisionKey: Effect.Effect<string, Error>,
+  ): PluginLoader =>
   (declared) =>
     Effect.gen(function* () {
       const wanted = new Set(
@@ -223,10 +253,11 @@ export const mcpPluginLoader =
             `The run declares MCP tools, but ${file} does not exist; no MCP server is configured.`,
           ],
         };
+      const key = yield* revisionKey;
       return {
         plugins: config.servers
           .filter((server) => wanted.has(server.name))
-          .map(mcpPlugin),
+          .map((server) => mcpPlugin(server, key)),
         warnings: config.warnings,
       };
     }).pipe(
