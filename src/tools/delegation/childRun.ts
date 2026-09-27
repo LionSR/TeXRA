@@ -206,12 +206,21 @@ const pauseChildRun = (
     const from = { kind: 'run', runId } as const;
     // Read with the parent's next input and offered to nobody: a pause
     // starts no model turn, parked or busy, and leaves no recovery lease.
-    const submitted = yield* session.followUps.submit(
-      parentRunId,
-      { text, from },
-      'recoverable',
-      { liveOffer: 'none' },
-    );
+    // The pause is durable by now: a failed admission loses only the
+    // notice, which the report keeps, so it is warned about, never raised.
+    const submitted = yield* session.followUps
+      .submit(parentRunId, { text, from }, 'recoverable', { liveOffer: 'none' })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Paused child ${runId}: its notice could not be queued for parent run ${parentRunId}; it remains in this run's report.`,
+              { data: error },
+            );
+            return { kind: 'failed' } as const;
+          }),
+        ),
+      );
     if (submitted.kind === 'queued' && submitted.lease)
       session.followUps.release(submitted.lease, 'recoverable');
     if (submitted.kind === 'refused')
