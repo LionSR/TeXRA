@@ -27,7 +27,7 @@ export type DefinedTool<T, R = never> = Omit<ITool<Error, R>, 'call'> & {
     rawInput: unknown,
   ): Effect.Effect<ToolResult, Error, Exclude<R, Scope.Scope>>;
   readonly parallelSafe: boolean | undefined;
-  readonly requiresApproval: boolean | undefined;
+  readonly requiresApproval: ITool['requiresApproval'];
   readonly slow: boolean | undefined;
   readonly unavailableHosts: readonly SettingHost[] | undefined;
   readonly guard: ToolGuard<T, R> | undefined;
@@ -52,7 +52,7 @@ export type DefineToolOptions<T, R = never> = {
   guard?: ToolGuard<T, NoInfer<R>>;
   execute: ToolExecute<T, R>;
   parallelSafe?: boolean;
-  requiresApproval?: boolean;
+  requiresApproval?: ITool['requiresApproval'];
   slow?: boolean;
 };
 

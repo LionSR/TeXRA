@@ -75,6 +75,7 @@ describe('human prompt progress events', () => {
             requestBashApproval({
               command: 'echo hello',
               cwd: '/tmp/texra-project',
+              grant: 'shell',
             }),
         );
 
@@ -176,7 +177,8 @@ describe('human prompt progress events', () => {
         const approval = yield* inToolContext(
           explicit.interactions,
           runId,
-          () => requestBashApproval({ command: 'echo still asks' }),
+          () =>
+            requestBashApproval({ command: 'echo still asks', grant: 'shell' }),
         );
 
         expect(approval).toMatchObject({ action: 'approve' });
@@ -194,7 +196,8 @@ describe('human prompt progress events', () => {
         const bypassed = yield* inToolContext(
           explicit.interactions,
           runId,
-          () => requestBashApproval({ command: 'echo bypassed' }),
+          () =>
+            requestBashApproval({ command: 'echo bypassed', grant: 'shell' }),
         );
 
         expect(bypassed).toEqual({ action: 'approve' });

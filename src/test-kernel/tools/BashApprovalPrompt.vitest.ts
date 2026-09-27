@@ -98,6 +98,7 @@ describe('requestBashApproval queueing', () => {
           });
           const bash = yield* requestBashApproval({
             command: 'echo scoped',
+            grant: 'shell',
           }).pipe(Effect.provide(layer));
           const edit = yield* requestToolEditApproval({
             path: 'Proof.lean',
@@ -126,6 +127,7 @@ describe('requestBashApproval queueing', () => {
 
         const result = yield* requestBashApproval({
           command: 'echo denied',
+          grant: 'shell',
         }).pipe(
           Effect.provide(
             nativeToolTestLayer({
@@ -164,7 +166,7 @@ describe('requestBashApproval queueing', () => {
           const requests = yield* watchBashRequests(session);
 
           const request = (command: string) =>
-            requestBashApproval({ command }).pipe(
+            requestBashApproval({ command, grant: 'shell' }).pipe(
               Effect.provide(
                 nativeToolTestLayer({
                   run: { runId, session, toolPolicy: {} },

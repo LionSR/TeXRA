@@ -23,6 +23,8 @@ export interface ToolGuard<T, R = never> {
   /**
    * The command this call runs, spelled as the approval prompt shows it. The
    * loop puts it through the session's bash approval before the body runs.
+   * Only the `bash` tool's commands take the run's command grant; any other
+   * tool's call is asked about per call.
    * An Effect because the spelling can depend on settings the prompt must
    * show (a Codex sandbox mode, a Claude permission mode).
    */
@@ -65,8 +67,16 @@ export interface ITool<E = Error, R = never> {
    * both mutates nothing and never prompts for approval.
    */
   readonly parallelSafe?: boolean;
-  /** Execution behavior consumed by tool resolution and dispatch. */
-  readonly requiresApproval?: boolean;
+  /**
+   * Whether a call needs a person's approval, and who asks for it. `true`:
+   * the run loop asks before the body runs, spelling the call as `guard.bash`
+   * does when the guard names one and as the tool's name and arguments
+   * otherwise, so a tool cannot declare approval and run unasked.
+   * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
+   * question, a delegation proposal) and the loop does not ask again. Either
+   * way, a run that cannot present a prompt is not offered the tool.
+   */
+  readonly requiresApproval?: boolean | 'inBody';
   /** Its card opens before the call runs; a fast tool's opens and closes
    *  with its settlement. */
   readonly slow?: boolean;

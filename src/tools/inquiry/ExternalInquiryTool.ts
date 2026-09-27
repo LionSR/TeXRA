@@ -400,7 +400,7 @@ export const ExternalInquiryTool = defineTool({
   name: 'inquiry',
   // Requires the long-lived graphical inquiry panel.
   unavailableHosts: ['cli'],
-  requiresApproval: true,
+  requiresApproval: 'inBody',
   description: TOOL_DESCRIPTION,
   schema: InquiryInputSchema,
   execute: executeExternalInquiryTool,
