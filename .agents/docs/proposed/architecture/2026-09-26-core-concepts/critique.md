@@ -89,7 +89,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 
 - **Input / inbox: add.** This is the largest omission.
   - `followup.queued` carries user input, child reports, peer messages and subscription notices (#13306).
-  - Its in-process owner is a 729-line second owner (`ToolUseFollowUpQueueManager.ts`), and it caused the parent-cancel bug (#13348).
+  - Its in-process owner is a 713-line second owner (`ToolUseFollowUpQueueManager.ts`), and it caused the parent-cancel bug (#13348).
   - The harness has an inbox, Pico5 has Submission and inbox, and move 10 is about exactly this.
 - **Agent (definition + catalog): add.**
   - Catalog: module state in `src/agent/index/agentRegistry.ts:63-70`. Three loaders exist. Definition pinning is open (decision 10).

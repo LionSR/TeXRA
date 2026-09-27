@@ -8,9 +8,8 @@ status: proposed
 Baseline: `origin/main` at `4311c54176`, **with #13359 assumed merged** (see
 "Assumes #13359"). This note defines the vocabulary the
 rest of the architecture is checked against. It does not replace
-[the session-core programme (#13350)](https://github.com/LionSR/TeXRA/pull/13350).
-Its note lands at `./2026-09-26-effect-native-session-core.md` when that PR
-merges.
+[the session-core programme](./2026-09-26-effect-native-session-core.md)
+(#13350, merged), which is the bounded delivery plan and owns no topic.
 Each of that programme's moves fixes the owner of one concept below, and this
 note says which concept each move serves.
 
@@ -26,7 +25,8 @@ It came from three read-only passes over `main`:
 Two names are proposed, pending the owner's choice:
 
 - **History** replaces "log" and "ledger". It is the append-only rows, and
-  the only truth.
+  the only truth for run and session facts. Current values are a separate
+  authority (invariant 9).
 - **Projection** replaces "fold". It is anything computed from history.
 
 The code keeps its current identifiers (`SessionEvents`, `RunLedger`,
@@ -56,9 +56,9 @@ workflow **round** is a turn opened by the round policy.
 | **Input**             | Every message to a run: user, child report, peer, subscription, or a turn opened by the continuation policy. Each is a `followup.queued` row on the run's aggregate.                                                                                                                                    | row until `followup.consumed`; the in-process inbox lives with the run                                       | a value on the run's own entry, passed explicitly; **never a context tag**                                                                                   | `src/agent/followUp/`, `FollowUps.ts` (#13348)                                                     |
 | **Agent**             | A resolved definition (settings, prompt, declared tools, category) from an ordered catalog of sources: bundled, user, remote, `plugin:<id>`.                                                                                                                                                            | catalog: process, rebuilt from empty on refresh; definition: recorded at run open                            | an `AgentCatalog` process service holding a `SubscriptionRef` of resolved agents                                                                             | `agentRegistry.ts`, `agentLoad.ts` (target: one loader)                                            |
 | **Plugin**            | A manifest row plus entries in fixed tables, one per extension point, keyed by plugin id and checked with `satisfies`. One on/off unit. Built-in plugins contribute code tables; loaded plugins (MCP, installed Claude Code and Codex plugins) contribute data and composition-lifetime resources only. | a table's value type is its lifetime (rule R4)                                                               | no runtime object and no hooks                                                                                                                               | `pluginManifest.ts`, `registry.ts`, each seam's owner module                                       |
-| **Composition**       | What a run gets: preset × the agent's tools × host × probe results, as a hashable key. A **preset** is a stored set of switches.                                                                                                                                                                        | key: a value; entry: refcounted in a process `LayerMap`, held by the scopes of the runs that pin it          | `CompositionKey` (`Equal`/`Hash`) plus the `Compositions` `LayerMap`, with one `MemoMap`                                                                     | `composition.ts`, `compositions.ts`                                                                |
+| **Composition**       | What a run gets: preset × the agent's tools × host × probe results, as a hashable key. A **preset** is a stored set of switches. A child whose tools differ gets its own key for its narrowed set, and shares its parent's layer resources through the one `MemoMap`.                                   | key: a value; entry: refcounted in a process `LayerMap`, held by the scopes of the runs that pin it          | `CompositionKey` (`Equal`/`Hash`) plus the `Compositions` `LayerMap`, with one `MemoMap`                                                                     | `composition.ts`, `compositions.ts`                                                                |
 | **Call**              | A model call or a tool call inside a run. A model call is binding → invoker → attempt, gated, priced and retried, with `ModelInvoker` its only caller. A tool call is offered set → guard → request → result, with a loop-owned card.                                                                   | call: `Effect.scoped` per attempt or tool call; a binding lives in its own `Scope.fork(run)`, closed on swap | scoped handles for streams, cards and request waits                                                                                                          | `ModelInvoker.ts`, `run/modelBinding.ts`, `loop/toolUseDispatch.ts`, `loop/toolGuard.ts`           |
-| **Request**           | A wait on a human or authority (approval, retry, question). The **authority** is a pure `decide(state, payload)` run inside the publisher job that appends `request.opened`. The **wait** is a call-scoped `Deferred`. Approval policy and grants are its state and are rebuilt from rows.              | authority: session; each wait: call                                                                          | `ApprovalState` as a `SubscriptionRef` value on the session entry; decisions are rows                                                                        | `SessionRequests.ts`, `runApprovalQueue.ts`                                                        |
+| **Request**           | A wait on a human or authority (approval, retry, question). The **authority** is a pure `decide(state, payload)` run inside the publisher job that appends `request.opened`. The **wait** is a call-scoped `Deferred`. Approval policy and grants are its state and are rebuilt from rows.              | authority: session; each wait: call                                                                          | `ApprovalState` folded synchronously inside the publisher job that decides (a `SubscriptionRef` only mirrors it for readers); decisions are rows             | `SessionRequests.ts`, `runApprovalQueue.ts`                                                        |
 | **Host**              | **Ports** (process-layer inputs: secrets, editor model, dialogs) plus a **presenter** (a scoped program that reads projections and sends Commands). It decides no recorded fact.                                                                                                                        | ports: process; presenter: window or activation scope, parallel to sessions                                  | ports: `Layer.succeed`; presenter: `Effect<void, E, Scope \| Sessions>`                                                                                      | `packages/{extension,desktop,cli}`, `hostRunActions.ts`                                            |
 | **Application state** | Settings and app state that are current values, not history.                                                                                                                                                                                                                                            | durable                                                                                                      | `CurrentValues` with one `modify` per write (a single `BEGIN IMMEDIATE`)                                                                                     | Zod catalog; target per the [current-value decision](./2026-09-22-current-value-state-decision.md) |
 
@@ -80,7 +80,10 @@ these details to the concepts above:
 
 - **Input has lanes and settles.**
   - A `steer` input arrives at the next step boundary; a `queue` input waits
-    until the run is idle.
+    until the run is idle. Only direct user input may steer. Peer messages
+    and child reports land at the turn boundary, as the
+    [session-messaging](./2026-09-25-session-messaging.md) owner decision
+    rules (no mid-turn steering by another run).
   - Every input ends either answered, with a link to the answer row, or
     unanswered with a reason (withdrawn, stale, run failed).
   - A queued input can be withdrawn.
@@ -223,7 +226,10 @@ and each such PR deletes the old per-kind mechanism.
      `RunLedger.appendBatch`, `run.end` through `finalizeRun`, request rows
      through the request authority.
    - Claims and GC stay in SQL.
-2. **History is the only truth.**
+2. **History is the only truth for run and session facts.** Current values
+   (settings, application state) are a separate authority by the accepted
+   [current-value decision](./2026-09-22-current-value-state-decision.md); see
+   invariant 9.
    - A fact is one row type.
    - A persisted derivation is admissible only as a checkpoint that rows
      rebuild and that loses every conflict with them.
@@ -265,8 +271,14 @@ and each such PR deletes the old per-kind mechanism.
    - A run can have several activations (a live fiber, a model binding, a
      composition hold). The recorded facts belong to the durable run; the
      resources belong to the activation.
+   - Every activation, fresh or resumed, records its exact offered set and
+     plugin revisions (on `run.activate`) before its first model request, so
+     each request is rebuildable from rows.
    - **Resume offers the recorded tools that are still available and still
-     the same tool.** A tool is the same when its definition digest and its
+     the same tool.** This keeps the ruled `recorded ∩ available` rule
+     ([rulings ledger](../../implemented/architecture/2026-08-01-architecture-rulings-ledger.md),
+     2026-09-23: a resumed run resolves its own composition) and adds an
+     identity check; it does not re-pin a recorded composition. A tool is the same when its definition digest and its
      plugin revision match what was recorded. A changed or missing tool is not
      offered, and a call to it gets `tool_unavailable`.
    - **Blocked, not failed.** If the run's driver, agent or a required plugin
@@ -285,7 +297,10 @@ and each such PR deletes the old per-kind mechanism.
    Transient observations such as stream chunks live on the live trace and are
    never rows.
 10. **One shutdown protocol, owned by core.** Core stops admission, drains
-    accepted deliveries, settles runs and releases resources, in that order.
+    accepted deliveries, settles runs and releases resources, in that order,
+    within the ruled deadline (`SESSION_CLOSE_DEADLINE_MS`, rulings ledger):
+    past it, remaining work is interrupted and the incomplete cleanup is
+    reported, so a call that never settles cannot hold shutdown forever.
     Explicit session close while the process keeps running follows the same
     protocol. Hosts invoke it. Plugins acquire and release their resources in
     their typed layers, ordered by layer dependencies, not hooks.
@@ -324,8 +339,10 @@ These are meant for AGENTS.md.
     - `PLUGIN_LAYERS`: layers built through the `Compositions` `MemoMap`,
       shared and refcounted.
   - Process lifetime: `PLUGIN_PROCESS_LAYERS`, merged into `ProcessLayer`.
-    GitHub requires `Sessions`, so its finalizer drains before sessions
-    close, with no hook.
+    `Sessions` consumes the GitHub service (`sessionLayer.ts`), so the edge
+    runs `Sessions` → plugin; the plugin's typed drain runs as a step of the
+    core shutdown protocol (invariant 10), with no hook. A plugin layer that
+    required `Sessions` would be a Layer cycle.
   - Session lifetime: `PLUGIN_SESSION_LAYERS`.
   - Chosen per run at open: `PLUGIN_CONTINUATIONS` and `PLUGIN_DRIVERS`,
     plain functions.
@@ -337,8 +354,9 @@ These are meant for AGENTS.md.
   - Read-modify-append goes through `exclusive`. Ordering comes from the queue
     and `withPerKeyLane`, never from `Semaphore(1)`, which barges.
 - **R6. Exposing projections.**
-  - `SubscriptionRef` is for current-value readers (presenters, admission
-    checks). Debounce high-rate readers.
+  - `SubscriptionRef` is for presenters. Admission and every other decision
+    read the run projection or the publisher (invariant 3). Debounce
+    high-rate readers.
   - A row `Stream` is for readers that need every row in order: NDJSON,
     export, SDK events and resume.
   - One fiber writes each projection. `getUnsafe` is allowed only at a
@@ -371,7 +389,7 @@ graph TD
     DB[(Database, private)] --> PUB[Publisher: Queue + one consumer]
     PUB --> VIEW[Session view SubscriptionRef]
     PUB --> LED[RunLedger.appendBatch -> run projection]
-    VIEW --> REQ[Request authority + ApprovalState]
+    PUB --> REQ[Request authority + ApprovalState, folded inside the publisher job]
     LED --> RUNS[Runs: one launch door, lanes, budget]
     REQ --> RUNS
   end
@@ -438,7 +456,7 @@ in the concept model and the audit:
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | History (claim)          | `runLiveness.ts` is deleted, so the aggregate claim is the only liveness authority (`probeChild`, `claimStanding`)                                                                                        | the three claim doors; the follow-up leases as second in-process owners (move 10)                                                                             |
 | Run (child edge)         | `ChildRunPort` is the one child-run handle contract; the dead `createChildRun` fields, the `childRunId` echo and the `registerChildRun` forward are gone                                                  | the launch door (R2); lineage vs supervision                                                                                                                  |
-| Call (model)             | `Model.generateTurn` is gone, so `completedTurn(streamTurn(...))` is the one turn path. Subscription providers are data: one `SubscriptionOAuthError`, and policies carrying their token endpoint.        | compaction and `helperModel` bypassing `ModelInvoker`; the retry gate's scope (move 8)                                                                        |
+| Call (model)             | `Model.generateTurn` is gone, so `completedTurn(streamTurn(...))` is the one turn path. Subscription providers are data: one `SubscriptionOAuthError`, and policies carrying their token endpoint.        | compaction and `helperModel` bypassing `ModelInvoker` (move 8). The retry gate is decided: process scope, keyed by wire route (#13350 move 8)                 |
 | Trace (producer of rows) | `AgentTrace` keeps `emit` and its real producer surface; the six sugar emitters are gone, so #13350 move 7 PR 4 has nothing left to rename                                                                | stage, stream and card lifetimes (move 7 PRs 1–3)                                                                                                             |
 | Process (module slots)   | the first-call-wins `getCliSecrets` singleton is deleted; the extension serves `AgentDirectories` as a layer; `bootstrapHost` reads `host` and `secrets` from the runtime's `SetupPlatform` and `Secrets` | the rest of the roughly 30 slots, including `initProcessSettingHost`, the `agentDirectories` watcher singleton, skills, the catalog and `AppSignals` (move 4) |
 | Host                     | the Tools and LaTeX settings pages have one shared body (`settingsToolCommands.ts`), so the plugin-toggle side effect is no longer restated by the extension and desktop                                  | the CLI toggle path; the five per-host decisions (Request)                                                                                                    |
@@ -455,16 +473,18 @@ note's open requests:
 Each invariant gets a guard in the same programme. A concept with no guard
 will drift back.
 
-| Invariant                    | Guard                                                                                                                                                                              |
-| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 One writer                 | an architecture test: only `SessionEvents.ts` and `RunLedger.ts` reference `appendAll` / `appendPrepared`; one writing module per row type (a table over `SessionEvent['type']`)   |
-| 2 History is truth           | the `sessionEventFormat` fingerprint already exists; a runtime assertion in `ModelInvoker` (development and CI) that each request is rebuildable from rows, plus a round-trip test |
-| 3 Decisions read projections | an architecture test forbidding `runView(`, `readView(` and `getUnsafe(…view)` in `src/agent/**` and `src/tools/**` outside an allowlist that only shrinks                         |
-| 4 One owner                  | a ratchet on module-level `let`, `new Map(` and `new WeakMap(` in `src/**` production files (baseline about 30, shrink only)                                                       |
-| 5 No ambient reads           | a lint rule: `Effect.serviceOption` only on the process-port allowlist; `forkDetach` banned in `src/agent/**` except the allowlisted foreign boundaries                            |
-| 6 Plugins                    | the existing `satisfies` tables, plus a test that every contribution kind reads the plugin's switch                                                                                |
-| 7 Changes at open            | a test that resume offers only recorded tools whose digest and plugin revision still match, and leaves a run blocked when its driver or agent is missing                           |
-| 8 Core decides               | the existing approval-authority ratchet, extended to bypass writes and to host packages deciding request kinds                                                                     |
+| Invariant                    | Guard                                                                                                                                                                                                                                                                            |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 One writer                 | an architecture test over **call sites**, not references: `Database.ts` may define `appendAll` / `appendPrepared`; the only production invocations are inside the `SessionEvents` publisher; one writing module per row type (a table over `SessionEvent['type']`)               |
+| 2 History is truth           | the `sessionEventFormat` fingerprint already exists; a runtime assertion in `ModelInvoker` (development and CI) that each request, rendered prompt included, is rebuildable from rows, plus a round-trip test                                                                    |
+| 3 Decisions read projections | an architecture test forbidding `runView(`, `readView(` and `getUnsafe(…view)` in every production root (`src/**`, `packages/*/src/**`) outside an allowlist that only shrinks; the baseline includes `SessionRequests.ts` and `desktopHostRequests.ts`                          |
+| 4 One owner                  | a ratchet on module-level `let`, `new Map(` and `new WeakMap(` in `src/**` and `packages/*/src/**` production files, with a scoped baseline per root, shrink only                                                                                                                |
+| 5 No ambient reads           | a lint rule: `Effect.serviceOption` only on the process-port allowlist; `forkDetach` and `FiberMap.run` banned for launching runs in `src/agent/**`, `src/tools/**` and `packages/*/src/**` (the baseline includes `detachedChildRun.ts`), except allowlisted foreign boundaries |
+| 6 Plugins                    | the existing `satisfies` tables, plus a test that every contribution kind reads the plugin's switch                                                                                                                                                                              |
+| 7 Changes at open            | a test that each activation records its offered set on `run.activate`, that resume offers only recorded tools whose digest and plugin revision still match, and that it leaves a run blocked when its driver or agent is missing                                                 |
+| 8 Core decides               | the existing approval-authority ratchet, extended to bypass writes, to host packages deciding request kinds, and to host-written outcomes (the baseline includes `packages/cli/src/commands/workflow.ts`)                                                                        |
+| 9 One authority per fact     | a schema test: no `SessionEvent` arm carries a current-value family or a stream chunk, and no current-value family carries a run fact                                                                                                                                            |
+| 10 One shutdown protocol     | a test that closing a session with a never-settling call returns within `SESSION_CLOSE_DEADLINE_MS` and reports the incomplete cleanup; a ratchet on host-registered shutdown chains (shrink to zero)                                                                            |
 
 ## How the #13350 moves map onto the concepts
 
