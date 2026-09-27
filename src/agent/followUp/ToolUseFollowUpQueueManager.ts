@@ -19,6 +19,7 @@ import {
 import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
+import { isInstruction } from './followUpMessages';
 import { RunInput } from './RunInput';
 import type { FollowUpSenderInput } from './followUpSender';
 import type { FollowUpRowPort } from './followUpRowPort';
@@ -50,12 +51,12 @@ interface QueueEntry {
   /** The owner's input, once its consumer attached one. */
   input?: RunInput;
   /**
-   * Follow-ups admitted with a deferred live offer (#8093): durable and
-   * pending on the rows, but not this generation's to take until their
-   * producer re-submits them. Live-only by nature: the generation's end
-   * clears it, and the next generation delivers them from the rows.
+   * Pending rows held out of this generation's takes, keyed by what frees
+   * them: `resubmit` (#8093) its producer's re-submission, `nextInput` (a
+   * `none` offer) a take that also holds an instruction. Live-only: the
+   * generation's end clears it; the next one reads them from the rows.
    */
-  readonly deferred: Set<string>;
+  readonly deferred: Map<string, 'resubmit' | 'nextInput'>;
   /** The admission job running for this run (at most one: jobs are serial). */
   admitting: boolean;
   /** A release its owner asked for while an admission was running, applied
@@ -112,8 +113,8 @@ interface FollowUpSubmitOptions {
    * wake (#8093) takes this path, then re-submits the same delivery id once
    * finalization completes; the replay check finds the rows durable and
    * pending, and the offer happens then. `immediate` (the default) offers as
-   * soon as the rows commit. `none` admits them for the consumer's next take
-   * without waking it: a notice the run reads at its next turn.
+   * soon as the rows commit. `none` wakes nobody: the rows ride with the
+   * next take that holds an instruction, parked or busy.
    */
   readonly liveOffer?: 'immediate' | 'deferred' | 'none';
 }
@@ -282,11 +283,17 @@ export class ToolUseFollowUpQueue {
     const adopted = entry.adoptedClaim;
     entry.adoptedClaim = undefined;
     if (adopted) this.port.detach(this.releaseClaim(runId, adopted));
-    entry.input ??= new RunInput(() =>
-      this.port
+    // What a take may hold: no row awaiting re-submission, and a `nextInput`
+    // row only beside an instruction, so it never starts a turn alone.
+    const held = ({ followUpId }: QueuedFollowUp) =>
+      entry.deferred.get(followUpId);
+    entry.input ??= new RunInput(() => {
+      const rows = this.port
         .pending(runId)
-        .filter(({ followUpId }) => !entry.deferred.has(followUpId)),
-    );
+        .filter((f) => held(f) !== 'resubmit');
+      const asked = rows.some((f) => !held(f) && isInstruction(f.content));
+      return asked ? rows : rows.filter((f) => !held(f));
+    });
     return entry.input;
   }
 
@@ -473,20 +480,24 @@ export class ToolUseFollowUpQueue {
       // A deferred offer holds the rows back from a live consumer's input:
       // the caller re-submits once its own ordering allows, and the offer
       // happens then.
+      const liveConsumer =
+        owner?.kind === 'flow' ||
+        owner?.kind === 'child' ||
+        (owner?.kind === 'recovery' && admitted.input !== undefined);
       const liveOfferDeferred =
-        options?.liveOffer === 'deferred' &&
-        (owner?.kind === 'flow' ||
-          owner?.kind === 'child' ||
-          (owner?.kind === 'recovery' && admitted.input !== undefined));
+        options?.liveOffer === 'deferred' && liveConsumer;
       if (current && queued.length > 0) {
         if (owner === undefined && admission === 'recoverable') {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        if (liveOfferDeferred) {
-          for (const { followUpId } of queued)
-            admitted.deferred.add(followUpId);
-        } else if (owner !== undefined && options?.liveOffer !== 'none') {
+        if (liveOfferDeferred || options?.liveOffer === 'none') {
+          // A consumer not yet live reads the rows when its generation starts.
+          const until = liveOfferDeferred ? 'resubmit' : 'nextInput';
+          if (liveConsumer)
+            for (const { followUpId } of queued)
+              admitted.deferred.set(followUpId, until);
+        } else if (owner !== undefined) {
           this.offer(admitted, queued);
         }
       }
@@ -682,7 +693,7 @@ export class ToolUseFollowUpQueue {
   }
 
   private createEntry(runId: RunId): QueueEntry {
-    const entry: QueueEntry = { deferred: new Set(), admitting: false };
+    const entry: QueueEntry = { deferred: new Map(), admitting: false };
     this.entries.set(runId, entry);
     return entry;
   }

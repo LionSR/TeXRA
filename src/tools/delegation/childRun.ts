@@ -9,7 +9,6 @@ import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
 import {
   aggregateId,
@@ -179,9 +178,10 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
 
 /**
  * Rest a stopped child that its parent's model can continue, instead of
- * ending it: the notice becomes its report and is queued for the parent
- * without waking it, and a `child.park` `paused` row carrying the resume id,
- * not `run.end`, closes the activation. Calling the child again activates it
+ * ending it: one batch commits the notice as its report with the `child.park`
+ * `paused` row carrying the resume id (not `run.end`), so the pause is
+ * durable before anything tells the parent; only then is the notice queued
+ * for the parent's next input, waking nobody. Calling the child again activates it
  * once more. The handle is untracked and the trace closed whatever the writes
  * did, so the registry never keeps a finished generation live.
  */
@@ -197,27 +197,36 @@ const pauseChildRun = (
       runId,
       lines: [escapeText(notice)],
     });
-    yield* persistChildRunDelivery(session, runId, text, undefined);
+    options.stage?.end(RUN_OUTCOME.CANCELLED);
+    const target = aggregateId('run', runId);
+    yield* session.commit([
+      { type: 'run.report', aggregateId: target, report: text },
+      { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
+    ]);
     const from = { kind: 'run', runId } as const;
-    // Queued for the parent's next turn and offered to nobody: a pause wakes
-    // no model, live or not, and no recovery lease is left behind.
-    const submitted = yield* session.followUps.submit(
-      parentRunId,
-      { text, from },
-      'recoverable',
-      { liveOffer: 'none' },
-    );
+    // Read with the parent's next input and offered to nobody: a pause
+    // starts no model turn, parked or busy, and leaves no recovery lease.
+    // The pause is durable by now: a failed admission loses only the
+    // notice, which the report keeps, so it is warned about, never raised.
+    const submitted = yield* session.followUps
+      .submit(parentRunId, { text, from }, 'recoverable', { liveOffer: 'none' })
+      .pipe(
+        Effect.catch((error) =>
+          Effect.sync(() => {
+            logger.warn(
+              `Paused child ${runId}: its notice could not be queued for parent run ${parentRunId}; it remains in this run's report.`,
+              { data: error },
+            );
+            return { kind: 'failed' } as const;
+          }),
+        ),
+      );
     if (submitted.kind === 'queued' && submitted.lease)
       session.followUps.release(submitted.lease, 'recoverable');
     if (submitted.kind === 'refused')
       logger.warn(
         `The pause notice was not queued for parent run ${parentRunId}; it remains in this run's report.`,
       );
-    options.stage?.end(RUN_OUTCOME.CANCELLED);
-    const target = aggregateId('run', runId);
-    yield* session.commit([
-      { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
-    ]);
   }).pipe(
     Effect.ensuring(
       Effect.gen(function* () {
