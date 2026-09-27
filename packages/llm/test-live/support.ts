@@ -5,7 +5,7 @@
  * Everything else in this package is proved against a synthetic transport, so
  * these suites are the only evidence that a real provider's bytes survive the
  * codec. They are therefore deliberately thin: one describe per advertised
- * capability, one request shape shared by all eleven routes, and no per-route
+ * capability, one request shape shared by all twelve routes, and no per-route
  * assertion beyond what that route's contract actually promises.
  *
  * The shared requests carry no optional controls. Each codec refuses a
