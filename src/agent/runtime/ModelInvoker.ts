@@ -253,7 +253,8 @@ export const modelInvokerLayer = (): Layer.Layer<
         bound: BoundModel,
         details: Record<string, unknown> = {},
       ): void => {
-        logger.domain({
+        logger.emit({
+          type: 'domain',
           key: 'modelRetryLifecycle',
           data: {
             kind: 'model_retry_lifecycle',
@@ -493,12 +494,9 @@ export const modelInvokerLayer = (): Layer.Layer<
           bound,
         );
         const usage = priceTurnUsage(bound, turn.usage, responseTimeMs, logger);
-        if (
-          usage !== null &&
-          usage.inputTokens > 0 &&
-          bound.contextWindow > 0
-        ) {
-          logger.contextState({
+        if (usage && usage.inputTokens > 0 && bound.contextWindow > 0) {
+          logger.emit({
+            type: 'context.state',
             inputTokens: usage.inputTokens,
             contextWindow: bound.contextWindow,
           });

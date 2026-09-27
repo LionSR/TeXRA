@@ -1,8 +1,12 @@
+// Node imports
+import * as path from 'node:path';
+
 // Third-party imports
 import {
   Cause,
   Effect,
   FileSystem,
+  Layer,
   type PlatformError,
   Schedule,
   Stream,
@@ -10,12 +14,13 @@ import {
 import * as vscode from 'vscode';
 
 // Local imports
-import { AgentDirectoryService } from '@agent/index';
+import { AgentDirectoryService, builtInToolUseRoots } from '@agent/index';
 import { showLoggedMessageWithDocs } from '@frontend/ui/errorHandlingUtils';
 import { withLogChannel } from '@logger/effectLog';
 import {
+  AgentDirectories,
   type AgentDirectoriesFailed,
-  type StateStore,
+  AppState,
 } from '@platform/interfaces';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import type { GlobalStorageFs } from '@platform/rootedFs';
@@ -42,17 +47,7 @@ const EXTERNAL_WATCH_RETRY = Schedule.exponential('1 second').pipe(
   ),
 );
 
-/** The two host services `initialize()` hands the manager, kept together so
- *  one guard covers both. */
-interface AgentDirectoryHost {
-  readonly directories: AgentDirectoryService;
-  readonly globalState: StateStore;
-  /** The host entry's process runtime, handed down with the two services. */
-  readonly runtime: ProcessRuntime;
-}
-
 class AgentDirectoryManager {
-  private host: AgentDirectoryHost | undefined;
   private watcherDisposables: vscode.Disposable[] = [];
   /** The single watcher subscriber; `undefined` means nobody is listening. */
   private onAgentChange: (() => void) | undefined;
@@ -61,77 +56,16 @@ class AgentDirectoryManager {
     'agent-watcher-rebuild',
   );
 
-  initialize(
-    globalState: StateStore,
-    resourcesPath: string,
-    runtime: ProcessRuntime,
-  ): void {
-    this.host = {
-      globalState,
-      runtime,
-      directories: new AgentDirectoryService({
-        channel: CHANNEL,
-        // Built-in agents are read straight out of the installed extension's
-        // `resources`, never copied into global storage.
-        resourcesPath,
-        customDirectoryStore: {
-          get: () =>
-            globalState.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
-        },
-        issueReporter: {
-          report: (message, docsId) =>
-            showLoggedMessageWithDocs(CHANNEL, message, docsId),
-        },
-      }),
-    };
-  }
-
-  private getHost(): AgentDirectoryHost {
-    if (!this.host) {
-      throw new Error(
-        'Agent directories not initialized. Call agentDirectories.initialize() first.',
-      );
-    }
-    return this.host;
-  }
-
-  // The four readers below are the platform port's, so they stay `Effect`s:
-  // `Effect.suspend` keeps the uninitialized-host guard inside the Effect
-  // rather than throwing from a call that is supposed to return a program.
-  // A caller that owns a runtime and needs the path outright runs it.
-
-  builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.suspend(() => this.getHost().directories.builtIn());
-  }
-
-  builtInToolUse(): Effect.Effect<string, AgentDirectoriesFailed> {
-    return Effect.suspend(() => this.getHost().directories.builtInToolUse());
-  }
-
-  custom(): Effect.Effect<
-    string,
-    AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
-  > {
-    return Effect.suspend(() => this.getHost().directories.custom());
-  }
-
-  customConfigured(): Effect.Effect<
-    boolean,
-    AgentDirectoriesFailed,
-    FileSystem.FileSystem
-  > {
-    return Effect.suspend(() => this.getHost().directories.customConfigured());
-  }
-
   /**
    * Watch every local agent directory and call `onChange` whenever anything
    * under one changes. One subscriber at a time — re-subscribing replaces the
    * previous callback. The subscriber debounces and rescans locally, so an
    * unfiltered event costs one glob, never a network fetch.
    */
-  watchAgentDirectories(onChange: () => void): vscode.Disposable {
-    const { runtime } = this.getHost();
+  watchAgentDirectories(
+    runtime: ProcessRuntime,
+    onChange: () => void,
+  ): vscode.Disposable {
     this.onAgentChange = onChange;
     runtime.runFork(
       this.refreshAfterDirChange().pipe(
@@ -158,12 +92,24 @@ class AgentDirectoryManager {
   refreshAfterDirChange(): Effect.Effect<
     void,
     AgentDirectoriesFailed,
-    GlobalStorageFs | FileSystem.FileSystem
+    AgentDirectories | GlobalStorageFs | FileSystem.FileSystem
   > {
     return this.onWatcherLane(
       Effect.gen({ self: this }, function* () {
         if (!this.onAgentChange) return;
-        const directories = yield* this.getHost().directories.getAllLocal();
+        const ports = yield* AgentDirectories;
+        const [customDir, builtInDir, builtInToolUseDir] = yield* Effect.all(
+          [ports.custom(), ports.builtIn(), ports.builtInToolUse()],
+          { concurrency: 'unbounded' },
+        );
+        const directories = [
+          { directory: customDir, source: AGENT_SOURCE.CUSTOM },
+          { directory: builtInDir, source: AGENT_SOURCE.BUILT_IN_WORKFLOW },
+          ...builtInToolUseRoots(builtInToolUseDir).map((directory) => ({
+            directory,
+            source: AGENT_SOURCE.BUILT_IN_TOOL_USE,
+          })),
+        ];
         this.disposeAgentWatchers();
         if (!this.onAgentChange) return;
         for (const { directory, source } of directories) {
@@ -265,3 +211,28 @@ class AgentDirectoryManager {
 }
 
 export const agentDirectories = new AgentDirectoryManager();
+
+/**
+ * The extension's `AgentDirectories` port, served over `AppState`. Built-in
+ * agents are read straight out of the installed extension's `resources`,
+ * never copied into global storage.
+ */
+export const agentDirectoriesLayer = (extensionPath: string) =>
+  Layer.effect(
+    AgentDirectories,
+    Effect.map(
+      AppState,
+      (state) =>
+        new AgentDirectoryService({
+          channel: CHANNEL,
+          resourcesPath: path.join(extensionPath, 'resources'),
+          customDirectoryStore: {
+            get: () => state.get<string>(GlobalStateKey.CUSTOM_AGENT_DIR, ''),
+          },
+          issueReporter: {
+            report: (message, docsId) =>
+              showLoggedMessageWithDocs(CHANNEL, message, docsId),
+          },
+        }),
+    ),
+  );

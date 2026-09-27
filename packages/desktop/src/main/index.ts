@@ -27,7 +27,6 @@ import type { SupabaseAuthShape } from '@auth/SupabaseAuth';
 import { SignInFailed } from '@common/errors/signInFailed';
 import { teamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { PendingOAuthStore } from '@controllers/auth/pendingOAuthStore';
-import { LatexToolingController } from '@controllers/settingsView/LatexToolingController';
 import {
   SessionBridge,
   type AttachedPort,
@@ -58,15 +57,9 @@ import {
   type RunId,
   type InstructionAction,
 } from '@shared/schemas';
-import { normalizePlatform } from '@shared/constants/latexToolchain';
 import { Cancelled } from '@shared/session/requestErrors';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { findToolInCommonPaths } from '@utils/system/binaryResolver';
-import {
-  checkToolInstalled,
-  detectPackageManager,
-} from '@utils/system/toolUtils';
 import {
   DesktopProjectRecords,
   openDesktopProjectRecords,
@@ -131,7 +124,6 @@ import {
   type DesktopSettingsIpc,
   type DesktopSettingsIpcOptions,
 } from './desktopSettingsIpc.js';
-import { DefaultDesktopToolingSettingsController } from './desktopToolingSettingsController.js';
 import { chooseDesktopOAuthProvider } from './desktopOAuthProviderPrompt.js';
 import {
   createDesktopShellActions,
@@ -1132,41 +1124,18 @@ function createWindow(options: {
         SubscriptionRef.getUnsafe(activeProject().session.view).runs.get(runId)
           ?.label,
       stateSettingApplied: () => Effect.void,
-    };
-    const toolingSettingsController =
-      new DefaultDesktopToolingSettingsController({
-        onError: reportAsyncError,
-        globalState: options.globalState,
-        config: project.roots.config,
-        workspaceRoot: project.roots.workspace,
-        runtime,
-        renderer: {
-          postToRenderer: postForActiveProject,
-        },
-        commands: {
-          run: async (command: string) => {
-            if (projectBindings.get(project.key) !== documentBinding) return;
-            postToRendererIfAlive({
-              command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
-              session: project.key,
-              initialCommand: command,
-            });
-          },
-        },
-        latexToolingController: new LatexToolingController({
-          checkToolInstalled: (tool) => checkToolInstalled(tool, false),
-          findPath: findToolInCommonPaths,
-          detectPackageManager,
-          getPlatform: () => normalizePlatform(process.platform),
-          // Extension hosting is deliberately unavailable in TeXRA Desktop.
-          isLatexWorkshopInstalled: () => false,
-          getRecommendedStatus: () => ({
-            outDir: true,
-            autoRevealExclude: true,
-          }),
-          onDetectionError: reportBackgroundError,
+      runInTerminal: (_name, command) =>
+        Effect.sync(() => {
+          if (projectBindings.get(project.key) !== documentBinding) return;
+          postToRendererIfAlive({
+            command: DESKTOP_WORKSPACE_COMMANDS.TERMINAL_OPEN_COMMAND,
+            session: project.key,
+            initialCommand: command,
+          });
         }),
-      });
+      // There is no editor whose settings the LaTeX page could recommend.
+      latexRecommendedStatus: () => ({ outDir: true, autoRevealExclude: true }),
+    };
     settingsIpcRef.current = runtime.runSync(
       createDesktopSettingsIpc({
         bindings: settingsBindings,
@@ -1181,7 +1150,6 @@ function createWindow(options: {
           signIn,
           signOut: () => desktopAuth.signOut(),
         },
-        toolingSettingsController,
         session: project.session,
         secrets: options.secrets,
         resourcesPath: options.resourcesPath,

@@ -307,7 +307,7 @@ describe('claude_agent tool launch and resume fallback', () => {
   it.live('preserves legacy usage when a result has no modelUsage', () =>
     Effect.gen(function* () {
       const childRun = createFakeAgentCliChildRun(childRunId);
-      const publishUsage = vi.spyOn(childRun.logger, 'usage');
+      const publishUsage = vi.spyOn(childRun.logger, 'emit');
       mocks.createChildRun.mockReturnValue(Effect.succeed(childRun));
       mocks.query.mockReturnValue(
         (async function* () {
@@ -334,9 +334,10 @@ describe('claude_agent tool launch and resume fallback', () => {
 
       expect(publishUsage).toHaveBeenCalledWith(
         expect.objectContaining({
+          type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
+          recordTranscript: false,
         }),
-        { recordTranscript: false },
       );
     }).pipe(
       Effect.provide(

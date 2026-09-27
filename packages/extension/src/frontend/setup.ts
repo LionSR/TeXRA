@@ -3,10 +3,13 @@ import * as path from 'node:path';
 import { Cause, Effect, FileSystem } from 'effect';
 import * as vscode from 'vscode';
 
-import { agentDirectories } from '@frontend/agents/AgentDirectoryManager';
 import { promptExtensionInstall } from '@frontend/ui/instruction';
 import { withLogChannel } from '@logger/effectLog';
-import type { AgentDirectoriesFailed, StateStore } from '@platform/interfaces';
+import {
+  AgentDirectories,
+  type AgentDirectoriesFailed,
+  type StateStore,
+} from '@platform/interfaces';
 import type { GlobalStorageFs } from '@platform/rootedFs';
 import { LATEX_WORKSHOP_EXT_ID } from '@shared/constants/latexToolchain';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -30,9 +33,10 @@ const CUSTOM_AGENT_ROOT_OPTIONS = {
  * The built-in directories are the packaged ones, so this only needs the
  * extension's resources path to be resolvable.
  */
-export function registerAgentDirectoryRoots(
+export const registerAgentDirectoryRoots = Effect.fnUntraced(function* (
   context: vscode.ExtensionContext,
-): Effect.Effect<void, never, GlobalStorageFs | FileSystem.FileSystem> {
+) {
+  const agentDirectories = yield* AgentDirectories;
   const registrations: Array<
     Effect.Effect<
       void,
@@ -78,7 +82,7 @@ export function registerAgentDirectoryRoots(
   // Register each root independently so one failing directory resolution
   // (e.g. a misconfigured custom agents path) does not take out the others —
   // the creator agent still needs its reference docs and built-in examples.
-  return Effect.forEach(
+  yield* Effect.forEach(
     registrations,
     (register) =>
       register.pipe(
@@ -90,7 +94,7 @@ export function registerAgentDirectoryRoots(
       ),
     { discard: true },
   );
-}
+});
 
 /**
  * Re-register the custom agents directory after the user changes its
@@ -100,9 +104,9 @@ export function registerAgentDirectoryRoots(
 export function refreshCustomAgentRoot(): Effect.Effect<
   void,
   never,
-  GlobalStorageFs | FileSystem.FileSystem
+  AgentDirectories | GlobalStorageFs | FileSystem.FileSystem
 > {
-  return agentDirectories.custom().pipe(
+  return AgentDirectories.use((directories) => directories.custom()).pipe(
     Effect.andThen((custom) =>
       Effect.sync(() =>
         registerExternalRoot(custom, CUSTOM_AGENT_ROOT_OPTIONS),

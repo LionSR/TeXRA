@@ -11,7 +11,6 @@ import {
 } from '@agent/core/definition/AgentDataclass';
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { resolveAgentTools } from '@agent/runtime/agentToolResolution';
-import { followUpsLayer } from '@agent/runtime/FollowUps';
 import type { AgentLaunchContext } from '@agent/runtime/AgentLaunchContext';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -89,7 +88,6 @@ function runLayer(
 ) {
   return Layer.mergeAll(
     observingInvokerLayer(seen),
-    followUpsLayer,
     nativeToolTestLayer(),
   ).pipe(
     Layer.provideMerge(agentRunLayer(ctx, { tools, callbacks: {} })),

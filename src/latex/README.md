@@ -97,13 +97,14 @@ The files have distinct roles:
   resolves which one a workspace setting selects and runs it, and
   `indentDirectory.ts` applies it across a whole directory.
 - **`latexdiff/`** — full-run discovery and operation planning around
-  `LaTeXdiffService`. `runLatexdiff.ts` is the host-neutral entry point the
-  VS Code command and the desktop stream-toolbar action call (the CLI's
-  latexdiff workflow instead goes through the agent's own `LatexDiffManager`,
-  which uses `LaTeXdiffService` directly); it resolves which round outputs to
-  diff via `outputDiscovery.ts`/`executionDiscovery.ts` (the latter's narrow
-  port lets `latex` stay out of `@agent/storage`), then builds and dispatches
-  the diff operations via `diffOperations.ts`/`diffCommandExecutor.ts`, naming
+  `LaTeXdiffService`. `diffOperations.ts` (`runLatexdiffForRun`) is the
+  host-neutral entry point the VS Code command and the desktop stream-toolbar
+  action call (the CLI's latexdiff workflow instead goes through the agent's
+  own `LatexDiffManager`, which uses `LaTeXdiffService` directly); it reads
+  the run's recorded round outputs through the narrow `runDiscovery.ts` port
+  (which lets `latex` stay out of `@agent/storage`), then builds and
+  dispatches the diff operations through `LaTeXdiffService.runDiff` and
+  `diffCommandExecutor.ts`, naming
   output files with `diffFileNameManager.ts` (the math markup mode is the
   `texra.latexdiff.mathMarkup` catalog row). `diffFileProcessor.ts` is the post-processor
   `LaTeXdiffService` itself calls after generating a direct or VC diff, to

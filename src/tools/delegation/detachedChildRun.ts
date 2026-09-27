@@ -1,5 +1,4 @@
 import { Cause, Effect, Exit, Fiber } from 'effect';
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { Runs } from '@agent/runtime/runRegistry';
 /**
  * Shared detached-child launch choreography for delegation launch sites.
@@ -11,51 +10,21 @@ import type { Runs } from '@agent/runtime/runRegistry';
  * their own run-id derivation, approval wiring, and result shaping; this
  * module owns the guard-and-trace skeleton so its invariant (a throw inside
  * the guard releases the claim; a late loop failure is surfaced) lives in one
- * place, plus native-agent registration.
+ * place.
  */
 
 // Third-party imports
 
 // Local imports
-import { registerRun } from '@agent/storage/runLifecycle';
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   startChildRunLoop,
   runWithLaunchGuard,
   type ChildRunLoopParams,
+  type ChildRunPort,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
 import type { AgentResume } from '@platform/interfaces';
-import {
-  RUN_OUTCOME,
-  type RunId,
-  type UserFollowUpSupport,
-} from '@shared/schemas';
-
-// Local file imports
-import type { ChildRun } from './childRun';
-
-/**
- * Register a native agent child and take its run's claim. The identity
- * derives from the canonical config's `agent`.
- */
-export const registerChildRun = Effect.fn('registerChildRun')(function* (
-  session: SessionHandle,
-  input: {
-    readonly runId: RunId;
-    /** Canonical config, already parsed by the launch site. */
-    readonly config: AgentConfig;
-    readonly userFollowUpSupport: UserFollowUpSupport;
-    readonly parentRunId?: RunId;
-  },
-): Effect.fn.Return<void, Error> {
-  const { runId, config } = input;
-  yield* registerRun(session, runId, config, {
-    identity: { kind: 'agent', agent: config.agent },
-    userFollowUpSupport: input.userFollowUpSupport,
-    parentRunId: input.parentRunId,
-  });
-});
+import { RUN_OUTCOME } from '@shared/schemas';
 
 /** The strategy wiring a launch site supplies inside the guard. */
 export interface DetachedChildRunLaunch<TTurn, R = never> {
@@ -86,12 +55,12 @@ export type DetachedChildRunInput<
   (
     | {
         /** Create the stream inside the launch guard, before any stream-dependent setup. */
-        readonly createChildRun: () => Effect.Effect<ChildRun, Error, Runs>;
+        readonly createChildRun: () => Effect.Effect<ChildRunPort, Error, Runs>;
         /** Build attempt-scoped setup around the stream retained by the launch
          * guard. It runs in the choreography's own context, so it may read the
          * session's `Runs` (the agent-CLI strategies resolve their registry there). */
         readonly buildLaunch: (
-          childRun: ChildRun,
+          childRun: ChildRunPort,
         ) => Effect.Effect<DetachedChildRunLaunch<TTurn, R>, Error, R | Runs>;
       }
     | {
@@ -113,15 +82,12 @@ export type DetachedChildRunInput<
  * Run the shared detached-child launch choreography: hold the owned-run
  * owned-run launch guard while creating any child stream and handing it to the run
  * loop, then attach the completion error trace. Returns the launched loop's
- * stream id and completion so in-band callers can await it.
+ * completion so in-band callers can await it.
  */
 export function startDetachedChildRunLoop<TTurn, R = never>(
   input: DetachedChildRunInput<TTurn, R>,
 ): Effect.Effect<
-  {
-    childRunId: RunId;
-    completion: Fiber.Fiber<TTurn | undefined, Error>;
-  },
+  { completion: Fiber.Fiber<TTurn | undefined, Error> },
   Error,
   R | Runs | AgentResume
 > {
@@ -129,7 +95,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
     input.session,
     input.runId,
     Effect.gen(function* () {
-      let childRun: ChildRun | undefined;
+      let childRun: ChildRunPort | undefined;
       const setup = yield* Effect.exit(
         Effect.gen(function* () {
           let launch: DetachedChildRunLaunch<TTurn, R>;
@@ -184,7 +150,7 @@ export function startDetachedChildRunLoop<TTurn, R = never>(
           ),
         );
       }
-      return { childRunId: input.runId, completion };
+      return { completion };
     }),
   ).pipe(Effect.uninterruptible);
 }

@@ -15,7 +15,6 @@ import {
   type TurnEvent,
   type TurnResult,
   type VscodeLanguageModelConfiguration,
-  completedTurn,
 } from '@texra-ai/llm/turn';
 import { Cause, Effect, Exit, Stream, type Scope } from 'effect';
 import * as vscode from 'vscode';
@@ -577,7 +576,5 @@ export const acquireVscodeLanguageModel = Effect.fn(
         );
       }),
     );
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
-  return Object.freeze({ prepareTurn, streamTurn, generateTurn });
+  return Object.freeze({ prepareTurn, streamTurn });
 });

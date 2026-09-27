@@ -218,9 +218,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalState: globalStateStore,
     });
     yield* bootstrapHost({
-      host: 'desktop',
       roots: processRoots,
-      secrets,
       skills: { resourcesPath },
     });
     return {

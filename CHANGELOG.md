@@ -92,8 +92,9 @@ All notable changes to this project will be documented in this file.
   same name.
 - **Workflow agents no longer continue a response cut off by the output
   limit** — a round whose response hits the model's max output tokens keeps
-  what the model wrote and processes it as that round's output, and the
-  transcript warns that it may be incomplete. Raise the model's max output
+  what the model wrote and processes it as that round's output, and warns
+  that it may be incomplete: in the transcript, in `texra run`'s text output,
+  and as a notice in the extension and desktop. Raise the model's max output
   tokens if a long document gets cut off. The extra helper-model call that
   joined continued pieces is gone with it.
 
@@ -214,6 +215,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   run's transcript. See the Agent integrations guide.
 
 ### Bug Fixes
+
+- **OpenAI reasoning models no longer fail with "The terminal snapshot
+  conflicts with completed output items"** — when a GPT reasoning model
+  reasoned before answering, OpenAI could send the same reasoning twice with
+  different encrypted contents, and TeXRA rejected the response as
+  malformed, failing every retry. The encrypted reasoning is opaque and is no
+  longer compared; the item's identity and status still are.
 
 - **A command the agent was running now ends when TeXRA is force-quit or
   crashes** — a shell command kept running after the process that started it

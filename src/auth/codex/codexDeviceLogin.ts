@@ -17,6 +17,7 @@ import { Data, Effect } from 'effect';
 import {
   completeDeviceSession,
   pollDeviceAuthorization,
+  type SubscriptionDeviceCodePrompt,
 } from '@auth/oauth/deviceAuthorization';
 
 // Local imports - codex
@@ -35,17 +36,10 @@ class DeviceCodeMissing extends Data.TaggedError('DeviceCodeMissing')<{
   readonly message: string;
 }> {}
 
-interface CodexDevicePrompt {
-  /** The one-time code the user types at the verification URL. */
-  userCode: string;
-  /** Where the user enters the code. */
-  verificationUrl: string;
-}
-
 export interface CodexDeviceLoginOptions {
   coordinator: CodexSessionCoordinator;
   /** Show the user the verification URL + one-time code. */
-  onPrompt: (prompt: CodexDevicePrompt) => void;
+  onPrompt: (prompt: SubscriptionDeviceCodePrompt) => void;
 }
 
 /**

@@ -14,7 +14,6 @@ import {
   type Model,
   type OpenAIResponsesConfiguration,
   type ResolvedTurn,
-  completedTurn,
 } from './turn.js';
 import {
   ModelError,
@@ -417,12 +416,9 @@ export const openaiResponsesWebSocketModel = Effect.fn(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     ...(countClient
       ? {
           estimateInputTokens: Effect.fn(

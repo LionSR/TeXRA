@@ -13,6 +13,7 @@ import type {
 } from '@common/teams/TeamAvailabilityPreflight';
 import type { TeamAvailabilityPrompt } from '@common/teams/TeamPlan';
 import type { SubscriptionProviderId } from '@controllers/modelAccess/subscriptionProviders';
+import type { LatexRecommendedStatus } from '@controllers/settingsView/LatexToolingController';
 import type {
   ExternalOpener,
   MessageHost,
@@ -68,8 +69,10 @@ export interface SettingsHostBindings {
   runLabel(runId: RunId): string | undefined;
   /** A catalog-backed setting was written; the host's own side effects. */
   stateSettingApplied(key: string): HostEffect;
-  /** The opening data of the pages only the host answers (Tools, LaTeX). */
-  readonly postHostStartup: HostEffect;
+  /** Run a command in a terminal the user sees and can type into. */
+  runInTerminal(name: string, command: string): HostEffect;
+  /** Which recommended editor settings the LaTeX page shows as applied. */
+  latexRecommendedStatus(): LatexRecommendedStatus;
   /** A workspace-target config write needs an open folder (the extension). */
   readonly requiresOpenWorkspace?: () => boolean;
 }

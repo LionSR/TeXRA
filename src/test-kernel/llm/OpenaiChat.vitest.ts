@@ -8,6 +8,7 @@ import { afterEach, describe, expect, vi } from 'vitest';
 import { openaiChatModel } from '@texra-ai/llm/openai-chat';
 import {
   ModelError,
+  completedTurn,
   type ChatConfiguration,
   type Model,
   type TurnEvent,
@@ -180,7 +181,7 @@ const generate = (model: Model) =>
   Effect.gen(function* () {
     const turn = yield* model.prepareTurn(REQUEST);
     assert(turn.mode === 'foreground');
-    return yield* model.generateTurn(turn);
+    return yield* completedTurn(model.streamTurn(turn));
   });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -344,7 +345,7 @@ describe('native OpenAI Chat protocol', () => {
           tools: TOOLS,
         });
         assert(next.mode === 'foreground');
-        yield* model.generateTurn(next);
+        yield* completedTurn(model.streamTurn(next));
         const sent = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
         expect(sent).toMatchObject({
           stream: true,
@@ -370,10 +371,12 @@ describe('native OpenAI Chat protocol', () => {
         });
         assert(prepared.protocol === 'minimax-chat');
         const rejected = yield* Effect.flip(
-          model.generateTurn({
-            ...prepared,
-            controls: { ...prepared.controls, reasoningSplit: false },
-          }),
+          completedTurn(
+            model.streamTurn({
+              ...prepared,
+              controls: { ...prepared.controls, reasoningSplit: false },
+            }),
+          ),
         );
         expect(rejected.kind).toBe('unsupported');
         for (const request of [
@@ -550,8 +553,8 @@ describe('native OpenAI Chat protocol', () => {
         };
         const prepared = yield* model.prepareTurn(request);
         expect(fetch).not.toHaveBeenCalled();
-        const result = yield* model.generateTurn(
-          JSON.parse(JSON.stringify(prepared)),
+        const result = yield* completedTurn(
+          model.streamTurn(JSON.parse(JSON.stringify(prepared))),
         );
         const first = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
         expect(first.messages).toEqual([
@@ -585,7 +588,9 @@ describe('native OpenAI Chat protocol', () => {
             { role: 'user', content: [{ kind: 'text', text: 'Continue.' }] },
           ],
         });
-        yield* model.generateTurn(JSON.parse(JSON.stringify(followUp)));
+        yield* completedTurn(
+          model.streamTurn(JSON.parse(JSON.stringify(followUp))),
+        );
         expect(
           JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).messages.slice(
             0,
@@ -611,10 +616,12 @@ describe('native OpenAI Chat protocol', () => {
           ).toBe('unsupported');
           expect(
             (yield* Effect.flip(
-              model.generateTurn({
-                ...JSON.parse(JSON.stringify(prepared)),
-                messages,
-              }),
+              completedTurn(
+                model.streamTurn({
+                  ...JSON.parse(JSON.stringify(prepared)),
+                  messages,
+                }),
+              ),
             )).kind,
           ).toBe('unsupported');
         }
@@ -719,7 +726,7 @@ describe('native OpenAI Chat protocol', () => {
             },
           ],
         });
-        yield* model.generateTurn(rehydrated);
+        yield* completedTurn(model.streamTurn(rehydrated));
         const generation = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
         expect({
           model: generation.model,
@@ -732,7 +739,7 @@ describe('native OpenAI Chat protocol', () => {
           deployment: { ...config.deployment, credentialScope: 'foreign' },
         };
         yield* Effect.flip(model.estimateInputTokens(rejected));
-        yield* Effect.flip(model.generateTurn(rejected));
+        yield* Effect.flip(completedTurn(model.streamTurn(rejected)));
         expect(fetch).toHaveBeenCalledTimes(2);
         const ordinary = openaiChatModel(REASONING_CONFIGS[1], {
           apiKey: 'synthetic',
@@ -1094,7 +1101,9 @@ describe('native OpenAI Chat protocol', () => {
         const prepared = yield* model.prepareTurn(REQUEST);
         const rehydrated = JSON.parse(JSON.stringify(prepared));
         Object.assign(rehydrated.controls, controls);
-        const failure = yield* Effect.flip(model.generateTurn(rehydrated));
+        const failure = yield* Effect.flip(
+          completedTurn(model.streamTurn(rehydrated)),
+        );
         expect(failure.kind).toBe('unsupported');
         expect(fetch).not.toHaveBeenCalled();
       }),
@@ -1202,7 +1211,9 @@ describe('native OpenAI Chat protocol', () => {
           tools: TOOLS,
           ...request,
         });
-        yield* model.generateTurn(JSON.parse(JSON.stringify(prepared)));
+        yield* completedTurn(
+          model.streamTurn(JSON.parse(JSON.stringify(prepared))),
+        );
         const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
         expect(body).toMatchObject(wire);
         for (const key of omitted) expect(body).not.toHaveProperty(key);
@@ -1617,8 +1628,8 @@ describe('native OpenAI Chat protocol', () => {
             },
           ],
         });
-        const final = yield* model.generateTurn(
-          JSON.parse(JSON.stringify(followUp)),
+        const final = yield* completedTurn(
+          model.streamTurn(JSON.parse(JSON.stringify(followUp))),
         );
         const replay = JSON.parse(
           String(fetch.mock.calls[1]?.[1]?.body),
@@ -1955,7 +1966,7 @@ describe('native OpenAI Chat protocol', () => {
           ],
         });
         assert(third.mode === 'foreground');
-        const last = yield* model.generateTurn(third);
+        const last = yield* completedTurn(model.streamTurn(third));
         const retained = JSON.parse(
           String(fetch.mock.calls[2]?.[1]?.body),
         ).messages;
@@ -2148,13 +2159,15 @@ describe('native OpenAI Chat protocol', () => {
           prepared.protocol === 'openai-chat' && prepared.mode === 'foreground',
         );
         const failure = yield* Effect.flip(
-          model.generateTurn({
-            ...prepared,
-            deployment: {
-              ...prepared.deployment,
-              credentialScope: 'another-account',
-            },
-          }),
+          completedTurn(
+            model.streamTurn({
+              ...prepared,
+              deployment: {
+                ...prepared.deployment,
+                credentialScope: 'another-account',
+              },
+            }),
+          ),
         );
         expect(failure).toMatchObject({ kind: 'unsupported' });
         expect(fetch).toHaveBeenCalledTimes(1);
@@ -2305,7 +2318,7 @@ describe('native OpenAI Chat protocol', () => {
           .pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
-              return model.generateTurn(turn);
+              return completedTurn(model.streamTurn(turn));
             }),
           );
         expect(fetch).toHaveBeenCalledTimes(2);
@@ -2378,7 +2391,7 @@ describe('native OpenAI Chat protocol', () => {
           effort: 'low',
         });
         choice.name = 'fetch';
-        yield* model.generateTurn(turn);
+        yield* completedTurn(model.streamTurn(turn));
         const body = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
         expect(body).toMatchObject({
           parallel_tool_calls: false,
@@ -2391,7 +2404,7 @@ describe('native OpenAI Chat protocol', () => {
           .pipe(
             Effect.flatMap((turn) => {
               assert(turn.mode === 'foreground');
-              return model.generateTurn(turn);
+              return completedTurn(model.streamTurn(turn));
             }),
           );
         expect(
@@ -2409,10 +2422,12 @@ describe('native OpenAI Chat protocol', () => {
         );
         expect(failure.kind).toBe('invalid-request');
         const forged = yield* Effect.flip(
-          model.generateTurn({
-            ...turn,
-            tools: [],
-          }),
+          completedTurn(
+            model.streamTurn({
+              ...turn,
+              tools: [],
+            }),
+          ),
         );
         expect(forged.kind).toBe('invalid-request');
         for (const request of [

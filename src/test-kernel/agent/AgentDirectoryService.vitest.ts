@@ -136,22 +136,4 @@ describe('AgentDirectoryService', () => {
       assert.equal(await runDirectories(service.customConfigured()), false);
     },
   );
-
-  it('returns local directories in source-priority order', async () => {
-    const parentDir = await makeTempDir('texra-agent-parent-', tempDirs);
-    const customPath = path.join(parentDir, 'custom');
-    const { service } = createService(customPath);
-
-    assert.deepEqual(await runDirectories(service.getAllLocal()), [
-      { directory: customPath, source: 'custom' },
-      {
-        directory: path.join(RESOURCES_PATH, 'agents'),
-        source: 'builtInWorkflow',
-      },
-      {
-        directory: path.join(RESOURCES_PATH, 'tool_use_agents'),
-        source: 'builtInToolUse',
-      },
-    ]);
-  });
 });
