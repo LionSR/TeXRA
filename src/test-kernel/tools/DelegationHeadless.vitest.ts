@@ -1038,6 +1038,31 @@ describe('headless delegation', () => {
   );
 
   it.effect(
+    'denies a proposal under the never policy, as every other request kind',
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Failure modes: `never` approves the proposal because the run
+          // cannot present prompts, or opens a prompt nobody may answer.
+          const session = createTestSession();
+          session.setApprovalPolicy('never');
+          const decider = answerOpenedRequests(session, { action: 'approve' });
+          yield* Effect.addFinalizer(() =>
+            decider.stop().pipe(Effect.ensuring(closeSessionOf(session))),
+          );
+          const result = yield* callDelegateReview(
+            parentRunContext({ session, approvalPromptsUnavailable: true }),
+          );
+
+          expect(decider.openedKinds).toEqual([]);
+          expect(result.status).toBe('error');
+          expect(result.summary).toBe("Delegation denied for 'review'");
+          expect(mocks.executeAgent).not.toHaveBeenCalled();
+        }),
+      ),
+  );
+
+  it.effect(
     'rejects an approved model override unavailable in the active API mode',
     () =>
       Effect.gen(function* () {

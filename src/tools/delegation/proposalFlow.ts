@@ -28,6 +28,10 @@ import type {
   DatabaseNotOwner,
   DatabaseWriteFailed,
 } from '@shared/session/database';
+import {
+  decideProposalApproval,
+  texraApprovalDenialMessage,
+} from '@shared/approvalPolicy';
 import { refusalOf } from '@shared/session/approvalDecision';
 import { errorResult, executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
@@ -185,20 +189,29 @@ export const requestDelegationProposal = Effect.fn('requestDelegationProposal')(
     DatabaseNotOwner | DatabaseWriteFailed
   > {
     const { session, runId } = parent.run;
-    if (session.approvals.proposal.isBypassed(runId)) {
-      return { result: { action: 'approve' }, autoApproved: true };
-    }
-
-    // A run that can never present approval prompts withholds
-    // `requiresApproval` tools from the model up front (resolveAgentTools),
-    // so a delegation tool that still executes here was deliberately offered
-    // for unattended use: delegate_multi_agents in a headless CLI run. The
-    // proposal is the interactive review surface, not the security gate:
-    // proceed without one. `autoApproved: false` keeps the child on
-    // inherited per-kind approval state, so `--approval-policy never` still
-    // denies bash and edits downstream.
-    if (parent.run.toolPolicy.approvalPromptsUnavailable === true) {
-      return { result: { action: 'approve' }, autoApproved: false };
+    const decision = decideProposalApproval({
+      policy: session.approvalPolicy,
+      scopedBypass: session.approvals.proposal.isBypassed(runId),
+      canPresent: parent.run.toolPolicy.approvalPromptsUnavailable !== true,
+    });
+    switch (decision) {
+      case 'deny-policy':
+        parent.run.onApprovalPolicyDenial?.();
+        return {
+          result: {
+            action: 'deny',
+            reason: texraApprovalDenialMessage(decision),
+          },
+          autoApproved: false,
+        };
+      case 'bypass':
+        return { result: { action: 'approve' }, autoApproved: true };
+      case 'unattended':
+        // `autoApproved: false` keeps the child on inherited per-kind
+        // approval state, so its bash and edits still gate.
+        return { result: { action: 'approve' }, autoApproved: false };
+      case 'present':
+        break;
     }
 
     const result = yield* session.openRequest(runId, {

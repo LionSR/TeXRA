@@ -245,6 +245,17 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   outcome. In the CLI, an `--output` or `--output-dir` copy that fails still
   reports the same error and exit code.
 
+- **Approvals you granted for a session survive resuming it after a
+  restart, and `never` now blocks workflow scripts** — resuming an
+  interrupted conversation in a new window or terminal forgot every "approve
+  for session" grant and asked again for commands and edits you had already
+  approved. The run's saved approvals are restored on resume. Approvals an
+  autonomous goal turned on stay off after a resume until you approve a plan
+  again. Separately, under the `never` approval policy a workflow script
+  (`delegate_multi_agents`) launched its sub-agents anyway; it is now denied,
+  like every other approval request. Session history from earlier builds is
+  cleared the first time this build opens a workspace.
+
 - **OpenAI reasoning models no longer fail with "The terminal snapshot
   conflicts with completed output items"** — when a GPT reasoning model
   reasoned before answering, OpenAI could send the same reasoning twice with

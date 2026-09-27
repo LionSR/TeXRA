@@ -25,6 +25,7 @@ import { z } from 'zod';
 
 import { parseJsonWith } from '@common/parsing/safeParseJson';
 
+import { APPROVAL_BYPASS_KINDS } from '@shared/approvalBypassKind';
 import { TexraApprovalPolicySchema } from '@shared/approvalPolicy';
 import { AgentCategorySchema } from './agent';
 import { AgentConfigFieldsSchema } from './agentConfig';
@@ -195,6 +196,10 @@ export type CommitOrdinal = z.infer<typeof CommitOrdinalSchema>;
 export const ApprovalPolicySnapshotSchema = z.object({
   policy: TexraApprovalPolicySchema,
   bypasses: ApprovalBypassesSchema,
+  /** The bypass kinds an autonomous goal holds on rather than a human. A
+   *  resume in a new process restores every other bypass and leaves these
+   *  off until a human re-arms them. */
+  autonomous: z.array(z.enum(APPROVAL_BYPASS_KINDS)),
 });
 export type ApprovalPolicySnapshot = z.infer<
   typeof ApprovalPolicySnapshotSchema
@@ -573,7 +578,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 21;
+export const SESSION_EVENT_FORMAT = 22;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

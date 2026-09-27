@@ -74,6 +74,7 @@ const GRANDCHILD_IDENTITY: RunIdentity = {
 export const ROOT_POLICY: ApprovalPolicySnapshot = {
   policy: 'ask',
   bypasses: { bash: false, toolEdit: true, superYolo: false },
+  autonomous: [],
 };
 
 /** A durable arm without its envelope: what a publisher builds before the

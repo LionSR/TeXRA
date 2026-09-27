@@ -18,13 +18,14 @@ const VOCABULARY_OWNER = 'src/shared/approvalPolicy.ts';
 
 /**
  * Sites allowed to call `decideTexraApproval` / `decideRetryApproval` /
- * `decideHumanInputRequest`. Hosts must not grow a second evaluator — extend
+ * `decideHumanInputRequest` / `decideProposalApproval`. Hosts must not grow a second evaluator — extend
  * this allowlist in the same PR if a new shared surface is intentional.
  */
 const EVALUATOR_CALL_ALLOWLIST = new Set([
   'src/shared/approvalPolicy.ts',
   'src/tools/approval/bashApproval.ts',
   'src/tools/approval/toolEditApproval.ts',
+  'src/tools/delegation/proposalFlow.ts',
   'packages/cli/src/runtime/approval/settleApprovals.ts',
 ]);
 
@@ -45,7 +46,7 @@ const SEED_CALL_ALLOWLIST = new Set([
 ]);
 
 const EVALUATOR_CALL =
-  /\b(?:decideTexraApproval|decideRetryApproval|decideHumanInputRequest)\s*\(/;
+  /\b(?:decideTexraApproval|decideRetryApproval|decideHumanInputRequest|decideProposalApproval)\s*\(/;
 const SET_APPROVAL_POLICY_CALL = /\bsetApprovalPolicy\s*\(/;
 const POLICY_VOCABULARY_DEFINITION =
   /\b(?:const|type)\s+(?:TEXRA_APPROVAL_POLICIES|TexraApprovalPolicySchema)\b/;

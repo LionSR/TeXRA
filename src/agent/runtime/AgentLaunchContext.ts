@@ -12,7 +12,10 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import {
+  finalizeRun,
+  commitResumedActivation,
+} from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
@@ -29,7 +32,6 @@ import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
-  aggregateId as qualifyAggregateId,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
@@ -371,23 +373,17 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and first activation; a
-    // resume appends its activation here, with the approval snapshot that
-    // enforcement holds (no `run.start` re-stamps it). Both are durable before
-    // the run resolves, so nothing drains here (lost facts are the terminal
-    // drain's), and the append is uninterruptible: a stop lands before or after.
+    // resume appends its activation here. It is durable before the run
+    // resolves, so nothing drains here (lost facts are the terminal drain's),
+    // and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      const aggregateId = qualifyAggregateId('run', runId);
-      const snapshot = session.approvalPolicySnapshotFor(runId);
       yield* Effect.uninterruptible(
-        session.commit([
-          {
-            type: 'run.activate',
-            aggregateId,
-            category: setting.agentCategory,
-            isRemote,
-          },
-          { type: 'approval.policy', aggregateId, snapshot },
-        ]),
+        commitResumedActivation(
+          session,
+          runId,
+          setting.agentCategory,
+          isRemote,
+        ),
       );
     }
 

@@ -17,6 +17,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   AgentCategory,
   aggregateId,
+  type ApprovalPolicySnapshot,
   type SessionEventDraft,
   USER_FOLLOW_UP_SUPPORT,
   emptyRunEndOutput,
@@ -42,6 +43,45 @@ function pinRunWorkingDirectory(
   );
   return workingDirectory ? { ...record, workingDirectory } : record;
 }
+
+/**
+ * The approval snapshot a run's re-activation stamps. Enforcement is the
+ * session's in-memory state, so a process holding none of the run's grants
+ * (a resume in a new process) first rebuilds them from the run's last
+ * durable `approval.policy` (`SessionApprovals.restoreRun`) rather than
+ * stamping an empty snapshot over them.
+ */
+const reactivatedApprovalPolicy = (
+  session: SessionHandle,
+  runId: RunId,
+): Effect.Effect<ApprovalPolicySnapshot> =>
+  session.readView([]).pipe(
+    Effect.map((view) => {
+      const durable = view.policy.get(runId);
+      if (durable) session.approvals.restoreRun(runId, durable);
+      return session.approvalPolicySnapshotFor(runId);
+    }),
+  );
+
+/**
+ * A resume's activation: its `run.activate` with the approval snapshot
+ * enforcement holds, as one batch (no `run.start` re-stamps the snapshot).
+ */
+export const commitResumedActivation = (
+  session: SessionHandle,
+  runId: RunId,
+  category: AgentCategory,
+  isRemote: boolean,
+) =>
+  reactivatedApprovalPolicy(session, runId).pipe(
+    Effect.flatMap((snapshot) => {
+      const target = aggregateId('run', runId);
+      return session.commit([
+        { type: 'run.activate', aggregateId: target, category, isRemote },
+        { type: 'approval.policy', aggregateId: target, snapshot },
+      ]);
+    }),
+  );
 
 interface RegisterRunOptions {
   /** The launching run: the whole parent edge, stamped on `run.start`. */
@@ -143,12 +183,13 @@ export const registerRun = Effect.fn('registerRun')(function* (
     );
     // Enforcement is the session's in-memory policy; the row is its
     // projection. A re-registration writes no `run.start`, so the
-    // activation re-stamps the snapshot enforcement now holds.
+    // activation re-stamps the snapshot enforcement now holds, rebuilt from
+    // the durable one when this process holds none of the run's grants.
     if (prior)
       events.push({
         type: 'approval.policy',
         aggregateId: target,
-        snapshot: session.approvalPolicySnapshotFor(runId),
+        snapshot: yield* reactivatedApprovalPolicy(session, runId),
       });
     if (options.description !== undefined)
       events.push({

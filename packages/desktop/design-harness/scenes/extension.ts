@@ -228,6 +228,7 @@ export const extensionScenes: Record<string, () => TemplateResult> = {
     view.policy.set(CHILD, {
       policy: 'ask',
       bypasses: { toolEdit: true, bash: true, superYolo: false },
+      autonomous: [],
     });
     return sidebar(view, surface(view, { kind: 'select', runId: CHILD }));
   },

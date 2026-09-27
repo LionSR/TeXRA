@@ -113,6 +113,24 @@ export function decideTexraApproval(input: {
   return input.canPresent ? 'present' : 'deny-unpresentable';
 }
 
+/**
+ * Decide one delegation proposal. `never` denies it as it denies every other
+ * request kind. Otherwise a scoped proposal bypass approves it, and a run that
+ * cannot present one proceeds `unattended`: such a run withholds
+ * `requiresApproval` delegation tools up front, so one that still executes
+ * was offered for unattended use, and the proposal is a review surface rather
+ * than the security gate (the child's bash and edits still gate).
+ */
+export function decideProposalApproval(input: {
+  readonly policy: TexraApprovalPolicy;
+  readonly scopedBypass: boolean;
+  readonly canPresent: boolean;
+}): 'bypass' | 'unattended' | 'present' | 'deny-policy' {
+  if (input.policy === 'never') return 'deny-policy';
+  if (input.scopedBypass) return 'bypass';
+  return input.canPresent ? 'present' : 'unattended';
+}
+
 const TEXRA_APPROVAL_YOLO_RETRY_MESSAGE =
   'Retry skipped: explicit interactive approval is required after automatic attempts are exhausted.';
 const TEXRA_APPROVAL_CREDENTIAL_RETRY_MESSAGE =
