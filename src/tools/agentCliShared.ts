@@ -452,8 +452,8 @@ interface AgentCliLoopParams<TTurn> {
   turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
-  /** The call that continues this session after a stop, once an id is known. */
-  continueWith: { readonly tool: string; readonly idParam: string };
+  /** The call continuing this session after a stop, and the id it resumed. */
+  continueWith: readonly [tool: string, idParam: string, id?: string];
 }
 
 /**
@@ -497,10 +497,10 @@ export function buildAgentCliLaunch<TTurn>(
     // and follow-up address. Live handles are resolved by the registry itself.
     const target: AgentCliSessionEntry = { runId };
 
-    // Fresh and resumed session/thread ids are registered after the first
-    // successful turn is persisted, immediately before its result reaches the
-    // parent.
-    let continueId: string | undefined;
+    // Session/thread ids are registered after the first successful turn is
+    // persisted, just before its result reaches the parent.
+    const [continueTool, continueParam, resumedId] = params.continueWith;
+    let continueId = resumedId;
     const registerSessionId = (id: string): void => {
       continueId = id;
       if (registry.lookup(id)) return;
@@ -554,7 +554,7 @@ export function buildAgentCliLaunch<TTurn>(
         continueId === undefined
           ? undefined
           : {
-              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${params.continueWith.tool} with ${params.continueWith.idParam} '${continueId}'.`,
+              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueTool} with ${continueParam} '${continueId}'.`,
               resumeId: continueId,
             },
       releaseSessionOwnership: () => {

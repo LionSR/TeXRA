@@ -463,8 +463,7 @@ export function formatInvalidExportFormatText(raw: string): string {
 /**
  * The one rename the NDJSON history records keep: a terminal outcome is
  * spelled as `CliRunStatus` ('completed' | 'interrupted' | 'error'), the
- * word the CLI contract promises, while 'resumable'/'unknown' pass through
- * unchanged. Internal and human-readable output keeps `HistoryRunStatus`.
+ * word the CLI contract promises; every other status passes through.
  */
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
@@ -561,6 +560,7 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
       checkpointPresent: entry.checkpointPresent,
       agentCategory: config.agentCategory,
       phase: entry.status,
+      paused: entry.paused,
     },
     session,
   );

@@ -148,7 +148,7 @@ export interface WorkflowScriptProgressProjection<R> {
   readonly tally: () => {
     readonly phaseCount: number;
     readonly tally: WorkflowTally;
-    /** Labels of the calls a stop cancelled mid-run. */
+    /** Labels of the calls a stop cancelled while they ran (not queued). */
     readonly stopped: readonly string[];
   };
 }
@@ -173,6 +173,7 @@ export function projectWorkflowScriptProgress<R>(
   const projectionId = generateShortId();
   const cards = new Map<WorkflowCallProgress['id'], WorkflowCallProgress>();
   const planTaskIds = new Set<string>();
+  const cutShort = new Map<WorkflowCallProgress['id'], string>();
   let currentPhase: string | undefined;
 
   const phaseFor = (
@@ -248,6 +249,10 @@ export function projectWorkflowScriptProgress<R>(
       case 'call': {
         const { call } = event;
         const previous = cards.get(call.id)?.status;
+        // The terminal sweep cancels queued calls too: only one that was
+        // running when cancelled was cut short.
+        if (call.status === 'cancelled' && previous === 'running')
+          cutShort.set(call.id, call.label);
         emitCall(call);
         if (call.status === previous) return;
         if (call.status === 'running') onActivity?.(`Running: ${call.label}`);
@@ -287,9 +292,7 @@ export function projectWorkflowScriptProgress<R>(
         [...planTaskIds].filter((id) => !cards.has(id)).length,
         true,
       ),
-      stopped: [...cards.values()]
-        .filter((card) => card.status === 'cancelled')
-        .map((card) => card.label),
+      stopped: [...cutShort.values()],
     }),
   };
 }

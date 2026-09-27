@@ -497,7 +497,7 @@ function buildClaudeAgentLaunch(params: {
         ),
       }),
     loopFailedMessage: 'Claude Agent run loop failed after launch',
-    continueWith: { tool: CLAUDE_AGENT_NAME, idParam: 'session_id' },
+    continueWith: [CLAUDE_AGENT_NAME, 'session_id', fallbackSessionId],
   });
 }
 

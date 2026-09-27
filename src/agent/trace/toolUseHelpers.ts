@@ -84,13 +84,15 @@ export function emitToolUseCard(
 export type OpenToolUseCard = ToolUseCardRef & { readonly toolLog: ToolUseLog };
 
 /** End every card still open as failed, keeping what each last showed: a
- *  turn that ended before its tools reported leaves no card running. */
+ *  turn that ended before its tools reported leaves no card running. A card
+ *  whose last log is already terminal is left as it closed. */
 export function endOpenToolUseCards(
   trace: AgentTrace,
   cards: Map<string, OpenToolUseCard>,
 ): void {
   for (const { toolLog, ...ref } of cards.values()) {
-    const { status: _status, ...log } = toolLog;
+    const { status, ...log } = toolLog;
+    if (status === 'completed' || status === 'failed') continue;
     const error = 'The turn ended before this tool reported.';
     endToolUseCard(trace, ref, { ...log, error }, 'failed');
   }

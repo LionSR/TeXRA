@@ -1195,7 +1195,6 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 });
                 if (queueLease)
                   runSession.followUps.release(queueLease, 'terminal');
-                releaseSessionOwnershipOnce();
                 yield* Effect.forkDetach(
                   Effect.try({
                     try: () => params.recordCost?.(bestCostUsd),
@@ -1226,7 +1225,11 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                     error: lastTurnErr,
                     stopped: stoppedAtExit,
                     stage: sessionStage,
-                    pauseNotice: strategy.pauseNotice,
+                    // A persist-only child routes nothing to a parent,
+                    // so nobody could continue it: its stop cancels it.
+                    ...(strategy.deliveryMode !== 'persistOnly' && {
+                      pauseNotice: strategy.pauseNotice,
+                    }),
                   });
                 } else if (
                   (stoppedAtExit || sawTurnFailure) &&
@@ -1245,6 +1248,11 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
                 }
               }),
             );
+            // Provider ids stay reserved until the terminal (or pause) row
+            // is written, so a call naming one finds this run, not a gap.
+            const owned = yield* Effect.exit(
+              Effect.sync(releaseSessionOwnershipOnce),
+            );
             const released = yield* Effect.exit(runSession.commitRunEnd(runId));
             if (Exit.isFailure(released)) {
               yield* loopLog(
@@ -1262,9 +1270,14 @@ export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
             const activation = yield* Effect.exit(
               Effect.sync(releaseChildActivation),
             );
-            const failures = [terminal, released, delivery, activation].flatMap(
-              (exit) =>
-                Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
+            const failures = [
+              terminal,
+              owned,
+              released,
+              delivery,
+              activation,
+            ].flatMap((exit) =>
+              Exit.isFailure(exit) ? [Cause.squash(exit.cause)] : [],
             );
             // The body's own failure or interruption propagates past this
             // finalizer as itself; only the cleanup's failures join it.

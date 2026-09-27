@@ -112,9 +112,10 @@ interface FollowUpSubmitOptions {
    * wake (#8093) takes this path, then re-submits the same delivery id once
    * finalization completes; the replay check finds the rows durable and
    * pending, and the offer happens then. `immediate` (the default) offers as
-   * soon as the rows commit.
+   * soon as the rows commit. `none` admits them for the consumer's next take
+   * without waking it: a notice the run reads at its next turn.
    */
-  readonly liveOffer?: 'immediate' | 'deferred';
+  readonly liveOffer?: 'immediate' | 'deferred' | 'none';
 }
 
 /**
@@ -485,7 +486,7 @@ export class ToolUseFollowUpQueue {
         if (liveOfferDeferred) {
           for (const { followUpId } of queued)
             admitted.deferred.add(followUpId);
-        } else if (owner !== undefined) {
+        } else if (owner !== undefined && options?.liveOffer !== 'none') {
           this.offer(admitted, queued);
         }
       }

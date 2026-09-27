@@ -124,6 +124,8 @@ export interface WorkflowScriptStrategyParams {
   readonly files?: WorkflowScriptFiles;
   /** Durable identity (`meta.name`) — used in the resume hint on failure. */
   readonly name: string;
+  /** The tool call's `agent`: with `name`, the journal a continuation finds. */
+  readonly agent: string;
   /**
    * Session-owned registry the strategy registers this run's skip/retry bridge
    * on while the run is in flight, so a host can target a focused grandchild.
@@ -402,7 +404,7 @@ export function createWorkflowScriptStrategy(
     pauseNotice: () => ({
       text: [
         `Workflow script '${params.name}' is paused at ${board.tally.ok} of ${board.tally.total} calls${board.stopped.length > 0 ? `; it was running ${board.stopped.join(', ')}` : ''}.`,
-        `Nothing continues it on its own. To continue it, call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} again with scriptPath: '${params.scriptPath}' and the same agent: completed calls replay from its journal and only the rest run.`,
+        `Nothing continues it on its own. To continue it, call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} again with scriptPath: '${params.scriptPath}' and agent: '${params.agent}': completed calls replay from its journal and only the rest run.`,
       ].join('\n'),
     }),
 

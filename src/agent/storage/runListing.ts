@@ -18,6 +18,7 @@ import {
   type SessionEvent,
   type RunId,
   type RunIdentity,
+  RUN_SUBSTATE,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { filterNotNull, toNewestFirstByTimestamp } from '@utils/core';
@@ -38,6 +39,8 @@ interface RunListingBase {
   /** The run's folded status; a terminal outcome phase is its durable
    *  outcome. */
   status: RunLifecycleStatus;
+  /** A stop rested the run (the fold's paused substate), a status of its own. */
+  paused?: true;
   /** AI-generated summary of what the session aimed to accomplish. */
   description?: string;
   /**
@@ -146,6 +149,7 @@ export const listRuns = Effect.fn('listRuns')(function* (
           timestamp: new Date(run.launchedAt).toISOString(),
           ...(run.parentId === null ? {} : { parentRunId: run.parentId }),
           status: run.status,
+          ...(run.substate === RUN_SUBSTATE.PAUSED && { paused: true }),
           ...(run.description === null ? {} : { description: run.description }),
           checkpointPresent,
         };

@@ -196,10 +196,10 @@ function updateCodexLiveToolLog(
   const existing = refs.get(item.id);
   const { status = 'completed', ...rest } = toolLog;
   if (existing) endToolUseCard(logger, existing, rest, status);
+  // The ref stays after the card closes (re-ending is idempotent); its last
+  // log tells the turn's finalizer whether the card is still open.
   const card = existing ?? emitToolUseCard(logger, toolLog);
-  // Only an open card is kept: the turn's finalizer ends what is left.
-  if (status === 'in_progress') refs.set(item.id, { ...card, toolLog });
-  else refs.delete(item.id);
+  refs.set(item.id, { ...card, toolLog });
 }
 
 function publishCodexItemProgress(params: {
@@ -221,10 +221,6 @@ function publishCodexItemProgress(params: {
   updateCodexLiveToolLog(logger, refs, item, toolLog);
   return true;
 }
-
-// ============================================================================
-// Streaming helpers
-// ============================================================================
 
 /** A Codex turn's spend in the one usage shape. The SDK reports no cost. */
 function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
@@ -404,7 +400,7 @@ function buildCodexLaunch(params: {
         message: toErrorMessage(err),
       }),
     loopFailedMessage: 'Codex run loop failed after launch',
-    continueWith: { tool: 'codex', idParam: 'thread_id' },
+    continueWith: ['codex', 'thread_id', fallbackThreadId],
   });
 }
 

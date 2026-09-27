@@ -540,6 +540,7 @@ function executeWorkflowScriptTool(
                         args: input.args,
                         files,
                         name: meta.name,
+                        agent: defaultAgent.name,
                         workflowControls: session.workflowControls,
                         ...(stopAfterCycle && {
                           deliveryMode: 'persistOnly' as const,
