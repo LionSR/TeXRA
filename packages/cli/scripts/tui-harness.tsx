@@ -1099,10 +1099,19 @@ async function appendHarnessPlanDecision(
     // The same grant `PlanTool.startGoalForPlan` applies next: approving a
     // plan as a goal auto-approves commands, and nothing broader unless the
     // user explicitly widened the scope.
-    setGoalSessionAutoApproval(
-      session(),
-      HARNESS_RUN_ID,
-      result.autoApproveAll ? 'allAgentWork' : 'commands',
+    // Under the goal plugin's session services, as the step serves them.
+    await harnessRuntime.runPromise(
+      Effect.scoped(
+        Effect.flatMap(
+          session().runs.pinPlugins(new Set(['goal'])),
+          (services) =>
+            setGoalSessionAutoApproval(
+              session(),
+              HARNESS_RUN_ID,
+              result.autoApproveAll ? 'allAgentWork' : 'commands',
+            ).pipe(Effect.provide(services)),
+        ),
+      ),
     );
     seedPhase(HARNESS_RUN_ID, RUN_PHASE.RUNNING);
     appendHarnessAssistantTranscript('PLAN-GOAL');

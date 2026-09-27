@@ -91,7 +91,8 @@ export interface ToolPlugin {
    *  that session pins it. */
   readonly sessionLayer?: true;
   /** Writes rows of its own kinds: an arm in `PLUGIN_EVENT_ARMS`
-   *  (`@tools/pluginArms`), read back only while the plugin is on. */
+   *  (`@tools/pluginArms`). They decode while the plugin is off; a build
+   *  without the plugin keeps them unread. */
   readonly rows?: true;
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;

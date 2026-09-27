@@ -1,5 +1,13 @@
 // Third-party imports
-import { Cause, Effect, FileSystem, Layer, Queue, Stream } from 'effect';
+import {
+  Cause,
+  Effect,
+  FileSystem,
+  Layer,
+  Queue,
+  Schedule,
+  Stream,
+} from 'effect';
 
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
@@ -293,6 +301,9 @@ const TOOL_TABLE = toolTable(
   PLUGIN_SESSION_LAYERS,
 );
 
+/** The first switch read's backoff: 200 ms doubling, over six retries. */
+const SWITCH_READ = Schedule.exponential('200 millis');
+
 /** The process layers a host supplies, for the plugins whose manifest
  *  entry declares `hostLayer` (the VS Code host's Copilot tools). */
 export type HostPluginLayers = {
@@ -333,6 +344,9 @@ export const toolRegistryLayer = (
           ]),
         },
         mcpPluginLoader(fs, mcpConfigPath, revisionKey),
+        // Fail closed: every plugin with a switch stays off until the
+        // switches are read, so an unreadable store never enables one.
+        switchedOffPlugins(new Set(TOOL_PLUGINS.map(({ id }) => id))),
       );
       const followSwitches = Layer.effectDiscard(
         Effect.gen(function* () {
@@ -341,23 +355,32 @@ export const toolRegistryLayer = (
             getDisabledToolIds(appState),
             switchedOffPlugins,
           );
-          // Nothing stays pinned: a pin here only applies the switches.
-          const apply = Effect.scoped(live.pinSwitched(off)).pipe(
-            Effect.catchCause((cause) =>
-              Effect.logWarning(
-                `Tool switches were not applied to the catalog: ${toErrorMessage(Cause.squash(cause))}`,
+          // Nothing stays pinned: a pin here only applies the switches. A
+          // failed apply changes nothing, so what is off stays off.
+          const apply = (retry: boolean) =>
+            Effect.scoped(
+              live.pinSwitched(
+                retry
+                  ? off.pipe(Effect.retry({ schedule: SWITCH_READ, times: 6 }))
+                  : off,
               ),
-            ),
-          );
-          // The switches as they stand, then each flip in this process, off
-          // the build: a store that cannot be read yet fails no process.
-          yield* apply.pipe(
+            ).pipe(
+              Effect.catchCause((cause) =>
+                Effect.logError(
+                  `Tool switches were not applied to the catalog; the plugins they switch stay as they were (off, before the first read): ${toErrorMessage(Cause.squash(cause))}`,
+                ),
+              ),
+            );
+          // The switches as they stand, read again with a bounded backoff
+          // until they are, then each flip in this process, off the build: a
+          // store that cannot be read yet fails no process.
+          yield* apply(true).pipe(
             Effect.andThen(
               Stream.callback<void>((queue) =>
                 onAppSignal('toolSwitchesChanged', () =>
                   Queue.offerUnsafe(queue, undefined),
                 ),
-              ).pipe(Stream.runForEach(() => apply)),
+              ).pipe(Stream.runForEach(() => apply(false))),
             ),
             Effect.forkScoped,
           );

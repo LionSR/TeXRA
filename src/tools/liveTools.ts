@@ -86,11 +86,10 @@ export interface ContinuationEntry {
   readonly continuation: Continuation;
 }
 
-/** What a hold found for each loaded plugin the declarations name. */
+/** What a hold found: the configuration problems the read found, and each
+ *  configured plugin by id with why it offers no tools, if so. */
 export interface HeldPlugins {
-  /** The configuration problems the read found. */
   readonly warnings: readonly string[];
-  /** Each configured plugin by id, with why it offers no tools, if so. */
   readonly loaded: ReadonlyMap<string, string | undefined>;
 }
 
@@ -168,10 +167,9 @@ const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * A JSON Schema node with the `description` keyword dropped at every schema
- * position. It walks keywords, not keys: a property named `description` is a
- * name in a `properties` map and stays, and `enum`/`const`/`default` values
- * are data and are not entered.
+ * A JSON Schema node with `description` dropped at every schema position. It
+ * walks keywords, not keys: a property named `description` stays, and
+ * `enum`/`const`/`default` values are data and are not entered.
  */
 function withoutSchemaDescriptions(node: unknown): unknown {
   if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
@@ -196,10 +194,9 @@ function withoutSchemaDescriptions(node: unknown): unknown {
 }
 
 /**
- * A tool's identity digest and the digest of its definition as a request
- * carries it. The identity is the name and input schema only: a description,
- * the tool's own or a schema node's, can change without invalidating a call
- * the model already made.
+ * A tool's identity digest (its name and input schema only, so a reworded
+ * description never invalidates a call the model already made) and the
+ * digest of its definition as a request carries it.
  */
 export const toolDigests = (
   tool: Pick<ITool, 'definition'>,
@@ -229,6 +226,7 @@ const entriesOf = (
 
 const liveToolsLayer = (
   loader: PluginLoader,
+  closed: ReadonlySet<string>,
 ): Layer.Layer<LiveTools, never, ToolRegistry | ChildProcessSpawner> =>
   Layer.effect(
     LiveTools,
@@ -478,23 +476,25 @@ const liveToolsLayer = (
             : Effect.succeed(Option.none()),
         );
       self.service = { registry, pinSwitched, hold, processServices };
-      yield* locked(reconcile(new Set()));
+      yield* locked(reconcile(closed));
       return self.service;
     }),
   );
 
-/** A loader for a process that loads no plugins from configuration. */
+/** Loads no plugins from configuration. */
 const noLoadedPlugins: PluginLoader = () =>
   Effect.succeed({ plugins: [], warnings: [] });
 
 /**
  * `table` as the `ToolRegistry`, and the live catalog over it and the
- * plugins `loader` reads (none when omitted).
+ * plugins `loader` reads (none when omitted), holding the `closed` plugins
+ * off until a step or a caller first applies the switches.
  */
 export const toolTableLayer = (
   table: ToolTable,
   loader: PluginLoader = noLoadedPlugins,
+  closed: ReadonlySet<string> = new Set(),
 ): Layer.Layer<LiveTools | ToolRegistry, never, ChildProcessSpawner> =>
-  liveToolsLayer(loader).pipe(
+  liveToolsLayer(loader, closed).pipe(
     Layer.provideMerge(Layer.succeed(ToolRegistry)(table)),
   );
