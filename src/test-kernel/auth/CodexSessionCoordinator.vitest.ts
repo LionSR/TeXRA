@@ -7,7 +7,7 @@ import { Deferred, Effect, Exit, Fiber } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
 // Local imports
-import { CodexAuthError } from '@auth/codex';
+import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
 import { CodexSessionCoordinator } from '@auth/codex/CodexSessionCoordinator';
 import type {
   SubscriptionOAuthClient,
@@ -15,10 +15,13 @@ import type {
 } from '@auth/oauth/SubscriptionOAuthCoordinator';
 import type {
   CodexSession,
-  CodexTokenResponse,
+  CodexTokenResponseSchema,
 } from '@auth/codex/codexSessionTypes';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import type { HttpClient } from 'effect/unstable/http';
+import type { z } from 'zod';
+
+type CodexTokenResponse = z.infer<typeof CodexTokenResponseSchema>;
 
 const NOW = 1_900_000_000_000;
 const FIVE_MIN = 5 * 60 * 1000;
@@ -157,7 +160,10 @@ const forkNow = <A>(
  * `setImmediate`, so no fixed wait on the test's side is ordered before it.
  */
 function parkedRefresh() {
-  const pending = Deferred.makeUnsafe<CodexTokenResponse, CodexAuthError>();
+  const pending = Deferred.makeUnsafe<
+    CodexTokenResponse,
+    SubscriptionOAuthError
+  >();
   const started = Deferred.makeUnsafe<void>();
   const refreshTokens = vi.fn(() =>
     Effect.andThen(
@@ -287,7 +293,7 @@ describe('CodexSessionCoordinator', () => {
       Effect.gen(function* () {
         const storage = gatedStorage('delete', expiredSession());
         const refreshTokens = vi.fn(() =>
-          Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+          Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
         );
         const exchangeAuthorizationCode = vi.fn(() =>
           Effect.succeed(newLoginTokenResponse()),
@@ -463,7 +469,7 @@ describe('CodexSessionCoordinator', () => {
         yield* loginWithCode(coordinator);
         Deferred.doneUnsafe(
           pending,
-          Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+          Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
         );
 
         const error = yield* joinFailure(token);
@@ -567,7 +573,7 @@ describe('CodexSessionCoordinator', () => {
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const refreshTokens = vi.fn(() =>
-        Effect.fail(new CodexAuthError('revoked', 'fatal', 401)),
+        Effect.fail(new SubscriptionOAuthError('revoked', 'fatal', 401)),
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 
@@ -586,7 +592,9 @@ describe('CodexSessionCoordinator', () => {
     Effect.gen(function* () {
       const storage = memoryStorage(expiredSession());
       const refreshTokens = vi.fn(() =>
-        Effect.fail(new CodexAuthError('upstream 502', 'transient', 502)),
+        Effect.fail(
+          new SubscriptionOAuthError('upstream 502', 'transient', 502),
+        ),
       );
       const coordinator = makeCoordinator(storage, { refreshTokens });
 

@@ -857,9 +857,6 @@ export interface Model {
   streamTurn(
     turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
   ): Stream.Stream<TurnEvent, ModelError>;
-  generateTurn(
-    turn: Extract<ResolvedTurn, { mode: 'foreground' }>,
-  ): Effect.Effect<TurnResult, ModelError>;
   /**
    * Upload a document's bytes so later turns on this same model can send the
    * provider's file id in their place. The id lives only in this model's
@@ -904,7 +901,7 @@ export interface Model {
   };
 }
 
-/** The `generateTurn` every model shares: the stream's completed result. */
+/** A foreground turn's completed result: the fold over `streamTurn`'s events. */
 export const completedTurn = Effect.fn('llm.generateTurn')(function* (
   events: Stream.Stream<TurnEvent, ModelError>,
 ) {

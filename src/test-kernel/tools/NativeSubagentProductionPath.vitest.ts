@@ -289,8 +289,6 @@ function scriptedBoundModel(
           return Stream.fromIterable(events);
         }),
       ),
-    generateTurn: () =>
-      Effect.die(new Error('The run loops stream; they never generate.')),
   };
   return {
     modelId: config.name,

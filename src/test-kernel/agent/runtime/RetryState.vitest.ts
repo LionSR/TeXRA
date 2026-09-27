@@ -211,8 +211,6 @@ function stubModel(outcomes: readonly AttemptOutcome[]): StubModel {
           return Stream.fromIterable(events);
         }),
       ),
-    generateTurn: () =>
-      Effect.die(new Error('The run loops stream; they never generate.')),
   };
   return { model, attempts: () => served };
 }

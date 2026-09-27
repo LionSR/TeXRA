@@ -485,7 +485,7 @@ export class ProgressViewProvider implements vscode.WebviewViewProvider {
     fileWatcher.onDidDelete(refreshFiles);
     this.disposables.push(
       fileWatcher,
-      agentDirectories.watchAgentDirectories(() =>
+      agentDirectories.watchAgentDirectories(this.runtime, () =>
         this.debouncedRefreshCatalogs.schedule(),
       ),
     );

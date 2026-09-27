@@ -3,7 +3,8 @@ import { HttpClientError } from 'effect/unstable/http';
 import { LRUCache } from 'lru-cache';
 
 import { settleFailure } from '@auth/authProgram';
-import { codexCoordinator, CodexAuthError } from '@auth/codex';
+import { codexCoordinator } from '@auth/codex';
+import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
 import { withLogChannel } from '@logger/effectLog';
 import { exposeApiKey, lookupApiKey } from '@model/apiProviders';
 import type { PlatformSecrets, SecretsFailed } from '@platform/secrets';
@@ -155,7 +156,7 @@ export class SubscriptionUsageService {
    * The stored ChatGPT session's usage credential, or `null` when no session
    * is stored. Refreshing an expiring session is the coordinator's own job, so
    * a refresh that fails reaches {@link fetchUsage}'s classification as the
-   * `CodexAuthError` it minted.
+   * `SubscriptionOAuthError` it raised.
    */
   private readonly loadChatGptCredential = Effect.fn(
     'SubscriptionUsage.loadChatGptCredential',
@@ -323,7 +324,7 @@ export class SubscriptionUsageService {
             withLogChannel(CHANNEL),
           );
           const invalidCredentials =
-            (error instanceof CodexAuthError && error.needsReauth) ||
+            (error instanceof SubscriptionOAuthError && error.needsReauth) ||
             status === 401 ||
             status === 403;
           if (invalidCredentials) {

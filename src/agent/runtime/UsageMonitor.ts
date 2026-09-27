@@ -172,13 +172,13 @@ export class UsageMonitor {
       };
 
       // One typed trace event feeds both transcript and progress projections.
-      logger.usage(
-        { runId, usage: payload },
-        {
-          recordTranscript: agentCategory === AgentCategory.Workflow,
-          stageId: runStageId,
-        },
-      );
+      logger.emit({
+        type: 'usage',
+        runId,
+        usage: payload,
+        recordTranscript: agentCategory === AgentCategory.Workflow,
+        stageId: runStageId,
+      });
 
       // Log to backend for analytics/billing.
       this.logToBackend(

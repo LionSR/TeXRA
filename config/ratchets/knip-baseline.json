@@ -272,12 +272,6 @@
       "name": "resolveStreamColor"
     },
     {
-      "file": "packages/cli/src/runtime/cliSecrets.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "cliSecretsPath"
-    },
-    {
       "file": "packages/cli/src/runtime/doctor.ts",
       "category": "production-dead",
       "kind": "exports",

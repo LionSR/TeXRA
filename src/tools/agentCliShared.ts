@@ -11,6 +11,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
 import type {
+  ChildRunPort,
   ChildRunPorts,
   ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
@@ -39,11 +40,7 @@ import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
-import {
-  childRunDescription,
-  createChildRun,
-  type ChildRun,
-} from './delegation/childRun';
+import { childRunDescription, createChildRun } from './delegation/childRun';
 import {
   startDetachedChildRunLoop,
   type DetachedChildRunLaunch,
@@ -192,7 +189,7 @@ interface AgentCliLaunchParams<TTurn> {
    * child stream the launch guard created. See {@link buildAgentCliLaunch}.
    */
   buildLaunch: (ctx: {
-    childRun: ChildRun;
+    childRun: ChildRunPort;
     runId: RunId;
   }) => Effect.Effect<DetachedChildRunLaunch<TTurn>, Error, Runs>;
   summary: string;
@@ -205,10 +202,6 @@ interface AgentCliLaunchParams<TTurn> {
  * choreography over it: create the child stream tab inside the owned-run
  * launch guard, hand the provider's strategy to the child run loop, and return
  * the "launched" ToolResult.
- *
- * `registerRun` stays here rather than moving to `registerChildRun`: an
- * agent-CLI run stamps `identity.tool`, TERMINAL_BACKED follow-up support and
- * a run description that the native registration does not.
  *
  * Failure channel: a setup failure dies with the error the choreography
  * raised (`Effect.orDie`), so the tool runner surfaces it as is; a cause
@@ -250,7 +243,7 @@ export const launchAgentCliSession = Effect.fn(
         ),
       );
 
-      const { childRunId } = yield* startDetachedChildRunLoop({
+      yield* startDetachedChildRunLoop({
         session: params.session,
         runId,
         parentRunId: params.parentRunId,
@@ -271,8 +264,6 @@ export const launchAgentCliSession = Effect.fn(
             Effect.andThen(
               createChildRun(params.session, runId, params.parentRunId, {
                 run: identity,
-                userFollowUpSupport: USER_FOLLOW_UP_SUPPORT.TERMINAL_BACKED,
-                description: params.description,
                 config: params.config,
               }),
             ),
@@ -284,7 +275,7 @@ export const launchAgentCliSession = Effect.fn(
         [
           params.launchedLine,
           `Run ID: ${runId}`,
-          `Run: ${childRunId}`,
+          `Run: ${runId}`,
           params.followUpLine,
         ].join('\n'),
         params.summary,
@@ -422,7 +413,7 @@ export function dispatchAgentCliTool<R = never>(params: {
 // ============================================================================
 
 interface AgentCliLoopParams<TTurn> {
-  childRun: ChildRun;
+  childRun: ChildRunPort;
   runId: RunId;
   /** Stage label opened on the child trace (e.g. "Codex session"). */
   stageLabel: string;
@@ -552,10 +543,12 @@ export function buildAgentCliLaunch<TTurn>(
         // the child run's running total and publishes that. Not a transcript
         // event: the session's `usage` row is a latest-only listing key.
         cumulativeUsage = sumUsageStats([cumulativeUsage, usage]);
-        logger.usage(
-          { runId, usage: cumulativeUsage },
-          { recordTranscript: false },
-        );
+        logger.emit({
+          type: 'usage',
+          runId,
+          usage: cumulativeUsage,
+          recordTranscript: false,
+        });
       },
       formatDelivery: (turn, wallTimeMs) =>
         Effect.try({

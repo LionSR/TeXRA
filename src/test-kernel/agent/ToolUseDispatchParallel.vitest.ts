@@ -174,7 +174,6 @@ function boundModel(): BoundModel {
   const model: Model = {
     prepareTurn: () => Effect.die(new Error('dispatch issues no turn')),
     streamTurn: () => Stream.die(new Error('dispatch issues no turn')),
-    generateTurn: () => Effect.die(new Error('dispatch issues no turn')),
   };
   return {
     modelId: 'gpt54',

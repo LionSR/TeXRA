@@ -2,11 +2,7 @@ import * as path from 'node:path';
 
 import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
 
-import {
-  logConversationProgress,
-  type AgentEvent,
-  type AgentTrace,
-} from '@agent/trace';
+import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { persistedParentRunId } from '@agent/storage/runRecords';
@@ -112,9 +108,12 @@ function runLayerFor(
         onApprovalPolicyDenial: shared.onApprovalPolicyDenial,
         callbacks: {
           onProgress: (update) => {
+            // A UI-only signal, suppressed in the transcript fold: the session
+            // progress projector derives `updateConversationProgress` from it.
             if (update.kind === 'overview') {
-              logConversationProgress(ctx.logger, {
-                toolCallCount: update.toolCallCount,
+              ctx.logger.emit({
+                type: 'conversation.progress',
+                progress: { toolCallCount: update.toolCallCount },
               });
             }
             shared.onProgress?.(update);

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 // Third-party imports
 import { it } from '@effect/vitest';
 import { openaiResponsesModel } from '@texra-ai/llm/openai-responses';
+import { completedTurn } from '@texra-ai/llm/turn';
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
@@ -225,7 +226,7 @@ describe('agent creator orchestration', () => {
             ],
           });
           assert(turn.mode === 'foreground');
-          const result = yield* model.generateTurn(turn);
+          const result = yield* completedTurn(model.streamTurn(turn));
           return result.content
             .flatMap((part) => (part.kind === 'message' ? part.content : []))
             .filter((part) => part.kind === 'text')

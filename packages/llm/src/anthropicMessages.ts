@@ -23,7 +23,6 @@ import {
   type ResolvedTurn,
   type TurnEvent,
   type TurnResult,
-  completedTurn,
 } from './turn.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import { ModelError, enrichModelError } from './errors.js';
@@ -967,8 +966,6 @@ export function anthropicMessagesModel(
         }).pipe(Effect.mapError(enrich)),
       );
     });
-  const generateTurn: Model['generateTurn'] = (turn) =>
-    completedTurn(streamTurn(turn));
   const estimateInputTokens: NonNullable<Model['estimateInputTokens']> =
     Effect.fn('llm.anthropic.estimateInputTokens')(function* (turn) {
       if (turn.protocol !== 'anthropic-messages')
@@ -1043,7 +1040,6 @@ export function anthropicMessagesModel(
   return Object.freeze({
     prepareTurn,
     streamTurn,
-    generateTurn,
     uploadFile: uploads.uploadFile,
     releaseUploads: uploads.releaseUploads,
     ...(config.supportsInputTokenEstimation ? { estimateInputTokens } : {}),

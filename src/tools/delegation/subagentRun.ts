@@ -11,6 +11,7 @@
 import { Cause, Effect, Exit } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
+import { registerRun } from '@agent/storage/runLifecycle';
 
 // Local imports
 import {
@@ -31,10 +32,7 @@ import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 // Local file imports
-import {
-  registerChildRun,
-  startDetachedChildRunLoop,
-} from './detachedChildRun';
+import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import type { DelegationParent } from './proposalFlow';
@@ -195,11 +193,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     : USER_FOLLOW_UP_SUPPORT.UNSUPPORTED;
   yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      yield* registerChildRun(parentSession, {
-        runId,
-        config,
+      yield* registerRun(parentSession, runId, config, {
+        identity: { kind: 'agent', agent: config.agent },
         userFollowUpSupport,
-        parentRunId: parentRunId,
+        parentRunId,
       });
 
       const strategyParams = {

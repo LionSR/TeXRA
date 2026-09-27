@@ -3,7 +3,7 @@ import { FetchHttpClient } from 'effect/unstable/http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as codexAuth from '@auth/codex';
-import { CodexAuthError } from '@auth/codex';
+import { SubscriptionOAuthError } from '@auth/oauth/subscriptionOAuthError';
 import { parseChatGptUsage } from '@controllers/modelAccess/subscriptionUsage/codexUsageAdapter';
 import { timestampField } from '@controllers/modelAccess/subscriptionUsage/subscriptionUsageParsing';
 import {
@@ -545,7 +545,7 @@ describe('SubscriptionUsageService', () => {
     },
   );
 
-  // The one reader of CodexAuthError.needsReauth: a ChatGPT session refresh
+  // SubscriptionOAuthError.needsReauth decides it: a ChatGPT session refresh
   // that needs re-auth is an invalid credential, a transient one is not.
   it.each([
     ['fatal' as const, 'invalid_credentials'],
@@ -554,7 +554,7 @@ describe('SubscriptionUsageService', () => {
   ])('maps ChatGPT %s auth failures to %s', async (kind, reason) => {
     stubCodexSession({
       getFreshSession: () =>
-        Effect.fail(new CodexAuthError('refresh failed', kind)),
+        Effect.fail(new SubscriptionOAuthError('refresh failed', kind)),
     });
     const http = vi.fn<UsageFetch>();
 

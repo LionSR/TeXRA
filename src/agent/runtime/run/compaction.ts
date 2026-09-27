@@ -7,7 +7,7 @@
  * context window (a live input estimate where the provider offers one, a
  * text-length estimate otherwise), a `/compact` request, or an overflow; the
  * replacement is a summary the bound model itself produces through a
- * throwaway `generateTurn`, folded back as one user message. Every skip and
+ * throwaway completed turn, folded back as one user message. Every skip and
  * every failure is logged and shown as a compaction activity, never silent.
  *
  * The compaction prompts, the summary cap and the token heuristic live here
@@ -15,6 +15,7 @@
  */
 import { Cause, Effect, Exit } from 'effect';
 
+import { completedTurn, type TurnRequest } from '@texra-ai/llm/turn';
 import {
   logContextManagementEvent,
   startCompactionActivity,
@@ -36,7 +37,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 import { rowAggregate, type Message } from '../loop/rows';
 import { estimateInputTokensOrNull } from './estimateInputTokens';
 import { turnText } from './turnText';
-import type { TurnRequest } from '@texra-ai/llm/turn';
 import type { BoundModel } from './modelBinding';
 
 /** Max tokens for the compaction summary response. */
@@ -276,7 +276,7 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
           new Error('A foreground compaction request resolved as background.'),
         );
       }
-      return yield* bound.model.generateTurn(prepared);
+      return yield* completedTurn(bound.model.streamTurn(prepared));
     }),
   );
   if (Exit.isFailure(summarized)) {

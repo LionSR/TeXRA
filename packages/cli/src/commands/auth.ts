@@ -34,8 +34,7 @@ import { withCliAuthError } from './_helpers/cliAuthError';
 import { withUsageSections } from './_helpers/dispatch';
 import { booleanArg, GLOBAL_ARGS, optString } from './_helpers/globalArgs';
 import { cliProgressWriter, emitCliResult } from './_helpers/output';
-import { chatgptAuthCommand } from './chatgptAuth';
-import { grokAuthCommand } from './grokAuth';
+import { defineSubscriptionAuthCommand } from './_helpers/subscriptionAuthCommand';
 
 type LoginCommandArgs = {
   readonly providerArg?: string;
@@ -329,7 +328,24 @@ export const authCommand = defineCommand({
     login: loginCommand,
     logout: logoutCommand,
     status: authStatusCommand,
-    chatgpt: chatgptAuthCommand,
-    grok: grokAuthCommand,
+    chatgpt: defineSubscriptionAuthCommand({
+      providerId: 'chatgpt',
+      rootDescription:
+        'Sign in with your ChatGPT subscription to use Codex models',
+      loginDescription: 'Sign in with your ChatGPT subscription',
+      logoutDescription: 'Sign out of your ChatGPT subscription',
+      statusDescription: 'Show ChatGPT subscription sign-in status',
+      loginPayloadExtras: (account) => ({
+        accountId: account.accountId ?? null,
+      }),
+    }),
+    grok: defineSubscriptionAuthCommand({
+      providerId: 'grok',
+      rootDescription:
+        'Sign in with your Grok (xAI SuperGrok) account to use xAI models via subscription',
+      loginDescription: 'Sign in with your Grok (xAI SuperGrok) account',
+      logoutDescription: 'Sign out of your Grok subscription',
+      statusDescription: 'Show Grok subscription sign-in status',
+    }),
   } as const,
 });

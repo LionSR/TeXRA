@@ -66,14 +66,10 @@ export const SETTINGS_VIEW_COMMANDS = {
   OPEN_GITHUB_TOKEN_URL: 'openGitHubTokenUrl',
   // Subscription sign-in status, provider-keyed in its payload.
   UPDATE_SUBSCRIPTION_AUTH_STATUS: 'updateSubscriptionAuthStatus',
-  // ChatGPT subscription (Codex) sign-in commands
-  SIGN_IN_CHATGPT: 'signInChatGpt',
-  SIGN_OUT_CHATGPT: 'signOutChatGpt',
-  SET_CHATGPT_PREFER_SUBSCRIPTION: 'setChatGptPreferSubscription',
-  // Grok (xAI SuperGrok) subscription sign-in commands
-  SIGN_IN_GROK: 'signInGrok',
-  SIGN_OUT_GROK: 'signOutGrok',
-  SET_GROK_PREFER_SUBSCRIPTION: 'setGrokPreferSubscription',
+  // Subscription sign-in commands, provider-keyed in their payload.
+  SIGN_IN_SUBSCRIPTION: 'signInSubscription',
+  SIGN_OUT_SUBSCRIPTION: 'signOutSubscription',
+  SET_SUBSCRIPTION_PREFERENCE: 'setSubscriptionPreference',
   GET_SUBSCRIPTION_USAGE: 'getSubscriptionUsage',
   GET_PR_SUBSCRIPTIONS: 'getPRSubscriptions',
   UPDATE_PR_SUBSCRIPTIONS: 'updatePRSubscriptions',

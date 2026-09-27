@@ -152,7 +152,10 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
           ...(def.authCommand
             ? [{ kind: 'auth' as const, command: def.authCommand }]
             : []),
-          ...(def.installExtensionId
+          // The desktop app cannot host VS Code extensions, so it gets no
+          // "Install Extension" button; the install guide and URL still
+          // describe the standalone path (Lean 4's `lake` build, for one).
+          ...(def.installExtensionId && host !== 'desktop'
             ? [
                 {
                   kind: 'extension' as const,

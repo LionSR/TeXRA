@@ -98,7 +98,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     // ...then the flow boundary emits the authoritative, replacement-clean
     // text once `assembly.lastResponse` is set.
     const completedText = 'Done \\checkmark\n'.repeat(4000);
-    trace.responseFinalized(completedText);
+    trace.emit({ type: 'response.finalized', text: completedText });
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -109,7 +109,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
   it('appends a fresh MODEL_RESPONSE entry when the round never streamed', () => {
     const { trace, rows } = attachRecorder();
 
-    trace.responseFinalized('The answer is 2.');
+    trace.emit({ type: 'response.finalized', text: 'The answer is 2.' });
 
     const responses = assistantRows(rows());
     expect(responses).toHaveLength(1);
@@ -129,7 +129,7 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     // call) — its `response.finalized` must append a new entry, not
     // overwrite round 0's already-closed stream entry.
     const round1 = trace.openStage('r1', { kind: 'round', index: 1 });
-    trace.responseFinalized('Final answer.');
+    trace.emit({ type: 'response.finalized', text: 'Final answer.' });
     round1.end();
 
     const responses = assistantRows(rows());
@@ -149,14 +149,18 @@ describe('createTestRunTrace response.finalized (issue #7086)', () => {
     toolRequest.append('I will inspect the file.');
     toolRequest.finalize();
 
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:read',
       toolName: 'read',
       input: { path: 'paper.tex' },
     });
-    trace.toolEnd({ logId: 'tool:read', status: 'completed' });
+    trace.emit({ type: 'tool.end', logId: 'tool:read', status: 'completed' });
 
-    trace.responseFinalized('The file contains the theorem statement.');
+    trace.emit({
+      type: 'response.finalized',
+      text: 'The file contains the theorem statement.',
+    });
     round.end();
 
     const responses = assistantRows(rows());
@@ -176,7 +180,8 @@ describe('createTestRunTrace workflow task state', () => {
     const phase = trace.openStage('Audit', { kind: 'phase' });
     const response = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     response.append('Partial answer');
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:pending',
       toolName: 'read',
       input: { path: 'paper.tex' },
@@ -214,7 +219,8 @@ describe('createTestRunTrace workflow task state', () => {
       id: response.id,
       finalText: 'Late replacement',
     });
-    trace.toolEnd({
+    trace.emit({
+      type: 'tool.end',
       logId: 'tool:pending',
       status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'late result' },
@@ -244,7 +250,7 @@ describe('createTestRunTrace workflow task state', () => {
     });
 
     settlePhase(RUN_PHASE.RUNNING);
-    trace.responseFinalized('Fresh turn response');
+    trace.emit({ type: 'response.finalized', text: 'Fresh turn response' });
     const responses = assistantRows(rows());
     expect(responses).toMatchObject([
       { settlementSeqNo: 5, text: { full: 'Fresh turn response' } },
@@ -258,7 +264,8 @@ describe('createTestRunTrace workflow task state', () => {
 
     const waitingResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     waitingResponse.append('Waiting response');
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:waiting',
       toolName: 'read',
       input: { path: 'waiting.tex' },
@@ -278,12 +285,14 @@ describe('createTestRunTrace workflow task state', () => {
     const resumedResponse = trace.openRun(MESSAGE_TYPES.MODEL_RESPONSE);
     resumedResponse.append('Resumed response');
     resumedResponse.finalize();
-    trace.toolStart({
+    trace.emit({
+      type: 'tool.start',
       logId: 'tool:resumed',
       toolName: 'read',
       input: { path: 'resumed.tex' },
     });
-    trace.toolEnd({
+    trace.emit({
+      type: 'tool.end',
       logId: 'tool:resumed',
       status: TOOL_CALL_STATUS.COMPLETED,
       result: { toolName: 'read', output: 'done' },

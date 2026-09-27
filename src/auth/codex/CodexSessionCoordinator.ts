@@ -8,7 +8,6 @@
 import { Effect } from 'effect';
 
 import { AuthPortError } from '../authProgram';
-import { providerAuthError } from '../oauth/providerAuthBridge';
 import {
   SubscriptionOAuthCoordinator,
   type SubscriptionOAuthClient,
@@ -16,6 +15,7 @@ import {
   type SubscriptionSessionStatus,
   type SubscriptionSessionStorage,
 } from '../oauth/SubscriptionOAuthCoordinator';
+import { SubscriptionOAuthError } from '../oauth/subscriptionOAuthError';
 import {
   CODEX_AUTHORIZE_URL,
   CODEX_CLIENT_ID,
@@ -23,13 +23,13 @@ import {
   CODEX_ORIGINATOR,
   CODEX_SCOPE,
   CODEX_TOKEN_REFRESH_BUFFER_MS,
+  CODEX_TOKEN_URL,
   codexRedirectUri,
 } from './codexConstants';
 import { extractCodexClaims } from './codexJwt';
-import { exchangeAuthorizationCode, refreshTokens } from './codexOAuthClient';
 import {
-  CodexAuthError,
   CodexSessionSchema,
+  CodexTokenResponseSchema,
   type CodexSession,
 } from './codexSessionTypes';
 import type { HttpClient } from 'effect/unstable/http';
@@ -44,6 +44,11 @@ export interface CodexSessionCoordinatorInit {
 
 const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   sessionSchema: CodexSessionSchema,
+  tokenEndpoint: {
+    tokenUrl: CODEX_TOKEN_URL,
+    clientId: CODEX_CLIENT_ID,
+    tokenResponseSchema: CodexTokenResponseSchema,
+  },
   refreshBufferMs: CODEX_TOKEN_REFRESH_BUFFER_MS,
   notSignedInMessage: 'Not signed in with ChatGPT. Run sign-in first.',
   sessionChangedMessage: 'ChatGPT session changed while refreshing. Try again.',
@@ -70,7 +75,7 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
   buildSession(tokens, nowMs, previous) {
     const refreshToken = tokens.refresh_token ?? previous?.refreshToken;
     if (!refreshToken) {
-      throw new CodexAuthError(
+      throw new SubscriptionOAuthError(
         'OAuth response did not include a refresh token.',
         'config',
       );
@@ -93,26 +98,7 @@ const CODEX_POLICY: SubscriptionOAuthPolicy<CodexSession> = {
 
 export class CodexSessionCoordinator extends SubscriptionOAuthCoordinator<CodexSession> {
   constructor(init: CodexSessionCoordinatorInit) {
-    super({
-      storage: init.storage,
-      policy: CODEX_POLICY,
-      client: init.client ?? {
-        exchangeAuthorizationCode: (params) =>
-          exchangeAuthorizationCode(params).pipe(
-            Effect.mapError((error) =>
-              providerAuthError(error, CodexAuthError),
-            ),
-          ),
-        refreshTokens: (refreshToken) =>
-          refreshTokens(refreshToken).pipe(
-            Effect.mapError((error) =>
-              providerAuthError(error, CodexAuthError),
-            ),
-          ),
-      },
-      now: init.now,
-      errorType: CodexAuthError,
-    });
+    super({ ...init, policy: CODEX_POLICY });
   }
 
   /** The device-grant code exchange, on the caller's fiber. */
