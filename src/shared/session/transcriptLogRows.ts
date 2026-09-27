@@ -134,8 +134,16 @@ export function recordLogRow(
     }
 
     case 'usage':
-      if (event.recordTranscript === false) return;
-      appendLog(d, event.stageId, MESSAGE_TYPES.STATISTICS, '', event.usage);
+      // A priced turn shows as a workflow run's statistics so far, which the
+      // session fold derives from the run's turns; other runs show none.
+      if (d.ctx.statistics == null) return;
+      appendLog(
+        d,
+        d.ix.runStage,
+        MESSAGE_TYPES.STATISTICS,
+        '',
+        d.ctx.statistics,
+      );
       return;
 
     case 'domain': {

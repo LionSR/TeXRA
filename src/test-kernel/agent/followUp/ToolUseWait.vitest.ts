@@ -323,7 +323,6 @@ function agentRunTestLayer(init: LoopInit) {
           {
             logger,
             runId: init.runId,
-            runStageId: undefined,
             config: testWorkspaceRoots().config,
             usageLog: { log: () => {} },
           },

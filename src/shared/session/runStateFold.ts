@@ -53,8 +53,8 @@ import type { z } from 'zod';
  * opened, both card rows for a fast tool whose card opens and closes in that
  * batch); an approval's recovery binding is the `tool.binding` committed in
  * the same batch; a streaming row open when the loop parks closes with the
- * `waiting` step; a model switch's `run.record` and `run.config` restate the
- * snapshot's model id. Publishing those companions separately is the crash
+ * `waiting` step; a model switch's `run.config` restates the snapshot's
+ * model id. Publishing those companions separately is the crash
  * window where a settled tool keeps an active card, or a terminal card claims
  * a result no row holds, or an approval survives with nothing to recover it
  * by, or a listing names a model the ledger does not. An explicit list
@@ -79,7 +79,6 @@ export type RunLedgerDraft = Extract<
       | 'request.opened'
       | 'request.decided'
       | 'followup.consumed'
-      | 'run.record'
       | 'run.config';
   }
 >;
@@ -183,8 +182,7 @@ export type RunState = RunPosition & {
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
-type CardRowType =
-  'tool.start' | 'tool.end' | 'stream.end' | 'run.record' | 'run.config';
+type CardRowType = 'tool.start' | 'tool.end' | 'stream.end' | 'run.config';
 
 /** The rows `foldRow` applies: the shared rows and the ledger's own arms. */
 type FoldedRowType =
@@ -226,7 +224,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'stream.start': true,
   'response.finalized': true,
   domain: true,
-  'run.record': true,
   'run.report': true,
   'run.result': true,
   'run.workspaceFiles': true,

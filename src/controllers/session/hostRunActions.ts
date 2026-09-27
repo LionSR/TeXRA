@@ -103,7 +103,7 @@ class RunLaunchFailed extends Data.TaggedError('RunLaunchFailed')<{
 }> {}
 
 /** The run's saved setup could not be read: the database would not answer,
- *  or it refused the committed `run.record` row (`cause`). */
+ *  or it refused the committed `run.config` row (`cause`). */
 class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
   readonly runId: RunId;
   readonly message: string;

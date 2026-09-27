@@ -18,7 +18,7 @@ import {
   type AttachedMemoryMiss,
   type OutputFileSummary,
   type ResultDiffSummary,
-  type ResultMeta,
+  type DeliveredResult,
   type RetryErrorInfo,
   type RunEndOutput,
   type RunId,
@@ -35,7 +35,10 @@ import { countLines, formatDuration } from '@utils/text/stringUtils';
 import { reportDiffTimeout, unifiedDiffText } from '@utils/text/unifiedDiff';
 import { formatDelivery } from './deliveryEnvelope';
 
-export type SubagentResultMeta = Extract<ResultMeta, { producer: 'subagent' }>;
+export type SubagentResultMeta = Extract<
+  DeliveredResult,
+  { producer: 'subagent' }
+>;
 
 // ============================================================================
 // Formatting helpers

@@ -9,8 +9,9 @@ import { getRunRecords, resolveChildRunOutput } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   aggregateId,
-  type ResultMeta,
-  type RunEndOutput,
+  RoundOutputSchema,
+  type DeliveredResult,
+  type RoundOutput,
   type RunId,
 } from '@shared/schemas';
 import {
@@ -35,33 +36,36 @@ beforeEach(async () => {
   session = await Effect.runPromise(createProcessSession());
 });
 
-function workflowOutput(absolutePath: string): RunEndOutput {
-  return {
-    category: 'workflow',
-    outputs: [
-      {
-        round: 1,
-        relativePath,
-        absolutePath,
-        location: 'runStorage',
-        originalPath: null,
-        added: null,
-        removed: null,
-      },
-    ],
-    compileFailures: [],
-    diffs: [],
-  };
+/** The child's declared files, as its `output.produced` row reports them. */
+function workflowRounds(absolutePath: string): RoundOutput[] {
+  return [
+    RoundOutputSchema.parse({
+      round: 1,
+      rawOutput: null,
+      outputs: [
+        {
+          source: 'draft',
+          round: 1,
+          location: {
+            kind: 'runStorage',
+            absolutePath,
+            relativePath,
+            runId: childRunId,
+          },
+          lineage: null,
+          diff: null,
+        },
+      ],
+    }),
+  ];
 }
 
-function completedWorkflowResult(absolutePath: string): ResultMeta {
-  return {
-    producer: 'subagent',
-    agentName: 'draft',
-    wallTimeMs: 10,
-    output: workflowOutput(absolutePath),
-  };
-}
+const completedWorkflowResult: DeliveredResult = {
+  producer: 'subagent',
+  agentName: 'draft',
+  wallTimeMs: 10,
+  output: { category: 'workflow', outputs: [], compileFailures: [], diffs: [] },
+};
 
 const persistCompletedChild = (parentId: RunId = parentRunId) =>
   Effect.gen(function* () {
@@ -84,15 +88,21 @@ const persistCompletedChild = (parentId: RunId = parentRunId) =>
       },
     ]);
     yield* getRunRecords(session, childRunId).writeResultMeta(
-      completedWorkflowResult(absolutePath),
+      completedWorkflowResult,
     );
-    // How the child ended is the `run.end` row's fact, not the manifest's.
+    // How the child ended is the `run.end` row's fact, and what it declared
+    // is its `output.produced` row's, not the manifest's.
     yield* session.commit([
+      {
+        type: 'output.produced',
+        aggregateId: aggregateId('run', childRunId),
+        rounds: workflowRounds(absolutePath),
+      },
       {
         type: 'run.end',
         aggregateId: aggregateId('run', childRunId),
         outcome: 'completed',
-        output: workflowOutput(absolutePath),
+        output: { category: 'workflow' },
       },
     ]);
     yield* Effect.promise(() =>

@@ -4,7 +4,6 @@ import { z } from 'zod';
 
 import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
-import { RunIdSchema } from './identifiers';
 import { LogLevelSchema } from './log';
 import { ToolCallStatusSchema } from './progressView/data';
 import { RunOutcomeSchema } from './run';
@@ -63,12 +62,17 @@ export const TranscriptEventSchemas = {
   skills: trace('skills.snapshot', {
     skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
   }),
+  /**
+   * One priced model turn of the row's run: never a running total, so a
+   * run's usage is the sum of its rows. A run with a ledger stores none: the
+   * database projects one from each priced `model.message` response and from
+   * each child's cost a `tool.result` adds (`Database`'s display reads). An
+   * agent-CLI child, which has no ledger, stores one per turn. `elapsedTime`
+   * is the turn's response time in seconds; `percentageCached` is a
+   * statistics row's, never a turn's.
+   */
   usage: trace('usage', {
-    /** The run this spend is attributed to: the row's own run, or the
-     *  agent-CLI child a parent logs a turn for through its own trace. */
-    runId: RunIdSchema,
-    usage: ExtendedTokenUsageStatsSchema,
-    recordTranscript: z.boolean().optional(),
+    usage: ExtendedTokenUsageStatsSchema.omit({ percentageCached: true }),
   }),
   context: trace('context.state', {
     inputTokens: ContextStateDataSchema.shape.inputTokens,

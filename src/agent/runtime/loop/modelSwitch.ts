@@ -7,6 +7,7 @@ import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Scope, SynchronizedRef } from 'effect';
 
 import { USER_VAR_MODEL } from '@agent/prompt/userVars';
+import { configChange } from '@agent/storage/runLifecycle';
 import type { LanguageModel } from '@platform/languageModel';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
@@ -53,10 +54,14 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
       temperature: run.setting.temperature,
     }).pipe(Scope.provide(run.scope));
     userChannels[USER_VAR_MODEL] = next.modelId;
-    // The snapshot's model id is the run's one model fact. The record a
-    // listing or a resume reads and the display row both restate it in
-    // the same batch, so no reader sees one without the other.
-    const config = { ...run.config, model: next.modelId };
+    // The snapshot's model id is the loop's model fact; the run's
+    // configuration row, which a listing, a resume and every renderer read,
+    // changes with it in the same batch, so no reader sees one without the
+    // other.
+    const config = yield* configChange(run.session, run.runId, {
+      ...run.config,
+      model: next.modelId,
+    });
     const switched = yield* cell.append([
       {
         type: 'model.compaction',
@@ -70,12 +75,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
             state.continuation === null ? null : 'history-replaced',
         },
       },
-      {
-        type: 'run.record',
-        aggregateId: rowAggregate(run.runId),
-        record: config,
-      },
-      { type: 'run.config', aggregateId: rowAggregate(run.runId), config },
+      ...(config === null ? [] : [config]),
       snapshot(state, {
         phase: state.phase ?? 'model.ready',
         runtime: {

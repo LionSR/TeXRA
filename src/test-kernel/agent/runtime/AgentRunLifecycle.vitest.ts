@@ -96,10 +96,11 @@ function lifecycleFixture(
 } {
   const runId =
     `e${(lifecycleFixtureCounter++).toString(16).padStart(5, '0')}` as RunId;
-  return {
-    runId,
-    ctx: createTestLaunchContext({ runId, agent, category }),
-  };
+  const ctx = createTestLaunchContext({ runId, agent, category });
+  // A run is registered before its lifecycle runs: an activation commits
+  // onto the run's rows.
+  publishTestRunStart(ctx.session, runId);
+  return { runId, ctx };
 }
 
 /** The launching run a subagent fixture names as its parent edge. */
@@ -281,7 +282,6 @@ describe('runFlowWithLifecycle', () => {
     () =>
       Effect.gen(function* () {
         const { runId, ctx } = lifecycleFixture();
-        publishTestRunStart(ctx.session, runId);
         const recorded = recordSessionEvents(ctx.session, {
           aggregateId: qualifyAggregateId('run', runId),
         });

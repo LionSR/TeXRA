@@ -18,7 +18,6 @@ import { Duration, Effect, FileSystem, Stream, SubscriptionRef } from 'effect';
 import {
   getRunRecords,
   listRunWorkspaceFiles,
-  unwrapResultMeta,
   resolveRunWorkspaceFilePath,
 } from '@agent/storage';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
@@ -502,21 +501,18 @@ const showResultMeta = Effect.fn('ExecutionsTool.showResultMeta')(function* (
   context: RunToolContext,
   runId: RunId,
 ) {
-  const records = getRunRecords(context.session, runId);
-  const [resultMeta, runEnd, note] = yield* Effect.all(
+  const [result, note] = yield* Effect.all(
     [
-      records.readResultMeta(),
-      records.readRunEnd(),
+      getRunRecords(context.session, runId).readResult(),
       turnAttributionNote(runId, context.session),
     ],
-    { concurrency: 3 },
+    { concurrency: 2 },
   );
-  if (!resultMeta) {
+  if (!result) {
     return executed(
       `No structured result recorded for ${runId} yet. It is written when the run completes.`,
     );
   }
-  const result = unwrapResultMeta(resultMeta, runEnd);
   // The note rides INSIDE the JSON: /result is the machine-readable
   // chaining endpoint, so prefixed prose would break JSON.parse
   // consumers precisely in the interrupted-turn case it describes.

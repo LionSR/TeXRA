@@ -48,7 +48,12 @@ describe('canonical run records', () => {
     expect(await run(records.readConfig())).toEqual(config);
     expect(await run(records.readReport())).toBe('private report');
     const visible = await run(Stream.runCollect(session.events.listing()));
-    expect(visible.map((event) => event.type)).toEqual(['run.start']);
+    // The configuration is the run's one `run.config` display row; the
+    // report stays private.
+    expect(visible.map((event) => event.type)).toEqual([
+      'run.start',
+      'run.config',
+    ]);
     expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(session.now());
   });
 
@@ -69,11 +74,7 @@ describe('canonical run records', () => {
           producer: 'subagent',
           agentName: 'worker',
           wallTimeMs: 1,
-          output: {
-            category: 'toolUse',
-            response: 'answer',
-            files: [],
-          },
+          output: { category: 'toolUse', response: 'done', files: [] },
         });
         yield* session.commit([
           {
@@ -84,6 +85,12 @@ describe('canonical run records', () => {
           },
         ]);
         expect(yield* records.readReport()).toBe('retained report bytes');
+        // The result joins the terminal fact to the reply the delivery
+        // recorded, and drops the producer's own context.
+        expect(yield* records.readResult()).toEqual({
+          outcome: 'completed',
+          output: { category: 'toolUse', response: 'done', files: [] },
+        });
         yield* session.commit([
           {
             type: 'run.removed',

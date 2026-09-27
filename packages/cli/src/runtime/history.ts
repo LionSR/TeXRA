@@ -8,8 +8,8 @@ import {
   isUserVisibleRun,
   listRuns,
   listRunWorkspaceFiles,
-  unwrapResultMeta,
   type AgentRunListingEntry,
+  type RunResult,
 } from '@agent/storage';
 import type { AgentConfig, SessionHandle } from '@agent/runtime';
 import { loadChatExportInput, type ChatExportInput } from '@agent/export';
@@ -97,7 +97,7 @@ interface CliHistoryDetails {
   /** The run's launch facts as the session's fold holds them. */
   readonly run: Pick<RunView, 'launchedAt' | 'parentId' | 'description'> | null;
   readonly config: AgentConfig | null;
-  readonly result: ReturnType<typeof unwrapResultMeta> | null;
+  readonly result: RunResult | null;
   readonly report: string | null;
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
@@ -187,8 +187,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
     const [
       run,
       config,
-      resultMeta,
-      runEnd,
+      result,
       report,
       conversationResult,
       persistedWorkspaceFilePaths,
@@ -198,15 +197,14 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       [
         session.readView([]).pipe(Effect.map((view) => view.runs.get(id))),
         store.readConfig(),
-        store.readResultMeta(),
-        store.readRunEnd(),
+        store.readResult(),
         store.readReport(),
         readCompletedRunConversation(id, session),
         store.readWorkspaceFiles(),
         listRunGeneratedFiles(id, session),
         checkpointExists(id, session),
       ],
-      { concurrency: 9 },
+      { concurrency: 8 },
     );
     const currentModel = config
       ? yield* readCliResumedModel(session, id, config)
@@ -264,7 +262,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
           }
         : null,
       config,
-      result: resultMeta ? unwrapResultMeta(resultMeta, runEnd) : null,
+      result,
       report,
       conversationPreview,
       ...(options.includeFullConversation

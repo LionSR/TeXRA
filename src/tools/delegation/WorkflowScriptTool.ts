@@ -443,6 +443,7 @@ function executeWorkflowScriptTool(
                     name: meta.name,
                     instruction: `Workflow script '${meta.name}'`,
                     model: runModel,
+                    inputFiles: runConfig.inputFiles,
                     ...(workingDirectory !== undefined && {
                       workingDirectory,
                     }),
@@ -506,7 +507,7 @@ function executeWorkflowScriptTool(
                         kind: 'multiAgentWorkflow',
                         workflowName: meta.name,
                       },
-                      config: runConfig,
+                      category: runConfig.agentCategory,
                     });
                   }),
                 buildLaunch: (childRun) =>

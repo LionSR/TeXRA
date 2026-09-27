@@ -472,7 +472,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       {
         logger: agentLogger,
         runId,
-        runStageId: parentStage.id,
         config: session.roots.config,
         usageLog: yield* UsageLog,
       },

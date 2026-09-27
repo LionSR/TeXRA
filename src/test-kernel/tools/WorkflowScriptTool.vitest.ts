@@ -182,11 +182,16 @@ function runIdFor(name: string): RunId {
 }
 
 /** The exact durable run record a launch of `name` must preserve. */
-function registrationRecordFor(name: string, model = 'parent-model') {
+function registrationRecordFor(
+  name: string,
+  model = 'parent-model',
+  inputFiles: readonly string[] = [],
+) {
   return {
     name,
     instruction: `Workflow script '${name}'`,
     model,
+    inputFiles,
   };
 }
 
@@ -797,19 +802,14 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ files });
 
       expect(result.status).toBe('executed');
-      // The durable record stays honest (no file lists); the binding rides the
-      // checkpoint and the live run config the agent steps consume.
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      // The durable record names the input files the run view lists; the
+      // full binding rides the checkpoint and the live run config the agent
+      // steps consume.
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('tool-test'),
-        expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
+        registrationRecordFor('tool-test', 'parent-model', ['paper.tex']),
+        registrationOptionsFor('tool-test'),
       );
     }),
   );
@@ -873,17 +873,11 @@ describe('WorkflowScriptTool', () => {
       const result = yield* callTool({ script: resumeScript });
 
       expect(result.status).toBe('executed');
-      expect(mocks.createChildRun).toHaveBeenCalledWith(
+      expect(mocks.registerRun).toHaveBeenCalledWith(
         testDefaultSession(),
         runIdFor('resume'),
+        expect.objectContaining({ inputFiles: ['paper.tex'] }),
         expect.anything(),
-        expect.objectContaining({
-          config: expect.objectContaining({
-            inputFiles: ['paper.tex'],
-            contextFiles: ['references.bib'],
-            mediaFiles: ['figure.pdf'],
-          }),
-        }),
       );
     }),
   );

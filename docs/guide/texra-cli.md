@@ -136,8 +136,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 - `kind: "progress"` records carry a session event verbatim. `event` is the
   event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
-  the rest of the event under its own field names. A run's events name it
-  through `payload.aggregateId`, the JSON array `["run", "<run id>"]`; a
+  the rest of the event under its own field names. A `usage` event is one
+  priced model turn, so a run's spend is the sum of its `usage` events. A
+  run's events name it through `payload.aggregateId`, the JSON array
+  `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live child roster as

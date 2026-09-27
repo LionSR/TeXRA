@@ -589,7 +589,10 @@ function seedRunEnd(runId: RunId, outcome: RunOutcome): void {
     type: 'run.end',
     aggregateId: qualifyAggregateId('run', runId),
     outcome,
-    output: emptyRunEndOutput(category),
+    output:
+      category === AgentCategory.Workflow
+        ? { category: 'workflow' }
+        : { category: 'toolUse', response: '', files: [] },
   });
 }
 
@@ -1292,7 +1295,6 @@ if (SHOW_CHILDREN) {
       publish({
         type: 'usage',
         aggregateId: qualifyAggregateId('run', runId),
-        runId,
         usage: { inputTokens: 52_000, outputTokens: 39_900, cost: 0.12 },
       });
     }

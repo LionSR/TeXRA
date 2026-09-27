@@ -402,8 +402,8 @@ export const sessionEventsLayer = Layer.effect(
         ),
       all,
       aggregate: (aggregateId, fromSeq) =>
-        Stream.fromIterableEffect(log.readAggregate(aggregateId, fromSeq)).pipe(
-          Stream.filter(isDisplaySessionEvent),
+        Stream.fromIterableEffect(
+          log.readDisplayAggregate(aggregateId, fromSeq),
         ),
     };
   }),

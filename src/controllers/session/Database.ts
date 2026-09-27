@@ -18,6 +18,7 @@
  * statement run, connection reservation and transactions; this layer owns the
  * C1 schema, claims, validation and committed wake levels.
  */
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import * as SqliteClient from '@effect/sql-sqlite-node/SqliteClient';
 import * as SqlClient from 'effect/unstable/sql/SqlClient';
@@ -81,6 +82,7 @@ import {
 } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { localDatabasePath } from './localDatabasePath';
+import { USAGE_ROWS } from './usageProjection';
 import {
   applySchema,
   assertStoreFormat,
@@ -94,7 +96,7 @@ const CHANNEL = 'sessionDatabase';
 /** A row or draft that contradicts the store's own protocol: a defect. */
 const invariant = (message: string) => Effect.die(new Error(message));
 const EVENT_COLUMNS = `e."commit" AS "commit", e.aggregate_id AS aggregateId,
-  e.seq, e.type, e.owner_id AS ownerId, e.at, e.data`;
+  e.seq, e.type, e.origin AS origin, e.at, e.data`;
 /** Listing arms of the present vocabulary; pending requests and queued
  *  follow-ups are sets. */
 const LISTING_TYPES = SessionEventDraftSchema.options
@@ -137,12 +139,16 @@ WITH latest AS (
       AND consumed.type = 'followup.consumed.1'
       AND json_extract(consumed.data, '$.followUpId') = json_extract(e.data, '$.followUpId')
   )
+  UNION ALL
+  SELECT ${EVENT_COLUMNS} FROM event e WHERE e.type = 'usage.1'
+  UNION ALL
+  SELECT * FROM ${USAGE_ROWS}
 )
 SELECT * FROM selected
 ORDER BY "commit"
 `;
 const READ_STATE = `
-SELECT s.aggregate_id AS aggregateId, s.owner_id AS ownerId,
+SELECT s.aggregate_id AS aggregateId, s.uid, s.owner_id AS ownerId,
   s.closed, s.parent_id AS parentId,
   CASE WHEN json_extract(s.aggregate_id, '$[0]') = 'run'
     THEN (SELECT e."commit" FROM event e
@@ -169,7 +175,7 @@ function decodeEvent(row: Record<string, unknown>): SessionEvent {
     aggregateId: row.aggregateId,
     seq: row.seq,
     commit: row.commit,
-    ownerId: row.ownerId,
+    origin: row.origin,
     at: row.at,
     type,
   });
@@ -184,17 +190,17 @@ function decodeEvent(row: Record<string, unknown>): SessionEvent {
     `Stored row ${String(row.aggregateId)} seq ${String(row.seq)} does not match the current event format (${reason})`,
   );
 }
-/** First append claims the aggregate; later appends require that same claim. */
+/** First append claims the aggregate and mints its uid; later need the claim. */
 const NEXT_SEQ = `
-INSERT INTO event_sequence (aggregate_id, seq, owner_id)
-VALUES (?, 1, ?)
+INSERT INTO event_sequence (aggregate_id, uid, seq, owner_id)
+VALUES (?, ?, 1, ?)
 ON CONFLICT(aggregate_id) DO UPDATE SET seq = event_sequence.seq + 1
 WHERE event_sequence.owner_id = excluded.owner_id AND event_sequence.closed = 0
 RETURNING seq
 `;
 /** Insert one row and read back the ordinal SQLite assigned it. */
 const INSERT_EVENT = `
-INSERT INTO event (aggregate_id, seq, type, owner_id, at, data)
+INSERT INTO event (aggregate_id, seq, type, origin, at, data)
 VALUES (?, ?, ?, ?, ?, ?)
 RETURNING "commit" AS "commit"
 `;
@@ -303,11 +309,12 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      // `readAll` narrowed by type, off `event_type_commit`.
+      // `readAll` narrowed by type, off `event_type_commit`, plus usage.
       const display = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.type IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
-        ORDER BY e."commit"`;
+        WHERE e.type IN (SELECT value FROM json_each(?1))
+          AND e."commit" > ?2 AND e."commit" <= ?3
+        UNION ALL SELECT * FROM ${USAGE_ROWS} u
+        WHERE u."commit" > ?2 AND u."commit" <= ?3 ORDER BY "commit"`;
       const displayTypes = JSON.stringify(
         DISPLAY_EVENT_TYPES.map((type) => `${type}.1`),
       );
@@ -329,6 +336,12 @@ export const databaseLayer = (
       const aggregate = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
+      // One aggregate's display rows, its projected `usage` rows among them.
+      const displayAggregate = `SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.aggregate_id = ?1 AND e.seq >= ?2
+          AND e.type IN (SELECT value FROM json_each(?3))
+        UNION ALL SELECT * FROM ${USAGE_ROWS} u
+        WHERE u.aggregateId = ?1 AND u.seq >= ?2 ORDER BY seq`;
       // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
       const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'flow.snapshot.1'
@@ -341,16 +354,19 @@ export const databaseLayer = (
         'request.decided.1',
         'followup.queued.1',
         'followup.consumed.1',
+        'usage.1',
       ]);
       const inputRows = `
         SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.type IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
+        WHERE e.type IN (SELECT value FROM json_each(?1))
+          AND e."commit" > ?2 AND e."commit" <= ?3
+        UNION ALL SELECT * FROM ${USAGE_ROWS} u
+        WHERE u."commit" > ?2 AND u."commit" <= ?3
         UNION ALL
         SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
-          AND e.type NOT IN (SELECT value FROM json_each(?))
-          AND e."commit" > ? AND e."commit" <= ?
+        WHERE e.aggregate_id IN (SELECT value FROM json_each(?4))
+          AND e.type NOT IN (SELECT value FROM json_each(?1))
+          AND e."commit" > ?2 AND e."commit" <= ?3
         ORDER BY "commit"
       `;
       const dataVersion = 'PRAGMA data_version';
@@ -609,6 +625,7 @@ export const databaseLayer = (
             }
             const seq = (yield* execOne(NEXT_SEQ, [
               draft.aggregateId,
+              randomUUID(),
               identity.ownerId,
             ]))?.seq;
             if (typeof seq !== 'number') {
@@ -636,7 +653,7 @@ export const databaseLayer = (
                 `Run lifecycle event has a non-run target: ${draft.aggregateId}`,
               );
             }
-            // Stamp the declared parent's creation commit in this same
+            // Stamp the declared parent's incarnation in this same
             // transaction. A reused logical id must not redirect the child to
             // a later incarnation of its parent.
             let parent: RunParent | null = null;
@@ -653,10 +670,7 @@ export const databaseLayer = (
                   `Child creation requires an open parent: ${draft.parent.id}`,
                 );
               }
-              parent = {
-                id: draft.parent.id,
-                startCommit: parentState.startCommit,
-              };
+              parent = { id: draft.parent.id, uid: parentState.uid };
             }
             // A tombstone names only run directories owned by this
             // lifecycle. Derive the targets under the same write permit
@@ -734,7 +748,7 @@ export const databaseLayer = (
               ...committedDraft,
               seq,
               commit,
-              ownerId: identity.ownerId,
+              origin: identity.ownerId,
               at,
             };
           }),
@@ -940,6 +954,12 @@ export const databaseLayer = (
           ),
         readAggregate: (id, fromSeq) =>
           query(decodedRows(aggregate, [id, fromSeq])),
+        readDisplayAggregate: (id, fromSeq) =>
+          query(
+            decodedRows(displayAggregate, [id, fromSeq, displayTypes]).pipe(
+              Effect.map((rows) => rows.filter(isDisplaySessionEvent)),
+            ),
+          ),
         aggregateState: (ids) => query(readState(ids)),
         claimOwner: (id) =>
           Effect.gen(function* () {
@@ -967,9 +987,6 @@ export const databaseLayer = (
                 fromCommit,
                 cursor,
                 JSON.stringify(ids),
-                inputTypes,
-                fromCommit,
-                cursor,
               ]);
               const checked = new Set(checkedIds);
               for (const event of events) {
@@ -1271,7 +1288,7 @@ function validateInquiryTransition(
 /**
  * Serialize the validated draft before opening the transaction. Draft parsing
  * removes caller-supplied envelope fields; the type and aggregate key have
- * their own C1 columns. Child creation adds the database-owned parent commit
+ * their own C1 columns. Child creation adds the parent's database-owned uid
  * to this payload inside the creation transaction.
  */
 function payloadOf(draft: {

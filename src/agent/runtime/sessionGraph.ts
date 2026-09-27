@@ -24,6 +24,7 @@ import type {
   RunId,
   LocalRuntimeState,
   SessionCloseReport,
+  DisplaySessionEvent,
   SessionEvent,
   SessionEventDraft,
   TranscriptSubscription,
@@ -104,10 +105,11 @@ export interface SessionGraph {
   readonly aggregateRows: (
     id: AggregateId,
   ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
-  readonly recordListing: () => Effect.Effect<
-    readonly SessionEvent[],
-    DatabaseReadFailed
-  >;
+  /** One aggregate's display rows, with the `usage` rows its priced
+   *  responses project: what a renderer or an export replays. */
+  readonly displayRows: (
+    id: AggregateId,
+  ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
   /** Transient text shares the existing session-input source, never the event table. */
   readonly publishText: (
     runId: RunId,

@@ -40,8 +40,7 @@ const mocks = vi.hoisted(() => ({
   readConfig: vi.fn(),
   readConversation: vi.fn(),
   readWorkspaceFiles: vi.fn(),
-  readResultMeta: vi.fn(),
-  readRunEnd: vi.fn(),
+  readResult: vi.fn(),
   readReport: vi.fn(),
   exists: vi.fn(),
   listRuns: vi.fn(),
@@ -58,8 +57,7 @@ vi.mock('@agent/storage', async () => {
       readConfig: () => Effect.tryPromise(() => mocks.readConfig()),
       readWorkspaceFiles: () =>
         Effect.tryPromise(() => mocks.readWorkspaceFiles()),
-      readResultMeta: () => Effect.tryPromise(() => mocks.readResultMeta()),
-      readRunEnd: () => Effect.tryPromise(() => mocks.readRunEnd()),
+      readResult: () => Effect.tryPromise(() => mocks.readResult()),
       readReport: () => Effect.tryPromise(() => mocks.readReport()),
     })),
     listRuns: mocks.listRuns,
@@ -316,8 +314,7 @@ describe('CLI history runtime', () => {
     mocks.readConfig.mockResolvedValue(config);
     mocks.readConversation.mockResolvedValue(null);
     mocks.readWorkspaceFiles.mockResolvedValue([]);
-    mocks.readResultMeta.mockResolvedValue(null);
-    mocks.readRunEnd.mockResolvedValue(null);
+    mocks.readResult.mockResolvedValue(null);
     mocks.readReport.mockResolvedValue(null);
     mocks.exists.mockResolvedValue(false);
     mocks.readCliResumedModel.mockResolvedValue(undefined);

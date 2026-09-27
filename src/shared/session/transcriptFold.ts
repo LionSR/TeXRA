@@ -95,6 +95,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       if (event.kind === 'round' || event.kind === 'session') {
         ix.pendingModelResponseId = undefined;
       }
+      if (event.kind === 'run') ix.runStage = event.id;
       const index = event.index ?? undefined;
       const total = event.total ?? undefined;
       write(d, {

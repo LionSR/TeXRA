@@ -100,7 +100,7 @@ const ENVELOPE_KEYS = new Set([
   'aggregateId',
   'seq',
   'commit',
-  'ownerId',
+  'origin',
   'at',
   'stageId',
 ]);

@@ -44,6 +44,8 @@ export type DeletionMode = z.infer<typeof DeletionModeSchema>;
 /** C7's current claim and existence, independent of historical event writers. */
 export const AggregateStateSchema = z.object({
   aggregateId: AggregateIdSchema,
+  /** The incarnation's durable identity, minted with its first row. */
+  uid: z.uuid(),
   ownerId: OwnerIdSchema.nullable(),
   closed: z
     .union([z.literal(0), z.literal(1)])
@@ -276,6 +278,12 @@ export class Database extends Context.Service<
       id: AggregateId,
       fromSeq: number,
     ) => Effect.Effect<readonly SessionEvent[], DatabaseReadFailed>;
+    /** One aggregate's display rows in seq order, with the `usage` rows its
+     *  priced responses project: what a renderer replays. */
+    readonly readDisplayAggregate: (
+      id: AggregateId,
+      fromSeq: number,
+    ) => Effect.Effect<readonly DisplaySessionEvent[], DatabaseReadFailed>;
     /** C5: who holds one aggregate right now, with its owner's liveness
      *  proved in this call. The one ownership read that is fresh by
      *  construction, so a cold run's long-dead owner is never reported held.

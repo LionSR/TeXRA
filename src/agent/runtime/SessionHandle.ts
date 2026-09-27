@@ -937,7 +937,7 @@ export class SessionHandle {
       );
   }
 
-  /** Private record reads (`run.record`, `run.report`, ...) read the database's latest row of each type, never the display fold. */
+  /** Record reads (`run.config`, `run.report`, ...) read the database's latest row of each type, never the display fold. */
   readRunRecords(
     runId: RunId,
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
@@ -952,25 +952,18 @@ export class SessionHandle {
     return this.graph.aggregateRows(id);
   }
 
-  /** The run aggregate's committed rows; empty when the run never existed
-   *  or is tombstoned. */
+  /** The run aggregate's committed display rows, its projected `usage`
+   *  rows among them; empty when the run never existed or is tombstoned. */
   readRunEvents(
     runId: RunId,
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
     return this.graph
-      .aggregateRows(qualifyAggregateId('run', runId))
+      .displayRows(qualifyAggregateId('run', runId))
       .pipe(
         Effect.map((events) =>
           events.at(-1)?.type === 'run.removed' ? [] : events,
         ),
       );
-  }
-
-  readRecordListing(): Effect.Effect<
-    readonly SessionEvent[],
-    DatabaseReadFailed
-  > {
-    return this.graph.recordListing();
   }
 
   /**
@@ -1114,7 +1107,7 @@ export class SessionHandle {
     return Effect.gen({ self: this }, function* () {
       // The sweep and host notifications belong to the authoring process.
       const { self } = yield* SubscriptionRef.get(this.graph.local);
-      if (event.ownerId == null || !self.includes(event.ownerId)) return;
+      if (event.origin == null || !self.includes(event.origin)) return;
       const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run' || event.type !== 'run.end') return;
       // A throwing listener is logged and never stops the ones after it.

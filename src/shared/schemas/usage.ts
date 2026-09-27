@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { roundTo } from '@utils/core';
+
 export const TokenCountSchema = z.int().nonnegative();
 
 export const UsageRouteSchema = z.enum([
@@ -130,6 +132,79 @@ export const ExtendedTokenUsageStatsSchema = TokenUsageStatsSchema.extend({
 export type ExtendedTokenUsageStats = z.infer<
   typeof ExtendedTokenUsageStatsSchema
 >;
+
+/** One priced model turn, as a `usage` row carries it. */
+export type TurnUsage = Omit<ExtendedTokenUsageStats, 'percentageCached'>;
+
+/** The model facts a statistics row reads. */
+interface StatisticsCapabilities {
+  readonly supportsPromptCaching: boolean;
+  readonly supportsAutoPromptCaching: boolean;
+  readonly supportsReasoning: boolean;
+}
+
+/**
+ * A run's statistics after one of its priced turns: the totals of every turn
+ * so far, as a workflow transcript's statistics row shows them. Derived from
+ * the turns, never stored. The cache percentage and the reasoning count
+ * appear only for a model that caches or reasons; the route and plan are the
+ * latest turn's, since that is what the run is on now.
+ */
+export function runStatistics(
+  turns: Iterable<TurnUsage>,
+  capabilities: StatisticsCapabilities | undefined,
+): ExtendedTokenUsageStats {
+  const sum = {
+    input: 0,
+    output: 0,
+    cost: 0,
+    elapsed: 0,
+    read: 0,
+    miss: 0,
+    creation: 0,
+    reasoning: 0,
+    tool: 0,
+  };
+  let latest: TurnUsage | undefined;
+  for (const turn of turns) {
+    sum.input += turn.inputTokens;
+    sum.output += turn.outputTokens;
+    sum.cost += turn.cost;
+    sum.elapsed += turn.elapsedTime ?? 0;
+    sum.read += turn.cacheReadInputTokens ?? 0;
+    sum.miss += turn.cacheMissInputTokens ?? 0;
+    sum.creation += turn.cacheCreationInputTokens ?? 0;
+    sum.reasoning += turn.reasoningTokens ?? 0;
+    sum.tool += turn.toolUseTokens ?? 0;
+    latest = turn;
+  }
+  const caching =
+    capabilities !== undefined &&
+    (capabilities.supportsPromptCaching ||
+      capabilities.supportsAutoPromptCaching);
+  const cacheable = capabilities?.supportsPromptCaching
+    ? sum.creation + sum.read
+    : sum.input;
+  return {
+    inputTokens: sum.input,
+    outputTokens: sum.output,
+    cost: roundTo(sum.cost, 3),
+    elapsedTime: roundTo(sum.elapsed, 1),
+    ...(sum.read > 0 && { cacheReadInputTokens: sum.read }),
+    ...(sum.miss > 0 && { cacheMissInputTokens: sum.miss }),
+    ...(sum.creation > 0 && { cacheCreationInputTokens: sum.creation }),
+    ...(caching && {
+      percentageCached:
+        cacheable === 0 ? 0 : roundTo((sum.read / cacheable) * 100, 2),
+    }),
+    ...(capabilities?.supportsReasoning === true && {
+      reasoningTokens: sum.reasoning,
+    }),
+    ...(sum.tool > 0 && { toolUseTokens: sum.tool }),
+    usageRoute: latest?.usageRoute ?? 'api-key',
+    ...(latest?.usagePlan !== undefined ? { usagePlan: latest.usagePlan } : {}),
+  };
+}
 
 /**
  * Schema for the totals recorded when a run ends.

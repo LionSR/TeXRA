@@ -10,6 +10,7 @@ import {
   AgentCategory,
   TOOL_CALL_STATUS,
   isPlainAgentIdentity,
+  type ExtendedTokenUsageStats,
   type LogLevel,
   type MessageType,
   type ToolUseLog,
@@ -49,6 +50,10 @@ export interface TranscriptContext {
   readonly lifecycleToTaskGroups: boolean;
   /** The session's runs by id, for the `executions` tool header. */
   readonly runLabels?: RunLabels;
+  /** A workflow run's statistics after the priced turn being folded, which
+   *  its transcript shows under the run's stage; absent for any other row
+   *  or run. Derived by the session fold from the run's turns. */
+  readonly statistics?: ExtendedTokenUsageStats | null;
 }
 
 /**
@@ -138,6 +143,8 @@ export interface TranscriptIndexes {
   /** The newest `workflow.plan`, for the run model. */
   plan: WorkflowDeclaredPlan | undefined;
   workflowAttemptId: string | undefined;
+  /** The newest run stage, the home of a workflow run's statistics rows. */
+  runStage: string | undefined;
 }
 
 const INDEXES = new WeakMap<TranscriptView, TranscriptIndexes>();
@@ -183,6 +190,7 @@ export function emptyTranscript(): TranscriptView {
     thinkingRowId: undefined,
     plan: undefined,
     workflowAttemptId: undefined,
+    runStage: undefined,
   });
   return transcript;
 }
