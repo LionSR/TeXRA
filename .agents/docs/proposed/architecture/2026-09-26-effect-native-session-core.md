@@ -569,10 +569,10 @@ no `@tools` to `@agent` edges.
   (`cliSecrets.ts:29`) do not serialize across processes, so the file
   stores implement it with an exclusive create of the key's entry. VS Code's
   `SecretStorage` has only separate `get` and `store`
-  (`vscodeSecrets.ts:22-49`). There, provisioning runs under an exclusive
-  lock file in the extension's global storage directory: create the lock,
-  `get`, `store` if absent, `get` again, release. That excludes every window
-  of the profile. Two processes that start on an empty store
+  (`vscodeSecrets.ts:22-49`). How it provisions atomically is left to the
+  implementing PR ([Open for the implementing PR](#open-for-the-implementing-pr)):
+  a cross-window exclusion whose ownership is released on process death, or
+  treating it as non-persistent. Two processes that start on an empty store
   therefore end up with the same key, and neither writes trust under a key
   that is later overwritten. A backend that cannot create atomically is
   treated as non-persistent (below). It
@@ -1118,9 +1118,11 @@ RunFailure>` contract of the SDK's `Run`. The trace itself stays infallible,
   parking forever. A `toolEdit` request carries its preview (original and
   proposed content) on the SDK's `PendingRequest`, taken from the live
   `ToolEditApprovalRequest`. The durable permission row holds only path and
-  line counts (`prompts.ts:29-36`), so after a restart that preview is gone. A
-  `toolEdit` request found pending on replay is therefore decided `cancelled`,
-  as a recorded row, rather than replayed without its content.
+  line counts (`prompts.ts:29-36`). The live preview is held until the
+  request settles, so a request opened before the consumer subscribed is
+  replayed with its content. Only when recovery after a restart finds a
+  pending `toolEdit` whose preview is gone is it decided `cancelled`, as a
+  recorded row, rather than replayed without its content.
 - `session.decide(req, decision)`, and exactly one approval authority per
   session, chosen when the process is built (`TexraProcessOptions.approvals`,
   move 4): `denyAll` (the default, today's behaviour), `handler(f)`, or
@@ -1412,8 +1414,13 @@ run entry holds its delivery ids in a deferred set that `take` skips, as the
 manager's `deferred` set does today (`ToolUseFollowUpQueueManager.ts:53-58,287`),
 so an unrelated resume of the parent cannot consume the child's row before the
 child finalizes. The deferral is durable, not inferred: `followup.queued`
-gains a `deferred` flag and `wake` appends `followup.released {followUpIds}`
-(one format bump). Today neither `followup.queued` (`sessionEvent.ts:375-378`)
+gains a `deferred` flag, and the release is a `followup.released
+{followUpIds}` row on the producing child's own aggregate (one format bump).
+The child owns that aggregate, so the release never needs the parent's
+claim. `Database.appendAll` refuses any aggregate another owner holds, and
+the parent may be claimed elsewhere when the child settles. The parent's
+pending-input fold reads the whole session, so it sees the release all the
+same. Today neither `followup.queued` (`sessionEvent.ts:375-378`)
 nor `child.turn` (`sessionEvent.ts:460-464`) records the mode, so after a
 crash a non-finalizing child turn and a finalizing result look alike. With
 the flag, hydration rebuilds the deferred set as "deferred and not released",
@@ -1669,10 +1676,12 @@ for each child (inference). The host-neutral controllers still carry
 - **Presentation is checkpointed, at least once.** After the host
   presents a round it records that round as presented. The checkpoint is a
   current value, not history: a `presentation` family in `CurrentValues`
-  (move 12), with one row per run and presenting host, keyed
-  `runId/hostId`, holding the set of presented `roundId`s, rather than an
-  `output.presented` row. `hostId` is the stable host identity (move 4), so
-  two host processes open on the same project each present a round once.
+  (move 12), keyed by run and presentation consumer, holding the set of
+  presented `roundId`s, rather than an `output.presented` row. The consumer
+  id must be stable across restarts and unique across concurrent host
+  processes. The host kind is not unique, and the per-graph nonce is not
+  stable, so choosing it is left to the implementing PR
+  ([Open for the implementing PR](#open-for-the-implementing-pr)).
   A row on the run's aggregate needs the run's claim, and one on the
   session's aggregate needs the `borrowsClaim` path that move 12 retires
   (`Database.ts:623-735`). A `CurrentValues` write is one `BEGIN IMMEDIATE`
@@ -1820,3 +1829,19 @@ Deletion earliest, least churn (the owner's review):
 ## What is open
 
 Everything in this note. No move has started.
+
+### Open for the implementing PR
+
+Review of this note kept finding implementation mechanics that belong with
+code rather than in a proposal. The invariants stay here and the mechanism
+is chosen in the PR that implements the move:
+
+- **Presentation consumer id** (move 13). It must be stable across restarts
+  and unique across concurrent host processes on one project.
+- **Atomic MCP trust-key provisioning on VS Code** (move 2). `SecretStorage`
+  has no compare-and-set. The PR picks a cross-window exclusion whose
+  ownership is released on process death, or treats that backend as
+  non-persistent.
+- **Mechanics below the stated invariants** in moves 10 to 13: lock
+  recovery, retry schedules, listing keys. The invariant each states is the
+  contract, and the PR proves it against the code.
