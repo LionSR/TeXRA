@@ -309,12 +309,13 @@ export const databaseLayer = (
       const all = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e."commit" > ? AND e."commit" <= ?
         ORDER BY e."commit"`;
-      // `readAll` narrowed by type, off `event_type_commit`, plus usage.
-      const display = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.type IN (SELECT value FROM json_each(?1))
-          AND e."commit" > ?2 AND e."commit" <= ?3
-        UNION ALL SELECT * FROM ${USAGE_ROWS} u
-        WHERE u."commit" > ?2 AND u."commit" <= ?3 ORDER BY "commit"`;
+      // `readAll` narrowed by type, off `event_type_commit`, plus usage. The
+      // range sits on the outer select, which SQLite pushes into each arm, so
+      // it binds once: Node 22's `node:sqlite` cannot bind a numbered `?NNN`.
+      const display = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+        UNION ALL SELECT * FROM ${USAGE_ROWS}) r
+        WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
       const displayTypes = JSON.stringify(
         DISPLAY_EVENT_TYPES.map((type) => `${type}.1`),
       );
@@ -337,11 +338,10 @@ export const databaseLayer = (
         WHERE e.aggregate_id = ? AND e.seq >= ?
         ORDER BY e.seq`;
       // One aggregate's display rows, its projected `usage` rows among them.
-      const displayAggregate = `SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id = ?1 AND e.seq >= ?2
-          AND e.type IN (SELECT value FROM json_each(?3))
-        UNION ALL SELECT * FROM ${USAGE_ROWS} u
-        WHERE u.aggregateId = ?1 AND u.seq >= ?2 ORDER BY seq`;
+      const displayAggregate = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+        UNION ALL SELECT * FROM ${USAGE_ROWS}) r
+        WHERE r.aggregateId = ? AND r.seq >= ? ORDER BY seq`;
       // The latest `flow.snapshot` of one open run, off `event_agg_type_seq`.
       const runSnapshot = `SELECT ${EVENT_COLUMNS} FROM event e
         WHERE e.aggregate_id = ? AND e.type = 'flow.snapshot.1'
@@ -356,19 +356,13 @@ export const databaseLayer = (
         'followup.consumed.1',
         'usage.1',
       ]);
-      const inputRows = `
-        SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.type IN (SELECT value FROM json_each(?1))
-          AND e."commit" > ?2 AND e."commit" <= ?3
-        UNION ALL SELECT * FROM ${USAGE_ROWS} u
-        WHERE u."commit" > ?2 AND u."commit" <= ?3
-        UNION ALL
-        SELECT ${EVENT_COLUMNS} FROM event e
-        WHERE e.aggregate_id IN (SELECT value FROM json_each(?4))
-          AND e.type NOT IN (SELECT value FROM json_each(?1))
-          AND e."commit" > ?2 AND e."commit" <= ?3
-        ORDER BY "commit"
-      `;
+      const inputRows = `SELECT * FROM (SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.type IN (SELECT value FROM json_each(?))
+        UNION ALL SELECT * FROM ${USAGE_ROWS}
+        UNION ALL SELECT ${EVENT_COLUMNS} FROM event e
+        WHERE e.aggregate_id IN (SELECT value FROM json_each(?))
+          AND e.type NOT IN (SELECT value FROM json_each(?))) r
+        WHERE r."commit" > ? AND r."commit" <= ? ORDER BY "commit"`;
       const dataVersion = 'PRAGMA data_version';
       let version = (yield* execOne(dataVersion, []).pipe(
         mapDatabaseFailure(openFailed),
@@ -945,7 +939,7 @@ export const databaseLayer = (
           query(decodedRows(aggregate, [id, fromSeq])),
         readDisplayAggregate: (id, fromSeq) =>
           query(
-            decodedRows(displayAggregate, [id, fromSeq, displayTypes]).pipe(
+            decodedRows(displayAggregate, [displayTypes, id, fromSeq]).pipe(
               Effect.map((rows) => rows.filter(isDisplaySessionEvent)),
             ),
           ),
@@ -973,9 +967,10 @@ export const databaseLayer = (
               const cursor = yield* currentCommit;
               const events = yield* decodedRows(inputRows, [
                 inputTypes,
+                JSON.stringify(ids),
+                inputTypes,
                 fromCommit,
                 cursor,
-                JSON.stringify(ids),
               ]);
               const checked = new Set(checkedIds);
               for (const event of events) {

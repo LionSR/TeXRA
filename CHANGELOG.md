@@ -257,6 +257,11 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A session-history failure names the SQLite error behind it** — a failed
+  read or write of a workspace's history reported only `Failed to execute
+statement`; the message now carries the database's own reason, such as
+  `database is locked`.
+
 - **Resuming a stopped workflow in the desktop app continues it instead of
   marking it failed** — Resume on a halted workflow run started the run over
   under its old id, which the app refused, so the run was recorded as failed.

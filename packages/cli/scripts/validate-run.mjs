@@ -986,8 +986,11 @@ prompts:
         'Solve the validation problems through workflow-script dispatch.',
         '--cwd',
         cwd,
+        // A workflow-script proposal is an approval request, and `never`
+        // denies it like every other kind (#13376); `yolo` is the explicit
+        // grant a headless run needs to dispatch the script at all.
         '--approval-policy',
-        'never',
+        'yolo',
         '--output-format',
         'ndjson',
         '--print',
