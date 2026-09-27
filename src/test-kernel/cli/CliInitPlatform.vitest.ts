@@ -13,6 +13,7 @@ import { disposeProcessRuntime } from '@controllers/session/sessionLayer';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { StateWriteFailed } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
+import { testStorageRoot } from '@test/cli/fixtures/cliContext';
 import { createTestSession } from '@test/support/sessionTestUtils';
 
 type SignalSpyEvent = 'SIGINT' | 'SIGTERM';
@@ -132,7 +133,7 @@ function cliContext(
   overrides: Partial<Parameters<typeof initCliPlatform>[0]> = {},
 ): Parameters<typeof initCliPlatform>[0] {
   return {
-    storageRoot: '/tmp/texra-test-storage',
+    storageRoot: testStorageRoot,
     cwd: '/tmp/project',
     resourcesPath: '/tmp/resources',
     version: '0.0.0-test',
