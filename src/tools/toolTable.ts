@@ -1,13 +1,16 @@
 /**
- * The process's plugin table: every plugin's tools by plugin id, which the
- * built-in plugins contribute to the live catalog (`@tools/liveTools`). The
- * `ToolRegistry` service holds it, provided once per process by
- * `installProcessRuntime` from `@tools/registry`, beside the catalog built
- * over it. This module imports no tool, manifest or plugin layer, so a
+ * The process's plugin table: every plugin's tools and continuation by plugin
+ * id, which the built-in plugins contribute to the live catalog
+ * (`@tools/liveTools`). The `ToolRegistry` service holds it, provided once
+ * per process by `installProcessRuntime` from `@tools/registry`, beside the
+ * catalog built over it. This module imports no tool, manifest or plugin layer, so a
  * reader of the tag loads none of them.
  */
 import { Context, type Effect, type Layer, type Scope } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
+import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import type { AgentCategory, RunId } from '@shared/schemas';
+import type { RunState } from '@shared/session/runStateFold';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
@@ -66,20 +69,41 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
   readonly warnings: readonly string[];
 }>;
 
+/**
+ * What decides that a parked run of one agent category continues, pinned by
+ * each step beside its tools (`@agent/runtime/loop/step`); with none, the run
+ * parks. `atIdle` answers the synthetic turn's text or null. `canContinue`
+ * is false when the run ends here or a follow-up is queued; `resumed` holds
+ * until a resumed activation's first park is decided.
+ */
+export interface Continuation {
+  readonly category: AgentCategory;
+  readonly atIdle: (park: {
+    readonly session: SessionHandle;
+    readonly runId: RunId;
+    readonly state: RunState;
+    readonly canContinue: boolean;
+    readonly resumed: boolean;
+  }) => Effect.Effect<string | null, Error>;
+}
+
 /** Every plugin's tools, and every tool by name. */
 export interface ToolTable {
   /** Each plugin's tools by registered name, keyed by plugin id. */
   readonly plugins: ReadonlyMap<string, ReadonlyMap<string, ITool>>;
   /** The layer of each plugin that owns resources, keyed by plugin id. */
   readonly layers: ReadonlyMap<string, PluginLayer>;
+  /** The continuation of each plugin that contributes one, by plugin id. */
+  readonly continuations: ReadonlyMap<string, Continuation>;
   /** The tool registered under `name` in any plugin. */
   readonly get: (name: string) => ITool | undefined;
 }
 
-/** A table over plugin id → (tool name → tool), and plugin id → layer. */
+/** A table over plugin id → tools, layer and continuation. */
 export function toolTable(
   plugins: Readonly<Record<string, Readonly<Record<string, ITool>>>>,
   layers: Readonly<Record<string, PluginLayer>> = {},
+  continuations: Readonly<Record<string, Continuation>> = {},
 ): ToolTable {
   const byName = new Map(Object.values(plugins).flatMap(Object.entries));
   return {
@@ -90,6 +114,7 @@ export function toolTable(
       ]),
     ),
     layers: new Map(Object.entries(layers)),
+    continuations: new Map(Object.entries(continuations)),
     get: (name) => byName.get(name),
   };
 }

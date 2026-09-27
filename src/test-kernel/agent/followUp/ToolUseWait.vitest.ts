@@ -468,6 +468,7 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       roundOutputs: [],
       overflowRecoveredAtTurn: null,
       offeredTools: null,
+      offeredContinuation: null,
     };
     const opened = yield* ledger.appendBatch(runId, null, [
       appendRow(runId, [

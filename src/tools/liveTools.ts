@@ -1,12 +1,14 @@
 /**
  * The process's live tool catalog: a `Registry` (`@tools/liveRegistry`) of
- * every tool some plugin currently contributes, keyed by tool name.
+ * every tool some plugin currently contributes, keyed by tool name, and a
+ * second of every continuation, keyed by the agent category it serves.
  *
  * - **Built-in plugins** contribute their manifest table while their switch
- *   is on. `pinSwitched` reads the user's switches, reconciles the
- *   contributions with them and pins the generation that produces, as one
- *   serialized step: a plugin switched off withdraws its tools, one switched
- *   on contributes them again. A run's step opens through it
+ *   is on, and their continuation with them. `pinSwitched` reads the user's
+ *   switches, reconciles the contributions with them and pins the
+ *   generations that produces, as one serialized step: a plugin switched off
+ *   withdraws its tools and continuation, one switched on contributes them
+ *   again. A run's step opens through it
  *   (`@agent/runtime/loop/step`), so a switch flipped by any host, or by
  *   `texra tools` from another shell, reaches every open run at its next
  *   step.
@@ -41,6 +43,7 @@ import stableStringify from 'safe-stable-stringify';
 
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { toolDefinitionsFor } from '@agent/runtime/run/tools';
+import type { AgentCategory } from '@shared/schemas';
 import {
   makeRegistry,
   type Generation,
@@ -49,6 +52,7 @@ import {
 } from '@tools/liveRegistry';
 import {
   ToolRegistry,
+  type Continuation,
   type LoadedPlugin,
   type PluginLoader,
   type ToolTable,
@@ -82,6 +86,12 @@ export interface ToolEntry {
 
 export type ToolGeneration = Generation<string, ToolEntry>;
 
+/** A continuation in the catalog, with the plugin that contributes it. */
+export interface ContinuationEntry {
+  readonly plugin: string;
+  readonly continuation: Continuation;
+}
+
 /** What a hold found for each loaded plugin the declarations name. */
 export interface HeldPlugins {
   /** The configuration problems the read found. */
@@ -96,14 +106,17 @@ export class LiveTools extends Context.Service<
     readonly registry: Registry<string, ToolEntry, Context.Context<never>>;
     /**
      * Read the switches, contribute exactly the built-in plugins they leave
-     * on, and pin the generation that produces, as one serialized step: a
-     * concurrent step's older read never reverts the catalog under it, and
-     * no step pins a generation built from switches it did not read.
+     * on, and pin the tool and continuation generations that produces, as
+     * one serialized step: a concurrent step's older read never reverts the
+     * catalog under it, and no step pins a generation built from switches
+     * it did not read.
      */
     readonly pinSwitched: <E>(
       off: Effect.Effect<ReadonlySet<string>, E>,
     ) => Effect.Effect<
-      Pinned<string, ToolEntry, Context.Context<never>>,
+      Pinned<string, ToolEntry, Context.Context<never>> & {
+        readonly continuations: Generation<AgentCategory, ContinuationEntry>;
+      },
       E,
       Scope.Scope
     >;
@@ -308,19 +321,50 @@ const liveToolsLayer = (
           ),
       });
 
-      /** Open and close the built-in contributions to match `off`. */
+      // Each built-in plugin's continuation, by category; it holds nothing.
+      const continuations = yield* makeRegistry<
+        AgentCategory,
+        ContinuationEntry,
+        void
+      >({
+        digest: (entries) =>
+          sha256(
+            [...entries]
+              .map(([category, { plugin }]) => [category, plugin])
+              .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
+          ),
+        acquire: () => Effect.void,
+      });
+
+      /** Open and close the built-in contributions (a plugin's tools and
+       *  continuation, in one scope) to match `off`. */
       const reconcile = (off: ReadonlySet<string>) =>
         Effect.gen(function* () {
-          for (const [id, tools] of table.plugins) {
+          for (const id of new Set([
+            ...table.plugins.keys(),
+            ...table.continuations.keys(),
+          ])) {
             const on = !off.has(id);
             const held = builtIns.get(id);
             if (on && held === undefined) {
               const contribution = yield* Scope.fork(scope);
+              const continuation = table.continuations.get(id);
               // The manifest rules out a name two plugins share, so a
               // conflict between built-in plugins is a defect.
-              yield* registry
-                .contribute(id, entriesOf(id, tools))
-                .pipe(Scope.provide(contribution), Effect.orDie);
+              yield* Effect.andThen(
+                registry.contribute(
+                  id,
+                  entriesOf(id, table.plugins.get(id) ?? new Map()),
+                ),
+                continuations.contribute(
+                  id,
+                  new Map(
+                    continuation === undefined
+                      ? []
+                      : [[continuation.category, { plugin: id, continuation }]],
+                  ),
+                ),
+              ).pipe(Scope.provide(contribution), Effect.orDie);
               builtIns.set(id, contribution);
             } else if (!on && held !== undefined) {
               builtIns.delete(id);
@@ -333,7 +377,8 @@ const liveToolsLayer = (
         locked(
           Effect.gen(function* () {
             yield* reconcile(yield* off);
-            return yield* registry.pin;
+            const { generation } = yield* continuations.pin;
+            return { ...(yield* registry.pin), continuations: generation };
           }),
         );
 

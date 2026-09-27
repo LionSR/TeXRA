@@ -14,16 +14,19 @@ import {
 } from '../support/repoScan';
 
 /**
- * Invariant 7 of the core concepts: a run's tools change only at a step
- * boundary, and the change is recorded there. The step
+ * Invariant 7 of the core concepts: a run's tools and continuation change
+ * only at a step boundary, and the change is recorded there. The step
  * (`src/agent/runtime/loop/step.ts`) is the one module that applies the
- * plugin switches to the live catalog, pins a generation, installs the
- * run's current step, and authors the `tools.offered` row. Anything else
- * doing one of these would change a run's tools between steps, or change
- * them unrecorded. Failure modes guarded:
+ * plugin switches to the live catalog, pins its tool and continuation
+ * generations, installs the run's current step, and authors the
+ * `tools.offered` row. Anything else doing one of these would change a
+ * run's tools or continuation between steps, or change them unrecorded.
+ * Failure modes guarded:
  *
  * - a host or tool pins the catalog, or applies the switches to it, and
  *   hands a run tools no step offered;
+ * - a loop reads a continuation no step pinned, so goal mode switched off
+ *   still opens turns, or switched on opens them unrecorded;
  * - code outside the step swaps `run.steps`, so a dispatch runs against a
  *   set no `tools.offered` row records;
  * - a second author of `tools.offered` records a set no step offered.
@@ -37,8 +40,9 @@ const RULES: readonly {
   readonly also: readonly string[];
 }[] = [
   {
-    what: 'applies the plugin switches and pins a catalog generation',
-    pattern: /\bregistry\.pin\b|\bpinSwitched\(/,
+    what: 'applies the plugin switches and pins a tool or continuation generation',
+    pattern:
+      /\b(?:registry|continuations)\.pin\b|\bpinSwitched\(|\.continuations\.entries\b/,
     // The catalog itself, which serializes the switch read with the pin.
     also: ['src/tools/liveTools.ts'],
   },

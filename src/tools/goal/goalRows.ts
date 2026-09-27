@@ -21,7 +21,7 @@ import type { RunView } from '@shared/session/sessionView';
 import { hexId12 } from '@utils/core';
 
 /** What a goal reader takes: the fold's per-run level. */
-export type GoalReader = Pick<SessionHandle, 'runView'>;
+type GoalReader = Pick<SessionHandle, 'runView'>;
 
 /**
  * What a goal mutation takes: the reader plus the awaited commit. A mutation

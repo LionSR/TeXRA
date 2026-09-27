@@ -184,6 +184,8 @@ export type RunState = RunPosition & {
   readonly flow: FlowState | null;
   /** The latest `tools.offered` row's set; `null` before the first. */
   readonly offeredTools: readonly OfferedTool[] | null;
+  /** The plugin whose continuation the latest `tools.offered` row pinned. */
+  readonly offeredContinuation: string | null;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
@@ -265,6 +267,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   flow: null,
   overflowRecoveredAtTurn: null,
   offeredTools: null,
+  offeredContinuation: null,
 });
 
 /**
@@ -649,6 +652,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return Result.succeed({
         ...advance(current ?? freshRunState(commit)),
         offeredTools: row.payload.tools,
+        offeredContinuation: row.payload.continuation,
       });
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
