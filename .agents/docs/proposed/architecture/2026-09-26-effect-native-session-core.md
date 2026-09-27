@@ -168,7 +168,7 @@ These do not depend on any architectural decision. Each is one small PR.
 | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Desktop **Resume** on a halted workflow run turns it into a failed run _(confirmed)_        | `HostRunActions.resume` passes `{config, runId}` to the host's `runValidated` (`src/controllers/session/hostRunActions.ts:625-632`). The desktop always wraps it as `kind:'fresh'` (`packages/desktop/src/main/desktopAgentRun.ts:196`), so `runAgent` registers again, `loadRun` refuses with "already has ledger state" (`src/agent/runtime/loop/runProgram.ts:159-165`) and the lifecycle writes `run.end FAILED`. The defect is desktop-only: the extension maps the id to `kind:'resume'` (`extensionHostRequests.ts:215-222`) and resumes correctly. Its workflow resume still bypasses `resumeRun`, the route tool-use runs take, so it drops the persisted `modelCompatibilityKey` (`resumeRun.ts:260-266`) and refuses a run another process holds through the claim acquisition rather than `resumeRun`'s owned-elsewhere marking. | Send workflow runs through `AgentResume.tryResumeRun` too (tool-use runs already go there; `resumeRun` has the workflow branch). Then remove `runId` from `RunRequest`/`ValidatedRunRequest`, so `runValidated` is fresh-only on both hosts and the desktop's hard-coded `fresh` is correct by construction.                              |
 | The SDK never runs `bootstrapHost` _(confirmed)_                                            | `packages/agent/src/effect/runtime.ts:228` calls `installProcessRuntime` directly. `bootstrapHost` (`src/controllers/hostBootstrap.ts:77-115`) installs the long-stream dispatcher, so embedders get undici's 300 s body timeout instead of 30 min and no proxy. The setting host defaults to `'vscode'` while the tool gate reads `undefined` and `PACKAGE_SETUP.host` throws.                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Make `storageDir` explicit (today it defaults to the real `~/.texra`), derive the MCP config path from it, and give embedders the long-stream transport by default as a fetch bound to the model factories rather than a global dispatcher (`modelTransport: 'bound'`). The full fix is [move 4](#move-4-the-process-is-one-layer-graph). |
-| `run.removed` bypasses the publisher _(confirmed)_                                          | `Database.removeRun` appends it inside its own transaction (`src/controllers/session/Database.ts:1048`). The publisher's `run.removed` arm (`src/agent/runtime/SessionEvents.ts:183`) never fires, so its open-work and follow-up entries for removed runs are never pruned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Widen the publisher job to `(ops: { append; removeRun })` and route removal through `exclusive`. The dependent-closure transaction stays in SQL. The tracker's `run.removed` arm must prune every id in `row.runIds` (the whole closed dependent set), not only `row.aggregateId` as it does today (`SessionEvents.ts:183-187`).          |
+| `run.removed` bypasses the publisher _(confirmed; **fixed**: #13375)_                       | `Database.removeRun` appends it inside its own transaction (`src/controllers/session/Database.ts:1048`). The publisher's `run.removed` arm (`src/agent/runtime/SessionEvents.ts:183`) never fires, so its open-work and follow-up entries for removed runs are never pruned.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Widen the publisher job to `(ops: { append; removeRun })` and route removal through `exclusive`. The dependent-closure transaction stays in SQL. The tracker's `run.removed` arm must prune every id in `row.runIds` (the whole closed dependent set), not only `row.aggregateId` as it does today (`SessionEvents.ts:183-187`).          |
 | Tool cards opened by the Claude and Codex strategies are never swept on abort _(confirmed)_ | `toolLogRefs` in `src/tools/claudeAgent.ts:236` and Codex's item cards (`itemLogRefs`) have no finalizer; the Codex turn card is closed by an `ensuring` (`codex.ts:343`). `OpenWork` tracks stages, streams and workflow calls but not cards.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Consume both SDKs' async iterators as Streams in a scope whose finalizer ends any open card (move 7, PR 1).                                                                                                                                                                                                                               |
 | Seven dead imports in `SessionHandle.ts`, one of them from #13340 _(confirmed)_             | `AgentTrace`, `finalizeRun`, `interruptedWorkflowCall`, `RUN_OUTCOME`, `RunOutcome`, `toErrorMessage`, `heldSessions` each appear only on their import line. `no-unused-vars` is off (`eslint.config.mjs:615`). The dead import hid that `heldSessions` and `SessionOwner.held` are test-only.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Delete them. Consider re-enabling unused-import detection.                                                                                                                                                                                                                                                                                |
 | Webview requests stay pending after close                                                   | `sessionTransport.ts:91,143-150,211-224`: the pending map is not keyed by session and `close`/`dispose` never settle it. Callers guard, so the effect is a leaked closure.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Scope-owned `Deferred`s per session, interrupted on close (move 5, PR 1).                                                                                                                                                                                                                                                                 |
@@ -196,7 +196,9 @@ Tools and approvals:
   (`runApprovalQueue.ts:323-331`, `goalAutoApproval.ts:64`).
 - **A goal's command grant is lost on resume** while the goal stays active: the
   goal row is durable, the grant lives only in a WeakMap
-  (`AgentLaunchContext.ts:383-389`).
+  (`AgentLaunchContext.ts:383-389`). **Settled:** #13376 restores a run's own
+  grants on resume and, per the goal-mode ruling, leaves a goal's autonomous
+  grant off until a human re-arms it (#13387).
 - **Four tools declare `requiresApproval` but have no call-time gate**
   (`update_config`, `unset_api_key`, `invoke_command`,
   `install_vscode_extension`). The flag only filters what is offered, and only
@@ -389,8 +391,8 @@ the unchecked lists grow; it is not scheduled.
 
 1. The single-run lineage read; collapse the double read.
 2. Exhaustive `listingTypeOf`.
-3. `removeRun` through `exclusive`, pruning `runIds`.
-4. The de-duplication cuts on one format bump.
+3. `removeRun` through `exclusive`, pruning `runIds`. Done (#13375).
+4. The de-duplication cuts on one format bump. Done (#13386).
 
 ### Rulings
 
@@ -445,19 +447,20 @@ manifest flag that declares the contribution. That keeps "the manifest imports
 no tool implementation" true, which dashboards and webviews rely on, and adds
 no `@tools` to `@agent` edges.
 
-| Table                    | Seam and owner                         | Contributors                                                                      |
-| ------------------------ | -------------------------------------- | --------------------------------------------------------------------------------- |
-| `PLUGIN_TOOLS`           | tools (on the Registry, #13364)        | every tool plugin                                                                 |
-| `PLUGIN_CONTINUATIONS`   | continuation (on the Registry, #13387) | `plan` (goal); rounds are chosen by category, not contributed                     |
-| `PLUGIN_LAYERS`          | run-pinned resources (exists, empty)   | none yet: built by `Compositions.pin` and released with the last pin              |
-| `PLUGIN_PROCESS_LAYERS`  | process services                       | GitHub subscriptions only (Lean, `SetupPlatform` and `InquiryRecords` stay core)  |
-| `PLUGIN_SESSION_LAYERS`  | the session entry                      | Codex and Claude handle registries (two real contributors of one shape)           |
-| `PLUGIN_EVENT_ARMS`      | the one closed event schema            | goal, inquiry, workflow checkpoints, documents (`output.produced`)                |
-| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                        | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts` |
+| Table                    | Seam and owner                         | Contributors                                                                          |
+| ------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------- |
+| `PLUGIN_TOOLS`           | tools (on the Registry, #13364)        | every tool plugin                                                                     |
+| `PLUGIN_CONTINUATIONS`   | continuation (on the Registry, #13387) | `plan` (goal); rounds are chosen by category, not contributed                         |
+| `PLUGIN_LAYERS`          | plugin resources (exists, empty)       | none yet: one `RcMap` entry per plugin, held by the generations that hold it (#13364) |
+| `PLUGIN_PROCESS_LAYERS`  | process services                       | GitHub subscriptions only (Lean, `SetupPlatform` and `InquiryRecords` stay core)      |
+| `PLUGIN_SESSION_LAYERS`  | the session entry                      | Codex and Claude handle registries (two real contributors of one shape)               |
+| `PLUGIN_EVENT_ARMS`      | the one closed event schema            | goal, inquiry, workflow checkpoints, documents (`output.produced`)                    |
+| `PLUGIN_PROMPT_SECTIONS` | prompt assembly                        | `memory-workflow`, only in the PR that moves its blocks out of `PromptBuilder.ts`     |
 
-- **Process services get their own table.** `PLUGIN_LAYERS` is read only
-  while `Compositions.pin` builds a run's entry (`compositions.ts:158-207`),
-  and its resources close with the last pin. GitHub subscriptions have
+- **Process services get their own table.** `PLUGIN_LAYERS` is built in the
+  plugin's own `RcMap` entry scope (`liveTools.ts`), shared by the Registry
+  generations that hold the plugin, and its resources close with the last
+  of them (#13364 deleted `Compositions`). GitHub subscriptions have
   consumers outside any run (settings, the session), so they go in
   `PLUGIN_PROCESS_LAYERS`. Three services that looked like candidates stay
   core and unconditional:
@@ -533,36 +536,31 @@ no `@tools` to `@agent` edges.
   `LoadedPlugin` like `mcp:<name>`, whose revision is a digest of the files
   it actually contributes (trust, below);
   its `skills/`, `agents/`, `commands/` and `.mcp.json` become data-table
-  entries; it enters `Composition.loaded`, so one switch hides everything it
-  contributes. Third parties never write TypeScript.
-- **The composition is recorded in the log, per activation.** Every
-  activation's `run.activate` row (the fresh launch and each resume) records
-  the composition it resolved. It goes on `run.activate` rather than
-  `flow.snapshot`, because only the tool-use loop writes snapshots
-  (`loop/rows.ts`), and a `codex`, `claude-agent` or `workflow-script`
-  activation never does. The recorded composition is (plugin set, the loaded plugins'
-  content digests, preset id), not only `toolsetHash`. Work done after a
-  resume is then attributed to the composition that actually ran it, so behaviour can be attributed
-  to a plugin revision across restarts. The record is for attribution: a
-  resumed run still resolves its own composition, as ruled (ledger,
-  2026-09-23), so no per-process value has to survive a restart. On resume
-  the existing rule stands, with an identity check (#13360): the offered
-  tools are the recorded tools intersected with what is available now, and a
-  recorded tool is offered only while its definition digest and its plugin's
-  revision still match what the run recorded. So a plugin disabled, replaced or
-  unavailable since the run started narrows the resumed run instead of
-  failing it. Exact historical replay of a plugin revision would need
-  revision retention, trust and missing-resource rules, and is not proposed.
-  Pinning the agent definition is decided separately (decision 10). A child
-  shares its parent's resource hold and records its own narrower offered set,
-  which `toolsetHash` already does.
-- **The offered surface is recorded exactly (#13360).** Each activation
-  records the exact tool declarations it offers and the rendered system
-  prompt, as digests with the content stored once. They go on `run.activate`
-  for the reason above: resume reads only the latest snapshot, which the loop
-  replaces at every turn. `ModelInvoker` checks at runtime that what it sends
-  matches the recorded digests, and a mismatch is a typed defect, never a
-  silent drift.
+  entries; it is one plugin on the Registry, so one switch hides everything
+  it contributes. That is a data plugin. The other third-party kind is a code
+  plugin, which runs out of process behind the typed RPC boundary with
+  granted capabilities. No third-party code loads in process (decided
+  2026-09-27).
+- **The offered surface is recorded per step (#13364).** Each step writes a
+  `tools.offered` row before its model request when the offered set or the
+  continuation changed: each tool's name, identity digest, `shown` digest,
+  plugin id and plugin revision, and the continuation's plugin. That row, not
+  `run.activate`, owns the record; `run.activate` carries only the category
+  and remoteness. Work after a resume is attributed to the plugin revisions
+  that ran it. On resume the existing rule stands, with an identity check:
+  a resumed activation's first step offers only recorded tools whose
+  identity still matches, and a call to a changed or missing tool settles as
+  `tool_unavailable`. So a plugin disabled, replaced or unavailable since the
+  run started narrows the resumed run instead of failing it. Exact
+  historical replay of a plugin revision would need revision retention,
+  trust and missing-resource rules, and is not proposed. Pinning the agent
+  definition is decided separately (decision 10). A child records its own
+  narrower offered set.
+- **Still to record: the rendered system prompt.** The step's row records
+  tools, not the prompt text. The target is a prompt digest on the same
+  step record, with the content stored once, and a runtime check in
+  `ModelInvoker` that what it sends matches the recorded digests; a mismatch
+  is a typed defect, never a silent drift.
 - **Replay safety is declared on the tool contract**, separately from
   `parallelSafe`: `parallelSafe` says a call may run beside others, and
   `replaySafe` says a call may run again after a crash. Resume re-executes
@@ -595,15 +593,21 @@ no `@tools` to `@agent` edges.
   records a change, and no env value can be read back or guessed offline from
   a row. A built-in plugin's revision is the constant `builtin`; each tool's
   identity covers its own schema, so rewording one tool does not change its
-  siblings. Trust keys on that revision. This also answers the deferred
-  project `.texra/mcp.json` trust prompt.
+  siblings. That is the **config revision**, used only for tool identity and
+  stale-call checks. It does not identify the executable a server runs.
+- **The trust revision is separate (decided 2026-09-27).** Trust is keyed per
+  plugin revision, and a code plugin's or a stdio MCP server's trust revision
+  includes a content digest of what actually runs: the resolved executable or
+  package files. A change to that content asks again, even when the config
+  revision is unchanged. This also answers the deferred project
+  `.texra/mcp.json` trust prompt.
 - **Third-party code runs out of process (decided 2026-09-27).** A
   third-party code plugin runs in a worker or child process and speaks one
   typed Effect RPC schema; its capabilities are the `R` its RPC surface is
-  granted. In-process loading is only for built-in plugins and for plugins
-  the user explicitly trusts at the in-process level. The loader's security
-  review covers the process boundary and the granted capability set. The
-  core-concepts note holds the ruling under Trust.
+  granted. No third-party code loads in process; in-process loading is only
+  for built-in plugins. The loader's security review covers the process
+  boundary and the granted capability set. The core-concepts note holds the
+  ruling under Trust.
 - **Self-improvement goes through data.** An approval-gated tool in the
   `setup` plugin installs, enables, trusts and saves presets. A change to
   tools or the continuation takes effect at the next step and is recorded
@@ -657,8 +661,9 @@ in `src/ui`, because webview frontends cannot import `@tools`.
    format fingerprint staying byte-identical; the documents fold slice replaces
    the category discrimination in `RunView`.
 6. `PLUGIN_PROMPT_SECTIONS` with the `memory-workflow` move.
-7. Installed plugins as loaded plugins; the composition on each `run.activate`;
-   presets; trust per hash; then the `setup` tool. Needs owner decisions.
+7. Installed plugins as loaded data plugins; the prompt digest on the step
+   record; presets; trust per trust revision; then the `setup` tool. Needs
+   owner decisions.
 
 ### Rulings
 
@@ -1906,9 +1911,13 @@ The owner delegated these calls and asked for the long-term option each time.
   native driver moves into core.
 - **Third-party code plugins run out of process by default.** They run in a
   worker or child process and speak one typed Effect RPC schema, the same
-  wire the hosts use. In-process loading is for built-in plugins and for
-  plugins the user explicitly trusts at the in-process level. Capabilities
-  are the `R` the plugin's RPC surface is granted. This scopes the loader's
+  wire the hosts use. Capabilities are the `R` the plugin's RPC surface is
+  granted. There are two kinds of third-party plugin: data plugins (the
+  Claude Code / Codex layout) load as data, and code plugins run out of
+  process. No third-party code loads in process; in-process loading is only
+  for built-in plugins. Trust keys on a trust revision that includes a
+  content digest of what runs; the config revision stays for tool identity
+  only. This scopes the loader's
   security review to the process boundary and the granted capability set,
   and reopens the RPC rejection in move 5 for this boundary.
 - **Format policy after 1.0: a version per row kind, migrated lazily at the
@@ -1931,7 +1940,7 @@ The owner delegated these calls and asked for the long-term option each time.
 Deletion earliest, least churn (the owner's review):
 
 1. Defects and hygiene: the `SessionHandle` dead imports, `heldSessions` and
-   `teardownDefaultSession`; `removeRun` through the publisher; the SDK calling
+   `teardownDefaultSession`; `removeRun` through the publisher (done, #13375); the SDK calling
    `bootstrapHost`; `forkScoped` and the `AppSignals` finalizer; an exhaustive
    `listingTypeOf`; the single-run lineage read. The security fix reported
    separately, and the second survey's defects, run alongside.
@@ -1947,8 +1956,8 @@ Deletion earliest, least churn (the owner's review):
    (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`) and plugin-owned row
    kinds with fold slices and per-kind versions. Paused children replace the
    dropped driver table, and the native driver moves into core.
-7. Installed plugins as loaded plugins, the composition on each `run.activate`,
-   presets and trust, then the `setup` tool. Needs owner decisions.
+7. Installed plugins as loaded data plugins, the prompt digest on the step
+   record, presets and trust, then the `setup` tool. Needs owner decisions.
 8. Anything else (`SessionKernel`, `ProcessLayer`, `SessionPlane`, `RunTrace`,
    and the structural halves of moves 9 to 13) only when a PR shows it deletes
    more than it adds.
@@ -1981,7 +1990,12 @@ In flight:
 - plugin services (`PLUGIN_PROCESS_LAYERS`, `PLUGIN_SESSION_LAYERS`);
 - plugin-owned row kinds.
 
-Moves 1, 4 to 13 and the rest of move 2 have not started.
+Also on the baseline: #13375 (move 1 PR 3, `removeRun` through the
+publisher), and the defect fixes #13376 (approval bypasses lost on resume;
+headless proposals decided without rows), #13372 (hosts deciding a run's
+outcome) and #13373 (external skill roots scoped to their project). With
+#13386, move 1 PRs 3 and 4 are done; PRs 1 and 2 remain. Moves 4 to 13 and
+the rest of move 2 have not started.
 
 ### Open for the implementing PR
 
