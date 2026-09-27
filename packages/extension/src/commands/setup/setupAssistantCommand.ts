@@ -298,7 +298,7 @@ export function launchSetupAssistant(
     yield* loadAgents();
 
     const launch = runAgent(
-      { kind: 'fresh', config },
+      { config },
       {
         session,
         onRunResolved: presentLaunchedProgressRun,

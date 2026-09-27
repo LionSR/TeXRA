@@ -1,5 +1,5 @@
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { ToolUseResumeData } from '@agent/runtime/SessionResumeRetrieval';
+import type { ResumeData } from '@agent/runtime/SessionResumeRetrieval';
 import type { RunId } from '@shared/schemas';
 
 /**
@@ -8,10 +8,9 @@ import type { RunId } from '@shared/schemas';
  * of it — the loop folds that from the ledger.
  */
 export function createToolUseResumeData(
-  overrides: Partial<ToolUseResumeData> = {},
-): ToolUseResumeData {
+  overrides: Partial<ResumeData> = {},
+): ResumeData {
   return {
-    type: 'toolUse',
     runId: '7e57ec000001' as RunId,
     agentConfig: AgentConfigSchema.parse({
       agent: 'test-agent',

@@ -15,7 +15,7 @@ import {
   type RecoveryContinuation,
 } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
-import { launchDesktopAgent } from './desktopAgentLaunch.js';
+import { presentDesktopFinalOutput } from './desktopAgentLaunch.js';
 
 /**
  * Process-lifetime owner of desktop run resumption. One process holds a
@@ -91,12 +91,7 @@ export class DesktopProcessResumeOwner {
         session,
         recovery,
         isCancellationRequested,
-        executeWorkflow: (config, id, modelCompatibilityKey) =>
-          launchDesktopAgent(
-            { kind: 'resume', config, runId: id },
-            { session, runtime },
-            { modelCompatibilityKey },
-          ),
+        presentResult: presentDesktopFinalOutput(session),
       });
     });
     // The resume is composed, not awaited: it takes the services the port's

@@ -248,31 +248,6 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
       }),
   );
 
-  it.effect('rejects a resumed launch that is not a tool-use agent', () =>
-    Effect.gen(function* () {
-      const resume = createToolUseResumeData({ runId: 'e80483' as RunId });
-      // The guard runs inside the lifecycle so its failure ends the started
-      // stream; the mocked lifecycle only has to run the body.
-      mocks.runFlowWithLifecycle.mockImplementationOnce(
-        (_context: unknown, runner: (...args: unknown[]) => unknown) =>
-          runner({}),
-      );
-      mocks.buildAgentLaunchContext.mockResolvedValueOnce({
-        setting: { agentCategory: AgentCategory.Workflow },
-        runId: resume.runId,
-        session: {
-          commitRunEnd: vi.fn(async () => {}),
-        },
-      } as unknown as AgentLaunchContext);
-
-      const error = yield* Effect.flip(resumeToolUseFromResumeData(resume));
-      expect(error).toBeInstanceOf(Error);
-      expect(error.message).toContain(
-        'Attempted to resume a non tool-use agent with resumeToolUseFromSnapshot.',
-      );
-    }),
-  );
-
   it.effect(
     'interrupts at flow attachment before substantive work starts',
     () =>

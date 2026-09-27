@@ -6,7 +6,6 @@ import { Cause, Deferred, Effect, Exit, Fiber, Result } from 'effect';
  * on the run lane. Recovered children use the same continuous delivery driver
  * as newly launched children and acknowledge each resumed turn separately.
  */
-import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   recordRunRefusal,
   type FollowUpFailureReason,
@@ -25,7 +24,6 @@ import {
   ownerPid,
   RUN_PHASE,
   USER_FOLLOW_UP_SUPPORT,
-  type ModelCompatibilityKey,
   type RunId,
 } from '@shared/schemas';
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
@@ -39,7 +37,7 @@ import { type AgentFlowResult } from './AgentFlowResult';
 import {
   ResumeSessionUnavailableError,
   resumeToolUseFromResumeData,
-  type SubagentRunOptions,
+  type ResumeToolUseFromResumeDataOptions,
 } from './executeAgent';
 import { classifyRun } from './runClassification';
 import { startChildRunLoop } from './childRunLoop';
@@ -47,7 +45,7 @@ import { Runs } from './runRegistry';
 import { RunLive } from './runRegistry';
 import {
   retrieveSessionResumeData,
-  type ToolUseResumeData,
+  type ResumeData,
 } from './SessionResumeRetrieval';
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './runRegistry';
@@ -61,12 +59,18 @@ export type ResumeRunResult =
       readonly outcome?: AgentFlowResult['outcome'] | typeof RUN_PHASE.WAITING;
       /** A root's lifetime past its idle acknowledgement; children have none. */
       readonly completion?: ResumeRunCompletion;
+      /** A workflow resume settles with its whole run: this is that run. */
+      readonly result?: AgentFlowResult;
     }
   | { readonly failed: FollowUpFailureReason };
 
 export interface ResumeRunOptions extends Pick<
-  SubagentRunOptions,
-  'approvalPromptsUnavailable' | 'onApprovalPolicyDenial'
+  ResumeToolUseFromResumeDataOptions,
+  | 'approvalPromptsUnavailable'
+  | 'onApprovalPolicyDenial'
+  | 'publishWorkflowOutput'
+  | 'beforeRunEnd'
+  | 'onRunClaimed'
 > {
   /** Session owning the resumed run's coordination state. */
   readonly session: SessionHandle;
@@ -91,16 +95,6 @@ export interface ResumeRunOptions extends Pick<
    * accepted this run. Failures propagate; cancellation is re-read afterwards.
    */
   readonly onResumeResolved?: () => Effect.Effect<void, Error, ProcessServices>;
-
-  /**
-   * Workflow launch owns stream acquisition and status transitions through
-   * `runAgent`; each host supplies its own launcher.
-   */
-  readonly executeWorkflow: (
-    config: AgentConfig,
-    runId: RunId,
-    modelCompatibilityKey: ModelCompatibilityKey | null | undefined,
-  ) => Effect.Effect<void, Error, ProcessServices>;
 }
 
 /**
@@ -132,8 +126,6 @@ export const resumeClaimedRun = Effect.fn('resumeClaimedRun')(function* (
 const CHANNEL = 'ResumeRun';
 
 const REFUSED: ResumeRunResult = { failed: 'not_resumable' };
-/** A workflow run carries no follow-up batch, so nothing awaits delivery. */
-const WORKFLOW_STARTED: ResumeRunResult = { started: true, delivered: true };
 
 /**
  * Only a ledger refusal of the saved rows names an unusable checkpoint.
@@ -255,22 +247,33 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
     }
   }
   // The category check above ensures every tool-use resume holds a lease.
-  if (resume.type === 'toolUse' && queueLease) {
+  if (queueLease) {
     return yield* resumeQueuedToolUse(session, resume, queueLease, options);
   }
+  // A workflow run takes no input, so there is no queue to hand over: the
+  // resume is its whole run, on the same resume path as a conversation.
+  if (cancelled()) return REFUSED;
   const launched = yield* Effect.result(
-    options.executeWorkflow(
-      resume.agentConfig,
-      resume.runId,
-      resume.modelCompatibilityKey,
-    ),
+    resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
   );
   if (Result.isFailure(launched)) {
     const refused = yield* refusalFor(launched.failure, session, runId);
     if (refused) return refused;
     return yield* Effect.fail(launched.failure);
   }
-  return WORKFLOW_STARTED;
+  const result = launched.success;
+  return { started: true, delivered: true, outcome: result.outcome, result };
+});
+
+/** What every resumed run takes from the resume's caller. */
+const runLaunchOptions = (options: ResumeRunOptions) => ({
+  session: options.session,
+  approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+  onApprovalPolicyDenial: options.onApprovalPolicyDenial,
+  isCancellationRequested: options.isCancellationRequested,
+  publishWorkflowOutput: options.publishWorkflowOutput,
+  beforeRunEnd: options.beforeRunEnd,
+  onRunClaimed: options.onRunClaimed,
 });
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
@@ -349,7 +352,7 @@ function refusalFor(
  */
 const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
   session: SessionHandle,
-  resume: ToolUseResumeData,
+  resume: ResumeData,
   queueLease: FollowUpRecoveryLease,
   options: ResumeRunOptions,
 ): Effect.fn.Return<ResumeRunResult, Error, AgentRunServices> {
@@ -403,10 +406,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
       for (const input of yield* queuedInput) admitted.add(input.followUpId);
       const idle = yield* Deferred.make<void>();
       const launchOptions = {
-        session,
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-        onApprovalPolicyDenial: options.onApprovalPolicyDenial,
-        isCancellationRequested: options.isCancellationRequested,
+        ...runLaunchOptions(options),
         onCancellationAtFlowAttachment: () => {
           cancelledAtFlowAttachment = true;
         },

@@ -306,7 +306,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       readonly shutdownScope: CliConfigExecuteOptions['shutdownScope'];
       readonly recoveryInputIsDurable?: boolean;
       readonly runId?: RunId;
-      readonly modelCompatibilityKey?: CliConfigExecuteOptions['modelCompatibilityKey'];
+      readonly agentRuns?: CliConfigExecuteOptions['agentRuns'];
     },
   ): Effect.fn.Return<number, Error, CliRunServices> {
     const session = yield* options.session;
@@ -366,7 +366,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       runtime: options.runtime,
       shutdownScope: options.shutdownScope,
       runId: options.runId,
-      modelCompatibilityKey: options.modelCompatibilityKey,
+      agentRuns: options.agentRuns,
       onInterruptedRunFinalized: recoveryInputIsDurable
         ? (runId) => writeResumeHint(runId, true)
         : undefined,

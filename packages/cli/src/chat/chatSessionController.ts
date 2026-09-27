@@ -565,15 +565,10 @@ export function createChatSessionController(
     approval: ReturnType<typeof cliToolUseApprovalOptions>,
   ): Pick<
     ResumeRunOptions,
-    | 'session'
-    | 'approvalPromptsUnavailable'
-    | 'onApprovalPolicyDenial'
-    | 'executeWorkflow'
+    'session' | 'approvalPromptsUnavailable' | 'onApprovalPolicyDenial'
   > => ({
     session: runtimeSession,
     ...approval,
-    executeWorkflow: (_config, runId) =>
-      Effect.fail(new Error(workflowResumeRefusal(runId))),
   });
 
   // Per launch: attach the root's terminal-result presenter until it
@@ -631,7 +626,7 @@ export function createChatSessionController(
             catch: ensureError,
           });
           const result = yield* agentRuns.launch(
-            { kind: 'fresh', config: registeredConfig, runId },
+            { config: registeredConfig, runId },
             {
               session: runtimeSession,
               enforceCategory: true,
@@ -921,7 +916,8 @@ export function createChatSessionController(
         const config = yield* agentRuns
           .records(runtimeSession, runId)
           .readConfig();
-        if (!config) return false;
+        // A workflow run resumes headless (`texra resume`), never in a chat.
+        if (config?.agentCategory !== AgentCategory.ToolUse) return false;
         if (isCancellationRequested()) return false;
         // The parent edge as the fold holds it, read cold: a resume at
         // startup must not race the live fold's first replay.

@@ -206,28 +206,23 @@ export function createExtensionHostRequests(
   const multipleFilePickers = createFileSelectionPickers(session);
 
   /**
-   * Launch a validated request directly, as the desktop's `runValidated`
-   * does: the surface's launch and the shared run actions both reach
-   * `runAgent` here. The launch program takes its process services from this
+   * Launch a validated fresh request directly, as the desktop's
+   * `runValidated` does: the surface's launch and the shared run actions
+   * both reach `runAgent` here. The launch program takes its process services from this
    * runtime's context on the fiber that runs it, as the resume port's program
    * does.
    */
   const runValidated: HostRunActionPorts['runValidated'] = (
-    { config, runId },
+    request,
     runOptions = {},
   ) => {
-    const launch = runAgent(
-      runId === undefined
-        ? { kind: 'fresh', config }
-        : { kind: 'resume', config, runId },
-      {
-        session,
-        preferHelperModel: runOptions.preferHelperModel ?? false,
-        ownApiKeyFallback: runOptions.ownApiKeyFallback,
-        onRun: runOptions.onRun,
-        onRunResolved: presentLaunchedProgressRun,
-      },
-    ).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
+    const launch = runAgent(request, {
+      session,
+      preferHelperModel: runOptions.preferHelperModel ?? false,
+      ownApiKeyFallback: runOptions.ownApiKeyFallback,
+      onRun: runOptions.onRun,
+      onRunResolved: presentLaunchedProgressRun,
+    }).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };
 

@@ -77,7 +77,10 @@ async function installStoragePlatform(): Promise<void> {
  * resumability read all land in the suite's mock bag.
  */
 const agentRunsFake = {
-  launch: (...args: unknown[]) => Effect.promise(() => mocks.runAgent(...args)),
+  launch:
+    () =>
+    (...args: unknown[]) =>
+      Effect.promise(() => mocks.runAgent(...args)),
   finalize: (_session: unknown, input: unknown) =>
     Effect.promise(() => mocks.finalizeRun(input)),
   resumability: (...args: unknown[]) =>
@@ -139,11 +142,8 @@ const COMPLETED_WORKFLOW_RUN: Parameters<
   runId: 'exec-1' as RunId,
 };
 
-function baseRequest(kind: 'fresh' | 'resume' = 'fresh'): CliRequest {
-  const request = { config: {}, runId: 'exec-1' } as const;
-  return kind === 'fresh'
-    ? ({ kind, ...request } as CliRequest)
-    : ({ kind, ...request } as CliRequest);
+function baseRequest(): CliRequest {
+  return { config: {}, runId: 'exec-1' } as unknown as CliRequest;
 }
 
 function toolUseConfig() {
@@ -558,7 +558,7 @@ describe('executeCliRequest', () => {
         // enters through the injected launch stand-in.
         const defectLaunch: typeof agentRunsFake = {
           ...agentRunsFake,
-          launch: () => Effect.die(new Error('disk full')),
+          launch: () => () => Effect.die(new Error('disk full')),
         };
 
         const error = yield* Effect.flip(
@@ -623,102 +623,97 @@ describe('executeCliRequest', () => {
 
   // it.live for the shutdown choreography below: the run is forked in-fiber,
   // but the command's shutdown step settles on the process runtime.
-  it.live.each([
-    { label: 'fresh', kind: 'fresh' },
-    { label: 'resumed', kind: 'resume' },
-  ] as const)(
-    'marks $label owned runs interrupted during platform shutdown',
-    ({ kind }) =>
-      Effect.gen(function* () {
-        const { platform, executeCliRequest } = yield* Effect.promise(
-          loadExecuteCliOnInstalledHost,
-        );
-        const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
-        const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
-        mocks.commitRunEndAfterArtifacts.mockImplementationOnce(
-          async (session, runId) =>
-            Effect.runPromise(session.settlePublications(runId)),
-        );
-        let settleRecoveryWrite!: () => void;
-        const recoveryWrite = new Promise<void>((resolve) => {
-          settleRecoveryWrite = resolve;
-        });
-        const finalized = yield* Deferred.make<void>();
-        const onInterruptedRunFinalized = vi.fn(() => {
-          Deferred.doneUnsafe(finalized, Effect.void);
-          return recoveryWrite;
-        });
-        const published = yield* Deferred.make<LeaseOptions>();
-        const hangingRun = stubHangingRun(published);
+  it.live('marks owned runs interrupted during platform shutdown', () =>
+    Effect.gen(function* () {
+      const { platform, executeCliRequest } = yield* Effect.promise(
+        loadExecuteCliOnInstalledHost,
+      );
+      const { flushSpy } = yield* Effect.promise(spyOnArtifactFlush);
+      const killSpy = vi.spyOn(testDefaultSession().runs, 'stop');
+      mocks.commitRunEndAfterArtifacts.mockImplementationOnce(
+        async (session, runId) =>
+          Effect.runPromise(session.settlePublications(runId)),
+      );
+      let settleRecoveryWrite!: () => void;
+      const recoveryWrite = new Promise<void>((resolve) => {
+        settleRecoveryWrite = resolve;
+      });
+      const finalized = yield* Deferred.make<void>();
+      const onInterruptedRunFinalized = vi.fn(() => {
+        Deferred.doneUnsafe(finalized, Effect.void);
+        return recoveryWrite;
+      });
+      const published = yield* Deferred.make<LeaseOptions>();
+      const hangingRun = stubHangingRun(published);
 
-        const run = yield* Effect.forkChild(
-          executeCliRequest(baseRequest(kind), cliContext(), {
-            onInterruptedRunFinalized,
-          }),
-        );
-        const leaseOptions = yield* Deferred.await(published);
-        // The stub resumes this fiber synchronously, so one macrotask lets the
-        // rest of the stub (the tracked launch handle) run first.
-        yield* settle;
-        expect(leaseOptions.onRunClaimed).toBeDefined();
-        const shutdown = yield* Effect.forkChild(
-          Scope.close(platform.shutdownScope, Exit.void),
-          { startImmediately: true },
-        );
-        yield* settle;
-        expect(mocks.finalizeRun).not.toHaveBeenCalled();
-        leaseOptions.onRunClaimed?.('exec-1' as RunId);
-        yield* settle;
-        expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
-          detachActiveChildren: false,
-        });
-        expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
+      const run = yield* Effect.forkChild(
+        executeCliRequest(baseRequest(), cliContext(), {
+          onInterruptedRunFinalized,
+        }),
+      );
+      const leaseOptions = yield* Deferred.await(published);
+      // The stub resumes this fiber synchronously, so one macrotask lets the
+      // rest of the stub (the tracked launch handle) run first.
+      yield* settle;
+      expect(leaseOptions.onRunClaimed).toBeDefined();
+      const shutdown = yield* Effect.forkChild(
+        Scope.close(platform.shutdownScope, Exit.void),
+        { startImmediately: true },
+      );
+      yield* settle;
+      expect(mocks.finalizeRun).not.toHaveBeenCalled();
+      leaseOptions.onRunClaimed?.('exec-1' as RunId);
+      yield* settle;
+      expect(killSpy).toHaveBeenCalledExactlyOnceWith('exec-1', {
+        detachActiveChildren: false,
+      });
+      expect(mocks.commitRunEndAfterArtifacts).not.toHaveBeenCalled();
 
-        mockCancelledOutcome();
-        hangingRun.resolve(COMPLETED_RUN);
-        yield* Deferred.await(finalized);
-        yield* settle;
-        expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
-        let shutdownResolved = false;
-        shutdown.addObserver(() => {
-          shutdownResolved = true;
-        });
-        yield* settle;
-        expect(shutdownResolved).toBe(false);
-        settleRecoveryWrite();
-        yield* Fiber.join(shutdown);
-        expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledOnce();
-        expect(flushSpy).toHaveBeenCalled();
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(
-          expect.objectContaining({
-            runId: 'exec-1',
-            outcome: RUN_OUTCOME.CANCELLED,
-          }),
-        );
-        expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
-          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-        expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
-          'exec-1',
-        );
-        expect(
-          mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0],
-        ).toBeLessThan(
-          onInterruptedRunFinalized.mock.invocationCallOrder[0] ??
-            Number.POSITIVE_INFINITY,
-        );
-        expect(yield* Fiber.join(run)).toEqual({
-          ok: true,
-          outcomePersisted: true,
-          result: {
-            outcome: 'cancelled',
-            output: { category: 'toolUse', response: '', files: [] },
-            runId: 'exec-1',
-          },
-        });
-        expect(mocks.finalizeRun).toHaveBeenCalledOnce();
-      }),
+      mockCancelledOutcome();
+      hangingRun.resolve(COMPLETED_RUN);
+      yield* Deferred.await(finalized);
+      yield* settle;
+      expect(onInterruptedRunFinalized).toHaveBeenCalledOnce();
+      let shutdownResolved = false;
+      shutdown.addObserver(() => {
+        shutdownResolved = true;
+      });
+      yield* settle;
+      expect(shutdownResolved).toBe(false);
+      settleRecoveryWrite();
+      yield* Fiber.join(shutdown);
+      expect(mocks.commitRunEndAfterArtifacts).toHaveBeenCalledOnce();
+      expect(flushSpy).toHaveBeenCalled();
+      expect(mocks.finalizeRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runId: 'exec-1',
+          outcome: RUN_OUTCOME.CANCELLED,
+        }),
+      );
+      expect(mocks.finalizeRun.mock.invocationCallOrder[0]).toBeLessThan(
+        mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
+      expect(onInterruptedRunFinalized).toHaveBeenCalledExactlyOnceWith(
+        'exec-1',
+      );
+      expect(
+        mocks.commitRunEndAfterArtifacts.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        onInterruptedRunFinalized.mock.invocationCallOrder[0] ??
+          Number.POSITIVE_INFINITY,
+      );
+      expect(yield* Fiber.join(run)).toEqual({
+        ok: true,
+        outcomePersisted: true,
+        result: {
+          outcome: 'cancelled',
+          output: { category: 'toolUse', response: '', files: [] },
+          runId: 'exec-1',
+        },
+      });
+      expect(mocks.finalizeRun).toHaveBeenCalledOnce();
+    }),
   );
 
   it.live(

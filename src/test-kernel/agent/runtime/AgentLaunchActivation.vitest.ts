@@ -248,12 +248,8 @@ describe('native agent launch activation', () => {
                   ? executeAgent(definition, FRESH_RUN_ID, {
                       session,
                       parentRunId,
-                      modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
                     })
-                  : executeAgent(definition, FRESH_RUN_ID, {
-                      session,
-                      modelCompatibilityKey: MODEL_COMPATIBILITY_KEY,
-                    }),
+                  : executeAgent(definition, FRESH_RUN_ID, { session }),
               ),
             ),
           { parentRunId },

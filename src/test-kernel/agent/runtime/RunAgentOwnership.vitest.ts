@@ -154,9 +154,7 @@ const EXECUTE_RESULT = {
 };
 const FINALIZE_RESULT = { ok: true };
 
-type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'> & {
-  readonly kind?: 'fresh' | 'resume';
-};
+type RunOptions = Omit<Parameters<typeof runAgent>[1], 'session'>;
 
 /**
  * `runAgent` over the fake host's process services: the suite runs it on the
@@ -167,9 +165,9 @@ function launchRun(...args: Parameters<typeof runAgent>) {
   return Effect.provide(runAgent(...args), fakeProcessServices());
 }
 
-function launch({ kind = 'resume', ...options }: RunOptions = {}) {
+function launch(options: RunOptions = {}) {
   return launchRun(
-    { kind, config: CONFIG, runId: RUN_ID },
+    { config: CONFIG, runId: RUN_ID },
     { session: SESSION, ...options },
   );
 }
@@ -190,7 +188,7 @@ function realRunRegistry(): RunRegistry {
 /** Launches on a real registry, the session's own runs replaced by it. */
 function launchOn(runs: RunRegistry) {
   return launchRun(
-    { kind: 'resume', config: CONFIG, runId: RUN_ID },
+    { config: CONFIG, runId: RUN_ID },
     { session: { ...(SESSION as object), runs } as never },
   );
 }
@@ -220,138 +218,35 @@ describe('runAgent run ownership', () => {
     mocks.executeAgent.mockResolvedValue(EXECUTE_RESULT);
   });
 
-  it.effect.each(['fresh', 'resume'] as const)(
-    'refuses a %s launch while the first is still in its lineage reads',
-    (kind) =>
+  it.effect(
+    'refuses a second launch while the first is still registering',
+    () =>
       Effect.gen(function* () {
         // A real registry: the first launch's admission is its fiber on the
         // roster, so the duplicate is refused against it wherever the first
-        // launch has got to — here, mid-lineage-read.
+        // launch has got to — here, mid-registration.
         const runs = realRunRegistry();
-        let finishRead!: (value: null) => void;
-        mocks.readRunEnd.mockImplementationOnce(
+        let finishRegistration!: () => void;
+        mocks.registerRun.mockImplementationOnce(
           () =>
-            new Promise<null>((resolve) => {
-              finishRead = resolve;
+            new Promise<void>((resolve) => {
+              finishRegistration = resolve;
             }),
         );
         const first = yield* Effect.forkChild(launchOn(runs), {
           startImmediately: true,
         });
-        expect(
-          yield* Effect.flip(
-            launchRun(
-              { kind, config: CONFIG, runId: RUN_ID },
-              { session: { ...(SESSION as object), runs } as never },
-            ),
-          ),
-        ).toMatchObject({
+        expect(yield* Effect.flip(launchOn(runs))).toMatchObject({
           message: `Run is already running: ${RUN_ID}`,
         });
         // The first launch's stop is its fiber's interruption.
         expect(runs.interrupt(RUN_ID)).toBe(true);
-        finishRead(null);
+        finishRegistration();
         const exit = yield* Fiber.await(first);
         expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
           true,
         );
       }),
-  );
-
-  it.effect('refuses a resume of a missing run', () =>
-    Effect.gen(function* () {
-      mocks.runExists.mockReturnValueOnce(false);
-      expect(
-        yield* Effect.flip(
-          launchRun(
-            { kind: 'resume', config: CONFIG, runId: RUN_ID },
-            { session: SESSION },
-          ),
-        ),
-      ).toMatchObject({
-        message: `Run not found: ${RUN_ID}`,
-      });
-      // The launch owns no handle: tracking is the lifecycle's, which the
-      // refusal never reaches.
-      expect(trackRun).not.toHaveBeenCalled();
-    }),
-  );
-
-  it.effect(
-    'admits a resumed child under the parent its `run.start` names',
-    () =>
-      Effect.gen(function* () {
-        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
-
-        yield* launch();
-
-        // The persisted edge — never a caller's word — is what the run's
-        // lifecycle launches under, so the registry's child admission (and a
-        // parent's stop) reaches the child through it.
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.anything(),
-          RUN_ID,
-          expect.objectContaining({
-            parentRunId: PARENT_RUN_ID,
-            resumed: true,
-          }),
-        );
-      }),
-  );
-
-  it.effect(
-    'takes a detach another host committed while the launch prepared',
-    () =>
-      Effect.gen(function* () {
-        persistedRuns.set(RUN_ID, { parentId: PARENT_RUN_ID });
-        // The foreign `run.detach` folds before this launch owns the run.
-        mocks.acquireClaims.mockImplementationOnce(() =>
-          Effect.sync(() => {
-            persistedRuns.delete(RUN_ID);
-            return Effect.void;
-          }),
-        );
-
-        yield* launch();
-
-        // The severed edge crossed the launch: the registry applied it to
-        // every local record it names, and the run's lifecycle launches
-        // parentless.
-        expect(sessionRuns.detachChildren).toHaveBeenCalledWith(PARENT_RUN_ID, [
-          RUN_ID,
-        ]);
-        expect(mocks.executeAgent).toHaveBeenCalledWith(
-          expect.anything(),
-          RUN_ID,
-          expect.not.objectContaining({ parentRunId: expect.anything() }),
-        );
-      }),
-  );
-
-  it.effect('stops a resumed launch killed during its lineage read', () =>
-    Effect.gen(function* () {
-      const runs = realRunRegistry();
-      let finishRead!: (value: null) => void;
-      mocks.readRunEnd.mockImplementationOnce(
-        () =>
-          new Promise<null>((resolve) => {
-            finishRead = resolve;
-          }),
-      );
-
-      const fiber = yield* Effect.forkChild(launchOn(runs), {
-        startImmediately: true,
-      });
-      // The launch's fiber exists from its first instant — the lineage reads
-      // run inside the forked operation — so a stop by run id reaches it.
-      expect(runs.interrupt(RUN_ID)).toBe(true);
-      finishRead(null);
-      const exit = yield* Fiber.await(fiber);
-      expect(Exit.isFailure(exit) && Cause.hasInterrupts(exit.cause)).toBe(
-        true,
-      );
-      expect(mocks.executeAgent).not.toHaveBeenCalled();
-    }),
   );
 
   it.effect(
@@ -369,7 +264,7 @@ describe('runAgent run ownership', () => {
 
         const fiber = yield* Effect.forkChild(
           launchRun(
-            { kind: 'fresh', config: CONFIG, runId: RUN_ID },
+            { config: CONFIG, runId: RUN_ID },
             { session: { ...(SESSION as object), runs } as never },
           ),
           { startImmediately: true },
@@ -387,7 +282,7 @@ describe('runAgent run ownership', () => {
 
   it.effect('registers and releases an explicitly identified fresh run', () =>
     Effect.gen(function* () {
-      yield* launch({ kind: 'fresh' });
+      yield* launch();
 
       expect(mocks.registerRun).toHaveBeenCalledOnce();
       // #9590 obligation 1: registration carries the birth identity and
@@ -411,19 +306,6 @@ describe('runAgent run ownership', () => {
     }),
   );
 
-  it.effect('acquires and releases ownership for an existing run', () =>
-    Effect.gen(function* () {
-      yield* launch();
-
-      expect(mocks.registerRun).not.toHaveBeenCalled();
-      expect(mocks.acquireClaims).toHaveBeenCalledWith(
-        qualifyAggregateId('run', RUN_ID),
-      );
-      expect(mocks.releaseClaims).toHaveBeenCalledWith(
-        qualifyAggregateId('run', RUN_ID),
-      );
-    }),
-  );
   it.effect(
     'registers the resolved category and passes the same definition to run',
     () =>
@@ -432,7 +314,7 @@ describe('runAgent run ownership', () => {
         mocks.prepareAgentDefinition.mockReturnValueOnce(definition);
 
         yield* launchRun(
-          { kind: 'fresh', config: CONFIG, runId: RUN_ID },
+          { config: CONFIG, runId: RUN_ID },
           { session: SESSION },
         );
 
@@ -464,7 +346,7 @@ describe('runAgent run ownership', () => {
           order.push('release');
         }),
       );
-      expect(yield* Effect.flip(launch({ kind: 'fresh' }))).toBe(launchError);
+      expect(yield* Effect.flip(launch())).toBe(launchError);
 
       expect(order).toEqual(['finalize', 'release']);
       expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
@@ -484,36 +366,13 @@ describe('runAgent run ownership', () => {
         },
       );
 
-      expect(yield* Effect.flip(launch({ kind: 'fresh' }))).toBe(launchError);
+      expect(yield* Effect.flip(launch())).toBe(launchError);
 
       expect(mocks.finalizeRun).not.toHaveBeenCalled();
       expect(mocks.releaseClaims).toHaveBeenCalledWith(
         qualifyAggregateId('run', RUN_ID),
       );
     }),
-  );
-
-  it.effect(
-    'restores a cancelled outcome when resume fails before lifecycle startup',
-    () =>
-      Effect.gen(function* () {
-        const launchError = new Error('resume launch failed');
-        // Read twice: the snapshot, then the revalidation before it is restored.
-        mocks.readRunEnd.mockReturnValue({
-          outcome: RUN_OUTCOME.CANCELLED,
-        });
-        mocks.executeAgent.mockRejectedValueOnce(launchError);
-
-        expect(yield* Effect.flip(launch())).toBe(launchError);
-
-        expect(mocks.finalizeRun).toHaveBeenCalledWith(SESSION, {
-          runId: RUN_ID,
-          outcome: RUN_OUTCOME.CANCELLED,
-        });
-        expect(mocks.releaseClaims).toHaveBeenCalledWith(
-          qualifyAggregateId('run', RUN_ID),
-        );
-      }),
   );
 
   it.effect('persists final host artifacts before releasing ownership', () =>
@@ -535,7 +394,6 @@ describe('runAgent run ownership', () => {
       );
 
       yield* launch({
-        kind: 'fresh',
         beforeRunEnd: () =>
           Effect.sync(() => {
             order.push('artifacts');
@@ -557,7 +415,7 @@ describe('runAgent run ownership', () => {
       Effect.gen(function* () {
         const publishWorkflowOutput = vi.fn();
 
-        yield* launch({ kind: 'fresh', publishWorkflowOutput });
+        yield* launch({ publishWorkflowOutput });
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           { config: CONFIG },
@@ -578,7 +436,6 @@ describe('runAgent run ownership', () => {
           return EXECUTE_RESULT;
         });
         yield* launch({
-          kind: 'fresh',
           beforeRunEnd: () =>
             Effect.sync(() => {
               order.push('host-artifacts-and-release');
@@ -632,7 +489,6 @@ describe('runAgent run ownership', () => {
 
         const failure = yield* Effect.flip(
           launch({
-            kind: 'fresh',
             beforeRunEnd: () => Effect.fail(artifactError),
           }),
         );
