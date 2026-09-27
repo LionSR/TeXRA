@@ -121,7 +121,7 @@ describe('UsageMonitor', () => {
         outputTokens: 10,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai-chat' as const,
+        provider: 'openai-responses' as const,
       };
       recordRound(state, round);
       monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
@@ -152,7 +152,7 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai-chat' as const,
+        provider: 'openai-responses' as const,
       };
       recordRound(state, usage);
       monitor.recordUsage(state.totals, state.latestUsage, testModelInfo);
@@ -182,7 +182,7 @@ describe('UsageMonitor', () => {
         outputTokens: 2,
         cost: 0.01,
         responseTimeMs: 50,
-        provider: 'openai-chat' as const,
+        provider: 'openai-responses' as const,
       });
       monitor.recordUsage(state.totals, state.latestUsage, switched);
 

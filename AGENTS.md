@@ -155,8 +155,9 @@ suite to the slow tier; removing it moves it back. The tier is not a target to
 opt into — write the suite the durable way and it lands there.
 
 `packages/llm` carries a third project, in its own
-`packages/llm/vitest.live.config.mjs`: one suite per HTTP protocol, run
-against the real provider (`npm run test:live`). It sits outside
+`packages/llm/vitest.live.config.mjs`: one suite per HTTP route (a vendor
+endpoint and the credential it takes, so a coding-plan subscription key gets
+its own suite beside the API key's), run against the real provider (`npm run test:live`). It sits outside
 `vitest.config.mjs` on purpose — it spends money and needs the network, so it
 is never part of `npm test`. Each suite gates itself on its route's key and
 skips without it; CI runs it only on the `live-llm` label

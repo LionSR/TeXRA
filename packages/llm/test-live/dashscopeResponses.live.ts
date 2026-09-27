@@ -3,18 +3,17 @@ import { openaiResponsesModel } from '../src/openaiResponses.js';
 import { liveProtocol } from './support.js';
 
 liveProtocol({
-  protocol: 'openai-responses',
-  apiKeyEnv: 'OPENAI_API_KEY',
-  // Stored responses plus response chaining: the codec returns an anchor the
-  // next turn sends in place of the prefix it covers.
+  protocol: 'openai-responses (DashScope)',
+  apiKeyEnv: 'DASHSCOPE_API_KEY',
+  // DashScope stores responses by default and chains on their ids.
   continuation: 'supported',
   bind: (apiKey) =>
     openaiResponsesModel(
       {
         protocol: 'openai-responses',
-        requestedModel: 'gpt-4.1-mini-2025-04-14',
+        requestedModel: 'qwen3-max',
         deployment: {
-          endpoint: 'https://api.openai.com/v1',
+          endpoint: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
           credentialScope: 'live',
         },
         background: 'unsupported',
@@ -23,13 +22,13 @@ liveProtocol({
         supportsMaxOutputTokens: true,
         supportsStorage: true,
         supportsResponseChaining: true,
-        supportsDocumentInput: true,
+        supportsDocumentInput: false,
         webSocketStreamParameter: 'implicit',
         allowedReasoningEfforts: [],
         instructions: { kind: 'optional' },
         continuationInheritsInstructions: false,
-        supportsForcedToolChoice: true,
-        requestDialect: 'openai',
+        supportsForcedToolChoice: false,
+        requestDialect: 'compatible',
         defaults: {
           temperature: 0,
           maxOutputTokens: 2048,

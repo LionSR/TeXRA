@@ -110,7 +110,7 @@ const pumpClock = Effect.forkChild(
 );
 
 const ORIGIN = {
-  protocol: 'openai-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'gpt-test',
   deployment: {
@@ -124,12 +124,15 @@ const PREPARED: ResolvedTurn = ResolvedTurnSchema.parse({
   mode: 'foreground',
   messages: [{ role: 'user', content: [{ kind: 'text', text: 'go' }] }],
   tools: [],
+  transport: { kind: 'http' },
   controls: {
     temperature: null,
     maxOutputTokens: 1024,
+    store: false,
     parallelToolCalls: false,
     toolChoice: 'auto',
-    effort: null,
+    reasoning: null,
+    serviceTier: null,
   },
 });
 

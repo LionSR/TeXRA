@@ -25,7 +25,7 @@ import { installHostAuth, setupPlatform } from '@test/support/setupPlatform';
 function usageEntry(model: string) {
   return {
     model,
-    provider: 'openai-chat' as const,
+    provider: 'openai-responses' as const,
     agentName: 'agent',
     agentCategory: AgentCategory.ToolUse,
     inputTokens: 1,

@@ -17,7 +17,7 @@ const tiers = [
     icon: 'bolt',
     kind: 'Simple',
     cue: 'Corrections, quick edits',
-    models: ['gpt6--', 'deepseek', 'haiku45'],
+    models: ['gpt6--', 'deepseek41', 'haiku45'],
   },
   {
     icon: 'sparkle',
@@ -29,7 +29,7 @@ const tiers = [
     icon: 'lightbulb',
     kind: 'Reasoning-heavy',
     cue: 'Deep, multi-step thinking',
-    models: ['fable51', 'sonnet5T', 'opus55', 'deepseekT'],
+    models: ['fable51', 'sonnet5T', 'opus55', 'deepseek41T'],
   },
 ];
 </script>

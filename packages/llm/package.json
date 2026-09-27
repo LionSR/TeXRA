@@ -7,7 +7,6 @@
   "exports": {
     "./openrouter-chat": "./src/openrouterChat.ts",
     "./turn": "./src/turn.ts",
-    "./openai-chat": "./src/openaiChat.ts",
     "./openai-responses": "./src/openaiResponses.ts",
     "./anthropic-messages": "./src/anthropicMessages.ts",
     "./google-interactions": "./src/googleInteractions.ts",

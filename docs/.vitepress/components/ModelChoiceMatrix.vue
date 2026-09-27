@@ -12,7 +12,7 @@ const rows = [
     icon: 'bolt',
     use: 'Simple tasks',
     note: 'Fast, cheap models',
-    models: ['gpt6--', 'deepseek', 'haiku45'],
+    models: ['gpt6--', 'deepseek41', 'haiku45'],
   },
   {
     icon: 'chart-line',
@@ -30,7 +30,7 @@ const rows = [
     icon: 'sparkle',
     use: 'Reasoning-heavy',
     note: 'Thinking models',
-    models: ['fable51', 'opus55', 'sonnet5T', 'deepseekT', 'kimi3'],
+    models: ['fable51', 'opus55', 'sonnet5T', 'deepseek41T', 'kimi3'],
   },
   {
     icon: 'file-lines',

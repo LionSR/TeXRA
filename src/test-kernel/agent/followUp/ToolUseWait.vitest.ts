@@ -101,7 +101,7 @@ import type { Model, TurnResult } from '@texra-ai/llm/turn';
 // ---------------------------------------------------------------------------
 
 const ORIGIN = {
-  protocol: 'deepseek-chat',
+  protocol: 'openai-responses',
   codecVersion: 1,
   requestedModel: 'test-model',
   deployment: {

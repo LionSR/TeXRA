@@ -7,8 +7,8 @@ import { Effect } from 'effect';
  * per-model base URL, then the route's own (Kimi Code, OpenRouter), then a
  * per-provider dashboard endpoint, then the provider plugin's default
  * (`baseUrl` in `@shared/constants/modelProviderPlugins`), picked by region
- * when it has two. GLM takes its Coding Plan path when the route decided the
- * plan pays (`@model/modelRoute`).
+ * when it has two. A GLM Coding Plan key takes its region's Responses
+ * endpoint, the same one an API key does.
  */
 
 import type { StateReadFailed } from '@platform/interfaces';
@@ -35,12 +35,6 @@ function normalizeProviderEndpoint(input: string): string {
   return `${parsed.host}${parsed.pathname}`.replace(/\/+$/, '');
 }
 
-/** The GLM Coding Plan endpoint, by region. */
-const GLM_CODING_PLAN_BASE_URLS = {
-  china: 'https://open.bigmodel.cn/api/coding/paas/v4',
-  international: 'https://api.z.ai/api/coding/paas/v4',
-} as const;
-
 export function resolveRouteEndpoint(
   stores: SettingsStores,
   config: Pick<ModelConfig, 'name' | 'provider' | 'baseUrl'>,
@@ -65,8 +59,6 @@ export function resolveRouteEndpoint(
     const region = (yield* useChinaRegion(stores, config.provider))
       ? 'china'
       : 'international';
-    return route.usageRoute === 'glm-coding-plan-subscription'
-      ? GLM_CODING_PLAN_BASE_URLS[region]
-      : baseUrl[region];
+    return baseUrl[region];
   });
 }

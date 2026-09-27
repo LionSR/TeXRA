@@ -39,6 +39,7 @@ import {
   type TurnEvent,
   type TurnRequest,
   type TurnResult,
+  sameModelOrigin,
 } from '@texra-ai/llm/turn';
 
 import { maybeSaveDebugObject } from '@agent/debug/debugMessageSaver';
@@ -306,8 +307,8 @@ export const modelInvokerLayer = (): Layer.Layer<
        * The semantic request an attempt admits: this run's history as the
        * ledger folded it, plus the caller's system, tools and stop sequences
        * and the continuation the last response left, when the binding still
-       * matches its origin. A resume rebuilds the admitted turn from the same
-       * inputs, so no row has to carry a second copy of the history.
+       * matches its whole origin. A resume rebuilds the admitted turn from
+       * the same inputs, so no row has to carry a second copy of the history.
        */
       const turnRequestFor = (
         state: RunState,
@@ -323,8 +324,7 @@ export const modelInvokerLayer = (): Layer.Layer<
           ? { toolChoice: request.toolChoice }
           : {}),
         ...(state.continuation !== null &&
-        state.continuation.origin.protocol === bound.origin.protocol &&
-        state.continuation.origin.requestedModel === bound.origin.requestedModel
+        sameModelOrigin(state.continuation.origin, bound.origin)
           ? { continuation: state.continuation }
           : {}),
       });

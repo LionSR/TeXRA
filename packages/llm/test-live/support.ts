@@ -5,7 +5,7 @@
  * Everything else in this package is proved against a synthetic transport, so
  * these suites are the only evidence that a real provider's bytes survive the
  * codec. They are therefore deliberately thin: one describe per advertised
- * capability, one request shape shared by all eleven routes, and no per-route
+ * capability, one request shape shared by all thirteen routes, and no per-route
  * assertion beyond what that route's contract actually promises.
  *
  * The shared requests carry no optional controls. Each codec refuses a
@@ -14,7 +14,7 @@
  * one request every codec admits is system text, messages and tools. A route
  * that needs more states it in its own configuration defaults.
  *
- * `vscode-lm` is the twelfth protocol and is absent by construction: it is
+ * `vscode-lm` is absent by construction: it is
  * acquired through the extension host's `vscode.lm` API
  * (`packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts`), so a
  * live check of it needs an Extension Development Host, not this Vitest
@@ -162,7 +162,10 @@ function followUp(result: TurnResult, continuation: Continuation): TurnRequest {
 }
 
 interface LiveProtocol {
-  /** The protocol as `TurnProtocolSchema` names it; also the suite name. */
+  /**
+   * The protocol as `TurnProtocolSchema` names it, qualified by the vendor
+   * where two routes share one codec; also the suite name.
+   */
   readonly protocol: string;
   /** The environment variable holding this route's credential. */
   readonly apiKeyEnv: string;
@@ -257,17 +260,14 @@ export function liveProtocol(spec: LiveProtocol): void {
           const usage = result.usage;
           // Every principal count in `UsageSchema` is nullable, and the
           // receipts these routes document differ: Google may report only a
-          // total, and MiniMax bills on characters and may report only those.
-          // So the contract under test is that a real receipt parsed into a
-          // usage record carrying some real count of what the route bills.
+          // total, and Zhipu reports no total. So the contract under test is
+          // that a real receipt parsed into a usage record carrying some real
+          // count of what the route bills.
           assert(usage !== null);
           const billed =
             (usage.inputTokens ?? 0) +
             (usage.outputTokens ?? 0) +
-            (usage.totalTokens ?? 0) +
-            (usage.providerUsage?.kind === 'minimax'
-              ? usage.providerUsage.totalCharacters
-              : 0);
+            (usage.totalTokens ?? 0);
           expect(billed).toBeGreaterThan(0);
         }),
       );

@@ -40,11 +40,9 @@ export const DEFAULT_MODELS: readonly string[] = [
 
   'deepseek41T',
   'deepseekproT',
-  'kimi26T',
   'kimi3',
   // Current non-retired GLM flagships.
   'glm53',
-  'glm53flash',
   // Current non-retired xAI flagship — API key or experimental Grok OAuth.
   'grok47',
   'musespark13',
