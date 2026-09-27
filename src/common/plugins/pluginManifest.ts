@@ -7,17 +7,17 @@
 // files that list plugins are read by `./marketplace`.
 
 // Node imports
-import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Data, Effect } from 'effect';
+import { Data, Effect, FileSystem, type PlatformError } from 'effect';
 import { z } from 'zod';
 
 // Local imports - common
-import { isFileNotFoundError } from '@common/errors';
 import { SkillNameSchema } from '@shared/schemas';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { toErrorMessage } from '@utils/errors/errorMessage';
+import { pathExists } from '@utils/files/fsDurability';
+import { absentReason } from '@utils/files/fsEntryExists';
 
 // Local imports - this module's neighbours
 import {
@@ -96,33 +96,28 @@ export const UNLOADED_COMPONENT_LABELS = [
 ].map((component) => component.label);
 
 /** Whether `relative` (from `path.relative`) climbs out of its base. */
-const escapes = (relative: string) =>
+export const escapes = (relative: string) =>
   relative === '..' ||
   relative.startsWith(`..${path.sep}`) ||
   path.isAbsolute(relative);
 
-const pluginIo = <A>(run: () => Promise<A>) =>
-  Effect.tryPromise({
-    try: run,
-    catch: (error) => new PluginError({ message: toErrorMessage(error) }),
-  });
+/** A filesystem failure, as a plugin error the user reads. */
+export const ioError = (error: PlatformError.PlatformError) =>
+  new PluginError({ message: error.message });
 
-const pathExists = (target: string) =>
-  Effect.tryPromise({ try: () => fs.stat(target), catch: ensureError }).pipe(
-    Effect.as(true),
-    Effect.catchIf(isFileNotFoundError, () => Effect.succeed(false)),
-    Effect.mapError((error) => new PluginError({ message: error.message })),
+/** Whether `target` is there (a link followed), as a plugin read asks. */
+const exists = (target: string) =>
+  FileSystem.FileSystem.use((fs) => pathExists(fs, target)).pipe(
+    Effect.mapError(ioError),
   );
 
 /** Read and validate one JSON file, or `undefined` when it is absent. */
 export function readJsonFile<T>(file: string, schema: z.ZodType<T>) {
   return Effect.gen(function* () {
-    const text = yield* Effect.tryPromise({
-      try: () => fs.readFile(file, 'utf8'),
-      catch: ensureError,
-    }).pipe(
-      Effect.catchIf(isFileNotFoundError, () => Effect.succeed(undefined)),
-      Effect.mapError((error) => new PluginError({ message: error.message })),
+    const fs = yield* FileSystem.FileSystem;
+    const text = yield* fs.readFileString(file).pipe(
+      Effect.catchIf(absentReason, () => Effect.succeed(undefined)),
+      Effect.mapError(ioError),
     );
     if (text === undefined) return undefined;
     const json = yield* Effect.try({
@@ -157,10 +152,12 @@ export function containedPath(root: string, declared: string) {
         `Plugin path "${declared}" points outside the plugin directory ${root}.`,
       );
     }
-    if (!(yield* pathExists(resolved))) return undefined;
-    const [realRoot, realResolved] = yield* pluginIo(() =>
-      Promise.all([fs.realpath(root), fs.realpath(resolved)]),
-    );
+    if (!(yield* exists(resolved))) return undefined;
+    const fs = yield* FileSystem.FileSystem;
+    const [realRoot, realResolved] = yield* Effect.all([
+      fs.realPath(root),
+      fs.realPath(resolved),
+    ]).pipe(Effect.mapError(ioError));
     if (escapes(path.relative(realRoot, realResolved))) {
       return yield* failPlugin(
         `Plugin path "${declared}" resolves through a symlink to ${realResolved}, outside the plugin directory ${root}.`,
@@ -223,6 +220,7 @@ function markdownFiles(
   declared: readonly string[],
 ) {
   return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
     const files = new Set<string>();
     for (const [index, candidate] of [conventional, ...declared].entries()) {
       const resolved = yield* containedPath(dir, candidate);
@@ -232,13 +230,14 @@ function markdownFiles(
           `The plugin at ${dir} declares "${candidate}", which does not exist.`,
         );
       }
-      const stat = yield* pluginIo(() => fs.stat(resolved));
-      const entries = stat.isDirectory()
-        ? (yield* pluginIo(() => fs.readdir(resolved)))
-            .filter((name) => name.endsWith('.md'))
-            .toSorted()
-            .map((name) => path.join(resolved, name))
-        : [resolved];
+      const stat = yield* fs.stat(resolved).pipe(Effect.mapError(ioError));
+      const entries =
+        stat.type === 'Directory'
+          ? (yield* fs.readDirectory(resolved).pipe(Effect.mapError(ioError)))
+              .filter((name) => name.endsWith('.md'))
+              .toSorted()
+              .map((name) => path.join(resolved, name))
+          : [resolved];
       for (const entry of entries) {
         const file = yield* containedPath(dir, path.relative(dir, entry));
         if (file !== undefined) files.add(path.relative(dir, file));
@@ -270,10 +269,7 @@ function mcpServersOf(dir: string, name: string, manifests: PluginManifest[]) {
       if (typeof entry !== 'string' && !Array.isArray(entry))
         maps.push({ where: `the manifest of ${name}`, servers: entry });
     }
-    if (
-      declared.length === 0 &&
-      (yield* pathExists(path.join(dir, '.mcp.json')))
-    )
+    if (declared.length === 0 && (yield* exists(path.join(dir, '.mcp.json'))))
       files.push('.mcp.json');
     // Both manifests may name the same file: it is read once.
     const read = new Set<string>();
@@ -337,7 +333,7 @@ function presentComponents(
       ? Effect.succeed(true)
       : Effect.map(
           Effect.forEach(component.files, (file) =>
-            pathExists(path.join(dir, file)),
+            exists(path.join(dir, file)),
           ),
           (found) => found.some(Boolean),
         ),
@@ -416,14 +412,14 @@ export function readPlugin(dir: string, fallback?: PluginFallback) {
   });
 }
 
-/** Count the skill directories (`<name>/SKILL.md`) under one skill root. */
+/** Count the skill directories (`<name>/SKILL.md`) under one skill root; an
+ *  entry that is not a directory has no `SKILL.md` under it. */
 export function countSkills(root: string) {
-  return pluginIo(() => fs.readdir(root, { withFileTypes: true })).pipe(
-    Effect.flatMap((entries) =>
-      Effect.forEach(entries, (entry) =>
-        entry.isDirectory() || entry.isSymbolicLink()
-          ? pathExists(path.join(root, entry.name, 'SKILL.md'))
-          : Effect.succeed(false),
+  return FileSystem.FileSystem.use((fs) => fs.readDirectory(root)).pipe(
+    Effect.mapError(ioError),
+    Effect.flatMap((names) =>
+      Effect.forEach(names, (name) =>
+        exists(path.join(root, name, 'SKILL.md')),
       ),
     ),
     Effect.map((found) => found.filter(Boolean).length),

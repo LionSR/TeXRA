@@ -254,12 +254,20 @@ export const agentCliChildRunId = Effect.fn('agentCliChildRunId')(function* ({
   readonly resumeId?: string;
 }) {
   if (resumeId === undefined) return generateRunId();
-  const [view, listing] = yield* Effect.all([
+  // Only the pauses that kept `resumeId` are collected, not the session.
+  const [view, parks] = yield* Effect.all([
     session.readView([]),
-    Stream.runCollect(session.events.listing()),
+    Stream.runCollect(
+      session.events
+        .listing()
+        .pipe(
+          Stream.filter(
+            (row) => row.type === 'child.park' && row.resumeId === resumeId,
+          ),
+        ),
+    ),
   ]).pipe(Effect.mapError((e) => new ToolError(toErrorMessage(e))));
-  for (const row of listing) {
-    if (row.type !== 'child.park' || row.resumeId !== resumeId) continue;
+  for (const row of parks) {
     const target = aggregateTarget(row.aggregateId);
     if (target.kind !== 'run') continue;
     const run = view.runs.get(target.id);

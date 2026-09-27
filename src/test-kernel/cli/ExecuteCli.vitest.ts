@@ -2,6 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
+import * as NodeFileSystem from '@effect/platform-node/NodeFileSystem';
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
@@ -1390,7 +1391,7 @@ describe('executeCliConfig', () => {
           'notes',
           { globalState, globalStorage: pluginDir },
           () => Effect.succeed(true),
-        );
+        ).pipe(Effect.provide(NodeFileSystem.layer));
         const { AgentCategory } = yield* Effect.promise(
           () => import('@shared/schemas'),
         );

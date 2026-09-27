@@ -1,5 +1,5 @@
 import { defineCommand } from 'citty';
-import { Effect, Result } from 'effect';
+import { Effect, type FileSystem, Result } from 'effect';
 
 import {
   installPlugins,
@@ -56,7 +56,9 @@ function pluginExitCode(error: unknown): number {
  */
 function withPluginEnv<A, E>(
   context: CliContext,
-  operation: (env: PluginEnv) => Effect.Effect<A, E, ChildProcessSpawner>,
+  operation: (
+    env: PluginEnv,
+  ) => Effect.Effect<A, E, ChildProcessSpawner | FileSystem.FileSystem>,
 ) {
   return Effect.gen(function* () {
     const services = yield* initCliPlatform({ ...context, quietLogs: true });
