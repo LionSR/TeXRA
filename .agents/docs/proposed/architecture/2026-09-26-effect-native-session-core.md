@@ -480,8 +480,10 @@ no `@tools` to `@agent` edges.
   (`agentCliShared.ts:532`, `workflowScriptStrategy.ts:157`). Resolve a driver
   from the run's resolved composition. A driver is the one contribution that
   does not narrow on resume: a run whose driver plugin is off cannot execute
-  at all, so its resume fails loudly with a typed `DriverUnavailable`, and no
-  other driver is substituted. This also deletes `resumeRun`'s `@tools/delegation` import.
+  at all. Its resume is blocked, not failed. The run stays pending with a
+  recorded reason (`DriverUnavailable`), ends only by an explicit stop, and
+  resumes once the driver is back (as in Pico v5's live registries, §6.4, per
+  #13360). No other driver is substituted. This also deletes `resumeRun`'s `@tools/delegation` import.
 - **Documents stays a plugin.** Its workflow arm of `RunView` becomes the
   documents plugin's fold slice; the category is the fact that selects which
   continuation plugin a run gets.
@@ -514,7 +516,10 @@ no `@tools` to `@agent` edges.
 - **The goal-grant WeakMap is deleted, not moved.** It saves, mutates and
   restores a bypass value. The effective bypass is computed from the
   approval-policy rows and the goal rows instead, so the bad state cannot
-  exist (this also answers the two grant defects above).
+  exist (this also answers the two grant defects above). Goal mode itself
+  does not carry across a resume: it starts paused and runs on only after a
+  human re-arms it, as in deepseek-harness. The grant still comes from rows
+  once it is re-armed. This needs owner confirmation (decision 14).
 - **Installed plugins join the one model instead of being renamed away.** The
   owner has ruled that a plugin is one on/off unit with one install record,
   qualified names and a `plugin:<id>/<name>` agent source, and that no new
@@ -535,14 +540,28 @@ no `@tools` to `@agent` edges.
   to a plugin revision across restarts. The record is for attribution: a
   resumed run still resolves its own composition, as ruled (ledger,
   2026-09-23), so no per-process value has to survive a restart. On resume
-  the existing rule stands: the offered tools are the recorded tools
-  intersected with what is available now. So a plugin disabled, replaced or
+  the existing rule stands, with an identity check (#13360): the offered
+  tools are the recorded tools intersected with what is available now, and a
+  recorded tool is offered only while its definition digest and its plugin's
+  revision still match what the run recorded. So a plugin disabled, replaced or
   unavailable since the run started narrows the resumed run instead of
-  failing it, except a missing driver (below). Exact historical replay of a plugin revision would need
+  failing it, except a missing driver, which blocks it (above). Exact historical replay of a plugin revision would need
   revision retention, trust and missing-resource rules, and is not proposed.
   Pinning the agent definition is decided separately (decision 10). A child
   shares its parent's resource hold and records its own narrower offered set,
   which `toolsetHash` already does.
+- **The offered surface is recorded exactly (#13360).** Each activation
+  records the exact tool declarations it offers and the rendered system
+  prompt, as digests with the content stored once. They go on `run.activate`
+  for the reason above: resume reads only the latest snapshot, which the loop
+  replaces at every turn. `ModelInvoker` checks at runtime that what it sends
+  matches the recorded digests, and a mismatch is a typed defect, never a
+  silent drift.
+- **Replay safety is declared on the tool contract**, separately from
+  `parallelSafe`: `parallelSafe` says a call may run beside others, and
+  `replaySafe` says a call may run again after a crash. Resume re-executes
+  only replay-safe calls whose result was not committed, and asks for the
+  rest.
 - **Presets are stored compositions.** Today's switches become the preset
   `default`, an agent YAML may name a preset, and the session records the
   preset id. A preset describes the user's selection; host availability is
@@ -1321,7 +1340,8 @@ already appends its request and retry binding in one transaction and already
 records its own automatic decision in it (`ModelInvoker.ts:985-1011`). A grant is
 acquired in its owner's scope and released when that scope closes; the goal's
 command grant is not held at all but computed from the goal and policy rows
-(move 2), so it survives resume and cannot outlive the goal. `ToolGuard`
+(move 2), so it cannot outlive the goal; goal mode starts paused on resume
+until re-armed (decision 14). `ToolGuard`
 gains `confirm` and `external` kinds beside `bash`, `requiresApproval` goes
 back to filtering only what is offered, and a `toolCall` request kind replaces
 approving MCP calls as shell. `approval.policy` rows follow `state`. It lives
@@ -1334,8 +1354,12 @@ in the existing session entry (no new lifetime) and keeps `withPerKeyLane`.
    CLI's evaluators and narrow the ratchet. Needs decision 7.
 3. Extend the ratchet to bypass writes; the host launch and the goal grant
    through `grant`.
-4. Guard kinds and the `toolCall` request kind. Needs an owner ruling under
-   the `defineTool` freeze amendment.
+4. One action × resource ruleset instead of one guard kind per tool family
+   (#13360's comparison), with delegated children defaulting to `never`, and
+   the `toolCall` request kind. Needs an owner ruling under the `defineTool`
+   freeze amendment. A separate PR (`fix/approval-gates`, in progress) fixes
+   the two approval security defects with the smallest change, and will say
+   whether it pre-empts decision 9.
 5. `ApprovalState` as a `SubscriptionRef` in the existing session entry.
 6. Edited content in the `request.decide` payload (move 5's verdict), with
    each preview request's lifetime as a scope.
@@ -1481,7 +1505,17 @@ not the claim (liveness note §2.5).
    run claim, then delete the recovery lease, the adopted claim and the wake
    half of `AgentResume` (after move 3 PR 4 and move 6 PR 3).
 6. After decision 8: follow-ups to a stopped run admitted in core; delete the
-   CLI buffer.
+   CLI buffer. Admission gets the shape all three reference harnesses share
+   (#13360):
+   - steer and queue lanes: a steer reaches the running turn, a queued input
+     waits for the next;
+   - settlement: every input ends answered, or unanswered with a recorded
+     reason, and can be withdrawn while unsettled;
+   - idempotent admission by caller id, so a retried delivery never
+     duplicates.
+
+   This gives decision 8 its shape.
+
 7. `onRelease` and `onSent` become scoped subscriptions over the publisher's
    pending follow-up state, which move 1 keeps.
 
@@ -1773,8 +1807,9 @@ These were in the first draft and did not survive the checks:
 
 ## Decisions for the owner
 
-The owner's two reviews recommend answers to all thirteen; they stay open until
-the owner confirms them:
+The owner's two reviews recommend answers to decisions 1 to 13, and the
+alignment with #13360 adds decision 14. All stay open until the owner
+confirms them:
 
 | Decision                                                      | Review recommendation                                                                                                                                         |
 | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -1791,6 +1826,7 @@ the owner confirms them:
 | 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                                                        |
 | 12. One global app-state root on desktop                      | Yes.                                                                                                                                                          |
 | 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                                                   |
+| 14. Goal mode on resume                                       | Starts paused until a human re-arms it (#13360; owner to confirm).                                                                                            |
 
 1. May static in-tree plugins own durable state as arms of the one closed
    schema? Move 2 assumes yes.
@@ -1821,8 +1857,9 @@ the owner confirms them:
    everywhere? #13359 left "CLI follow-ups to an interrupted run" open for
    this decision: core refuses a follow-up to a cancelled run
    (`getToolUseFollowUpTarget`), so there is no shared path to converge on.
-9. Guard kinds on the tool contract (move 9 PR 4) touch the frozen
-   `defineTool` contract: allowed?
+9. An action × resource ruleset on the tool contract (move 9 PR 4), in place
+   of per-family guard kinds, touches the frozen `defineTool` contract:
+   allowed? `fix/approval-gates` may pre-empt part of it.
 10. Does a run pin its agent definition (setting and prompt) the way it pins
     its composition, so resume uses the recorded definition?
 11. Does the creator wizard give way to the cross-host `creator` agent?
@@ -1830,6 +1867,9 @@ the owner confirms them:
     profile database?
 13. Does output presentation move out of the run and into the hosts
     (move 13 PR 5)?
+14. Does goal mode start paused on resume, continuing only after a human
+    re-arms it (#13360's recommendation, as in deepseek-harness), rather than
+    surviving resume?
 
 ## Suggested order
 
