@@ -41,7 +41,9 @@ settles or shrinks a move:
   - The `getCliSecrets` singleton is deleted.
   - The extension serves `AgentDirectories` as a runtime layer.
   - `bootstrapHost` reads `host` and `secrets` from `SetupPlatform` and
-    `Secrets`.
+    `Secrets`. It uses only `SetupPlatform.host` (`hostBootstrap.ts:77`), so
+    move 4 reads the host from the core host identity instead. That keeps
+    bootstrap independent of the optional Setup plugin.
 
   The module-slot inventory below is recounted on that basis.
 
@@ -673,7 +675,11 @@ export const TexraProcess: {
   long-stream transport (as a bound `fetch` unless `'process-global'`), the
   host identity, skills and plugin agent directories.
 - **The host identity is data** on `SettingsStores`/`WorkspaceRoots`, not a
-  slot or a tag.
+  slot or a tag. It is core and always present, and `bootstrapHost` reads the
+  host from it rather than from `SetupPlatform.host`. A core-only process
+  (the SDK default, `plugins` omitted) therefore bootstraps without the Setup
+  plugin, and `SetupPlatform` is only the Setup plugin's capability in
+  `PLUGIN_PROCESS_LAYERS`.
 - **`AppSignals` is a service with a shutdown finalizer**, and process-lifetime
   `forkDetach` calls become `forkScoped` on the runtime's scope.
 - **The owner id gains a per-graph nonce**, so two graphs in one process are
@@ -1222,9 +1228,13 @@ nor `child.turn` (`sessionEvent.ts:460-464`) records the mode, so after a
 crash a non-finalizing child turn and a finalizing result look alike. With
 the flag, hydration rebuilds the deferred set as "deferred and not released",
 and nothing reads `run.end` to guess. No crash window is left between the
-child's end and its release: `followup.released` is appended in the same
-publisher job as the child's `child.turn` `settled` row or its `run.end`,
-whichever settles the delivery. A child that crashes before that job leaves
+child's end and its release. A finalizing delivery (the child's last turn)
+is released only in the same publisher job as the child's `run.end`, never
+with `child.turn` `settled`: `deliverTurn` commits `settled` before the child
+finalizes (`childRunLoop.ts:631-637`), and waking the parent there is the
+#8093 self-stall that `childRunLoop.ts:482-489` warns about. A
+non-finalizing delivery, where the child continues to another turn, is
+released with its `settled` row. A child that crashes before that job leaves
 no terminal row either, so its resume performs the release. A native child uses it for its turn result before it
 finalizes and calls `wake` with the token its own delivery returned, so a
 parent with several deferred children releases only that child's rows, as `deliverTurn` and
@@ -1443,11 +1453,15 @@ for each child (inference). The host-neutral controllers still carry
   exist only in the live pipeline. They are added to the fact first, on a
   format bump, so a host opens the right PDF and does not reopen earlier
   rounds' files.
-- **Presentation is checkpointed in the log.** After the host presents a
-  round it publishes `output.presented {runId, roundId}`. An attaching host
-  presents only facts with no `output.presented` row, so a reattached window
-  neither replays earlier rounds nor loses outputs produced while no host was
-  attached.
+- **Presentation is checkpointed in the log, at least once.** After the host
+  presents a round it publishes `output.presented {runId, roundId}`. An
+  attaching host presents only facts with no `output.presented` row, so a
+  reattached window does not replay rounds already checkpointed and loses no
+  outputs produced while no host was attached. A crash between the side
+  effect and the checkpoint repeats that one round once. The effects are
+  chosen to be idempotent: opening a file or PDF reveals the editor already
+  showing it. Only the "missing outputs" dialog can appear twice, which is
+  the accepted cost.
 
 ### PRs
 
