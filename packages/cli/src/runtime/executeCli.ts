@@ -90,21 +90,20 @@ interface CliExecuteOptions {
   /** Workflow output handler extended with the CLI publication gate; attempt
    *  the commit synchronously once before destination validation or I/O. */
   readonly publishWorkflowOutput?: CliWorkflowOutputHandler;
-  /** Forwarded to `runAgent` on resume, pinning the original handler dialect. */
-  readonly modelCompatibilityKey?: RunAgentOptions['modelCompatibilityKey'];
   /** Called during signal shutdown after CANCELLED status is durable and the
    *  resumable checkpoint has been drained, before the signal handler exits. */
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
   /** The agent boundary the request runs through. Composition leaves it
-   *  unset and gets the agent runtime's own; a test harness injects its
-   *  stand-ins here rather than mocking agent modules. */
-  readonly agentRuns?: {
+   *  unset and gets the agent runtime's own; `texra resume` launches through
+   *  the core resume path, and a test harness injects its stand-ins here
+   *  rather than mocking agent modules. */
+  readonly agentRuns?: Partial<{
     readonly launch: typeof runAgent;
     readonly finalize: typeof finalizeRun;
     readonly resumability: typeof deriveResumability;
-  };
+  }>;
 }
 
 type ExecuteAgentResultForCategory<C extends AgentCategory | undefined> =
@@ -121,8 +120,8 @@ export interface CliConfigExecuteOptions<
    *  run by `runAgent`, and the narrowing key for the returned result. */
   readonly expectedCategory?: C;
   /**
-   * Resume an existing run under its persisted id instead of minting a
-   * fresh one. The CLI turns this into explicit resume intent for `runAgent`.
+   * The persisted run a resume continues, instead of minting a fresh id; its
+   * `agentRuns.launch` is the resume path.
    */
   readonly runId?: RunId;
 }
@@ -159,16 +158,14 @@ export function executeCliConfig<
       ...executeOptions
     } = options;
     const runId = resumedRunId ?? generateRunId();
-    const validation = validateRunRequest({ config, runId });
+    const validation = validateRunRequest({ config });
     if (!validation.valid) {
       writeTextStderr(validation.message);
       return { ok: false as const, exitCode: CliExitCode.Usage };
     }
 
     const plugins = yield* readCliPluginPins((yield* options.session).roots);
-    const request: RunAgentRequest & { readonly runId: RunId } = resumedRunId
-      ? { kind: 'resume', ...validation.request, runId }
-      : { kind: 'fresh', ...validation.request, runId };
+    const request = { ...validation.request, runId };
     const run = yield* executeCliRequest(request, runContext, {
       ...executeOptions,
       enforceCategory: expectedCategory !== undefined,
@@ -554,7 +551,6 @@ export function executeCliRequest(
                   agentDefaultOutputFiles,
                   tryCommitWorkflowOutputPublication,
                 ),
-        modelCompatibilityKey: options.modelCompatibilityKey,
         beforeRunEnd: () =>
           Effect.gen(function* () {
             const handled = yield* finalizeShutdownStatus;

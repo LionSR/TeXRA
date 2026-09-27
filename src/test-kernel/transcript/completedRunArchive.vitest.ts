@@ -443,7 +443,6 @@ describe('completedRunArchive facade', () => {
           yield* Effect.flip(
             resumeRun(runId, {
               session,
-              executeWorkflow: vi.fn(() => Effect.void),
             }),
           ),
         ).toBe(launchFailure);

@@ -113,7 +113,7 @@ class RunConfigUnreadable extends Data.TaggedError('RunConfigUnreadable')<{
 export interface HostRunActionPorts {
   readonly session: SessionHandle;
   /**
-   * Launch or resume a validated run; the host's own launcher reaches
+   * Launch a validated fresh run; the host's own launcher reaches
    * `runAgent`. The Effect settles with the launched run itself — a caller
    * that wants only the launch acknowledged races it against the `onRun`
    * gate instead of awaiting it. It fails with the launcher's own error; the
@@ -155,7 +155,7 @@ export interface HostRunActions {
     runId: RunId,
   ): Effect.Effect<
     void,
-    AgentResumeFailed | RequestRefusal | RunConfigUnreadable | RunLaunchFailed,
+    AgentResumeFailed | RequestRefusal | RunConfigUnreadable,
     AgentResume
   >;
   runNew(
@@ -617,18 +617,12 @@ export const createHostRunActions = (
         return Effect.forkDetach(deliver).pipe(Effect.asVoid);
       },
       /**
-       * Resume a settled run: a workflow relaunches through the
-       * host's launcher with its run id; a tool-use run carries
-       * canonical session state, so it goes through the resume port that
-       * restores it instead of starting a fresh run.
+       * Resume a settled run, of either category, through the resume port:
+       * it continues the run's own rows. The launcher only starts fresh runs.
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 'resumed');
-        if (config.agentCategory !== AgentCategory.Workflow) {
-          yield* (yield* AgentResume).tryResumeRun(runId);
-          return;
-        }
-        yield* runAgentRequest({ config, runId });
+        yield* nativeAgentRun(runId, 'resumed');
+        yield* (yield* AgentResume).tryResumeRun(runId);
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');

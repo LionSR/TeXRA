@@ -237,6 +237,12 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **Resuming a stopped workflow in the desktop app continues it instead of
+  marking it failed** — Resume on a halted workflow run started the run over
+  under its old id, which the app refused, so the run was recorded as failed.
+  A workflow run now resumes from where it stopped, on the same path a
+  conversation resumes on.
+
 - **A completed workflow is no longer recorded as failed when opening its
   final output fails** — in the VS Code extension and the desktop app, the
   preview of a workflow's final revised file ran inside the run, so a failure

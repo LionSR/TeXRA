@@ -16,13 +16,16 @@ import * as AgentRun from '@agent/runtime/executeAgent';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import * as SessionResumeRetrieval from '@agent/runtime/SessionResumeRetrieval';
 import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
-import * as AgentRunner from '@agent/runtime/runAgent';
+import { createHostRunActions } from '@controllers/session/hostRunActions';
 import { DesktopProcessResumeOwner } from '@desktop/main/desktopAgentResume';
+import { AgentResume } from '@platform/interfaces';
+import { withProcessServices } from '@platform/processRuntime';
 import {
   AgentCategory,
   aggregateId,
   emptyRunEndOutput,
   RUN_OUTCOME,
+  RUN_PHASE,
   type RunId,
   type SessionEventDraft,
 } from '@shared/schemas';
@@ -41,7 +44,6 @@ const retrieveSessionResumeData = vi.spyOn(
   SessionResumeRetrieval,
   'retrieveSessionResumeData',
 );
-const runAgent = vi.spyOn(AgentRunner, 'runAgent');
 const resumeToolUseFromResumeData = vi.spyOn(
   AgentRun,
   'resumeToolUseFromResumeData',
@@ -101,13 +103,13 @@ function completedRunResult(): AgentFlowResult {
   };
 }
 
-/** runAgent fails after lifecycle startup, publishing one failed result. */
+/** The resumed run fails after lifecycle startup, publishing one failed result. */
 function failAfterLifecycle(
   session: SessionHandle,
   category: AgentCategory,
   message: string,
 ): void {
-  runAgent.mockImplementation((_request, options) =>
+  resumeToolUseFromResumeData.mockImplementation((_request, options) =>
     Effect.tryPromise({
       try: async () => {
         await Effect.runPromise(options.onRun?.(runId) ?? Effect.void);
@@ -172,7 +174,6 @@ async function mockWorkflowResume(): Promise<void> {
   await persistRunRecord('workflow');
   retrieveSessionResumeData.mockReturnValue(
     Effect.succeed({
-      type: 'workflow',
       agentConfig: workflowConfig,
       runId,
       modelCompatibilityKey: null,
@@ -194,7 +195,6 @@ async function gateWorkflowResume(): Promise<{
         started.resolve();
         await gate.promise;
         return {
-          type: 'workflow' as const,
           agentConfig: workflowConfig,
           runId,
           modelCompatibilityKey: null,
@@ -212,8 +212,9 @@ describe('desktop process resume owner', () => {
     publishTestRunStart(testSession, runId);
     await Effect.runPromise(testSession.settlePublications());
     retrieveSessionResumeData.mockReset();
-    resumeToolUseFromResumeData.mockReset();
-    runAgent.mockReset().mockReturnValue(Effect.succeed(completedRunResult()));
+    resumeToolUseFromResumeData
+      .mockReset()
+      .mockReturnValue(Effect.succeed(completedRunResult()));
   });
 
   it.effect('resumes while no BrowserWindow presentation exists', () =>
@@ -222,7 +223,43 @@ describe('desktop process resume owner', () => {
       const harness = yield* Effect.promise(() => createResumeHarness());
 
       expect(yield* harness.owner.tryResumeRun(runId)).toBe(true);
-      expect(runAgent).toHaveBeenCalledOnce();
+      expect(resumeToolUseFromResumeData).toHaveBeenCalledOnce();
+    }),
+  );
+
+  // Regression: Resume on a halted workflow reached the host's fresh
+  // launcher with the run's id, which registered the run a second time and
+  // ended it FAILED. The Resume action continues the run's own rows.
+  it.effect('resumes a halted workflow from the Resume action', () =>
+    Effect.gen(function* () {
+      yield* Effect.promise(() => mockWorkflowResume());
+      const harness = yield* Effect.promise(() => createResumeHarness());
+      const runValidated = vi.fn(() =>
+        Effect.fail(new Error('relaunched as a fresh run')),
+      );
+      const actions = yield* withProcessServices(
+        testRuntime(),
+        createHostRunActions({
+          session: harness.session,
+          runValidated,
+          loadModelOptions: () => Effect.succeed([]),
+          promptForApiKey: () => Effect.void,
+          showInfo: () => Effect.void,
+          showWarning: () => Effect.void,
+        }),
+      );
+
+      yield* actions
+        .resume(runId)
+        .pipe(Effect.provideService(AgentResume, harness.owner));
+
+      expect(runValidated).not.toHaveBeenCalled();
+      expect(resumeToolUseFromResumeData).toHaveBeenCalledOnce();
+      expect(resumeToolUseFromResumeData.mock.calls[0]?.[0]).toMatchObject({
+        runId,
+        agentConfig: { agentCategory: AgentCategory.Workflow },
+      });
+      expect(harness.session.runView(runId)?.status).not.toBe(RUN_PHASE.FAILED);
     }),
   );
 
@@ -231,15 +268,14 @@ describe('desktop process resume owner', () => {
     () =>
       Effect.gen(function* () {
         yield* Effect.promise(() => mockWorkflowResume());
-        runAgent.mockReturnValue(Effect.fail(new Error('launch failed')));
+        resumeToolUseFromResumeData.mockReturnValue(
+          Effect.fail(new Error('launch failed')),
+        );
         const harness = yield* Effect.promise(() => createResumeHarness());
         const presenter = attachResultPresenter(harness.session);
 
         expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
         expectOneErrorPresentation(presenter, 'Resume failed: launch failed');
-        expect(runAgent.mock.calls[0]?.[1].suppressErrorNotification).toBe(
-          true,
-        );
 
         presenter.detach();
         const replacement = attachResultPresenter(harness.session);
@@ -345,7 +381,7 @@ describe('desktop process resume owner', () => {
       Effect.gen(function* () {
         yield* Effect.promise(() => mockWorkflowResume());
         const harness = yield* Effect.promise(() => createResumeHarness());
-        runAgent.mockImplementation((_request, options) =>
+        resumeToolUseFromResumeData.mockImplementation((_request, options) =>
           Effect.tryPromise({
             try: async () => {
               await Effect.runPromise(options.onRun?.(runId) ?? Effect.void);
@@ -392,7 +428,7 @@ describe('desktop process resume owner', () => {
       retrieval.release();
 
       expect(yield* Fiber.join(resume)).toBe(false);
-      expect(runAgent).not.toHaveBeenCalled();
+      expect(resumeToolUseFromResumeData).not.toHaveBeenCalled();
     }),
   );
 
@@ -413,7 +449,7 @@ describe('desktop process resume owner', () => {
       retrieval.release();
 
       expect(yield* Fiber.join(resume)).toBe(false);
-      expect(runAgent).not.toHaveBeenCalled();
+      expect(resumeToolUseFromResumeData).not.toHaveBeenCalled();
       expect(harness.session.runView(runId)).toBeUndefined();
     }),
   );
@@ -429,7 +465,7 @@ describe('desktop process resume owner', () => {
         );
 
         expect(yield* harness.owner.tryResumeRun(runId)).toBe(false);
-        expect(runAgent).not.toHaveBeenCalled();
+        expect(resumeToolUseFromResumeData).not.toHaveBeenCalled();
         expect(retrieveSessionResumeData).not.toHaveBeenCalled();
         expect(harness.session.runView(runId)).toBeDefined();
       }),

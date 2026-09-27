@@ -2,6 +2,7 @@ import { Effect } from 'effect';
 
 import {
   selectAutoOpenFinalOutput,
+  type AgentFlowResult,
   type RunAgentOptions,
   type RunAgentRequest,
   type SessionHandle,
@@ -27,11 +28,7 @@ interface DesktopAgentLaunchContext {
 
 export type DesktopAgentLaunchOptions = Pick<
   RunAgentOptions,
-  | 'ownApiKeyFallback'
-  | 'modelCompatibilityKey'
-  | 'preferHelperModel'
-  | 'onRun'
-  | 'onRunResolved'
+  'ownApiKeyFallback' | 'preferHelperModel' | 'onRun' | 'onRunResolved'
 >;
 
 /**
@@ -52,7 +49,6 @@ export function launchDesktopAgent(
     });
     yield* runAgent(request, {
       session: context.session,
-      modelCompatibilityKey: options.modelCompatibilityKey,
       ownApiKeyFallback: options.ownApiKeyFallback,
       ...(options.preferHelperModel && { preferHelperModel: true }),
       onRun: options.onRun,
@@ -61,36 +57,36 @@ export function launchDesktopAgent(
     }).pipe(
       // Presentation reacts to the outcome the run committed; it never runs
       // inside the run, so it cannot change that outcome.
-      Effect.flatMap((result) =>
-        Effect.gen(function* () {
-          const output = yield* selectAutoOpenFinalOutput(
-            context.session.roots,
-            result,
-          );
-          if (!output) return;
-          let location: RequestOpenFilePayload['location'];
-          if (output.location === 'workspace') {
-            location = createWorkspaceLocation(
-              output.absolutePath,
-              output.relativePath,
-            );
-          } else if (output.location === 'runStorage') {
-            location = createRunStorageLocation(
-              output.absolutePath,
-              output.relativePath,
-              result.runId,
-            );
-          } else {
-            location = createExternalLocation(output.absolutePath);
-          }
-          yield* context.session.interactions.emit(
-            'requestOpenFile',
-            { location, preserveFocus: false },
-            { replayWhenAttached: true },
-          );
-        }),
-      ),
+      Effect.flatMap(presentDesktopFinalOutput(context.session)),
     );
   });
   return withProcessServices(context.runtime, launch);
 }
+
+/** Open a settled run's final output, as a fresh launch and a resume both do. */
+export const presentDesktopFinalOutput =
+  (session: SessionHandle) => (result: AgentFlowResult) =>
+    Effect.gen(function* () {
+      const output = yield* selectAutoOpenFinalOutput(session.roots, result);
+      if (!output) return;
+      let location: RequestOpenFilePayload['location'];
+      if (output.location === 'workspace') {
+        location = createWorkspaceLocation(
+          output.absolutePath,
+          output.relativePath,
+        );
+      } else if (output.location === 'runStorage') {
+        location = createRunStorageLocation(
+          output.absolutePath,
+          output.relativePath,
+          result.runId,
+        );
+      } else {
+        location = createExternalLocation(output.absolutePath);
+      }
+      yield* session.interactions.emit(
+        'requestOpenFile',
+        { location, preserveFocus: false },
+        { replayWhenAttached: true },
+      );
+    });

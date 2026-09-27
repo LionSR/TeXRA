@@ -1,15 +1,14 @@
-import type { AgentConfigInput, RunId } from '@shared/schemas';
+import type { AgentConfigInput } from '@shared/schemas';
 import { AgentConfigSchema, type AgentConfig } from '../definition/AgentConfig';
 import type { z } from 'zod';
 
+/** A fresh launch: a persisted run resumes through `resumeRun`. */
 export interface RunRequest {
   config: AgentConfigInput;
-  runId?: RunId;
 }
 
 export interface ValidatedRunRequest {
   config: AgentConfig;
-  runId?: RunId;
 }
 
 type RunValidationResult =
@@ -30,9 +29,6 @@ export function validateRunRequest(request: RunRequest): RunValidationResult {
 
   return {
     valid: true,
-    request: {
-      config: parseResult.data,
-      runId: request.runId,
-    },
+    request: { config: parseResult.data },
   };
 }

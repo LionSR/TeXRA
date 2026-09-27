@@ -328,10 +328,6 @@ function resumePersistedRun(
         resumeRun(runId, {
           session,
           recovery,
-          executeWorkflow: () =>
-            Effect.fail(
-              new Error('Workflow resume is not part of this fixture.'),
-            ),
         }),
       );
       return 'started' in resumed && resumed.delivered;
@@ -771,8 +767,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                   from: { kind: 'user' as const },
                 },
               ],
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
             }),
           ),
         );
@@ -817,8 +811,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             testRuntime(),
             resumeRun(runId, {
               session,
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
             }),
           ).pipe(Effect.timeout('5 seconds')),
         ).toEqual({
@@ -853,8 +845,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
                   from: { kind: 'user' as const },
                 },
               ],
-              executeWorkflow: () =>
-                Effect.fail(new Error('Expected a tool-use child.')),
             }),
           ),
         ).toEqual({
@@ -1391,7 +1381,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         const launch = yield* Effect.exit(
           launchDesktopAgent(
             {
-              kind: 'fresh',
               runId,
               config: AgentConfigSchema.parse({
                 agent: WORKFLOW_CHILD_AGENT,

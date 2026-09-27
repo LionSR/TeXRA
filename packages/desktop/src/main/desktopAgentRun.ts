@@ -193,7 +193,7 @@ export function createDesktopAgentRun(
     runOptions: DesktopRunOptions = {},
   ): Effect.Effect<void, Error> {
     return launchDesktopAgent(
-      { kind: 'fresh', ...request },
+      request,
       { session, runtime },
       {
         onRunResolved: options.onLaunched,

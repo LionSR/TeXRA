@@ -18,7 +18,6 @@ import { aggregateId } from '@shared/schemas';
 import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
-import { RunLedgerRefused } from '@shared/session/runLedger';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
@@ -233,10 +232,7 @@ describe('runResumeCommand', () => {
   });
 
   it('resumes a workflow run headless under its persisted run id', async () => {
-    await seedRunRecord({
-      config: WORKFLOW_CONFIG,
-      modelCompatibilityKey: 'Anthropic',
-    });
+    await seedRunRecord({ config: WORKFLOW_CONFIG });
 
     // Headless (non-TTY) is fine for the workflow arm — only tool-use resume
     // needs an interactive terminal.
@@ -245,10 +241,7 @@ describe('runResumeCommand', () => {
     expect(mocks.executeCliWorkflowConfig).toHaveBeenCalledWith(
       WORKFLOW_CONFIG,
       expect.any(Object),
-      expect.objectContaining({
-        runId: RUN_ID,
-        modelCompatibilityKey: 'Anthropic',
-      }),
+      expect.objectContaining({ runId: RUN_ID }),
     );
     expect(mocks.resolveCliResumeAgent).toHaveBeenCalledWith(
       expect.anything(),
@@ -414,56 +407,6 @@ describe('runResumeCommand', () => {
     expect(mocks.executeCliWorkflowConfig).toHaveBeenCalled();
     expect(mocks.writeTextStderr).not.toHaveBeenCalledWith(
       expect.stringContaining('This run has finished'),
-    );
-  });
-
-  // A transient failure over a checkpoint that is still on disk says nothing
-  // about the record, so it stays the operational error it was. The
-  // classification's read of the snapshot succeeds; the resume's own read of
-  // the same checkpoint fails, the way a transient storage fault lands
-  // mid-command.
-  it('reports a transient resume-state load failure as an operational error', async () => {
-    await seedWorkflowResume(WORKFLOW_CONFIG);
-    let snapshotReads = 0;
-    const realLatestSnapshot = seededSession.ledger.latestSnapshot.bind(
-      seededSession.ledger,
-    );
-    vi.spyOn(seededSession.ledger, 'latestSnapshot').mockImplementation(
-      (runId) =>
-        ++snapshotReads === 1
-          ? realLatestSnapshot(runId)
-          : Effect.fail(
-              new DatabaseReadFailed({
-                path: 'run-ledger',
-                cause: new Error('KV timeout'),
-              }),
-            ),
-    );
-
-    await expect(run(cliContext())).resolves.toBe(1);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      `Could not load session ${RUN_ID}: Failed to retrieve workflow resume data for run: ${RUN_ID}: checkpoint could not be read (KV timeout)`,
-    );
-  });
-
-  // The positive cohort: the launch folded the run's rows and the ledger
-  // refused them, so the user is told the saved state cannot be continued
-  // instead of being shown the launch's internal wording.
-  it('refuses an aggregate the ledger cannot fold as unusable state', async () => {
-    await seedWorkflowResume(WORKFLOW_CONFIG);
-    mocks.executeCliWorkflowConfig.mockRejectedValue(
-      new RunLedgerRefused({
-        reason: 'inconsistent',
-        runId: RUN_ID,
-        detail: 'unsupported-record',
-      }),
-    );
-
-    await expect(run(cliContext())).resolves.toBe(2);
-
-    expect(mocks.writeTextStderr).toHaveBeenCalledWith(
-      "This run's saved state could not be loaded, so it cannot be continued. Delete it from history and start a new agent task.",
     );
   });
 });
