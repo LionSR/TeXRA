@@ -37,7 +37,7 @@
     "packages/extension/src/progressView/frontend/sessionSurfaces.ts": 509,
     "packages/extension/src/progressView/ProgressViewProvider.ts": 824,
     "packages/extension/src/settingsView/frontend/tabs/LaTeXTab.ts": 560,
-    "packages/llm/src/anthropicMessages.ts": 1094,
+    "packages/llm/src/anthropicMessages.ts": 1037,
     "packages/llm/src/googleInteractions.ts": 1368,
     "packages/llm/src/openaiResponses.ts": 802,
     "packages/llm/src/openaiResponsesCodec.ts": 812,
