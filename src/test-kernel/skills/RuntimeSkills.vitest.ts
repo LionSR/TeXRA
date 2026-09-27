@@ -1,3 +1,5 @@
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
@@ -5,6 +7,7 @@ import { afterEach, describe, expect } from 'vitest';
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   ActiveSkillsSnapshotSchema,
+  ToolError,
 } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
@@ -16,6 +19,7 @@ import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
+import { resolveToolPath } from '@tools/pathResolution';
 
 const tempRoots = useTempDirs();
 
@@ -188,4 +192,38 @@ describe('runtime skills', () => {
       ActiveSkillsSnapshotSchema.parse({ skills: result.skills }),
     ).toStrictEqual({ skills: result.skills });
   });
+
+  // Fails if a skill root registered for one project admits file access in
+  // another project's session, or if scoping cuts off the registering project
+  // itself. The skill sits outside both projects, so neither workspace
+  // contains it and only the external-root allowlist can admit it.
+  it.effect("admits one project's skill directory to that project only", () =>
+    Effect.gen(function* () {
+      const skillsRoot = yield* Effect.promise(createTempRoot);
+      const skillPath = yield* Effect.promise(() =>
+        writeSkill(
+          skillsRoot,
+          'shared-notes',
+          { name: 'shared-notes', description: 'Shared notes.' },
+          'Read the notes.',
+        ),
+      );
+      installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
+      const projectA = path.resolve(path.sep, 'project-a');
+      const projectB = path.resolve(path.sep, 'project-b');
+      yield* loadRuntimeSkillCatalogEffect(projectA, testWorkspaceRoots()).pipe(
+        Effect.provide(nodePlatformLayer),
+      );
+      const resolveFrom = (workspace: string) =>
+        resolveToolPath(
+          { roots: { ...testWorkspaceRoots(), workspace } },
+          skillPath,
+        );
+
+      expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
+      expect(yield* Effect.flip(resolveFrom(projectB))).toBeInstanceOf(
+        ToolError,
+      );
+    }),
+  );
 });

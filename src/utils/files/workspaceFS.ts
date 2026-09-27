@@ -7,11 +7,7 @@ import { normalizeFilePath } from '@utils/core';
 import { escapesRoot } from '@utils/core/pathCore';
 
 // Local file imports
-import {
-  annotateExternal,
-  locatePathInRoot,
-  type ResolvedPath,
-} from './workspaceRoot';
+import { locatePathInRoot, type ResolvedPath } from './workspaceRoot';
 
 /**
  * The workspace-relative form of `filePath`, symlink-aware. A path outside
@@ -54,10 +50,7 @@ export function locateInWorkspace(
 ): ResolvedPath {
   if (!root) {
     if (!inputPath) return { kind: 'external', absolutePath: '' };
-    return annotateExternal({
-      kind: 'external',
-      absolutePath: path.resolve(inputPath),
-    });
+    return { kind: 'external', absolutePath: path.resolve(inputPath) };
   }
 
   // Absolute paths: platform's asRelativePath for symlink handling
@@ -66,7 +59,7 @@ export function locateInWorkspace(
     if (!path.isAbsolute(relativePath) && !escapesRoot(relativePath)) {
       return { kind: 'workspace', absolutePath: inputPath, relativePath };
     }
-    return annotateExternal({ kind: 'external', absolutePath: inputPath });
+    return { kind: 'external', absolutePath: inputPath };
   }
 
   // Empty + relative paths: pure path logic

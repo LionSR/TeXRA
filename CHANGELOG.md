@@ -244,6 +244,13 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
   malformed, failing every retry. The encrypted reasoning is opaque and is no
   longer compared; the item's identity and status still are.
 
+- **Security: one project's skill folders no longer open file access in
+  another project** — the desktop app keeps several projects open in one
+  process, and every skill folder a project's run loaded outside its
+  workspace became readable by file tools in every project's sessions,
+  including skills another project had disabled. A skill folder is now
+  readable only from sessions of the project that loaded it.
+
 - **Security: setup tools ask before they act, and approving a tool call for
   the session no longer approves every shell command** — `update_config`,
   `unset_api_key`, `invoke_command` and `install_vscode_extension` were marked

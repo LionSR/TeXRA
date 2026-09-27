@@ -204,8 +204,9 @@ export function filterDiscoveredSkills(
  *
  * The catalog and an activation both point the model at a skill's `SKILL.md`
  * and its directory, so each enabled skill outside the workspace is
- * registered as a read-only external root: `read_file` can read the skill
- * and its resources, and no tool can write them. A skill inside the
+ * registered as a read-only external root of this project: `read_file` can
+ * read the skill and its resources in this project's sessions only, and no
+ * tool can write them. A skill inside the
  * workspace is already readable and stays writable like any project file.
  */
 export function loadEnabledRuntimeSkills(
@@ -236,6 +237,7 @@ export function loadEnabledRuntimeSkills(
             kind: 'skill',
             writable: false,
             label: `Skill ${skill.name}`,
+            project: workspaceRoot,
           });
         },
         catch: ensureError,
