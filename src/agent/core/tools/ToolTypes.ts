@@ -73,7 +73,8 @@ export interface ITool<E = Error, R = never> {
    * does when the guard names one and as the tool's name and arguments
    * otherwise, so a tool cannot declare approval and run unasked.
    * `'inBody'`: the body opens its own request (a file-edit review, a plan, a
-   * question, a delegation proposal) and the loop does not ask again. Either
+   * question, a delegation proposal, an external inquiry) and the loop does
+   * not ask again. Either
    * way, a run that cannot present a prompt is not offered the tool.
    */
   readonly requiresApproval?: boolean | 'inBody';
