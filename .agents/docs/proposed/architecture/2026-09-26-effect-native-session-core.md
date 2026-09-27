@@ -519,7 +519,8 @@ no `@tools` to `@agent` edges.
   owner has ruled that a plugin is one on/off unit with one install record,
   qualified names and a `plugin:<id>/<name>` agent source, and that no new
   formats are invented. An installed Claude Code or Codex plugin becomes a
-  `LoadedPlugin` like `mcp:<name>`, whose revision is its commit or tree hash;
+  `LoadedPlugin` like `mcp:<name>`, whose revision is a digest of the files
+  it actually contributes (trust, below);
   its `skills/`, `agents/`, `commands/` and `.mcp.json` become data-table
   entries; it enters `Composition.loaded`, so one switch hides everything it
   contributes. Third parties never write TypeScript.
@@ -553,14 +554,25 @@ no `@tools` to `@agent` edges.
   contributions (tools, `PLUGIN_LAYERS`) still switch at run open. The plugin note already promised this.
 - **Trust is per content digest.** Trust is keyed on a restart-stable digest
   of the plugin's content: a changed digest is a new, untrusted revision. For
-  an installed plugin that is its commit or tree hash. An MCP definition can
+  an installed plugin it is a digest of the files TeXRA consumes (`skills/`,
+  `agents/`, `commands/`, `.mcp.json`), read from the checkout at load. It is
+  not the recorded commit. The installer records a commit and a writable path
+  (`packages/cli/src/runtime/plugins.ts:183-190`) and rereads the path
+  (`:342-346`), so an in-place edit under the same commit would otherwise keep
+  the old trust. The `.mcp.json` part uses the keyed digest below, because it
+  can carry secrets. An MCP definition can
   carry secrets in `env`, so a plain SHA-256 of it would let anyone holding a
   snapshot or trace check guessed passwords offline. Its digest is instead an
   HMAC under a key created once and kept in `Secrets`, never in the log.
   The key is provisioned by `Secrets.getOrCreate`, an atomic create-if-absent
   each persistent backend implements. The CLI's in-process mutation lanes
   (`cliSecrets.ts:29`) do not serialize across processes, so the file
-  stores implement it with an exclusive create of the key's entry. Two processes that start on an empty store
+  stores implement it with an exclusive create of the key's entry. VS Code's
+  `SecretStorage` has only separate `get` and `store`
+  (`vscodeSecrets.ts:22-49`). There, provisioning runs under an exclusive
+  lock file in the extension's global storage directory: create the lock,
+  `get`, `store` if absent, `get` again, release. That excludes every window
+  of the profile. Two processes that start on an empty store
   therefore end up with the same key, and neither writes trust under a key
   that is later overwritten. A backend that cannot create atomically is
   treated as non-persistent (below). It
@@ -1103,7 +1115,12 @@ RunFailure>` contract of the SDK's `Run`. The trace itself stays infallible,
   first replays every request pending in the session's fold, then follows new
   ones, so a consumer forked after `start` cannot miss a request a fast run
   opened in the gap. Under `manual` that replay is what keeps a run from
-  parking forever.
+  parking forever. A `toolEdit` request carries its preview (original and
+  proposed content) on the SDK's `PendingRequest`, taken from the live
+  `ToolEditApprovalRequest`. The durable permission row holds only path and
+  line counts (`prompts.ts:29-36`), so after a restart that preview is gone. A
+  `toolEdit` request found pending on replay is therefore decided `cancelled`,
+  as a recorded row, rather than replayed without its content.
 - `session.decide(req, decision)`, and exactly one approval authority per
   session, chosen when the process is built (`TexraProcessOptions.approvals`,
   move 4): `denyAll` (the default, today's behaviour), `handler(f)`, or
@@ -1652,16 +1669,18 @@ for each child (inference). The host-neutral controllers still carry
 - **Presentation is checkpointed, at least once.** After the host
   presents a round it records that round as presented. The checkpoint is a
   current value, not history: a `presentation` family in `CurrentValues`
-  (move 12), with one row per run, keyed `runId`, holding the set of
-  presented `roundId`s, rather than an `output.presented` row.
+  (move 12), with one row per run and presenting host, keyed
+  `runId/hostId`, holding the set of presented `roundId`s, rather than an
+  `output.presented` row. `hostId` is the stable host identity (move 4), so
+  two host processes open on the same project each present a round once.
   A row on the run's aggregate needs the run's claim, and one on the
   session's aggregate needs the `borrowsClaim` path that move 12 retires
   (`Database.ts:623-735`). A `CurrentValues` write is one `BEGIN IMMEDIATE`
   with no aggregate claim, so a host that attaches after the run settled or
   after a restart can always write it, and never takes or releases a live
   run's claim. Adding the family amends the accepted current-value decision.
-  It is deletable, like app-state. `removeRun` deletes the row of every run
-  in `run.removed.runIds` (the whole removed closure, children included) in
+  It is deletable, like app-state. `removeRun` deletes every host's row of
+  every run in `run.removed.runIds` (the whole removed closure, children included) in
   the same transaction, so checkpoints never outlive their run. An
   attaching host presents only rounds with no checkpoint, so a
   reattached window does not replay rounds already checkpointed and loses no
