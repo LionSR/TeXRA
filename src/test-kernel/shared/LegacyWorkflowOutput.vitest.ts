@@ -28,7 +28,8 @@ describe('Save-as-copy stem and workspace pack', () => {
     ['builtInWorkflow:write-polish', 'polish'],
     ['custom:alpha_beta', 'alpha'],
     ['remote:alpha-beta', 'alpha'],
-    ['vendor:alpha_beta', 'vendor:alpha'],
+    // No `:` reaches a file name: an unknown prefix is kept as `vendor__`.
+    ['vendor:alpha_beta', 'vendor'],
   ])('preserves the agent chunk in the stem for %s', (agent, expected) => {
     expect(
       workflowOutputCopyStem({

@@ -11,7 +11,7 @@
  */
 
 // Local imports
-import { agentName } from '@shared/schemas';
+import { agentFileName } from '@shared/schemas';
 
 /** The fixed basename of every workflow output file (no extension). */
 export const WORKFLOW_OUTPUT_BASENAME = 'output';
@@ -56,7 +56,7 @@ export function workflowOutputPath(params: {
 
 /** First-name chunk used in the "Save as copy" stem. */
 function getAgentFirstNameChunk(agent: string): string {
-  const cleanAgent = agentName(agent);
+  const cleanAgent = agentFileName(agent);
   // A `write-` tool takes the chunk after that prefix; every other agent takes
   // its first word, delimited by `_` when the name uses that convention and by
   // `-` otherwise.

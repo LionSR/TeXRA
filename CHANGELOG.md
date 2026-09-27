@@ -207,8 +207,8 @@ install github.com/<owner>/<repo>` (or a local folder, or one plugin of a
   the Skills section of the Agents settings page does the same in VS Code and
   the desktop app, which now share one install record with the terminal. A
   plugin stays off until you enable it: enabling shows what it declares and
-  asks you to trust that version and the MCP servers it runs, and a new
-  version or a changed server script asks again. An enabled plugin's skills
+  asks you to trust that version, its files and the MCP servers it runs, and
+  a new version or any edit inside the plugin asks again. An enabled plugin's skills
   and commands load as skills named `<plugin>:<name>`, its agents as tool-use
   agents `<plugin>:<name>`, and its `.mcp.json` servers' tools are offered to
   every tool-use run from its next model request. `texra plugin disable`

@@ -4,8 +4,9 @@
 // what it declares (`enablePlugin`); the accepted decision is recorded in
 // `texra.plugins.trusted` through the state store's single writer. The
 // decision covers the plugin's name and version and a digest of what it
-// runs: each MCP server's spec, the executable it resolves to, and the
-// plugin's own files among them. That digest is not the config revision a
+// ships and runs: every file under its root, and each MCP server's spec and
+// the external executable it resolves to (by path, size and date). That
+// digest is not the config revision a
 // tool's identity carries (`@tools/liveTools`): it changes when what runs
 // changes, and a changed digest asks again.
 //
@@ -55,26 +56,48 @@ const within = (root: string, file: string) => {
 };
 
 /**
- * What one file a server runs is: its bytes' digest when the plugin ships
- * it, and otherwise its resolved path, size and modification time, so a
- * reinstalled or upgraded executable asks again without hashing a runtime
- * on every step.
+ * Content hashes by (path, size, mtime), for this process: a plugin's files
+ * are digested at every step that loads it, and an unchanged file is read
+ * once. An entry holds only a hash of bytes that key names.
  */
-const fileFingerprint = (root: string, file: string) =>
+const contentHashes = new Map<string, string>();
+
+/**
+ * Every file under the plugin root, as sorted `[path, sha256]` pairs; `.git`
+ * is skipped, and a symlink digests its target text rather than following
+ * it. Any edit inside the plugin, a script a server imports included,
+ * changes it.
+ */
+const pluginFiles = (root: string) =>
   Effect.tryPromise({
     try: async () => {
-      const real = await fs.realpath(file);
-      if (within(await fs.realpath(root), real))
-        return {
-          file: path.relative(root, real),
-          sha256: sha256(await fs.readFile(real)),
-        };
-      const stat = await fs.stat(real);
-      return { file: real, size: stat.size, mtimeMs: stat.mtimeMs };
+      const files: [string, string][] = [];
+      const walk = async (dir: string): Promise<void> => {
+        for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name);
+          const relative = path.relative(root, full);
+          if (entry.isDirectory()) {
+            if (entry.name !== '.git') await walk(full);
+          } else if (entry.isSymbolicLink()) {
+            files.push([relative, `-> ${await fs.readlink(full)}`]);
+          } else if (entry.isFile()) {
+            const stat = await fs.stat(full);
+            const key = `${full}\0${stat.size}\0${stat.mtimeMs}`;
+            let hash = contentHashes.get(key);
+            if (hash === undefined) {
+              hash = sha256(await fs.readFile(full));
+              contentHashes.set(key, hash);
+            }
+            files.push([relative, hash]);
+          }
+        }
+      };
+      await walk(root);
+      return files.toSorted(([a], [b]) => Number(a > b) - Number(a < b));
     },
     catch: (error) =>
       new PluginError({
-        message: `Could not read ${file}: ${toErrorMessage(error)}`,
+        message: `Could not read the plugin at ${root}: ${toErrorMessage(error)}`,
       }),
   });
 
@@ -86,45 +109,47 @@ function resolveCommand(root: string, command: string): string | null {
   return whichOnExtendedPath(command);
 }
 
-const isFile = (file: string) =>
-  Effect.promise(() =>
-    fs.stat(file).then(
-      (stat) => stat.isFile(),
-      () => false,
-    ),
-  );
-
-/** One server's part of the digest: its spec, its executable and the
- *  plugin files its arguments name. */
-const serverRuns = (root: string, server: McpServerConfig) =>
-  Effect.gen(function* () {
-    const executable = resolveCommand(root, server.command);
-    const files = [];
-    for (const arg of server.args) {
-      const file = path.resolve(root, arg);
-      if (within(root, file) && (yield* isFile(file)))
-        files.push(yield* fileFingerprint(root, file));
-    }
-    return {
-      name: server.name,
-      command: server.command,
-      args: server.args,
-      envKeys: Object.keys(server.env).toSorted(),
-      executable:
-        executable === null || !(yield* isFile(executable))
-          ? null
-          : yield* fileFingerprint(root, executable),
-      files,
-    };
+/**
+ * The executable a server runs when it lies outside the plugin (`node`,
+ * `uvx`): its resolved path, size and modification time. It is not hashed,
+ * so an upgraded runtime asks again without being read on every step, but
+ * its content is not pinned. `null` when the command is the plugin's own
+ * (its files cover it) or resolves to no file, which fails the server's
+ * start loudly.
+ */
+const externalCommand = (root: string, server: McpServerConfig) =>
+  Effect.promise(async () => {
+    const resolved = resolveCommand(root, server.command);
+    if (resolved === null) return null;
+    const [realRoot, real] = await Promise.all([
+      fs.realpath(root),
+      fs.realpath(resolved).catch(() => null),
+    ]);
+    if (real === null || within(realRoot, real)) return null;
+    const stat = await fs.stat(real);
+    return stat.isFile()
+      ? { path: real, size: stat.size, mtimeMs: stat.mtimeMs }
+      : null;
   });
 
-/** sha256 over what the plugin runs. A plugin that runs nothing digests its
- *  empty list, so its version alone keys its trust. */
+/**
+ * sha256 over what the plugin ships and runs: every file under its root,
+ * and each server's spec and the external command it resolves to.
+ */
 const runsDigest = (root: string, plugin: ResolvedPlugin) =>
-  Effect.map(
-    Effect.forEach(plugin.mcpServers, (server) => serverRuns(root, server)),
-    (runs) => sha256(stableStringify(runs) ?? ''),
-  );
+  Effect.gen(function* () {
+    const files = yield* pluginFiles(root);
+    const servers = yield* Effect.forEach(plugin.mcpServers, (server) =>
+      Effect.map(externalCommand(root, server), (external) => ({
+        name: server.name,
+        command: server.command,
+        args: server.args,
+        envKeys: Object.keys(server.env).toSorted(),
+        external,
+      })),
+    );
+    return sha256(stableStringify({ files, servers }) ?? '');
+  });
 
 /** The trust decision the plugin needs now. */
 const trustKey = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
@@ -161,6 +186,7 @@ function reviewLines(
   record: InstalledPlugin,
   plugin: ResolvedPlugin,
   skillCount: number,
+  external: readonly (string | null)[],
 ): string[] {
   const lines = [
     `Source: ${record.commit ? `${record.source} at ${record.commit.slice(0, 12)}` : `${record.source} (local)`}`,
@@ -170,8 +196,18 @@ function reviewLines(
   else
     lines.push(
       `MCP servers (each runs as a process on this machine, its tools approved like shell commands):`,
-      ...plugin.mcpServers.map((server) => `  ${describeServer(server)}`),
+      ...plugin.mcpServers.flatMap((server, index) => [
+        `  ${describeServer(server)}`,
+        ...(external[index] == null
+          ? []
+          : [
+              `    external command: ${external[index]} (trusted by its path, size and date, not its content)`,
+            ]),
+      ]),
     );
+  lines.push(
+    'Trust covers this version and every file in the plugin: an edit to any of them asks again.',
+  );
   if (plugin.ignored.length > 0)
     lines.push(`Not loaded: ${plugin.ignored.join(', ')}`);
   lines.push(...plugin.warnings);
@@ -206,7 +242,17 @@ export function enablePlugin<E, R>(
       const accepted = yield* confirm({
         name,
         version: key.version,
-        lines: reviewLines(record, plugin, skillCount),
+        lines: reviewLines(
+          record,
+          plugin,
+          skillCount,
+          yield* Effect.forEach(plugin.mcpServers, (server) =>
+            Effect.map(
+              externalCommand(record.path, server),
+              (external) => external?.path ?? null,
+            ),
+          ),
+        ),
       });
       if (!accepted) return 'declined' as const;
       // One decision per plugin: trusting a version replaces the last one.

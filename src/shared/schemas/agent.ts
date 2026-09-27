@@ -126,6 +126,16 @@ export function agentName(key: string): string {
     : key;
 }
 
+/**
+ * The agent name in an identifier as one file-name segment: a plugin
+ * agent's `<plugin>:<name>` becomes `<plugin>__<name>`, since `:` is not a
+ * file-name character on every platform. Run packs, run directories and
+ * copy stems derive their names through this alone.
+ */
+export function agentFileName(key: string): string {
+  return agentName(key).replaceAll(':', '__');
+}
+
 /** Match bare names by name and source-qualified keys by exact identity. */
 export function agentMatchesIdentifier(
   entry: { source: string; name: string },

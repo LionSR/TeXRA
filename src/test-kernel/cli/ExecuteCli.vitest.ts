@@ -1,5 +1,4 @@
 import '@test/support/sessionGraphTestSetup';
-import { createHash } from 'node:crypto';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
@@ -13,6 +12,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
+import { enablePlugin } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -1382,18 +1382,15 @@ describe('executeCliConfig', () => {
         };
         const { globalState } = testDefaultSession().roots;
         yield* globalState.update(GlobalStateKey.INSTALLED_PLUGINS, [
-          { name: 'notes', ...plugin, enabled: true },
+          { name: 'notes', ...plugin, enabled: false },
           // Enabled but never trusted: it loads nothing, so it is not named.
           { name: 'drafts', ...plugin, enabled: true },
         ]);
-        yield* globalState.update(GlobalStateKey.PLUGIN_TRUST, [
-          {
-            name: 'notes',
-            version: '1.0.0',
-            // A plugin that runs nothing digests its empty list.
-            digest: createHash('sha256').update('[]').digest('hex'),
-          },
-        ]);
+        yield* enablePlugin(
+          'notes',
+          { globalState, globalStorage: pluginDir },
+          () => Effect.succeed(true),
+        );
         const { AgentCategory } = yield* Effect.promise(
           () => import('@shared/schemas'),
         );

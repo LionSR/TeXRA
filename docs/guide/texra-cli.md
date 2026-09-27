@@ -333,10 +333,12 @@ texra plugin remove paper-protocol
 
 An installed plugin stays off until you enable it. `texra plugin enable` shows
 what the plugin declares (its skills, commands, agents, and each MCP server's
-command line) and asks you to trust it. The trust covers that version and what
-it runs: the MCP servers' commands, the executables they resolve to, and the
-plugin's own files among their arguments. If the version or any of those
-change, the plugin loads nothing until you enable it again and trust it anew.
+command line) and asks you to trust it. The trust covers that version, every
+file in the plugin folder, and the MCP servers' commands. If the version, any
+file in the plugin, or a server's command changes, the plugin loads nothing
+until you enable it again and trust it anew. A command outside the plugin,
+such as `node`, is listed as an external command and trusted by its path,
+size and date, not by its content.
 A plugin with hooks or LSP servers runs code of its own and cannot be enabled
 yet; output styles and apps are not loaded.
 

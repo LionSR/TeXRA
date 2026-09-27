@@ -7,7 +7,7 @@ import { Effect } from 'effect';
 // Internal imports
 import { withLogChannel } from '@logger/effectLog';
 import { WorkspaceFs } from '@platform/rootedFs';
-import { agentName, type FileOpResult } from '@shared/schemas';
+import { agentFileName, type FileOpResult } from '@shared/schemas';
 import { copyFileExclusive } from '@utils/files/fsDurability';
 
 // Local file imports
@@ -76,7 +76,7 @@ export const runPackSingle = Effect.fn('housekeeping.runPackSingle')(function* (
       withLogChannel(CHANNEL),
     );
 
-    const cleanAgent = agentName(agent);
+    const cleanAgent = agentFileName(agent);
     const resolvedOutputFolder =
       outputFolder ||
       path.join(
@@ -147,7 +147,7 @@ export const runPackMultiple = Effect.fn('housekeeping.runPackMultiple')(
 
     const baseName = path.parse(inputFile).name;
     const outputDir = path.dirname(inputFile);
-    const cleanAgent = agentName(agent);
+    const cleanAgent = agentFileName(agent);
     const commonOutputFolder = path.join(
       outputDir,
       HISTORY_DIR,
