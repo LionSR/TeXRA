@@ -230,6 +230,8 @@ const freshState = (): RunState => ({
   offeredTools: null,
   offeredContinuation: null,
   offeredSections: [],
+  offeredSystem: null,
+  contents: {},
 });
 
 const INVOCATION = {
@@ -356,6 +358,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
       aggregateId: rowAggregate(runId),
       payload: {
         kind: 'attempt',
+        request: '0'.repeat(64),
         invocation: INVOCATION,
         origin: ORIGIN,
         delivery: 'stream',

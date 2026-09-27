@@ -168,6 +168,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',

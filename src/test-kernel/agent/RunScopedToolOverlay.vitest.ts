@@ -200,6 +200,7 @@ describe('run-scoped tool resolution', () => {
             state!,
             false,
             'request',
+            () => ({ base: undefined, added: '' }),
           );
           return { state: state!, step };
         }).pipe(

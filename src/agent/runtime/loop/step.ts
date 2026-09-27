@@ -16,15 +16,19 @@
  * step has pinned its own, so the calls a response makes run against the
  * tools its request offered, and a generation no step holds drains.
  *
- * When the offered set, the continuation or the prompt contributors differ
- * from what the run last recorded, the step returns a `tools.offered` row, which the loop appends
- * before the request (or the park's decision) through the run's one ledger
- * writer. A resumed run's first step is
- * held to what it recorded: it offers the recorded tools that are still in
+ * The step renders the system text its requests send (`RenderSystem`).
+ * When the offered set, the continuation, the prompt contributors or that
+ * text differ from what the run last recorded, the step returns a
+ * `tools.offered` row, preceded by the `context.blob` rows of the content it
+ * names that the run has not stored yet, which the loop appends before the
+ * request (or the park's decision) through the run's one ledger writer. A
+ * resumed run's first step is held to what it recorded: it offers the recorded tools that are still in
  * the catalog as the same tool (the digest of its name and input schema, and
  * its plugin's id and revision), and names each one that is gone or changed.
  * A description is not part of a tool's identity: a changed one is recorded
- * as a new offered set, and a call made before it still runs.
+ * as a new offered set, and a call made before it still runs. So is a
+ * section whose text an update changed: nothing a request sends differs
+ * from the latest record unrecorded.
  */
 import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
@@ -38,13 +42,15 @@ import {
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import type { ContinuationEntry } from '@tools/catalogEntries';
+import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
 import { getDisabledToolIds } from '@utils/config/constants';
 
 import { resolveStepTools } from '../agentToolResolution';
+import { blobRows } from '../run/requestContext';
+import { toolDefinitionsFor } from '../run/tools';
 import { rowAggregate } from './rows';
 import type { AgentRunShape } from '../run/AgentRun';
 
@@ -58,6 +64,13 @@ export interface StepTools {
   /** The pinned plugins' process and session services. */
   readonly services: Context.Context<PluginServices>;
 }
+
+/** The system text a step's requests send: the run's base text, and the
+ *  prompt contributions the step pinned rendered for the tools it offers. */
+export type RenderSystem = (
+  prompt: ReadonlyMap<string, PromptContribution>,
+  offered: readonly string[],
+) => { readonly base: string | undefined; readonly added: string };
 
 /** The run's current step, the scope that holds its pin, the tools it
  *  withheld for approval, its continuation, and its prompt contributions by
@@ -147,6 +160,7 @@ const openStep = Effect.fn('Step.open')(function* (
   state: RunState,
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
+  render: RenderSystem,
 ) {
   const live = yield* LiveTools;
   const scope = yield* Scope.fork(run.scope);
@@ -209,10 +223,16 @@ const openStep = Effect.fn('Step.open')(function* (
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
   const sections = [...step.prompt.keys()];
+  const names = step.tools.definitions.map(({ name }) => name);
+  const { base, added } = render(step.prompt, names);
+  const system =
+    base === undefined || added === '' ? base : `${base}\n${added}`;
+  const address = system === undefined ? null : sha256(system);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
   const changed =
     toolsChanged ||
     state.offeredContinuation !== continuation ||
+    state.offeredSystem !== address ||
     sections.join('\0') !== state.offeredSections.join('\0');
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
@@ -241,12 +261,25 @@ const openStep = Effect.fn('Step.open')(function* (
     tools: step.tools,
     continuation: step.continuation?.continuation ?? null,
     prompt: step.prompt,
+    system,
+    // The content the set names is stored before the row that names it.
     rows: changed
       ? [
+          // The base text is what a snapshot names.
+          ...blobRows(run.runId, state, [
+            ...(base === undefined ? [] : [base]),
+            ...(system === undefined ? [] : [system]),
+            ...toolDefinitionsFor(step.tools.definitions),
+          ]),
           {
             type: 'tools.offered',
             aggregateId: rowAggregate(run.runId),
-            payload: { tools: step.tools.offered, continuation, sections },
+            payload: {
+              tools: step.tools.offered,
+              continuation,
+              sections,
+              system: address,
+            },
           } satisfies RunLedgerDraft,
         ]
       : [],
@@ -271,15 +304,23 @@ export const stepFor = Effect.fn('Step.for')(function* (
   state: RunState,
   roundMode: boolean,
   kind: 'request' | 'dispatch' | 'park',
+  render: RenderSystem,
 ) {
   if (roundMode)
-    return { tools: NO_TOOLS, continuation: null, prompt: new Map(), rows: [] };
+    return {
+      tools: NO_TOOLS,
+      continuation: null,
+      prompt: new Map(),
+      system: undefined,
+      rows: [],
+    };
   const open = yield* SynchronizedRef.get(run.steps);
   if (open !== null && kind === 'dispatch')
     return {
       tools: open.tools,
       continuation: open.continuation?.continuation ?? null,
       prompt: open.prompt,
+      system: undefined,
       rows: [],
     };
   const held = open === null || open.holding;
@@ -288,6 +329,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     state,
     held ? state.offeredTools : null,
     held && kind === 'park',
+    render,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });

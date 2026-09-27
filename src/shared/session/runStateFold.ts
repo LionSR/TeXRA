@@ -23,6 +23,7 @@ import {
   type CommitOrdinal,
   type DispatchFacts,
   type InvocationRef,
+  type JsonValue,
   type ModelCompatibilityKey,
   type OfferedTool,
   type PendingRetry,
@@ -75,6 +76,7 @@ export type RunLedgerDraft = Extract<
       | 'model.retry'
       | 'flow.snapshot'
       | 'tools.offered'
+      | 'context.blob'
       | 'output.produced'
       | 'tool.start'
       | 'tool.end'
@@ -109,6 +111,7 @@ type Message = z.output<typeof MessageSchema>;
 
 type OpenAttempt = {
   readonly invocation: InvocationRef;
+  readonly request: string; // its recorded request's address
   readonly origin: ModelOrigin;
   readonly delivery: 'stream' | 'blocking' | 'background';
   readonly providerResponseId: string | null;
@@ -178,8 +181,7 @@ export type RunState = RunPosition & {
   /** Derived (D12): the priced usage stamped on every `response` row plus
    *  `tool.result` `add` operations. No snapshot carries it. */
   readonly usage: RunUsageTotals;
-  /** The turn the last `context-window` compaction (one per round) landed
-   *  in. */
+  /** The turn the last `context-window` compaction (one per round) hit. */
   readonly overflowRecoveredAtTurn: number | null;
   readonly flow: FlowState | null;
   /** The latest `tools.offered` row's set; `null` before the first. */
@@ -188,6 +190,9 @@ export type RunState = RunPosition & {
   readonly offeredContinuation: string | null;
   /** The plugins whose prompt contributions it pinned. */
   readonly offeredSections: readonly string[];
+  readonly offeredSystem: string | null; // its system text's address
+  /** The run's `context.blob` rows: model-facing content by address. */
+  readonly contents: Readonly<Record<string, JsonValue>>;
 };
 
 /** Companions committed beside the ledger fact; the loop ignores them. */
@@ -271,6 +276,8 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   offeredTools: null,
   offeredContinuation: null,
   offeredSections: [],
+  offeredSystem: null,
+  contents: {},
 });
 
 /**
@@ -458,6 +465,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
             phase: 'model.submitted',
             openAttempt: {
               invocation: p.invocation,
+              request: p.request,
               origin: p.origin,
               delivery: p.delivery,
               providerResponseId: null,
@@ -657,7 +665,16 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         offeredTools: row.payload.tools,
         offeredContinuation: row.payload.continuation,
         offeredSections: row.payload.sections,
+        offeredSystem: row.payload.system,
       });
+    case 'context.blob': {
+      const { digest, value } = row.payload;
+      const state = advance(current ?? freshRunState(commit));
+      return Result.succeed({
+        ...state,
+        contents: { ...state.contents, [digest]: value },
+      });
+    }
     case 'model.retry': {
       if (!opened(current)) return beforeOpening(row.type);
       const permit = row.payload.permit;

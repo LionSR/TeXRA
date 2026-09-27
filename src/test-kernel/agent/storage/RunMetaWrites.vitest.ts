@@ -108,6 +108,7 @@ describe('run metadata updates', () => {
             aggregateId: rowAggregate(id),
             payload: {
               kind: 'attempt',
+              request: '0'.repeat(64),
               invocation,
               origin,
               delivery: 'stream',

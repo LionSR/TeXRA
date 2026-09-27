@@ -344,6 +344,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
                 aggregateId,
                 payload: {
                   kind: 'attempt',
+                  request: '0'.repeat(64),
                   invocation,
                   origin: bound.origin,
                   delivery: 'stream',

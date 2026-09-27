@@ -11,6 +11,7 @@ import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
+import { Sha256Schema } from './offeredTools';
 import { FileLocationSchema } from './output';
 import {
   type RunUsageTotals,
@@ -303,9 +304,10 @@ const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
-  /** The run's system text, before what each request's step adds
-   *  (`stepInstructions`, rebuilt from the step's `tools.offered` row). */
-  systemPrompt: z.string().optional(),
+  /** The address of the run's system text, before what each step adds
+   *  (`stepInstructions`): a `context.blob` of the run, never restated in
+   *  every snapshot. */
+  system: Sha256Schema.optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

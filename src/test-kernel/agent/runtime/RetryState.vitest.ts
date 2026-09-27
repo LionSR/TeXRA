@@ -338,6 +338,8 @@ const freshState = (): RunState => ({
   offeredTools: null,
   offeredContinuation: null,
   offeredSections: [],
+  offeredSystem: null,
+  contents: {},
 });
 
 interface InvokerKit {

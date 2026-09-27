@@ -2520,6 +2520,7 @@ describe('RunLedger', () => {
           aggregateId: AGGREGATE,
           payload: {
             kind: 'attempt',
+            request: '0'.repeat(64),
             invocation: INVOCATION,
             origin: ORIGIN,
             delivery: 'stream',
@@ -2695,6 +2696,7 @@ describe('RunLedger', () => {
               aggregateId: AGGREGATE,
               payload: {
                 kind: 'attempt',
+                request: '0'.repeat(64),
                 invocation: { ...INVOCATION, attempt: 2 },
                 origin: {
                   ...ORIGIN,

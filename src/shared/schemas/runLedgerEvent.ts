@@ -27,6 +27,7 @@ import {
 
 import { RetryErrorInfoSchema } from './errors';
 import { JsonValueSchema } from './jsonValue';
+import { Sha256Schema } from './offeredTools';
 import { RunOutcomeSchema } from './run';
 import {
   ModelCompatibilityKeySchema,
@@ -127,12 +128,13 @@ export type DispatchFacts = z.infer<typeof DispatchFactsSchema>;
 export const ModelMessagePayloadSchema = z
   .discriminatedUnion('kind', [
     /**
-     * A billed request is about to leave the process. Carries no history:
-     * the history is whatever the rows below this commit say.
+     * A billed request is about to leave the process. Carries no history,
+     * only the address of the rest it sends (`requestContext.ts`).
      */
     z.strictObject({
       kind: z.literal('attempt'),
       invocation: InvocationRefSchema,
+      request: Sha256Schema,
       origin: ModelOriginSchema,
       delivery: z.enum(['stream', 'blocking', 'background']),
     }),
@@ -181,9 +183,8 @@ export const ModelMessagePayloadSchema = z
       usage: NormalizedUsageSchema.nullable(),
     }),
     /**
-     * Canonical messages appended to history, verbatim.
-     *
-     * When `sourceResponse` is set the row carries ONLY the settlement group
+     * Canonical messages appended to history, verbatim. When
+     * `sourceResponse` is set the row carries ONLY the settlement group
      * (and any accompanying user message). The assistant message is derived
      * by the fold from the pending response's own row, so the paid turn is
      * stored once on an aggregate that never rewrites and never deletes, and
@@ -472,8 +473,7 @@ const PendingRetrySchema = z.strictObject({
   invocation: InvocationRefSchema,
   failedModelId: z.string().min(1),
   failedCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
-  /** Route requirements without secrets: a credential scope, never a
-   *  credential. */
+  /** Route requirements without secrets: a scope, never a credential. */
   credentialScope: z.string().min(1),
   /** No default and no `.catch`. A spent permit that reads as an unused one
    *  silently buys a second billed attempt: `waiting` = a decision is
