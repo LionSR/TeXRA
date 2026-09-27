@@ -506,7 +506,7 @@ export const runFlowWithLifecycle = Effect.fn('runFlowWithLifecycle')(
       const err = ensureError(Cause.squash(cause));
       if (!Cause.hasInterrupts(cause)) return finalizeFailedRun(err, undefined);
       // A stop that met a failure (a finalizer that died or failed as the
-      // stop unwound it) is still a stop, as `runVerdict` keys it: the row
+      // stop unwound it) is still a stop, as `failureOutcome` keys it: the row
       // says CANCELLED and carries the failure, which is logged, not lost.
       return logLifecycleWarning('A stopped run also failed', {
         runId,
