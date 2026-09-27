@@ -1,16 +1,24 @@
 /** The change feed of a root database's app-state keys. */
-import { Effect, Stream, SubscriptionRef } from 'effect';
+import { Duration, Effect, Schedule, Stream, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 
 import { withLogChannel } from '@logger/effectLog';
 import { aggregateId } from '@shared/schemas';
 import type { SqlError } from 'effect/unstable/sql/SqlError';
 
+/** A failed marker read's backoff: 250 ms doubling, at most 30 s. */
+const READ_RETRY = Schedule.exponential('250 millis').pipe(
+  Schedule.modifyDelay(({ duration }) =>
+    Effect.succeed(Duration.min(duration, Duration.seconds(30))),
+  ),
+);
+
 /**
  * A root database's `appStateChanges`, over its wake level and its
  * connection: each wake reads the keys' latest commit (off
- * `event_agg_commit`), and only a new one emits. A failed read is -1: one
- * change, logged, then quiet until a read succeeds.
+ * `event_agg_commit`), and only a new one emits. A failed read is logged
+ * and read again, holding the wake until it reads: the marker only moves
+ * on a successful read, so no commit goes unobserved.
  */
 export const appStateChangeFeed =
   (
@@ -36,15 +44,18 @@ export const appStateChangeFeed =
           .nullable()
           .parse(row?.commit ?? null),
       ),
-      Effect.catch((error) =>
+      Effect.tapError((error) =>
         Effect.logWarning(
-          `Could not read whether ${keys.join(', ')} changed; its readers re-read it.`,
+          `Could not read whether ${keys.join(', ')} changed; retrying.`,
         ).pipe(
           Effect.annotateLogs({ data: error }),
           withLogChannel('sessionDatabase'),
-          Effect.as(-1),
         ),
       ),
+      // Until it reads: a wake is never consumed by a failed read, so every
+      // commit is observed. The backoff is the database poll's own.
+      Effect.retry(READ_RETRY),
+      Effect.orDie,
     );
     return SubscriptionRef.changes(level).pipe(
       Stream.mapEffect(() => latest),

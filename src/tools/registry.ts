@@ -298,7 +298,7 @@ const TOOL_TABLE = toolTable(
   PLUGIN_SESSION_LAYERS,
 );
 
-/** The first switch read's backoff: 200 ms doubling, over six retries. */
+/** A switch apply's backoff: 200 ms doubling, over six retries. */
 const SWITCH_READ = Schedule.exponential('200 millis');
 
 /** The process layers a host supplies, for the plugins whose manifest
@@ -395,37 +395,29 @@ export const toolRegistryLayer = (
           );
           // Nothing stays pinned: a pin here only applies the switches and
           // withdraws the installed plugins no longer enabled; it starts
-          // none. A failed apply changes nothing, so what is off stays off.
-          const apply = (read: typeof off) =>
-            Effect.scoped(
-              live.pinSwitched(read, { installed: 'withdraw' }),
-            ).pipe(
-              Effect.catchCause((cause) =>
-                Effect.logError(
-                  `Tool switches were not applied to the catalog; the plugins they switch stay as they were (off, before the first read): ${toErrorMessage(Cause.squash(cause))}`,
-                ),
+          // none. A failed apply changes nothing, so what is off stays off;
+          // it is tried again with a bounded backoff, the catalog's lock
+          // released between tries, and a change it still misses is logged.
+          const apply = Effect.scoped(
+            live.pinSwitched(off, { installed: 'withdraw' }),
+          ).pipe(
+            Effect.retry({ schedule: SWITCH_READ, times: 6 }),
+            Effect.catchCause((cause) =>
+              Effect.logError(
+                `Tool switches were not applied to the catalog after seven tries; the plugins they switch stay as they were (off, before the first read) until the switches or the install record change again: ${toErrorMessage(Cause.squash(cause))}`,
               ),
-            );
-          // The switches as they stand, read again with a bounded backoff
-          // until they are, then again on each change to them or to the
-          // install record, written here or by another process, off the
-          // build: a store not readable yet fails no process.
+            ),
+          );
+          // The switches as they stand, then again on each change to them
+          // or to the install record, written here or by another process,
+          // off the build: a store not readable yet fails no process.
           yield* appState
             .changes([
               GlobalStateKey.DISABLED_TOOLS,
               GlobalStateKey.INSTALLED_PLUGINS,
             ])
             .pipe(
-              Stream.zipWithIndex,
-              Stream.runForEach(([, index]) =>
-                apply(
-                  index === 0
-                    ? off.pipe(
-                        Effect.retry({ schedule: SWITCH_READ, times: 6 }),
-                      )
-                    : off,
-                ),
-              ),
+              Stream.runForEach(() => apply),
               Effect.forkScoped,
             );
         }),

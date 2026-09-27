@@ -5,7 +5,7 @@
  * (`AppState.changes`), the catalog reloads and every roster view repaints
  * (`agentRosterChanged`). The one path: no writer refreshes it itself.
  */
-import { Cause, Effect, Layer, Stream } from 'effect';
+import { Cause, Effect, Layer, Schedule, Stream } from 'effect';
 
 import { refresh as refreshAgentCatalog } from '@agent/index/agentRegistry';
 import { emitAppSignal } from '@eventBus/AppSignals';
@@ -20,9 +20,11 @@ export const agentCatalogFollower = Layer.effectDiscard(
       Effect.andThen(
         Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
       ),
+      // A transient read failure is tried again: 200 ms doubling, six times.
+      Effect.retry({ schedule: Schedule.exponential('200 millis'), times: 6 }),
       Effect.catchCause((cause) =>
-        Effect.logWarning(
-          `The agent catalog was not reloaded after a plugin change; it lists the agents it had: ${toErrorMessage(Cause.squash(cause))}`,
+        Effect.logError(
+          `The agent catalog was not reloaded after a plugin change, after seven tries; it lists the agents it had until the next change: ${toErrorMessage(Cause.squash(cause))}`,
         ),
       ),
     );
