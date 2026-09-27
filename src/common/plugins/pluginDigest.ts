@@ -10,6 +10,7 @@ import * as path from 'node:path';
 
 // Third-party imports
 import {
+  Clock,
   Context,
   Effect,
   FileSystem,
@@ -30,8 +31,11 @@ import { escapes, PluginError, type ResolvedPlugin } from './pluginManifest';
 const sha256 = (value: string | Uint8Array) =>
   createHash('sha256').update(value).digest('hex');
 
+/** How recent a modification keeps a file out of the hash cache. */
+const RACY_MS = 2_000;
+
 /**
- * Content hashes by (path, size, mtime), for this process: a plugin's files
+ * Content hashes by (path, inode, size, mtime), for this process: a plugin's files
  * are digested at every step that loads it, and an unchanged file is read
  * once. An entry holds only a hash of the bytes its key names; past the
  * bound the least recently used go, so edits leave no unbounded trail.
@@ -73,9 +77,15 @@ const pluginFiles = Effect.fn('pluginDigest.pluginFiles')(function* (
           if (name !== '.git') yield* walk(full);
         } else if (info.type === 'File') {
           const mtime = Option.getOrUndefined(info.mtime)?.getTime();
-          // No modification time, no cache: size alone cannot vouch.
-          const key =
-            mtime === undefined ? undefined : `${full}\0${info.size}\0${mtime}`;
+          // git's racy rule: a file modified within RACY_MS of now may be
+          // written again under the same (rounded) mtime and size, so it is
+          // hashed fresh and not cached; nor is one with no mtime.
+          const cacheable =
+            mtime !== undefined &&
+            (yield* Clock.currentTimeMillis) - mtime > RACY_MS;
+          const key = cacheable
+            ? `${full}\0${Option.getOrElse(info.ino, () => '')}\0${info.size}\0${mtime}`
+            : undefined;
           let hash = key === undefined ? undefined : hashes.get(key);
           if (hash === undefined) {
             hash = sha256(yield* fs.readFile(full));

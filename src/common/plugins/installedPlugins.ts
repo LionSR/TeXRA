@@ -353,9 +353,11 @@ export function removePlugin(name: string, env: PluginEnv) {
     });
     if (plugin === undefined) {
       // Only a name a plugin could have had names a managed directory: `..`
-      // or `.` would name the plugins directory's parent or itself.
+      // or `.` would name the plugins directory's parent or itself. The name
+      // must already be canonical: the schema collapses whitespace, and
+      // `notes ` is not the directory `notes`.
       const leftover =
-        SkillNameSchema.safeParse(name).success &&
+        SkillNameSchema.safeParse(name).data === name &&
         (yield* FileSystem.FileSystem.use((fs) => pathExists(fs, dir)).pipe(
           Effect.mapError(ioError),
         ));
