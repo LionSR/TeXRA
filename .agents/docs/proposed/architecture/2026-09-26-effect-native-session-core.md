@@ -554,7 +554,12 @@ no `@tools` to `@agent` edges.
   snapshot or trace check guessed passwords offline. Its digest is instead an
   HMAC under a key created once and kept in `Secrets`, never in the log. It
   is stable across restarts, changes when a credential changes, and is no
-  oracle without the key. Today's MCP revision is an HMAC under a
+  oracle without the key. The key needs a persistent `Secrets`. The SDK's
+  default Node platform refuses `set` (`packages/agent/src/node.ts:29-47`), so
+  there trust is not stored: every MCP revision starts untrusted on each
+  start and is decided by the process's `approvals` mode (default
+  `denyAll`), with a `warn` logged once. It never falls back to an in-memory
+  key that would make saved trust look valid. Today's MCP revision is an HMAC under a
   per-process random key (`mcpConfig.ts:70-74,201-203`), deliberately
   unguessable and different after every restart, so it stays the in-process
   resource key and is neither the trust key nor the recorded identity. This also answers the deferred project
@@ -1340,8 +1345,13 @@ delivery is prepared cannot leave the row unwoken. The in-memory wake cannot
 commit with the append, so a crash between them is recovered from the log:
 pending input is a fold (queued, minus consumed, minus deferred and not
 released). When a session opens, it wakes each resumable run that has
-pending input and no live claim, through the same session-bound resume. User,
-GitHub and released child input therefore never waits for a manual resume. `'deferred'` admits the row
+pending input and no live claim, through the same session-bound resume. The
+same scan runs again on two later events. One is a foreign `followup.queued`
+or `followup.released` row arriving through the session's tail. The other is
+a claim held by another process becoming acquirable, when its lease lapses.
+So input that another process queued before it crashed does not wait on a
+session that was already open. User, GitHub and released child input
+therefore never waits for a manual resume. `'deferred'` admits the row
 durably, wakes nobody, and stays invisible to consumption until `wake`: the
 run entry holds its delivery ids in a deferred set that `take` skips, as the
 manager's `deferred` set does today (`ToolUseFollowUpQueueManager.ts:53-58,287`),
@@ -1451,8 +1461,12 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 - **A watcher on every host.** A `DirectoryWatch` host port (VS Code watcher,
   or `FileSystem.watch`) triggers a refresh.
 - **Refresh reaches runs only at run open.** Runs record the full resolved
-  definition on the snapshot (setting and prompt, with its digest) and resume
-  from it, so an edit between a halt and its resume changes neither the
+  definition (setting and prompt, with its digest) once, in a dedicated
+  run-level `run.definition` row, and resume reads it next to the latest
+  snapshot. It does not go on `flow.snapshot`: resume reads only the latest
+  snapshot (`AgentRun.ts:263`), and the loop replaces that at every turn and
+  wait (`toolUse.ts:405,695`). A pin there would be lost or copied into
+  every checkpoint. Resume then runs from the recorded definition, so an edit between a halt and its resume changes neither the
   settings nor the instructions.
 - Post-auth invalidation stays per host, as ruled.
 
@@ -1465,7 +1479,7 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
 4. The ordered source table, rebuilt from empty; delete the epoch,
    carry-over and re-remove cases, the 22 defensive loads, the extension's
    manager and the plugin-directory slot; watchers on every host.
-5. Pin the definition on the snapshot. Needs decision 10.
+5. Pin the definition in one `run.definition` row. Needs decision 10.
 6. Retire the creator wizard in favour of the cross-host `creator` agent.
    Needs decision 11.
 
@@ -1667,7 +1681,7 @@ the owner confirms them:
 | 7. `yolo`/`never` for plans, proposals, retries and questions | One answer, decided in core when the request opens, the same on every host.                                                                                   |
 | 8. A follow-up typed into a stopped run                       | Admit it as a durable row that resumes the run, on every host; the CLI's in-memory buffer goes.                                                               |
 | 9. Guard kinds on the `defineTool` contract                   | Allow.                                                                                                                                                        |
-| 10. Pin the agent definition on the snapshot                  | Yes: the log records what the model saw, and resume uses the recorded definition.                                                                             |
+| 10. Pin the agent definition in the run's record              | Yes: the log records what the model saw, and resume uses the recorded definition.                                                                             |
 | 11. The creator wizard                                        | Retire it in favour of the cross-host `creator` agent.                                                                                                        |
 | 12. One global app-state root on desktop                      | Yes.                                                                                                                                                          |
 | 13. Presentation out of the run                               | Yes, for side effects only.                                                                                                                                   |
