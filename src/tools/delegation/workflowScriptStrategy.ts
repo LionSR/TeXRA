@@ -399,11 +399,12 @@ export function createWorkflowScriptStrategy(
 
     isTerminal: () => true,
 
-    pauseNotice: () =>
-      [
+    pauseNotice: () => ({
+      text: [
         `Workflow script '${params.name}' is paused at ${board.tally.ok} of ${board.tally.total} calls${board.stopped.length > 0 ? `; it was running ${board.stopped.join(', ')}` : ''}.`,
         `Nothing continues it on its own. To continue it, call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} again with scriptPath: '${params.scriptPath}' and the same agent: completed calls replay from its journal and only the rest run.`,
       ].join('\n'),
+    }),
 
     // Wrap the free-form result in the shared child-run envelope so the async
     // follow-up carries the run's runId, like every other detached

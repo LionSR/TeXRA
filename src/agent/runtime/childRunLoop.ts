@@ -79,6 +79,14 @@ export interface ChildRunPorts {
   recordCost(totalCost: number | undefined): void;
 }
 
+/** A stopped child's pause: the notice its parent reads, and the id a
+ *  tool call names to continue it (a Codex thread, a Claude session), which
+ *  the `child.park` row keeps so that call reactivates this same run. */
+export interface ChildRunPause {
+  readonly text: string;
+  readonly resumeId?: string;
+}
+
 /**
  * Agent-CLI presentation and finalization. Native engines own their run
  * handle and terminal finalization and omit this port.
@@ -103,7 +111,7 @@ export interface ChildRunPort {
     /** Session stage closed with the derived outcome (the loop's stage). */
     stage?: Pick<StageHandle, 'end'>;
     /** The strategy's {@link ChildRunStrategy.pauseNotice}, read on a stop. */
-    pauseNotice?: () => string | undefined;
+    pauseNotice?: () => ChildRunPause | undefined;
   }): Effect.Effect<void, Error, Runs>;
 }
 
@@ -143,7 +151,7 @@ export interface ChildRunStrategy<TTurn, R = never> {
 
   /** A stop pauses this child rather than cancelling it: what it had done
    *  and how the parent's model continues it; undefined cancels it. */
-  pauseNotice?(): string | undefined;
+  pauseNotice?(): ChildRunPause | undefined;
 
   /**
    * Produce the first turn's outcome. Throws on hard failure. `R` names the

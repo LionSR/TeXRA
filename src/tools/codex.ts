@@ -256,9 +256,8 @@ export function runStreamedTurn(
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
     // `Effect.ensuring` below closes it and every open item card on any other
-    // exit (stream error, abort, or an early stream end) so the progress view
-    // never keeps a spinning Running card after the turn is already dead.
-    // finalizeTurnCard is a no-op once the card is closed.
+    // exit (stream error, abort, early end), so no dead turn keeps a Running
+    // card. finalizeTurnCard is a no-op once the card is closed.
     let turnLogRef: ToolUseCardRef | null = null;
     let turnStartedMs = Date.now();
     const finalizeTurnCard = (
@@ -552,6 +551,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
   return yield* launchAgentCliSession({
     session,
     parentRunId,
+    resumeId: input.thread_id ?? undefined,
     agentName: 'codex',
     description: input.prompt,
     config,

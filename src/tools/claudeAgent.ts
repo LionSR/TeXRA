@@ -625,6 +625,7 @@ const launchClaudeAgentSession = Effect.fn(
   return yield* launchAgentCliSession({
     session,
     parentRunId,
+    resumeId: input.fork_session ? undefined : (input.session_id ?? undefined),
     agentName: CLAUDE_AGENT_NAME,
     description: input.prompt,
     config: agentConfig,

@@ -1,21 +1,28 @@
 // Third-party imports
-import { Cause, Effect, Exit } from 'effect';
+import { Cause, Effect, Exit, Stream } from 'effect';
 
 // Local imports
 import { TraceEmitter, type AgentTrace } from '@agent/trace';
 import { finalizeRunTerminal } from '@agent/runtime/AgentRunLifecycle';
-import type { ChildRunPort } from '@agent/runtime/childRunLoop';
+import type { ChildRunPause, ChildRunPort } from '@agent/runtime/childRunLoop';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
-import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import {
+  aggregateId,
+  aggregateTarget,
+  RUN_OUTCOME,
+  RUN_SUBSTATE,
+} from '@shared/schemas';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
+import { ToolError } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
+import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 interface CreateChildRunOptions {
@@ -104,11 +111,11 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
   const { handle, session, logger, closeTrace, options } = args;
-  const notice =
+  const pause =
     options.outcome === RUN_OUTCOME.CANCELLED
       ? options.pauseNotice?.()
       : undefined;
-  if (notice !== undefined) return yield* pauseChildRun(args, notice);
+  if (pause !== undefined) return yield* pauseChildRun(args, pause);
 
   // Describing the failure is fallible: `error` is `unknown`, and formatting
   // a foreign value can throw (a throwing `message` getter or `toString`).
@@ -168,13 +175,14 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
 
 /**
  * Rest a stopped child that its parent's model can continue, instead of
- * ending it: `notice` becomes its report and is queued for the parent without
- * waking it, and a `child.park` `paused` row, not `run.end`, closes the
- * activation. Calling the child again activates it once more.
+ * ending it: the notice becomes its report and is queued for the parent
+ * without waking it, and a `child.park` `paused` row carrying the resume id,
+ * not `run.end`, closes the activation. Calling the child again activates it
+ * once more.
  */
 const pauseChildRun = Effect.fn('pauseChildRun')(function* (
   { handle, session, logger, closeTrace, options }: FinalizeChildRunArgs,
-  notice: string,
+  { text: notice, resumeId }: ChildRunPause,
 ) {
   const runId = handle.runId;
   const text = formatDelivery({
@@ -202,8 +210,40 @@ const pauseChildRun = Effect.fn('pauseChildRun')(function* (
   options.stage?.end(RUN_OUTCOME.CANCELLED);
   const target = aggregateId('run', runId);
   yield* session.commit([
-    { type: 'child.park', aggregateId: target, phase: 'paused' },
+    { type: 'child.park', aggregateId: target, phase: 'paused', resumeId },
   ]);
   (yield* Runs).untrackIfCurrent(handle);
   closeTrace();
+});
+
+/**
+ * The run an agent-CLI launch registers: the paused child of `parentRunId`
+ * whose pause kept `resumeId`, reactivated rather than left paused beside a
+ * new run, else a fresh id. Read from the rows (each run's latest
+ * `child.park`, and the fold's paused reading), not from a live registry, so
+ * it holds across a restart.
+ */
+export const agentCliChildRunId = Effect.fn('agentCliChildRunId')(function* ({
+  session,
+  parentRunId,
+  resumeId,
+}: {
+  readonly session: SessionHandle;
+  readonly parentRunId: RunId;
+  readonly resumeId?: string;
+}) {
+  if (resumeId === undefined) return generateRunId();
+  const [view, listing] = yield* Effect.all([
+    session.readView([]),
+    Stream.runCollect(session.events.listing()),
+  ]).pipe(Effect.mapError((e) => new ToolError(toErrorMessage(e))));
+  for (const row of listing) {
+    if (row.type !== 'child.park' || row.resumeId !== resumeId) continue;
+    const target = aggregateTarget(row.aggregateId);
+    if (target.kind !== 'run') continue;
+    const run = view.runs.get(target.id);
+    if (run?.substate === RUN_SUBSTATE.PAUSED && run.parentId === parentRunId)
+      return target.id;
+  }
+  return generateRunId();
 });

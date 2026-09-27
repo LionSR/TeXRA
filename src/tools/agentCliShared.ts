@@ -34,11 +34,14 @@ import {
 } from '@shared/schemas';
 import { executed } from '@tools/core/result';
 import { requireToolRun, type ToolRun } from '@tools/core/toolRun';
-import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { previewLabel } from '@utils/text/stringUtils';
 
-import { childRunDescription, createChildRun } from './delegation/childRun';
+import {
+  agentCliChildRunId,
+  childRunDescription,
+  createChildRun,
+} from './delegation/childRun';
 import {
   startDetachedChildRunLoop,
   type DetachedChildRunLaunch,
@@ -178,6 +181,8 @@ interface AgentCliLaunchParams<TTurn> {
   session: SessionHandle;
   /** The launching run: the child's parent edge. */
   parentRunId: RunId;
+  /** The thread or session id this launch continues, if any. */
+  resumeId?: string;
   agentName: string;
   description: string;
   config: AgentConfig;
@@ -196,18 +201,14 @@ interface AgentCliLaunchParams<TTurn> {
 }
 
 /**
- * Register a fresh agent-CLI run, then run the shared detached-child launch
- * choreography over it: create the child stream tab inside the owned-run
- * launch guard, hand the provider's strategy to the child run loop, and return
+ * Register an agent-CLI run (fresh, or the paused one `resumeId` continues),
+ * then run the shared detached-child launch choreography over it and return
  * the "launched" ToolResult.
  *
- * Failure channel: a setup failure dies with the error the choreography
- * raised (`Effect.orDie`), so the tool runner surfaces it as is; a cause
- * carrying an interrupt re-raises as an interrupt into the calling tool
- * fiber rather than being squashed into a failure. Under today's topology the
- * only reachable interrupt is the `restore` checkpoint below, before the child
- * stream exists (everything after it is uninterruptible), so this states the
- * primitive's semantics rather than a second live arm.
+ * Failure channel: a setup failure dies with the choreography's error
+ * (`Effect.orDie`); an interrupt re-raises as an interrupt into the calling
+ * tool fiber. The only reachable one is the `restore` checkpoint below, before
+ * the child stream exists.
  */
 export const launchAgentCliSession = Effect.fn(
   'agentCliShared.launchAgentCliSession',
@@ -216,7 +217,7 @@ export const launchAgentCliSession = Effect.fn(
 ): Effect.fn.Return<ToolResult, ToolError, Runs | AgentResume> {
   return yield* Effect.uninterruptibleMask((restore) =>
     Effect.gen(function* () {
-      const runId = generateRunId();
+      const runId = yield* agentCliChildRunId(params);
       // An external CLI drives this agent: the CLI is both the agent name and the
       // driving tool, and `identity.tool` is what gates native-only affordances
       // (resume/rerun) off for this cohort.
@@ -451,8 +452,7 @@ interface AgentCliLoopParams<TTurn> {
   turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
-  /** The tool call and id parameter that continue this session after a
-   *  stop; until a turn has registered an id, a stop cancels it. */
+  /** The call that continues this session after a stop, once an id is known. */
   continueWith: { readonly tool: string; readonly idParam: string };
 }
 
@@ -489,7 +489,6 @@ export function buildAgentCliLaunch<TTurn>(
       isTurnError,
       turnErrorMessage,
       loopFailedMessage,
-      continueWith,
     } = params;
     const { logger } = childRun;
     const registry = store(yield* Runs);
@@ -552,8 +551,12 @@ export function buildAgentCliLaunch<TTurn>(
         }),
       formatError: (turn, err) => formatError(turn, err, lastPrompt),
       pauseNotice: () =>
-        continueId &&
-        `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueWith.tool} with ${continueWith.idParam} '${continueId}'.`,
+        continueId === undefined
+          ? undefined
+          : {
+              text: `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${params.continueWith.tool} with ${params.continueWith.idParam} '${continueId}'.`,
+              resumeId: continueId,
+            },
       releaseSessionOwnership: () => {
         releaseFallbackClaim?.();
         registry.releaseByRunId(runId);
