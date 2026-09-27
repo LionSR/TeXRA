@@ -8,7 +8,11 @@ import {
 } from '@controllers/settingsView/ToolDashboardData';
 import type { StateStore } from '@platform/interfaces';
 import type { ToolDashboardItem } from '@shared/settingsView/settingsViewMessages';
-import { findToolPlugin, type ToolPlugin } from '@tools/plugins';
+import {
+  findToolPlugin,
+  type ToolPlugin,
+  type ToolPluginSetup,
+} from '@tools/plugins';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import { setToolEnabled } from '@utils/config/constants';
 
@@ -53,23 +57,26 @@ export function readCliToolGuide(
 ): CliToolGuide | undefined {
   const def = findCliToolDef(id);
   if (!def) return undefined;
+  const setup: ToolPluginSetup = def.setup ?? {};
 
   if (kind === 'install') {
-    const lines = [def.installGuide ?? def.configNotes ?? 'No install guide.'];
-    if (def.installCommand) {
-      lines.push('', `Command: ${def.installCommand}`);
+    const lines = [
+      setup.installGuide ?? setup.configNotes ?? 'No install guide.',
+    ];
+    if (setup.installCommand) {
+      lines.push('', `Command: ${setup.installCommand}`);
     }
-    if (def.installUrl) {
-      lines.push(`URL: ${def.installUrl}`);
+    if (setup.installUrl) {
+      lines.push(`URL: ${setup.installUrl}`);
     }
-    return { text: lines.join('\n'), command: def.installCommand };
+    return { text: lines.join('\n'), command: setup.installCommand };
   }
 
-  const lines = [def.authNote ?? def.configNotes ?? 'No auth guide.'];
-  if (def.authCommand) {
-    lines.push('', `Command: ${def.authCommand}`);
+  const lines = [setup.authNote ?? setup.configNotes ?? 'No auth guide.'];
+  if (setup.authCommand) {
+    lines.push('', `Command: ${setup.authCommand}`);
   }
-  return { text: lines.join('\n'), command: def.authCommand };
+  return { text: lines.join('\n'), command: setup.authCommand };
 }
 
 export function setCliToolEnabled(

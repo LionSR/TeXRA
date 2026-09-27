@@ -16,7 +16,12 @@ import type {
   ToolCommandKind,
   ToolDashboardItem,
 } from '@shared/settingsView/settingsViewMessages';
-import { TOOL_PLUGINS, findToolPlugin, type ToolPlugin } from '@tools/plugins';
+import {
+  TOOL_PLUGINS,
+  findToolPlugin,
+  type ToolPlugin,
+  type ToolPluginSetup,
+} from '@tools/plugins';
 import { isToolUnavailableOnHost } from '@tools/registry';
 import type { ToolProbeInputs } from '@tools/toolProbes';
 import {
@@ -55,7 +60,9 @@ export function planToolTerminalAction(input: {
   if (!def?.availability) return { kind: 'none', reason: 'unknownTool' };
 
   const command =
-    input.commandKind === 'install' ? def.installCommand : def.authCommand;
+    input.commandKind === 'install'
+      ? def.setup?.installCommand
+      : def.setup?.authCommand;
   if (!command) return { kind: 'none', reason: 'missingCommand' };
 
   return { kind: 'terminal', name: `TeXRA: ${def.name}`, command };
@@ -133,6 +140,15 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
     for (const { id, tools, status, statusLabel, statusDetail } of results) {
       const def = findToolPlugin(id);
       if (!def || !isToolPluginVisible(def, host)) continue;
+      const {
+        installGuide,
+        installCommand,
+        authCommand,
+        installExtensionId,
+        installUrl,
+        configNotes,
+        authNote,
+      }: ToolPluginSetup = def.setup ?? {};
       externalItems.push({
         id: def.id,
         name: def.name,
@@ -143,33 +159,31 @@ export const buildToolDashboardItems = Effect.fn('buildToolDashboardItems')(
         statusLabel,
         requiresSetup: true,
         installActions: [
-          ...(def.installGuide
-            ? [{ kind: 'guide' as const, text: def.installGuide }]
+          ...(installGuide
+            ? [{ kind: 'guide' as const, text: installGuide }]
             : []),
-          ...(def.installCommand
-            ? [{ kind: 'command' as const, command: def.installCommand }]
+          ...(installCommand
+            ? [{ kind: 'command' as const, command: installCommand }]
             : []),
-          ...(def.authCommand
-            ? [{ kind: 'auth' as const, command: def.authCommand }]
+          ...(authCommand
+            ? [{ kind: 'auth' as const, command: authCommand }]
             : []),
           // The desktop app cannot host VS Code extensions, so it gets no
           // "Install Extension" button; the install guide and URL still
           // describe the standalone path (Lean 4's `lake` build, for one).
-          ...(def.installExtensionId && host !== 'desktop'
+          ...(installExtensionId && host !== 'desktop'
             ? [
                 {
                   kind: 'extension' as const,
-                  extensionId: def.installExtensionId,
+                  extensionId: installExtensionId,
                 },
               ]
             : []),
-          ...(def.installUrl
-            ? [{ kind: 'url' as const, url: def.installUrl }]
-            : []),
+          ...(installUrl ? [{ kind: 'url' as const, url: installUrl }] : []),
         ],
-        configNotes: def.configNotes,
+        configNotes,
         statusDetail,
-        authNote: def.authNote,
+        authNote,
         toggleable: def.toggleable,
         enabled: !disabledIds.has(def.id),
         ...settingRows(def),
