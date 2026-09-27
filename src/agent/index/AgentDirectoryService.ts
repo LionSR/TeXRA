@@ -46,7 +46,12 @@ export interface AgentDirectoryServiceOptions {
 }
 
 export class AgentDirectoryService {
-  constructor(private readonly options: AgentDirectoryServiceOptions) {}
+  readonly resourcesRoot?: string;
+
+  constructor(private readonly options: AgentDirectoryServiceOptions) {
+    if (options.resourcesPath !== '')
+      this.resourcesRoot = options.resourcesPath;
+  }
 
   builtIn(): Effect.Effect<string, AgentDirectoriesFailed> {
     return this.packagedDir(BUILTIN_WORKFLOW_AGENTS_DIR);

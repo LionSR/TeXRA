@@ -4,7 +4,7 @@ import { Effect, RcMap, Result } from 'effect';
 import {
   StateReadFailed,
   StateWriteFailed,
-  type StateStore,
+  type AppStateStore,
 } from '@platform/interfaces';
 import {
   JsonValueSchema,
@@ -23,9 +23,9 @@ export function appStateStoreFromDatabase(
   storage: string,
   database: Pick<
     Database['Service'],
-    'readAppStateKey' | 'appendAll' | 'updateAppStateKey'
+    'readAppStateKey' | 'appendAll' | 'updateAppStateKey' | 'appStateChanges'
   >,
-): StateStore {
+): AppStateStore {
   const refused = (key: string, cause: unknown) =>
     new StateWriteFailed({
       key,
@@ -52,6 +52,7 @@ export function appStateStoreFromDatabase(
   const lane = (key: string) =>
     withPerKeyLane(writeLanes, `${storage}\u0000${key}`);
   return {
+    changes: database.appStateChanges,
     get: <T>(key: string, defaultValue?: T) =>
       database.readAppStateKey(key).pipe(
         Effect.map((value) =>

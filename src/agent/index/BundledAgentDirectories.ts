@@ -17,10 +17,10 @@ export const BUNDLED_AGENT_DIRECTORY_NAMES = [
  * The agent directories that tool plugins ship, at
  * `<resources>/plugins/<id>/agents`, by plugin id. Their agents are bundled
  * tool-use agents like the core ones and keep the `builtInToolUse` source, so
- * their keys do not change. The host bootstrap installs them once; the plugin
- * ids cross as strings, so `@agent/index` takes no edge to `@tools`. The
- * default installs none, which is what an embedder with its own agent
- * directories gets.
+ * their keys do not change. The process's agent-catalog follower
+ * (`@tools/agentCatalogFollower`) installs them under the host's packaged
+ * resources root as it is built, before any reload; the plugin ids cross as strings, so `@agent/index` takes no edge
+ * to `@tools`. The default installs none.
  */
 let pluginAgentDirectories: ReadonlyMap<string, string> = new Map();
 

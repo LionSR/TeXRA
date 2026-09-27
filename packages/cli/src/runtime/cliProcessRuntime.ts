@@ -38,7 +38,7 @@
  * scoped connection. Platform-less entries provide refusing services instead.
  * initCliPlatform reads that AppState and opens only the workspace scope.
  */
-import { Effect, Layer } from 'effect';
+import { Effect, Layer, Stream } from 'effect';
 
 import { installedProcessRuntime } from '@agent/runtime';
 import { AgentDirectoryService } from '@agent/index';
@@ -127,6 +127,8 @@ const refusingGlobalDatabase: Layer.Layer<GlobalDatabase> = Layer.succeed(
 )({
   appendAll: () => refuseGlobalRecord('appendAll'),
   readAppStateKey: () => refuseGlobalRecord('readAppStateKey'),
+  appStateChanges: () =>
+    Stream.fromEffect(refuseGlobalRecord('appStateChanges')),
   updateAppStateKey: () => refuseGlobalRecord('updateAppStateKey'),
   readInputHistory: () => refuseGlobalRecord('readInputHistory'),
   appendInputHistory: () => refuseGlobalRecord('appendInputHistory'),

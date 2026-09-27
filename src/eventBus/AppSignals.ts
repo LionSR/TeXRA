@@ -98,25 +98,16 @@ export interface AppSignalPayloads {
   toolAvailabilityChanged: undefined;
 
   /**
-   * A tool plugin switch was flipped in this process (`setToolEnabled`).
-   * Keyless: a listener re-reads the switches.
-   *
-   * Consumed by: the process's tool registry (`toolRegistryLayer`), which
-   * applies the switches to the live catalog at once, so what follows the
-   * catalog outside a run (a host plugin layer's lifetime, the Copilot tools)
-   * need not wait for a run's step. Runs read the switches at their next
-   * step anyway, which also covers a switch flipped by another process.
-   */
-  toolSwitchesChanged: undefined;
-
-  /**
    * The workspace agent roster changed outside a settings round-trip. Keyless
    * on purpose: every listener re-reads the roster, so which team or agent
    * moved carries no information.
    *
    * Emitted by the in-process roster writers that bypass the settings
    * round-trip: `apply_team`, which the setup agent runs mid-conversation,
-   * and the agent-creator prompt that adds a new agent to the dropdown.
+   * and the agent-creator prompt that adds a new agent to the dropdown; and
+   * by the tool registry (`toolRegistryLayer`) once it has reloaded the agent
+   * catalog after a tool switch or the plugin install record changed, in
+   * this process or another.
    * Settings-originated changes repaint through their own handler and do not
    * emit.
    *

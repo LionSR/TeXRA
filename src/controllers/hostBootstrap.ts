@@ -30,7 +30,6 @@
 import { Effect } from 'effect';
 
 // Local imports
-import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
@@ -88,14 +87,6 @@ export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
     init.skills,
     TOOL_PLUGINS.flatMap((plugin) =>
       plugin.skills === true ? [plugin.id] : [],
-    ),
-  );
-  // Tool plugins that ship agents add their directories to the bundled
-  // tool-use source, again by id, so `@agent/index` takes no edge to `@tools`.
-  installPluginAgentDirectories(
-    init.skills.resourcesPath,
-    TOOL_PLUGINS.flatMap((plugin) =>
-      plugin.agents === true ? [plugin.id] : [],
     ),
   );
   // Seed first-install defaults (e.g. disabled tools). No-ops once

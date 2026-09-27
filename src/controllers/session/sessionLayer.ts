@@ -127,6 +127,7 @@ import { drainPlugins, sessionPluginLayers } from '@tools/pluginLayers';
 import { directLeanLanguageServices } from '@tools/lean/direct/directLspAdapter';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import { SetupPlatform, type SetupPlatformShape } from '@tools/setup/platform';
+import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 import { toolRegistryLayer, type HostPluginLayers } from '@tools/registry';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
@@ -1193,7 +1194,7 @@ export function installProcessRuntime({
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
     AgentResume.layer(agentResume),
-    agentDirectories,
+    Layer.provideMerge(agentCatalogFollower, agentDirectories),
     toolMissingReporter === undefined
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
@@ -1222,10 +1223,9 @@ export function installProcessRuntime({
     ManagedRuntime.make(
       Sessions.layer(held).pipe(
         Layer.provideMerge(projectDatabaseLayer),
-        // The usage log's own lifetime: its sender and ticker run as long as
-        // this runtime does, and its finalizer drains the queue while the
-        // account plane below is still up. Ahead of `services` in the chain so
-        // that plane and the HTTP client reach it.
+        // The usage log's own lifetime: its sender and ticker run with this
+        // runtime, its finalizer drains the queue while the account plane is
+        // up, and it is ahead of `services` so that plane and HTTP reach it.
         Layer.provideMerge(usageLog),
         // The editor's Lean port also reads this process's AppState.
         Layer.provideMerge(lean),

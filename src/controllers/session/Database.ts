@@ -82,6 +82,7 @@ import {
 } from '@shared/session/database';
 import { PLUGIN_ARMS } from '@tools/pluginArms';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
+import { appStateChangeFeed } from './appStateChanges';
 import { localDatabasePath } from './localDatabasePath';
 import { USAGE_ROWS } from './usageProjection';
 import {
@@ -866,6 +867,7 @@ export const databaseLayer = (
             }),
           ),
         readAppStateKey: (key) => query(readAppStateKey(key)),
+        appStateChanges: appStateChangeFeed(level, execOne),
         updateAppStateKey: (key, change) =>
           transact(
             Effect.gen(function* () {
