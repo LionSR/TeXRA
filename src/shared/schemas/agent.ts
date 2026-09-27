@@ -43,6 +43,8 @@ export const AGENT_SOURCE = {
   BUILT_IN_WORKFLOW: 'builtInWorkflow',
   BUILT_IN_TOOL_USE: 'builtInToolUse',
   REMOTE: 'remote',
+  /** An installed Claude Code or Codex plugin's agent, named `<plugin>:<name>`. */
+  PLUGIN: 'plugin',
 } as const;
 
 /** Single source of truth for agent source identifiers. */
@@ -51,15 +53,17 @@ export const AgentSourceSchema = z.enum(AGENT_SOURCE);
 export type AgentSource = z.infer<typeof AgentSourceSchema>;
 
 /**
- * True for the two sources whose definitions ship inside the host bundle and
- * are read in place. Every surface that offers to open one presents it
- * read-only and points edits at the custom copy; the extension additionally
- * registers those directories `writable: false` for its file tools.
+ * True for the sources whose definitions are read in place and are not the
+ * user's to edit: the two that ship inside the host bundle, and an installed
+ * plugin's. Every surface that offers to open one presents it read-only and
+ * points edits at the custom copy; the extension additionally registers the
+ * bundled directories `writable: false` for its file tools.
  */
 export function isPackagedAgentSource(source: AgentSource): boolean {
   return (
     source === AGENT_SOURCE.BUILT_IN_WORKFLOW ||
-    source === AGENT_SOURCE.BUILT_IN_TOOL_USE
+    source === AGENT_SOURCE.BUILT_IN_TOOL_USE ||
+    source === AGENT_SOURCE.PLUGIN
   );
 }
 
@@ -74,13 +78,24 @@ export const AgentNameSchema = z
       'Agent names must be identifiers: letters, numbers, underscores, or hyphens.',
   });
 
+/** An agent's name as the catalog lists it: its own, or `<plugin>:<name>`
+ *  for an installed plugin's agent. A definition names itself bare. */
+const CatalogAgentNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .regex(/^(?:[a-z0-9][a-z0-9-]*:)?[A-Za-z0-9][A-Za-z0-9_-]*$/u, {
+    message:
+      'Agent names must be identifiers (letters, numbers, underscores, or hyphens), optionally after a plugin name and a colon.',
+  });
+
 /**
  * Base schema for agent identity metadata shared across all agent representations.
  * View-specific schemas (RemoteAgentSchema, AgentSelectionItemSchema, etc.)
  * should extend this via `.extend()` rather than redefining these fields.
  */
 export const AgentMetadataBaseSchema = z.object({
-  name: AgentNameSchema,
+  name: CatalogAgentNameSchema,
   category: AgentCategorySchema,
   description: z.string().optional(),
 });
@@ -99,10 +114,26 @@ export function agentKeyOf(entry: { source: string; name: string }): string {
   return agentKey(entry.source, entry.name);
 }
 
-/** Extract the plain agent name from a possibly source-qualified key ("source:name" → "name"). */
+/**
+ * The agent name in an identifier: a source-qualified key's name
+ * ("plugin:paper:review" → "paper:review", "custom:x" → "x"), or the
+ * identifier itself when it names no source ("paper:review", or a URL).
+ */
 export function agentName(key: string): string {
   const idx = key.indexOf(':');
-  return idx >= 0 ? key.slice(idx + 1) : key;
+  return idx >= 0 && AgentSourceSchema.safeParse(key.slice(0, idx)).success
+    ? key.slice(idx + 1)
+    : key;
+}
+
+/**
+ * The agent name in an identifier as one file-name segment: a plugin
+ * agent's `<plugin>:<name>` becomes `<plugin>__<name>`, since `:` is not a
+ * file-name character on every platform. Run packs, run directories and
+ * copy stems derive their names through this alone.
+ */
+export function agentFileName(key: string): string {
+  return agentName(key).replaceAll(':', '__');
 }
 
 /** Match bare names by name and source-qualified keys by exact identity. */
@@ -114,19 +145,4 @@ export function agentMatchesIdentifier(
   return identifier === name
     ? entry.name === name
     : agentKeyOf(entry) === identifier;
-}
-
-/**
- * Extract the clean agent name from an identifier.
- * Like agentName() but validates the prefix is a known AgentSource first,
- * so arbitrary strings with colons (e.g. URLs) pass through unchanged.
- */
-export function getCleanAgentName(agentIdentifier: string): string {
-  const colonIdx = agentIdentifier.indexOf(':');
-  if (colonIdx === -1) return agentIdentifier;
-
-  const source = agentIdentifier.slice(0, colonIdx);
-  if (!AgentSourceSchema.safeParse(source).success) return agentIdentifier;
-
-  return agentName(agentIdentifier);
 }

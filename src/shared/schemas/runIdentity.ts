@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Local imports
-import { getCleanAgentName } from './agent';
+import { agentName } from './agent';
 
 /**
  * What kind of thing a run is, declared once at the launch site and carried
@@ -52,5 +52,5 @@ export function runIdentityName(id: RunIdentity): string {
 
 /** UI label for a run identity — strips a known source prefix from agent ids. */
 export function runIdentityDisplayName(id: RunIdentity): string {
-  return getCleanAgentName(runIdentityName(id));
+  return agentName(runIdentityName(id));
 }

@@ -720,7 +720,6 @@ describe('desktop settings IPC', () => {
         [AGENT_SKILLS_CONFIG_KEY]: false,
         [WorkspaceStateKey.DISABLED_SKILLS]: [],
         [WorkspaceStateKey.DISABLED_SKILL_SOURCES]: [],
-        [GlobalStateKey.INSTALLED_PLUGINS]: [],
       },
     });
   });

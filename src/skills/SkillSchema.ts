@@ -2,12 +2,12 @@
 import { z } from 'zod';
 
 // Local imports - shared schemas
-import { SkillNameSchema } from '@shared/schemas';
+import { QualifiedSkillNameSchema } from '@shared/schemas';
 
 export const SKILL_DESCRIPTION_MAX_LENGTH = 1024;
 
 export const SkillSchema = z.strictObject({
-  name: SkillNameSchema,
+  name: QualifiedSkillNameSchema,
   /** Collapsed, non-empty and at most {@link SKILL_DESCRIPTION_MAX_LENGTH}
    *  characters before it gets here: `skillLoader.normalizeSkillDescription`
    *  owns that policy and reports what it changed. */

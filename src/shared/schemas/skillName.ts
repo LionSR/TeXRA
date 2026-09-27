@@ -21,3 +21,17 @@ export const SkillNameSchema = z
     (name) => !name.includes('--'),
     'Skill name must not contain repeated hyphens',
   );
+
+/**
+ * A skill's name as the catalog, the switches and the transcript carry it:
+ * a bare name, or `<plugin>:<name>` for a skill or command an installed
+ * plugin contributes. A skill's own frontmatter takes the bare grammar only,
+ * so no skill names itself into a plugin's namespace.
+ */
+export const QualifiedSkillNameSchema = z.string().refine((name) => {
+  const parts = name.split(':');
+  return (
+    parts.length <= 2 &&
+    parts.every((part) => SkillNameSchema.safeParse(part).data === part)
+  );
+}, 'Skill name must be a skill name, or <plugin>:<skill name>');

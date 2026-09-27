@@ -4,8 +4,9 @@
  * invariant 7).
  *
  * Each model request opens a step, and so does a conversation's park. It
- * applies the user's plugin switches to the live catalog
- * (`@tools/liveTools`), pins its current generations, and resolves from them
+ * applies the user's plugin switches, and the installed plugins enabled and
+ * trusted from any host, to the live catalog (`@tools/liveTools`), pins its
+ * current generations, and resolves from them
  * the tools the run is offered (`resolveStepTools`), the continuation for
  * its agent category, if any plugin on contributes one, and the prompt
  * contribution of each plugin on that makes one, with the process and
@@ -37,7 +38,8 @@ import {
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
-import { LiveTools, type ContinuationEntry } from '@tools/liveTools';
+import type { ContinuationEntry } from '@tools/catalogEntries';
+import { LiveTools } from '@tools/liveTools';
 import { switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
 import { getDisabledToolIds } from '@utils/config/constants';
@@ -155,6 +157,7 @@ const openStep = Effect.fn('Step.open')(function* (
           getDisabledToolIds(run.stores.globalState),
           switchedOffPlugins,
         ),
+        { installed: true },
       )
       .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
@@ -181,7 +184,11 @@ const openStep = Effect.fn('Step.open')(function* (
     );
     return {
       tools: { ...tools, services },
-      warnings: [...resolved.warnings, ...(held?.notes ?? [])],
+      warnings: [
+        ...pinned.warnings,
+        ...resolved.warnings,
+        ...(held?.notes ?? []),
+      ],
       withheld: resolved.withheldForApproval,
       continuation,
       prompt: new Map(

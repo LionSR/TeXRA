@@ -1,4 +1,7 @@
 import '@test/support/sessionGraphTestSetup';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+
 import { it } from '@effect/vitest';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
@@ -9,6 +12,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
+import { enablePlugin } from '@common/plugins/pluginTrust';
 import { RUN_OUTCOME } from '@shared/schemas';
 import type { AggregateId, FlowSnapshotPayload, RunId } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -23,6 +27,7 @@ import {
 import { createTestCliContext as cliContext } from '@test/cli/fixtures/cliContext';
 import {
   createTempDirPlatform,
+  makeTempDir,
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -1355,21 +1360,36 @@ describe('executeCliConfig', () => {
   );
 
   it.effect(
-    'records each installed plugin by source and pinned commit in the CLI result',
+    'records each installed plugin that loads by source and pinned commit in the CLI result',
     () =>
       Effect.gen(function* () {
         const commit = 'a'.repeat(40);
-        yield* testDefaultSession().roots.globalState.update(
-          GlobalStateKey.INSTALLED_PLUGINS,
-          [
-            {
-              name: 'notes',
-              source: 'https://github.com/example/notes.git',
-              commit,
-              path: '/home/me/.texra/plugins/notes',
-              skills: ['/home/me/.texra/plugins/notes/skills'],
-            },
-          ],
+        const pluginDir = yield* Effect.promise(() =>
+          makeTempDir('texra-cli-plugin-', tempDirs),
+        );
+        yield* Effect.promise(async () => {
+          await fs.mkdir(path.join(pluginDir, '.claude-plugin'));
+          await fs.writeFile(
+            path.join(pluginDir, '.claude-plugin', 'plugin.json'),
+            JSON.stringify({ name: 'notes', version: '1.0.0' }),
+          );
+        });
+        const plugin = {
+          source: 'https://github.com/example/notes.git',
+          commit,
+          path: pluginDir,
+          skills: [],
+        };
+        const { globalState } = testDefaultSession().roots;
+        yield* globalState.update(GlobalStateKey.INSTALLED_PLUGINS, [
+          { name: 'notes', ...plugin, enabled: false },
+          // Enabled but never trusted: it loads nothing, so it is not named.
+          { name: 'drafts', ...plugin, enabled: true },
+        ]);
+        yield* enablePlugin(
+          'notes',
+          { globalState, globalStorage: pluginDir },
+          () => Effect.succeed(true),
         );
         const { AgentCategory } = yield* Effect.promise(
           () => import('@shared/schemas'),

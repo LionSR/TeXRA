@@ -19,9 +19,14 @@ import { getDisabledToolIds } from '@utils/config/constants';
 export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   input: Omit<
     StepToolInputs,
-    'held' | 'runTools' | 'approvalPromptsUnavailable'
+    'held' | 'runTools' | 'approvalPromptsUnavailable' | 'injectInstalled'
   > &
-    Partial<Pick<StepToolInputs, 'runTools' | 'approvalPromptsUnavailable'>>,
+    Partial<
+      Pick<
+        StepToolInputs,
+        'runTools' | 'approvalPromptsUnavailable' | 'injectInstalled'
+      >
+    >,
 ) {
   const live = yield* LiveTools;
   const held = yield* live.hold(declaredToolNames(input.tools));
@@ -34,6 +39,7 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
   const resolved = yield* resolveStepTools(pinned.generation, {
     runTools: [],
     approvalPromptsUnavailable: false,
+    injectInstalled: false,
     ...input,
     held,
   });

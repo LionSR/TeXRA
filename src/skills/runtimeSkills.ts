@@ -2,10 +2,11 @@ import { realpathSync } from 'node:fs';
 
 import { Effect } from 'effect';
 
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
   type ActiveSkillSourceScope,
-  type InstalledPlugin,
   type RawAcceptedSkill,
   type SkillCatalogEntry,
   type SkillDisplayItem,
@@ -19,6 +20,7 @@ import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { registerExternalRoot } from '@utils/files/externalRoots';
 import { safeHomedir } from '@utils/system/platformPaths';
 
+import { issue } from './skillLoader';
 import {
   discoverSkillSources,
   type DiscoverSkillSourcesResult,
@@ -73,31 +75,41 @@ export function installSkillContributions(
 }
 
 /**
- * The installed contributions folded for one folder, with the plugins
- * recorded in `stores`. `options` replaces the installed options for one
+ * Discover the installed contributions folded for one folder, with the
+ * installed plugins that load now: the enabled ones the user trusts as they
+ * are. Why each other enabled plugin loads nothing is a discovery issue, so
+ * every listing names it. `options` replaces the installed options for one
  * call: the CLI's `skills list` flags.
  */
-export function runtimeSkillSources(
+export function discoverRuntimeSkillSources(
   cwd: string,
   stores: SettingsStores,
   options: SkillSourceOptions = installed.options,
 ) {
   return Effect.gen(function* () {
-    const plugins = yield* readSettingFrom<InstalledPlugin[]>(
-      stores,
-      GlobalStateKey.INSTALLED_PLUGINS,
+    const plugins = yield* readInstalledPluginLoad(stores);
+    const result = yield* discoverSkillSources(
+      foldSkillSources(installed.contributions, {
+        cwd,
+        // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
+        // raise UV_ENOENT in containers/CI); `/nonexistent` matches the
+        // fallback used by other agnostic-zone callers (e.g.
+        // `claudeAgentConfig.ts`).
+        home: safeHomedir() ?? '/nonexistent',
+        resourcesPath: installed.resourcesPath,
+        options,
+        plugins: plugins.loadable,
+      }),
     );
-    return foldSkillSources(installed.contributions, {
-      cwd,
-      // `safeHomedir()` never throws (unlike raw `os.homedir()`, which can
-      // raise UV_ENOENT in containers/CI); `/nonexistent` matches the
-      // fallback used by other agnostic-zone callers (e.g.
-      // `claudeAgentConfig.ts`).
-      home: safeHomedir() ?? '/nonexistent',
-      resourcesPath: installed.resourcesPath,
-      options,
-      plugins,
-    });
+    return {
+      skills: result.skills,
+      errors: [
+        ...plugins.withheld.map((message) =>
+          issue('warning', 'invalid_source', message),
+        ),
+        ...result.errors,
+      ],
+    } satisfies DiscoverSkillSourcesResult;
   });
 }
 
@@ -107,15 +119,14 @@ export function runtimeSkillSources(
  * data by the caller that holds it — a run's session workspace, or the host's
  * at the settings surface that asked (#12421).
  */
-function discoverRuntimeSkills(
+const discoverRuntimeSkills = (
   workspaceRoot: string | undefined,
   stores: SettingsStores,
-) {
-  return runtimeSkillSources(
+) =>
+  discoverRuntimeSkillSources(
     workspaceRoot ?? safeHomedir() ?? '/nonexistent',
     stores,
-  ).pipe(Effect.flatMap(discoverSkillSources));
-}
+  );
 
 function sourceLabel(source: SkillSource): string {
   return source.label ?? source.scope;

@@ -13,11 +13,27 @@ export const AgentSkillsEnabledSchema = z
   );
 
 /**
- * One plugin `texra plugin install` recorded, persisted as a row of the
- * `texra.plugins.installed` setting. The plugin keeps its own manifest
- * (`.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`); this row is
- * only where it lives and which of its directories hold skills, resolved once
- * at install or update so discovery reads data rather than manifests.
+ * The trust decision the user accepted for an installed plugin: the version
+ * it was at and a digest of every file it ships and what its MCP servers run
+ * (their specs, a keyed digest of their env values, and the external
+ * commands and files they name). The plugin loads only while its current
+ * version and digest match, so another version, or any edit, asks again.
+ */
+const PluginTrustSchema = z.object({
+  version: z.string().nullable(),
+  digest: z.string().regex(/^[0-9a-f]{64}$/),
+});
+export type PluginTrust = z.infer<typeof PluginTrustSchema>;
+
+/**
+ * One installed plugin, persisted as a row of the `texra.plugins.installed`
+ * state: the one install record every host reads and writes (the CLI's
+ * `texra plugin`, and the Skills page of the extension's and the desktop's
+ * settings). The plugin keeps its own manifest (`.claude-plugin/plugin.json`
+ * or `.codex-plugin/plugin.json`); this row is where it lives, whether it is
+ * enabled, the trust given to it, and what stands in for a manifest the
+ * plugin does not have (the marketplace entry's skill directories, version
+ * and description).
  *
  * `name` takes the skill-name grammar, which also makes it a safe single path
  * segment for the managed `plugins/<name>` directory. `commit` is set exactly
@@ -39,11 +55,18 @@ export const InstalledPluginSchema = z.object({
   path: z.string().min(1),
   /** Absolute skill roots inside `path`, each holding `<skill>/SKILL.md`. */
   skills: z.array(z.string().min(1)),
+  /** The marketplace entry's version and description, for a plugin with no
+   *  manifest of its own. */
+  version: z.string().optional(),
+  description: z.string().optional(),
   /**
-   * Whether the plugin's skills load (`texra plugin enable|disable`). A
-   * disabled plugin stays installed and pinned; everything it contributes
-   * is hidden. Rows written before the switch existed read as enabled.
+   * Whether the plugin loads. An install records it disabled; enabling it
+   * asks the user to trust it as it is (`trust`). A disabled plugin stays
+   * installed, pinned and trusted, and contributes nothing.
    */
-  enabled: z.boolean().default(true),
+  enabled: z.boolean(),
+  /** The last trust decision the user accepted; kept in the same row, so
+   *  one write changes both, and removing the plugin removes its trust. */
+  trust: PluginTrustSchema.optional(),
 });
 export type InstalledPlugin = z.infer<typeof InstalledPluginSchema>;

@@ -4,11 +4,14 @@
  * database does to a live reader, and when its owner's scope releases it.
  */
 import { it } from '@effect/vitest';
-import { Effect, Exit, Result, Scope } from 'effect';
+import { Context, Effect, Exit, Layer, Result, Scope } from 'effect';
 import { describe, expect } from 'vitest';
 
-import { openAppStateStore } from '@controllers/session/appStateStore';
+import { appStateStoreFromDatabase } from '@controllers/session/appStateStore';
+import { databaseLayer } from '@controllers/session/Database';
+import { WorkspaceRoots } from '@controllers/session/WorkspaceRoots';
 import { processOwnerId } from '@platform/defaults/nodeProcesses';
+import { Database } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
@@ -16,6 +19,17 @@ import { nodePlatformLayer } from '@test/support/fsTestUtils';
 
 describe('application state on SQLite', () => {
   const tempDirs = useTempDirs();
+  /** Independent state over its own database, in the caller's scope. */
+  const openAppStateStore = (storage: string) =>
+    Effect.map(
+      Layer.build(
+        databaseLayer('persistent').pipe(
+          Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
+        ),
+      ),
+      (context) =>
+        appStateStoreFromDatabase(storage, Context.get(context, Database)),
+    );
   const openStore = (storage: string) =>
     openAppStateStore(storage).pipe(
       Effect.provide(ProcessIdentity.layer(processOwnerId('app-state-test'))),

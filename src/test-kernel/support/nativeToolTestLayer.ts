@@ -43,6 +43,7 @@ export const testRunTools = (
     host: undefined,
     runTools: Object.values(tools),
     injectTools: false,
+    injectInstalled: false,
     stores,
     workspaceRoot: undefined,
     held: { warnings: [], loaded: new Map() },

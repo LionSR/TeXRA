@@ -109,7 +109,7 @@ export enum GlobalStateKey {
   /** The per-install key MCP env values are digested under (`mcpConfig`). */
   MCP_REVISION_KEY = 'texra.mcp.revisionKey',
 
-  // Plugins recorded by `texra plugin install`
+  // Installed Claude Code and Codex plugins, and the trust given to each
   INSTALLED_PLUGINS = 'texra.plugins.installed',
 
   // Experimental

@@ -201,22 +201,20 @@ All notable changes to this project will be documented in this file.
   marks no longer look like checkboxes, and plan entries read "planned"
   rather than "declared".
 
-- **Enable or disable an installed plugin** — `texra plugin disable <name>`
-  hides a plugin's skills without uninstalling it, and
-  `texra plugin enable <name>` brings them back. `texra plugin list` marks a
-  disabled plugin.
-
-- **Install Claude Code and Codex plugins for their skills** — `texra plugin
-install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
-  adds its skills as user skills to TeXRA sessions in the terminal and in
-  VS Code, which share the install. The desktop app does not load them yet.
-  It reads the
-  plugin's own `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`,
-  installs from a marketplace repository with `--plugin <name>`, and uses a
-  local plugin folder in place. `texra plugin list`, `update` and `remove`
-  manage them, and the Skills settings tab lists them. Only skills are loaded
-  for now; a plugin's MCP servers, hooks, commands and agents are listed as
-  ignored and never run.
+- **Install Claude Code and Codex plugins in the terminal, VS Code and the
+  desktop app** — install a plugin from GitHub, a git URL or a local folder
+  with `texra plugin install`, or from Settings > Agents > Skills; all three
+  apps see the same installed plugins. A plugin stays off until you turn it
+  on: TeXRA shows what it contains and the programs it will run, and asks you
+  to trust it. A new version, or any change to its files or settings, asks
+  again. Once on, its skills, commands and agents appear under the plugin's
+  name (for example `paper:review`), and its tools are available to your
+  agents, including in a conversation already under way. Turning a plugin off
+  removes its tools and agents without uninstalling it, and past
+  conversations keep what it did. Plugins that run code of their own (hooks)
+  are not supported yet and cannot be turned on.
+- **The desktop app's settings now live alongside the extension and CLI;
+  desktop-only settings reset once.**
 - **Desktop: clearer multiple projects** — each open project in the sidebar
   has one row with a status dot (waiting on you, running, or finished while
   you were elsewhere), a `+` that starts a task in that project, and a `×`

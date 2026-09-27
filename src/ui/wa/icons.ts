@@ -88,6 +88,11 @@ export const AGENT_DECORATORS = {
       label: 'Custom',
       hint: 'Custom agent: User-defined in your agents directory',
     },
+    plugin: {
+      icon: 'cube',
+      label: 'Plugin',
+      hint: 'Plugin agent: From an installed Claude Code or Codex plugin',
+    },
   },
   agentCategories: {
     workflow: { icon: 'cube', label: 'Workflow' },

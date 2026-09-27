@@ -2,6 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Result } from 'effect';
 import { getAgent } from '@agent/index';
+import { readPluginAgent } from '@agent/index/pluginAgents';
 import type { AgentEntry } from '@agent/index/agentEntry';
 import {
   AgentPromptSchema,
@@ -15,7 +16,9 @@ import {
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
+import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
+import { AppState } from '@platform/interfaces';
 import { agentKey, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -95,7 +98,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 ): Effect.fn.Return<
   [AgentSetting, AgentPrompt],
   Error,
-  FileSystem.FileSystem | HttpClient.HttpClient
+  FileSystem.FileSystem | HttpClient.HttpClient | AppState
 > {
   // Handle remote agents
   if (entry.source === 'remote') {
@@ -103,6 +106,45 @@ export const loadAgentSettingAndPrompts = Effect.fn(
 
     // Remote agents are already fully processed (tools resolved, validated)
     return [remoteConfig.settings, remoteConfig.prompts];
+  }
+
+  // A plugin agent is its subagent file, read again: it inherits nothing.
+  // The catalog that listed it may predate a change another host made, so
+  // its plugin must load now (enabled, and trusted as it is) or it does not
+  // run.
+  if (entry.source === 'plugin') {
+    const plugin = entry.name.slice(0, entry.name.indexOf(':'));
+    const load = yield* readInstalledPluginLoad({
+      globalState: yield* AppState,
+    });
+    if (!load.loadable.some(({ record }) => record.name === plugin))
+      return yield* Effect.fail(
+        new Error(
+          `Agent ${entry.name} does not run: ${
+            load.withheld.find((reason) =>
+              reason.startsWith(`Plugin ${plugin} `),
+            ) ?? `plugin ${plugin} is not installed or not enabled.`
+          }`,
+        ),
+      );
+    const agent = yield* readPluginAgent(entry.path, plugin);
+    return yield* Effect.try({
+      try: () =>
+        [
+          AgentSettingSchema.parse({
+            agentCategory: AgentCategory.ToolUse,
+            // None named: `AgentRun` gives it what it inherits.
+            tools: agent.tools ?? [],
+          }),
+          // The task arrives as the instruction, as a Claude Code subagent's
+          // does.
+          AgentPromptSchema.parse({
+            systemPrompt: agent.systemPrompt,
+            userRequest: '{{ INSTRUCTION }}',
+          }),
+        ] as [AgentSetting, AgentPrompt],
+      catch: ensureError,
+    });
   }
 
   // Mirrors the cycle guard in agentYamlScanner.ts's inheritedDefinitionBlock:

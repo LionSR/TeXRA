@@ -18,16 +18,17 @@
  * run shows in its transcript. The project-level `.texra/mcp.json` is not
  * read: a checked-in file that spawns processes needs a trust prompt first.
  */
-import { createHmac, randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
-import { Effect, Result, type FileSystem } from 'effect';
-import stableStringify from 'safe-stable-stringify';
+import { Effect, type FileSystem } from 'effect';
 import { z } from 'zod';
 
+import {
+  envDigest,
+  parseMcpServers,
+  type McpServerConfig,
+} from '@common/plugins/mcpServers';
 import { TEXRA_STORAGE_DIR_NAME } from '@platform/defaults/nodeStorage';
-import { AppState } from '@platform/interfaces';
-import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { LoadedPlugin, PluginLoader } from '@tools/toolTable';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
@@ -51,69 +52,9 @@ export const USER_MCP_CONFIG_PATH = mcpConfigPathOf(
   path.join(safeHomedir() ?? '/nonexistent', TEXRA_STORAGE_DIR_NAME),
 );
 
-/**
- * A server name: the `<server>` in its tools' `mcp__<server>__<tool>` names,
- * so it takes their characters, stays short enough to leave room for a tool
- * name, and never contains the `__` separator.
- */
-const ServerNameSchema = z
-  .string()
-  .regex(/^[A-Za-z0-9_-]{1,32}$/, 'use 1-32 letters, digits, _ or -')
-  .refine((name) => !name.includes('__'), 'must not contain "__"');
-
-const McpServerEntrySchema = z.strictObject({
-  type: z.literal('stdio').optional(),
-  command: z.string().min(1),
-  args: z.array(z.string()).optional(),
-  env: z.record(z.string(), z.string()).optional(),
-});
-
 const McpConfigFileSchema = z.object({
   mcpServers: z.record(z.string(), z.unknown()),
 });
-
-/** A revision key as app state stores it: 32 random bytes, hex. */
-const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
-
-/**
- * The key a server's env values are digested under for its revision: random
- * per install, created once in app state, never written to history. The
- * same env values digest the same across restarts, and the digest a run
- * records cannot be checked against a guessed value. A stored key is only
- * read; an absent one is created through one `modify` at the store's
- * authority (create-if-absent, so a concurrent creator's key wins). A stored
- * value that is not a key is replaced, loudly: every server then records a
- * new revision once. The caller resolves it once per process.
- */
-export const mcpRevisionKey = Effect.gen(function* () {
-  const state = yield* AppState;
-  const isKey = (value: unknown): value is string =>
-    typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
-  const stored = yield* state.get<unknown>(GlobalStateKey.MCP_REVISION_KEY);
-  if (isKey(stored)) return stored;
-  let replaced = false;
-  const key = yield* state.modify(
-    GlobalStateKey.MCP_REVISION_KEY,
-    (current) => {
-      if (isKey(current)) return Result.succeed(current);
-      replaced = current !== undefined;
-      return Result.succeed(randomBytes(32).toString('hex'));
-    },
-  );
-  if (replaced)
-    yield* Effect.logWarning(
-      'The stored MCP revision key was not a key; a new one was created, so every MCP server records a new revision once.',
-    );
-  return key;
-});
-
-/** One configured stdio server, as the plugin spawns it. */
-export interface McpServerConfig {
-  readonly name: string;
-  readonly command: string;
-  readonly args: readonly string[];
-  readonly env: Readonly<Record<string, string>>;
-}
 
 /** The file's text, or `null` when it does not exist. */
 const readConfigText = (
@@ -157,8 +98,7 @@ function jsonSyntaxError(error: unknown): string {
 function parseConfig(
   file: string,
   json: unknown,
-): { servers: McpServerConfig[]; warnings: string[] } {
-  const warnings: string[] = [];
+): ReturnType<typeof parseMcpServers> {
   const parsed = McpConfigFileSchema.safeParse(json);
   if (!parsed.success)
     return {
@@ -167,25 +107,7 @@ function parseConfig(
         `${file} must be { "mcpServers": { ... } }: ${z.prettifyError(parsed.error)}`,
       ],
     };
-  const servers: McpServerConfig[] = [];
-  for (const [name, raw] of Object.entries(parsed.data.mcpServers)) {
-    const validName = ServerNameSchema.safeParse(name);
-    const entry = McpServerEntrySchema.safeParse(raw);
-    if (!validName.success || !entry.success) {
-      const error = validName.error ?? entry.error;
-      warnings.push(
-        `MCP server "${name}" in ${file} is skipped (only stdio servers with a command are supported): ${error ? z.prettifyError(error) : ''}`,
-      );
-      continue;
-    }
-    servers.push({
-      name,
-      command: entry.data.command,
-      args: entry.data.args ?? [],
-      env: entry.data.env ?? {},
-    });
-  }
-  return { servers, warnings };
+  return parseMcpServers(file, parsed.data.mcpServers);
 }
 
 /**
@@ -222,25 +144,32 @@ export const mcpConfigWarnings = (
     Effect.catch((error) => Effect.succeed([error.message])),
   );
 
-/** The plugin one configured server is, its env digested under `key`. */
-function mcpPlugin(config: McpServerConfig, key: string): LoadedPlugin {
+/**
+ * The plugin one server is, its env digested under `key`: a configured
+ * server is its own plugin `mcp:<server>`; an installed plugin's servers go
+ * under that plugin's `id`.
+ */
+export function mcpPlugin(
+  config: McpServerConfig,
+  key: string,
+  id = mcpPluginId(config.name),
+): LoadedPlugin {
   return {
-    id: mcpPluginId(config.name),
+    id,
     spec: {
       name: config.name,
       command: config.command,
       args: [...config.args],
       envKeys: Object.keys(config.env).toSorted(),
+      ...(config.cwd === undefined ? {} : { cwd: config.cwd }),
     },
-    revision: createHmac('sha256', Buffer.from(key, 'hex'))
-      .update(stableStringify(config.env))
-      .digest('hex'),
+    revision: envDigest(key, config.env),
     acquire: acquireMcpServer(config),
   };
 }
 
 /** The loader over the MCP config file at `file`, read through `fs`, with
- *  env values digested under the key `revisionKey` reads (`mcpRevisionKey`),
+ *  env values digested under the key `revisionKey` reads (`@common/plugins/mcpServers`),
  *  read only when a run declares an MCP tool. */
 export const mcpPluginLoader =
   (

@@ -1,12 +1,15 @@
-// The git steps `texra plugin` takes: fetch one pinned commit and check it
+// The git steps a plugin install takes: fetch one pinned commit and check it
 // out detached. git only fetches here; nothing from a plugin runs.
 
+// Third-party imports
 import { Effect, Stream } from 'effect';
 import * as ChildProcess from 'effect/unstable/process/ChildProcess';
 
+// Local imports - utilities
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { makeMachineGitEnv } from '@utils/system/gitEnv';
 
+// Local imports - this module's neighbours
 import { PluginError } from './pluginManifest';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 

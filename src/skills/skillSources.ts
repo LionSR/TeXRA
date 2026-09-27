@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 
-import type { ActiveSkillSourceScope, InstalledPlugin } from '@shared/schemas';
+import type { LoadablePlugin } from '@common/plugins/pluginTrust';
+import type { ActiveSkillSourceScope } from '@shared/schemas';
 
 import type { SkillSource, SkillSourceTier } from './loadSkills';
 
@@ -27,10 +28,9 @@ export const INTEROP_SKILL_DIRS = [
  *
  * Installed plugins sit right below the user's own skills and carry the
  * `user` scope: installing one is a per-user act like writing
- * `~/.texra/skills`, so the user source switch governs both, and a skill the
- * user writes by hand still shadows a plugin's. They rank above interop
- * imports and bundled skills because an explicit install is a stronger
- * choice than either.
+ * `~/.texra/skills`, so the user source switch governs both. Their skills
+ * and commands are named `<plugin>:<name>`, so they never shadow, or are
+ * shadowed by, a skill of another source.
  */
 const SKILL_TIERS = [
   { id: 'custom', scope: 'custom', order: 'source' },
@@ -54,8 +54,8 @@ interface SkillSourceCall {
   readonly home: string;
   readonly resourcesPath: string;
   readonly options: SkillSourceOptions;
-  /** The plugins `texra plugin install` recorded, read from settings. */
-  readonly plugins: readonly InstalledPlugin[];
+  /** The installed plugins that load: enabled, and trusted as they are. */
+  readonly plugins: readonly LoadablePlugin[];
 }
 
 interface SkillRoot {
@@ -63,6 +63,10 @@ interface SkillRoot {
   readonly label: string;
   readonly required?: true;
   readonly plugin?: string;
+  /** The installed plugin whose name prefixes the skills' names. */
+  readonly namespace?: string;
+  /** `path` is one command file (`commands/<name>.md`), not a skill root. */
+  readonly command?: true;
 }
 
 /**
@@ -117,17 +121,27 @@ const CORE_SKILL_CONTRIBUTIONS: readonly SkillSourceContribution[] = [
   {
     id: 'core:plugins',
     tier: 'plugin',
-    // Required: a recorded root that has gone missing is reported, not
-    // skipped, until `texra plugin update` or `remove` resolves it. A
-    // disabled plugin (`texra plugin disable`) contributes nothing.
+    // Each skill root and command file the plugin declares, read when it
+    // loaded; a root that has gone missing since is reported, not skipped.
     roots: ({ plugins }) =>
-      plugins.flatMap((plugin) =>
-        (plugin.enabled ? plugin.skills : []).map((skillsPath) => ({
-          path: skillsPath,
-          label: `plugin ${plugin.name}`,
+      plugins.flatMap(({ record, plugin }) => {
+        const root = {
+          label: `plugin ${record.name}`,
           required: true as const,
-        })),
-      ),
+          namespace: record.name,
+        };
+        return [
+          ...plugin.skills.map((skills) => ({
+            ...root,
+            path: path.join(record.path, skills),
+          })),
+          ...plugin.commands.map((command) => ({
+            ...root,
+            path: path.join(record.path, command),
+            command: true as const,
+          })),
+        ];
+      }),
   },
   {
     id: 'core:interop-user',
@@ -223,6 +237,10 @@ export function foldSkillSources(
             label: root.label,
             ...(root.required === true ? { required: true } : {}),
             ...(root.plugin === undefined ? {} : { plugin: root.plugin }),
+            ...(root.namespace === undefined
+              ? {}
+              : { namespace: root.namespace }),
+            ...(root.command === undefined ? {} : { command: root.command }),
           },
         });
       }

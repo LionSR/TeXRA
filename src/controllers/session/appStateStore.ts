@@ -1,5 +1,5 @@
 /** Application state reads its root's SQLite authority on every operation. */
-import { Context, Effect, Layer, RcMap, Result } from 'effect';
+import { Effect, RcMap, Result } from 'effect';
 
 import {
   StateReadFailed,
@@ -11,12 +11,9 @@ import {
   aggregateId,
   type PersistedJsonValue,
 } from '@shared/schemas';
-import { Database, ProjectDatabases } from '@shared/session/database';
+import { ProjectDatabases, type Database } from '@shared/session/database';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-import { databaseLayer } from './Database';
-import { WorkspaceRoots } from './WorkspaceRoots';
 
 /** Preserve write admission order across stores of the same root and key. */
 const writeLanes = new Map<string, PerKeyLane>();
@@ -109,19 +106,6 @@ export function appStateStoreFromDatabase(
     },
   };
 }
-
-/** Acquire independent profile state in the caller's scope. Project state
- *  instead borrows the connection its session graph shares below. */
-export const openAppStateStore = Effect.fn('appStateStore.openAppStateStore')(
-  function* (storage: string) {
-    const context = yield* Layer.build(
-      databaseLayer('persistent').pipe(
-        Layer.provide(Layer.succeed(WorkspaceRoots)({ storage })),
-      ),
-    );
-    return appStateStoreFromDatabase(storage, Context.get(context, Database));
-  },
-);
 
 /** Retain the project's persistent database for the caller's project scope. */
 export const openProjectStateStore = Effect.fn(
