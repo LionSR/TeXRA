@@ -21,7 +21,7 @@ const rows = [
     status: 'api key set',
   },
   {
-    id: 'deepseekT',
+    id: 'deepseek41T',
     label: 'DeepSeek V4 Flash (Thinking)',
     status: 'api key set',
   },

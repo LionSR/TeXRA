@@ -17,7 +17,7 @@ import type { DeclinableUsageRoute } from '@shared/schemas';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { hostStores, setupPlatform } from '@test/support/setupPlatform';
 
-const GLM52 = MODEL_CONFIGS.glm52;
+const GLM53 = MODEL_CONFIGS.glm53;
 
 /** The endpoint and plan the decided route binds `config` to. */
 const boundEndpoint = (
@@ -51,7 +51,7 @@ describe('coding-plan subscription runtime', () => {
   });
 
   afterEach(async () => {
-    delete MODEL_CONFIGS.glm52.baseUrl;
+    delete MODEL_CONFIGS.glm53.baseUrl;
     await Effect.runPromise(
       hostStores().globalState.update(GlobalStateKey.ENDPOINT_GLM, ''),
     );
@@ -89,7 +89,7 @@ describe('coding-plan subscription runtime', () => {
         codingPlan,
       );
 
-      expect(yield* boundEndpoint(GLM52)).toEqual(expected);
+      expect(yield* boundEndpoint(GLM53)).toEqual(expected);
     }),
   );
 
@@ -138,10 +138,10 @@ describe('coding-plan subscription runtime', () => {
           GlobalStateKey.ENDPOINT_GLM,
           providerEndpoint,
         );
-        if (modelBaseUrl) MODEL_CONFIGS.glm52.baseUrl = modelBaseUrl;
+        if (modelBaseUrl) MODEL_CONFIGS.glm53.baseUrl = modelBaseUrl;
 
         const endpoint = yield* boundEndpoint({
-          ...GLM52,
+          ...GLM53,
           baseUrl: modelBaseUrl,
         });
 
@@ -150,7 +150,7 @@ describe('coding-plan subscription runtime', () => {
           ...(usageRoute && { usageRoute }),
         });
         expect(
-          yield* readProspectiveUsageRoute(hostStores(), 'glm52').pipe(
+          yield* readProspectiveUsageRoute(hostStores(), 'glm53').pipe(
             Effect.provide(
               LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT),
             ),
@@ -172,11 +172,11 @@ describe('coding-plan subscription runtime', () => {
           true,
         );
 
-        expect((yield* boundEndpoint(GLM52)).usageRoute).toBe(
+        expect((yield* boundEndpoint(GLM53)).usageRoute).toBe(
           'glm-coding-plan-subscription',
         );
         expect(
-          yield* boundEndpoint(GLM52, ['glm-coding-plan-subscription']),
+          yield* boundEndpoint(GLM53, ['glm-coding-plan-subscription']),
         ).toEqual({ baseUrl: 'https://open.bigmodel.cn/api/v1' });
         // The decline is the asking run's, so the user's switch is untouched and
         // a concurrent run still routes through the plan.
