@@ -159,7 +159,7 @@ export interface RunRegistryInit {
   readonly borrowRunClaim: (
     runId: RunId,
   ) => Effect.Effect<void, Error, Scope.Scope>;
-  /** The fork every run starts on: the session's context, never a caller's. */
+  /** The fork every run starts on: the session's context, never a caller's, since a fork from a tool call reads that call's run services (#13348); a child's parent is data (`parentRunId`), not fiber ancestry. */
   readonly fork: <A, E>(
     effect: Effect.Effect<A, E, ProcessServices>,
   ) => Fiber.Fiber<A, E>;
