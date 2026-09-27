@@ -43,9 +43,8 @@ import {
   SubscriptionRef,
 } from 'effect';
 
-import type { AgentEvent, AgentTrace, ResultEvent } from '@agent/trace';
+import type { AgentEvent, ResultEvent } from '@agent/trace';
 import { ToolUseFollowUpQueue } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { finalizeRun } from '@agent/storage/runLifecycle';
 import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
@@ -57,15 +56,12 @@ import {
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
-  interruptedWorkflowCall,
-  RUN_OUTCOME,
   type AggregateId,
   type ApprovalPolicySnapshot,
   type CommitOrdinal,
   type PermissionPayload,
   type RequestDecision,
   type RunId,
-  type RunOutcome,
   type SessionEvent,
   type SessionEventDraft,
   type TranscriptSubscription,
@@ -90,16 +86,16 @@ import type {
   SessionEventReads,
 } from '@shared/session/sessionEvents';
 import { aggregateError } from '@utils/core';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { ensureError } from '@utils/errors/errorMessage';
 import {
   SessionHostInteractions,
   type HostInteractions,
 } from './HostInteractions';
 import { redactedForFact } from './loop/rows';
 import { runEventDraft } from './SessionEvents';
-import { heldSessions, type SessionGraph } from './sessionGraph';
 import { WorkflowControlRegistry } from './workflowControlRegistry';
 import { createNeutralResponseTextProcessing } from './responseTextProcessing';
+import type { SessionGraph } from './sessionGraph';
 import type { SessionApprovals } from './runApprovalQueue';
 import type { RunRegistry } from './runRegistry';
 import type { HistoryQuery } from './historyQuery/HistoryQuery';

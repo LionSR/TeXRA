@@ -216,7 +216,7 @@ async function loadSupabaseAuth() {
       Layer.mock(AgentResume, { tryResumeRun: unreadProcessService }),
       // Plain in-memory ownership tables; the auth edge binds nothing.
       gitHubSubscriptionsLayer,
-      SetupPlatform.layer({ host: 'cli', signIn: () => Effect.succeed(false) }),
+      SetupPlatform.layer({ signIn: () => Effect.succeed(false) }),
     ),
   );
   const supabaseAuth = await import('@cli/runtime/supabaseAuth');

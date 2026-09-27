@@ -365,6 +365,7 @@ export function initCliPlatform(
           // first-install tool seed) must fail while they are still private,
           // as the seed did when this body owned it.
           yield* bootstrapHost({
+            host: 'cli',
             roots,
             skills: {
               resourcesPath: context.resourcesPath,

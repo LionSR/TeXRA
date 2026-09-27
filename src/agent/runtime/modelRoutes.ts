@@ -25,6 +25,7 @@ import {
   type ModelRoute,
 } from '@model/modelRoute';
 import { resolveRouteEndpoint } from '@model/routeEndpoint';
+import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import type { PlatformSecrets } from '@platform/secrets';
@@ -102,6 +103,11 @@ export function routeBearer(credential: RouteCredential): string {
     case 'xai-subscription':
       return credential.accessToken;
   }
+}
+
+/** A bearer route's model transport: its secret over the long-stream fetch. */
+export function bearerTransport(credential: RouteCredential) {
+  return { apiKey: routeBearer(credential), fetch: longRunningModelFetch };
 }
 
 /**

@@ -2,7 +2,7 @@ import '@test/support/sessionGraphTestSetup';
 
 import { Effect } from 'effect';
 import { TraceEmitter } from '@agent/trace';
-import { heldSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
+import { listSessions, openSessionEffect } from '@agent/runtime/sessionGraph';
 import type {
   SessionHandle,
   SessionHandleInit,
@@ -74,7 +74,7 @@ export function createProcessSession(
 ): Effect.Effect<SessionHandle, SessionOpenError> {
   return Effect.gen(function* () {
     const roots = testWorkspaceRoots();
-    const predecessors = heldSessions().filter(
+    const predecessors = (yield* listSessions()).filter(
       (live) => live.roots.storage === roots.storage,
     );
     yield* Effect.forEach(predecessors, (live) => closeSessionOf(live), {

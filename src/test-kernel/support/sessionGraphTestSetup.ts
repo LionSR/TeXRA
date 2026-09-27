@@ -4,6 +4,7 @@ import { installProcessRuntime } from '@controllers/session/sessionLayer';
 import { globalDatabaseLayer } from '@controllers/session/Database';
 import { AppState, AgentDirectories } from '@platform/interfaces';
 import { UsageLog } from '@shared/usageLog';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 import { initTestProcessRuntime } from './testProcessRuntime';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
@@ -54,6 +55,8 @@ const runtime = installProcessRuntime({
     return 'vitest';
   }),
   globalStorage,
+  // Under the fake global root, never the developer's `~/.texra/mcp.json`.
+  mcpConfigPath: mcpConfigPathOf(globalStorage),
   secrets: fakeHostSecrets,
   appState: AppState.layer(fakeHostAppState),
   // Suites swap the account plane with their host; the default host's

@@ -8,7 +8,7 @@
  * the window's one message listener and hands each message to `receive`;
  * the desktop renderer runs it as the last of its routes.
  */
-import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
+import { Cause, Deferred, Effect, Exit, Scope, SubscriptionRef } from 'effect';
 import { z } from 'zod';
 
 import {
@@ -58,7 +58,8 @@ export interface WebviewTransport {
   open(session: string): WebviewSession;
   /** A new generation over the named transcript aggregates. */
   subscribe(session: WebviewSession, aggregates: Subscribe['aggregates']): void;
-  /** Answered on the matching `response` message. */
+  /** Answered on the matching `response` message of its session; answered
+   *  `Cancelled` when that session closes first or is not open. */
   request(
     message: Extract<UpMessage, { requestId: string }>,
   ): Promise<Response['result']>;
@@ -75,7 +76,16 @@ export interface WebviewTransport {
 interface OpenSession extends WebviewSession {
   readonly graph: WebviewGraph;
   readonly scope: Scope.Closeable;
+  /** This session's requests awaiting their `response`, by request id. The
+   *  session's scope interrupts every one still here when it closes. */
+  readonly pending: Map<string, Deferred.Deferred<Response['result']>>;
 }
+
+/** What a request answers when its session closed before the host did. */
+const CANCELLED: Response['result'] = {
+  ok: false,
+  error: { _tag: 'Cancelled' },
+};
 
 /** The discriminator alone: a message of one of the session kinds that
  *  still fails the schema is malformed, not another route's. */
@@ -88,7 +98,6 @@ const DownKindSchema = z.object({
 export function installWebviewTransport(): WebviewTransport {
   const runtime = installWebviewRuntime();
   const sessions = new Map<string, OpenSession>();
-  const pending = new Map<string, (result: Response['result']) => void>();
   let surfaceListener: (
     session: string,
     action: WireSurfaceAction,
@@ -123,15 +132,16 @@ export function installWebviewTransport(): WebviewTransport {
         deliver(message);
         return true;
       case 'response': {
-        const settle = pending.get(message.requestId);
-        if (!settle) {
+        const pending = sessions.get(message.session)?.pending;
+        const settle = pending?.get(message.requestId);
+        if (!pending || !settle) {
           console.warn(
-            `[progress] dropped a response to request ${message.requestId}: not pending`,
+            `[progress] dropped a response to request ${message.requestId} of session ${message.session}: not pending`,
           );
           return true;
         }
         pending.delete(message.requestId);
-        settle(message.result);
+        runtime.runSync(Deferred.succeed(settle, message.result));
         return true;
       }
       case 'surface.action':
@@ -156,11 +166,24 @@ export function installWebviewTransport(): WebviewTransport {
       if (held) return held;
       // The graph lives under this scope: closing it releases the LayerMap
       // entry once the last holder leaves.
+      const pending = new Map<string, Deferred.Deferred<Response['result']>>();
       const { scope, graph } = runtime.runSync(
         Effect.gen(function* () {
           const scope = yield* Scope.make();
           const graph = yield* WebviewSessions.open(key).pipe(
             Effect.provideService(Scope.Scope, scope),
+          );
+          // Requests the host never answered end with the session: each
+          // caller's promise settles as `Cancelled` rather than leaking.
+          yield* Scope.addFinalizer(
+            scope,
+            Effect.suspend(() => {
+              const open = [...pending.values()];
+              pending.clear();
+              return Effect.forEach(open, Deferred.interrupt, {
+                discard: true,
+              });
+            }),
           );
           return { scope, graph };
         }),
@@ -169,6 +192,7 @@ export function installWebviewTransport(): WebviewTransport {
         key,
         graph,
         scope,
+        pending,
         view$: toSignal(
           runtime,
           SubscriptionRef.changes(graph.view.ref),
@@ -209,10 +233,25 @@ export function installWebviewTransport(): WebviewTransport {
       hostBridge.postMessage(message);
     },
     request(message) {
-      return new Promise((resolve) => {
-        pending.set(message.requestId, resolve);
-        hostBridge.postMessage(message);
-      });
+      const session = sessions.get(message.session);
+      if (!session) {
+        console.warn(
+          `[progress] cancelled request ${message.requestId}: session ${message.session} is not open`,
+        );
+        return Promise.resolve(CANCELLED);
+      }
+      const settled = Deferred.makeUnsafe<Response['result']>();
+      session.pending.set(message.requestId, settled);
+      hostBridge.postMessage(message);
+      return runtime.runPromise(
+        Deferred.await(settled).pipe(
+          Effect.catchCause((cause) =>
+            Cause.hasInterruptsOnly(cause)
+              ? Effect.succeed(CANCELLED)
+              : Effect.failCause(cause),
+          ),
+        ),
+      );
     },
     onSurfaceAction(listener) {
       surfaceListener = listener;

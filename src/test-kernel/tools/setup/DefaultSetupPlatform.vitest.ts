@@ -22,7 +22,7 @@ setupPlatform(
     secrets: { 'apiKey.openai': 'sk-stored-key' },
     env: { GITHUB_TOKEN: 'github-env-token' },
   },
-  { setup: { host: 'vscode', signIn: () => Effect.succeed(false) } },
+  { setup: { signIn: () => Effect.succeed(false) } },
 );
 
 afterEach(() => {

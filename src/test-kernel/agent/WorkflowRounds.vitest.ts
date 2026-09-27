@@ -22,7 +22,6 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { rowAggregate, snapshotRow, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';

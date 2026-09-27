@@ -269,6 +269,35 @@ function discriminantIsOwnedUnion(checker, tsNode, depth = 0) {
 
 const localRules = {
   rules: {
+    // Imports only: `@typescript-eslint/no-unused-vars` would also report the
+    // module-level schema a type is derived from (`z.infer<typeof X>`), a
+    // value the repo keeps on purpose.
+    'no-unused-imports': {
+      meta: {
+        type: 'problem',
+        docs: { description: 'Disallow imports nothing in the file reads.' },
+        messages: {
+          unused: "'{{name}}' is imported but never used: delete the import.",
+        },
+        schema: [],
+      },
+      create(context) {
+        return {
+          ImportDeclaration(node) {
+            for (const variable of context.sourceCode.getDeclaredVariables(
+              node,
+            )) {
+              if (variable.references.length > 0) continue;
+              context.report({
+                node: variable.defs[0].node,
+                messageId: 'unused',
+                data: { name: variable.name },
+              });
+            }
+          },
+        };
+      },
+    },
     'exhaustive-switch-over-owned-union': {
       meta: {
         type: 'problem',
@@ -613,6 +642,7 @@ export default tseslint.config(
       'no-useless-assignment': 'off',
       'preserve-caught-error': 'off',
       '@typescript-eslint/no-unused-vars': 'off',
+      'local/no-unused-imports': 'error',
       'local/no-vscode-import-in-free-zones': 'error',
       'prefer-const': 'error',
 

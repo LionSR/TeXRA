@@ -9,7 +9,7 @@
  * mirrors bypass state, and holds a tool edit's preview so the diff can be
  * printed.
  */
-import { Effect, Exit, Fiber, Result, Stream, SubscriptionRef } from 'effect';
+import { Effect, Exit, Fiber, Result, Stream } from 'effect';
 
 import { type HostInteractions, type SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';

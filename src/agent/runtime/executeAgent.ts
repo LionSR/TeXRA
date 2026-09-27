@@ -2,7 +2,7 @@ import * as path from 'node:path';
 
 import { Effect, Fiber, Layer } from 'effect';
 
-import type { AgentEvent, AgentTrace } from '@agent/trace';
+import type { AgentEvent } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { persistedParentRunId } from '@agent/storage/runRecords';

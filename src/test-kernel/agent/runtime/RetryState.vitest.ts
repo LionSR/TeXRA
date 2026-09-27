@@ -52,7 +52,6 @@ import {
   type InvokeRequest,
 } from '@agent/runtime/ModelInvoker';
 import { makeRunCell } from '@agent/runtime/loop/runProgram';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { classifyModelFailure } from '@agent/runtime/run/modelFailure';

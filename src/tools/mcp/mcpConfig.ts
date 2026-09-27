@@ -41,11 +41,14 @@ import {
 /** The config file's name inside the user's `~/.texra` directory. */
 const MCP_CONFIG_FILE_NAME = 'mcp.json';
 
-/** The user-level config file: `~/.texra/mcp.json`. */
-export const USER_MCP_CONFIG_PATH = path.join(
-  safeHomedir() ?? '/nonexistent',
-  TEXRA_STORAGE_DIR_NAME,
-  MCP_CONFIG_FILE_NAME,
+/** The MCP config file of a TeXRA storage root. */
+export function mcpConfigPathOf(storageRoot: string): string {
+  return path.join(storageRoot, MCP_CONFIG_FILE_NAME);
+}
+
+/** The user-level config file the hosts read: `~/.texra/mcp.json`. */
+export const USER_MCP_CONFIG_PATH = mcpConfigPathOf(
+  path.join(safeHomedir() ?? '/nonexistent', TEXRA_STORAGE_DIR_NAME),
 );
 
 /**

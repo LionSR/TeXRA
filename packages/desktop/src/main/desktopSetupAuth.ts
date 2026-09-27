@@ -24,7 +24,6 @@ export function createDesktopSetupAuth(): DesktopSetupAuth {
   let activeSignIn: DesktopSetupSignIn | undefined;
   return {
     platform: {
-      host: 'desktop',
       signIn: () => activeSignIn?.() ?? Effect.succeed(false),
     },
     registerSignIn(signIn) {

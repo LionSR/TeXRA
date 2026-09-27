@@ -9,13 +9,13 @@ import { SecretsFailed, type PlatformSecrets } from '@platform/secrets';
 import { MemoryConfigProvider } from '@platform/defaults/memoryConfigProvider';
 import { MemoryStateStore } from '@platform/defaults/memoryState';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
-import { DEFAULT_NODE_STORAGE_ROOT } from '@platform/defaults/nodeStorage';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
   resolveWorkspaceStoragePath,
 } from '@platform/defaults/workspaceStorage';
 import { UNAVAILABLE_LANGUAGE_MODEL_PORT } from '@platform/languageModel';
+import { mcpConfigPathOf } from '@tools/mcp/mcpConfig';
 
 import type { AgentPlatform } from './index.js';
 
@@ -23,7 +23,13 @@ import type { AgentPlatform } from './index.js';
 export interface NodePlatformOptions {
   readonly agentsDir: string;
   readonly workspaceDir?: string;
-  readonly storageDir?: string;
+  /**
+   * The directory this platform stores run history, checkpoints and its
+   * global state under, and reads its `mcp.json` from. Required: the package
+   * never falls back to the user's own `~/.texra`, which belongs to the
+   * TeXRA hosts.
+   */
+  readonly storageDir: string;
 }
 
 const NO_PERSISTED_SECRETS =
@@ -60,7 +66,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
   const workspaceDir = canonicalizeWorkspacePath(
     options.workspaceDir ?? process.cwd(),
   );
-  const storageRoot = options.storageDir ?? DEFAULT_NODE_STORAGE_ROOT;
+  const storageRoot = options.storageDir;
   const globalState = new MemoryStateStore();
   return {
     secrets: unpersistedSecrets,
@@ -70,6 +76,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       tryResumeRun: () => Effect.succeed(false),
     },
     languageModel: UNAVAILABLE_LANGUAGE_MODEL_PORT,
+    mcpConfigPath: mcpConfigPathOf(storageRoot),
     agentDirectories: {
       custom: () => Effect.succeed(options.agentsDir),
       customConfigured: () => Effect.succeed(true),

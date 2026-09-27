@@ -11,11 +11,7 @@ import {
   type CanonicalDelegationToolName,
 } from '@shared/constants/delegationTools';
 import { toolTableLayer } from '@tools/liveTools';
-import {
-  mcpPluginLoader,
-  mcpRevisionKey,
-  USER_MCP_CONFIG_PATH,
-} from '@tools/mcp/mcpConfig';
+import { mcpPluginLoader, mcpRevisionKey } from '@tools/mcp/mcpConfig';
 import type {
   PluginToolName,
   ToolPluginEntry,
@@ -247,25 +243,26 @@ export const TOOL_TABLE = toolTable(
 
 /**
  * The process's `ToolRegistry` and the live catalog (`LiveTools`) over it and the
- * MCP servers of the user's `~/.texra/mcp.json`, which
- * `installProcessRuntime` provides. The layer takes the process
+ * MCP servers of `mcpConfigPath` (a host's is the user's `~/.texra/mcp.json`),
+ * which `installProcessRuntime` provides. The layer takes the process
  * `FileSystem` that `installProcessRuntime` serves, to read that file, and
  * its `AppState`, which holds the key MCP env values are digested under.
  */
-export const toolRegistryLayer = Layer.unwrap(
-  Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const appState = yield* AppState;
-    // Resolved once per process, on the first run that declares an MCP tool.
-    const revisionKey = yield* Effect.cached(
-      mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
-    );
-    return toolTableLayer(
-      TOOL_TABLE,
-      mcpPluginLoader(fs, USER_MCP_CONFIG_PATH, revisionKey),
-    );
-  }),
-);
+export const toolRegistryLayer = (mcpConfigPath: string) =>
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const appState = yield* AppState;
+      // Resolved once per process, on the first run that declares an MCP tool.
+      const revisionKey = yield* Effect.cached(
+        mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
+      );
+      return toolTableLayer(
+        TOOL_TABLE,
+        mcpPluginLoader(fs, mcpConfigPath, revisionKey),
+      );
+    }),
+  );
 
 /** Whether a registered tool declares itself unavailable on a product host. */
 export function isToolUnavailableOnHost(

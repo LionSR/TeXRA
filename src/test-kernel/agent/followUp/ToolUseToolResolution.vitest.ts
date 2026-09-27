@@ -18,6 +18,7 @@ import {
 import { nodeSpawnerLayer } from '@test/support/childProcessTestLayer';
 import { resolveTestStep } from '@test/support/stepToolsTestUtils';
 import { toolTableLayer } from '@tools/liveTools';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toolRegistryLayer } from '@tools/registry';
 import { toolTable } from '@tools/toolTable';
 import { setToolEnabled } from '@utils/config/constants';
@@ -49,7 +50,7 @@ describe('tool-use tool resolution', () => {
       // this host has no editor models.
       Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
       Effect.provide(
-        toolRegistryLayer.pipe(
+        toolRegistryLayer(USER_MCP_CONFIG_PATH).pipe(
           Layer.provide(
             Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
           ),
@@ -177,7 +178,7 @@ describe('tool-use tool resolution', () => {
         Effect.scoped,
         Effect.provide(LanguageModel.layer(UNAVAILABLE_LANGUAGE_MODEL_PORT)),
         Effect.provide(
-          toolRegistryLayer.pipe(
+          toolRegistryLayer(USER_MCP_CONFIG_PATH).pipe(
             Layer.provide(
               Layer.merge(nodePlatformLayer, AppState.layer(fakeHostAppState)),
             ),

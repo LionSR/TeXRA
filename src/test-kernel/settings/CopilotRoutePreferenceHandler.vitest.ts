@@ -1,6 +1,6 @@
 // Third-party imports
 import { it } from '@effect/vitest';
-import { Cause, Effect, Fiber } from 'effect';
+import { Cause, Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 import * as vscode from 'vscode';
 
@@ -86,7 +86,6 @@ import type {
   LanguageModelInfo,
   LanguageModelPort,
 } from '@platform/languageModel';
-import { withProcessServices } from '@platform/processRuntime';
 import { SettingsViewMessageHandler } from '@settingsView/SettingsViewMessageHandler';
 import { SETTINGS_VIEW_COMMANDS } from '@shared/ipc';
 import { testRuntime } from '@test/support/testProcessRuntime';

@@ -6,11 +6,7 @@ import { afterEach, describe, expect } from 'vitest';
 import { SessionHandle } from '@agent/runtime/SessionHandle';
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { AgentResume } from '@platform/interfaces';
-import {
-  aggregateId as qualifyAggregateId,
-  RUN_OUTCOME,
-  type RunId,
-} from '@shared/schemas';
+import { RUN_OUTCOME, type RunId } from '@shared/schemas';
 import { untrackRun, closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { testRunHandle } from '@test/support/runHandleFixtures';

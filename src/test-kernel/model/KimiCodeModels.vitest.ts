@@ -8,7 +8,6 @@ import {
   type BindableRoute,
 } from '@agent/runtime/modelRoutes';
 import { decideModelRoute, OWN_KEY_ROUTE_FACTS } from '@model/modelRoute';
-import { isKimiCodeExclusiveModel } from '@shared/model/kimiCodeRetryGate';
 
 describe('Kimi Code routing', () => {
   const route = (model: string, useOpenRouter: boolean) =>

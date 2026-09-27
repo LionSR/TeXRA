@@ -24,7 +24,6 @@ import { readProspectiveUsageRoute } from '@model/computeModelOptions';
 import { CHATGPT_SETUP_MODEL } from '@model/setupModelDefaults';
 import type { LanguageModel } from '@platform/languageModel';
 import { Secrets } from '@platform/secrets';
-import type { SettingHost } from '@shared/state/stateSettings';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ToolError } from '@shared/schemas';
 
@@ -83,8 +82,6 @@ interface SetupExtensionAdapter {
 
 /** Host-varying setup capabilities. */
 export interface SetupPlatformShape {
-  /** Product surface currently running the shared setup agent. */
-  host: SettingHost;
   /**
    * Start the host's existing TeXRA account sign-in flow. The member is an
    * `Effect`: a host that cannot run the flow reaches the setup tool as

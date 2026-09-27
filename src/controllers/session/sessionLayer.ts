@@ -30,7 +30,6 @@ import {
   RcMap,
   Stream,
   SubscriptionRef,
-  Fiber,
   Scope,
   type FileSystem,
   type Path,
@@ -191,8 +190,8 @@ class Session extends Context.Service<Session, SessionHandle>()(
 
 /**
  * The sessions the owner holds, outside the map: what the owner's synchronous
- * `current` and `held` read, and so the process's one list of live sessions
- * (`heldSessions`) — no module keeps a second one. An
+ * `current` reads, and so the process's one list of live sessions — no module
+ * keeps a second one. An
  * entry is written once its handle exists and removed as the first step of its
  * release, so a root whose session is still building, or already unwinding,
  * reads as having none. Keyed by the entry's `SessionKey` and matched on its
@@ -1052,6 +1051,7 @@ const closeSession = (root: string) =>
 interface ProcessRuntimeOptions {
   readonly processStart: Effect.Effect<string | undefined, never, ProcessProbe>;
   readonly globalStorage: string;
+  readonly mcpConfigPath: string;
   readonly secrets: PlatformSecrets;
   /**
    * The root's agent-resume port, served as `AgentResume`: the same value the
@@ -1158,6 +1158,7 @@ interface ProcessRuntimeOptions {
 export function installProcessRuntime({
   processStart,
   globalStorage,
+  mcpConfigPath,
   secrets,
   appState,
   auth,
@@ -1195,7 +1196,7 @@ export function installProcessRuntime({
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
-    toolRegistryLayer,
+    toolRegistryLayer(mcpConfigPath),
     Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
     // Built with this runtime: a replacement starts with empty tables.
     gitHubSubscriptionsLayer,
@@ -1251,7 +1252,6 @@ export function installProcessRuntime({
     runtime,
     open: (open) => onThisRuntime(openSession(open)),
     current: (root) => [...held].find(([key]) => key.storage === root)?.[1],
-    held: () => [...held.values()],
     list: () => onThisRuntime(listSessions),
     close: (root) => onThisRuntime(closeSession(root)),
     closeAll: () =>

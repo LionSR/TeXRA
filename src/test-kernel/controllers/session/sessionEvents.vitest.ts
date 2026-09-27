@@ -57,7 +57,7 @@ import { sessionEventsLayer } from '@agent/runtime/SessionEvents';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import {
   closeSession,
-  heldSessions,
+  listSessions,
   openSessionEffect,
 } from '@agent/runtime/sessionGraph';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
@@ -776,8 +776,8 @@ describe('Sessions owner', () => {
       roots: createFakeWorkspaceRoots({ storagePath }),
       transcriptMode: { kind: 'ephemeral', reason: 'sessions owner test' },
     });
-  const isLive = (session: SessionHandle): boolean =>
-    heldSessions().includes(session);
+  const isLive = (session: SessionHandle) =>
+    Effect.map(listSessions(), (live) => live.includes(session));
   const track = (session: SessionHandle, runId: RunId) =>
     session.runs.track(testRunHandle({ runId, agent: 'chat' }));
 
@@ -1080,7 +1080,7 @@ describe('Sessions owner', () => {
         expect(SubscriptionRef.getUnsafe(session.view).cursor).toBe(
           session.now(),
         );
-        expect(isLive(session)).toBe(false);
+        expect(yield* isLive(session)).toBe(false);
       }),
   );
 
@@ -1101,7 +1101,7 @@ describe('Sessions owner', () => {
           settled: true,
           abandoned: [],
         });
-        expect(isLive(session)).toBe(false);
+        expect(yield* isLive(session)).toBe(false);
       }),
   );
 
@@ -1131,7 +1131,7 @@ describe('Sessions owner', () => {
           settled: false,
           abandoned: [slow],
         });
-        expect(isLive(session)).toBe(false);
+        expect(yield* isLive(session)).toBe(false);
       }),
   );
 });

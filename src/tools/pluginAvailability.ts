@@ -42,6 +42,7 @@ import {
 import { ZOTERO_PORT_KEY } from '@tools/zotero/bbtClient';
 import { isGitRepository } from '@utils/git/isGitRepository';
 import { envVar } from '@utils/system/envFlags';
+import { processHost } from '@utils/config/platformSettings';
 import { findToolInCommonPaths } from '@utils/system/binaryResolver';
 import { checkToolInstalled } from '@utils/system/toolUtils';
 import { formatResultCount } from '@utils/text/stringUtils';
@@ -106,9 +107,8 @@ export const LEAN4_AVAILABILITY = prerequisitesChecks({
       const extensionAvailable =
         setup.extensions?.isInstalled(LEAN4_EXTENSION_ID) ?? false;
       const lakeAvailable = (yield* findToolInCommonPaths('lake')) !== null;
-      // The setup port the probe already holds names the running product,
-      // and only the VS Code build drives Lean through the extension.
-      const requiresExtension = setup.host === 'vscode';
+      // Only the VS Code build drives Lean through the extension.
+      const requiresExtension = processHost() === 'vscode';
       return {
         extensionAvailable,
         lakeAvailable,

@@ -65,6 +65,7 @@ import { nodeProcesses } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 import { readCliVersion } from './cliContext';
@@ -229,6 +230,7 @@ export function installCliProcessRuntime(
     const runtime: ProcessRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: globalStoragePath,
+      mcpConfigPath: USER_MCP_CONFIG_PATH,
       secrets,
       appState: options?.appState
         ? AppState.layer(options.appState)
@@ -248,7 +250,6 @@ export function installCliProcessRuntime(
       agentResume: cliAgentResume,
       agentDirectories: AgentDirectories.layer(agentDirectories),
       setup: {
-        host: 'cli',
         // The one closure left over the runtime being installed, and a real
         // one: signing in runs a program on it, long after this returns. The
         // account plane it reports on is the one built above, which is also
