@@ -25,12 +25,12 @@ Baseline: `main` at `a65f817`.
 
 **Existing tools, each gaining a `project` field:**
 
-| Tool | Today (one project) | With `project: <root>` |
-| --- | --- | --- |
-| `delegate_agent` (`src/tools/delegation/DelegationTools.ts`) | `agent` starts a subagent; `execution_id` sends a running one a follow-up; results come back as follow-ups; approval through proposal-or-bypass (`proposalFlow.ts:213`) | The child run is opened in **that project's session**, so its ledger, approvals and resume live there. Its result still comes back to the orchestrator as a follow-up. |
-| `delegate_workflow` | Same, for workflow agents | Same |
-| `delegate_multi_agents` (`src/agent/workflowScript/`) | Fans a script's `agent` operations out in the caller's session | Each `agent` operation may name a `project` |
-| `executions` (`src/tools/ExecutionsTool.ts`) | List runs, read a run's report, conversation and output, `wait`, `kill` | The same, read from that project's session fold |
+| Tool                                                                   | Today (one project)                                                                                                                                                     | With `project: <root>`                                                                                                                                                 |
+| ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `delegate_agent` (`src/tools/delegation/DelegationTools.ts`)           | `agent` starts a subagent; `execution_id` sends a running one a follow-up; results come back as follow-ups; approval through proposal-or-bypass (`proposalFlow.ts:213`) | The child run is opened in **that project's session**, so its ledger, approvals and resume live there. Its result still comes back to the orchestrator as a follow-up. |
+| `delegate_workflow`                                                    | Same, for workflow agents                                                                                                                                               | Same                                                                                                                                                                   |
+| `delegate_multi_agents` (`src/tools/delegation/WorkflowScriptTool.ts`) | Fans a script's `agent` operations out in the caller's session                                                                                                          | Each `agent` operation may name a `project`                                                                                                                            |
+| `executions` (`src/tools/ExecutionsTool.ts`)                           | List runs, read a run's report, conversation and output, `wait`, `kill`                                                                                                 | The same, read from that project's session fold                                                                                                                        |
 
 This gives dispatch (`delegate_*`), steering (`execution_id`), stopping (`kill`), inspection (`executions`) and result delivery with no new commands.
 
@@ -49,6 +49,7 @@ This gives dispatch (`delegate_*`), steering (`execution_id`), stopping (`kill`)
   - **Use:** this is how the orchestrator checks back on anything it didn't dispatch itself. The UI labels each delivery by `initiation` ("Check-in you asked for" or "Check-in the orchestrator set").
 
 **Also on:**
+
 - `memory`, `ask_user_question`, `inquiry`.
 - File tools and `bash`.
 - `todo_write`, `plan`, `github_subscription`.
@@ -74,6 +75,7 @@ This gives dispatch (`delegate_*`), steering (`execution_id`), stopping (`kill`)
 7. **The orchestrator does setup** (§Setup below). Delete `packages/extension/resources/tool_use_agents/setup.yaml`.
 
 Done when:
+
 - `delegate_agent` with `project` starts a run that appears, is approved and resumes in that project, and its result comes back to the orchestrator.
 - `executions` with `project` lists and kills that project's runs.
 - A `send_later` message arrives as a follow-up, including after TeXRA is restarted before its time. A cancelled one never arrives.
