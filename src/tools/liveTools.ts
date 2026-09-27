@@ -27,17 +27,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import {
-  Context,
-  Effect,
-  Equal,
-  Exit,
-  Hash,
-  Layer,
-  RcMap,
-  Scope,
-  Semaphore,
-} from 'effect';
+import { Context, Effect, Exit, Layer, RcMap, Scope, Semaphore } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
 

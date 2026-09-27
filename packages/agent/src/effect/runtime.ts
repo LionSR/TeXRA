@@ -67,6 +67,9 @@ export interface AgentPlatform {
   /** The bridge its `LanguageModel` service serves; an embedder with no
    *  editor passes `UNAVAILABLE_LANGUAGE_MODEL_PORT`, as `nodePlatform()`. */
   readonly languageModel: LanguageModelPort;
+  /** The MCP config file (`.mcp.json` shape) the process's tool registry
+   *  reads; `nodePlatform()` names the one under its `storageDir`. */
+  readonly mcpConfigPath: string;
 }
 
 /**
@@ -86,9 +89,6 @@ const NO_SETUP_PLATFORM =
   'The agent package has no setup platform: run the setup agent from the texra CLI, the desktop app, or the VS Code extension.';
 
 const PACKAGE_SETUP: SetupPlatformShape = {
-  get host(): never {
-    throw new Error(NO_SETUP_PLATFORM);
-  },
   signIn: () => Effect.fail(new SignInFailed({ message: NO_SETUP_PLATFORM })),
   // The one member read before it is called: `unset_api_key` asks for the
   // command surface to refresh the host's status views after a credential
@@ -228,6 +228,7 @@ function composeProcess(platform: AgentPlatform): ProcessHold {
     processRuntime = installProcessRuntime({
       processStart: nodeProcesses.selfIdentity(),
       globalStorage: platform.roots.globalStorage,
+      mcpConfigPath: platform.mcpConfigPath,
       ...processServices,
       // An embedder reports no usage: the package has no version or editor of
       // its own to stamp entries with, and no account plane to send them on.

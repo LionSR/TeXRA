@@ -33,6 +33,7 @@ import {
 } from '@platform/defaults/workspaceStorage';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { processEnvConfigLayer } from '@utils/system/envFlags';
 
@@ -165,6 +166,7 @@ export const initializeElectronPlatform = Effect.fn(
   const runtime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
+    mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     // Electron profile state intentionally differs from the shared global DB.
     appState: Layer.effect(
@@ -218,6 +220,7 @@ export const initializeElectronPlatform = Effect.fn(
       globalState: globalStateStore,
     });
     yield* bootstrapHost({
+      host: 'desktop',
       roots: processRoots,
       skills: { resourcesPath },
     });

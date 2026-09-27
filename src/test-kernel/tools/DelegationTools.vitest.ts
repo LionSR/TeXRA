@@ -5,9 +5,9 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 // Third-party imports
-import { Deferred, Effect } from 'effect';
+import { Effect } from 'effect';
 import { it } from '@effect/vitest';
-import { describe, expect, afterEach, beforeEach, vi } from 'vitest';
+import { describe, afterEach, beforeEach, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   submitFollowUp: vi.fn(),
@@ -19,13 +19,7 @@ vi.mock('@agent/followUp/ToolUseFollowUp', async (importOriginal) => ({
 }));
 
 // Local imports
-import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
-import type { RunHandle } from '@agent/runtime/RunHandle';
-import { AgentCategory, type RunId } from '@shared/schemas';
-import { testRunHandle } from '@test/support/runHandleFixtures';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
-import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
-import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { rejectOversizedBibAttachments } from '@tools/delegation/inputFields';
 
 describe('DelegationTools', () => {

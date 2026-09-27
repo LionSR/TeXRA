@@ -23,7 +23,6 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import type { FollowUpQueueInput } from '@agent/followUp/ToolUseFollowUpQueueManager';
-import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import {

@@ -39,7 +39,6 @@ import {
   aggregateId as qualifyAggregateId,
   AgentCategory,
   AgentConfigFieldsSchema,
-  emptyRunEndOutput,
   LOG_LEVELS,
   MESSAGE_TYPES,
   RUN_OUTCOME,

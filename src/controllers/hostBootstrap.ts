@@ -35,19 +35,21 @@ import {
   initializeNodeRuntimeSkills,
   type NodeRuntimeSkillOptions,
 } from '@platform/defaults/nodeHost';
-import { installLongRunningModelDispatcher } from '@platform/defaults/longRunningModelTransport';
+import { installProcessHttpDispatcher } from '@platform/defaults/longRunningModelTransport';
 import { Secrets } from '@platform/secrets';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { SettingHost } from '@shared/state/stateSettings';
 import { reprobeOnCredentialChange } from '@tools/credentialReprobe';
 import { TOOL_PLUGINS } from '@tools/plugins';
-import { SetupPlatform } from '@tools/setup/platform';
 import { seedDisabledToolDefaults } from '@tools/toolAvailability';
-import { initProcessSettingHost } from '@utils/config/platformSettings';
+import { initProcessHost } from '@utils/config/platformSettings';
 
 // Local file imports
 import { installTexraAccountProbes } from './modelAccess/installTexraAccountProbes';
 
 export interface HostBootstrapInit {
+  /** Which product host this process is: one process is one host. */
+  readonly host: SettingHost;
   /**
    * The process roots the root just built: the global state store the
    * first-install seed writes to.
@@ -62,19 +64,18 @@ export interface HostBootstrapInit {
  *
  * Runs on the composition root's own process runtime: the first-install tool
  * seed is a state write, and the root that just installed that runtime is the
- * one that runs this. Which host this process is and its secret store are
- * that runtime's `SetupPlatform` and `Secrets` services.
+ * one that runs this. The root names which host this process is; its secret
+ * store is that runtime's `Secrets` service.
  */
 export const bootstrapHost = Effect.fn('bootstrapHost')(function* (
   init: HostBootstrapInit,
 ) {
-  // The process's HTTP dispatcher for model traffic (proxy policy plus the
-  // long-stream timeouts). Installed before any model call, which cannot
-  // happen until a session is open.
-  installLongRunningModelDispatcher();
-  // Which host this process is, for the catalog rows whose storage slot
-  // differs by host. One process is one host.
-  initProcessSettingHost((yield* SetupPlatform).host);
+  // The environment's proxy policy for the rest of the process's HTTP
+  // traffic. Model traffic carries its own transport; this is the host's
+  // process, so it may set the global dispatcher an embedder's may not.
+  installProcessHttpDispatcher();
+  // Which host this process is: the settings slots and the tool gate read it.
+  initProcessHost(init.host);
   // TeXRA's account plane (ChatGPT / Grok sign-in). Without this the model
   // layer is bring-your-own-key. See installTexraAccountProbes. The probes
   // close over the secret store, so the model layer stays secrets-free.

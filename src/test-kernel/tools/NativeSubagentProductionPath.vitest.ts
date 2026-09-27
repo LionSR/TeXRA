@@ -100,7 +100,6 @@ import {
 } from '@test/support/fsTestUtils';
 import { testHttpClientLayer } from '@test/support/fetchTestUtils';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
-import { DelegateAgentTool } from '@tools/delegation/DelegationTools';
 import { requireDelegationParent } from '@tools/delegation/proposalFlow';
 import { executeSubagent } from '@tools/delegation/subagentRun';
 import { readCompletedRunConversation } from '@transcript';

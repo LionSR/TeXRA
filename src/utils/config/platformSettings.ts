@@ -24,30 +24,38 @@ function requireEntry(key: string) {
 }
 
 /**
- * The host this process is, for the catalog rows whose storage slot differs
- * by host (the git identity rows live in worktree-shared workspace state on
- * the extension and desktop and in `.texra/config.json` on the CLI). One
- * process is one host, so the composition root installs it once, beside
- * `installProcessRuntime()`.
+ * The product host this process is: the one home of that identity. The
+ * composition root names it once, through `bootstrapHost`; the agent package,
+ * embedded in someone else's process, names none. It keys two things: the
+ * catalog rows whose storage slot differs by host (the git identity rows live
+ * in worktree-shared workspace state on the extension and desktop and in
+ * `.texra/config.json` on the CLI), and the tool resolver's
+ * `unavailableHosts` gate.
  */
 let installedHost: SettingHost | undefined;
 
-export function initProcessSettingHost(host: SettingHost): void {
+export function initProcessHost(host: SettingHost): void {
   installedHost = host;
 }
 
-/** Setting slots keep their extension layout until a root names the host. */
-const processSettingHost = (): SettingHost => installedHost ?? 'vscode';
-
 /**
- * The host a composition root named, for the tool resolver's
- * `unavailableHosts` gate, or `undefined` when none did (the agent package
- * embedded in another process, a test). The tool resolver withholds every
- * host-bound tool from such a process rather than guessing which host it is.
+ * The host a composition root named, or `undefined` when none did (the agent
+ * package embedded in another process, a test). The tool resolver withholds
+ * every host-bound tool from such a process rather than guessing which host
+ * it is, and the setup probes report no host.
  */
-export function processToolHost(): SettingHost | undefined {
+export function processHost(): SettingHost | undefined {
   return installedHost;
 }
+
+/**
+ * The slot layout a setting read uses. A process no root named reads the
+ * catalog's canonical layout, the extension's, whose keys are the rows' own
+ * (`StateSettingEntry.key`): that is a slot choice over the stores the caller
+ * passes, not a claim to be the extension, which only {@link processHost}
+ * answers.
+ */
+const settingSlotHost = (): SettingHost => installedHost ?? 'vscode';
 
 /**
  * The one catalog reader: a setting read from the three slots the caller holds
@@ -63,7 +71,7 @@ export function readSettingFrom<T>(
   return readSetting(
     requireEntry(key),
     stores,
-    processSettingHost(),
+    settingSlotHost(),
   ) as Effect.Effect<T, StateReadFailed>;
 }
 
@@ -93,7 +101,7 @@ export function inspectSettingFrom<T>(
   return inspectSetting(
     requireEntry(key),
     stores,
-    processSettingHost(),
+    settingSlotHost(),
   ) as Effect.Effect<StoredSetting<T>, StateReadFailed>;
 }
 
@@ -135,7 +143,7 @@ export function writeSettingTo(
     requireEntry(key),
     value,
     stores,
-    processSettingHost(),
+    settingSlotHost(),
     target,
   );
 }

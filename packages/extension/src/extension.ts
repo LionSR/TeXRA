@@ -76,7 +76,7 @@ import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProce
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
-import { AppState, AgentDirectories } from '@platform/interfaces';
+import { AppState } from '@platform/interfaces';
 import type { AgentResumePort, ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
@@ -109,6 +109,7 @@ import {
 import type { CommandId } from '@shared/commands/catalog';
 import { GlobalDatabase } from '@shared/session/database';
 import { usageLogLayer } from '@telemetry/UsageLogService';
+import { USER_MCP_CONFIG_PATH } from '@tools/mcp/mcpConfig';
 import { refreshToolAvailability } from '@tools/toolAvailability';
 import { gitHubTokenRejectedMessage } from '@tools/github/githubAuth';
 import { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
@@ -217,9 +218,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     },
   };
   // Usage logging is a runtime service, not an authentication-provider
-  // capability: it runs even when Supabase sign-in is not configured, as it
-  // does on desktop and CLI, and the service itself decides which records can
-  // be sent.
+  // capability: it runs without Supabase sign-in, as on desktop and CLI.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
       ? context.extension.packageJSON.version
@@ -227,6 +226,7 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   const runtime = installProcessRuntime({
     processStart: nodeProcesses.selfIdentity(),
     globalStorage,
+    mcpConfigPath: USER_MCP_CONFIG_PATH,
     secrets,
     appState,
     auth,
@@ -313,9 +313,9 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
           : projectState,
         globalState,
       });
-      // Everything this process installs once after its roots exist, in the
-      // order the shared bootstrap owns for all three hosts.
+      // The once-per-process installs, in the order the shared bootstrap owns.
       yield* bootstrapHost({
+        host: 'vscode',
         roots,
         skills: {
           resourcesPath: path.join(context.extensionPath, 'resources'),

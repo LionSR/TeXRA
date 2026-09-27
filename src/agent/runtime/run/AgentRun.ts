@@ -40,7 +40,7 @@ import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
 import { LiveTools } from '@tools/liveTools';
 import { buildTerminalTool } from '@tools/structuredOutput';
-import { processToolHost } from '@utils/config/platformSettings';
+import { processHost } from '@utils/config/platformSettings';
 import { RunFileService } from '@utils/files/runStorage';
 
 import { bindModel, type BoundModel } from './modelBinding';
@@ -223,7 +223,7 @@ export const agentRunLayer = (
         tools: setting.tools,
         approvalPromptsUnavailable:
           ctx.toolPolicy.approvalPromptsUnavailable === true,
-        host: processToolHost(),
+        host: processHost(),
         runTools: terminalTool
           ? [...(input.tools ?? []), terminalTool]
           : (input.tools ?? []),

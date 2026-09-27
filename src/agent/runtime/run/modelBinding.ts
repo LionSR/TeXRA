@@ -29,6 +29,7 @@ import {
 } from '@texra-ai/llm/turn';
 
 import {
+  bearerTransport,
   resolveModelRoute,
   resolveRouteCredential,
   resolveSubscriptionCredential,
@@ -44,6 +45,7 @@ import {
 } from '@model/reasoningLevel';
 import type { CopilotModelRoute } from '@model/copilotRouting';
 import { routeConfig, type ModelRoute } from '@model/modelRoute';
+import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { StateStore } from '@platform/interfaces';
 import type { LanguageModel } from '@platform/languageModel';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
@@ -475,9 +477,7 @@ const PROTOCOL_DESCRIPTORS: {
       },
     }),
     construct: (configuration, credential) =>
-      anthropicMessagesModel(configuration, {
-        apiKey: routeBearer(credential),
-      }),
+      anthropicMessagesModel(configuration, bearerTransport(credential)),
     background: false,
   },
   'openai-responses': {
@@ -595,6 +595,7 @@ const PROTOCOL_DESCRIPTORS: {
     construct: (configuration, credential) =>
       openaiResponsesModel(configuration, {
         authentication: responsesAuthentication(credential),
+        fetch: longRunningModelFetch,
       }),
     background: (configuration) => configuration.background === 'supported',
   },
@@ -624,9 +625,7 @@ const PROTOCOL_DESCRIPTORS: {
       },
     }),
     construct: (configuration, credential) =>
-      googleInteractionsModel(configuration, {
-        apiKey: routeBearer(credential),
-      }),
+      googleInteractionsModel(configuration, bearerTransport(credential)),
     // Google retrieves a background result through server-side state.
     background: (configuration) =>
       configuration.background === 'supported' && configuration.defaults.store,
@@ -659,7 +658,7 @@ const PROTOCOL_DESCRIPTORS: {
       },
     }),
     construct: (configuration, credential) =>
-      openrouterChatModel(configuration, { apiKey: routeBearer(credential) }),
+      openrouterChatModel(configuration, bearerTransport(credential)),
     background: false,
   },
 };

@@ -10,7 +10,6 @@ import {
   onTestFinished,
   vi,
 } from 'vitest';
-import { NotificationFailed } from '@hosts/uiHosts';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import {
   StateWriteFailed,

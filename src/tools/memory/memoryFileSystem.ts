@@ -20,7 +20,6 @@ import {
   type FileSystem,
   Option,
   type PlatformError,
-  Result,
   Semaphore,
   Stream,
 } from 'effect';
@@ -34,10 +33,7 @@ import {
   MAX_PREVIEW_LINES,
   MAX_PREVIEW_CHARS,
 } from '@tools/memory/constants';
-import {
-  displayToStoragePath,
-  relativeToDisplayPath,
-} from '@tools/memory/memoryUtils';
+import { relativeToDisplayPath } from '@tools/memory/memoryUtils';
 import {
   buildFile,
   parseFrontmatter,

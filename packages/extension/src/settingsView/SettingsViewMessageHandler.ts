@@ -51,10 +51,7 @@ import {
 } from '@progressView/progressNavigation';
 import { TEXRA_APPROVAL_POLICY_CONFIG_KEY } from '@shared/approvalPolicy';
 import { GlobalStateKey } from '@shared/state/stateKeys';
-import type {
-  SettingsMessageFor,
-  SettingsViewOutboundMessage,
-} from '@shared/settingsView/settingsViewMessages';
+import type { SettingsViewOutboundMessage } from '@shared/settingsView/settingsViewMessages';
 import { loadRuntimeSkillDisplay } from '@skills/runtimeSkills';
 import { ACCOUNT_OUTCOME } from '@ui/copy/accountAuth';
 import { allSettledVoid } from '@utils/core/allSettledVoid';

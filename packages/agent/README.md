@@ -42,7 +42,10 @@ import { Effect, Stream } from 'effect';
 import { Sessions } from '@texra-ai/agent';
 import { nodePlatform } from '@texra-ai/agent/node';
 
-const platform = nodePlatform({ agentsDir: './agents' });
+const platform = nodePlatform({
+  agentsDir: './agents',
+  storageDir: './.agent-storage',
+});
 
 const program = Effect.gen(function* () {
   const sessions = yield* Sessions;
@@ -216,10 +219,17 @@ composes (the agent directories, secrets, the resume
 and language-model ports, and an optional `toolMissingHandler` that surfaces
 a missing external tool) plus the `WorkspaceRoots` of the folder the runs
 work in (workspace path, its storage path, config, workspace state, and the
-process-wide global state). `nodePlatform()` supplies both: process-local
-config and state, TeXRA's ordinary storage layout, and environment-variable
-secrets (so provider API keys are read from `process.env`; nothing is
-persisted).
+process-wide global state), and the `mcpConfigPath` its tool registry reads.
+`nodePlatform()` supplies all of them: process-local config and state,
+TeXRA's ordinary storage layout under the `storageDir` you name (required; the
+package never writes to the user's `~/.texra`), that directory's `mcp.json`,
+and environment-variable secrets (so provider API keys are read from
+`process.env`; nothing is persisted).
+
+Model requests carry their own HTTP transport: the environment's proxy policy
+(`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) and a 30-minute stream inactivity
+timeout, bound to each model rather than installed as your process's global
+dispatcher.
 
 The platform is **process-wide** while any `Sessions.layer` scope holds the
 composition. Create one and reuse it for every run: passing a second,
@@ -233,8 +243,8 @@ Implement the `AgentPlatform` ports and the `roots` yourself when embedding in a
 host that already owns those services. For TeXRA 1.0, supply a fresh,
 application-owned storage directory in custom `WorkspaceRoots`; the SDK uses
 that exact directory. Do not reuse an earlier TeXRA storage directory.
-`nodePlatform()` selects the separate `v1` storage layout automatically,
-including when `storageDir` is supplied. Earlier histories and checkpoints
+`nodePlatform()` selects the separate `v1` storage layout under `storageDir`
+automatically. Earlier histories and checkpoints
 are not imported or removed.
 
 ## Custom tools

@@ -4,7 +4,7 @@
  * (`runProgressRenderer.ts`) and the plain-text workflow output
  * (`workflowPlainOutput.ts`), which are otherwise separate renderers.
  */
-import { Effect, Fiber, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, Stream } from 'effect';
 
 import type { SessionHandle } from '@agent/runtime';
 import type { ProcessRuntime } from '@platform/processRuntime';

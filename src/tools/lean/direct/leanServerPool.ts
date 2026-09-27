@@ -41,7 +41,6 @@ import { runLakeCommand } from './lakeCommands';
 import { LeanServer, type LeanStartError } from './leanServer';
 import { createLeanServerRoster } from '../leanServerRegistry';
 import type { LeanServerInfo } from '../leanServerRegistry';
-import type { LeanLanguageServices } from '../leanLanguageServices';
 import type {
   LeanFileCommand,
   LeanProjectCommand,

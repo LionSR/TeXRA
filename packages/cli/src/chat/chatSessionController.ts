@@ -3,16 +3,7 @@
 // Host-neutral (no Ink/TUI rendering dependencies): the Ink component
 // consumes narrow commands exposed here.
 
-import {
-  Cause,
-  Data,
-  Deferred,
-  Effect,
-  Exit,
-  Option,
-  Stream,
-  SubscriptionRef,
-} from 'effect';
+import { Cause, Data, Deferred, Effect, Exit, Option, Stream } from 'effect';
 
 import { getRunRecords } from '@agent/storage';
 import {

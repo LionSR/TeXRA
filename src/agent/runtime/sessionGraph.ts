@@ -172,10 +172,6 @@ export interface SessionOwner {
   current(root: string): SessionHandle | undefined;
   /** Every session the owner holds, in no particular order. */
   list(): Effect.Effect<readonly SessionHandle[]>;
-  /** The owner's synchronous face on the same set as {@link current}: every
-   *  session whose handle exists and whose release has not begun. Builds
-   *  nothing and waits for nothing, so an entry still building is absent. */
-  held(): readonly SessionHandle[];
   /** Close the session of a storage root, settling what it owns inside the
    *  runtime's shutdown-phase budget. */
   close(root: string): Effect.Effect<SessionCloseReport>;
@@ -244,16 +240,6 @@ export function openSessionEffect(
  */
 export function listSessions(): Effect.Effect<readonly SessionHandle[]> {
   return Effect.suspend(() => owner?.list() ?? Effect.succeed([]));
-}
-
-/**
- * Every session the process's owner holds right now, read synchronously: the
- * enumeration a process-shutdown sweep needs, which has no fiber to wait on a
- * build with. A process with no owner installed holds none. This is the one
- * list of live sessions — no module keeps a second one.
- */
-export function heldSessions(): readonly SessionHandle[] {
-  return owner?.held() ?? [];
 }
 
 function snapshotRoots(init: SessionHandleInit): SessionHandleInit {

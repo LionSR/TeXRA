@@ -571,7 +571,7 @@ const normalizeCompleted = Effect.fn('llm.google.normalizeCompleted')(
 /** Direct Gemini Interactions protocol; it owns neither history nor local tools. */
 export function googleInteractionsModel(
   configuration: GoogleInteractionsConfiguration,
-  transport: { readonly apiKey: string },
+  transport: { readonly apiKey: string; readonly fetch?: typeof fetch },
 ): Model {
   const config = ModelConfigurationSchema.parse(configuration);
   if (config.protocol !== 'google-interactions' || !transport.apiKey) {
@@ -589,7 +589,10 @@ export function googleInteractionsModel(
     enterprise: false,
     apiKey: transport.apiKey,
     apiVersion: 'v1beta',
-    httpOptions: { baseUrl: config.deployment.endpoint },
+    httpOptions: {
+      baseUrl: config.deployment.endpoint,
+      fetch: transport.fetch,
+    },
   });
 
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
