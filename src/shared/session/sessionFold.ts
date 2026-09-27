@@ -425,9 +425,8 @@ function setRun(view: SessionView, run: RunView): void {
   if (previous?.ownerId !== run.ownerId) {
     reindexOwner(view, run.id, previous?.ownerId ?? null, run.ownerId);
   }
-  if (previous?.group !== run.group) {
+  if (previous?.group !== run.group)
     countGroups(view, previous?.group, run.group);
-  }
 }
 
 function dropRun(view: SessionView, run: RunView): void {
@@ -578,7 +577,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
   const heldBy =
     owner !== null && !own && !local.dead.includes(owner) ? owner : null;
   const heldElsewhere = heldBy !== null;
-  const held = own || heldElsewhere;
+  const held = own || heldElsewhere || run.substate === RUN_SUBSTATE.PAUSED;
   // Only a request that parks its tool is a wait: a dispatched inquiry left
   // its run working, so it stays listed for the panel without moving the run
   // out of Running.
@@ -1004,9 +1003,11 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         ? { ...run, goal: event.state }
         : wrongArm(run, 'goalStateChanged');
     case 'child.park':
-      // An agent-CLI child's park, on the row the child protocol owns.
-      // `flow` stays null: a run with no ledger has no position to paint.
-      return parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
+      // A child's park (agent-CLI turns, or a stop's pause) on the row its
+      // protocol owns. `flow` stays null: no ledger, no position to paint.
+      return event.phase === 'paused'
+        ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
+        : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);
     case 'run.detach':
       // The edge severed: the child is top level from here (one run model,
       // section 3.2). A run never acquires a new parent.
@@ -1249,9 +1250,8 @@ function foldDurable(
   // publisher logs it).
   if (!known && event.type !== 'run.start') return false;
   latest.set(listingKey, event.commit);
-  if (event.type === 'run.removed') {
+  if (event.type === 'run.removed')
     return foldRunRemoved(view, runId, deferred);
-  }
   const created = !known;
   const before = known ?? createRun(view, event as RunStartEvent, runId);
 

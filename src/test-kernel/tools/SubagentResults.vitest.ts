@@ -2,21 +2,21 @@
 import { describe, expect, it } from 'vitest';
 
 // Local imports
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import {
+  formatSubagentDelivery,
+  formatSubagentError,
+} from '@agent/runtime/subagentResults';
 import {
   RUN_OUTCOME,
   type RunEnd,
   type RunEndOutput,
   type RunId,
 } from '@shared/schemas';
-import { formatDelivery } from '@tools/delegation/deliveryEnvelope';
 import {
   formatBashDelivery,
   formatBashError,
 } from '@tools/delegation/bashDelivery';
-import {
-  formatSubagentDelivery,
-  formatSubagentError,
-} from '@tools/delegation/subagentResults';
 
 type ToolUseOutput = Extract<RunEndOutput, { category: 'toolUse' }>;
 type WorkflowOutput = Extract<RunEndOutput, { category: 'workflow' }>;

@@ -27,6 +27,7 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { WorkflowControlRegistry } from '@agent/runtime/workflowControlRegistry';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { withLogChannel } from '@logger/effectLog';
 import type {
   RunId,
@@ -43,7 +44,6 @@ import { isPathWithin } from '@utils/core/pathCore';
 import { truncateSummary } from '@utils/text/stringUtils';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { workspaceRelativePath } from '@utils/files/workspaceFS';
-import { formatDelivery } from './deliveryEnvelope';
 
 // Local file imports
 import {
@@ -173,6 +173,7 @@ export function createWorkflowScriptStrategy(
   let board: ReturnType<WorkflowScriptProgressProjection<never>['tally']> = {
     phaseCount: 0,
     tally: tallyWorkflowCalls([], 0, true),
+    stopped: [],
   };
   let settledCostUsd = 0;
   // A delivered file reads as the workspace file it replaces, not the
@@ -397,6 +398,12 @@ export function createWorkflowScriptStrategy(
       }),
 
     isTerminal: () => true,
+
+    pauseNotice: () =>
+      [
+        `Workflow script '${params.name}' is paused at ${board.tally.ok} of ${board.tally.total} calls${board.stopped.length > 0 ? `; it was running ${board.stopped.join(', ')}` : ''}.`,
+        `Nothing continues it on its own. To continue it, call ${DELEGATE_MULTI_AGENTS_TOOL_NAME} again with scriptPath: '${params.scriptPath}' and the same agent: completed calls replay from its journal and only the rest run.`,
+      ].join('\n'),
 
     // Wrap the free-form result in the shared child-run envelope so the async
     // follow-up carries the run's runId, like every other detached

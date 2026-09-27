@@ -327,7 +327,7 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
     case 'child.park':
-      return row.phase === 'parked' ? RUN_PHASE.WAITING : RUN_PHASE.RUNNING;
+      return row.phase === 'resumed' ? RUN_PHASE.RUNNING : RUN_PHASE.WAITING;
     case 'run.end':
       return row.outcome;
     default:

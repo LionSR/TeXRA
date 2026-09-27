@@ -113,3 +113,6 @@ export {
 
 // Native tool host capabilities, supplied per standalone invocation.
 export { ToolCall } from './ToolCall';
+
+// A workflow run's delivered outputs with their diffs, for a host that prints them.
+export { withWorkflowDiffs } from './subagentResults';

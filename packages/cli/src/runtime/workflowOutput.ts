@@ -2,7 +2,11 @@ import * as path from 'node:path';
 
 import { Effect, FileSystem, Path, PlatformError } from 'effect';
 
-import type { AgentConfigPayload, WorkflowFlowResult } from '@agent/runtime';
+import {
+  withWorkflowDiffs,
+  type AgentConfigPayload,
+  type WorkflowFlowResult,
+} from '@agent/runtime';
 import { isNotADirectoryError } from '@common/errors';
 import type {
   OutputFileSummary,
@@ -15,7 +19,6 @@ import {
 } from '@shared/schemas';
 import { runOutcomeToCliRunStatus } from '@shared/runs/runStatus';
 import { stripWorkflowRoundDir } from '@shared/constants/workflowOutput';
-import { withWorkflowDiffs } from '@tools/delegation/subagentResults';
 import { getSafeDocumentRelativePath } from '@utils/files/outputFileUtils';
 import { runDirUnder } from '@utils/files/runStorageFs';
 // toPosixPath also trims and resolves `.`/`..` segments beyond a bare slash

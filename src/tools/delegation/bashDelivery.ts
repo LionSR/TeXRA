@@ -6,14 +6,13 @@
  * including a tail/head output excerpt for long runs.
  */
 
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import { DELIVERY_TAG } from '@shared/deliveryTags';
 
 import type { ExecResult } from '@shared/schemas';
 import { escapeText } from '@shared/utils/xmlEscape';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { formatDuration, splitContentLines } from '@utils/text/stringUtils';
-
-import { formatDelivery } from './deliveryEnvelope';
 
 /** Last N lines of output for the delivery preview. */
 const OUTPUT_PREVIEW_LINES = 20;

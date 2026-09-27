@@ -72,6 +72,9 @@ export type TaskGroupStatus = z.infer<typeof TaskGroupStatusSchema>;
 export const RUN_SUBSTATE = {
   STARTING: 'starting',
   RESUMING: 'resuming',
+  /** Rested by a stop (`child.park` `paused`): not ended, continued by
+   *  calling the child again. */
+  PAUSED: 'paused',
 } as const;
 
 export const RunSubstateSchema = z.enum(RUN_SUBSTATE);

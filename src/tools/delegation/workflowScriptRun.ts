@@ -148,6 +148,8 @@ export interface WorkflowScriptProgressProjection<R> {
   readonly tally: () => {
     readonly phaseCount: number;
     readonly tally: WorkflowTally;
+    /** Labels of the calls a stop cancelled mid-run. */
+    readonly stopped: readonly string[];
   };
 }
 
@@ -285,6 +287,9 @@ export function projectWorkflowScriptProgress<R>(
         [...planTaskIds].filter((id) => !cards.has(id)).length,
         true,
       ),
+      stopped: [...cards.values()]
+        .filter((card) => card.status === 'cancelled')
+        .map((card) => card.label),
     }),
   };
 }

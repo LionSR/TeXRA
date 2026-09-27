@@ -451,6 +451,9 @@ interface AgentCliLoopParams<TTurn> {
   turnErrorMessage?: (turn: TTurn) => string | undefined;
   /** Logged if the loop fails after launch. */
   loopFailedMessage: string;
+  /** The tool call and id parameter that continue this session after a
+   *  stop; until a turn has registered an id, a stop cancels it. */
+  continueWith: { readonly tool: string; readonly idParam: string };
 }
 
 /**
@@ -486,6 +489,7 @@ export function buildAgentCliLaunch<TTurn>(
       isTurnError,
       turnErrorMessage,
       loopFailedMessage,
+      continueWith,
     } = params;
     const { logger } = childRun;
     const registry = store(yield* Runs);
@@ -497,7 +501,9 @@ export function buildAgentCliLaunch<TTurn>(
     // Fresh and resumed session/thread ids are registered after the first
     // successful turn is persisted, immediately before its result reaches the
     // parent.
+    let continueId: string | undefined;
     const registerSessionId = (id: string): void => {
+      continueId = id;
       if (registry.lookup(id)) return;
       registry.register(id, target);
     };
@@ -545,6 +551,9 @@ export function buildAgentCliLaunch<TTurn>(
           catch: ensureError,
         }),
       formatError: (turn, err) => formatError(turn, err, lastPrompt),
+      pauseNotice: () =>
+        continueId &&
+        `The ${stageLabel} is paused. Nothing continues it on its own; to continue it, call ${continueWith.tool} with ${continueWith.idParam} '${continueId}'.`,
       releaseSessionOwnership: () => {
         releaseFallbackClaim?.();
         registry.releaseByRunId(runId);

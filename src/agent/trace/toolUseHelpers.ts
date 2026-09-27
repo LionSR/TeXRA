@@ -79,3 +79,20 @@ export function emitToolUseCard(
   }
   return ref;
 }
+
+/** A card its caller holds open, with the log it last showed. */
+export type OpenToolUseCard = ToolUseCardRef & { readonly toolLog: ToolUseLog };
+
+/** End every card still open as failed, keeping what each last showed: a
+ *  turn that ended before its tools reported leaves no card running. */
+export function endOpenToolUseCards(
+  trace: AgentTrace,
+  cards: Map<string, OpenToolUseCard>,
+): void {
+  for (const { toolLog, ...ref } of cards.values()) {
+    const { status: _status, ...log } = toolLog;
+    const error = 'The turn ended before this tool reported.';
+    endToolUseCard(trace, ref, { ...log, error }, 'failed');
+  }
+  cards.clear();
+}

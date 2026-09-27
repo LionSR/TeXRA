@@ -19,6 +19,7 @@ import {
   aggregateTarget,
   HISTORY_RUN_STATUS,
   HISTORY_RUN_STATUS_LABEL,
+  RUN_SUBSTATE,
   type RunId,
   type HistoryRunStatus,
 } from '@shared/schemas';
@@ -218,6 +219,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         checkpointPresent,
         agentCategory: config === null ? null : config.agentCategory,
         phase: run?.status,
+        paused: run?.substate === RUN_SUBSTATE.PAUSED,
       },
       session,
     );
@@ -467,6 +469,7 @@ export function formatInvalidExportFormatText(raw: string): string {
 function toNdjsonHistoryStatus(status: HistoryRunStatus): string {
   if (
     status === HISTORY_RUN_STATUS.RESUMABLE ||
+    status === HISTORY_RUN_STATUS.PAUSED ||
     status === HISTORY_RUN_STATUS.UNKNOWN
   ) {
     return status;

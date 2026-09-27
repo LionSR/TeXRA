@@ -18,21 +18,24 @@
  */
 
 // Third-party imports
-import { Effect } from 'effect';
+import { Effect, Stream } from 'effect';
 import { z } from 'zod';
 
 // Local imports
 import {
   emitToolUseCard,
+  endOpenToolUseCards,
   endToolUseCard,
   logWebSearch,
   type AgentTrace,
+  type OpenToolUseCard,
   type ToolUseCardRef,
 } from '@agent/trace';
 import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { type SessionHandle } from '@agent/runtime/SessionHandle';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
 import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
@@ -71,7 +74,6 @@ import {
   dispatchAgentCliTool,
   launchAgentCliSession,
 } from './agentCliShared';
-import { formatDelivery } from './delegation/deliveryEnvelope';
 import {
   CODEX_AGENT_NAME,
   buildCodexCommandToolLog,
@@ -89,14 +91,11 @@ import type {
   RunResult,
   SandboxMode,
   Thread,
+  ThreadEvent,
   ThreadItem,
   ThreadOptions,
   TodoListItem,
 } from '@openai/codex-sdk';
-
-// ============================================================================
-// Codex config
-// ============================================================================
 
 // The sandbox-mode schema is imported eagerly from `@shared` (a light,
 // dependency-free leaf) since it is used at module level by the input schema.
@@ -126,10 +125,6 @@ const CodexInputSchema = z.strictObject({
 });
 
 export type CodexInput = z.infer<typeof CodexInputSchema>;
-
-// ============================================================================
-// Run fact helpers
-// ============================================================================
 
 function toProgressTodos(item: TodoListItem): TodoItem[] {
   return item.items.map((t) => ({
@@ -194,25 +189,24 @@ function buildCodexLiveToolLog(
 
 function updateCodexLiveToolLog(
   logger: AgentTrace,
-  refs: Map<string, ToolUseCardRef>,
+  refs: Map<string, OpenToolUseCard>,
   item: ThreadItem,
   toolLog: ToolUseLog,
 ): void {
   const existing = refs.get(item.id);
-  if (!existing) {
-    refs.set(item.id, emitToolUseCard(logger, toolLog));
-    return;
-  }
-
   const { status = 'completed', ...rest } = toolLog;
-  endToolUseCard(logger, existing, rest, status);
+  if (existing) endToolUseCard(logger, existing, rest, status);
+  const card = existing ?? emitToolUseCard(logger, toolLog);
+  // Only an open card is kept: the turn's finalizer ends what is left.
+  if (status === 'in_progress') refs.set(item.id, { ...card, toolLog });
+  else refs.delete(item.id);
 }
 
 function publishCodexItemProgress(params: {
   item: ThreadItem;
   status: ToolCallStatus;
   logger: AgentTrace;
-  refs: Map<string, ToolUseCardRef>;
+  refs: Map<string, OpenToolUseCard>;
 }): boolean {
   const { item, status, logger, refs } = params;
 
@@ -245,8 +239,8 @@ function codexTurnUsage({ usage }: RunResult): TokenUsageStats | null {
 }
 
 /** Run a single streamed turn, logging events to the child stream. The
- * `@openai/codex-sdk` stream is this module's foreign edge, so the async drain
- * below is the one place it is wrapped. */
+ * `@openai/codex-sdk` event iterator is this module's foreign edge, consumed
+ * as a Stream below. */
 export function runStreamedTurn(
   thread: Thread,
   prompt: string,
@@ -257,14 +251,14 @@ export function runStreamedTurn(
     logger.info(prompt, { messageType: MESSAGE_TYPES.USER_MESSAGE });
     const responseParts: string[] = [];
     let usage: RunResult['usage'] = null;
-    const itemLogRefs = new Map<string, ToolUseCardRef>();
+    const itemLogRefs = new Map<string, OpenToolUseCard>();
 
     // The live "Codex Turn" card is opened on turn.started and closed on
     // turn.completed / turn.failed with the measured wall time. The
-    // `Effect.ensuring` below closes it on any other exit (stream error, abort,
-    // or an early stream end) so the progress view never keeps a spinning
-    // Running card after the turn is already dead. finalizeTurnCard is a no-op
-    // once the card is closed.
+    // `Effect.ensuring` below closes it and every open item card on any other
+    // exit (stream error, abort, or an early stream end) so the progress view
+    // never keeps a spinning Running card after the turn is already dead.
+    // finalizeTurnCard is a no-op once the card is closed.
     let turnLogRef: ToolUseCardRef | null = null;
     let turnStartedMs = Date.now();
     const finalizeTurnCard = (
@@ -281,66 +275,71 @@ export function runStreamedTurn(
       turnLogRef = null;
     };
 
-    const drainTurn = async (): Promise<RunResult> => {
-      const { events } = await thread.runStreamed(prompt, { signal });
-      for await (const event of events) {
-        switch (event.type) {
-          case 'thread.started':
-            emitToolUseCard(logger, buildCodexThreadToolLog(event));
-            break;
-          case 'turn.started':
-            turnStartedMs = Date.now();
-            turnLogRef = emitToolUseCard(
-              logger,
-              buildCodexTurnToolLog({ state: 'running' }),
-            );
-            break;
-          case 'item.started':
-          case 'item.updated':
-            publishCodexItemProgress({
-              item: event.item,
-              status: 'in_progress',
-              logger,
-              refs: itemLogRefs,
-            });
-            break;
-          case 'item.completed': {
-            const { item } = event;
-            const wasRenderedAsProgress = publishCodexItemProgress({
-              item,
-              status: 'completed',
-              logger,
-              refs: itemLogRefs,
-            });
-            if (!wasRenderedAsProgress) {
-              logCodexItem(item, logger);
-            }
-            if (item.type === 'agent_message') {
-              responseParts.push(item.text);
-            }
-            break;
-          }
-          case 'turn.completed':
-            usage = event.usage ?? null;
-            finalizeTurnCard('completed');
-            break;
-          case 'turn.failed':
-            finalizeTurnCard('failed', event.error.message);
-            throw new ToolError(event.error.message ?? 'Codex turn failed');
-          case 'error':
-            finalizeTurnCard('failed', event.message);
-            throw new ToolError(event.message ?? 'Codex stream error');
+    const onEvent = (event: ThreadEvent): void => {
+      switch (event.type) {
+        case 'thread.started':
+          emitToolUseCard(logger, buildCodexThreadToolLog(event));
+          break;
+        case 'turn.started':
+          turnStartedMs = Date.now();
+          turnLogRef = emitToolUseCard(
+            logger,
+            buildCodexTurnToolLog({ state: 'running' }),
+          );
+          break;
+        case 'item.started':
+        case 'item.updated':
+          publishCodexItemProgress({
+            item: event.item,
+            status: 'in_progress',
+            logger,
+            refs: itemLogRefs,
+          });
+          break;
+        case 'item.completed': {
+          const { item } = event;
+          const wasRenderedAsProgress = publishCodexItemProgress({
+            item,
+            status: 'completed',
+            logger,
+            refs: itemLogRefs,
+          });
+          if (!wasRenderedAsProgress) logCodexItem(item, logger);
+          if (item.type === 'agent_message') responseParts.push(item.text);
+          break;
         }
+        case 'turn.completed':
+          usage = event.usage ?? null;
+          finalizeTurnCard('completed');
+          break;
+        case 'turn.failed':
+          finalizeTurnCard('failed', event.error.message);
+          throw new ToolError(event.error.message ?? 'Codex turn failed');
+        case 'error':
+          finalizeTurnCard('failed', event.message);
+          throw new ToolError(event.message ?? 'Codex stream error');
       }
-      return {
-        items: [],
-        finalResponse: responseParts.join('\n\n'),
-        usage,
-      };
     };
 
-    return Effect.tryPromise({ try: drainTurn, catch: ensureError }).pipe(
-      Effect.ensuring(Effect.sync(() => finalizeTurnCard('failed'))),
+    return Effect.tryPromise({
+      try: () => thread.runStreamed(prompt, { signal }),
+      catch: ensureError,
+    }).pipe(
+      Effect.flatMap(({ events }) =>
+        Stream.runForEach(Stream.fromAsyncIterable(events, ensureError), (e) =>
+          Effect.try({ try: () => onEvent(e), catch: ensureError }),
+        ),
+      ),
+      Effect.map((): RunResult => {
+        const finalResponse = responseParts.join('\n\n');
+        return { items: [], finalResponse, usage };
+      }),
+      Effect.ensuring(
+        Effect.sync(() => {
+          endOpenToolUseCards(logger, itemLogRefs);
+          finalizeTurnCard('failed');
+        }),
+      ),
     );
   });
 }
@@ -406,6 +405,7 @@ function buildCodexLaunch(params: {
         message: toErrorMessage(err),
       }),
     loopFailedMessage: 'Codex run loop failed after launch',
+    continueWith: { tool: 'codex', idParam: 'thread_id' },
   });
 }
 

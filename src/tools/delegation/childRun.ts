@@ -8,8 +8,12 @@ import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
+import { persistChildRunDelivery } from '@agent/storage/childRunDeliveryPersistence';
 import { classifyAgentError } from '@common/errors';
-import { RUN_OUTCOME } from '@shared/schemas';
+import { aggregateId, RUN_OUTCOME } from '@shared/schemas';
+import { DELIVERY_TAG } from '@shared/deliveryTags';
+import { escapeText } from '@shared/utils/xmlEscape';
 import type { AgentCategory, RunId, RunIdentity } from '@shared/schemas';
 import { truncateWithEllipsis } from '@utils/text/stringUtils';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -100,6 +104,11 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
   args: FinalizeChildRunArgs,
 ) {
   const { handle, session, logger, closeTrace, options } = args;
+  const notice =
+    options.outcome === RUN_OUTCOME.CANCELLED
+      ? options.pauseNotice?.()
+      : undefined;
+  if (notice !== undefined) return yield* pauseChildRun(args, notice);
 
   // Describing the failure is fallible: `error` is `unknown`, and formatting
   // a foreign value can throw (a throwing `message` getter or `toString`).
@@ -156,3 +165,45 @@ const finalizeChildRun = Effect.fn('finalizeChildRun')(function* (
     );
   }
 }, Effect.uninterruptible);
+
+/**
+ * Rest a stopped child that its parent's model can continue, instead of
+ * ending it: `notice` becomes its report and is queued for the parent without
+ * waking it, and a `child.park` `paused` row, not `run.end`, closes the
+ * activation. Calling the child again activates it once more.
+ */
+const pauseChildRun = Effect.fn('pauseChildRun')(function* (
+  { handle, session, logger, closeTrace, options }: FinalizeChildRunArgs,
+  notice: string,
+) {
+  const runId = handle.runId;
+  const text = formatDelivery({
+    tag: DELIVERY_TAG.childPaused,
+    runId,
+    lines: [escapeText(notice)],
+  });
+  yield* persistChildRunDelivery(session, runId, text, undefined);
+  const parentRunId = handle.parentState.current;
+  if (parentRunId !== null) {
+    const from = { kind: 'run', runId } as const;
+    const submitted = yield* session.followUps.submit(
+      parentRunId,
+      { text, from },
+      'recoverable',
+    );
+    // A pause wakes nobody: a parent that is not running reads it next turn.
+    if (submitted.kind === 'queued' && submitted.lease)
+      session.followUps.release(submitted.lease, 'recoverable');
+    if (submitted.kind === 'refused')
+      logger.warn(
+        `The pause notice was not queued for parent run ${parentRunId}; it remains in this run's report.`,
+      );
+  }
+  options.stage?.end(RUN_OUTCOME.CANCELLED);
+  const target = aggregateId('run', runId);
+  yield* session.commit([
+    { type: 'child.park', aggregateId: target, phase: 'paused' },
+  ]);
+  (yield* Runs).untrackIfCurrent(handle);
+  closeTrace();
+});

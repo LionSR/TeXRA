@@ -359,9 +359,9 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
    * `getToolUseFollowUpTarget` reads to admit the next turn. A listing key
    * of its own (`listingTypeOf`'s default), for the same reason `flow.step`
    * is one: a cold listing that dropped it would paint every parked child
-   * as busy.
+   * as busy. `paused`: a stop rested it, no `run.end` follows (continuable).
    */
-  durable('child.park', { phase: z.enum(['parked', 'resumed']) }),
+  durable('child.park', { phase: z.enum(['parked', 'resumed', 'paused']) }),
   RunRemovedDraftSchema,
   /** The AI-generated summary of what the run set out to do. */
   durable('run.description', { description: z.string() }),

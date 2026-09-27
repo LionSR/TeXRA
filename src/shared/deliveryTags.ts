@@ -23,6 +23,7 @@ export const DELIVERY_TAG = {
   claudeAgentError: 'claude-agent-error',
   workflowScriptResult: 'workflow-script-result',
   workflowScriptError: 'workflow-script-error',
+  childPaused: 'child-paused',
   githubWebhookActivity: 'github-webhook-activity',
 } as const;
 

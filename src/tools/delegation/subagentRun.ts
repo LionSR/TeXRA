@@ -19,6 +19,7 @@ import {
   AgentConfigSchema,
   type AgentConfigPayload,
 } from '@agent/core/definition/AgentConfig';
+import { createNativeSubagentStrategy } from '@agent/runtime/nativeSubagentStrategy';
 import { withLogChannel } from '@logger/effectLog';
 import {
   AgentCategory,
@@ -38,7 +39,6 @@ import { toErrorMessage } from '@utils/errors/errorMessage';
 // Local file imports
 import { startDetachedChildRunLoop } from './detachedChildRun';
 import { executeSubagentForDeliveryInBand } from './inBandSubagentRun';
-import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 import type { DelegationParent } from './proposalFlow';
 
 // ============================================================================

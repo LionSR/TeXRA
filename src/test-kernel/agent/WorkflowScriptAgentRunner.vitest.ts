@@ -1420,16 +1420,15 @@ describe('createWorkflowScriptAgentRunner', () => {
     }),
   );
 
-  it.effect('refuses a cancelled child whose accepted turn never settled', () =>
+  it.effect('reruns a cancelled child whose accepted turn never settled', () =>
     Effect.gen(function* () {
-      // Acceptance commits immediately before the turn dispatches, so a stop
-      // that lands in that window leaves a CANCELLED row with no manifest
-      // over tool edits that already ran. The open turn is the evidence work
-      // began, so the attempt is refused rather than relaunched.
-      probeAnswers({
-        exists: true,
-        runEnd: { ...result, outcome: 'cancelled' },
-      });
+      // A stop that lands after acceptance leaves a CANCELLED row over an
+      // open turn. A stop pauses the workflow, and continuing it reruns what
+      // the stop cut short: the next attempt launches.
+      probeAnswers(
+        { exists: true, runEnd: { ...result, outcome: 'cancelled' } },
+        { exists: false },
+      );
       mocks.readChildTurnState.mockReturnValue(
         Effect.succeed({
           active: { key: 'a0', index: 1 },
@@ -1437,13 +1436,9 @@ describe('createWorkflowScriptAgentRunner', () => {
         }),
       );
 
-      const error = yield* Effect.flip(defaultRunner()(invocation()));
-
-      expect(error).toMatchObject({
-        name: 'WorkflowRunAbortError',
-        message: expect.stringContaining('accepted a turn it never settled'),
-      });
-      expect(mocks.executeSubagentInBand).not.toHaveBeenCalled();
+      expect(yield* defaultRunner()(invocation())).toBe(result);
+      expect(mocks.probedRunIds).toHaveLength(2);
+      expect(mocks.executeSubagentInBand).toHaveBeenCalledTimes(1);
     }),
   );
 
