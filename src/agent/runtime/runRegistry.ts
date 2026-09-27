@@ -165,6 +165,10 @@ export interface RunRegistryInit {
   readonly borrowRunClaim: (
     runId: RunId,
   ) => Effect.Effect<void, Error, Scope.Scope>;
+  /** The fork every run starts on (`makeRunFork`). */
+  readonly fork: <A, E>(
+    effect: Effect.Effect<A, E, ProcessServices>,
+  ) => Fiber.Fiber<A, E>;
 }
 
 type AnyFiber = Fiber.Fiber<unknown, unknown>;
@@ -449,17 +453,40 @@ export class RunRegistry {
   }
 
   /**
-   * Run a generation after earlier work, holding its lane through cleanup, and
-   * refuse with `RunLive` when a generation of the run is already live here.
-   * The refusal is taken in the same synchronous step as the lane claim, so it
-   * is the whole duplicate-launch answer. The claim that survives it lifts the
-   * run's stop marks; a refused launch leaves the stop's gate intact.
+   * The one launch door (R2): every run starts here, at once, on the
+   * session's context (`makeRunFork`), never its caller's. It runs after
+   * earlier work on the run's lane and refuses with `RunLive` in the step
+   * that claims it; a claim that survives lifts the run's stop marks.
+   * `settle` wraps the admission, so a refusal reaches the caller's own exit.
    */
-  launchRun<A, E, R>(
+  launch<A, E, R extends AgentRunServices, B, E2>(
     runId: RunId,
-    operation: Effect.Effect<A, E, R>,
-  ): Effect.Effect<A, E | Error, R> {
-    return this.admit(runId, operation, false);
+    program: Effect.Effect<A, E, R>,
+    settle: (
+      admitted: Effect.Effect<A, E | Error, R>,
+    ) => Effect.Effect<B, E2, R>,
+  ): Effect.Effect<Fiber.Fiber<B, E2>> {
+    return Effect.sync(() =>
+      this.init.fork(
+        settle(this.admit(runId, program, false)).pipe(
+          Effect.provideService(Runs, this),
+        ) as Effect.Effect<B, E2, ProcessServices>,
+      ),
+    );
+  }
+
+  /** {@link launch}, awaited: the caller's interruption stops the run. */
+  launchRun<A, E, R extends AgentRunServices>(
+    runId: RunId,
+    program: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | Error> {
+    return Effect.flatMap(
+      this.launch(runId, program, (run) => run),
+      (fiber) =>
+        Fiber.join(fiber).pipe(
+          Effect.onInterrupt(() => Fiber.interrupt(fiber)),
+        ),
+    );
   }
 
   /** Reserve an inactive run for deletion; never wait for a live owner. */

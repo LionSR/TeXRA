@@ -55,6 +55,17 @@ vi.mock('@agent/runtime/AgentLaunchContext', () => ({
   prepareAgentDefinition: mocks.prepareAgentDefinition,
 }));
 
+// A child run starts at the session's launch door, on the session's context:
+// the process engine it reads there is this suite's engine.
+vi.mock('@agent/runtime/executeAgent', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agent/runtime/executeAgent')>()),
+  executeAgent: (...args: Parameters<AgentEngine['Service']['executeAgent']>) =>
+    testEngine.executeAgent(...args),
+  resumeToolUseFromResumeData: (
+    ...args: Parameters<AgentEngine['Service']['resumeToolUseFromResumeData']>
+  ) => testEngine.resumeToolUseFromResumeData(...args),
+}));
+
 // Delegation resolves targets through the scope resolver; with no active run
 // scope that is the workspace-visible roster, and identity matching is
 // agentRegistry's own rule — mirrored here rather than re-implemented.
@@ -843,7 +854,9 @@ describe('headless delegation', () => {
 
         const running = yield* Effect.forkChild(runInBand(delegationOptions()));
         yield* Deferred.await(persisting);
-        const interrupting = yield* Effect.forkChild(Fiber.interrupt(running));
+        const interrupting = yield* Effect.forkChild(Fiber.interrupt(running), {
+          startImmediately: true,
+        });
         finishPersistence();
 
         yield* Fiber.join(interrupting);

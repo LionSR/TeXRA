@@ -3,12 +3,16 @@ import { Cause, Clock, Deferred, Effect, Exit, Fiber, Queue } from 'effect';
 
 // Shared child accounting and durable delivery for native runs and processes.
 
-import { finalizeRun } from '@agent/storage';
 import type { AgentTrace, StageHandle } from '@agent/trace';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { resolveChildRunConcurrencyBudget } from '@agent/runtime/childRunBudget';
 import type { RunParent } from '@agent/runtime/RunHandle';
-import { Runs, type RunRegistry } from '@agent/runtime/runRegistry';
+import {
+  Runs,
+  type AgentRunServices,
+  type RunRegistry,
+} from '@agent/runtime/runRegistry';
+import { endRunOutsideLifecycle } from '@agent/runtime/runLaunchGuard';
 import { FollowUpContinuationOwned } from '@agent/followUp/RunInput';
 import type { RunInput } from '@agent/followUp/RunInput';
 import type {
@@ -707,61 +711,12 @@ function onceAborted<A, E>(
 }
 
 /**
- * Own admitted run cleanup until the child loop takes over. Failure or
- * interruption records the terminal outcome, commits the run's ending and
- * releases its claim before propagating the original cause. Post-handoff work stays outside
- * this owner because the live child then owns its own settlement.
- */
-export function runWithLaunchGuard<A, E, R>(
-  session: SessionHandle,
-  runId: RunId,
-  operation: Effect.Effect<A, E, R>,
-): Effect.Effect<A, E | Error, R> {
-  return operation.pipe(
-    Effect.onExit((exit) => {
-      if (Exit.isSuccess(exit)) return Effect.void;
-      return Effect.gen(function* () {
-        const finalized = yield* Effect.exit(
-          finalizeRun(session, {
-            runId,
-            outcome: Cause.hasInterrupts(exit.cause)
-              ? RUN_OUTCOME.CANCELLED
-              : RUN_OUTCOME.FAILED,
-          }),
-        );
-        // The run's ending, then its birth claim: a hold taken and let go at
-        // once releases it, since no driver ever took one.
-        const released = yield* Effect.exit(
-          session
-            .commitRunEnd(runId)
-            .pipe(
-              Effect.ensuring(
-                Effect.scoped(Effect.ignore(session.holdRunClaim(runId))),
-              ),
-            ),
-        );
-        const failures: unknown[] = [];
-        if (Exit.isFailure(finalized))
-          failures.push(Cause.squash(finalized.cause));
-        else if (!finalized.value.ok) failures.push(finalized.value.error);
-        if (Exit.isFailure(released))
-          failures.push(Cause.squash(released.cause));
-        if (failures.length > 0)
-          return yield* Effect.fail(
-            new AggregateError(failures, `Run ${runId} launch cleanup failed`),
-          );
-      });
-    }),
-  );
-}
-
-/**
  * Own one child's delivery, queue, concurrency budget and terminal cleanup.
  * A native launch runs on its own fiber and offers its turn boundaries to
  * this loop; process strategies return a turn and wait for their next batch
  * here.
  */
-export function startChildRunLoop<TTurn, R = never>(
+export function startChildRunLoop<TTurn, R extends AgentRunServices = never>(
   params: ChildRunLoopParams<TTurn, R>,
 ): Effect.Effect<
   Fiber.Fiber<TTurn | undefined, Error>,
@@ -1299,13 +1254,12 @@ export function startChildRunLoop<TTurn, R = never>(
                   // its fiber has exited by now (this loop's scope awaited
                   // it). A failure or stop can precede that lifecycle; one
                   // that ran has already ended the run, which this keeps.
-                  const finalized = yield* finalizeRun(runSession, {
+                  yield* endRunOutsideLifecycle(
+                    runSession,
                     runId,
                     outcome,
-                    keepExistingOutcome: true,
-                  });
-                  if (!finalized.ok)
-                    return yield* Effect.fail(ensureError(finalized.error));
+                    lastTurnErr,
+                  );
                 }
               }),
             );
@@ -1343,12 +1297,13 @@ export function startChildRunLoop<TTurn, R = never>(
         ),
       ),
     );
-    // The daemon owns settlement from its first tick; an unwind of the
-    // launch fiber before this point still owns the setup it acquired.
-    return yield* Effect.forkDetach(
+    // The launched fiber owns settlement from its first step; an unwind of
+    // the launch before that still owns the setup it acquired. It is
+    // admitted a tick later, once this launch has handed back its fiber.
+    return yield* runs.launch(runId, run, (admitted) =>
       Effect.suspend(() => {
         forked = true;
-        return runs.launchRun(runId, run).pipe(
+        return Effect.andThen(Effect.yieldNow, admitted).pipe(
           Effect.catchCause((cause) =>
             Cause.hasInterruptsOnly(cause)
               ? Effect.failCause(cause)

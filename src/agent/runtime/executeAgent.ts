@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 
-import { Cause, Effect, Exit, Fiber, Layer } from 'effect';
+import { Effect, Fiber, Layer } from 'effect';
 
 import type { AgentEvent, AgentTrace } from '@agent/trace';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
@@ -22,8 +22,6 @@ import {
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import type { CompositionKey } from '@tools/compositions';
-import { aggregateError } from '@utils/core';
-import { ensureError } from '@utils/errors/errorMessage';
 import { ensureRunDirUnder } from '@utils/files/runStorageFs';
 
 import {
@@ -51,6 +49,7 @@ import {
 import { modelInvokerLayer } from './ModelInvoker';
 import { agentRunLayer, withCompositionHash } from './run/AgentRun';
 import { runToolUse } from './loop/toolUse';
+import { runWithLaunchGuard, type RunTerminalOwner } from './runLaunchGuard';
 import { Runs } from './runRegistry';
 import type { AgentRunServices } from './runRegistry';
 import type { SessionHandle } from './SessionHandle';
@@ -72,10 +71,7 @@ export class ResumeSessionUnavailableError extends Error {
  * added for one entry point cannot go missing on the other.
  */
 type ToolUseLaunchVariant =
-  | {
-      readonly kind: 'fresh';
-      readonly onIdle?: () => void;
-    }
+  | { readonly kind: 'fresh' }
   | {
       readonly kind: 'resume';
       readonly onIdle?: () => void;
@@ -184,7 +180,13 @@ function launchToolUseRun(
   }).pipe(
     Effect.map(toResult),
     withCompositionHash,
-    Effect.provide(runLayerFor(ctx, shared, variant.onIdle)),
+    Effect.provide(
+      runLayerFor(
+        ctx,
+        shared,
+        variant.kind === 'resume' ? variant.onIdle : undefined,
+      ),
+    ),
   );
 }
 
@@ -350,8 +352,6 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
   /** A sink of every event the run's trace emits, beside the session's
    *  (`AgentLaunchContext.onTraceEvent`). */
   onTraceEvent?: (event: AgentEvent) => void;
-  /** Fires at every cycle boundary — see `AgentRun.callbacks.onIdle`. */
-  onIdle?: () => void;
   /** Stop a tool-use run after one model/tool cycle instead of waiting for follow-up input. */
   stopAfterCycle?: boolean;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
@@ -456,7 +456,7 @@ export function executeAgent(
                 ctx,
                 handle,
                 { ...options, parentRunId },
-                { kind: 'fresh', onIdle: options.onIdle },
+                { kind: 'fresh' },
               );
             }
             return yield* launchWorkflowRun(
@@ -490,188 +490,85 @@ export type ResumeTurnIdentity = Pick<ResumeData, 'runId' | 'agentConfig'>;
 export interface ResumeToolUseFromResumeDataOptions
   extends
     SubagentRunOptions,
-    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'> {
+    Pick<ExecuteAgentOptions, 'publishWorkflowOutput'>,
+    RunTerminalOwner {
   /** A resumed cycle is idle after its child delivery, while its run stays live. */
   readonly onIdle?: () => void;
   /** Query caller-owned cancellation once the resumed flow is interruptible. */
   readonly isCancellationRequested?: () => boolean;
   /** Observe cancellation accepted at the live-flow attachment boundary. */
   readonly onCancellationAtFlowAttachment?: () => void;
-  /** Fires once a standalone resume holds the run's claim. */
-  readonly onRunClaimed?: (runId: RunId) => void;
-  /**
-   * Host-owned final state, persisted before the run's ending commits; true
-   * when the hook committed that ending itself (`commitRunEnd`). Its failure
-   * is one more failure reported, never a `false`: the ending still commits.
-   */
-  readonly beforeRunEnd?: (
-    session: SessionHandle,
-  ) => Effect.Effect<boolean | void, Error>;
 }
 
 /**
- * Resume one live run, a conversation or a workflow in round mode, from its
- * durable cursor. Lineage is `run.start.parent`, minus a committed detach.
+ * Resume one run, a conversation or a workflow in round mode, from its
+ * durable cursor, in place: a standalone resume is launched through the
+ * session's door (`Runs.launch`), and a recovered child's continuous driver
+ * (`options.turns`) runs it inside its own launch. A standalone resume owns
+ * the run for its whole life under the launch terminal
+ * ({@link runWithLaunchGuard}), whose claim is held before the cursor read so
+ * no concurrent owner mutates the run between the read and the launch; the
+ * resume's own scope, and the compensating finalizers the launch registered
+ * in it, close before that claim goes. Lineage is `run.start.parent`, minus a
+ * committed detach.
  */
-const resumeToolUseWithOwnedLease = Effect.fn('resumeToolUseWithOwnedLease')(
-  function* (
-    resume: ResumeData,
-    options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-  ) {
-    const runSession = options.session;
-    // Every exit escapes this scope before the claim's release runs (the
-    // scope `resumeToolUse` closes around this call): the launch's finalizers
-    // compensate through the run's own claim - the stage's FAILED close is an
-    // append - so a release that ran before them would have their
-    // compensation refused `DatabaseNotOwner`.
-    const outcome = yield* Effect.exit(
-      Effect.scoped(
-        Effect.gen(function* () {
-          const parentRunId = yield* persistedParentRunId(
-            runSession,
-            resume.runId,
-          );
-          const definition = yield* prepareAgentDefinition({
-            config: resume.agentConfig,
-            enforceCategory: true,
-            session: runSession,
-            suppressErrorNotification: true,
-          });
-          const ctx = yield* buildAgentLaunchContext({
-            definition,
-            runId: resume.runId,
-            resumed: true,
-            modelCompatibilityKey: resume.modelCompatibilityKey,
-            session: runSession,
-            toolPolicy: {
-              approvalPromptsUnavailable: options.approvalPromptsUnavailable,
-            },
-          });
-          return yield* runFlowWithLifecycle(
-            ctx,
-            (handle) =>
-              ctx.setting.agentCategory === AgentCategory.Workflow
-                ? launchWorkflowRun(ctx, { ...options, parentRunId }, true)
-                : launchToolUseRun(
-                    ctx,
-                    handle,
-                    { ...options, parentRunId },
-                    {
-                      kind: 'resume',
-                      onIdle: options.onIdle,
-                      isCancellationRequested: options.isCancellationRequested,
-                      onCancellationAtFlowAttachment:
-                        options.onCancellationAtFlowAttachment,
-                    },
-                  ),
-            buildLifecycleOptions(options, parentRunId),
-          );
-        }),
-      ),
-    );
-    // The claim's release is no longer this function's: it rides the scope
-    // `resumeToolUse` closes around this call, and for a recovered child the
-    // driver owns delivery and releases afterwards.
-    return yield* outcome;
-  },
-);
-
-/** Acquire a recovered run and reload its cursor before starting its live scope. */
-const resumeToolUse = Effect.fn('resumeToolUse')(function* (
-  identity: ResumeTurnIdentity,
-  options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
-) {
-  const session = options.session;
-  // The claim's lifetime is the whole resume, as one `acquireRelease`:
-  // acquired before the cursor read so no concurrent owner mutates the run
-  // between the read and the launch, released when this scope closes — after
-  // the launch's own scope and its compensating finalizers, never before
-  // them, and on every exit the old rollback/release pair covered.
-  // A release finalizer cannot fail, and a failed claim release is no
-  // defect either — a drain that lost queued facts is the caller's typed
-  // error. The finalizer records it and the fold after the scope re-fails:
-  // alone after a successful turn, aggregated behind the run's own failure
-  // otherwise, the run's first — `Effect.onExit`-style combining would bury
-  // it instead.
-  let releaseFailure: Error | undefined;
-  const outcome = yield* Effect.exit(
-    Effect.scoped(
-      Effect.gen(function* () {
-        // A recovered child's continuous driver holds the claim already; a
-        // standalone resume takes it here.
-        if (!options.turns) {
-          yield* session.holdRunClaim(identity.runId);
-          options.onRunClaimed?.(identity.runId);
-          // Registered after the hold, so it runs before the hold's release:
-          // the run's ending commits under the claim it is written with,
-          // unless the host's own final step already committed it.
-          yield* Effect.addFinalizer(() =>
-            Effect.gen(function* () {
-              const failures: unknown[] = [];
-              const artifacts = yield* Effect.exit(
-                Effect.suspend(
-                  () => options.beforeRunEnd?.(session) ?? Effect.void,
-                ),
-              );
-              if (Exit.isFailure(artifacts))
-                failures.push(Cause.squash(artifacts.cause));
-              if (Exit.isFailure(artifacts) || artifacts.value !== true) {
-                const ended = yield* Effect.exit(
-                  session.commitRunEnd(identity.runId),
-                );
-                if (Exit.isFailure(ended))
-                  failures.push(Cause.squash(ended.cause));
-              }
-              if (failures.length > 0)
-                releaseFailure = ensureError(
-                  aggregateError(failures, 'The run could not be ended'),
-                );
-            }),
-          );
-        }
-        const retrieved = yield* retrieveSessionResumeData(
-          identity.runId,
-          identity.agentConfig,
-          session,
-        ).pipe(
-          Effect.flatMap((retrieved) =>
-            retrieved
-              ? Effect.succeed(retrieved)
-              : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
-          ),
-        );
-        // The launched turn owns the run from here, including setup failures.
-        return yield* resumeToolUseWithOwnedLease(retrieved, options);
-      }),
-    ),
-  );
-  if (Exit.isSuccess(outcome)) {
-    if (releaseFailure !== undefined) return yield* Effect.fail(releaseFailure);
-    return outcome.value;
-  }
-  // An interruption unwinds straight past the fold; nothing aggregates
-  // behind it.
-  if (releaseFailure === undefined || Cause.hasInterruptsOnly(outcome.cause))
-    return yield* Effect.failCause(outcome.cause);
-  return yield* Effect.fail(
-    new AggregateError(
-      [ensureError(Cause.squash(outcome.cause)), releaseFailure],
-      `Run ${identity.runId} failed and its final artifacts could not be persisted`,
-    ),
-  );
-});
-
-/** Resume after the previous generation and its teardown have settled, on
- *  the `Runs` of `options.session`. */
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
   options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
 ): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
-  const { runs } = options.session;
-  // A recovered child's continuous driver already holds this run lane.
-  // Standalone host roots acquire it here; neither path launches a second owner.
-  const program = resumeToolUse(identity, options);
+  const runSession = options.session;
+  const resumed = Effect.gen(function* () {
+    const resume = yield* retrieveSessionResumeData(
+      identity.runId,
+      identity.agentConfig,
+      runSession,
+    ).pipe(
+      Effect.flatMap((retrieved) =>
+        retrieved
+          ? Effect.succeed(retrieved)
+          : Effect.fail(new ResumeSessionUnavailableError(identity.runId)),
+      ),
+    );
+    const parentRunId = yield* persistedParentRunId(runSession, resume.runId);
+    const definition = yield* prepareAgentDefinition({
+      config: resume.agentConfig,
+      enforceCategory: true,
+      session: runSession,
+      suppressErrorNotification: true,
+    });
+    const ctx = yield* buildAgentLaunchContext({
+      definition,
+      runId: resume.runId,
+      resumed: true,
+      modelCompatibilityKey: resume.modelCompatibilityKey,
+      session: runSession,
+      toolPolicy: {
+        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+      },
+    });
+    return yield* runFlowWithLifecycle(
+      ctx,
+      (handle) =>
+        ctx.setting.agentCategory === AgentCategory.Workflow
+          ? launchWorkflowRun(ctx, { ...options, parentRunId }, true)
+          : launchToolUseRun(
+              ctx,
+              handle,
+              { ...options, parentRunId },
+              {
+                kind: 'resume',
+                onIdle: options.onIdle,
+                isCancellationRequested: options.isCancellationRequested,
+                onCancellationAtFlowAttachment:
+                  options.onCancellationAtFlowAttachment,
+              },
+            ),
+      buildLifecycleOptions(options, parentRunId),
+    );
+  }).pipe(Effect.scoped);
   return (
-    options.turns ? program : runs.launchRun(identity.runId, program)
-  ).pipe(Effect.provideService(Runs, runs));
+    options.turns
+      ? resumed
+      : runWithLaunchGuard(runSession, identity.runId, resumed, options)
+  ).pipe(Effect.provideService(Runs, runSession.runs));
 }

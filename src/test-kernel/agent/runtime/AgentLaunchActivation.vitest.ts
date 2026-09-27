@@ -45,6 +45,7 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
+import { runWithLaunchGuard } from '@agent/runtime/runLaunchGuard';
 import {
   RUN_OUTCOME,
   RUN_PHASE,
@@ -244,12 +245,18 @@ describe('native agent launch activation', () => {
           (session) =>
             prepareAgentDefinition({ config, session }).pipe(
               Effect.flatMap((definition) =>
-                parentRunId
-                  ? executeAgent(definition, FRESH_RUN_ID, {
-                      session,
-                      parentRunId,
-                    })
-                  : executeAgent(definition, FRESH_RUN_ID, { session }),
+                // The launch terminal `runAgent` runs a fresh run under.
+                runWithLaunchGuard(
+                  session,
+                  FRESH_RUN_ID,
+                  parentRunId
+                    ? executeAgent(definition, FRESH_RUN_ID, {
+                        session,
+                        parentRunId,
+                      })
+                    : executeAgent(definition, FRESH_RUN_ID, { session }),
+                  {},
+                ),
               ),
             ),
           { parentRunId },

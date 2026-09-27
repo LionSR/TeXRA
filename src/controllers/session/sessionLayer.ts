@@ -47,6 +47,7 @@ import {
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
+import { makeRunFork } from '@agent/runtime/runLaunchGuard';
 import { runLedgerLayer } from '@agent/runtime/RunLedger';
 import { sessionEventsLayer, tailFrom } from '@agent/runtime/SessionEvents';
 import { HistoryQuery } from '@agent/runtime/historyQuery/HistoryQuery';
@@ -550,8 +551,7 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
           local: local.ref,
           inputs: inputs.read,
           subscriptions,
-          // The session's runs, over the session's own doors: each is called
-          // only once the handle it names is built.
+          // The runs, over the doors of a handle built by the time they call.
           runs: new RunRegistry({
             runView: (runId) => session.runView(runId),
             commit: (events) => session.commit(events).pipe(Effect.asVoid),
@@ -559,9 +559,9 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             finalizeRun: (input) => finalizeRun(session, input),
             holdRunClaim: (runId) => session.holdRunClaim(runId),
             borrowRunClaim: (runId) => session.borrowRunClaim(runId),
+            fork,
           }),
-          // The session's requests: the approval state above and the handler
-          // that admits on the root graph's log.
+          // The requests: the approvals above, admitted on the root's log.
           requests: sessionRequests(
             session,
             approvals,
@@ -584,8 +584,8 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       );
       // Capture the startup cohort before callers can publish new launches.
       const initialListing = yield* eventLog.readListing();
-      // The gate's probe fibers and waiting calls, and the history store's
-      // process, end with this scope, after the handle below has unwound its runs.
+      // The runs' fork, the gate's probes and the history store end with this scope.
+      const fork = yield* makeRunFork();
       const services = {
         modelRetries: yield* ModelRetryGate.make,
         history: yield* HistoryQuery.make(() => session),
