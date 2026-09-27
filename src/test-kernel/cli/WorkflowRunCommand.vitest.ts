@@ -229,20 +229,24 @@ function mockWorkflowRun(
     _config: unknown,
     _context: unknown,
     options: {
-      readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+      readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
     },
   ) =>
     Effect.gen(function* () {
-      if (result.ok && options.openWorkflowOutput) {
-        const outputOutcome = yield* options.openWorkflowOutput(
+      if (result.ok && options.publishWorkflowOutput) {
+        const publication = yield* options.publishWorkflowOutput(
           result.result,
           agentDefaultOutputFiles,
           () => true,
         );
-        if (outputOutcome !== undefined) {
+        // The verdict rule the run applies (`launchWorkflowRun`).
+        if (
+          publication === 'failed' &&
+          result.result.outcome !== RUN_OUTCOME.CANCELLED
+        ) {
           return {
             ...result,
-            result: { ...result.result, outcome: outputOutcome },
+            result: { ...result.result, outcome: RUN_OUTCOME.FAILED },
           };
         }
       }
@@ -265,12 +269,12 @@ function mockCancellationDuringOutputFinalization(
       _config: unknown,
       _context: unknown,
       options: {
-        readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+        readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
       },
     ) =>
       Effect.gen(function* () {
-        if (options.openWorkflowOutput)
-          yield* options.openWorkflowOutput(
+        if (options.publishWorkflowOutput)
+          yield* options.publishWorkflowOutput(
             provisional.result,
             [],
             tryCommitPublication,
@@ -853,7 +857,7 @@ describe('CLI run command, workflow agents', () => {
                 .holdRunClaim(runId)
                 .pipe(
                   Effect.andThen(
-                    options.openWorkflowOutput(run.result, [], () => true),
+                    options.publishWorkflowOutput(run.result, [], () => true),
                   ),
                   Effect.as(run),
                   Effect.ensuring(
@@ -1476,8 +1480,12 @@ describe('CLI run command, workflow agents', () => {
           (_config, _context, options) =>
             Effect.gen(function* () {
               if (!run.ok) return run;
-              if (options.openWorkflowOutput)
-                yield* options.openWorkflowOutput(run.result, [], () => true);
+              if (options.publishWorkflowOutput)
+                yield* options.publishWorkflowOutput(
+                  run.result,
+                  [],
+                  () => true,
+                );
               options.onInterruptedRunFinalized?.('abc010');
               return run;
             }),

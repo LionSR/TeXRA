@@ -237,6 +237,15 @@ install github.com/<owner>/<repo>` fetches a plugin, pins its commit, and
 
 ### Bug Fixes
 
+- **A completed workflow is no longer recorded as failed when opening its
+  final output fails** — in the VS Code extension and the desktop app, the
+  preview of a workflow's final revised file ran inside the run, so a failure
+  there ended a finished run as failed. The preview now opens after the run
+  has recorded its outcome, and a failure to open it no longer changes that
+  outcome. The CLI's `--output` and `--output-dir` copies still run before the
+  run ends: a copy that fails still fails the run with the same message and
+  exit code, and the run, not the CLI, now decides that verdict.
+
 - **OpenAI reasoning models no longer fail with "The terminal snapshot
   conflicts with completed output items"** — when a GPT reasoning model
   reasoned before answering, OpenAI could send the same reasoning twice with

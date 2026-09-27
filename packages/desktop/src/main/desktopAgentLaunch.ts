@@ -58,7 +58,10 @@ export function launchDesktopAgent(
       onRun: options.onRun,
       onRunResolved: options.onRunResolved,
       suppressErrorNotification: true,
-      openWorkflowOutput: (result) =>
+    }).pipe(
+      // Presentation reacts to the outcome the run committed; it never runs
+      // inside the run, so it cannot change that outcome.
+      Effect.flatMap((result) =>
         Effect.gen(function* () {
           const output = yield* selectAutoOpenFinalOutput(
             context.session.roots,
@@ -86,7 +89,8 @@ export function launchDesktopAgent(
             { replayWhenAttached: true },
           );
         }),
-    }).pipe(Effect.asVoid);
+      ),
+    );
   });
   return withProcessServices(context.runtime, launch);
 }

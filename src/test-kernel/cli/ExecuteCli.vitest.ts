@@ -127,7 +127,7 @@ const COMPLETED_RUN = {
 } as const;
 
 const COMPLETED_WORKFLOW_RUN: Parameters<
-  NonNullable<RunAgentOptions['openWorkflowOutput']>
+  NonNullable<RunAgentOptions['publishWorkflowOutput']>
 >[0] = {
   outcome: 'completed',
   output: {
@@ -225,7 +225,7 @@ async function loadExecuteCli() {
 
 type LeaseOptions = {
   beforeRunEnd?: () => Effect.Effect<boolean | void, Error>;
-  openWorkflowOutput?: RunAgentOptions['openWorkflowOutput'];
+  publishWorkflowOutput?: RunAgentOptions['publishWorkflowOutput'];
   session?: SessionHandle;
   onRunClaimed?: (runId: RunId) => void;
 };
@@ -890,13 +890,14 @@ describe('executeCliRequest', () => {
         let publicationCommitted: boolean | undefined;
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (
+            publishWorkflowOutput: (
               _result,
               _agentDefaultOutputFiles,
               tryCommitPublication,
             ) =>
               Effect.sync(() => {
                 publicationCommitted = tryCommitPublication();
+                return 'published' as const;
               }),
           }),
         );
@@ -910,8 +911,10 @@ describe('executeCliRequest', () => {
         );
         leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
-        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
-          Effect.void;
+        yield* leaseOptions.publishWorkflowOutput?.(
+          COMPLETED_WORKFLOW_RUN,
+          [],
+        ) ?? Effect.void;
         mockCancelledOutcome();
         hangingRun.resolve(COMPLETED_WORKFLOW_RUN);
 
@@ -943,13 +946,14 @@ describe('executeCliRequest', () => {
         let publicationCommitted: boolean | undefined;
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (
+            publishWorkflowOutput: (
               _result,
               _agentDefaultOutputFiles,
               tryCommitPublication,
             ) =>
               Effect.sync(() => {
                 publicationCommitted = tryCommitPublication();
+                return 'published' as const;
               }),
           }),
         );
@@ -958,8 +962,10 @@ describe('executeCliRequest', () => {
         expect(leaseOptions).toBeDefined();
         leaseOptions.onRunClaimed?.('exec-1' as RunId);
         yield* settle;
-        yield* leaseOptions.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
-          Effect.void;
+        yield* leaseOptions.publishWorkflowOutput?.(
+          COMPLETED_WORKFLOW_RUN,
+          [],
+        ) ?? Effect.void;
 
         const shutdown = yield* Effect.forkChild(
           Scope.close(platform.shutdownScope, Exit.void),
@@ -1007,7 +1013,7 @@ describe('executeCliRequest', () => {
             options.onRunClaimed?.('exec-1' as RunId);
             try {
               await testRuntime().runPromise(
-                options.openWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
+                options.publishWorkflowOutput?.(COMPLETED_WORKFLOW_RUN, []) ??
                   Effect.void,
               );
             } catch {
@@ -1027,7 +1033,7 @@ describe('executeCliRequest', () => {
 
         const run = yield* Effect.forkChild(
           executeCliRequest(baseRequest(), cliContext(), {
-            openWorkflowOutput: (
+            publishWorkflowOutput: (
               _result,
               _agentDefaultOutputFiles,
               tryCommitPublication,

@@ -76,10 +76,8 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     : ({ kind: 'fresh', config } as const);
   // Post-start failures are already logged and surfaced by the run lifecycle,
   // so they travel the failure channel without a second (mislabeled) log entry.
-  yield* runAgent(request, {
+  const result = yield* runAgent(request, {
     session,
-    openWorkflowOutput: (result) =>
-      openFinalOutputIfAvailable(session.roots, result),
     // Set only by the "fix LaTeX" actions (see handleFixCompilation and the
     // progress-view compile fixer); a direct main-view launch omits it and
     // keeps the user's selected model.
@@ -88,4 +86,6 @@ export const runExecuteCommand = Effect.fn('runExecuteCommand')(function* (
     ownApiKeyFallback: wrapped?.ownApiKeyFallback,
     onRunResolved: presentLaunchedProgressRun,
   });
+  // Presentation reacts to the committed outcome; it never runs inside the run.
+  yield* openFinalOutputIfAvailable(session.roots)(result);
 });

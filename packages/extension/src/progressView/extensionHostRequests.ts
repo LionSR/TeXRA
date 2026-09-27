@@ -222,14 +222,12 @@ export function createExtensionHostRequests(
         : { kind: 'resume', config, runId },
       {
         session,
-        openWorkflowOutput: (result) =>
-          openFinalOutputIfAvailable(session.roots, result),
         preferHelperModel: runOptions.preferHelperModel ?? false,
         ownApiKeyFallback: runOptions.ownApiKeyFallback,
         onRun: runOptions.onRun,
         onRunResolved: presentLaunchedProgressRun,
       },
-    ).pipe(Effect.asVoid);
+    ).pipe(Effect.flatMap(openFinalOutputIfAvailable(session.roots)));
     return withProcessServices(runtime, launch);
   };
 

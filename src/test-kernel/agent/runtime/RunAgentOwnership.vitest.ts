@@ -555,16 +555,16 @@ describe('runAgent run ownership', () => {
     'delegates workflow output finalization to the live run lifecycle',
     () =>
       Effect.gen(function* () {
-        const openWorkflowOutput = vi.fn();
+        const publishWorkflowOutput = vi.fn();
 
-        yield* launch({ kind: 'fresh', openWorkflowOutput });
+        yield* launch({ kind: 'fresh', publishWorkflowOutput });
 
         expect(mocks.executeAgent).toHaveBeenCalledWith(
           { config: CONFIG },
           RUN_ID,
-          expect.objectContaining({ openWorkflowOutput }),
+          expect.objectContaining({ publishWorkflowOutput }),
         );
-        expect(openWorkflowOutput).not.toHaveBeenCalled();
+        expect(publishWorkflowOutput).not.toHaveBeenCalled();
       }),
   );
 
