@@ -52,7 +52,7 @@ export interface Generation<K, V> {
 }
 
 /** A pinned generation and the resources acquired for it. */
-interface Pinned<K, V, A> {
+export interface Pinned<K, V, A> {
   readonly generation: Generation<K, V>;
   readonly resources: A;
 }

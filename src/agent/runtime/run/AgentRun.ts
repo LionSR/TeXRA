@@ -213,13 +213,10 @@ export const agentRunLayer = (
       // The loaded plugins (MCP servers) the declared tools name, held for
       // the run's life; the read's problems reach its transcript. A
       // workflow run's rounds offer no tools, so it holds none.
-      const declared =
-        setting.agentCategory === AgentCategory.Workflow ||
-        !Array.isArray(setting.tools)
-          ? []
-          : declaredToolNames(setting.tools);
+      const workflow = setting.agentCategory === AgentCategory.Workflow;
+      const declared = declaredToolNames(setting.tools);
       const held = yield* (yield* LiveTools)
-        .hold(declared)
+        .hold(workflow ? [] : declared)
         .pipe(Scope.provide(scope));
       for (const warning of held.warnings) logger.warn(warning);
       const toolInputs: StepToolInputs = {
@@ -242,13 +239,9 @@ export const agentRunLayer = (
       const snapshot = yield* ledger.latestSnapshot(runId);
       // A workflow agent's rounds offer no tools: a fresh run says so rather
       // than narrowing its YAML's declared `tools:` silently.
-      const workflowTools =
-        setting.agentCategory === AgentCategory.Workflow
-          ? declaredToolNames(setting.tools)
-          : [];
-      if (snapshot === null && workflowTools.length > 0) {
+      if (workflow && snapshot === null && declared.length > 0) {
         logger.warn(
-          `The workflow family advertises no tools under this release, so the tools this agent declares are not offered to the model: ${workflowTools.join(', ')}. Run the agent in the tool-use family if it needs them.`,
+          `The workflow family advertises no tools under this release, so the tools this agent declares are not offered to the model: ${declared.join(', ')}. Run the agent in the tool-use family if it needs them.`,
           { messageType: MESSAGE_TYPES.INTERNAL },
         );
       }

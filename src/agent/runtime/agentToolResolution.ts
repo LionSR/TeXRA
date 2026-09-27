@@ -311,10 +311,6 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   ))
     offer(name, 'declared');
   for (const name of injected) offer(name, 'injected');
-  if (withheldForApproval.length > 0)
-    warnings.push(
-      `Not offering ${withheldForApproval.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
-    );
 
   const availableModelNames = yield* availableDelegationModelNamesForTools(
     resolved,
@@ -351,18 +347,21 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   // Dispatch answers only the names the model was offered.
   const offeredTools = new Map<string, ITool>();
   const offered: OfferedTool[] = [];
-  for (const { name } of definitions) {
+  // Recorded as shown: the definition sent, annotations included.
+  for (const definition of definitions) {
+    const { name } = definition;
     const own = overlay.get(name);
     const entry = enabled.get(name);
+    const { shown } = toolDigests({ definition });
     if (own) {
       offeredTools.set(name, own);
-      offered.push(runToolIdentity(own));
+      offered.push({ ...runToolIdentity(own), shown });
     } else if (entry) {
       offeredTools.set(name, entry.tool);
       offered.push({
         name,
         digest: entry.digest,
-        shown: entry.shown,
+        shown,
         plugin: entry.plugin,
         revision: entry.revision,
       });

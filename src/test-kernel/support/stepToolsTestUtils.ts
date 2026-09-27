@@ -3,6 +3,7 @@
 import { Effect } from 'effect';
 
 import {
+  declaredToolNames,
   resolveStepTools,
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
@@ -11,8 +12,8 @@ import { switchedOffPlugins } from '@tools/plugins';
 import { getDisabledToolIds } from '@utils/config/constants';
 
 /**
- * Apply the switches `stores` holds, hold the loaded plugins the
- * declarations name and pin the catalog's current generation, all for the
+ * Hold the loaded plugins the declarations name, apply the switches
+ * `stores` holds and pin the generation that produces, all for the
  * caller's scope, then resolve what a step would offer from it.
  */
 export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
@@ -23,15 +24,13 @@ export const resolveTestStep = Effect.fn('resolveTestStep')(function* (
     Partial<Pick<StepToolInputs, 'runTools' | 'approvalPromptsUnavailable'>>,
 ) {
   const live = yield* LiveTools;
-  yield* live.sync(
-    switchedOffPlugins(yield* getDisabledToolIds(input.stores.globalState)),
-  );
-  const held = yield* live.hold(
-    (Array.isArray(input.tools) ? input.tools : []).map((tool) =>
-      typeof tool === 'string' ? tool : tool.name,
+  const held = yield* live.hold(declaredToolNames(input.tools));
+  const pinned = yield* live.pinSwitched(
+    Effect.map(
+      getDisabledToolIds(input.stores.globalState),
+      switchedOffPlugins,
     ),
   );
-  const pinned = yield* live.registry.pin;
   const resolved = yield* resolveStepTools(pinned.generation, {
     runTools: [],
     approvalPromptsUnavailable: false,

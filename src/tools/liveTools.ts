@@ -3,25 +3,25 @@
  * every tool some plugin currently contributes, keyed by tool name.
  *
  * - **Built-in plugins** contribute their manifest table while their switch
- *   is on. `sync` reconciles the contributions with the user's switches: a
- *   plugin switched off withdraws its tools, one switched on contributes
- *   them again, and each change is a new generation on `current`. A run's
- *   step syncs before it pins (`@agent/runtime/loop/step`), so a switch
- *   flipped by any host, or by `texra tools` from another shell, reaches
- *   every open run at its next step.
+ *   is on. `pinSwitched` reads the user's switches, reconciles the
+ *   contributions with them and pins the generation that produces, as one
+ *   serialized step: a plugin switched off withdraws its tools, one switched
+ *   on contributes them again. A run's step opens through it
+ *   (`@agent/runtime/loop/step`), so a switch flipped by any host, or by
+ *   `texra tools` from another shell, reaches every open run at its next
+ *   step.
  * - **Loaded plugins** (MCP servers, `@tools/toolTable`) contribute the tools
  *   their server listed while some run holds them (`hold`). Holds are
- *   counted per spec and revision, so runs naming the same server share one
- *   process, which stops with the last hold. A reloaded server's new
- *   revision supersedes the older one in the catalog while both run.
- * - **Plugin layers** are built per pinned generation through one `MemoMap`,
- *   so the generations that share a plugin share one build of its layer,
- *   released when the last generation holding it drains.
+ *   counted per spec and keyed env revision, so runs naming the same server
+ *   share one process, which stops with the last hold. An edited server's
+ *   new process supersedes the older one in the catalog while both run, and
+ *   its recorded revision differs, so a run moved onto it records the move.
+ * - **Plugin layers** are built once per plugin while any pinned generation
+ *   holds it, and released with the last one.
  *
  * Each entry carries its identity, the digest of its name and input schema
  * with its plugin's id and revision, which a call is checked against before
- * it runs; and the digest of its definition as shown, which a step records
- * with the identity as what it offered.
+ * it runs.
  */
 import { createHash } from 'node:crypto';
 
@@ -44,6 +44,7 @@ import { toolDefinitionsFor } from '@agent/runtime/run/tools';
 import {
   makeRegistry,
   type Generation,
+  type Pinned,
   type Registry,
 } from '@tools/liveRegistry';
 import {
@@ -59,21 +60,18 @@ export interface ToolEntry {
   readonly tool: ITool;
   /** The contributing plugin's id. */
   readonly plugin: string;
-  /** The plugin's revision, which rows record, so the same in every
-   *  process: a digest of its tools' identities for a built-in plugin, of
-   *  its spec for a loaded one. A loaded plugin's keyed revision (its env
-   *  values) is fresh per process and only counts its holds. */
+  /** The plugin's revision, which rows record. `builtin` for a built-in
+   *  plugin, whose code cannot change under a process: each tool's digest
+   *  covers its own schema. A loaded plugin's is a digest of its spec and
+   *  of which env-value edit this process runs (`envEdit`), never of the
+   *  values themselves, so a run moved onto an edited server records it. */
   readonly revision: string;
-  /** What this process built the entry from, never recorded: a loaded
-   *  plugin's hold, so two holds of one revision (edited env values) are
-   *  different generations, whose pins never share a server process. */
-  readonly build: string;
   /** The tool's identity: sha256 over its name and input schema, every
    *  description left out. A call runs only while its tool still has it. */
   readonly digest: string;
-  /** sha256 over the definition as the model is shown it, descriptions
-   *  included: a change is recorded as a new offered set, and rejects no
-   *  call. */
+  /** sha256 over the catalog's definition, descriptions included: a
+   *  reworded tool is a new generation. What a step records as shown is the
+   *  definition it sends (`resolveStepTools`). */
   readonly shown: string;
 }
 
@@ -91,8 +89,19 @@ export class LiveTools extends Context.Service<
   LiveTools,
   {
     readonly registry: Registry<string, ToolEntry, Context.Context<never>>;
-    /** Contribute exactly the built-in plugins not switched `off`. */
-    readonly sync: (off: ReadonlySet<string>) => Effect.Effect<void>;
+    /**
+     * Read the switches, contribute exactly the built-in plugins they leave
+     * on, and pin the generation that produces, as one serialized step: a
+     * concurrent step's older read never reverts the catalog under it, and
+     * no step pins a generation built from switches it did not read.
+     */
+    readonly pinSwitched: <E>(
+      off: Effect.Effect<ReadonlySet<string>, E>,
+    ) => Effect.Effect<
+      Pinned<string, ToolEntry, Context.Context<never>>,
+      E,
+      Scope.Scope
+    >;
     /** Hold the loaded plugins `declared` names until the caller's scope
      *  closes; their tools are in the catalog while held. */
     readonly hold: (
@@ -171,7 +180,7 @@ function withoutSchemaDescriptions(node: unknown): unknown {
  * the model already made.
  */
 export const toolDigests = (
-  tool: ITool,
+  tool: Pick<ITool, 'definition'>,
 ): { readonly digest: string; readonly shown: string } => {
   const [definition] = toolDefinitionsFor([tool.definition]);
   return {
@@ -183,29 +192,18 @@ export const toolDigests = (
   };
 };
 
-/** A plugin's tools as catalog entries under one revision; `loaded` is
- *  the hold a loaded plugin's tools come from. */
+/** A plugin's tools as catalog entries under one revision. */
 const entriesOf = (
   plugin: string,
   tools: ReadonlyMap<string, ITool>,
-  loaded?: LoadedKey,
-): ReadonlyMap<string, ToolEntry> => {
-  const digests = [...tools].map(
-    ([name, tool]) => [name, tool, toolDigests(tool)] as const,
-  );
-  // A built-in plugin's revision is over its tools' identities, so a
-  // description edit is not a new revision either.
-  const revision = loaded
-    ? sha256(loaded.plugin.spec)
-    : sha256(digests.map(([name, , { digest }]) => [name, digest]));
-  const build = loaded?.id ?? revision;
-  return new Map(
-    digests.map(([name, tool, digests]) => [
+  revision = 'builtin',
+): ReadonlyMap<string, ToolEntry> =>
+  new Map(
+    [...tools].map(([name, tool]) => [
       name,
-      { tool, plugin, revision, build, ...digests },
+      { tool, plugin, revision, ...toolDigests(tool) },
     ]),
   );
-};
 
 /** One spec revision of a loaded plugin: the key its holds are counted by. */
 class LoadedKey implements Equal.Equal {
@@ -230,7 +228,13 @@ const liveToolsLayer = (
       const table: ToolTable = yield* ToolRegistry;
       const spawner = yield* ChildProcessSpawner;
       const scope = yield* Effect.scope;
-      const memoMap = yield* Layer.makeMemoMap;
+      // Each plugin's layer, built once while any pinned generation holds
+      // the plugin, in the map entry's own scope: it outlives every
+      // generation that shares it and is released with the last.
+      const layers = yield* RcMap.make({
+        lookup: (id: string) =>
+          Layer.build(table.layers.get(id) ?? Layer.empty),
+      });
       const registry = yield* makeRegistry<
         string,
         ToolEntry,
@@ -239,21 +243,25 @@ const liveToolsLayer = (
         digest: (entries) =>
           sha256(
             [...entries]
-              .map(([name, e]) => [name, e.digest, e.shown, e.plugin, e.build])
+              .map(([name, e]) => [
+                name,
+                e.digest,
+                e.shown,
+                e.plugin,
+                e.revision,
+              ])
               .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
           ),
         acquire: (generation) =>
-          Effect.flatMap(Effect.scope, (pinScope) =>
-            Layer.buildWithMemoMap(
-              [...new Set(generation.owners.values())].reduce<
-                Layer.Layer<never>
-              >((merged, id) => {
-                const layer = table.layers.get(id);
-                return layer ? Layer.merge(merged, layer) : merged;
-              }, Layer.empty),
-              memoMap,
-              pinScope,
+          Effect.reduce(
+            [...new Set(generation.owners.values())].filter((id) =>
+              table.layers.has(id),
             ),
+            () => Context.empty(),
+            (merged, id) =>
+              Effect.map(RcMap.get(layers, id), (services) =>
+                Context.merge(merged, services),
+              ),
           ),
       });
 
@@ -262,31 +270,44 @@ const liveToolsLayer = (
       const builtIns = yield* SynchronizedRef.make(
         new Map<string, Scope.Closeable>(),
       );
-      const sync = (off: ReadonlySet<string>) =>
-        SynchronizedRef.updateEffect(builtIns, (open) =>
-          Effect.gen(function* () {
-            const next = new Map(open);
-            for (const [id, tools] of table.plugins) {
-              const on = !off.has(id);
-              const held = next.get(id);
-              if (on && held === undefined) {
-                const contribution = yield* Scope.fork(scope);
-                // The manifest rules out a name two plugins share, so a
-                // conflict between built-in plugins is a defect.
-                yield* registry
-                  .contribute(id, entriesOf(id, tools))
-                  .pipe(Scope.provide(contribution), Effect.orDie);
-                next.set(id, contribution);
-              } else if (!on && held !== undefined) {
-                yield* Scope.close(held, Exit.void);
-                next.delete(id);
-              }
+      /** Open and close the built-in contributions to match `off`. */
+      const reconcile = (
+        open: ReadonlyMap<string, Scope.Closeable>,
+        off: ReadonlySet<string>,
+      ) =>
+        Effect.gen(function* () {
+          const next = new Map(open);
+          for (const [id, tools] of table.plugins) {
+            const on = !off.has(id);
+            const held = next.get(id);
+            if (on && held === undefined) {
+              const contribution = yield* Scope.fork(scope);
+              // The manifest rules out a name two plugins share, so a
+              // conflict between built-in plugins is a defect.
+              yield* registry
+                .contribute(id, entriesOf(id, tools))
+                .pipe(Scope.provide(contribution), Effect.orDie);
+              next.set(id, contribution);
+            } else if (!on && held !== undefined) {
+              yield* Scope.close(held, Exit.void);
+              next.delete(id);
             }
-            return next;
+          }
+          return next;
+        });
+      yield* SynchronizedRef.updateEffect(builtIns, (open) =>
+        reconcile(open, new Set()),
+      );
+      const pinSwitched = <E>(off: Effect.Effect<ReadonlySet<string>, E>) =>
+        SynchronizedRef.modifyEffect(builtIns, (open) =>
+          Effect.gen(function* () {
+            const next = yield* reconcile(open, yield* off);
+            return [yield* registry.pin, next] as const;
           }),
         );
-      yield* sync(new Set());
 
+      // Per spec digest, each keyed env revision's ordinal.
+      const envEdits = new Map<string, Map<string, number>>();
       const servers = yield* RcMap.make({
         lookup: (key: LoadedKey) =>
           Effect.gen(function* () {
@@ -294,11 +315,22 @@ const liveToolsLayer = (
               Effect.provideService(ChildProcessSpawner, spawner),
             );
             if (answered.failure !== undefined) return answered.failure;
+            // The recorded revision: the spec, and which env-value edit of
+            // it this is, counted in the order this process met them.
+            const spec = sha256(key.plugin.spec);
+            const seen = envEdits.get(spec) ?? new Map<string, number>();
+            envEdits.set(spec, seen);
+            const envEdit = seen.get(key.plugin.revision) ?? seen.size;
+            seen.set(key.plugin.revision, envEdit);
             // Withdrawn when the last hold of this revision closes.
             return yield* registry
               .contribute(
                 key.plugin.id,
-                entriesOf(key.plugin.id, answered.tools, key),
+                entriesOf(
+                  key.plugin.id,
+                  answered.tools,
+                  sha256({ spec: key.plugin.spec, envEdit }),
+                ),
               )
               .pipe(
                 Effect.as(undefined),
@@ -322,7 +354,7 @@ const liveToolsLayer = (
           );
         return { warnings: read.warnings, loaded };
       });
-      return { registry, sync, hold };
+      return { registry, pinSwitched, hold };
     }),
   );
 

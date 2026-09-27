@@ -22,7 +22,7 @@ import {
  * doing one of these would change a run's tools between steps, or change
  * them unrecorded. Failure modes guarded:
  *
- * - a host or tool pins the catalog, or syncs the switches into it, and
+ * - a host or tool pins the catalog, or applies the switches to it, and
  *   hands a run tools no step offered;
  * - code outside the step swaps `run.steps`, so a dispatch runs against a
  *   set no `tools.offered` row records;
@@ -36,11 +36,11 @@ const RULES: readonly {
   /** Files allowed to match, besides the step. */
   readonly also: readonly string[];
 }[] = [
-  { what: 'pins a catalog generation', pattern: /\bregistry\.pin\b/, also: [] },
   {
-    what: 'applies the plugin switches to the live catalog',
-    pattern: /\b(?:live|LiveTools)\b[^;]*?\.sync\(/,
-    also: [],
+    what: 'applies the plugin switches and pins a catalog generation',
+    pattern: /\bregistry\.pin\b|\bpinSwitched\(/,
+    // The catalog itself, which serializes the switch read with the pin.
+    also: ['src/tools/liveTools.ts'],
   },
   {
     what: "writes a run's current step",

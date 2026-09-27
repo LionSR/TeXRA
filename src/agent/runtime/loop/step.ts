@@ -50,10 +50,12 @@ export interface StepTools {
   readonly services: Context.Context<never>;
 }
 
-/** The run's current step and the scope that holds its pin. */
+/** The run's current step, the scope that holds its pin, and the tools
+ *  it withheld for approval. */
 export interface OpenStep {
   readonly tools: StepTools;
   readonly scope: Scope.Closeable;
+  readonly withheld: readonly string[];
 }
 
 /** A round-mode run's step: it offers no tools. */
@@ -117,8 +119,9 @@ function heldToRecord(
 }
 
 /**
- * Open the run's next step: apply the switches, pin the current generation
- * (releasing the previous step's pin), and resolve what it offers.
+ * Open the run's next step: apply the switches and pin the generation they
+ * produce, as one step (`LiveTools.pinSwitched`), release the previous
+ * step's pin, and resolve what it offers.
  * `recorded` holds a resumed activation's first step to it. The rows
  * are what the loop appends before a request: the new offered set, when it
  * differs from `state`'s.
@@ -129,12 +132,16 @@ const openStep = Effect.fn('Step.open')(function* (
   recorded: readonly OfferedTool[] | null,
 ) {
   const live = yield* LiveTools;
-  yield* live.sync(
-    switchedOffPlugins(yield* getDisabledToolIds(run.stores.globalState)),
-  );
   const scope = yield* Scope.fork(run.scope);
   const step = yield* Effect.gen(function* () {
-    const pinned = yield* live.registry.pin.pipe(Scope.provide(scope));
+    const pinned = yield* live
+      .pinSwitched(
+        Effect.map(
+          getDisabledToolIds(run.stores.globalState),
+          switchedOffPlugins,
+        ),
+      )
+      .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
     return {
@@ -146,21 +153,33 @@ const openStep = Effect.fn('Step.open')(function* (
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
     tools: step.tools,
     scope,
+    withheld: step.withheld,
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const changed = !sameSet(state.offeredTools, step.tools.offered);
-  if (changed) {
-    // Reported where the change is recorded, not at every step.
-    for (const message of step.warnings) {
-      yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
-      run.logger.warn(message);
-    }
-    if (step.withheld.length > 0)
-      run.onApprovalPolicyDenial?.({
-        kind: 'withheldTools',
-        tools: step.withheld,
-      });
+  // What is withheld can change while the offered set does not (a plugin
+  // switched on whose tools all need approval): reported on its own.
+  const withheldChanged =
+    step.withheld.length > 0 &&
+    step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
+  const warnings = [
+    ...(changed ? step.warnings : []),
+    ...(withheldChanged
+      ? [
+          `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
+        ]
+      : []),
+  ];
+  // Reported where the change is recorded, not at every step.
+  for (const message of warnings) {
+    yield* Effect.logWarning(message).pipe(withLogChannel('Step'));
+    run.logger.warn(message);
   }
+  if (withheldChanged)
+    run.onApprovalPolicyDenial?.({
+      kind: 'withheldTools',
+      tools: step.withheld,
+    });
   return {
     tools: step.tools,
     rows: changed ? [offeredRow(run.runId, step.tools.offered)] : [],
