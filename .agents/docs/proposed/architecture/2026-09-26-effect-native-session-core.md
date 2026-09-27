@@ -1423,7 +1423,11 @@ so an unrelated resume of the parent cannot consume the child's row before the
 child finalizes. The deferral is durable, not inferred: `followup.queued`
 gains a `deferred` flag, and the release is a `followup.released
 {followUpIds}` row on the producing child's own aggregate (one format bump).
-Its listing key includes the release's delivery id, so a child that
+A child's aggregate is not collected while its parent still holds an
+unconsumed follow-up that child produced. Collection deletes an aggregate's
+events, the release included, which would leave the parent's row deferred
+forever. Removing the parent removes both together, as the removal closure
+already does. Its listing key includes the release's delivery id, so a child that
 releases several turns keeps every release row after a restart. The cold
 listing otherwise keeps only the latest row per aggregate and type.
 The child owns that aggregate, so the release never needs the parent's
