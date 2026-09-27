@@ -55,7 +55,7 @@ import {
   type ToolTable,
 } from '@tools/toolTable';
 import { buildPluginLayer } from '@tools/pluginLayers';
-import { isObject } from '@utils/core';
+import { withoutSchemaDescriptions } from '@tools/schemaIdentity';
 
 /** One tool in the catalog, with the identity a step records. */
 export interface ToolEntry {
@@ -99,7 +99,7 @@ type Services = Context.Context<PluginServices>;
 export class LiveTools extends Context.Service<
   LiveTools,
   {
-    readonly registry: Registry<string, ToolEntry, Services>;
+    readonly registry: Registry<string, ToolEntry, void>;
     /**
      * Read the switches, contribute exactly the built-in plugins they leave
      * on, and pin the tool, continuation and prompt generations that produces, as
@@ -110,7 +110,12 @@ export class LiveTools extends Context.Service<
     readonly pinSwitched: <E>(
       off: Effect.Effect<ReadonlySet<string>, E>,
     ) => Effect.Effect<
-      Pinned<string, ToolEntry, Services> & {
+      Pinned<string, ToolEntry, void> & {
+        /** Pin the process services of the plugins the step uses, from the
+         *  plugins on when it pinned, for the caller's scope. */
+        readonly layersFor: (
+          plugins: ReadonlySet<string>,
+        ) => Effect.Effect<Services, never, Scope.Scope>;
         readonly continuations: Generation<AgentCategory, ContinuationEntry>;
         /** Each switched-on plugin's prompt contribution, by plugin id. */
         readonly sections: Generation<string, PromptContribution>;
@@ -135,63 +140,6 @@ const sha256 = (value: unknown): string =>
   createHash('sha256')
     .update(stableStringify(value) ?? '')
     .digest('hex');
-
-/** Keywords whose value is one schema, or an array of schemas. */
-const SUBSCHEMA_KEYWORDS: ReadonlySet<string> = new Set([
-  'items',
-  'prefixItems',
-  'additionalProperties',
-  'additionalItems',
-  'unevaluatedProperties',
-  'unevaluatedItems',
-  'contains',
-  'contentSchema',
-  'propertyNames',
-  'not',
-  'if',
-  'then',
-  'else',
-  'anyOf',
-  'oneOf',
-  'allOf',
-]);
-
-/** Keywords whose value maps a name to a schema: keys are data, kept as is. */
-const SCHEMA_MAP_KEYWORDS: ReadonlySet<string> = new Set([
-  'properties',
-  '$defs',
-  'definitions',
-  'patternProperties',
-  'dependentSchemas',
-  'dependencies',
-]);
-
-/**
- * A JSON Schema node with `description` dropped at every schema position. It
- * walks keywords, not keys: a property named `description` stays, and
- * `enum`/`const`/`default` values are data and are not entered.
- */
-function withoutSchemaDescriptions(node: unknown): unknown {
-  if (Array.isArray(node)) return node.map(withoutSchemaDescriptions);
-  if (!isObject(node)) return node;
-  const out: Record<string, unknown> = {};
-  for (const [keyword, value] of Object.entries(node)) {
-    if (keyword === 'description') continue;
-    if (SUBSCHEMA_KEYWORDS.has(keyword)) {
-      out[keyword] = withoutSchemaDescriptions(value);
-    } else if (SCHEMA_MAP_KEYWORDS.has(keyword) && isObject(value)) {
-      out[keyword] = Object.fromEntries(
-        Object.entries(value).map(([name, schema]) => [
-          name,
-          withoutSchemaDescriptions(schema),
-        ]),
-      );
-    } else {
-      out[keyword] = value;
-    }
-  }
-  return out;
-}
 
 /**
  * A tool's identity digest (its name and input schema only, so a reworded
@@ -272,7 +220,7 @@ const liveToolsLayer = (
             yield* Scope.close(open.scope, Exit.void);
           }),
         );
-      const registry = yield* makeRegistry<string, ToolEntry, Services>({
+      const registry = yield* makeRegistry<string, ToolEntry, void>({
         digest: (entries) =>
           sha256(
             [...entries]
@@ -285,36 +233,24 @@ const liveToolsLayer = (
               ])
               .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
           ),
+        // The server processes the generation dispatches through, held for
+        // the pin. Pins are taken only under the catalog's lock
+        // (`pinSwitched`), where a server in `current` is still up.
         acquire: (generation) =>
-          Effect.andThen(
-            // The server processes the generation dispatches through, held
-            // for the pin. Pins are taken only under the catalog's lock
-            // (`pinSwitched`), where a server in `current` is still up.
-            Effect.forEach(
-              new Set(
-                [...generation.entries.values()].flatMap(
-                  (entry) => entry.server ?? [],
-                ),
+          Effect.forEach(
+            new Set(
+              [...generation.entries.values()].flatMap(
+                (entry) => entry.server ?? [],
               ),
-              (server) =>
-                Effect.acquireRelease(
-                  Effect.sync(() => {
-                    servers.get(server)!.count += 1;
-                  }),
-                  () => release(server),
-                ),
-              { discard: true },
             ),
-            Effect.reduce(
-              [...new Set(generation.owners.values())].filter((id) =>
-                table.processLayers.has(id),
+            (server) =>
+              Effect.acquireRelease(
+                Effect.sync(() => {
+                  servers.get(server)!.count += 1;
+                }),
+                () => release(server),
               ),
-              () => Context.empty() as Services,
-              (merged, id) =>
-                Effect.map(RcMap.get(layers, id), (services) =>
-                  Context.merge(merged, services),
-                ),
-            ),
+            { discard: true },
           ),
       });
 
@@ -391,10 +327,28 @@ const liveToolsLayer = (
             yield* reconcile(yield* off);
             const { generation } = yield* continuations.pin;
             const pinned = yield* sections.pin;
+            // Every on plugin's process layer, held until the step has
+            // pinned the ones it uses: a flip meanwhile drops none of them.
+            const on = [...builtIns.keys()].filter((id) =>
+              table.processLayers.has(id),
+            );
+            const bridge = yield* Scope.fork(yield* Effect.scope);
+            for (const id of on)
+              yield* RcMap.get(layers, id).pipe(Scope.provide(bridge));
+            const layersFor = (plugins: ReadonlySet<string>) =>
+              Effect.reduce(
+                on.filter((id) => plugins.has(id)),
+                () => Context.empty() as Services,
+                (merged, id) =>
+                  Effect.map(RcMap.get(layers, id), (services) =>
+                    Context.merge(merged, services),
+                  ),
+              ).pipe(Effect.ensuring(Scope.close(bridge, Exit.void)));
             return {
               ...(yield* registry.pin),
               continuations: generation,
               sections: pinned.generation,
+              layersFor,
             };
           }),
         );

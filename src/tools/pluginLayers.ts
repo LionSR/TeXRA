@@ -43,8 +43,8 @@ export const buildPluginLayer = <R>(
  * One session's plugin layers (the table's), built in the caller's scope, the
  * session's, over the session's `Runs`. The pin it answers reconciles the session's
  * standing builds with the plugins a step found switched on (each on plugin
- * holds its build, an off one lets go) and pins those plugins' services for
- * the step's scope, so a plugin switched off keeps its services until the
+ * holds its build, an off one lets go) and pins the services of the ones
+ * the step uses for its scope, so a plugin switched off keeps its services until the
  * last step that pinned them, and the last work holding them
  * (`PluginHold`), releases.
  */
@@ -78,7 +78,7 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
   });
   const standing = new Map<string, Scope.Closeable>();
   const lock = yield* Semaphore.make(1);
-  return (on: ReadonlySet<string>) =>
+  return (on: ReadonlySet<string>, used: ReadonlySet<string>) =>
     lock.withPermits(1)(
       Effect.uninterruptible(
         Effect.gen(function* () {
@@ -94,7 +94,7 @@ export const sessionPluginLayers = Effect.fnUntraced(function* (
             }
           }
           return yield* Effect.reduce(
-            [...on].filter((id) => layers.has(id)),
+            [...used].filter((id) => on.has(id) && layers.has(id)),
             () => Context.empty() as Context.Context<PluginServices>,
             (merged, id) =>
               Effect.map(RcMap.get(built, id), (services) =>

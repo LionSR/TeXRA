@@ -54,12 +54,13 @@ export const testPluginServicesLayer = Layer.mergeAll(
  * grant is revoked only when its layer is released), beside the unread
  * GitHub tables, which are process services.
  */
+const ALL: ReadonlySet<string> = new Set(['goal', 'codex', 'claude-agent']);
 export const testCallPluginServices = Layer.merge(
   Layer.effectContext(
     Effect.flatMap(Runs, (runs) =>
       // A suite's stand-in `Runs` has no session: the call gets its own.
       typeof runs.pinPlugins === 'function'
-        ? runs.pinPlugins(new Set(['goal', 'codex', 'claude-agent']))
+        ? runs.pinPlugins(ALL, ALL)
         : Layer.build(testPluginServicesLayer),
     ),
   ),

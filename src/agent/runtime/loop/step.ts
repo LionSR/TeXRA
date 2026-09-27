@@ -157,20 +157,29 @@ const openStep = Effect.fn('Step.open')(function* (
         ),
       )
       .pipe(Scope.provide(scope));
-    const session = yield* run.session.runs
-      .pinPlugins(new Set(pinned.generation.owners.values()))
-      .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
     const held = recorded === null ? null : heldToRecord(resolved, recorded);
+    const tools = held?.tools ?? resolved;
+    const continuation =
+      pinned.continuations.entries.get(run.config.agentCategory) ?? null;
+    // Only the plugins this step uses hold services: a parked run keeps up
+    // nothing it does not offer.
+    const used = new Set([
+      ...tools.offered.map(({ plugin }) => plugin),
+      ...(continuation === null ? [] : [continuation.plugin]),
+      ...pinned.sections.entries.keys(),
+    ]);
+    const services = Context.merge(
+      yield* pinned.layersFor(used).pipe(Scope.provide(scope)),
+      yield* run.session.runs
+        .pinPlugins(new Set(pinned.generation.owners.values()), used)
+        .pipe(Scope.provide(scope)),
+    );
     return {
-      tools: {
-        ...(held?.tools ?? resolved),
-        services: Context.merge(pinned.resources, session),
-      },
+      tools: { ...tools, services },
       warnings: [...resolved.warnings, ...(held?.notes ?? [])],
       withheld: resolved.withheldForApproval,
-      continuation:
-        pinned.continuations.entries.get(run.config.agentCategory) ?? null,
+      continuation,
       prompt: new Map(
         [...pinned.sections.entries].toSorted(
           ([a], [b]) => Number(a > b) - Number(a < b),
