@@ -11,7 +11,7 @@
  * Derived from this list: the Tools dashboard (in list order) and each
  * card's inline settings rows, the agent creator's tool groups, availability
  * probes, the first-install toggle seed, switched-off plugins, a run's
- * injected tools (`@tools/composition`), install/auth actions, `texra tools`
+ * injected tools (`@agent/runtime/agentToolResolution`), install/auth actions, `texra tools`
  * guides, and the bundled skills and agents the bootstrap installs, which a
  * switched-off plugin withholds with its tools.
  *
@@ -31,8 +31,8 @@ export interface ToolPlugin {
   /** Stable, persisted identifier (the dashboard item id and toggle key). */
   readonly id: string;
   /** The registered tools this plugin provides; `@tools/registry` checks
-   *  them. Empty only for a plugin that contributes a continuation policy. */
-  readonly toolNames: readonly [string, ...string[]] | readonly [];
+   *  them. */
+  readonly toolNames: readonly [string, ...string[]];
   /**
    * Present when the plugin has an external dependency: it is probed, its
    * tools are withheld while the dependency is missing, and the dashboard
@@ -65,12 +65,12 @@ export interface ToolPlugin {
   readonly toggleable?: boolean;
   /** A toggleable plugin a fresh install seeds on rather than off. */
   readonly onByDefault?: true;
-  /** Decides what a parked tool-use run does next: a policy in
-   *  `PLUGIN_CONTINUATIONS` (`@agent/runtime/loop/continuationPolicy`), which
-   *  a run gets only while its pinned composition includes the plugin. */
+  /** Decides what a parked run does next: a continuation in
+   *  `PLUGIN_CONTINUATIONS` (`@tools/registry`), which a run's step pins
+   *  while the plugin is switched on. */
   readonly continuation?: true;
-  /** Owns resources: a layer in `@tools/registry`, built while an open
-   *  composition includes the plugin (`@tools/compositions`). */
+  /** Owns resources: a layer in `@tools/registry`, built while a pinned
+   *  catalog generation includes the plugin (`@tools/liveTools`). */
   readonly layer?: true;
   /** Ships skills / `builtInToolUse` agents in `resources/plugins/<id>/`. */
   readonly skills?: true;
@@ -147,4 +147,14 @@ type _ToggleablePluginsAreProbed = AssertNever<
 /** Look up a plugin by id. */
 export function findToolPlugin(id: string): ToolPlugin | undefined {
   return TOOL_PLUGINS.find((plugin) => plugin.id === id);
+}
+
+/** The plugins the user's switches hold off: only a probed plugin has a
+ *  switch, so a stored id of any other plugin switches nothing. */
+export function switchedOffPlugins(
+  disabled: ReadonlySet<string>,
+): ReadonlySet<string> {
+  return new Set(
+    [...disabled].filter((id) => findToolPlugin(id)?.availability != null),
+  );
 }

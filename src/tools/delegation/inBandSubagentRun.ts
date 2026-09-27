@@ -23,7 +23,7 @@ import {
   prepareAgentDefinition,
   type PreparedAgentDefinition,
 } from '@agent/runtime/AgentLaunchContext';
-import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
+import { childToolRefusal } from '@agent/runtime/agentToolResolution';
 import {
   AgentConfigSchema,
   type AgentConfigPayload,
@@ -38,11 +38,11 @@ import {
   RUN_OUTCOME,
   AgentCategory,
   USER_FOLLOW_UP_SUPPORT,
+  type OfferedTool,
   type RunEnd,
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import type { CompositionKey } from '@tools/compositions';
 import { generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -74,8 +74,8 @@ export class SubagentDurabilityError extends Error {
 
 interface InBandSubagentRunBaseOptions extends ChildRunLaunchOptions {
   readonly configPayload: AgentConfigPayload;
-  /** The parent's composition, which the child joins. */
-  readonly composition: CompositionKey;
+  /** What the parent's step offered, which the child can only narrow. */
+  readonly parentOffered: readonly OfferedTool[];
   /** Synchronous by contract; forwarded as the loop's `recordCost`. */
   readonly onCost?: (costUsd: number | undefined) => void;
   /**
@@ -172,10 +172,10 @@ const executeInBand = Effect.fn('executeInBand')(
     const { config } = definition;
     const startedAt = Date.now();
     const workingDirectory = config.workingDirectory ?? undefined;
-    // A child that needs a plugin its parent's composition lacks is an
-    // ordinary failed call, refused before any row records it.
-    const refusal = childCompositionRefusal(
-      options.composition.composition,
+    // A child that needs a plugin its parent's step lacks is an ordinary
+    // failed call, refused before any row records it.
+    const refusal = childToolRefusal(
+      options.parentOffered,
       definition.setting.tools,
       config.agent,
     );

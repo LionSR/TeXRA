@@ -62,7 +62,7 @@ function toolUseSnapshot(
   return {
     family: 'toolUse',
     runtime: runtimeOf(modelId, compatibilityKey),
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   };
 }
 
@@ -101,7 +101,6 @@ describe('retrieveSessionResumeData', () => {
         expect(
           yield* retrieveSessionResumeData(runId, CONFIG, session),
         ).toMatchObject({
-          type: 'toolUse',
           runId,
           agentConfig: { model: 'gpt55' },
           modelCompatibilityKey: COMPATIBILITY_KEY,
@@ -121,14 +120,14 @@ describe('retrieveSessionResumeData', () => {
     }),
   );
 
-  it.effect('retrieves a workflow run as a workflow resume', () =>
+  it.effect('retrieves a workflow run on the same resume identity', () =>
     Effect.gen(function* () {
       const runId = 'ab0003' as RunId;
       yield* openRun(runId, toolUseSnapshot('gpt54'));
 
       expect(
         yield* retrieveSessionResumeData(runId, WORKFLOW_CONFIG, session),
-      ).toMatchObject({ type: 'workflow', runId });
+      ).toMatchObject({ runId, agentConfig: { agentCategory: 'workflow' } });
     }),
   );
 

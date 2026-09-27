@@ -158,7 +158,9 @@ export const readCliResumedModel = Effect.fn('readCliResumedModel')(function* (
 ): Effect.fn.Return<string | undefined> {
   return yield* retrieveSessionResumeData(id, config, session).pipe(
     Effect.map((resume) =>
-      resume?.type === 'toolUse' ? resume.agentConfig.model : undefined,
+      resume && config.agentCategory === AgentCategory.ToolUse
+        ? resume.agentConfig.model
+        : undefined,
     ),
     Effect.catch((error) =>
       Effect.logDebug(

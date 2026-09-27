@@ -25,14 +25,12 @@ import {
   DatabaseClaimRefused,
   DatabaseWriteFailed,
 } from '@shared/session/database';
-import {
-  emptyPinnedComposition,
-  testModelCell,
-} from '@test/support/nativeToolTestLayer';
+import { noStep, testModelCell } from '@test/support/nativeToolTestLayer';
 import { noopTrace } from '@test/support/noopTrace';
 import { createFakeWorkspaceRoots, fakePath } from '@test/support/FakePlatform';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { fakeProcessServices } from '@test/support/setupPlatform';
+import { testRunFork } from '@test/support/runHandleFixtures';
 import { createWorkflowScriptAgentRunner as createNativeWorkflowScriptAgentRunner } from '@tools/delegation/workflowScriptAgentRunner';
 import { fingerprintWorkflowAgentDependencies as fingerprintInputDependencies } from '@tools/delegation/inputFields';
 import type { DelegationParent } from '@tools/delegation/proposalFlow';
@@ -176,9 +174,10 @@ vi.mock('@agent/workflowScript/checkpoint', () => ({
   recordWorkflowCallAttempt: mocks.recordWorkflowCallAttempt,
 }));
 
-vi.mock('@agent/storage', () => ({
+vi.mock('@agent/storage', async () => ({
   resolveChildRunOutput: mocks.resolveChildRunOutput,
   getRunRecords: mocks.getRunRecords,
+  deliveredOutput: (await import('@agent/storage/resultMeta')).deliveredOutput,
 }));
 
 // The child's own turn rows live on the same stubbed session, so the one read
@@ -269,6 +268,7 @@ const fenceRoster = () =>
           (release: Effect.Effect<void>) => release,
         ),
       ),
+    fork: testRunFork,
   });
 let lanes = fenceRoster();
 const runs = {
@@ -298,6 +298,7 @@ function parentContext(): DelegationParent {
     run: {
       runId: parentRunId,
       session,
+      steps: noStep(),
       scope: Scope.makeUnsafe(),
       config: AgentConfigSchema.parse({
         agent: 'chat',
@@ -312,7 +313,6 @@ function parentContext(): DelegationParent {
       toolPolicy: {
         approvalPromptsUnavailable: true,
       },
-      composition: emptyPinnedComposition,
     },
   };
 }

@@ -16,7 +16,6 @@ import {
   ObservationPolicySchema,
   ModelConfigurationSchema,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   TurnResultSchema,
   type GoogleInteractionsConfiguration,
   type Model,
@@ -24,6 +23,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
+import { decodeTurnRequest, initialTextInput } from './turnInput.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -594,46 +594,42 @@ export function googleInteractionsModel(
 
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.google.prepareTurn')(
     function* (request) {
-      const parsed = TurnRequestSchema.safeParse(request);
-      if (!parsed.success) {
-        return yield* new ModelError({
-          kind: 'invalid-request',
-          message: 'The canonical Google input is invalid.',
-          cause: parsed.error,
-        });
-      }
-      if (parsed.data.temperature !== undefined) {
+      const authored = yield* decodeTurnRequest(
+        request,
+        'The canonical Google input is invalid.',
+      );
+      if (authored.temperature !== undefined) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google Interactions does not support temperature.',
         });
       }
-      if (parsed.data.parallelToolCalls !== undefined) {
+      if (authored.parallelToolCalls !== undefined) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google parallel-call control is not implemented.',
         });
       }
       if (
-        parsed.data.reasoning !== undefined ||
-        parsed.data.serviceTier !== undefined ||
-        parsed.data.thinking !== undefined ||
-        parsed.data.effort !== undefined ||
-        parsed.data.cache !== undefined ||
-        parsed.data.stopSequences !== undefined ||
-        (parsed.data.continuation !== undefined &&
-          parsed.data.continuation.origin.protocol !== 'google-interactions')
+        authored.reasoning !== undefined ||
+        authored.serviceTier !== undefined ||
+        authored.thinking !== undefined ||
+        authored.effort !== undefined ||
+        authored.cache !== undefined ||
+        authored.stopSequences !== undefined ||
+        (authored.continuation !== undefined &&
+          authored.continuation.origin.protocol !== 'google-interactions')
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
           message: 'Google does not support the supplied protocol controls.',
         });
       }
-      const mode = parsed.data.mode ?? 'foreground';
+      const mode = authored.mode ?? 'foreground';
       if (
         mode === 'background' &&
         (config.background !== 'supported' ||
-          !(parsed.data.store ?? config.defaults.store))
+          !(authored.store ?? config.defaults.store))
       ) {
         return yield* new ModelError({
           kind: 'unsupported',
@@ -644,17 +640,17 @@ export function googleInteractionsModel(
       const turn = ResolvedTurnSchema.parse({
         ...origin,
         mode,
-        system: parsed.data.system,
-        messages: parsed.data.messages,
-        tools: parsed.data.tools ?? [],
-        continuation: parsed.data.continuation,
+        system: authored.system,
+        messages: authored.messages,
+        tools: authored.tools ?? [],
+        continuation: authored.continuation,
         controls: {
-          toolChoice: parsed.data.toolChoice ?? 'auto',
+          toolChoice: authored.toolChoice ?? 'auto',
           maxOutputTokens:
-            parsed.data.maxOutputTokens ?? config.defaults.maxOutputTokens,
-          store: parsed.data.store ?? config.defaults.store,
+            authored.maxOutputTokens ?? config.defaults.maxOutputTokens,
+          store: authored.store ?? config.defaults.store,
           thinkingLevel:
-            parsed.data.thinkingLevel ?? config.defaults.thinkingLevel,
+            authored.thinkingLevel ?? config.defaults.thinkingLevel,
         },
       });
       yield* invocationInput(turn, origin);
@@ -1282,20 +1278,14 @@ export function googleInteractionsModel(
           message: 'The prepared Google count invocation is unsupported.',
         });
       yield* invocationInput(turn, origin);
-      const message = turn.messages[0];
-      if (
-        turn.continuation !== undefined ||
-        turn.tools.length !== 0 ||
-        turn.messages.length !== 1 ||
-        message?.role !== 'user' ||
-        !message.content.every((part) => part.kind === 'text')
-      )
+      const text = initialTextInput(turn);
+      if (text === undefined)
         return yield* new ModelError({
           kind: 'unsupported',
           message:
             'Google counting supports one initial text-only user message and optional system text.',
         });
-      const parts = message.content.map((part) => ({ text: part.text }));
+      const parts = text.map((part) => ({ text: part.text }));
       const response = yield* ownedAbortSafeRequest(
         (signal) =>
           client.models.countTokens({

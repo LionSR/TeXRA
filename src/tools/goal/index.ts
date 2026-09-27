@@ -13,7 +13,6 @@ export {
   pauseGoal,
   retargetGoal,
   startGoal,
-  type GoalReader,
 } from './goalRows';
 export {
   setGoalSessionAutoApproval,

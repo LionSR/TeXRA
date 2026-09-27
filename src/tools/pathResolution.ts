@@ -41,7 +41,7 @@ export interface WorkspacePathResolution {
 interface OutsideRootCandidate {
   readonly kind: 'outside-root';
   readonly absolutePath: string;
-  readonly match: MatchedExternalRoot | null | undefined;
+  readonly match: MatchedExternalRoot | null;
   readonly outsideMessage: string;
 }
 
@@ -114,7 +114,7 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
             return {
               kind: 'outside-root',
               absolutePath: input,
-              match: findExternalRoot(input),
+              match: findExternalRoot(input, call.roots.workspace),
               outsideMessage: 'Workspace path is not available.',
             };
           }
@@ -123,12 +123,13 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
 
         const resolved = locateInWorkspace(root, input);
         if (resolved.kind === 'external') {
-          // `locateInWorkspace` already consulted the external-root registry,
-          // so its match is reused rather than looked up again.
           return {
             kind: 'outside-root',
             absolutePath: resolved.absolutePath,
-            match: resolved.allowed,
+            match: findExternalRoot(
+              resolved.absolutePath,
+              call.roots.workspace,
+            ),
             outsideMessage: `Path must stay within the ${scope}.`,
           };
         }
@@ -144,15 +145,18 @@ export function resolveToolPath(call: ToolPathCall, targetPath?: string) {
           return {
             kind: 'outside-root',
             absolutePath: physical,
-            match: findExternalRoot(physical),
+            match: findExternalRoot(physical, call.roots.workspace),
             outsideMessage: `Path must stay within the ${scope}. ${toPosixPath(relative)} resolves through a symlink to ${normalizeFilePath(physical)}.`,
           };
         }
-        return annotateExternalPermission({
-          relative,
-          absolute: resolved.absolutePath,
-          fsPath: call.workingDirectory ? resolved.absolutePath : relative,
-        });
+        return annotateExternalPermission(
+          {
+            relative,
+            absolute: resolved.absolutePath,
+            fsPath: call.workingDirectory ? resolved.absolutePath : relative,
+          },
+          call.roots.workspace,
+        );
       },
       catch: ensureError,
     });
@@ -217,9 +221,10 @@ function externalInfo(
  */
 function annotateExternalPermission(
   resolution: WorkspacePathResolution,
+  project: string | undefined,
 ): WorkspacePathResolution {
   if (resolution.external) return resolution;
-  const match = findExternalRoot(resolution.absolute);
+  const match = findExternalRoot(resolution.absolute, project);
   if (!match) return resolution;
   return { ...resolution, external: externalInfo(match) };
 }

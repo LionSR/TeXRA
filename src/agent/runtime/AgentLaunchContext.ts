@@ -12,24 +12,21 @@ import {
   type AgentTrace,
   type StageHandle,
 } from '@agent/trace';
-import { finalizeRun } from '@agent/storage/runLifecycle';
+import { commitResumedActivation } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
-import { AgentError, classifyAgentError } from '@common/errors';
+import { AgentError } from '@common/errors';
 import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
 } from '@common/errors/sdkError/errorMetadata';
-import { getSdkErrorMessage } from '@common/errors/sdkError/providerErrorFormat';
-import { withLogChannel } from '@logger/effectLog';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
 import {
-  aggregateId as qualifyAggregateId,
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
@@ -52,8 +49,6 @@ import type {
   RuntimePresentationEvent,
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
-
-const CHANNEL = 'AgentLaunchContext';
 
 /**
  * The launch facts carried by {@link AgentRunShape}. The run narrows `setting`
@@ -326,7 +321,14 @@ export type PreparedAgentDefinition = Effect.Success<
   ReturnType<typeof prepareAgentDefinition>
 >;
 
-const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
+/**
+ * Resolve the context of a run already admitted and created by registration.
+ * A failure here is the launch's to end (`runWithLaunchGuard`, or a child
+ * loop's tail). Interruptible: every acquisition settles atomically inside
+ * its own `acquireRelease`, so an interruption lands between steps and the
+ * scope's finalizers release whatever was acquired.
+ */
+export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
   function* (
     input: AgentLaunchInput & { session: SessionHandle },
   ): Effect.fn.Return<
@@ -371,23 +373,17 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
 
     const isRemote = agentEntry.source === 'remote';
     // Registration committed creation, configuration and first activation; a
-    // resume appends its activation here, with the approval snapshot that
-    // enforcement holds (no `run.start` re-stamps it). Both are durable before
-    // the run resolves, so nothing drains here (lost facts are the terminal
-    // drain's), and the append is uninterruptible: a stop lands before or after.
+    // resume appends its activation here. It is durable before the run
+    // resolves, so nothing drains here (lost facts are the terminal drain's),
+    // and the append is uninterruptible: a stop lands before or after.
     if (input.resumed) {
-      const aggregateId = qualifyAggregateId('run', runId);
-      const snapshot = session.approvalPolicySnapshotFor(runId);
       yield* Effect.uninterruptible(
-        session.commit([
-          {
-            type: 'run.activate',
-            aggregateId,
-            category: setting.agentCategory,
-            isRemote,
-          },
-          { type: 'approval.policy', aggregateId, snapshot },
-        ]),
+        commitResumedActivation(
+          session,
+          runId,
+          setting.agentCategory,
+          isRemote,
+        ),
       );
     }
 
@@ -476,7 +472,6 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
       {
         logger: agentLogger,
         runId,
-        runStageId: parentStage.id,
         config: session.roots.config,
         usageLog: yield* UsageLog,
       },
@@ -515,42 +510,4 @@ const assembleAgentLaunchContext = Effect.fn('assembleAgentLaunchContext')(
     // callers that kept their types.
     return Object.freeze(context);
   },
-);
-
-/** Resolve the context of a run already admitted and created by registration. */
-export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
-  function* (input: AgentLaunchInput & { session: SessionHandle }) {
-    const { session: launchSession, runId } = input;
-    const { config } = input.definition;
-
-    return yield* assembleAgentLaunchContext(input).pipe(
-      Effect.onError((cause) =>
-        Effect.gen(function* () {
-          const err = Cause.squash(cause);
-          const message = `Failed to start agent ${config.agent}: ${getSdkErrorMessage(err)}`;
-          const finalization = yield* finalizeRun(launchSession, {
-            runId,
-            outcome: RUN_OUTCOME.FAILED,
-            error: { kind: classifyAgentError(err), message },
-          });
-          // `finalizeRun` commits the terminal row awaited and reports its
-          // own refusal, so this path has nothing left queued to wait on. A
-          // drain here would take the run's other in-flight facts out of the
-          // tracked set and warn over them, which is how a lost run fact
-          // stops reaching the row that should carry it.
-          if (!finalization.ok)
-            yield* Effect.logWarning(
-              'Failed to persist the launch failure',
-            ).pipe(
-              Effect.annotateLogs({ data: finalization.error }),
-              withLogChannel(CHANNEL),
-            );
-        }),
-      ),
-    );
-  },
-  // Interruptible: every acquisition above settles atomically inside its own
-  // `acquireRelease`, so an interruption lands between steps and the scope's
-  // finalizers release whatever was acquired — the guarantee the old region
-  // mask bought at the cost of suppressing every stop.
 );

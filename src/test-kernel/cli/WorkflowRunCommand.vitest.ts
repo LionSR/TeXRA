@@ -229,20 +229,24 @@ function mockWorkflowRun(
     _config: unknown,
     _context: unknown,
     options: {
-      readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+      readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
     },
   ) =>
     Effect.gen(function* () {
-      if (result.ok && options.openWorkflowOutput) {
-        const outputOutcome = yield* options.openWorkflowOutput(
+      if (result.ok && options.publishWorkflowOutput) {
+        const publication = yield* options.publishWorkflowOutput(
           result.result,
           agentDefaultOutputFiles,
           () => true,
         );
-        if (outputOutcome !== undefined) {
+        // The verdict rule the run applies (`launchWorkflowRun`).
+        if (
+          publication === 'failed' &&
+          result.result.outcome !== RUN_OUTCOME.CANCELLED
+        ) {
           return {
             ...result,
-            result: { ...result.result, outcome: outputOutcome },
+            result: { ...result.result, outcome: RUN_OUTCOME.FAILED },
           };
         }
       }
@@ -265,12 +269,12 @@ function mockCancellationDuringOutputFinalization(
       _config: unknown,
       _context: unknown,
       options: {
-        readonly openWorkflowOutput?: CliConfigExecuteOptions['openWorkflowOutput'];
+        readonly publishWorkflowOutput?: CliConfigExecuteOptions['publishWorkflowOutput'];
       },
     ) =>
       Effect.gen(function* () {
-        if (options.openWorkflowOutput)
-          yield* options.openWorkflowOutput(
+        if (options.publishWorkflowOutput)
+          yield* options.publishWorkflowOutput(
             provisional.result,
             [],
             tryCommitPublication,
@@ -287,26 +291,15 @@ function mockCancellationDuringOutputFinalization(
 }
 
 /**
- * The result envelope the command persists for history details. How the run
- * ended is the `run.end` row's fact, so the record carries only its output.
+ * The result record the command persists for history details: the copies it
+ * made and the diffs it computed. How the run ended is the `run.end` row's
+ * fact and its files are its `output.produced` rows', so neither is copied.
  */
-function expectedResultMeta(options: {
-  readonly outputs: readonly unknown[];
-  readonly compileFailures: readonly unknown[];
+function expectedResultMeta(copies: {
   readonly copiedOutput?: string;
   readonly copiedOutputs?: readonly string[];
 }): Record<string, unknown> {
-  const { outputs, compileFailures, ...copies } = options;
-  return {
-    producer: 'cliWorkflow',
-    ...copies,
-    output: {
-      category: 'workflow',
-      outputs,
-      compileFailures,
-      diffs: [],
-    },
-  };
+  return { producer: 'cliWorkflow', ...copies, diffs: [] };
 }
 
 /** Materializes the round-1 output file the copy target is sourced from. */
@@ -353,7 +346,7 @@ function workflowSnapshot(
       declinedRoutes: [],
       ...runtime,
     },
-    state: { stateSlices: null, offeredTools: [], toolsetHash: '0'.repeat(64) },
+    state: { stateSlices: null },
   };
 }
 
@@ -694,8 +687,6 @@ describe('CLI run command, workflow agents', () => {
           ).toMatchObject(
             expectedResultMeta({
               copiedOutput: path.join(root, 'polished.tex'),
-              outputs: [outputSummary],
-              compileFailures: [compileFailure],
             }),
           );
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
@@ -760,8 +751,6 @@ describe('CLI run command, workflow agents', () => {
         expect(yield* readResultMeta(currentSession(), 'abc003')).toMatchObject(
           expectedResultMeta({
             copiedOutputs: [path.join(workspace, 'out', 'paper.tex')],
-            outputs: [outputSummary],
-            compileFailures: [],
           }),
         );
       }),
@@ -853,7 +842,7 @@ describe('CLI run command, workflow agents', () => {
                 .holdRunClaim(runId)
                 .pipe(
                   Effect.andThen(
-                    options.openWorkflowOutput(run.result, [], () => true),
+                    options.publishWorkflowOutput(run.result, [], () => true),
                   ),
                   Effect.as(run),
                   Effect.ensuring(
@@ -868,7 +857,7 @@ describe('CLI run command, workflow agents', () => {
         );
         expect(yield* records.readResultMeta()).toMatchObject({
           producer: 'cliWorkflow',
-          output: { category: 'workflow' },
+          diffs: [],
         });
         const afterRelease = yield* Effect.result(
           records.writeResultMeta({
@@ -946,10 +935,7 @@ describe('CLI run command, workflow agents', () => {
 
         expect(exitCode).toBe(CliExitCode.AgentError);
         expect(yield* readResultMeta(currentSession(), 'abc006')).toMatchObject(
-          expectedResultMeta({
-            outputs: [outputSummary],
-            compileFailures: [],
-          }),
+          expectedResultMeta({}),
         );
       }),
   );
@@ -992,12 +978,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc007'),
-          ).toMatchObject(
-            expectedResultMeta({
-              outputs: [],
-              compileFailures: [],
-            }),
-          );
+          ).toMatchObject(expectedResultMeta({}));
           expect(
             cliLogSinksMock.writeTextStderr,
           ).toHaveBeenCalledExactlyOnceWith(
@@ -1043,12 +1024,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc008'),
-          ).toMatchObject(
-            expectedResultMeta({
-              outputs: [outputSummary],
-              compileFailures: [],
-            }),
-          );
+          ).toMatchObject(expectedResultMeta({}));
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1101,12 +1077,7 @@ describe('CLI run command, workflow agents', () => {
           ).toBe(true);
           expect(
             yield* readResultMeta(currentSession(), 'abc009'),
-          ).toMatchObject(
-            expectedResultMeta({
-              outputs: [outputSummary],
-              compileFailures: [],
-            }),
-          );
+          ).toMatchObject(expectedResultMeta({}));
           const emission = mocks.emitCliResult.mock.calls[0]?.[1];
           expect(emission?.json).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1219,10 +1190,7 @@ describe('CLI run command, workflow agents', () => {
 
         expect(exitCode).toBe(CliExitCode.Interrupted);
         expect(yield* readResultMeta(currentSession(), 'abc00c')).toMatchObject(
-          expectedResultMeta({
-            outputs: [],
-            compileFailures: [],
-          }),
+          expectedResultMeta({}),
         );
         expect(mocks.emitCliResult).toHaveBeenCalledWith(
           expect.any(Object),
@@ -1307,12 +1275,7 @@ describe('CLI run command, workflow agents', () => {
           }
           expect(
             yield* readResultMeta(currentSession(), 'abc00c'),
-          ).toMatchObject(
-            expectedResultMeta({
-              outputs: [outputSummary],
-              compileFailures: [],
-            }),
-          );
+          ).toMatchObject(expectedResultMeta({}));
           const emitted = mocks.emitCliResult.mock.calls[0]?.[1]?.json;
           expect(emitted).toMatchObject({
             outcome: RUN_OUTCOME.CANCELLED,
@@ -1476,8 +1439,12 @@ describe('CLI run command, workflow agents', () => {
           (_config, _context, options) =>
             Effect.gen(function* () {
               if (!run.ok) return run;
-              if (options.openWorkflowOutput)
-                yield* options.openWorkflowOutput(run.result, [], () => true);
+              if (options.publishWorkflowOutput)
+                yield* options.publishWorkflowOutput(
+                  run.result,
+                  [],
+                  () => true,
+                );
               options.onInterruptedRunFinalized?.('abc010');
               return run;
             }),

@@ -57,12 +57,15 @@ vi.mock('@tools/delegation/childRun', () => ({
   childRunDescription: (raw: string) => raw,
 }));
 
-vi.mock('@agent/runtime/childRunLoop', () => ({
+vi.mock('@agent/runtime/runLaunchGuard', () => ({
   runWithLaunchGuard: (
     ...args: Parameters<
-      typeof import('@agent/runtime/childRunLoop').runWithLaunchGuard
+      typeof import('@agent/runtime/runLaunchGuard').runWithLaunchGuard
     >
   ) => args[2],
+}));
+
+vi.mock('@agent/runtime/childRunLoop', () => ({
   startChildRunLoop: mocks.startChildRunLoop,
 }));
 
@@ -336,7 +339,6 @@ describe('claude_agent tool launch and resume fallback', () => {
         expect.objectContaining({
           type: 'usage',
           usage: expect.objectContaining({ inputTokens: 12, outputTokens: 3 }),
-          recordTranscript: false,
         }),
       );
     }).pipe(

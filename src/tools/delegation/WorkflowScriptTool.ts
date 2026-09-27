@@ -231,7 +231,7 @@ function withScriptReference(
  * Execute a durable, deterministic workflow script from an agent whose tool
  * list names it. Gated by the "Multi-Agent Workflow" dashboard switch (id
  * `workflow-script` in {@link @tools/plugins}), which
- * `resolveAgentTools()` enforces regardless of any agent's configured tools -
+ * `resolveStepTools()` enforces regardless of any agent's configured tools -
  * new installs start with the switch off.
  */
 function executeWorkflowScriptTool(
@@ -443,6 +443,7 @@ function executeWorkflowScriptTool(
                     name: meta.name,
                     instruction: `Workflow script '${meta.name}'`,
                     model: runModel,
+                    inputFiles: runConfig.inputFiles,
                     ...(workingDirectory !== undefined && {
                       workingDirectory,
                     }),
@@ -506,7 +507,7 @@ function executeWorkflowScriptTool(
                         kind: 'multiAgentWorkflow',
                         workflowName: meta.name,
                       },
-                      config: runConfig,
+                      category: runConfig.agentCategory,
                     });
                   }),
                 buildLaunch: (childRun) =>
@@ -517,9 +518,7 @@ function executeWorkflowScriptTool(
                     configureDelegatedChildApprovals(
                       runId,
                       parentRunId,
-                      proposalDecision.autoApproved
-                        ? 'auto-approved'
-                        : 'inherit',
+                      proposalDecision.childApproval,
                       session,
                     );
 

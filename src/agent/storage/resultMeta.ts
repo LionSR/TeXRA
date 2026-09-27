@@ -1,25 +1,34 @@
 import type { ResultMeta, RunEnd, RunOutcome } from '@shared/schemas';
 
 /**
- * The public value of one run's result endpoint: the run's terminal fact,
- * carrying the output as the producer's delivery enriched it (a workflow
- * subagent's diffs are computed after the flow reported), with the
- * persistence-only producer context dropped. `outcome` is absent only while
- * the run has not ended — an interim turn already leaves a manifest.
+ * The public value of one run's result endpoint (`readResult`): the run's
+ * terminal result with the output as its delivery reported it, or a
+ * background command's own record. The terminal fields are absent while the
+ * run has not ended.
  */
-type PublicRunResult =
+export type RunResult =
   | Extract<ResultMeta, { producer: 'backgroundBash' }>
   | (Omit<RunEnd, 'outcome'> & { readonly outcome?: RunOutcome });
 
 /**
- * Join a producer record to its run's terminal fact. A background command is
- * its own result: the `run.end` row of the run that launched it says nothing
- * about the command, so that record passes through whole.
+ * A run's output as its delivery reported it: a subagent's delivered reply,
+ * which only its producer record holds, or else the run's own output, plus
+ * the diffs a workflow delivery computed after the flow reported. `output`
+ * is the run's output as its rows derive it (`getRunRecords().readResult`).
  */
-export function unwrapResultMeta(
-  meta: ResultMeta,
-  runEnd: RunEnd | null,
-): PublicRunResult {
-  if (meta.producer === 'backgroundBash') return meta;
-  return { ...(runEnd ?? {}), output: meta.output };
+export function deliveredOutput(
+  meta: Exclude<ResultMeta, { producer: 'backgroundBash' }>,
+  output: RunEnd['output'],
+): RunEnd['output'] {
+  if (meta.producer === 'subagent' && meta.output.category === 'toolUse') {
+    return meta.output;
+  }
+  if (output.category !== 'workflow') return output;
+  return {
+    ...output,
+    diffs: meta.diffs,
+    ...(meta.diffsUnavailable !== undefined
+      ? { diffsUnavailable: meta.diffsUnavailable }
+      : {}),
+  };
 }

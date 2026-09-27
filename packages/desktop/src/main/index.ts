@@ -104,6 +104,7 @@ import {
 import {
   DESKTOP_WORKSPACE_COMMANDS,
   DesktopWorkspaceInboundMessageSchema,
+  type DesktopWorkspaceReply,
 } from '../shared/desktopWorkspaceMessages.js';
 import { DESKTOP_PROJECT_COMMANDS } from '../shared/desktopProjectMessages.js';
 import { installDesktopProtocolCallbackLifecycle } from './desktopProtocolCallbacks.js';
@@ -1344,13 +1345,10 @@ function createWindow(options: {
   /** Each document/project owns one auxiliary transport and its resources.
    *  Callbacks capture the project before any asynchronous file or PTY work. */
   function createProjectWorkspace(project: DesktopProject) {
-    const post = (message: unknown) => {
+    const post = (message: DesktopWorkspaceReply) => {
       if (projectBindings.get(project.key)?.workspace !== workspace)
         return false;
-      return postToRendererIfAlive({
-        ...(message as Record<string, unknown>),
-        session: project.key,
-      });
+      return postToRendererIfAlive({ ...message, session: project.key });
     };
     const ptyHost = createDesktopPtyHost({
       cwd: () => project.root,

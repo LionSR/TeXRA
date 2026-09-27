@@ -175,6 +175,16 @@ export const pragmaValue = Effect.fnUntraced(function* (
  * order (the listing tier across runs). `UNIQUE (aggregate_id, seq)` is
  * both the density guarantee and the index a single aggregate's history reads
  * from its seq.
+ *
+ * Row identity (core concepts, "Decisions for the next two years" 1): a
+ * row's durable identity is its aggregate's `uid` and its `seq`, and its
+ * `origin` is the process that wrote it. `uid` is minted once, when the
+ * aggregate's first row lands, so it is unique across machines and across
+ * incarnations, which the logical key is not: a fixed key such as
+ * `["app-state", key]` exists on every machine, and a derived run id comes
+ * back after its aggregate was collected. The logical key stays this store's
+ * lookup key. `commit` is a local cursor only: it orders this file's rows and
+ * names nothing outside it.
  */
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS input_history (
@@ -185,6 +195,7 @@ CREATE TABLE IF NOT EXISTS input_history (
 
 CREATE TABLE IF NOT EXISTS event_sequence (
   aggregate_id TEXT NOT NULL PRIMARY KEY,
+  uid          TEXT NOT NULL UNIQUE,
   seq          INTEGER NOT NULL,
   owner_id     TEXT,
   parent_id    TEXT REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
@@ -200,7 +211,7 @@ CREATE TABLE IF NOT EXISTS event (
                REFERENCES event_sequence(aggregate_id) ON DELETE CASCADE,
   seq          INTEGER NOT NULL,
   type         TEXT NOT NULL,
-  owner_id     TEXT NOT NULL,
+  origin       TEXT NOT NULL,
   at           INTEGER NOT NULL,
   data         TEXT NOT NULL,
   UNIQUE (aggregate_id, seq)

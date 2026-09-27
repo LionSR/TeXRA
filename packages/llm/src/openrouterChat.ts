@@ -16,7 +16,6 @@ import { chatDeltaAccumulator, chatUsageCounts } from './chatStream.js';
 import {
   ModelConfigurationSchema,
   ResolvedTurnSchema,
-  TurnRequestSchema,
   TurnResultSchema,
   type Model,
   type OpenRouterConfiguration,
@@ -24,6 +23,7 @@ import {
   type TurnEvent,
   type TurnResult,
 } from './turn.js';
+import { decodeTurnRequest } from './turnInput.js';
 import { sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -428,14 +428,10 @@ export function openrouterChatModel(
   const http = transport.fetch ?? globalThis.fetch;
   const prepareTurn: Model['prepareTurn'] = Effect.fn('llm.prepareTurn')(
     function* (request) {
-      const parsed = TurnRequestSchema.safeParse(request);
-      if (!parsed.success)
-        return yield* new ModelError({
-          kind: 'invalid-request',
-          message: 'OpenRouter requires supported materialized input.',
-          cause: parsed.error,
-        });
-      const authored = parsed.data;
+      const authored = yield* decodeTurnRequest(
+        request,
+        'OpenRouter requires supported materialized input.',
+      );
       if (
         authored.mode === 'background' ||
         authored.store !== undefined ||

@@ -10,7 +10,8 @@
 // Third-party imports
 import { Cause, Effect, Exit } from 'effect';
 import { prepareAgentDefinition } from '@agent/runtime/AgentLaunchContext';
-import { childCompositionRefusal } from '@agent/runtime/agentToolResolution';
+import { childToolRefusal } from '@agent/runtime/agentToolResolution';
+import { offeredBy } from '@agent/runtime/loop/step';
 import { registerRun } from '@agent/storage/runLifecycle';
 
 // Local imports
@@ -26,7 +27,10 @@ import {
   type RunId,
   type SubagentProgressUpdate,
 } from '@shared/schemas';
-import { configureDelegatedChildApprovals } from '@tools/approval';
+import {
+  configureDelegatedChildApprovals,
+  type DelegatedChildApproval,
+} from '@tools/approval';
 import { errorResult, executed } from '@tools/core/result';
 import { generateRunId } from '@utils/core';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -71,6 +75,8 @@ function describeSubagentProgress(
 /** Metadata about how the delegation was approved, included in the tool result. */
 interface ApprovalMeta {
   autoApproved: boolean;
+  /** How the child's own grants record the approval; `inherit` when absent. */
+  childApproval?: DelegatedChildApproval;
   modelOverride?: string;
   requestedModel?: string;
   agentOverride?: string;
@@ -118,13 +124,13 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
     configureDelegatedChildApprovals(
       resolvedRunId,
       parentRunId,
-      options?.approvalMeta?.autoApproved === true
-        ? 'auto-approved'
-        : 'inherit',
+      options?.approvalMeta?.childApproval ?? 'inherit',
       parentSession,
     );
   };
 
+  // The most the child may be offered: what the parent's step offers now.
+  const parentOffered = yield* offeredBy(parent.run);
   if (parent.run.toolPolicy.stopAfterCycle) {
     // The parent is mid-cycle, so child progress cannot be delivered as a
     // follow-up the way the detached loop does it. Degrade deliberately to the
@@ -142,7 +148,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         session: parentSession,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
-        composition: parent.run.composition.key,
+        parentOffered,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         onCost: recordCost,
@@ -173,10 +179,10 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
   });
   const { config } = definition;
   // A detached child launches after this call settles, so a child that needs
-  // a plugin its parent's composition lacks is refused here, on the call
+  // a plugin its parent's step lacks is refused here, on the call
   // that asked for it, before any row records it.
-  const refusal = childCompositionRefusal(
-    parent.run.composition.key.composition,
+  const refusal = childToolRefusal(
+    parentOffered,
     definition.setting.tools,
     agentName,
   );
@@ -208,7 +214,7 @@ export const executeSubagent = Effect.fn('executeSubagent')(function* (
         workingDirectory,
         approvalPromptsUnavailable:
           parent.run.toolPolicy.approvalPromptsUnavailable,
-        composition: parent.run.composition.key,
+        parentOffered,
         onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
         onRunResolved: inheritChildRunApprovals,
         userFollowUpSupport,

@@ -62,7 +62,9 @@ export function setGoalSessionAutoApproval(
     // from a parent ends with the parent's grant, so the goal writes its own.
     const own = bypass.ownBypass(runId);
     if (granted.has(kind) || own === true) continue;
-    bypass.setBypass(runId, true);
+    // Autonomous: a resume in a new process leaves this grant off until a
+    // human re-arms the goal.
+    bypass.setBypass(runId, true, { autonomous: true });
     granted.set(kind, own);
   }
   if (granted.size === 0) byRun.delete(runId);

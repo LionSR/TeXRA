@@ -106,6 +106,9 @@ export enum GlobalStateKey {
   // Tool settings
   DISABLED_TOOLS = 'texra.tools.disabled',
 
+  /** The per-install key MCP env values are digested under (`mcpConfig`). */
+  MCP_REVISION_KEY = 'texra.mcp.revisionKey',
+
   // Plugins recorded by `texra plugin install`
   INSTALLED_PLUGINS = 'texra.plugins.installed',
 

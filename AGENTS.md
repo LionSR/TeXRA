@@ -657,8 +657,8 @@ For good separation of concerns and platform independence, core business logic s
 **Agent execution and tool-use**
 
 - Define agents using `AgentDataclass` and `AgentConfig` (`src/agent/core/`) and compose them via the factories in `src/agent/runtime`.
-- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts` or a resume path). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
-- Resume a persisted tool-use session via `resumeToolUseFromResumeData` (`src/agent/runtime/executeAgent.ts`), not `runAgent`.
+- Launch executions from host code (commands, frontend services, desktop IPC) via `runAgent` (`src/agent/runtime/runAgent.ts`) — it assigns an `executionId`, registers the run in storage, and opens workflow output. Only use the lower-level `executeAgent` when you already own the `executionId` (e.g. subagent dispatch in `src/tools/delegation/DelegationTools.ts`). Attach presentation and approval behavior to the run's `SessionHandle.interactions`.
+- Resume a persisted run, tool-use or workflow, via `resumeRun` (`src/agent/runtime/resumeRun.ts`), which continues it with `resumeToolUseFromResumeData`; `runAgent` launches fresh runs only.
 - A new provider is a protocol arm in `packages/llm` plus a route row in `src/agent/runtime/modelRoutes.ts` and `src/agent/runtime/run/modelBinding.ts`; there is no per-provider handler class. Register capabilities/pricing in `src/model/computeModelOptions.ts`.
 
 **Run loop architecture**

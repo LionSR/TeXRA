@@ -95,7 +95,7 @@ function recordedFollowUps(
             ...event,
             seq: rows.length + 1,
             commit: rows.length + 1,
-            ownerId: null,
+            origin: null,
             at: 0,
           }) as SessionEvent,
       );

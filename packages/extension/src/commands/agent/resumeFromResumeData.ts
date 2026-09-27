@@ -11,6 +11,7 @@ import {
   resumeCancellationLatch,
   resumeRunWithRefusalNotice,
 } from '@controllers/session/resumeRunPresentation';
+import { openFinalOutputIfAvailable } from '@frontend/agents/finalOutputOpener';
 import { withLogChannel } from '@logger/effectLog';
 import type { ProcessRuntime } from '@platform/processRuntime';
 import {
@@ -19,8 +20,6 @@ import {
 } from '@platform/interfaces';
 import type { RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
-
-import { runExecuteCommand } from './executeCommand';
 
 const CHANNEL = 'resumeFromResumeData';
 
@@ -44,15 +43,7 @@ export function tryResumeFromResumeData(
       session,
       recovery,
       isCancellationRequested,
-      executeWorkflow: (config, id, modelCompatibilityKey) =>
-        runExecuteCommand(
-          {
-            config,
-            runId: id,
-            modelCompatibilityKey,
-          },
-          session,
-        ),
+      presentResult: openFinalOutputIfAvailable(session.roots),
     },
     (failure) => {
       refusal = `Run ${runId} was not resumed: ${failure}`;

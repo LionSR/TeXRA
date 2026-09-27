@@ -85,7 +85,7 @@ describe('trace-viewer TraceDocumentSchema', () => {
         true,
       );
       // An export has no producer, so no row names one.
-      expect(parsed.data.events.every((event) => event.ownerId === null)).toBe(
+      expect(parsed.data.events.every((event) => event.origin === null)).toBe(
         true,
       );
 

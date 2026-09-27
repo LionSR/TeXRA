@@ -1,9 +1,10 @@
 /**
  * Round mode: a workflow agent run by the tool-use loop. A round is one turn
  * with no tools offered; the documents plugin (`@agent/output/documentRounds`)
- * builds its prompt and turns its text into output files, and this module is
- * the continuation policy that opens the next round or ends the run, plus the
- * few places a round differs from a conversational turn.
+ * builds its prompt and turns its text into output files, and this module
+ * opens the next round or ends the run, plus the few places a round differs
+ * from a conversational turn. A workflow run is round mode for its whole
+ * life, chosen by its category, not pinned per step (`./step`).
  *
  * - A round's stage is `r<index>` with the index and total from the policy.
  *   The index is the turn less one, never `state.round`, which the loop
@@ -50,7 +51,6 @@ import { turnText } from '../run/turnText';
 import { appendRow, stepRow, type SnapshotPatch } from './rows';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
-import type { ContinuationPolicy } from './continuationPolicy';
 import type { RunCell } from './runProgram';
 
 /** Length for the debug preview slices of a round's text. */
@@ -78,7 +78,7 @@ function rejectionOf(
 }
 
 /** What the tool-use loop asks of a round. */
-export interface RoundTurns {
+interface RoundTurns {
   readonly totalRounds: number;
   /** Every entry, before a round: the outputs and rejection facts the rows
    *  hold, then run-workspace preparation. */
@@ -115,7 +115,14 @@ export interface RoundTurns {
   >;
 }
 
-/** The documents plugin's continuation policy for one workflow run. */
+/** A workflow run's rounds, and what it does at a completed round. */
+interface RoundPolicy {
+  readonly rounds: RoundTurns;
+  /** The run's end with this outcome, or null to open the next round. */
+  readonly atIdle: (state: RunState) => Effect.Effect<RunOutcome | null, Error>;
+}
+
+/** The documents plugin's rounds for one workflow run. */
 export const roundsContinuation = Effect.fn('rounds.policy')(function* (
   run: AgentRunShape,
 ) {
@@ -263,16 +270,14 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
      *  while the configured total allows one, else the run's end. The total
      *  is read from configuration, so lowering it takes effect on resume. */
     atIdle: Effect.fn('rounds.atIdle')(function* (state: RunState) {
-      if (state.turn < totalRounds) return { round: state.turn };
+      if (state.turn < totalRounds) return null;
       const rejected = yield* docs.rejected(state.turn - 1);
-      return {
-        finish: deriveRunOutcome({
-          failed: state.lastError !== null || rejected,
-          cancelled: false,
-        }),
-      };
+      return deriveRunOutcome({
+        failed: state.lastError !== null || rejected,
+        cancelled: false,
+      });
     }),
-  } satisfies ContinuationPolicy;
+  } satisfies RoundPolicy;
 });
 
 type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
@@ -285,8 +290,7 @@ type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
  */
 export const roundLoop =
   <R>(
-    policy: ContinuationPolicy,
-    rounds: RoundTurns,
+    { rounds, atIdle }: RoundPolicy,
     runTurn: (
       cell: RunCell,
       next: boolean,
@@ -308,15 +312,14 @@ export const roundLoop =
           completed || state.phase === 'initial' || state.phase === 'halted';
         // A round the rows left open past a lowered total is not continued.
         if (idle || state.turn > rounds.totalRounds) {
-          const next = yield* policy.atIdle(state, true);
-          if (next !== null && 'finish' in next) {
-            if (state.phase === 'halted')
-              return { state, outcome: next.finish };
+          const finish = yield* atIdle(state);
+          if (finish !== null) {
+            if (state.phase === 'halted') return { state, outcome: finish };
             const halted = yield* cell.append([
               ...(completed ? [stepRow(runId, state, 'turn.end')] : []),
               snapshot(state, { phase: 'halted' }),
             ]);
-            return { state: halted, outcome: next.finish };
+            return { state: halted, outcome: finish };
           }
         }
         const turn = yield* runTurn(cell, completed);

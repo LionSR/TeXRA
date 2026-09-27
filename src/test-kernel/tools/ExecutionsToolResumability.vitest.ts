@@ -30,8 +30,6 @@ function openingSnapshot(runId: RunId): RunLedgerDraft {
       },
       state: {
         stateSlices: null,
-        offeredTools: [],
-        toolsetHash: '0'.repeat(64),
       },
     },
   };

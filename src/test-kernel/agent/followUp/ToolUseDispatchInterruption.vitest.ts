@@ -22,7 +22,7 @@ import {
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
 import { MapToolRegistry, type ITool } from '@agent/core/tools/ToolTypes';
-import { ModelInvoker } from '@agent/runtime/ModelInvoker';
+import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
 import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
@@ -43,7 +43,7 @@ import { RunLedger } from '@shared/session/runLedger';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import {
   nativeToolTestLayer,
-  emptyPinnedComposition,
+  testRunTools,
 } from '@test/support/nativeToolTestLayer';
 import { hostStores } from '@test/support/setupPlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
@@ -183,7 +183,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
                   turn,
                   calls: dispatchFactsFor(
                     turn,
-                    run.tools,
+                    (yield* SynchronizedRef.get(run.steps))?.tools.registry,
                     run.logger,
                     generateShortId,
                   ),
@@ -244,10 +244,8 @@ function agentRunTestLayer(init: HarnessInit) {
         userVarChannels: {},
         initialUserMessageForTranscript: 'Run the tools.',
         fileService: new RunFileService(init.runId, init.session.roots),
-        tools: new MapToolRegistry(init.tools),
+        ...testRunTools(hostStores(), init.tools),
         finalToolName: null,
-        toolset: { offeredTools: [], toolsetHash: '0'.repeat(64) },
-        composition: emptyPinnedComposition,
         structured: { value: undefined },
         model,
         scope,
@@ -257,7 +255,6 @@ function agentRunTestLayer(init: HarnessInit) {
           {
             logger,
             runId: init.runId,
-            runStageId: undefined,
             config: testWorkspaceRoots().config,
             usageLog: { log: () => {} },
           },

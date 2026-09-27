@@ -23,8 +23,6 @@ import {
 
 const runId = 'c11a01' as RunId;
 const childRunId = 'c11c01' as RunId;
-/** The run a usage report is keyed by: a child's spend on its parent's map. */
-const usageRunId = 'a00101' as RunId;
 const runAggregate = qualifyAggregateId('run', runId);
 const childAggregate = qualifyAggregateId('run', childRunId);
 
@@ -82,9 +80,9 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
     },
   },
   {
-    source: { run: { type: 'usage', runId: usageRunId, usage } },
+    source: { run: { type: 'usage', usage } },
     event: 'usage',
-    payload: { aggregateId: runAggregate, runId: usageRunId, usage },
+    payload: { aggregateId: runAggregate, usage },
   },
   {
     source: {
@@ -160,13 +158,13 @@ function rowFields(record: CliNdjsonRecord): {
 } {
   expect(record.kind).toBe('progress');
   expect(record.ts).toEqual(expect.any(String));
-  const { seq, commit, ownerId, at, ...fields } = record.payload as Record<
+  const { seq, commit, origin, at, ...fields } = record.payload as Record<
     string,
     unknown
   >;
   expect(seq).toEqual(expect.any(Number));
   expect(commit).toEqual(expect.any(Number));
-  expect(ownerId === null || typeof ownerId === 'string').toBe(true);
+  expect(origin === null || typeof origin === 'string').toBe(true);
   expect(at).toEqual(expect.any(Number));
   return { event: record.event, fields };
 }

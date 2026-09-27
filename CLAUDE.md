@@ -232,8 +232,9 @@ single and multi-document output.
 **Launch executions via `runAgent`** (`src/agent/runtime/runAgent.ts`) — it
 assigns an `executionId`, registers the run, and opens workflow output. Use the
 lower-level `executeAgent` only when you already own the `executionId` (subagent
-dispatch, resume paths). Resume a persisted tool-use session via
-`resumeToolUseFromResumeData`, not `runAgent`. Loop conventions and the
+dispatch). `runAgent` launches fresh runs only: a persisted run of either
+category resumes through `resumeRun`, which continues it with
+`resumeToolUseFromResumeData`. Loop conventions and the
 write points: AGENTS.md "Patterns across the codebase" (Run loop
 architecture).
 

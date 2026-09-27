@@ -119,13 +119,11 @@ filesystem copy was written, and report the completed run's canonical
 `outcome`.
 
 Final run result objects report their terminal state through `outcome` and name
-the run through `runId`. A `texra run` result also records what the run ran
-with: `compositionHash` names the tool composition the run pinned, and `plugins`
-lists the enabled plugins installed when it started or resumed (`name`,
-`source`, and for a fetched plugin its `ref` and pinned `commit`). Two runs with
-the same hash and plugin list ran with the same tools and plugin skills, which
-is what a script comparing agent or prompt variants needs to know. A run stopped
-before its loop returned carries no `compositionHash`.
+the run through `runId`. A `texra run` result also records the plugins it ran
+with: `plugins` lists the enabled plugins installed when it started or resumed
+(`name`, `source`, and for a fetched plugin its `ref` and pinned `commit`). The
+tools a run offered can change between its model requests when a plugin is
+switched on or off; the run records each change in its history.
 
 ### NDJSON contract, version 2
 
@@ -136,8 +134,10 @@ Every `--output-format ndjson` line is one JSON object whose first key is
 - `kind: "progress"` records carry a session event verbatim. `event` is the
   event's `type` (`run.start`, `status`, `run.end`, `usage`, `stage.start`,
   `tool.start`, `run.description`, `run.removed`, and so on), and `payload` is
-  the rest of the event under its own field names. A run's events name it
-  through `payload.aggregateId`, the JSON array `["run", "<run id>"]`; a
+  the rest of the event under its own field names. A `usage` event is one
+  priced model turn, so a run's spend is the sum of its `usage` events. A
+  run's events name it through `payload.aggregateId`, the JSON array
+  `["run", "<run id>"]`; a
   parent edge is `payload.parent` on `run.start`; the terminal fact is
   `run.end` with its `outcome`. One record with no session event behind it,
   `event: "run.children"`, reports a parent run's live child roster as
