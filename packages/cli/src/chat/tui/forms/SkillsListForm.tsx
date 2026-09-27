@@ -110,13 +110,15 @@ export function SkillsListForm(props: SkillsListFormProps): React.JSX.Element {
       loadingLabel="Loading skills..."
       load={() =>
         Effect.gen(function* () {
+          const disabled = yield* readDisabledSkills(props.stores);
           const result = yield* loadEnabledRuntimeSkills(
             props.workspaceRoot,
             props.stores,
+            disabled,
           );
           return {
             ...result,
-            disabled: yield* readDisabledSkills(props.stores),
+            disabled,
             offHint: yield* readCliSkillsOffNotice(props.stores, '/config'),
           };
         })

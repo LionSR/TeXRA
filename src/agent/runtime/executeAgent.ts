@@ -287,8 +287,8 @@ interface SubagentRunOptions {
   parentOffered?: readonly OfferedTool[];
   /** Record that this run met an approval-policy denial (see `AgentRun`). */
   onApprovalPolicyDenial?: import('./run/AgentRun').AgentRunShape['onApprovalPolicyDenial'];
-  /** Session owning this run's coordination state; run entry points require it. */
-  session?: SessionHandle;
+  /** Session owning this run's coordination state. */
+  readonly session: SessionHandle;
   /** Fires once with the run's id right after its handle is tracked. */
   onRun?: (runId: RunId) => Effect.Effect<void, Error>;
 }
@@ -348,7 +348,7 @@ export interface ExecuteAgentOptions extends SubagentRunOptions {
 export function executeAgent(
   definition: PreparedAgentDefinition,
   runId: RunId,
-  options: ExecuteAgentOptions & { session: SessionHandle },
+  options: ExecuteAgentOptions,
 ): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   return Effect.gen(function* () {
     const ctx = yield* buildAgentLaunchContext({
@@ -490,7 +490,7 @@ export interface ResumeToolUseFromResumeDataOptions
  */
 export function resumeToolUseFromResumeData(
   identity: ResumeTurnIdentity,
-  options: ResumeToolUseFromResumeDataOptions & { session: SessionHandle },
+  options: ResumeToolUseFromResumeDataOptions,
 ): Effect.Effect<AgentFlowResult, Error, ProcessServices> {
   const runSession = options.session;
   const resumed = Effect.gen(function* () {
