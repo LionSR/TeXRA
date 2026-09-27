@@ -29,7 +29,7 @@
     "packages/extension/src/frontend/auth/SupabaseAuthProvider.ts": 529,
     "packages/extension/src/frontend/lean/VscodeIntegration.ts": 550,
     "packages/extension/src/frontend/lm/acquireVscodeLanguageModel.ts": 587,
-    "packages/extension/src/progressView/extensionHostRequests.ts": 777,
+    "packages/extension/src/progressView/extensionHostRequests.ts": 768,
     "packages/extension/src/progressView/frontend/components/RunHeader.ts": 696,
     "packages/extension/src/progressView/frontend/components/SessionComposer.ts": 630,
     "packages/extension/src/progressView/frontend/components/TaskGroupList.ts": 590,

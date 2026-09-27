@@ -463,9 +463,9 @@ export function registerLatexdiffCommands(
     },
     {
       id: 'texra.packLatexdiffvc',
-      handler: (baseFile: string, commitHash: string, clean: boolean) =>
+      handler: (baseFile: string, commitHash: string) =>
         runtime.runPromise(
-          handlePackLatexdiffvc(session, baseFile, commitHash, clean),
+          handlePackLatexdiffvc(session, baseFile, commitHash, false),
         ),
     },
     {

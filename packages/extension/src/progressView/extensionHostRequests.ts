@@ -589,9 +589,7 @@ export function createExtensionHostRequests(
     openPath: (file, line) => commandVerb('texra.openFile', file, line),
     openLabel: (label) =>
       Effect.map(
-        runCommand<boolean>('texra.openLabel', label, {
-          notifyNotFound: false,
-        }),
+        runCommand<boolean>('texra.openLabel', label),
         (opened) => opened === true,
       ),
     exportTranscript: (runId) => Effect.asVoid(exportTranscript(runId)),
@@ -601,14 +599,7 @@ export function createExtensionHostRequests(
     runWorkflowFileOperation: (operation, request) =>
       commandVerb(`texra.${operation}`, request),
     latexdiffAgainstCommit: (action, baseFile, commit) =>
-      action === 'latexdiffvc'
-        ? commandVerb('texra.latexdiffvc', baseFile, commit)
-        : commandVerb(
-            `texra.${action}`,
-            baseFile,
-            commit,
-            action === 'cleanLatexdiffvc',
-          ),
+      commandVerb(`texra.${action}`, baseFile, commit),
     openSettings: (section) => {
       if (section === 'teams') return commandVerb('texra.showMultiAgent');
       if (section === 'models') return commandVerb('texra.showModels');

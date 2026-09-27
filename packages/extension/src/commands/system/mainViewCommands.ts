@@ -10,11 +10,6 @@ import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 
 const CHANNEL = 'mainViewCommands';
 
-interface RefreshAllOptionsArgs {
-  readonly selectedToolUseAgent?: string;
-  readonly agentCatalogAlreadyFresh?: boolean;
-}
-
 /** Registers main view commands for the extension. */
 export function registerMainViewCommands(
   context: vscode.ExtensionContext,
@@ -24,9 +19,9 @@ export function registerMainViewCommands(
   registerCommandEntries(context, [
     {
       id: 'texra.refreshAllOptions',
-      handler: (args?: RefreshAllOptionsArgs) =>
+      handler: () =>
         runtime.runPromise(
-          progressViewProvider.refreshCatalogs(args ?? {}).pipe(
+          progressViewProvider.refreshCatalogs().pipe(
             // The command's one terminal boundary, as the rejection the
             // lift it replaces caught was: a failed catalog load and a
             // failed snapshot publish are reported alike.
