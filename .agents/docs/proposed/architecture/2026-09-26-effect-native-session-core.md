@@ -139,7 +139,12 @@ move 4).
 - **Shutdown is one protocol, specified once in core.** Stop admission,
   drain accepted deliveries, settle runs, then release resources. It runs on
   explicit session close while the process continues, and on process
-  disposal. Hosts invoke it rather than repeating it (move 4). Plugin
+  disposal, and the drain is scoped to the thing closing. Process disposal
+  drains the process-scoped plugin services, as `closeAll` does today
+  (`sessionLayer.ts:1262`). Closing one session drains only the deliveries
+  bound to that session. It never stops process polling that other open
+  sessions still use: `PollingLifetime.drain` closes polling for good
+  (`PollingSourceBase.ts:99-137`). Hosts invoke it rather than repeating it (move 4). Plugin
   acquisition and release stay in their typed layers. For an SDK reader,
   closing its scope detaches the reader; the session's own ownership
   governs the run.
@@ -476,6 +481,14 @@ no `@tools` to `@agent` edges.
   service that is still alive, with no `beforeSessionsClose` hook and no drain
   layer. Today the hosts close sessions before they dispose the process
   runtime, so the same PR moves those callers onto that one protocol.
+- **The drain is the plugin's typed contribution, so a core-only process has
+  none.** Each `PLUGIN_PROCESS_LAYERS` entry is `{ layer, drain? }`, and the
+  protocol runs the drains of the plugins the process selected. Today
+  `Sessions` reads `GitHubSubscriptions` unconditionally (`sessionLayer.ts:1262`).
+  So before GitHub leaves `ProcessServices`, its session-side uses (run and
+  settings operations) must read it only through the selected entry. A
+  core-only `TexraProcess.layer` then builds `Sessions` with no GitHub service
+  and no drain. Until that lands, GitHub stays unconditional.
 - **The goal-grant WeakMap is deleted, not moved.** It saves, mutates and
   restores a bypass value. The effective bypass is computed from the
   approval-policy rows and the goal rows instead, so the bad state cannot
@@ -722,7 +735,12 @@ export const TexraProcess: {
     Sessions,
     // bootstrapHost seeds first-install state through StateStore
     // (seedDisabledToolDefaults, hostBootstrap.ts:108)
-    DatabaseOpenFailed | PlatformConflict | StateReadFailed | StateWriteFailed
+    | DatabaseOpenFailed
+    | PlatformConflict
+    | StateReadFailed
+    | StateWriteFailed
+    // an unknown preset id, or a stored preset naming an invalid composition
+    | PresetInvalid
   >;
 };
 ```
@@ -1277,8 +1295,12 @@ resume (move 6), which launches through the path move 3 selects
 root workflow run is the exception: its resume needs the host's
 `openWorkflowOutput` (move 3). The automatic wake takes that hook from the
 session's attached host (`attachSessionHost`, move 5), and with no host
-attached it leaves the run pending for an explicit host resume. The row stays
-durable either way, so nothing is stranded or finalized without its output. The caller never chooses, so a run that turns live or idle while the
+attached it leaves the run pending. `attachSessionHost` then runs the
+pending-input scan again for the runs that were waiting on a host. Recovery
+after a restart runs while the session is still opening, before any host can
+attach, so without that second scan crash-recovered workflow input would need
+a manual resume. The row stays durable either way, so nothing is stranded or
+finalized without its output. The caller never chooses, so a run that turns live or idle while the
 delivery is prepared cannot leave the row unwoken. The in-memory wake cannot
 commit with the append, so a crash between them is recovered from the log:
 pending input is a fold (queued, minus consumed, minus deferred and not
@@ -1429,11 +1451,11 @@ non-atomically. There are 21 raw `get<T>` casts of persisted state.
 ### Target
 
 ```ts
-// deletion is app-state only (current-value decision): the retained families
-// cannot return undefined, so an inquiry's revision is never reused
-type Next<F extends Family> = F extends 'app-state'
-  ? Value<F> | undefined
-  : Value<F>;
+// deletion is app-state only (current-value decision). Two overloads, not a
+// conditional type: a conditional distributes over a `Family` union and would
+// admit undefined for a retained family. A caller holding a bare `Family`
+// matches neither overload and must narrow first.
+type RetainedFamily = Exclude<Family, 'app-state'>;
 export class CurrentValues extends Context.Service<
   CurrentValues,
   {
@@ -1441,12 +1463,19 @@ export class CurrentValues extends Context.Service<
       f: F,
       key: string,
     ): Effect.Effect<Value<F> | undefined, DatabaseReadFailed>;
-    modify<F extends Family, A>(
+    // one BEGIN IMMEDIATE each; a malformed row rolls back
+    modify<A>(
+      f: 'app-state',
+      key: string,
+      change: (
+        v: Value<'app-state'> | undefined,
+      ) => readonly [A, Value<'app-state'> | undefined],
+    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>;
+    modify<F extends RetainedFamily, A>(
       f: F,
       key: string,
-      // only app-state may delete its row; the other three families retain one
-      change: (v: Value<F> | undefined) => readonly [A, Next<F>],
-    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>; // one BEGIN IMMEDIATE; a malformed row rolls back
+      change: (v: Value<F> | undefined) => readonly [A, Value<F>],
+    ): Effect.Effect<A, DatabaseReadFailed | DatabaseWriteFailed>;
     // every live row of a family, latest write first (inquiry listing,
     // inquiryRecords.ts:241-265, keeps the decision's revision order)
     list<F extends Family>(
