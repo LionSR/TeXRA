@@ -34,7 +34,7 @@ import {
   Layer,
   RcMap,
   Scope,
-  SynchronizedRef,
+  Semaphore,
 } from 'effect';
 import { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 import stableStringify from 'safe-stable-stringify';
@@ -237,14 +237,15 @@ const liveToolsLayer = (
         }
       >();
       // Each built-in plugin's open contribution, by id: its scope closes
-      // when the plugin is switched off. The ref is the catalog's lock.
-      const builtIns = yield* SynchronizedRef.make(
-        new Map<string, Scope.Closeable>(),
-      );
-      const locked = <A, E>(effect: Effect.Effect<A, E>) =>
-        SynchronizedRef.modifyEffect(builtIns, (open) =>
-          Effect.map(effect, (a) => [a, open] as const),
-        );
+      // when the plugin is switched off. Read and written only under the
+      // catalog's lock.
+      const builtIns = new Map<string, Scope.Closeable>();
+      // The catalog's lock. What runs under it is short and uninterruptible,
+      // so a cancelled step never leaves a scope opened or closed without
+      // the maps that track it saying so.
+      const lock = yield* Semaphore.make(1);
+      const locked = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+        lock.withPermits(1)(Effect.uninterruptible(effect));
       /** Drop one hold of a server; the last withdraws its tools and stops
        *  its process. */
       const release = (id: string) =>
@@ -308,15 +309,11 @@ const liveToolsLayer = (
       });
 
       /** Open and close the built-in contributions to match `off`. */
-      const reconcile = (
-        open: ReadonlyMap<string, Scope.Closeable>,
-        off: ReadonlySet<string>,
-      ) =>
+      const reconcile = (off: ReadonlySet<string>) =>
         Effect.gen(function* () {
-          const next = new Map(open);
           for (const [id, tools] of table.plugins) {
             const on = !off.has(id);
-            const held = next.get(id);
+            const held = builtIns.get(id);
             if (on && held === undefined) {
               const contribution = yield* Scope.fork(scope);
               // The manifest rules out a name two plugins share, so a
@@ -324,22 +321,19 @@ const liveToolsLayer = (
               yield* registry
                 .contribute(id, entriesOf(id, tools))
                 .pipe(Scope.provide(contribution), Effect.orDie);
-              next.set(id, contribution);
+              builtIns.set(id, contribution);
             } else if (!on && held !== undefined) {
+              builtIns.delete(id);
               yield* Scope.close(held, Exit.void);
-              next.delete(id);
             }
           }
-          return next;
         });
-      yield* SynchronizedRef.updateEffect(builtIns, (open) =>
-        reconcile(open, new Set()),
-      );
+      yield* locked(reconcile(new Set()));
       const pinSwitched = <E>(off: Effect.Effect<ReadonlySet<string>, E>) =>
-        SynchronizedRef.modifyEffect(builtIns, (open) =>
+        locked(
           Effect.gen(function* () {
-            const next = yield* reconcile(open, yield* off);
-            return [yield* registry.pin, next] as const;
+            yield* reconcile(yield* off);
+            return yield* registry.pin;
           }),
         );
 

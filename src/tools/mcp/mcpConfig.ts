@@ -74,19 +74,25 @@ const REVISION_KEY_PATTERN = /^[0-9a-f]{64}$/;
 
 /**
  * The key a server's env values are digested under for its revision: random
- * per install, created once in app state (create-if-absent, one `modify` at
- * the store's authority), never written to history. The same env values
- * digest the same across restarts, and the digest a run records cannot be
- * checked against a guessed value. A stored value that is not a key is
- * replaced, loudly: every server then records a new revision once.
+ * per install, created once in app state, never written to history. The
+ * same env values digest the same across restarts, and the digest a run
+ * records cannot be checked against a guessed value. A stored key is only
+ * read; an absent one is created through one `modify` at the store's
+ * authority (create-if-absent, so a concurrent creator's key wins). A stored
+ * value that is not a key is replaced, loudly: every server then records a
+ * new revision once. The caller resolves it once per process.
  */
 export const mcpRevisionKey = Effect.gen(function* () {
+  const state = yield* AppState;
+  const isKey = (value: unknown): value is string =>
+    typeof value === 'string' && REVISION_KEY_PATTERN.test(value);
+  const stored = yield* state.get<unknown>(GlobalStateKey.MCP_REVISION_KEY);
+  if (isKey(stored)) return stored;
   let replaced = false;
-  const key = yield* (yield* AppState).modify(
+  const key = yield* state.modify(
     GlobalStateKey.MCP_REVISION_KEY,
     (current) => {
-      if (typeof current === 'string' && REVISION_KEY_PATTERN.test(current))
-        return Result.succeed(current);
+      if (isKey(current)) return Result.succeed(current);
       replaced = current !== undefined;
       return Result.succeed(randomBytes(32).toString('hex'));
     },

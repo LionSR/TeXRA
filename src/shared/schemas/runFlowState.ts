@@ -293,7 +293,8 @@ const StateSlicesSchema = z.object({
  */
 export const ToolUseSnapshotStateSchema = z.object({
   stateSlices: StateSlicesSchema.nullable(),
-  /** Per-call system text for providers that do not embed it in messages. */
+  /** The run's system text, before what each request's offered tools add
+   *  (`toolInstructions`, rebuilt from the step's `tools.offered` set). */
   systemPrompt: z.string().optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),

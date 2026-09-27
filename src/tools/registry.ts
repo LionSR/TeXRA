@@ -239,13 +239,13 @@ export const toolRegistryLayer = Layer.unwrap(
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const appState = yield* AppState;
+    // Resolved once per process, on the first run that declares an MCP tool.
+    const revisionKey = yield* Effect.cached(
+      mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
+    );
     return toolTableLayer(
       TOOL_TABLE,
-      mcpPluginLoader(
-        fs,
-        USER_MCP_CONFIG_PATH,
-        mcpRevisionKey.pipe(Effect.provideService(AppState, appState)),
-      ),
+      mcpPluginLoader(fs, USER_MCP_CONFIG_PATH, revisionKey),
     );
   }),
 );

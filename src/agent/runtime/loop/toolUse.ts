@@ -25,13 +25,15 @@ import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
-import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
+import {
+  buildInitialToolUsePrompts,
+  toolInstructions,
+} from '@agent/prompt/PromptBuilder';
 import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { logUserMessage } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
 import type { StorageFs, WorkspaceFs } from '@platform/rootedFs';
-import { hasDelegationTool } from '@shared/constants/delegationTools';
 import {
   RUN_OUTCOME,
   type JsonValue,
@@ -221,7 +223,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
         const step = yield* stepFor(run, opening, false);
-        const resolvedToolNames = step.tools.definitions.map((t) => t.name);
         const promptVars = {
           ...run.userVarChannels,
           [USER_VAR_MODEL]: bound.modelId,
@@ -233,9 +234,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           {
             workspace: session.roots.workspace,
             settings: session.roots,
-            resolvedToolNames,
-            hasDelegationTools: hasDelegationTool(resolvedToolNames),
-            isChild: isChild(),
           },
         );
         systemPrompt = prompts.systemPrompt
@@ -492,6 +490,19 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         const step = yield* stepFor(run, state, rounds !== null);
         if (step.rows.length > 0) state = yield* cell.append(step.rows);
         const tools = toolDefinitionsFor(step.tools.definitions);
+        // The system text this request sends: the run's recorded prompt and
+        // what the step's offered tools add, rebuilt from the offered set.
+        // A round sends its own system text and offers no tools.
+        const addedByTools = rounds
+          ? ''
+          : toolInstructions(
+              step.tools.definitions.map((t) => t.name),
+              isChild(),
+            );
+        const system =
+          systemPrompt === undefined || addedByTools === ''
+            ? systemPrompt
+            : `${systemPrompt}\n${addedByTools}`;
         // One round: the compaction the history may need, the snapshot that
         // admits the round, then the invocation. An open attempt's history
         // is fixed; it is neither compacted nor re-admitted.
@@ -507,7 +518,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 logger,
                 bound,
                 stores: session.roots,
-                system: systemPrompt,
+                system,
                 tools,
                 force,
               }),
@@ -527,7 +538,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ...(rounds
             ? yield* rounds.request(index)
             : {
-                system: systemPrompt,
+                system,
                 round: state.round,
                 debugName: 'tooluse',
               }),

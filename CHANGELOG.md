@@ -143,18 +143,17 @@ All notable changes to this project will be documented in this file.
 
 ### Features
 
-- **Tool switches reach open conversations** — switching a Tools plugin on
-  or off (in the Tools settings, or with `texra tools enable|disable` from
-  another shell) now changes what an open conversation offers at its next
-  model request instead of only runs started afterwards. The run records
-  each change in its history before the request, and calls the model already
-  made run against the tools their request offered. A resumed conversation
-  offers the tools it last recorded that are still the same tool, and a
-  pending call to a tool that changed or left gets a `tool_unavailable`
-  result while the turn continues. A tool is the same while its name, input
-  schema, plugin and plugin revision are: a changed description is recorded
-  but rejects no call. The result of `texra run` no longer carries
-  `compositionHash`.
+- **Tool changes reach open conversations** — switching Memory or a Tools
+  plugin on or off (in the settings, or with `texra tools enable|disable`
+  from another shell) now takes effect at the conversation's next step
+  instead of only in conversations started afterwards. The conversation's
+  history records each change, and the instructions that go with a tool
+  (such as Memory's) follow it in and out. Calls the model already made
+  finish with the tools they were made against. A resumed conversation
+  keeps the tools that are still compatible; a pending call to a tool that
+  is no longer available is answered as unavailable and the conversation
+  continues. A reworded tool description alone does not interrupt anything.
+  The `texra run` result no longer reports a tool-composition hash.
 - **Workflow scripts get longer default limits and an orchestration
   skill** — the whole-run wall clock defaults to 60 minutes
   (`meta.timeoutMs` up to 24 hours), a run may make 1000 live `agent()`
