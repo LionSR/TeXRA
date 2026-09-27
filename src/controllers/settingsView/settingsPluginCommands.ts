@@ -10,7 +10,6 @@
 import { Effect, Result } from 'effect';
 
 // Local imports - agent runtime
-import { refresh as refreshAgentCatalog } from '@agent/index';
 import {
   installPlugins,
   parsePluginOrigin,
@@ -127,7 +126,6 @@ export function settingsPluginCommands(ports: {
         present
           .reported(`Plugin ${message.action} failed`, act(message))
           .pipe(
-            Effect.andThen(refreshAgentCatalog()),
             Effect.andThen(bindings.refreshCatalogs()),
             Effect.andThen(ports.repaint),
           ),

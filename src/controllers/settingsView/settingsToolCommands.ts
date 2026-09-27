@@ -6,7 +6,6 @@
  */
 import { Effect } from 'effect';
 
-import { refresh as refreshAgentCatalog } from '@agent/index';
 import {
   detectLatexSettingsStatus,
   isAllowedLatexInstallCommand,
@@ -103,8 +102,7 @@ export function settingsToolCommands(ports: {
   const handlers = {
     toggleTool: ({ toolId, enabled }) =>
       setToolEnabled(toolId, enabled, roots.globalState).pipe(
-        // A plugin's bundled agents follow its switch.
-        Effect.andThen(refreshAgentCatalog()),
+        // A plugin's bundled agents follow its switch (`toolRegistryLayer`).
         Effect.andThen(postToolDashboard),
       ),
     // The command is looked up from the plugin manifest, never taken from
