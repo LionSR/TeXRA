@@ -77,7 +77,10 @@ async function installStoragePlatform(): Promise<void> {
  * resumability read all land in the suite's mock bag.
  */
 const agentRunsFake = {
-  launch: (...args: unknown[]) => Effect.promise(() => mocks.runAgent(...args)),
+  launch:
+    () =>
+    (...args: unknown[]) =>
+      Effect.promise(() => mocks.runAgent(...args)),
   finalize: (_session: unknown, input: unknown) =>
     Effect.promise(() => mocks.finalizeRun(input)),
   resumability: (...args: unknown[]) =>
@@ -555,7 +558,7 @@ describe('executeCliRequest', () => {
         // enters through the injected launch stand-in.
         const defectLaunch: typeof agentRunsFake = {
           ...agentRunsFake,
-          launch: () => Effect.die(new Error('disk full')),
+          launch: () => () => Effect.die(new Error('disk full')),
         };
 
         const error = yield* Effect.flip(

@@ -252,6 +252,7 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
   }
   // A workflow run takes no input, so there is no queue to hand over: the
   // resume is its whole run, on the same resume path as a conversation.
+  if (cancelled()) return REFUSED;
   const launched = yield* Effect.result(
     resumeToolUseFromResumeData(resume, runLaunchOptions(options)),
   );

@@ -53,7 +53,7 @@ import {
   runOutcomeExitCode,
   type ExecuteAgentResult,
 } from './terminalStatus';
-import type { CliContext } from './cliContext';
+import { CliUsageError, type CliContext } from './cliContext';
 
 type RunAgentWorkflowOutput = NonNullable<
   RunAgentOptions['publishWorkflowOutput']
@@ -95,12 +95,11 @@ interface CliExecuteOptions {
   readonly onInterruptedRunFinalized?: (runId: RunId) => void | Promise<void>;
   /** Refine generic flow resumability for the launched workflow's state. */
   readonly canAdvertiseInterruptedRun?: CheckpointRefinement;
-  /** The agent boundary the request runs through. Composition leaves it
-   *  unset and gets the agent runtime's own; `texra resume` launches through
-   *  the core resume path, and a test harness injects its stand-ins here
-   *  rather than mocking agent modules. */
+  /** The agent boundary the request runs through: unset, the runtime's own;
+   *  `texra resume`'s is the core resume path, which reads the shutdown
+   *  predicate; a test harness injects stand-ins rather than mocking. */
   readonly agentRuns?: Partial<{
-    readonly launch: typeof runAgent;
+    readonly launch: (shutdown: () => boolean) => typeof runAgent;
     readonly finalize: typeof finalizeRun;
     readonly resumability: typeof deriveResumability;
   }>;
@@ -280,7 +279,7 @@ export function executeCliRequest(
 > {
   return Effect.gen(function* () {
     const agentRuns = {
-      launch: runAgent,
+      launch: () => runAgent,
       finalize: finalizeRun,
       resumability: deriveResumability,
       ...options.agentRuns,
@@ -539,7 +538,7 @@ export function executeCliRequest(
     );
     const publishWorkflowOutput = options.publishWorkflowOutput;
     const invoke = (): ReturnType<typeof runAgent> =>
-      agentRuns.launch(request, {
+      agentRuns.launch(() => shutdownRequested)(request, {
         session,
         enforceCategory: options.enforceCategory,
         publishWorkflowOutput:
@@ -576,6 +575,7 @@ export function executeCliRequest(
       | { readonly ok: false } = { ok: false };
     let primaryRunFailure: { readonly error: unknown } | undefined;
     let shutdownLaunchAborted = false;
+    let refusal: CliUsageError | undefined;
     // Run exactly once: the early detach below is taken only on a path that
     // then throws or returns before the success tail that `ensuring`s it.
     const detachPresentation = Effect.gen(function* () {
@@ -604,6 +604,8 @@ export function executeCliRequest(
       // propagating to bin/texra.ts's crash handler.
       if (shutdownRequested && isUserAbort(err)) {
         shutdownLaunchAborted = true;
+      } else if (err instanceof CliUsageError) {
+        refusal = err; // a refused resume: the caller's usage exit
       } else if (!(err instanceof AgentError)) {
         primaryRunFailure = { error: err };
       } else if (!failurePresented && !hasErrorPresentationClaimed(err)) {
@@ -663,6 +665,7 @@ export function executeCliRequest(
       );
     }
     if (primaryRunFailure) return yield* Effect.die(primaryRunFailure.error);
+    if (refusal) return yield* Effect.fail(refusal);
     if (!runResult.ok) {
       return {
         ok: false as const,

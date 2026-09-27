@@ -622,7 +622,14 @@ export const createHostRunActions = (
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
         yield* nativeAgentRun(runId, 'resumed');
-        yield* (yield* AgentResume).tryResumeRun(runId);
+        // `false` is a run that did not start: the request is refused, not done.
+        if (!(yield* (yield* AgentResume).tryResumeRun(runId)))
+          return yield* Effect.fail(
+            new Unavailable({
+              runId,
+              reason: 'This run could not be resumed.',
+            }),
+          );
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 're-run');

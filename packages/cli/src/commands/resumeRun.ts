@@ -205,14 +205,21 @@ export function runResumeCommand(context: CliContext, id: RunId) {
             agentRuns: {
               // The headless run skeleton launches the persisted run through
               // the one core resume path, settling with its whole run.
-              launch: (_request, options) =>
-                resumeRun(id, options).pipe(
+              // A shutdown before the run's lane exists stops the resume through
+              // its predicate; the refusal it causes reads as that abort.
+              launch: (shutdown) => (_request, options) =>
+                resumeRun(id, {
+                  ...options,
+                  isCancellationRequested: shutdown,
+                }).pipe(
                   Effect.flatMap((resumed) => {
                     if ('failed' in resumed)
                       return Effect.fail(
-                        new CliUsageError(
-                          describeFollowUpFailure(resumed.failed),
-                        ),
+                        shutdown()
+                          ? new DOMException('Resume stopped', 'AbortError')
+                          : new CliUsageError(
+                              describeFollowUpFailure(resumed.failed),
+                            ),
                       );
                     if (resumed.result) return Effect.succeed(resumed.result);
                     return Effect.fail(
