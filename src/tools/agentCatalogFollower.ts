@@ -28,15 +28,14 @@ export const agentCatalogFollower = Layer.effectDiscard(
         ),
       ),
     );
-    // The host loads the catalog as it starts: the first element, the
-    // state as subscribed, reloads nothing.
+    // The first element reloads too: a write that lands between the host's
+    // startup scan and the feed's first read is folded into that element.
     yield* appState
       .changes([
         GlobalStateKey.DISABLED_TOOLS,
         GlobalStateKey.INSTALLED_PLUGINS,
       ])
       .pipe(
-        Stream.drop(1),
         Stream.runForEach(() => reload),
         Effect.forkScoped,
       );
