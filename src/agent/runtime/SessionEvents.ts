@@ -43,9 +43,11 @@ import {
 import {
   applyRunRow,
   closesRunWindow,
+  endsRun,
   foldRunRows,
   freshRunRows,
   FOLLOW_UP_TYPES,
+  RUN_TERMINAL_TYPES,
   isFollowUpRow,
   type RunRows,
 } from '@shared/session/runRows';
@@ -183,7 +185,7 @@ export const sessionEventsLayer = Layer.effect(
     const ended = new Set<AggregateId>();
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
-        if (row.type === 'run.end') ended.add(row.aggregateId);
+        if (endsRun(row)) ended.add(row.aggregateId);
         if (row.type === 'run.removed') {
           ended.add(row.aggregateId);
           open.delete(row.aggregateId);
@@ -416,8 +418,7 @@ export const sessionEventsLayer = Layer.effect(
           for (const sender of senders) {
             if (ended.has(sender)) continue;
             const terminal = yield* log.readAggregate(sender, 1, [
-              'run.end',
-              'run.removed',
+              ...RUN_TERMINAL_TYPES,
             ]);
             if (terminal.length > 0) ended.add(sender);
           }

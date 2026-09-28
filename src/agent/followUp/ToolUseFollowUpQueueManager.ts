@@ -142,6 +142,8 @@ export class ToolUseFollowUpQueue {
     ToolUseFollowUpQueue.TERMINALIZED_CAP,
   );
   private readonly releaseObservers = new Set<(runId: RunId) => void>();
+  /** Senders whose terminal row the fold showed (`wakeHeldFrom`). */
+  private readonly endedSenders = new Set<RunId>();
   /** Leases nobody holds that keep an entry owned while the claim an
    *  admission took for it is released ({@link releaseAdoptedClaim}). */
   private readonly releasing = new WeakSet<FollowUpConsumerLease>();
@@ -321,11 +323,8 @@ export class ToolUseFollowUpQueue {
     return true;
   }
 
-  /**
-   * What a take may hold, from the rows alone: no row whose sending run has
-   * not ended yet, and an `instruction`-held row only beside an unheld
-   * instruction, so it never starts a turn alone.
-   */
+  /** What a take may hold: no row whose sender has not ended, and an
+   *  `instruction`-held row only beside an unheld instruction. */
   private takeable(runId: RunId): readonly QueuedFollowUp[] {
     const rows = this.port
       .pending(runId)
@@ -333,6 +332,7 @@ export class ToolUseFollowUpQueue {
         ({ holdUntil, content }) =>
           holdUntil !== 'senderEnd' ||
           content.from.kind !== 'run' ||
+          this.endedSenders.has(content.from.runId) ||
           this.port.ended(content.from.runId),
       );
     const asked = rows.some(
@@ -341,9 +341,9 @@ export class ToolUseFollowUpQueue {
     return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
   }
 
-  /** A run's terminal row just folded (any process's commit): the
-   *  `senderEnd` rows it held are released, so every waiting take reads. */
-  wakeHeldFrom(): void {
+  /** `sender`'s terminal row folded (any process): its holds release. */
+  wakeHeldFrom(sender: RunId): void {
+    this.endedSenders.add(sender);
     for (const entry of this.entries.values()) entry.input?.notify();
   }
 
@@ -500,8 +500,7 @@ export class ToolUseFollowUpQueue {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        // A held row is offered by what releases it (`wakeHeldFrom`, a
-        // re-submission, the next instruction's offer).
+        // A held row is offered by what releases it (`wakeHeldFrom`, ...).
         if (owner !== undefined && holdUntil === undefined)
           admitted.input?.notify();
       }

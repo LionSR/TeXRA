@@ -186,6 +186,12 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The rows that end a run for its held input (`holdUntil: 'senderEnd'`):
+ *  what `SessionEvents.runEnded` records and what wakes a waiting take. */
+export const RUN_TERMINAL_TYPES = ['run.end', 'run.removed'] as const;
+export const endsRun = (row: Pick<SessionEvent, 'type'>): boolean =>
+  (RUN_TERMINAL_TYPES as readonly string[]).includes(row.type);
+
 /** The shared rows that move a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
   'followup.queued',

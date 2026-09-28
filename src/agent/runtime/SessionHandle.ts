@@ -79,7 +79,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
-import { foldRunRows } from '@shared/session/runRows';
+import { endsRun, foldRunRows } from '@shared/session/runRows';
 import type {
   Append,
   OpenWork,
@@ -1112,8 +1112,8 @@ export class SessionHandle {
     return Effect.gen({ self: this }, function* () {
       // The sweep and host notifications belong to the authoring process.
       const target = aggregateTarget(event.aggregateId);
-      // A sender's end releases its held rows: wake their takes.
-      if (event.type === 'run.end') this.followUps.wakeHeldFrom();
+      if (target.kind === 'run' && endsRun(event))
+        this.followUps.wakeHeldFrom(target.id);
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
       if (target.kind !== 'run' || event.type !== 'run.end') return;
