@@ -10,7 +10,6 @@ import {
   isWorkingRun,
   runTreeUsage,
   sessionActivity,
-  type RunView,
 } from '@shared/session/sessionView';
 
 /**
@@ -35,7 +34,8 @@ export class StatusBarUsageTracker {
   }
 
   public get activeRunCount(): number {
-    return this.runs.filter(isWorkingRun).length;
+    const { runs } = SubscriptionRef.getUnsafe(this.session.view);
+    return [...runs.values()].filter(isWorkingRun).length;
   }
 
   /** The spend of every run tree still in flight: a root counts, with all
@@ -54,10 +54,5 @@ export class StatusBarUsageTracker {
     return sumUsageStats(
       liveTreeRoots.map((root) => runTreeUsage(view, root.id)),
     );
-  }
-
-  /** The view's runs, in fold order. */
-  private get runs(): RunView[] {
-    return [...SubscriptionRef.getUnsafe(this.session.view).runs.values()];
   }
 }

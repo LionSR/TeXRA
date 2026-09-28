@@ -76,9 +76,8 @@ export interface CliHistoryEntry {
   readonly model: string;
   readonly status: HistoryRunStatus;
   /**
-   * Whether the durable facts say this run can be continued: a checkpoint
-   * file exists and the row carries the stream id stamped at registration.
-   * Ownership and loadability are settled when the run is opened, not per
+   * Whether the durable facts say this run can be continued: its run
+   * aggregate carries a `run.snapshot` ({@link cliRunStanding}). Ownership and loadability are settled when the run is opened, not per
    * listed row, so a run live in another process — or one whose checkpoint
    * turns out to be unloadable — still lists here and is refused, in its own
    * words, on open. Independent of `status`, which stays a frozen contract: a
@@ -103,7 +102,7 @@ interface CliHistoryDetails {
   readonly conversationPreview: CliHistoryConversationPreview | null;
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
-  /** Whether a checkpoint file exists for this run. */
+  /** Whether the run aggregate carries a `run.snapshot`. */
   readonly checkpointPresent: boolean;
   /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;
@@ -163,10 +162,10 @@ export function parseCliHistoryId(raw: string): RunId | undefined {
  */
 export const listCliHistoryEntries = Effect.fn('cli.listCliHistoryEntries')(
   function* (session: Effect.Effect<SessionHandle, SessionOpenError>) {
-    // A row's resumability comes from the checkpoint `stat` the listing already
+    // A row's resumability comes from the snapshot probe the listing already
     // did; only a failed workflow row still reads its persisted state. That
     // read is bounded here so a history full of failed workflow runs cannot
-    // open one file handle burst per run. `Effect.forEach` preserves input
+    // fold every run's ledger at once. `Effect.forEach` preserves input
     // order.
     const opened = yield* session;
     const entries = yield* listRuns(opened);

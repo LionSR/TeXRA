@@ -121,8 +121,9 @@ export class RunLedger extends Context.Service<
      * The latest `run.snapshot` on the run aggregate, one indexed row read
      * and no fold: what every reader of the retired `flow_<id>.json` becomes.
      * `null` when the run has never written one, or is closed. Existence,
-     * `payload.family`, and `payload.runtime` (phase, coordinates, model id,
-     * compatibility key) are the facts it answers; a run's state is `load`.
+     * `payload.family`, and `payload.runtime` (model id, compatibility key,
+     * last error, declined routes) are the facts it answers; a run's
+     * position and state are `load`.
      */
     readonly latestSnapshot: (
       run: RunId,

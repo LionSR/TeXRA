@@ -263,7 +263,6 @@ export const compactIfNeeded = Effect.fn('compaction.check')(function* (
   // and reports it, and its usage rides the row below.
   const summarized = yield* Effect.exit(
     input.invoker.call(
-      'compaction',
       {
         mode: 'foreground',
         system: COMPACTION_SYSTEM_PROMPT,

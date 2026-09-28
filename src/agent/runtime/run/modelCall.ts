@@ -35,9 +35,6 @@ import { priceTurnUsage } from './pricing';
 import type { ModelRetryGate, RoutePolicy } from '../ModelRetryGate';
 import type { BoundModel } from './modelBinding';
 
-/** Why a model call is made. Only a turn is recorded on the run ledger. */
-export type CallPurpose = 'turn' | 'compaction' | 'helper';
-
 /** Base delay between automatic attempts; the gate scales its own on top. */
 export const RETRY_BACKOFF_MS = 1000;
 
@@ -164,7 +161,8 @@ export const beforeNextAttempt = <E, R>(
   );
 
 export interface ModelCall<R = never> {
-  readonly purpose: Exclude<CallPurpose, 'turn'>;
+  /** Why the call is made; a turn is `ModelInvoker.invoke`, not this path. */
+  readonly purpose: 'compaction' | 'helper';
   /** The binding in force, read again before every attempt. */
   readonly binding: Effect.Effect<BoundModel>;
   /** Replace a binding whose connection a failure killed. */

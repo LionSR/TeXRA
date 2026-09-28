@@ -92,7 +92,6 @@ import {
   reportUsage,
   RETRY_BACKOFF_MS,
   routePolicies,
-  type CallPurpose,
   type CallResult,
 } from './run/modelCall';
 import { priceTurnUsage } from './run/pricing';
@@ -212,9 +211,8 @@ export class ModelInvoker extends Context.Service<
       InvokeError,
       FileSystem.FileSystem | LanguageModel | HttpClient.HttpClient
     >;
-    /** One call outside a turn (a compaction summary) on the run's binding. */
+    /** A compaction summary: one call outside a turn, on the run's binding. */
     readonly call: (
-      purpose: Exclude<CallPurpose, 'turn'>,
       request: TurnRequest,
       declinedRoutes: readonly DeclinableUsageRoute[],
     ) => Effect.Effect<CallResult, Error>;
@@ -1124,7 +1122,6 @@ export const modelInvokerLayer = (): Layer.Layer<
           lastFailure = state.lastError;
         }
         for (;;) {
-          const bound = yield* SynchronizedRef.get(run.model);
           if (admission !== 'automatic') {
             if (admission === 'waiting' || admission === 'decision') {
               const failure = lastFailure;
@@ -1135,7 +1132,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               }
               const decision = yield* manualRetry(
                 cell,
-                bound,
+                yield* SynchronizedRef.get(run.model),
                 failure,
                 failedAttempt,
                 operationId,
@@ -1165,6 +1162,8 @@ export const modelInvokerLayer = (): Layer.Layer<
             ]);
             admission = 'automatic';
           }
+          // Read after the gate: a manual retry rebinds the model.
+          const bound = yield* SynchronizedRef.get(run.model);
           let invocation: InvocationRef;
           let exit: Exit.Exit<InvocationResponse, AttemptFailed | InvokeError>;
           if (observing !== null) {
@@ -1174,7 +1173,7 @@ export const modelInvokerLayer = (): Layer.Layer<
                 cell,
                 invocation,
                 request,
-                yield* SynchronizedRef.get(run.model),
+                bound,
                 operationId,
                 observing.accepted,
               ),
@@ -1184,13 +1183,7 @@ export const modelInvokerLayer = (): Layer.Layer<
             invocation = { invocationId, attempt };
             attempt += 1;
             exit = yield* Effect.exit(
-              gatedAttempt(
-                cell,
-                invocation,
-                request,
-                yield* SynchronizedRef.get(run.model),
-                operationId,
-              ),
+              gatedAttempt(cell, invocation, request, bound, operationId),
             );
           }
           if (Exit.isSuccess(exit)) return exit.value;
@@ -1217,7 +1210,6 @@ export const modelInvokerLayer = (): Layer.Layer<
               { data: failure.info.message },
             );
             const { declinedRoutes: declined } = yield* cell.current;
-            const bound = yield* SynchronizedRef.get(run.model);
             yield* beforeNextAttempt(bound, (b) =>
               rebind('configured', b, declined),
             );
@@ -1246,12 +1238,11 @@ export const modelInvokerLayer = (): Layer.Layer<
 
       /** A compaction summary on the run's binding; its caller records it. */
       const call = (
-        purpose: Exclude<CallPurpose, 'turn'>,
         request: TurnRequest,
         declinedRoutes: readonly DeclinableUsageRoute[],
       ) =>
         callModel({
-          purpose,
+          purpose: 'compaction',
           binding: SynchronizedRef.get(run.model),
           reacquire: (failed) => rebind('configured', failed, declinedRoutes),
           request,

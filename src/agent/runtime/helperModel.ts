@@ -1,8 +1,8 @@
 /**
  * The helper model: one configured "helper model" setting behind session
- * descriptions, instruction polishing, AI-assisted agent creation and the
- * LaTeX text connector. Every use is one non-streaming turn, text in, text
- * out; the model is bound through the same route the run loop binds under.
+ * descriptions and draft polishing. Every use is one non-streaming turn, text
+ * in, text out; the model is bound through the same route the run loop binds
+ * under.
  *
  * A helper call is gated, priced and reported to the usage log like every
  * model call; it writes no ledger row, because it belongs to no run's history.
@@ -83,12 +83,14 @@ interface HelperPrompt {
  * One helper call: bind the configured helper model for this call alone and
  * run one completion through the invoker's call path (`run/modelCall.ts`),
  * gated on the session's retry gate, priced and reported to the usage log as
- * `attribution`. No row is written. Returns the turn's assistant text.
+ * `attribution`. No row is written. Returns the turn's assistant text. The
+ * binding, the retry limit and the usage consent read one set of stores: the
+ * session's setting slots and the process `secrets`.
  */
 export const helperCall = Effect.fn('helperCall')(
   function* (
     session: Pick<SessionHandle, 'modelRetries' | 'roots'>,
-    stores: ModelOptionStores,
+    secrets: ModelOptionStores['secrets'],
     { userPrompt, systemPrompt }: HelperPrompt,
     attribution: UsageAttribution,
     /** Automatic retries; the configured batch when absent. */
@@ -104,6 +106,7 @@ export const helperCall = Effect.fn('helperCall')(
     const context = yield* Effect.context<
       LanguageModel | HttpClient.HttpClient
     >();
+    const stores: ModelOptionStores = { ...session.roots, secrets };
     const bindFresh = Effect.gen(function* () {
       const fork = yield* Scope.fork(scope);
       const bound = yield* helperModel(stores).pipe(Scope.provide(fork));

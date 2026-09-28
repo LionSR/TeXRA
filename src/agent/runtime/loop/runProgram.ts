@@ -167,13 +167,10 @@ export const loadRun = (
     } satisfies RunEntry;
   });
 
-/**
- * What a run program returns. `outcome: null` is a park: the launch ended
- * without ending the run, so no `halted` step is written.
- */
+/** What a run program, and each of its turns, returns. */
 export type RunExit = {
   readonly state: RunState;
-  readonly outcome: RunOutcome | null;
+  readonly outcome: RunOutcome;
 };
 
 /**
@@ -206,23 +203,18 @@ export const settleRun =
       onSuccess: (value) => value.outcome,
       onFailure: failureOutcome,
     });
-    const halt =
-      outcome === null
-        ? Effect.void
-        : Effect.gen(function* () {
-            const state = yield* cell.current;
-            yield* cell
-              .append([haltedPositionRow(cell.runId, state, outcome)])
-              .pipe(
-                Effect.catchTag('RunLedgerRefused', (error) =>
-                  Effect.sync(() =>
-                    logger.warn('Failed to record the run halt', {
-                      data: error,
-                    }),
-                  ),
-                ),
-              );
-          });
+    const halt = Effect.gen(function* () {
+      const state = yield* cell.current;
+      yield* cell.append([haltedPositionRow(cell.runId, state, outcome)]).pipe(
+        Effect.catchTag('RunLedgerRefused', (error) =>
+          Effect.sync(() =>
+            logger.warn('Failed to record the run halt', {
+              data: error,
+            }),
+          ),
+        ),
+      );
+    });
     return halt.pipe(
       Effect.onExit((halted) =>
         lease === null

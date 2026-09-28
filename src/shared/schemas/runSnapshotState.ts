@@ -9,7 +9,7 @@ import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
-import { ACTIVATED_SKILLS_MAX, SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
+import { ACTIVATED_SKILLS_MAX } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
@@ -178,19 +178,6 @@ export interface SkillCatalogEntry {
   readonly text: string;
   readonly directory: string | null;
 }
-
-/**
- * The catalog entries a step lists: those of core sources and of the
- * plugins it names, bounded after the filter, so a withdrawn plugin's skills
- * never push a listed one out.
- */
-export const listedSkills = (
-  catalog: readonly SkillCatalogEntry[],
-  plugins: ReadonlySet<string>,
-): SkillCatalogEntry[] =>
-  catalog
-    .filter(({ plugin }) => plugin === null || plugins.has(plugin))
-    .slice(0, SKILL_CATALOG_MAX_SKILLS);
 
 // --------------------------------------------------- model compatibility
 

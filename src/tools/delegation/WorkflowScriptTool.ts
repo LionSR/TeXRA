@@ -536,19 +536,15 @@ function executeWorkflowScriptTool(
                         ...(stopAfterCycle && {
                           deliveryMode: 'persistOnly' as const,
                         }),
-                        createRunAgent: (hooks) => {
-                          const runAgent = createWorkflowScriptAgentRunner(
+                        createRunAgent: (hooks) =>
+                          createWorkflowScriptAgentRunner(
                             parent,
                             parentModel,
                             defaultAgent,
                             checkpointId,
-                            {
-                              runId,
-                            },
+                            { runId },
                             hooks,
-                          );
-                          return runAgent;
-                        },
+                          ),
                       }),
                       // Detached callers do not await completion. Own late finalization
                       // failures here as trace diagnostics; the child loop already owns

@@ -127,8 +127,8 @@ function truncateLogData(entry: LogEntry): LogEntry {
 
 /**
  * The console as a sink: the fallback for entries written before a host
- * installs its own, and the CLI's deliberate destination. Severity picks the
- * console method, so even this path keeps the level a reader can act on.
+ * installs its own. Severity picks the console method, so even this path
+ * keeps the level a reader can act on.
  */
 const consoleLogSink: LogSink = {
   write(entry) {
@@ -153,10 +153,10 @@ const consoleLogSink: LogSink = {
 };
 
 /**
- * The sink of a host that wants no diagnostics at all. A CLI command run with
- * `--quiet` installs this in place of the console fallback: `defineCliCommand`
- * before it builds the process runtime, and the platform init again for the
- * commands that reach one.
+ * The sink of a host that wants no diagnostics at all: `defineCliCommand`
+ * installs it for a command run with `--quiet` before it builds the process
+ * runtime, and the CLI platform init installs it for every command that
+ * reaches one, since each command renders its own output.
  */
 export const silentLogSink: LogSink = Object.freeze({
   write: () => undefined,

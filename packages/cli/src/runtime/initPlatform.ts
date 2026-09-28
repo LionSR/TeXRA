@@ -89,8 +89,8 @@ type CliPlatformInitOptions = Pick<
   readonly installSignalHandlers?: boolean;
   /** The caller shows `SessionHandle.storeMovedAside` itself: the chat TUI,
    *  in its transcript (`createChatSessionController`), since stderr written before Ink mounts is left
-   *  above its header. Otherwise the database's own warning says it, or,
-   *  under a silenced log, this init prints it to stderr. */
+   *  above its header. Otherwise this init prints it to stderr: the
+   *  platform's log sink is always silent. */
   readonly presentsStoreMovedAside?: boolean;
 };
 

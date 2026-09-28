@@ -135,8 +135,7 @@ export interface WorkflowScriptStrategyParams {
   readonly deliveryMode?: ChildRunStrategy<WorkflowScriptRunResult>['deliveryMode'];
   /**
    * Build the `agent()` adapter bound to the run's ancestry, wired to the
-   * supplied per-live-child cost hook so delta accounting stays local to this
-   * run.
+   * supplied per-attempt cost hook that feeds the delivery summary's cost.
    */
   readonly createRunAgent: (hooks: {
     readonly onCost: (
@@ -150,9 +149,9 @@ export interface WorkflowScriptStrategyParams {
 
 /**
  * Create the terminal-only strategy that runs one durable workflow script as a
- * detached child. The run body — cost delta-accounting, run-log capture, and
- * progress projection onto the run's own stream — lives here; the tool only
- * launches it.
+ * detached child. The run body — the delivery summary's cost, run-log
+ * capture, and progress projection onto the run's own stream — lives here;
+ * the tool only launches it.
  */
 export function createWorkflowScriptStrategy(
   params: WorkflowScriptStrategyParams,

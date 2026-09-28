@@ -294,8 +294,8 @@ export class RunRegistry {
   }
 
   /** Whether this process holds a live generation of the run: its fiber, a
-   *  hold, or an admitted launch. A live tool-use flow is not a fourth arm:
-   *  the flow attaches and detaches inside the run program, which runs on
+   *  hold, or an admitted launch. A live tool-use loop is not a fourth arm:
+   *  the loop attaches and detaches inside the run program, which runs on
    *  the generation's fiber. */
   isLive(runId: RunId): boolean {
     const entry = this.entries.get(runId);

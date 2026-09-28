@@ -53,8 +53,8 @@ Call tools sequentially and wait for the output before calling another.`;
  * mechanics of the step's model and the configured bibliography, the skills
  * the step lists, then each pinned plugin's section, in plugin id order. It
  * is built from the step (its model, settings, offered tools and pinned
- * contributors) and the catalog the run recorded at open, so a model switch
- * or a setting change reaches the next request, and a resume rebuilds it.
+ * contributors) and the skill catalog it discovers, so a model switch or a
+ * setting change reaches the next request, and a resume rebuilds it.
  */
 export function stepInstructions(
   prompt: ReadonlyMap<string, PromptContribution>,

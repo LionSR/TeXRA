@@ -1,9 +1,9 @@
 import { quote } from 'shell-quote';
 
-import type { CliOutputFormat } from '@shared/schemas';
 import type { TexraApprovalPolicy } from '@shared/approvalPolicy';
 import {
   isEmptyUsage,
+  type CliOutputFormat,
   type RunId,
   type TokenUsageStats,
 } from '@shared/schemas';
