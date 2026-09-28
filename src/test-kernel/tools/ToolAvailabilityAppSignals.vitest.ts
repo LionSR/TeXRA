@@ -101,54 +101,36 @@ describe('tool availability service', () => {
             },
           ],
         }));
-        const sessionGraph = yield* Effect.promise(
-          () => import('@agent/runtime/sessionGraph'),
-        );
         const { emitAppSignal } = yield* Effect.promise(
           () => import('@eventBus/AppSignals'),
         );
-        const { reprobeOnCredentialChange } = yield* Effect.promise(
-          () => import('@tools/credentialReprobe'),
-        );
         const availability = yield* availabilityService;
-        const session = (workspace: string | undefined) => ({
-          roots: { ...probeInputs, workspace },
+        const roots = (workspace: string | undefined) => ({
+          ...probeInputs,
+          workspace,
         });
         // Two projects plus the no-workspace session; the second session on
         // `/a` shares its results, so it is probed once.
         const sessions = [
-          session('/a'),
-          session('/a'),
-          session('/b'),
-          session(undefined),
+          roots('/a'),
+          roots('/a'),
+          roots('/b'),
+          roots(undefined),
         ];
-        sessionGraph.initSessionOwner({
-          list: () => Effect.succeed(sessions),
-        } as never);
         // Each session holds its roots, which probes them once on open.
-        for (const { roots } of sessions) yield* availability.hold(roots);
+        for (const held of sessions) yield* availability.hold(held);
         const probedAll = SubscriptionRef.changes(availability.results).pipe(
           Stream.filter(() => probedRoots.length === 3),
           Stream.runHead,
         );
         yield* probedAll;
         probedRoots.length = 0;
-        const reprobe = yield* Effect.forkChild(
-          reprobeOnCredentialChange.pipe(
-            Effect.provideService(ToolAvailability, availability),
-          ),
-        );
-        // The re-prober registers on its own fiber, one fork deeper, before
-        // the store announces anything.
-        yield* Effect.repeat(Effect.yieldNow, { times: 3 });
 
         emitAppSignal('credentialChanged', { key: 'unrelated.key' });
         emitAppSignal('credentialChanged', { key: 'token.key' });
 
         yield* probedAll;
         expect(probedRoots.toSorted()).toEqual(['/a', '/b', undefined]);
-        sessionGraph.initSessionOwner(undefined);
-        yield* Fiber.interrupt(reprobe);
       }).pipe(Effect.provide(probeServices)),
   );
 
@@ -271,10 +253,34 @@ describe('tool availability service', () => {
                 ),
               },
             },
+            {
+              // A callback that throws, as an eager configuration read can.
+              id: 'throwing-probe',
+              toolNames: ['throwing'],
+              name: 'Throwing probe',
+              category: 'ai-agents',
+              availability: {
+                probe: vi.fn(() => {
+                  throw new Error('config read threw');
+                }),
+                check: vi.fn(() => Effect.succeed(true)),
+              },
+            },
           ],
         }));
         const availability = yield* availabilityService;
+        const throwing = expect.objectContaining({
+          id: 'throwing-probe',
+          status: 'unknown',
+          statusDetail: 'Availability check failed: config read threw',
+        });
 
+        // A defect is reported, not fatal: the root's next check probes
+        // again rather than joining a dead fiber.
+        for (const _ of [1, 2])
+          expect(yield* availability.refresh(probeInputs)).toContainEqual(
+            throwing,
+          );
         expect(yield* availability.refresh(probeInputs)).toEqual([
           expect.objectContaining({
             id: 'broken-probe',
@@ -288,6 +294,7 @@ describe('tool availability service', () => {
             status: 'available',
             statusDetail: undefined,
           }),
+          throwing,
         ]);
       }).pipe(Effect.provide(probeServices)),
   );
