@@ -71,6 +71,7 @@ import {
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
+import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -771,7 +772,7 @@ describe('Sessions owner', () => {
   );
 
   it.effect(
-    'refuses a delete rendered before the run started, with the reason',
+    'refuses a delete rendered before the run started, and a second concurrent resume',
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -815,6 +816,24 @@ describe('Sessions owner', () => {
           reason: expect.stringContaining('stop it first'),
         });
         expect(removeRun).not.toHaveBeenCalled();
+
+        // A second Resume while the first is in flight is refused at once,
+        // not queued behind the first's whole run.
+        const guard = runActionGuard(
+          {} as Pick<SessionHandle, 'runView' | 'runs'>,
+        );
+        const finish = yield* Deferred.make<void>();
+        const first = yield* Effect.forkChild(
+          guard.resuming(Deferred.await(finish), RUN),
+          { startImmediately: true },
+        );
+        const second = yield* guard
+          .resuming(Effect.void, RUN)
+          .pipe(Effect.flip);
+        expect(second.reason).toBe('This run is already resuming.');
+        yield* Deferred.succeed(finish, undefined);
+        yield* Fiber.join(first);
+        yield* guard.resuming(Effect.void, RUN);
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(

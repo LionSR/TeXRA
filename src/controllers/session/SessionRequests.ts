@@ -122,6 +122,9 @@ export function sessionRequests(
     // sweep) acts through the registry's inactive-run step and the claim,
     // which refuse a run anything still holds; the view's liveness of a
     // spawned run this process registered and never started is not theirs.
+    // Deliberately not gated on `actions` either: an explicit delete is how
+    // a user clears a run this process cannot read (the UI never offers
+    // it), and the claim still protects a run a live process holds.
     const admitted = yield* admit(log, local, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
