@@ -47,7 +47,8 @@ import {
   foldRunRows,
   freshRunRows,
   FOLLOW_UP_TYPES,
-  RUN_TERMINAL_TYPES,
+  RUN_LIFECYCLE_TYPES,
+  lifecycleOf,
   isFollowUpRow,
   type RunRows,
 } from '@shared/session/runRows';
@@ -181,13 +182,27 @@ export const sessionEventsLayer = Layer.effect(
     // no other process commits to the run, so what it tracks stays whole.
     const followUps = new Map<AggregateId, RunRows>();
     const hydrated = new Set<AggregateId>();
-    // Runs whose terminal row is committed: what releases a `senderEnd` hold.
+    // Runs whose latest lifecycle ended (what releases a `senderEnd` hold),
+    // and runs whose input is closed: both as the rows say, latest wins.
     const ended = new Set<AggregateId>();
+    const closed = new Set<AggregateId>();
+    const setLifecycle = (
+      id: AggregateId,
+      rows: readonly Pick<SessionEvent, 'type'>[],
+    ) => {
+      const standing = lifecycleOf(rows);
+      if (standing.ended) ended.add(id);
+      else ended.delete(id);
+      if (standing.closed) closed.add(id);
+      else closed.delete(id);
+    };
     const track = (rows: readonly SessionEvent[]) => {
       for (const row of rows) {
+        if (row.type === 'run.activate') setLifecycle(row.aggregateId, [row]);
         if (endsRun(row)) ended.add(row.aggregateId);
+        if (row.type === 'followup.closed') closed.add(row.aggregateId);
         if (row.type === 'run.removed') {
-          ended.add(row.aggregateId);
+          closed.add(row.aggregateId);
           open.delete(row.aggregateId);
           followUps.delete(row.aggregateId);
           hydrated.delete(row.aggregateId);
@@ -377,6 +392,7 @@ export const sessionEventsLayer = Layer.effect(
       followUpNamed: (aggregateId, followUpId) =>
         followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
       runEnded: (aggregateId) => ended.has(aggregateId),
+      inputClosed: (aggregateId) => closed.has(aggregateId),
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;
@@ -405,8 +421,14 @@ export const sessionEventsLayer = Layer.effect(
             ],
             followUpIds: new Set([...read.followUpIds, ...live.followUpIds]),
           });
-          // A held row's sender may have ended in an earlier process: read
-          // its terminal row once, so the hold is decided from the rows.
+          // The run's own input standing, from its committed rows.
+          setLifecycle(
+            aggregateId,
+            yield* log.readAggregate(aggregateId, 1, [...RUN_LIFECYCLE_TYPES]),
+          );
+          // A held row's sender may have ended in an earlier process: its
+          // latest lifecycle decides. A sender whose deleted aggregate was
+          // collected has no rows left at all: it ended with its deletion.
           const senders = new Set(
             (followUps.get(aggregateId)?.followUps ?? []).flatMap(
               ({ holdUntil, content: { from } }) =>
@@ -417,10 +439,13 @@ export const sessionEventsLayer = Layer.effect(
           );
           for (const sender of senders) {
             if (ended.has(sender)) continue;
-            const terminal = yield* log.readAggregate(sender, 1, [
-              ...RUN_TERMINAL_TYPES,
+            const rows = yield* log.readAggregate(sender, 1, [
+              ...RUN_LIFECYCLE_TYPES,
             ]);
-            if (terminal.length > 0) ended.add(sender);
+            const collected =
+              rows.length === 0 &&
+              (yield* log.aggregateState([sender])).length === 0;
+            if (collected || lifecycleOf(rows).ended) ended.add(sender);
           }
           hydrated.add(aggregateId);
         }),

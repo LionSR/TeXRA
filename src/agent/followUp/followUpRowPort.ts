@@ -14,12 +14,14 @@ export interface FollowUpRowPort {
     job: (append: Append) => Effect.Effect<A, E>,
   ) => Effect.Effect<A, E>;
   /** Enqueue a job on that publisher and return (`SessionGraph.detach`). */
-  readonly detach: (job: Effect.Effect<void>) => void;
+  readonly detach: (job: (append: Append) => Effect.Effect<void>) => void;
   /** The run's pending follow-ups (`SessionEvents.pendingFollowUps`). */
   readonly pending: (runId: RunId) => readonly QueuedFollowUp[];
-  /** Whether a committed terminal row of the run is known here; a run with
-   *  none known is not ended. */
+  /** Whether a committed terminal row of the run's latest lifecycle is
+   *  known here; a run with none known is not ended. */
   readonly ended: (runId: RunId) => boolean;
+  /** Whether the run's input is closed (`SessionEvents.inputClosed`). */
+  readonly inputClosed: (runId: RunId) => boolean;
   /** The run's parent as the session view folds it; `null` at top level. */
   readonly parentOf: (runId: RunId) => RunId | null | undefined;
   /** Whether a committed row of the run named this follow-up id, queued or

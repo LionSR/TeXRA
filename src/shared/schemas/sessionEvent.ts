@@ -410,12 +410,13 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
     }),
   ),
 ]);
-/** The run's private records: on the same aggregate as its display rows,
- *  read by the runtime's typed accessors and never by a renderer
- *  (`isDisplaySessionEvent` keeps them out of the transport by type). */
+/** The run's private records, read by the runtime and never by a renderer
+ *  (`isDisplaySessionEvent`). `followup.closed`: its input is closed until a
+ *  claim reopens it or it activates again. */
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
+  durable('followup.closed', {}),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
@@ -428,8 +429,7 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   durable('model.message', { payload: ModelMessagePayloadSchema }),
   durable('model.compaction', { payload: ModelCompactionPayloadSchema }),
   durable('tool.intent', { payload: ToolIntentPayloadSchema }),
-  /** The approval that guards one outcome-unknown call, committed in the
-   *  batch that opens the request it names. */
+  /** Guards one outcome-unknown call; commits with the request it names. */
   durable('tool.binding', { payload: ToolBindingPayloadSchema }),
   durable('tool.result', { payload: ToolResultPayloadSchema }),
   /** The human retry permit, written by the one retry owner
@@ -543,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 41;
+export const SESSION_EVENT_FORMAT = 42;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

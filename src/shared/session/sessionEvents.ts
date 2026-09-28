@@ -145,6 +145,10 @@ export class SessionEvents extends Context.Service<
      *  for the senders of held follow-ups, a read at {@link hydrateFollowUps}.
      *  A run with no such row known is not ended. */
     readonly runEnded: (aggregateId: AggregateId) => boolean;
+    /** Whether the run's input is closed (`followup.closed` or `run.removed`
+     *  since its latest `run.activate`), known on the same terms as
+     *  {@link runEnded}; for the run itself, once its claim moved here. */
+    readonly inputClosed: (aggregateId: AggregateId) => boolean;
     /** Whether a row of the aggregate named this follow-up id, queued or
      *  consumed: the replay key, kept with {@link pendingFollowUps} and
      *  whole on the same terms. */
@@ -203,5 +207,6 @@ export type SessionEventReads = Pick<
   | 'pendingFollowUps'
   | 'followUpNamed'
   | 'runEnded'
+  | 'inputClosed'
   | 'hydrateFollowUps'
 >;

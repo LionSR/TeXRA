@@ -23,7 +23,11 @@ import {
   heldElsewhereBy,
 } from '@shared/session/database';
 import { runRelation } from '@shared/session/runRelation';
-import { foldRunRows, type QueuedFollowUp } from '@shared/session/runRows';
+import {
+  foldRunRows,
+  lifecycleOf,
+  type QueuedFollowUp,
+} from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { createDeferred } from '@test/support/asyncTestUtils';
 import { generateRunId } from '@utils/core';
@@ -121,9 +125,10 @@ function recordedFollowUps(
   const followUps = new ToolUseFollowUpQueue({
     exclusive: (job) => publisher.withPermits(1)(job(append)),
     detach: (job) => {
-      Effect.runFork(publisher.withPermits(1)(job));
+      Effect.runFork(publisher.withPermits(1)(job(append)));
     },
     pending: (runId) => foldRunRows(runRows(runId)).followUps,
+    inputClosed: (runId) => lifecycleOf(runRows(runId)).closed,
     ended: (runId) => ended.has(runId),
     parentOf: () => undefined,
     named: (runId, followUpId) =>
@@ -1002,31 +1007,46 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
   );
 });
 
-describe('ToolUseFollowUpQueue terminal tombstones', () => {
-  it.effect('evicts the oldest tombstone at the historical cap', () =>
-    Effect.gen(function* () {
-      const { followUps } = recordedFollowUps();
-      const runIds = Array.from(
-        { length: ToolUseFollowUpQueue.TERMINALIZED_CAP + 1 },
-        () => generateRunId(),
-      );
-      for (const runId of runIds) followUps.terminalize(runId);
+describe('ToolUseFollowUpQueue closed input', () => {
+  it.effect(
+    'a closed run refuses producers from its rows, unbounded, until a claim reopens it',
+    () =>
+      Effect.gen(function* () {
+        // The close is the run's `followup.closed` row, not an in-memory
+        // mark: no cap evicts it, and a queue with no memory of the close
+        // (the fixture's port reads only the rows) still refuses.
+        const { followUps, queued } = recordedFollowUps();
+        const closed = generateRunId();
+        const open = generateRunId();
+        followUps.terminalize(closed);
+        yield* settle;
 
-      expect(
-        yield* followUps.submit(
-          runIds[0]!,
-          { from: { kind: 'user' as const }, text: 'after eviction' },
-          'recoverable',
-        ),
-      ).toMatchObject({ kind: 'queued' });
-      expect(
-        yield* followUps.submit(
-          runIds[1]!,
-          { from: { kind: 'user' as const }, text: 'still terminalized' },
-          'recoverable',
-        ),
-      ).toEqual({ kind: 'refused' });
-    }),
+        expect(
+          yield* followUps.submit(
+            closed,
+            { from: { kind: 'user' as const }, text: 'still closed' },
+            'recoverable',
+          ),
+        ).toEqual({ kind: 'refused' });
+        expect(queued(closed)).toEqual([]);
+        expect(
+          yield* followUps.submit(
+            open,
+            { from: { kind: 'user' as const }, text: 'never closed' },
+            'recoverable',
+          ),
+        ).toMatchObject({ kind: 'queued' });
+
+        // An explicit claim reopens it.
+        expect(followUps.claimRecovery(closed, true)).toBeDefined();
+        expect(
+          yield* followUps.submit(
+            closed,
+            { from: { kind: 'user' as const }, text: 'reopened' },
+            'recoverable',
+          ),
+        ).toMatchObject({ kind: 'queued' });
+      }),
   );
 });
 
