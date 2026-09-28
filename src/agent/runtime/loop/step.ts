@@ -50,7 +50,7 @@ import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
-import { grantSkillRoots } from '@utils/files/externalRoots';
+import { skillRoots, type StepRoot } from '@utils/files/externalRoots';
 
 import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
@@ -67,9 +67,11 @@ export interface StepTools {
   readonly offered: readonly OfferedTool[];
   /** The pinned plugins' process and session services. */
   readonly services: Context.Context<PluginServices>;
+  /** The read-only skill directories its calls may read. */
+  readonly stepRoots: readonly StepRoot[];
 }
 
-/** What a step's system text and skill grants are built from that the run
+/** What a step's system text and skill roots are built from that the run
  *  holds, all recorded in its rows: its base text, its skill catalog, the
  *  skills its user activated, and whether it is a child. */
 export interface RunSystem {
@@ -99,6 +101,7 @@ const NO_TOOLS: StepTools = {
   registry: new MapToolRegistry(new Map()),
   offered: [],
   services: Context.empty() as Context.Context<PluginServices>,
+  stepRoots: [],
 };
 
 /** Whether `b` is the set `a` records: the same tools, as the same
@@ -118,9 +121,12 @@ const sameSet = (
 /** The recorded tools a resumed step may still offer, and why the rest
  *  are not offered. */
 function heldToRecord(
-  resolved: Omit<StepTools, 'services'>,
+  resolved: Omit<StepTools, 'services' | 'stepRoots'>,
   recorded: readonly OfferedTool[],
-): { readonly tools: Omit<StepTools, 'services'>; readonly notes: string[] } {
+): {
+  readonly tools: Omit<StepTools, 'services' | 'stepRoots'>;
+  readonly notes: string[];
+} {
   const current = new Map(resolved.offered.map((tool) => [tool.name, tool]));
   // The current entry, which may describe the tool anew.
   const kept = recorded.flatMap((tool) => {
@@ -220,8 +226,33 @@ const openStep = Effect.fn('Step.open')(function* (
       ),
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
+  // The plugins the step's system text draws on: the built-in ones' sections
+  // and skills, and the installed ones' skills. The skills it lists are the
+  // ones its calls may read.
+  const sections = [...step.prompt.keys(), ...step.installed].toSorted();
+  const contributors = new Set([
+    ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
+    ...step.installed,
+  ]);
+  const listed = listedSkills(runSystem.catalog(), contributors);
+  // An activated skill is readable while the step would list it: its
+  // plugin, if any, still contributes, so one disabled or untrusted since
+  // loses it.
+  const activated = runSystem
+    .activated(state)
+    .filter(({ plugin }) => plugin === null || contributors.has(plugin));
+  const readable = skillRoots(
+    [...listed, ...activated].flatMap(({ name, directory }) =>
+      directory === null ? [] : [{ name, directory }],
+    ),
+  );
+  for (const name of readable.refused)
+    run.logger.warn(
+      `Skill ${name} is not readable by tools: its directory cannot be verified.`,
+    );
+  const tools = { ...step.tools, stepRoots: readable.roots };
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
-    tools: step.tools,
+    tools,
     scope,
     withheld: step.withheld,
     continuation: step.continuation,
@@ -230,30 +261,7 @@ const openStep = Effect.fn('Step.open')(function* (
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
-  // The plugins the step's system text draws on: the built-in ones' sections
-  // and skills, and the installed ones' skills. The skills it lists are the
-  // ones the run grants tools to read.
-  const sections = [...step.prompt.keys(), ...step.installed].toSorted();
-  const contributors = new Set([
-    ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
-    ...step.installed,
-  ]);
-  const listed = listedSkills(runSystem.catalog(), contributors);
-  // An activated skill is granted while the step would list it: its plugin,
-  // if any, still contributes, so one disabled or untrusted since loses it.
-  const activated = runSystem
-    .activated(state)
-    .filter(({ plugin }) => plugin === null || contributors.has(plugin));
   const { roots } = run.session;
-  for (const name of grantSkillRoots(
-    run.runId,
-    [...listed, ...activated].flatMap(({ name, directory }) =>
-      directory === null ? [] : [{ name, directory }],
-    ),
-  ))
-    run.logger.warn(
-      `Skill ${name} is not readable by tools: its directory cannot be verified.`,
-    );
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const base = runSystem.base();
@@ -299,7 +307,7 @@ const openStep = Effect.fn('Step.open')(function* (
       tools: step.withheld,
     });
   return {
-    tools: step.tools,
+    tools,
     continuation: step.continuation?.continuation ?? null,
     prompt: step.prompt,
     system,

@@ -438,8 +438,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         diagnostics: { code: 'tool_unavailable', tool: fact.toolName },
       };
     } else {
-      // Guard first, in the same call context: a refused path or an
-      // unapproved command settles the call without the body running.
+      // Guard first, under the step's roots and plugin services: a refused
+      // path or unapproved command settles the call without the body running.
       const invoked = yield* Effect.exit(
         Effect.scoped(
           guardedToolCall(tool, parsedInput).pipe(
@@ -447,13 +447,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
               roots: run.session.roots,
               run,
               workingDirectory: run.workingDirectory,
+              stepRoots: step.stepRoots,
               tracker: workspace.interactions,
               workPlanState: workspace.workPlan,
               userInstruction,
               toolCallId: fact.callId,
               hooks: { onToolOutput, recordSubagentCost },
             }),
-            // The step's plugin layers' services.
             Effect.provide(step.services),
           ),
         ),

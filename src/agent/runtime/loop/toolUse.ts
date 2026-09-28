@@ -43,7 +43,6 @@ import {
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
-import { releaseSkillRoots } from '@utils/files/externalRoots';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
@@ -193,7 +192,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
-  // What a step's system text is built from; its skill grants end with us.
+  // What a step's system text and skill roots are built from.
   const system: RunSystem = {
     base: () => systemPrompt,
     catalog: () => catalog,
@@ -205,7 +204,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     },
     isChild,
   };
-  yield* Effect.addFinalizer(() => Effect.sync(() => releaseSkillRoots(runId)));
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
     Effect.tap(stepFor(run, state, rounds !== null, kind, system), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())

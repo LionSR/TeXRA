@@ -291,13 +291,12 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
     // An agent written into the custom agents directory (the `creator`
     // agent's) is listed before the tool answers, so the agent's next call
     // can run it. The write stands whether or not the rescan does.
-    const call = yield* ToolCall;
     const absolutePath = nodePath.isAbsolute(path)
       ? path
       : yield* Effect.flatMap(WorkspaceFs, (workspace) =>
           workspace.resolve(path),
         );
-    if (findExternalRoot(absolutePath, call.run?.runId)?.kind === 'custom') {
+    if (findExternalRoot(absolutePath)?.kind === 'custom') {
       yield* reloadAgentCatalog.pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(

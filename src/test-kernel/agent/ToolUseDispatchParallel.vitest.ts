@@ -416,6 +416,7 @@ const dispatch = (kit: DispatchKit) =>
         registry: kit.tools,
         offered: [],
         services: Context.empty() as Context.Context<PluginServices>,
+        stepRoots: [],
       }),
     ),
     Effect.provide(kit.layer),
