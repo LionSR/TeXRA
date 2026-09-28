@@ -53,7 +53,6 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  rowAggregate,
   snapshotRow,
   positionRow,
   type SnapshotPatch,
@@ -166,14 +165,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   };
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, { ...patch, state: loopState(state) });
-
-  const publishTouchedFiles = (): void => {
-    const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
-    if (paths.length === 0) return;
-    session.publish([
-      { type: 'run.workspaceFiles', aggregateId: rowAggregate(runId), paths },
-    ]);
-  };
 
   // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
@@ -665,7 +656,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           ...session.streamClosureFacts(runId),
           positionRow(runId, state, 'waiting'),
         ]);
-        publishTouchedFiles();
         if (turn.outcome === 'completed') {
           const interactions = workspace.interactions;
           const cost = state.usage.totalCost;

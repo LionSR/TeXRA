@@ -33,7 +33,6 @@ import { JsonValueSchema } from './jsonValue';
 import {
   RunEndRowSchema,
   RunRecordFieldsSchema,
-  RunWorkspaceFilesSchema,
   ResultMetaSchema,
 } from './runRecords';
 import { RunIdSchema, type RunId } from './identifiers';
@@ -415,7 +414,6 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
 const RunRecordEventDraftSchema = z.discriminatedUnion('type', [
   durable('run.report', { report: z.string().nullable() }),
   durable('run.result', { result: ResultMetaSchema }),
-  durable('run.workspaceFiles', { paths: RunWorkspaceFilesSchema }),
 ]);
 /**
  * The run ledger's private rows (`2026-09-08-pr1-run-ledger-foundation.md`):
