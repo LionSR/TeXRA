@@ -58,10 +58,7 @@ export function defineSubscriptionAuthCommand(
     const writeProgress = cliProgressWriter(context);
 
     return Effect.gen(function* () {
-      const services = yield* initCliPlatform({
-        ...context,
-        quietLogs: true,
-      });
+      const services = yield* initCliPlatform(context);
       const signInResult = yield* withCliAuthError(
         signInCliSubscription(
           options.providerId,
@@ -125,10 +122,7 @@ export function defineSubscriptionAuthCommand(
     args: { ...GLOBAL_ARGS },
     run: (context) =>
       Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
+        const services = yield* initCliPlatform(context);
         const signOutResult = yield* withCliAuthError(
           signOutCliSubscription(services, options.providerId),
         );
@@ -158,10 +152,7 @@ export function defineSubscriptionAuthCommand(
     args: { ...GLOBAL_ARGS },
     run: (context) =>
       Effect.gen(function* () {
-        const services = yield* initCliPlatform({
-          ...context,
-          quietLogs: true,
-        });
+        const services = yield* initCliPlatform(context);
         const statusResult = yield* withCliAuthError(
           provider.getStatus(services.secrets),
         );

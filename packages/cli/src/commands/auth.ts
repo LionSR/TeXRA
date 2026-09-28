@@ -135,7 +135,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
   }
 
   if (init.device) {
-    yield* initCliPlatform({ ...context, quietLogs: true });
+    yield* initCliPlatform(context);
     // Human-facing progress goes to stdout only in text mode so the JSON/NDJSON
     // result stream stays machine-readable (same convention as --no-browser).
     const writeProgress = cliProgressWriter(context);
@@ -161,7 +161,7 @@ const runLoginCommand = Effect.fn('runLoginCommand')(function* (
     writeTextStderr(unsupportedLoginProviderMessage(provider));
     return yield* exitBeforePlatform(CliExitCode.Usage);
   }
-  const { runtime } = yield* initCliPlatform({ ...context, quietLogs: true });
+  const { runtime } = yield* initCliPlatform(context);
   const accountWarning = githubSelectAccountWarning(init);
   if (accountWarning) writeTextStderr(accountWarning);
   if (context.outputFormat === 'text' && !init.noBrowser) {
@@ -247,7 +247,7 @@ export const logoutCommand = defineCliCommand({
   },
   run: (context) =>
     Effect.gen(function* () {
-      yield* initCliPlatform({ ...context, quietLogs: true });
+      yield* initCliPlatform(context);
       const signOutResult = yield* withCliAuthError(signOutCliSupabase());
       if (!signOutResult.ok) return CliExitCode.ModelOrNetworkError;
 
@@ -290,7 +290,7 @@ const authStatusCommand = defineCliCommand({
   run: (context) =>
     Effect.gen(function* () {
       const statusResult = yield* withCliAuthError(
-        initCliPlatform({ ...context, quietLogs: true }).pipe(
+        initCliPlatform(context).pipe(
           Effect.flatMap(() => getCliAuthProfile()),
         ),
       );

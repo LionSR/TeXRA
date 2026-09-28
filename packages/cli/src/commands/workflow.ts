@@ -118,7 +118,7 @@ export const runHeadlessAgent = Effect.fn('runHeadlessAgent')(function* (
     );
   }
 
-  const services = yield* initCliPlatform({ ...context, quietLogs: true });
+  const services = yield* initCliPlatform(context);
   // Resolve once, before stdin is read or the runtime host starts; the run
   // pins the resolved source.
   const { category, source } = yield* resolveCliRunAgent(services, init.agent);

@@ -32,7 +32,7 @@ function listSkills(
   // The init and the skill read it feeds are one program, run on the process
   // runtime the command entry installs.
   return Effect.gen(function* () {
-    const services = yield* initCliPlatform({ ...context, quietLogs: true });
+    const services = yield* initCliPlatform(context);
     const roots = services.roots;
     const result = yield* readCliSkills(context.cwd, roots, options);
     const exitCode = result.errors.some(

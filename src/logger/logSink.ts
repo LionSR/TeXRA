@@ -130,7 +130,7 @@ function truncateLogData(entry: LogEntry): LogEntry {
  * installs its own, and the CLI's deliberate destination. Severity picks the
  * console method, so even this path keeps the level a reader can act on.
  */
-export const consoleLogSink: LogSink = {
+const consoleLogSink: LogSink = {
   write(entry) {
     const channel = entryChannel(entry);
     const line = `${channel ? `[${channel}] ` : ''}${entryMessage(entry)}`;

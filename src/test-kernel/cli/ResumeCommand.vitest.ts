@@ -223,7 +223,7 @@ describe('runResumeCommand', () => {
     await run(context);
 
     expect(mocks.initCliPlatform).toHaveBeenCalledWith(
-      expect.objectContaining({ ...context, quietLogs: true }),
+      expect.objectContaining(context),
     );
     expect(mocks.initCliPlatform.mock.calls[0]?.[0]).not.toHaveProperty(
       'installSignalHandlers',
