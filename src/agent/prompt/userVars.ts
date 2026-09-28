@@ -13,6 +13,7 @@ import {
   type BuiltUserVars,
 } from '@agent/core/definition/AgentCycleOptions';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
+import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { ConfigProvider } from '@platform/interfaces';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
@@ -106,6 +107,7 @@ interface BuildUserVarsOptions {
    * whichever roots the calling fiber carries.
    */
   settings: SettingsStores;
+  installed: Effect.Effect<InstalledPluginLoad>;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
 }
@@ -161,7 +163,7 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
       AgentSkillsEnabledSchema.parse(
         options.config.get(AGENT_SKILLS_CONFIG_KEY),
       )
-        ? loadRuntimeSkillCatalog(options.workspacePath, options.settings)
+        ? loadRuntimeSkillCatalog(options)
         : // A fresh object per call, not a shared constant: `skills` is handed
           // to the snapshot consumer, and a shared array would accumulate.
           Effect.succeed({ catalog: [], skills: [], issues: [] }),
@@ -417,9 +419,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
     // reflects the second read that fills its `*_FILE`/`*_CONTENT` pair, so the
     // card cannot report success while those prompt variables remain null.
     //
-    // Tool-use agents get no card. Media files are excluded: they have no user
-    // vars (display-only in Init) and MediaExtractionNode already logs them
-    // with full load results in r0.
+    // Tool-use agents get no card, nor do media files (no user vars).
     const cardLabel = FILE_CATEGORY_CARD_LABEL[prefix];
     if (
       cardLabel != null &&

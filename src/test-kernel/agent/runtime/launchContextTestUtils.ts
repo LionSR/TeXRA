@@ -1,4 +1,5 @@
 // Third-party imports
+import { Effect } from 'effect';
 import { ModelProvider } from 'llm-zoo';
 
 // Local imports
@@ -74,6 +75,7 @@ export function createTestLaunchContext({
     ownApiKeyFallback: false,
     // The launch stores a real run carries; no fixture reads through them.
     stores: fakeStores(),
+    installed: Effect.succeed({ loadable: [], withheld: [] }),
     runId,
     session,
     logger,

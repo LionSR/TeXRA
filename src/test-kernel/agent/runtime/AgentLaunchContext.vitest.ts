@@ -524,6 +524,7 @@ describe('AgentLaunchContext', () => {
         storageRoot: session.roots.storage,
         config: session.roots.config,
         settings: session.roots,
+        installed: expect.anything(),
         stageId: undefined,
       });
       expect(endStage).toHaveBeenCalledExactlyOnceWith(RUN_OUTCOME.FAILED);

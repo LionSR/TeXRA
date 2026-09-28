@@ -111,7 +111,8 @@ function recordedFollowUps(
     },
     pending: (runId) => foldRunRows(runRows(runId)).followUps,
     parentOf: () => undefined,
-    rows: (runId) => Effect.sync(() => runRows(runId)),
+    named: (runId, followUpId) =>
+      foldRunRows(runRows(runId)).followUpIds.has(followUpId),
     acquireClaim: (runId) =>
       Effect.suspend(() => {
         claims.push(runId);

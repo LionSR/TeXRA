@@ -367,6 +367,8 @@ export const sessionEventsLayer = Layer.effect(
       openWork: (aggregateId) => [...(open.get(aggregateId)?.values() ?? [])],
       pendingFollowUps: (aggregateId) =>
         followUps.get(aggregateId)?.followUps ?? [],
+      followUpNamed: (aggregateId, followUpId) =>
+        followUps.get(aggregateId)?.followUpIds.has(followUpId) ?? false,
       hydrateFollowUps: (aggregateId, claimMoved, rows) =>
         Effect.gen(function* () {
           if (aggregateTarget(aggregateId).kind !== 'run') return;

@@ -23,6 +23,7 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -113,6 +114,12 @@ export interface AgentRunShape {
   readonly fileService: RunFileService;
   /** What each step resolves its tools from (`loop/step.ts`). */
   readonly toolInputs: StepToolInputs;
+  /**
+   * The installed plugins that load, as the launch read them, once: the
+   * agent's own check, the skill catalog and the activation's first step
+   * share that one read. Every later step reads them again.
+   */
+  readonly installed: Effect.Effect<InstalledPluginLoad>;
   /**
    * The run's current step: the tools it offers and the pin that holds its
    * catalog generation, replaced by each new step. A delegated child reads
@@ -325,6 +332,7 @@ export const agentRunLayer = (
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
         toolInputs,
+        installed: ctx.installed,
         steps: yield* SynchronizedRef.make<OpenStep | null>(null),
         finalToolName,
         structured,

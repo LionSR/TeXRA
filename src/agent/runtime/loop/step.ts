@@ -34,6 +34,7 @@ import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
 
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
+import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginServices } from '@platform/processRuntime';
 import {
@@ -151,7 +152,8 @@ function heldToRecord(
  * produce, as one step (`LiveTools.pinSwitched`), release the previous
  * step's pin, and resolve what it offers.
  * `recorded` holds a resumed activation's first step to it; `holding` says
- * the hold outlives this step (a park's). The rows
+ * the hold outlives this step (a park's); `installed`, the installed
+ * plugins as the run's launch read them, is the first step's. The rows
  * are what the loop appends before a request: the new offered set, when it
  * differs from `state`'s.
  */
@@ -161,6 +163,7 @@ const openStep = Effect.fn('Step.open')(function* (
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
   render: RenderSystem,
+  installed: InstalledPluginLoad | undefined,
 ) {
   const live = yield* LiveTools;
   const scope = yield* Scope.fork(run.scope);
@@ -171,7 +174,7 @@ const openStep = Effect.fn('Step.open')(function* (
           getDisabledToolIds(run.stores.globalState),
           switchedOffPlugins,
         ),
-        { installed: true },
+        { installed: true, read: installed },
       )
       .pipe(Scope.provide(scope));
     const resolved = yield* resolveStepTools(pinned.generation, run.toolInputs);
@@ -330,6 +333,9 @@ export const stepFor = Effect.fn('Step.for')(function* (
     held ? state.offeredTools : null,
     held && kind === 'park',
     render,
+    // The activation's first step loads the installed plugins as its launch
+    // read them; every later step reads them again.
+    open === null ? yield* run.installed : undefined,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });

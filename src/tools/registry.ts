@@ -334,46 +334,53 @@ export const toolRegistryLayer = (
       const envKey = yield* Effect.cached(revisionKey(appState));
       // The installed plugins a step loads: the enabled, trusted ones with
       // MCP servers, keyed by what they would start, and why each other
-      // enabled one loads nothing.
-      const installed: InstalledToolReader = Effect.gen(function* () {
-        const load = yield* readInstalledPluginLoad({
-          globalState: appState,
-        }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
-        const withServers = load.loadable.filter(
-          ({ plugin }) => plugin.mcpServers.length > 0,
-        );
-        const warnings = [
-          ...load.withheld,
-          ...withServers.flatMap(({ plugin }) => plugin.warnings),
-        ];
-        if (withServers.length === 0) return { plugins: [], warnings };
-        const key = yield* Effect.result(envKey);
-        if (key._tag === 'Failure')
-          return {
-            plugins: [],
-            warnings: [
-              ...warnings,
-              `No installed plugin's MCP servers start: ${key.failure.message}`,
-            ],
-          };
-        return {
-          plugins: withServers.map(({ record, plugin, trust }) => {
-            const id = installedPluginId(record.name);
-            const servers = plugin.mcpServers.map((server) =>
-              mcpPlugin(server, key.success, id),
-            );
+      // enabled one loads nothing. A run's first step brings the read its
+      // launch took; every other pin reads now.
+      const installed: InstalledToolReader = (read) =>
+        Effect.gen(function* () {
+          const load =
+            read ??
+            (yield* readInstalledPluginLoad({
+              globalState: appState,
+            }).pipe(Effect.provideService(FileSystem.FileSystem, fs)));
+          const withServers = load.loadable.filter(
+            ({ plugin }) => plugin.mcpServers.length > 0,
+          );
+          const warnings = [
+            ...load.withheld,
+            ...withServers.flatMap(({ plugin }) => plugin.warnings),
+          ];
+          if (withServers.length === 0) return { plugins: [], warnings };
+          const key = yield* Effect.result(envKey);
+          if (key._tag === 'Failure')
             return {
-              id,
-              key: sha256({
-                trust,
-                servers: servers.map(({ spec, revision }) => [spec, revision]),
-              }),
-              servers,
+              plugins: [],
+              warnings: [
+                ...warnings,
+                `No installed plugin's MCP servers start: ${key.failure.message}`,
+              ],
             };
-          }),
-          warnings,
-        };
-      });
+          return {
+            plugins: withServers.map(({ record, plugin, trust }) => {
+              const id = installedPluginId(record.name);
+              const servers = plugin.mcpServers.map((server) =>
+                mcpPlugin(server, key.success, id),
+              );
+              return {
+                id,
+                key: sha256({
+                  trust,
+                  servers: servers.map(({ spec, revision }) => [
+                    spec,
+                    revision,
+                  ]),
+                }),
+                servers,
+              };
+            }),
+            warnings,
+          };
+        });
       const catalog = toolTableLayer(
         {
           ...TOOL_TABLE,

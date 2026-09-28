@@ -1,5 +1,5 @@
 /** Explicit call capabilities over the test host's existing process services. */
-import { Layer, Scope, SynchronizedRef } from 'effect';
+import { Effect, Layer, Scope, SynchronizedRef } from 'effect';
 
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import { FileInteractionState } from '@agent/core/state/AgentWorkspaceState';
@@ -31,12 +31,14 @@ export const testModelCell = (modelId: string) =>
 /** A run that has opened no step yet. */
 export const noStep = () => SynchronizedRef.makeUnsafe<OpenStep | null>(null);
 
-/** A run fixture's step fields: no step opened yet, and every step offers
- *  exactly `tools`, as the run's own tools over an empty catalog. */
+/** A run fixture's step fields: no step opened yet, no installed plugin,
+ *  and every step offers exactly `tools`, as the run's own tools over an
+ *  empty catalog. */
 export const testRunTools = (
   stores: ModelOptionStores,
   tools: Readonly<Record<string, RuntimeTool>> = {},
-): Pick<AgentRunShape, 'toolInputs' | 'steps'> => ({
+): Pick<AgentRunShape, 'toolInputs' | 'steps' | 'installed'> => ({
+  installed: Effect.succeed({ loadable: [], withheld: [] }),
   toolInputs: {
     tools: [],
     approvalPromptsUnavailable: false,
