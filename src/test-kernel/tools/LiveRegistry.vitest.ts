@@ -10,7 +10,8 @@
  *   earlier one, or the earlier one is lost when the later closes first;
  * - a generation's resources are acquired per pin rather than shared, or are
  *   released while a pin still holds them, or never released once `current`
- *   has moved on (no drain).
+ *   has moved on (no drain);
+ * - a rebuild with equal entries reuses an older generation's resources.
  */
 import { it } from '@effect/vitest';
 import { Effect, Exit, Scope, SubscriptionRef } from 'effect';
@@ -24,7 +25,6 @@ const names = (generation: Generation<string, number>) => [
 
 const registryWithLog = (log: string[]) =>
   makeRegistry<string, number, string>({
-    digest: (entries) => JSON.stringify([...entries]),
     acquire: (generation) =>
       Effect.acquireRelease(
         Effect.sync(() => {
@@ -118,8 +118,18 @@ describe('Registry', () => {
         yield* registry.pin.pipe(Scope.provide(three));
         yield* Scope.close(one, Exit.void);
         expect(log).toEqual(['acquire x', 'acquire ']);
+        // Equal entries rebuilt are another generation, with its own
+        // resources: a reloaded plugin's tools may run elsewhere.
+        yield* registry.contribute('a', new Map([['x', 1]]));
+        yield* registry.pin.pipe(Scope.provide(three));
+        expect(log).toEqual(['acquire x', 'acquire ', 'acquire x']);
         yield* Scope.close(two, Exit.void);
-        expect(log).toEqual(['acquire x', 'acquire ', 'release x']);
+        expect(log).toEqual([
+          'acquire x',
+          'acquire ',
+          'acquire x',
+          'release x',
+        ]);
         yield* Scope.close(three, Exit.void);
       }).pipe(Effect.scoped),
   );

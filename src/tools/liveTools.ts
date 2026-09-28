@@ -56,7 +56,6 @@ import {
 } from '@tools/toolTable';
 import {
   entriesOf,
-  sha256,
   type ContinuationEntry,
   type HeldPlugins,
   type ToolEntry,
@@ -99,8 +98,9 @@ export class LiveTools extends Context.Service<
         /** Why each enabled installed plugin, or one of its servers, offers
          *  no tools; empty unless the installed plugins were loaded. */
         readonly warnings: readonly string[];
-        /** The ids of the installed plugins the applied read loads; empty
-         *  unless the installed plugins were loaded. */
+        /** The ids of the installed plugins the catalog has accepted, those
+         *  that ship only skills included; empty unless the installed
+         *  plugins were loaded. */
         readonly installed: readonly string[];
       },
       E,
@@ -158,9 +158,6 @@ const liveToolsLayer = (
       // load from an older read never reverts a newer one.
       let reads = 0;
       let applied = 0;
-      // The installed plugins the applied read loads: what a stale read
-      // returns in place of its own, so it cannot restore a withdrawn one.
-      let loaded: readonly string[] = [];
       // The catalog's lock: what runs under it is short and uninterruptible,
       // so a cancelled step never leaves a scope and its map out of step.
       const lock = yield* Semaphore.make(1);
@@ -173,18 +170,6 @@ const liveToolsLayer = (
         registry: () => registry,
       });
       const registry = yield* makeRegistry<string, ToolEntry, void>({
-        digest: (entries) =>
-          sha256(
-            [...entries]
-              .map(([name, e]) => [
-                name,
-                e.digest,
-                e.shown,
-                e.plugin,
-                e.revision,
-              ])
-              .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
-          ),
         // The server processes the generation dispatches through.
         acquire: holds.pinHolds,
       });
@@ -194,18 +179,9 @@ const liveToolsLayer = (
         AgentCategory,
         ContinuationEntry,
         void
-      >({
-        digest: (entries) =>
-          sha256(
-            [...entries]
-              .map(([category, { plugin }]) => [category, plugin])
-              .toSorted(([a], [b]) => Number(a > b) - Number(a < b)),
-          ),
-        acquire: () => Effect.void,
-      });
+      >({ acquire: () => Effect.void });
       // Each built-in plugin's prompt contribution, by plugin id.
       const sections = yield* makeRegistry<string, PromptContribution, void>({
-        digest: (entries) => sha256([...entries.keys()].toSorted()),
         acquire: () => Effect.void,
       });
 
@@ -273,9 +249,10 @@ const liveToolsLayer = (
           const readId = reading ? ++reads : 0;
           const read = reading
             ? yield* installedReader
-            : { loaded: [], plugins: [], warnings: [] };
-          // Loads started here and not yet adopted by the catalog: an
-          // interruption or failure before adoption drops them.
+            : { plugins: [], warnings: [] };
+          // Loads prepared here and not yet adopted by the catalog: none is
+          // in a generation, and an interruption or failure before adoption
+          // drops them.
           const started: InstalledLoad[] = [];
           const adopted = new Set<InstalledLoad>();
           const dropUnadopted = Effect.suspend(() =>
@@ -318,7 +295,6 @@ const liveToolsLayer = (
                   for (const load of started) yield* retire(load);
                 } else if (reading) {
                   applied = readId;
-                  loaded = read.loaded;
                   const wanted = new Map(
                     read.plugins.map(({ id, key }) => [id, key]),
                   );
@@ -329,7 +305,8 @@ const liveToolsLayer = (
                       yield* retire(load);
                       continue;
                     }
-                    installed.set(load.id, load);
+                    // Accepted as current: only now are its tools published.
+                    installed.set(load.id, yield* holds.publish(load));
                     adopted.add(load);
                     if (current) yield* retire(current);
                   }
@@ -364,7 +341,7 @@ const liveToolsLayer = (
                   continuations: generation,
                   sections: pinned.generation,
                   layersFor,
-                  installed: loading ? loaded : [],
+                  installed: loading ? [...installed.keys()] : [],
                   warnings: [
                     ...read.warnings,
                     ...(loading
@@ -417,7 +394,7 @@ const liveToolsLayer = (
   );
 
 /** Loads no plugins, from configuration or installed. */
-const NONE = Effect.succeed({ loaded: [], plugins: [], warnings: [] });
+const NONE = Effect.succeed({ plugins: [], warnings: [] });
 
 /**
  * `table` as the `ToolRegistry`, and the live catalog over it, the plugins
