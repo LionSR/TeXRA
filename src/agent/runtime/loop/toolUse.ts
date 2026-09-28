@@ -363,8 +363,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const turnContext: TurnContext = {
       workspace,
       get userInstruction() {
-        const instruction = userChannels[USER_VAR_INSTRUCTION];
-        return typeof instruction === 'string' ? instruction : undefined;
+        return userChannels[USER_VAR_INSTRUCTION];
       },
     };
     let continuedAt: number | null = null;

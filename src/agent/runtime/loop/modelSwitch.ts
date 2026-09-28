@@ -13,6 +13,7 @@ import {
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
 import { LanguageModel } from '@platform/languageModel';
+import type { UserVariableChannels } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
@@ -28,7 +29,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     state: RunState,
     cell: RunCell,
     /** The loop's user channels, which name the model the run is on. */
-    userChannels: Record<string, unknown>,
+    userChannels: UserVariableChannels,
     /** The loop's snapshot row, family state included. */
     snapshot: (
       state: RunState,
