@@ -152,7 +152,7 @@ const RunViewCommonSchema = z.object({
   /**
    * The terminal status once nothing can move it: for a run this process
    * owns, after its `run.end` has folded (a user stop publishes CANCELLED
-   * while the flow still writes its closing rows); for any other run, the
+   * while the loop still writes its closing rows); for any other run, the
    * terminal status itself. Null while anything can still move.
    * What licenses a host to paint an open group as interrupted and the
    * session to release the run's sidecar record.

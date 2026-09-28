@@ -101,9 +101,6 @@ export interface InBandSubagentLaunchOptions {
   >;
 }
 
-/** Options for the XML-delivery API. */
-type InBandSubagentDeliveryOptions = InBandSubagentRunBaseOptions;
-
 interface InBandSubagentRunResult {
   readonly runId: RunId;
   readonly result: RunEnd;
@@ -121,7 +118,7 @@ type SettledInBandTurn = Parameters<
 
 /** Resolve the definition once before either in-band launch path registers it. */
 const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
-  options: InBandSubagentDeliveryOptions,
+  options: InBandSubagentRunBaseOptions,
 ) {
   return yield* prepareAgentDefinition({
     config: AgentConfigSchema.parse(options.configPayload),
@@ -162,7 +159,7 @@ const prepareInBandDefinition = Effect.fn('prepareInBandDefinition')(function* (
  */
 const executeInBand = Effect.fn('executeInBand')(
   function* (
-    options: InBandSubagentDeliveryOptions,
+    options: InBandSubagentRunBaseOptions,
     definition: PreparedAgentDefinition,
     mode: PersistenceMode,
     runId: RunId,
@@ -464,7 +461,7 @@ const launchSubagentInBand = Effect.fn('executeSubagentInBand')(
 export const executeSubagentForDeliveryInBand = Effect.fn(
   'executeSubagentForDeliveryInBand',
 )(function* (
-  options: InBandSubagentDeliveryOptions,
+  options: InBandSubagentRunBaseOptions,
 ): Effect.fn.Return<InBandSubagentDeliveryResult, Error, AgentRunServices> {
   const definition = yield* prepareInBandDefinition(options);
   return yield* executeInBand(

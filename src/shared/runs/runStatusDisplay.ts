@@ -147,16 +147,7 @@ export function formatRunStatusLabel(status: RunLifecycleStatus): string {
 
 /** Compact round/turn progress label: `r2/3` when the planned total is known
  *  (workflow runs), else `r2`. Zero-based `index` renders one-based. */
-export function formatRoundStageLabel(stage: Readonly<RoundStage>): string;
-
-export function formatRoundStageLabel(
-  stage: Readonly<RoundStage> | undefined,
-): string | undefined;
-
-export function formatRoundStageLabel(
-  stage: Readonly<RoundStage> | undefined,
-): string | undefined {
-  if (stage === undefined) return undefined;
+export function formatRoundStageLabel(stage: Readonly<RoundStage>): string {
   const current = `r${stage.index + 1}`;
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }

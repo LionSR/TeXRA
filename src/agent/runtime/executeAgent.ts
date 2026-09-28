@@ -198,7 +198,7 @@ function launchWorkflowRun(
     const result = yield* runToolUse({ resume: resumed }).pipe(
       Effect.provide(runLayerFor(ctx, options, undefined)),
     );
-    const flowResult: WorkflowRunEndResult = {
+    const runEnd: WorkflowRunEndResult = {
       outcome: result.outcome,
       output: {
         category: 'workflow',
@@ -215,17 +215,16 @@ function launchWorkflowRun(
         ? { memoryMisses: ctx.attachedMemoryMisses }
         : {}),
     };
-    if (flowResult.error || !options.publishWorkflowOutput) return flowResult;
+    if (runEnd.error || !options.publishWorkflowOutput) return runEnd;
     const publication = yield* options.publishWorkflowOutput(
-      flowResult,
+      runEnd,
       ctx.setting.defaultOutputFiles,
     );
     // Output the user asked for and did not get fails the run; a stop still
     // reads as the stop it was.
-    return publication === 'failed' &&
-      flowResult.outcome !== RUN_OUTCOME.CANCELLED
-      ? { ...flowResult, outcome: RUN_OUTCOME.FAILED }
-      : flowResult;
+    return publication === 'failed' && runEnd.outcome !== RUN_OUTCOME.CANCELLED
+      ? { ...runEnd, outcome: RUN_OUTCOME.FAILED }
+      : runEnd;
   });
   return options.turns ? options.turns.turnPermit(program) : program;
 }
@@ -425,18 +424,11 @@ export function executeAgent(
           );
 
           if (setting.agentCategory === AgentCategory.ToolUse) {
-            return yield* launchToolUseRun(
-              ctx,
-              handle,
-              { ...options, parentRunId },
-              { kind: 'fresh' },
-            );
+            return yield* launchToolUseRun(ctx, handle, options, {
+              kind: 'fresh',
+            });
           }
-          return yield* launchWorkflowRun(
-            ctx,
-            { ...options, parentRunId },
-            false,
-          );
+          return yield* launchWorkflowRun(ctx, options, false);
         }).pipe(settleDescriptionOnExit(sessionDescription)),
       // The edge the lifecycle's handle is born with: the caller's own
       // parent for a fresh child.
@@ -521,17 +513,12 @@ export function resumeToolUseFromResumeData(
       ctx,
       (handle) =>
         ctx.setting.agentCategory === AgentCategory.Workflow
-          ? launchWorkflowRun(ctx, { ...options, parentRunId }, true)
-          : launchToolUseRun(
-              ctx,
-              handle,
-              { ...options, parentRunId },
-              {
-                kind: 'resume',
-                onIdle: options.onIdle,
-                isCancellationRequested: options.isCancellationRequested,
-              },
-            ),
+          ? launchWorkflowRun(ctx, options, true)
+          : launchToolUseRun(ctx, handle, options, {
+              kind: 'resume',
+              onIdle: options.onIdle,
+              isCancellationRequested: options.isCancellationRequested,
+            }),
       // Resume reads the parent edge from the persisted `run.start`.
       { parentRunId, onRun: options.onRun },
     );

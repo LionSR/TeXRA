@@ -1005,7 +1005,7 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
         facts: { ...run.facts, [`${event.plugin}/${event.kind}`]: event.value },
       };
     case 'child.park':
-      // A loop-driven child's park or pause; no ledger, so `flow` stays null.
+      // A loop-driven child's park or pause; no ledger, so `position` stays null.
       return event.phase === 'paused'
         ? { ...parked(run, true, event.at), substate: RUN_SUBSTATE.PAUSED }
         : parked(run, phaseMoveOf(event) === RUN_PHASE.WAITING, event.at);

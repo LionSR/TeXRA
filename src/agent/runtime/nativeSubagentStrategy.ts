@@ -11,10 +11,7 @@ import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
 import type { AgentRunServices } from '@agent/runtime/runRegistry';
-import type {
-  ChildRunPorts,
-  ChildRunStrategy,
-} from '@agent/runtime/childRunLoop';
+import type { ChildRunStrategy } from '@agent/runtime/childRunLoop';
 import type { PreparedAgentDefinition } from '@agent/runtime/AgentLaunchContext';
 import { normalizeProviderError } from '@common/errors/sdkError/providerErrorFormat';
 import {
@@ -167,8 +164,7 @@ export function createNativeSubagentStrategy(
             parentOffered: params.parentOffered,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             onRunResolved: params.onRunResolved,
-            onProgress: (update: Parameters<ChildRunPorts['notify']>[0]) =>
-              ports.notify(update),
+            onProgress: (update) => ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,
               onTurnBoundary: (turn: RunEndResult) =>

@@ -26,7 +26,6 @@ import { issue } from './skillLoader';
 import {
   discoverSkillSources,
   type DiscoverSkillSourcesResult,
-  type SkillLoadIssue,
   type SkillSource,
   type SourcedSkill,
 } from './loadSkills';
@@ -55,12 +54,6 @@ let installed: SkillContributionsInstall = {
   options: {},
   contributions: [],
 };
-
-interface RuntimeSkillCatalogResult {
-  catalog: SkillCatalogEntry[];
-  named: SkillCatalogEntry[];
-  issues: SkillLoadIssue[];
-}
 
 interface DisabledSkills {
   readonly names: readonly string[];
@@ -328,17 +321,19 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: the step lists those of the plugins it pinned.
     const disabled = yield* readDisabledSkills(run.settings);
-    const plugins = run.plugins;
-    const result = yield* loadEnabledRuntimeSkills(run.workspacePath, plugins, {
-      ...disabled,
-      plugins: [],
-    });
+    const result = yield* loadEnabledRuntimeSkills(
+      run.workspacePath,
+      run.plugins,
+      {
+        ...disabled,
+        plugins: [],
+      },
+    );
     // Discovery orders by source precedence and then skill directory. The
     // bound applies to what a reader lists, after its switch filter, so a
     // switched-off plugin's skills never push an enabled one out: the
-    // catalog keeps the first ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS of core
-    // sources and of each plugin, and each step bounds what it lists
-    // (`stepInstructions`).
+    // catalog keeps the first SKILL_CATALOG_MAX_SKILLS of core sources and
+    // of each plugin, and each step bounds what it lists (`openStep`).
     const kept = new Map<string | undefined, number>();
     const catalog = result.skills.filter(({ source }) => {
       const count = kept.get(source.plugin) ?? 0;
@@ -355,6 +350,6 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
         (entry) => catalogEntry(run.workspacePath, entry),
       ),
       issues: result.errors,
-    } satisfies RuntimeSkillCatalogResult;
+    };
   },
 );

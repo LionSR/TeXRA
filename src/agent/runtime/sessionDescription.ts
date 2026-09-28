@@ -124,7 +124,7 @@ export const generateSessionDescription = Effect.fn(
   yield* Effect.gen(function* () {
     const text = yield* helperCall(
       session,
-      stores,
+      stores.secrets,
       {
         userPrompt: buildUserPrompt(
           config.agent,

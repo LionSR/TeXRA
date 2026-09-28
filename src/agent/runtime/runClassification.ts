@@ -38,26 +38,6 @@ export type RunClassification =
   | { readonly kind: 'finished' }
   | { readonly kind: 'unclassified'; readonly cause: string };
 
-/** What the durable facts alone decide, ownership already settled. */
-type RunFactsClassification = Exclude<
-  RunClassification,
-  { kind: 'held_elsewhere' | 'owned_here' }
->;
-
-/** The one mapping from durable resumability facts to this vocabulary. */
-const classifyRunFacts = Effect.fn('classifyRunFacts')(function* (
-  runId: RunId,
-  session: SessionHandle,
-): Effect.fn.Return<RunFactsClassification> {
-  const facts = yield* deriveResumability(runId, session);
-  if (facts.kind === 'checkpoint') return { kind: 'resumable' };
-  if (facts.kind === 'none') return { kind: 'finished' };
-  yield* Effect.logWarning(`Cannot classify ${runId}: ${facts.cause}`).pipe(
-    withLogChannel(CHANNEL),
-  );
-  return { kind: 'unclassified', cause: facts.cause };
-});
-
 /** Classify one run. Never throws: an unreadable fact is `unclassified`. */
 export const classifyRun = Effect.fn('classifyRun')(function* (
   runId: RunId,
@@ -77,5 +57,12 @@ export const classifyRun = Effect.fn('classifyRun')(function* (
   if (standing.kind === 'self') return { kind: 'owned_here' };
   if (standing.kind === 'held')
     return { kind: 'held_elsewhere', owner: standing.owner };
-  return yield* classifyRunFacts(runId, session);
+  // Ownership settled: the durable resumability facts alone decide the rest.
+  const facts = yield* deriveResumability(runId, session);
+  if (facts.kind === 'checkpoint') return { kind: 'resumable' };
+  if (facts.kind === 'none') return { kind: 'finished' };
+  yield* Effect.logWarning(`Cannot classify ${runId}: ${facts.cause}`).pipe(
+    withLogChannel(CHANNEL),
+  );
+  return { kind: 'unclassified', cause: facts.cause };
 });

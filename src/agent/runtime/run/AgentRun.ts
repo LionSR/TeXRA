@@ -50,17 +50,6 @@ import type { AgentLaunchContext } from '../AgentLaunchContext';
 import type { SessionHandle } from '../SessionHandle';
 
 /**
- * The routes a launch declines before it has any ledger state: an
- * own-API-key fallback turns away from every subscription route, since the
- * user answered a quota prompt by choosing to pay with their own key.
- */
-function launchDeclinedRoutes(
-  ctx: AgentLaunchContext,
-): readonly DeclinableUsageRoute[] {
-  return ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : [];
-}
-
-/**
  * Immutable per-run tool policy, resolved by the launch and read from the
  * run's `AgentRun` service.
  *
@@ -299,10 +288,12 @@ export const agentRunLayer = (
       }
       // The routes this run declines: a resumed run replays the set its
       // snapshot recorded, a fresh own-API-key fallback declines every
-      // subscription route from its first binding. Nothing here reads or
+      // subscription route from its first binding (the user answered a quota
+      // prompt by choosing to pay with their own key). Nothing here reads or
       // writes the user's stored preferences.
-      const declinedRoutes =
-        persisted?.declinedRoutes ?? launchDeclinedRoutes(ctx);
+      const declinedRoutes: readonly DeclinableUsageRoute[] =
+        persisted?.declinedRoutes ??
+        (ctx.ownApiKeyFallback ? DeclinableUsageRouteSchema.options : []);
       // Each binding owns a scope forked from the run's; only the one in
       // force is open. `bindingScope` is written only inside the ref's
       // update, which serializes every swap.

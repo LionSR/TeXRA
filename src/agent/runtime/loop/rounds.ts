@@ -52,7 +52,7 @@ import { appendRow, positionRow } from './rows';
 import { ModelInvoker } from '../ModelInvoker';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
-import type { RunCell } from './runProgram';
+import type { RunCell, RunExit } from './runProgram';
 
 /** Length for the debug preview slices of a round's text. */
 const K_SLICE = 200;
@@ -290,8 +290,6 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
   } satisfies RoundPolicy;
 });
 
-type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
-
 /**
  * The round loop, over the tool-use loop's turn. `runTurn(cell, next)` opens
  * a round when `next` is set (closing the completed one) or the run is at a
@@ -303,10 +301,7 @@ type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
 export const roundLoop =
   <R>(
     { rounds, atIdle }: RoundPolicy,
-    runTurn: (
-      cell: RunCell,
-      next: boolean,
-    ) => Effect.Effect<TurnExit, Error, R>,
+    runTurn: (cell: RunCell, next: boolean) => Effect.Effect<RunExit, Error, R>,
   ) =>
   (cell: RunCell) =>
     Effect.gen(function* () {

@@ -65,6 +65,7 @@ import {
   stagedBy,
   stoppedBy,
   type RunCell,
+  type RunExit,
 } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
 import { stepFor, type RunSystem } from './step';
@@ -310,13 +311,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   };
 
   // ------------------------------------------------------------ the turn
-  type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
   const runTurn = Effect.fn('toolUse.turn')(function* (
     cell: RunCell,
     /** Round mode: open the next round, closing the completed one. */
     advance = false,
   ): Effect.fn.Return<
-    TurnExit,
+    RunExit,
     Error,
     AgentRun | RunLedger | ProcessServices | Runs | WorkspaceFs | StorageFs
   > {
@@ -342,7 +342,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       },
     });
     /** The turn's completed exit; the stage closes with its own verdict. */
-    const completeTurn = (at: RunState): TurnExit => ({
+    const completeTurn = (at: RunState): RunExit => ({
       state: at,
       outcome: 'completed',
     });
@@ -541,7 +541,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       () =>
         rounds?.stage(index) ??
         logger.openStage('Tool-use turn', { kind: 'session' }),
-      (exit: TurnExit) => exit.outcome,
+      (exit: RunExit) => exit.outcome,
     )(body).pipe(
       Effect.ensuring(Effect.sync(() => workspace.workPlan.clearOnUpdate())),
     );
@@ -628,7 +628,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           if (!consumed.turn) continue;
         }
         restoring = false;
-        const turn: TurnExit = yield* start.turns
+        const turn: RunExit = yield* start.turns
           ? start.turns.turnPermit(runTurn(cell))
           : runTurn(cell);
         state = turn.state;
@@ -674,8 +674,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       }
     });
 
-  /** The terminal step of a run that ends here, then the caller's result. */
-  const finish = (state: RunState, outcome: RunOutcome): TurnExit =>
+  /** A run that ends here: `settleRun` writes its halt from this outcome. */
+  const finish = (state: RunState, outcome: RunOutcome): RunExit =>
     ({ state, outcome }) as const;
 
   const result = (outcome: RunOutcome, at: RunState): ToolUseResult => ({

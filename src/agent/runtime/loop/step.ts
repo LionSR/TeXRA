@@ -42,8 +42,8 @@ import type { PluginServices } from '@platform/processRuntime';
 import {
   AGENT_SKILLS_CONFIG_KEY,
   AgentSkillsEnabledSchema,
-  listedSkills,
   sameIdentity,
+  SKILL_CATALOG_MAX_SKILLS,
   type OfferedTool,
   type SkillCatalogEntry,
   type ToolDefinition,
@@ -259,10 +259,12 @@ const openStep = Effect.fn('Step.open')(function* (
     const byName = new Map(
       catalog.named.filter(contributes).map((entry) => [entry.name, entry]),
     );
+    // Those of core sources and of the plugins it draws on, bounded after
+    // the filter, so a withdrawn plugin's skills never push a listed one out.
     const listed = !listing
       ? []
       : (recordedSkills?.flatMap((name) => byName.get(name) ?? []) ??
-        listedSkills(catalog.catalog, contributors));
+        catalog.catalog.filter(contributes).slice(0, SKILL_CATALOG_MAX_SKILLS));
     const activated = names.flatMap((name) => byName.get(name) ?? []);
     return {
       tools: {
