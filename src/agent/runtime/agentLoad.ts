@@ -56,11 +56,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   /** The installed plugins that load, as the launch reads them. */
   installed: Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem>,
   seen: ReadonlySet<string> = new Set(),
-): Effect.fn.Return<
-  [AgentSetting, AgentPrompt],
-  Error,
-  FileSystem.FileSystem
-> {
+): Effect.fn.Return<[AgentSetting, AgentPrompt], Error, FileSystem.FileSystem> {
   // A plugin agent is its subagent file, read again: it inherits nothing.
   // The catalog that listed it may predate a change another host made, so
   // its plugin must load now (enabled, and trusted as it is) or it does not

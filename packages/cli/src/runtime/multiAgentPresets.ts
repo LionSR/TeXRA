@@ -224,4 +224,3 @@ function formatAgentNames(names: readonly string[]): string {
   if (names.length === 0) return '  (none)';
   return names.map((name) => `  ${name}`).join('\n');
 }
-

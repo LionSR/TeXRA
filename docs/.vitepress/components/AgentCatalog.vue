@@ -63,7 +63,10 @@ const groups = [
       { name: 'transcribe_audio', purpose: 'Transcribe audio to text' },
       { name: 'merge', purpose: 'Intelligently merge document versions' },
       { name: 'generic', purpose: 'Edit a paper by your instruction' },
-      { name: 'devise', purpose: 'Add derivations, then revise for publication' },
+      {
+        name: 'devise',
+        purpose: 'Add derivations, then revise for publication',
+      },
       { name: 'criticize', purpose: 'Critical review as inline comments' },
       { name: 'firstread', purpose: 'First-read confusion notes, inline' },
       { name: 'logic', purpose: 'Improve argument structure and flow' },

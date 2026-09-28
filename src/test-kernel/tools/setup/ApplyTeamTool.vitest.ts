@@ -128,38 +128,34 @@ describe('apply_team', () => {
     }),
   );
 
-  it.effect(
-    'applies a preset of bundled members',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* applyTeam({
-          teamId: 'software-engineer',
-        });
+  it.effect('applies a preset of bundled members', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({
+        teamId: 'software-engineer',
+      });
 
-        expect(result.status).toBe('executed');
-        expect(yield* workspaceRoster()).toEqual({
-          kind: 'team',
-          teamId: 'software-engineer',
-        });
-      }),
+      expect(result.status).toBe('executed');
+      expect(yield* workspaceRoster()).toEqual({
+        kind: 'team',
+        teamId: 'software-engineer',
+      });
+    }),
   );
 
-  it.effect(
-    'applies the physicist team with every member bundled',
-    () =>
-      Effect.gen(function* () {
-        const result = yield* applyTeam({ teamId: 'physicist' });
+  it.effect('applies the physicist team with every member bundled', () =>
+    Effect.gen(function* () {
+      const result = yield* applyTeam({ teamId: 'physicist' });
 
-        expect(result.status).toBe('executed');
-        expect(result.output).not.toMatch(/Not installed yet/);
-        expect(result.summary).toMatch(/Applied the Physicist roster/);
-        expect(yield* workspaceRoster()).toEqual({
-          kind: 'team',
-          teamId: 'physicist',
-        });
-        expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
-          'physicist',
-        );
-      }),
+      expect(result.status).toBe('executed');
+      expect(result.output).not.toMatch(/Not installed yet/);
+      expect(result.summary).toMatch(/Applied the Physicist roster/);
+      expect(yield* workspaceRoster()).toEqual({
+        kind: 'team',
+        teamId: 'physicist',
+      });
+      expect(yield* getDefaultTeamId(hostStores().globalState)).toBe(
+        'physicist',
+      );
+    }),
   );
 });

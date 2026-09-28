@@ -200,10 +200,7 @@ describe('agent registry load state', () => {
       counter.scans = 0;
 
       yield* Effect.all(
-        [
-          onGlobalStorage(loadAgents()),
-          onGlobalStorage(loadAgents()),
-        ],
+        [onGlobalStorage(loadAgents()), onGlobalStorage(loadAgents())],
         { concurrency: 'unbounded' },
       );
 
@@ -238,9 +235,7 @@ describe('agent registry load state', () => {
         }),
       );
 
-      const error = yield* Effect.flip(
-        onGlobalStorage(refresh()),
-      );
+      const error = yield* Effect.flip(onGlobalStorage(refresh()));
       assert.ok(error instanceof Error);
       assert.strictEqual(error.message, scanFailure.message);
 

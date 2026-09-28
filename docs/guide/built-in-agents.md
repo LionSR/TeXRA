@@ -195,7 +195,7 @@ others rewrite it, and `apply` works through the comments the reviewers left.
 | Agent       | What it does                                                                                                   |
 | :---------- | :------------------------------------------------------------------------------------------------------------- |
 | `generic`   | Edits the paper by your instruction, keeping academic and LaTeX conventions and the paper's own comment style. |
-| `devise`    | Rewrites in two phases: adds rigorous derivations, then revises to publication-ready style.                   |
+| `devise`    | Rewrites in two phases: adds rigorous derivations, then revises to publication-ready style.                    |
 | `criticize` | Reviews the paper critically and inserts inline comments.                                                      |
 | `firstread` | Reads the paper top to bottom as a first-time reader and notes where it loses the thread.                      |
 | `logic`     | Improves the argument's structure and coherence.                                                               |

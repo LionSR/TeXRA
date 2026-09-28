@@ -33,4 +33,3 @@ export const followerOwnsInitialLoad = Effect.acquireRelease(
 export const untilFollowerLoaded = Effect.suspend(() =>
   followerLoad === undefined ? Effect.void : Deferred.await(followerLoad),
 );
-

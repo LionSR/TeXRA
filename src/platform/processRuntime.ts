@@ -111,10 +111,7 @@ type _PluginServicesAreNotProcessServices = AssertNever<
  * disabled-plugin switch is read from.
  */
 export type AgentCatalogServices =
-  | GlobalStorageFs
-  | FileSystem.FileSystem
-  | AgentDirectories
-  | AppState;
+  GlobalStorageFs | FileSystem.FileSystem | AgentDirectories | AppState;
 
 export type ProcessRuntime = ManagedRuntime.ManagedRuntime<
   ProcessServices,
