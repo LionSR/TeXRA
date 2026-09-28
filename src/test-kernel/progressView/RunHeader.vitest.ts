@@ -4,8 +4,14 @@ import { describe, expect, it } from 'vitest';
 // Local imports
 import type { RunHeader } from '@progressView/frontend/components/RunHeader';
 import { ELEMENT_IDS } from '@progressView/frontend/constants';
-import type { RunId } from '@shared/schemas';
+import {
+  AgentCategory,
+  RUN_PHASE,
+  RUN_SUBSTATE,
+  type RunId,
+} from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
+import { runActions } from '@shared/session/runActions';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import type { SurfaceAction } from '@shared/session/surface';
 import type { RuntimeRequest } from '@shared/session/runtimeRequest';
@@ -92,5 +98,35 @@ describe('run-header over the fold', () => {
     expectAnchoredTooltip(element, ELEMENT_IDS.STOP_STREAM_BTN);
     stop?.click();
     expect(requests).toEqual([{ kind: 'run.stop', runId: ROOT }]);
+  });
+
+  it('offers deleting a workflow run’s output files only once it has stopped', async () => {
+    const view = fanOutView();
+    const root = runOfEvent(view, ROOT);
+    const cleanOffered = async (over: Partial<RunView>): Promise<boolean> => {
+      const fields = {
+        ...root,
+        identity: { kind: 'agent', agent: 'correct' },
+        category: AgentCategory.Workflow,
+        files: {},
+        ...over,
+      } as RunView;
+      const { element } = await mountHeader(view, {
+        ...fields,
+        actions: runActions(fields),
+      });
+      return (
+        element.shadowRoot?.querySelector(
+          `wa-dropdown-item[value="${ELEMENT_IDS.CLEAN_STREAM_BTN}"]`,
+        ) != null
+      );
+    };
+    expect(root.group).toBe('running');
+    expect(await cleanOffered({})).toBe(false);
+    // Starting was the hole: the header used to enable it there.
+    expect(await cleanOffered({ substate: RUN_SUBSTATE.STARTING })).toBe(false);
+    expect(
+      await cleanOffered({ status: RUN_PHASE.COMPLETED, group: 'recent' }),
+    ).toBe(true);
   });
 });

@@ -10,14 +10,9 @@ import {
 } from '@shared/approvalBypassKind';
 import type { RunId } from '@shared/schemas';
 import { goalStateOf, type GoalState } from '@shared/plugins/goal';
-import { isPlainAgentIdentity, RUN_PHASE, RUN_SUBSTATE } from '@shared/schemas';
 import type { SessionView, RunView } from '@shared/session/sessionView';
 import { SessionUiEvents } from '@shared/session/uiEvents';
 import { CopyButtonController } from '@shared/litControllers/CopyButtonController';
-import {
-  runStatusDisplayKey,
-  type RunStatusDisplayKey,
-} from '@shared/runs/runStatusDisplay';
 import { formatWorkflowRunContext } from '@ui/copy/workflowRunContext';
 import { designTokens, commonViewStyles } from '@ui/styles';
 import { statusIndicatorStyles } from '@ui/styles/statusIndicatorStyles';
@@ -62,68 +57,6 @@ export interface HeaderMenuItem {
   readonly activate: () => void;
 }
 
-const ACTIVE_STATE_ACTIONS = [
-  ELEMENT_IDS.STOP_STREAM_BTN,
-  ELEMENT_IDS.AUTO_APPROVE,
-  ELEMENT_IDS.COMPACT_RESPONSE_BTN,
-  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
-  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
-  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-];
-
-const TERMINAL_STATE_ACTIONS = [
-  ELEMENT_IDS.RUN_NEW_BTN,
-  ELEMENT_IDS.RESUME_BTN,
-  ELEMENT_IDS.PACK_STREAM_BTN,
-  ELEMENT_IDS.CLEAN_STREAM_BTN,
-  ELEMENT_IDS.DIFF_STREAM_BTN,
-  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
-  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
-  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-];
-
-/** A run this process cannot act on: read and export only. */
-const READ_ONLY_ACTIONS = new Set<string>([
-  ELEMENT_IDS.OPEN_RUN_STORAGE_BTN,
-  ELEMENT_IDS.EXPORT_TRANSCRIPT_BTN,
-  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-]);
-
-const NOT_YET_RUN_ACTIONS = new Set<string>([
-  ELEMENT_IDS.RESUME_BTN,
-  ELEMENT_IDS.COPY_RUN_CONTEXT_BTN,
-]);
-
-/** Interrupted rows get the terminal set whatever their display key. */
-const INTERRUPTED_ACTIONS: ReadonlySet<string> = new Set(
-  TERMINAL_STATE_ACTIONS,
-);
-
-const ENABLED_ACTIONS_BY_DISPLAY_KEY: Record<
-  RunStatusDisplayKey,
-  Set<string>
-> = {
-  [RUN_SUBSTATE.STARTING]: new Set([
-    ELEMENT_IDS.STOP_STREAM_BTN,
-    ELEMENT_IDS.CLEAN_STREAM_BTN,
-  ]),
-  [RUN_PHASE.RUNNING]: new Set(ACTIVE_STATE_ACTIONS),
-  [RUN_PHASE.FAILED]: new Set(TERMINAL_STATE_ACTIONS),
-  [RUN_PHASE.COMPLETED]: new Set(TERMINAL_STATE_ACTIONS),
-  [RUN_PHASE.CANCELLED]: new Set(TERMINAL_STATE_ACTIONS),
-  ready: new Set(
-    TERMINAL_STATE_ACTIONS.filter((id) => !NOT_YET_RUN_ACTIONS.has(id)),
-  ),
-  [RUN_PHASE.WAITING]: new Set(ACTIVE_STATE_ACTIONS),
-  [RUN_SUBSTATE.RESUMING]: new Set(ACTIVE_STATE_ACTIONS),
-  [RUN_SUBSTATE.PAUSED]: new Set(TERMINAL_STATE_ACTIONS),
-};
-
-const NATIVE_AGENT_ONLY_ACTIONS = new Set([
-  ELEMENT_IDS.RESUME_BTN,
-  ELEMENT_IDS.RUN_NEW_BTN,
-]);
-
 /** The menu value of the delete item, which asks before it acts. */
 const DELETE_SESSION = 'deleteSession';
 
@@ -135,16 +68,6 @@ const TONE_INDICATOR_CLASS: Record<RunView['tone'], string> = {
   warning: 'is-starting',
   neutral: 'is-ready',
 };
-
-/** Which run actions a run's state licenses. */
-function enabledRunActions(
-  run: RunView,
-  displayKey: RunStatusDisplayKey,
-): ReadonlySet<string> | undefined {
-  if (run.readOnly) return READ_ONLY_ACTIONS;
-  if (run.group === 'interrupted') return INTERRUPTED_ACTIONS;
-  return ENABLED_ACTIONS_BY_DISPLAY_KEY[displayKey];
-}
 
 /**
  * `<run-header>`: the one header row of a selected run (PRD 12.1). The
@@ -377,20 +300,12 @@ export class RunHeader extends LitElement {
   override render(): TemplateResult | typeof nothing {
     const run = this.run;
     if (!run) return nothing;
-    const displayKey = runStatusDisplayKey(
-      run.status,
-      run.substate ?? undefined,
-    );
     const statusLabel = run.statusLabel;
     const goal = goalStateOf(run);
-    const enabled = enabledRunActions(run, displayKey);
-    const canStop = enabled?.has(ELEMENT_IDS.STOP_STREAM_BTN) === true;
-    // A run grant means something only on a live tool-use run this window
-    // holds: read-only, interrupted and ended runs take none.
-    const canGrant =
-      enabled?.has(ELEMENT_IDS.AUTO_APPROVE) === true &&
-      run.category === 'toolUse' &&
-      run.identity.kind === 'agent';
+    // The fold's `actions` is the one reading of what the run's state
+    // licenses; the header offers exactly that.
+    const canStop = run.actions.includes('stop');
+    const canGrant = run.actions.includes('grant');
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
       run.position,
@@ -447,7 +362,7 @@ export class RunHeader extends LitElement {
             : nothing
         }
         <slot name="end"></slot>
-        ${this.renderMenu(run, enabled, statusLabel, progressTitle, canGrant)}
+        ${this.renderMenu(run, statusLabel, progressTitle, canGrant)}
       </div>
       ${this.confirmingDelete === run.id ? this.renderDeleteConfirm(run) : nothing}
     `;
@@ -455,28 +370,22 @@ export class RunHeader extends LitElement {
 
   private renderMenu(
     run: RunView,
-    enabled: ReadonlySet<string> | undefined,
     statusLabel: string,
     progressTitle: string | undefined,
     canGrant: boolean,
   ): TemplateResult {
-    // An agent run takes its category's actions; a process or a workflow
-    // container takes the neutral ones. Resume and Run again reach the
-    // host's `nativeAgentRun` gate, which admits a plain agent identity and
-    // nothing else. Edit as new task lives in the conversation's ended line.
+    // An agent run's menu lists its category's actions, a process's or a
+    // workflow container's the neutral ones, each shown only while the
+    // run's `actions` holds it. Edit as new task lives in the conversation's
+    // ended line.
     const actions = (
       run.identity.kind === 'agent'
         ? RUN_MENU_ACTIONS[run.category]
         : NEUTRAL_RUN_ACTIONS
-    ).filter(
-      (action) =>
-        !NATIVE_AGENT_ONLY_ACTIONS.has(action.id) ||
-        isPlainAgentIdentity(run.identity),
-    );
+    ).filter((action) => run.actions.includes(action.action));
     const runContext = this.runContextText(run);
     const copied = this.copyRunContext.state.copied;
-    // A run still going is stopped first; deleting it is never offered.
-    const canDelete = run.group !== 'running' && run.group !== 'waiting';
+    const canDelete = run.actions.includes('delete');
     return html`
       <wa-dropdown
         placement="bottom-end"
@@ -529,9 +438,7 @@ export class RunHeader extends LitElement {
             const isCopy = action.arm === 'copyRunContext';
             return html`<wa-dropdown-item
               value=${action.id}
-              ?disabled=${
-                !enabled?.has(action.id) || (isCopy && runContext === '')
-              }
+              ?disabled=${isCopy && runContext === ''}
               >${waIcon(isCopy && copied ? 'check' : action.icon, {
                 slot: 'icon',
               })}${action.label}</wa-dropdown-item

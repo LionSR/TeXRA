@@ -113,6 +113,7 @@ import {
   resetTranscriptOwnership,
 } from './transcriptState';
 
+import { runActions } from './runActions';
 import { emptySessionView, isLiveRun, loopCoordinate } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
@@ -380,6 +381,7 @@ function createRun(
     approval: 'none' as const,
     ownedHere: false,
     readOnly: false,
+    actions: [],
     forceExpanded: false,
     group: 'recent' as const,
     usage: emptyUsageStats(),
@@ -556,15 +558,13 @@ function refreshAncestors(view: SessionView, runId: RunId): void {
 // ---------------------------------------------------------------------------
 
 /**
- * `group`, `approval`, `readOnly`, `forceExpanded`, `rollup`,
- * `durableOutcome`, and the status copy from the run's own facts, the
- * local snapshot, and its children (5.2). Interrupted is owner loss: a
- * non-terminal run nobody holds, whether or not an approval is pending.
- * Somebody holds it when its owner is this process or a process whose lease
- * this one may not touch. Waiting needs a held owner and a request that parks
- * its tool: without an owner the same pending request reads as interrupted,
- * never waiting, because nothing is listening for the answer; the durable
- * phase and the listed request stay, so a resume can re-ask.
+ * `group`, `approval`, `readOnly`, `actions`, `forceExpanded`, `rollup`,
+ * `durableOutcome` and the status copy, from the run's facts, the local
+ * snapshot and its children (5.2). Interrupted is owner loss: a non-terminal
+ * run nobody holds (this process, or one whose lease this one may not
+ * touch), pending approval or not. Waiting needs a held owner and a request
+ * that parks its tool; unheld, that request reads as interrupted, since
+ * nothing listens for the answer, and stays listed so a resume can re-ask.
  */
 function withAggregates(view: SessionView, run: RunView): RunView {
   const { local } = sessionIndexesOf(view);
@@ -620,17 +620,18 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     interrupted,
   });
   const readOnly = heldElsewhere || unreadable !== undefined;
+  const actions = runActions({ ...run, readOnly, group });
   const forceExpanded = waiting || interrupted || descendantNeedsUser;
   let statusDetail: string | null = unreadable?.detail ?? null;
-  if (statusDetail === null && interrupted) {
+  if (statusDetail === null && interrupted)
     statusDetail = runInterruptedMessage();
-  } else if (statusDetail === null && heldBy !== null) {
+  else if (statusDetail === null && heldBy !== null)
     statusDetail = runHeldMessage(ownerPid(heldBy));
-  }
   if (
     run.group === group &&
     run.approval === approval &&
     run.readOnly === readOnly &&
+    run.actions.join() === actions.join() &&
     run.ownedHere === own &&
     run.forceExpanded === forceExpanded &&
     run.durableOutcome === durableOutcome &&
@@ -648,6 +649,7 @@ function withAggregates(view: SessionView, run: RunView): RunView {
     group,
     approval,
     readOnly,
+    actions,
     ownedHere: own,
     forceExpanded,
     durableOutcome,

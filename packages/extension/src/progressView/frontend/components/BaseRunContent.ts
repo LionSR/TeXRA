@@ -7,7 +7,7 @@
 import { html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property } from 'lit/decorators.js';
 
-import { isPlainAgentIdentity, type PermissionPayload } from '@shared/schemas';
+import type { PermissionPayload } from '@shared/schemas';
 import type { HostSnapshot } from '@shared/session/hostSnapshot';
 import {
   isLiveRun,
@@ -66,14 +66,10 @@ export abstract class BaseRunContent extends LitElement {
    * can do. An interrupted run resumes; a run that has stopped, however it
    * stopped, starts a new task from its setup (the launcher prefilled with
    * its agent and instruction). This is the one home of Edit as new task.
-   * Both reach the host's `nativeAgentRun` gate, which admits a plain agent
-   * identity and nothing else, and neither is offered on a run this process
-   * may not act on.
+   * Each is offered only while the run's `actions` holds it.
    */
   protected renderEndedLine(run: RunView): TemplateResult {
     const live = isLiveRun(run);
-    const actionable =
-      !live && !run.readOnly && isPlainAgentIdentity(run.identity);
     const request = (kind: 'resume' | 'restoreIntoLauncher') => () =>
       this.dispatchEvent(SessionUiEvents.host({ kind, runId: run.id }));
     return html`<div class="conversation-ended">
@@ -84,7 +80,7 @@ export abstract class BaseRunContent extends LitElement {
         }</span
       >
       ${
-        actionable && run.group === 'interrupted'
+        run.actions.includes('resume') && run.group === 'interrupted'
           ? html`<wa-button
               id="resumeRunBtn"
               variant="brand"
@@ -95,7 +91,7 @@ export abstract class BaseRunContent extends LitElement {
           : nothing
       }
       ${
-        actionable
+        run.actions.includes('restore')
           ? html`<wa-button
               id="editAsNewTaskBtn"
               appearance="outlined"

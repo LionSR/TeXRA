@@ -37,7 +37,7 @@ import {
   AgentCategory,
   agentKey,
   agentName,
-  isPlainAgentIdentity,
+  type RunAction,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -48,6 +48,7 @@ import {
   Unavailable,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
+import { runActionRefusal } from '@shared/session/runActions';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
@@ -179,12 +180,16 @@ export interface HostRunActions {
    *  when the run has no config or is not a workflow: the action is a no-op. */
   workflowDiffRequest(
     runId: RunId,
-  ): Effect.Effect<WorkflowDiffRequest | undefined, RunConfigUnreadable>;
+  ): Effect.Effect<
+    WorkflowDiffRequest | undefined,
+    Rejected | RunConfigUnreadable
+  >;
   workflowFileOperationRequest(
     runId: RunId,
+    operation: 'pack' | 'clean',
   ): Effect.Effect<
     WorkflowFileOperationRequest | undefined,
-    RunConfigUnreadable
+    Rejected | RunConfigUnreadable
   >;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
@@ -309,30 +314,27 @@ export const createHostRunActions = (
       },
     );
 
+    /** The run's `actions` must still hold `action` when the request is
+     *  handled, not only when the host rendered it: it may have moved since. */
+    const requireAction = (runId: RunId, action: RunAction) =>
+      Effect.suspend(() => {
+        const run = session.runView(runId);
+        return run === undefined || run.actions.includes(action)
+          ? Effect.void
+          : Effect.fail(
+              new Rejected({ reason: runActionRefusal(run, action) }),
+            );
+      });
+
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
-      function* (runId: RunId, action: string) {
-        const run = session.runView(runId);
-        if (run === undefined) {
-          return yield* Effect.fail(
-            new Unavailable({
-              runId,
-              reason: 'The run is no longer open.',
-            }),
-          );
-        }
-        if (!isPlainAgentIdentity(run.identity)) {
-          return yield* Effect.fail(
-            new Rejected({
-              reason: `Only TeXRA agent runs can be ${action} from here; this run is not one.`,
-            }),
-          );
-        }
+      function* (runId: RunId, action: 'resume' | 'runNew' | 'restore') {
+        yield* requireAction(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
           return yield* Effect.fail(
             new Rejected({
-              reason: `This run's configuration was not saved, so it cannot be ${action}.`,
+              reason: "This run's configuration was not saved.",
             }),
           );
         }
@@ -609,7 +611,7 @@ export const createHostRunActions = (
        * with its whole run, whose output opens then.
        */
       resume: Effect.fn('HostRunActions.resume')(function* (runId) {
-        yield* nativeAgentRun(runId, 'resumed');
+        yield* nativeAgentRun(runId, 'resume');
         const resumed = yield* resumeOnSession(runId, { session });
         if (!('started' in resumed) || !resumed.delivered)
           return yield* Effect.fail(
@@ -624,19 +626,21 @@ export const createHostRunActions = (
             .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
       }),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
-        const config = yield* nativeAgentRun(runId, 're-run');
+        const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
       }),
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
+          yield* requireAction(runId, 'diff');
           const config = yield* workflowConfig(runId);
           return config ? { runId } : undefined;
         },
       ),
       workflowFileOperationRequest: Effect.fn(
         'HostRunActions.workflowFileOperationRequest',
-      )(function* (runId) {
+      )(function* (runId, operation) {
+        yield* requireAction(runId, operation);
         const config = yield* workflowConfig(runId);
         if (!config) return undefined;
         return {
@@ -684,7 +688,7 @@ export const createHostRunActions = (
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-        return yield* nativeAgentRun(runId, 'restored');
+        return yield* nativeAgentRun(runId, 'restore');
       }),
     };
   });

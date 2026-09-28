@@ -11,7 +11,7 @@ import {
 } from '@shared/schemas';
 import type { LoopCoordinate, RunGroup } from '@shared/session/sessionView';
 
-export type RunStatusDisplayKey =
+type RunStatusDisplayKey =
   | Exclude<RunLifecycleStatus, typeof RUN_LIFECYCLE_READY>
   | RunSubstate
   | 'ready';
@@ -30,7 +30,7 @@ type RunStatusCopyKey = RunStatusDisplayKey | typeof RUN_DISPLAY_INTERRUPTED;
  * Display key for a `RunLifecycleStatus` (a `RunPhase`, or the `ready`
  * idle sentinel every host defaults an unstarted run to).
  */
-export function runStatusDisplayKey(
+function runStatusDisplayKey(
   status: RunLifecycleStatus,
   substate?: RunSubstate,
 ): RunStatusDisplayKey {
