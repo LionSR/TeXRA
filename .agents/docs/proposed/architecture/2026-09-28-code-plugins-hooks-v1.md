@@ -27,18 +27,19 @@ in core and recorded, and changes land at step boundaries.
 
 ## Events
 
-The protocol module (`src/common/plugins/hookProtocol.ts`) holds every
-schema: the `hooks.json` configuration, each event's stdin input, and each
-event's stdout output. Hook output is parsed there once.
+The protocol module (`src/common/plugins/hookProtocol.ts`) holds each
+event's stdin input and stdout output schema, and parses hook output once.
+The `hooks.json` configuration, its matchers and the tool-name mapping are
+in `src/common/plugins/hookConfig.ts`.
 
-| Event | Where it fires in TeXRA | What it may do in v1 |
-| --- | --- | --- |
-| `SessionStart` | a root run's opening, `source: "startup"` | add context to the first user message |
-| `UserPromptSubmit` | a root run's opening and each user follow-up that starts a turn | add context beside the prompt |
-| `PreToolUse` | before a call's approval and body | deny with a reason, or add context |
-| `PostToolUse` | after a call that executed without error | add feedback beside the tool result |
-| `Stop` | a root run's completed turn | notification only |
-| `SubagentStop` | a child run's completed turn | notification only |
+| Event              | Where it fires in TeXRA                                         | What it may do in v1                  |
+| ------------------ | --------------------------------------------------------------- | ------------------------------------- |
+| `SessionStart`     | a root run's opening, `source: "startup"`                       | add context to the first user message |
+| `UserPromptSubmit` | a root run's opening and each user follow-up that starts a turn | add context beside the prompt         |
+| `PreToolUse`       | before a call's approval and body                               | deny with a reason, or add context    |
+| `PostToolUse`      | after a call that executed without error                        | add feedback beside the tool result   |
+| `Stop`             | a root run's completed turn                                     | notification only                     |
+| `SubagentStop`     | a child run's completed turn                                    | notification only                     |
 
 `PreToolUse` never approves. `allow` is read as "no objection", and so are
 `ask` and `defer`: the run's approval policy decides as it would without the
@@ -82,11 +83,13 @@ line of stderr, unless the JSON is valid, in which case the JSON decides.
 
 ## Process lifecycle
 
-A hook runs through Effect's `ChildProcess` in a scope forked from the
-step's. Shell form (no `args`) runs `sh -c <command>`. Exec form runs
-`command` with `args` and no shell. Placeholders
-(`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PROJECT_DIR}`, `${CLAUDE_PLUGIN_DATA}`)
-are substituted in both forms. The child is spawned detached, in its own
+A hook runs through Effect's `ChildProcess` in its own scope, inside the
+run loop's fiber for the step, so interrupting the step closes it. Shell
+form (no `args`) runs `sh -c <command>`, and the shell expands the
+placeholders (`${CLAUDE_PLUGIN_ROOT}`, `${CLAUDE_PROJECT_DIR}`,
+`${CLAUDE_PLUGIN_DATA}`) from the environment, where they are exported.
+Exec form runs `command` with `args` and no shell, with the placeholders
+substituted as plain strings. The child is spawned detached, in its own
 process group.
 
 - The timeout is the handler's `timeout`, or the reference default (600 s,

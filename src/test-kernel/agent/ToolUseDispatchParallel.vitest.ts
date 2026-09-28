@@ -231,6 +231,7 @@ const freshState = (): RunState => ({
   offeredSkills: [],
   offeredSystem: null,
   contents: {},
+  hookOutcomes: {},
 });
 
 const INVOCATION = {
@@ -409,6 +410,7 @@ const dispatch = (kit: DispatchKit) =>
         offered: [],
         services: Context.empty() as Context.Context<PluginServices>,
         stepRoots: [],
+        hooks: [],
       }),
     ),
     Effect.provide(kit.layer),

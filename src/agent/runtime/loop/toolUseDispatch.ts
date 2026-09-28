@@ -63,6 +63,7 @@ import {
   formatToolResultAsText,
 } from '../run/toolResultText';
 import { guardedToolCall } from './toolGuard';
+import { callHookText, preToolUse } from './hooks';
 import {
   appendRow,
   bindingRow,
@@ -412,8 +413,13 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
       });
     };
     workspace.interactions.recordToolCall();
+    // Its step's PreToolUse hooks, recorded before the approval and the body.
+    const pre = tool && (yield* preToolUse(run, cell, step, fact, parsedInput));
+    if (pre && pre.rows.length > 0) yield* append(pre.rows);
     let result: ToolResult;
-    if (!tool) {
+    if (pre && pre.denied !== null) {
+      result = pre.denied;
+    } else if (!tool) {
       result = {
         status: 'error',
         error: `tool_unavailable: the tool "${fact.toolName}" is not available in this run. Continue with the tools you were offered.`,
@@ -543,6 +549,8 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     // terminal card outside the batch would tell the transcript the call
     // completed while recovery still sees an unsettled call.
     const cards = settledCards(fact, parsedInput, status, toolUseLog);
+    // An executed call's PostToolUse rows commit with its settlement.
+    const post = pre ? yield* pre.after(extracted.sanitizedResult) : [];
     yield* settle(
       fact,
       attempt,
@@ -556,7 +564,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         attachments,
         stateMutation: [],
       },
-      cards,
+      [...cards, ...post],
       true,
     );
   });
@@ -842,11 +850,15 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
         settlement.result.status === 'executed'
           ? ('success' as const)
           : ('error' as const),
-      content: settlementContent(
-        { ...settlement, stateMutation: [] },
-        bound,
-        logger,
-      ),
+      content: [
+        ...settlementContent(
+          { ...settlement, stateMutation: [] },
+          bound,
+          logger,
+        ),
+        // What the call's hooks add, after its result.
+        ...callHookText(settledState, fact.callId),
+      ],
     };
   });
   // Offer each delivered document to the binding's upload cache, so the

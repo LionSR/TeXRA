@@ -5,12 +5,11 @@
 // plugin's row of the install record through the state store's single
 // writer. The decision covers the plugin's version and its digest
 // (`./pluginDigest`): every file it ships, and each MCP server's spec, env
-// values and the files outside the plugin it runs. A changed digest asks
-// again.
+// values and the files outside the plugin it runs, and the scripts its
+// hooks run outside the plugin. A changed digest asks again.
 //
-// A plugin that runs code other than a declared MCP server (hooks, LSP
-// servers) is a code plugin. TeXRA refuses to enable one until it can run it
-// out of process behind a typed boundary.
+// Hooks run out of process (`./pluginHooks`). A plugin with LSP servers is
+// refused: TeXRA does not run them yet.
 
 // Node imports
 import * as path from 'node:path';
@@ -32,12 +31,14 @@ import {
 } from './installRecord';
 import { revisionKey, type McpServerConfig } from './mcpServers';
 import { externalFiles, pluginDigest } from './pluginDigest';
+import { hookFiles } from './pluginHooks';
 import {
   countSkills,
   PluginError,
   PluginRequestError,
   type ResolvedPlugin,
 } from './pluginManifest';
+import type { ConfiguredHook } from './hookConfig';
 
 /** The trust decision the plugin needs now, its env digested under `key`. */
 const trustKey = (
@@ -59,9 +60,13 @@ const envKeyOf = (stores: Pick<SettingsStores, 'globalState'>) =>
     Effect.mapError((error) => new PluginError({ message: error.message })),
   );
 
-/** Why a plugin that declares code is refused. */
+/** Why a plugin with LSP servers is refused. */
 const codeRefusal = (name: string, plugin: ResolvedPlugin) =>
-  `Plugin ${name} runs code (${plugin.code.join(', ')}). Code plugins are not supported yet: TeXRA runs only a plugin's declared MCP servers, each in its own process.`;
+  `Plugin ${name} ships ${plugin.code.join(', ')}, which TeXRA does not run yet, so it cannot be enabled.`;
+
+/** A hook's event, matcher and command, as the prompt and a listing show it. */
+export const describeHook = (hook: ConfiguredHook) =>
+  `${hook.event}${hook.matcher ? ` [${hook.matcher}]` : ''}: runs \`${[hook.command, ...(hook.args ?? [])].join(' ')}\` (timeout ${hook.timeoutSeconds}s)`;
 
 const describeServer = (server: McpServerConfig) =>
   `${server.name.replace(/^plugin_[^_]+_/, '')}: runs \`${[server.command, ...server.args].join(' ')}\`${
@@ -102,8 +107,37 @@ const reviewLines = (record: InstalledPlugin, plugin: ResolvedPlugin) =>
           );
       }
     }
+    const { hooks, unsupported } = plugin.hooks;
+    if (hooks.length === 0) lines.push('Hooks: none');
+    else {
+      lines.push(
+        'Hooks (each runs as a process in the workspace, as you, with only PATH, HOME and the CLAUDE_* paths set; it can deny a tool call and add text the model reads):',
+      );
+      for (const hook of hooks) {
+        lines.push(`  ${describeHook(hook)}`);
+        for (const file of yield* hookFiles(record.path, hook)) {
+          if (file.kind === 'external')
+            lines.push(
+              `    runs ${file.path}, outside the plugin (trusted by its content: an edit asks again)`,
+            );
+          else if (file.kind === 'program')
+            lines.push(
+              `    program: ${file.path} (trusted by its path, size and date, not its content)`,
+            );
+          else
+            lines.push(
+              `    workspace file: ${file.path} (read when the hook runs, not covered by trust)`,
+            );
+        }
+      }
+    }
+    if (unsupported.length > 0)
+      lines.push(
+        'Hooks TeXRA does not run:',
+        ...unsupported.map((line) => `  ${line}`),
+      );
     lines.push(
-      'Trust covers this version, every file in the plugin and its servers’ settings: a change to any of them asks again.',
+      'Trust covers this version, every file in the plugin, its servers’ settings and the scripts its hooks run: a change to any of them asks again.',
     );
     if (plugin.ignored.length > 0)
       lines.push(`Not loaded: ${plugin.ignored.join(', ')}`);
@@ -164,7 +198,10 @@ export interface PluginListing extends InstalledPlugin {
   readonly mcpServers: readonly string[];
   /** Whether the user trusts it as it is now. */
   readonly trusted: boolean;
-  /** Code components, which keep it from being enabled. */
+  /** Its command hooks, and the configured ones TeXRA does not run. */
+  readonly hooks: readonly ConfiguredHook[];
+  readonly unsupportedHooks: readonly string[];
+  /** Code components, which keep it from being enabled (LSP servers). */
   readonly code: readonly string[];
   readonly ignored: readonly string[];
   /** Why the plugin cannot be read now, when it cannot. */
@@ -194,6 +231,8 @@ export function listPlugins(env: PluginEnv) {
             agentCount: plugin.agents.length,
             mcpServers: plugin.mcpServers.map((server) => server.name),
             trusted: trusts(record, key),
+            hooks: plugin.hooks.hooks,
+            unsupportedHooks: plugin.hooks.unsupported,
             code: plugin.code,
             ignored: plugin.ignored,
           } satisfies PluginListing;
@@ -206,6 +245,8 @@ export function listPlugins(env: PluginEnv) {
               agentCount: 0,
               mcpServers: [],
               trusted: false,
+              hooks: [],
+              unsupportedHooks: [],
               code: [],
               ignored: [],
               problem: error.message,
@@ -242,7 +283,7 @@ export interface InstalledPluginLoad {
 
 /**
  * The enabled plugins that load now: each read from its directory, refused
- * when it declares code, and held back when its version or digest is not
+ * when it ships LSP servers, and held back when its version or digest is not
  * what the user trusted. Never fails: an unreadable record or plugin loads
  * nothing and says why, so a store fault fails closed.
  */

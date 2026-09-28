@@ -60,6 +60,7 @@ import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { rowAggregate } from './rows';
+import type { StepHook } from './hooks';
 import type { AgentRunShape } from '../run/AgentRun';
 
 /** The tools one step offers. */
@@ -73,6 +74,9 @@ export interface StepTools {
   readonly services: Context.Context<PluginServices>;
   /** The read-only skill directories its calls may read. */
   readonly stepRoots: readonly StepRoot[];
+  /** The command hooks of the installed plugins it accepted, by plugin id:
+   *  its calls, and the prompts and stops under it, run these. */
+  readonly hooks: readonly StepHook[];
 }
 
 /** What a step's system text and skill roots are built from that the run
@@ -112,6 +116,7 @@ const NO_TOOLS: StepTools = {
   offered: [],
   services: Context.empty() as Context.Context<PluginServices>,
   stepRoots: [],
+  hooks: [],
 };
 
 /** Whether `b` is the set `a` records: the same tools, as the same
@@ -131,10 +136,10 @@ const sameSet = (
 /** The recorded tools a resumed step may still offer, and why the rest
  *  are not offered. */
 function heldToRecord(
-  resolved: Omit<StepTools, 'services' | 'stepRoots'>,
+  resolved: Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>,
   recorded: readonly OfferedTool[],
 ): {
-  readonly tools: Omit<StepTools, 'services' | 'stepRoots'>;
+  readonly tools: Omit<StepTools, 'services' | 'stepRoots' | 'hooks'>;
   readonly notes: string[];
 } {
   const current = new Map(resolved.offered.map((tool) => [tool.name, tool]));
@@ -276,6 +281,16 @@ const openStep = Effect.fn('Step.open')(function* (
             ? []
             : [{ absolutePath: directory, label: `Skill ${name}` }],
         ),
+        hooks: [...pinned.installed]
+          .toSorted(([a], [b]) => Number(a > b) - Number(a < b))
+          .flatMap(([plugin, { record, plugin: resolved }]) =>
+            resolved.hooks.hooks.map((hook) => ({
+              plugin,
+              name: record.name,
+              root: record.path,
+              hook,
+            })),
+          ),
       },
       warnings: [
         ...pinned.warnings,
