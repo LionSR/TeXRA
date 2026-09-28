@@ -1605,6 +1605,7 @@ function startRun(log, { runId, agent, at, parentRunId }) {
       policy: 'ask',
       bypasses: { bash: false, toolEdit: false, superYolo: false },
       own: {},
+      goal: [],
     },
     parent: parentRunId
       ? {
