@@ -32,9 +32,6 @@ export interface ToolEntry {
   /** The tool's identity: sha256 over its name and input schema, every
    *  description left out. A call runs only while its tool still has it. */
   readonly digest: string;
-  /** sha256 over the catalog's definition, descriptions included: a
-   *  reworded tool is a new generation (a step records what it sends). */
-  readonly shown: string;
 }
 
 export type ToolGeneration = Generation<string, ToolEntry>;
@@ -84,6 +81,12 @@ export const entriesOf = (
   new Map(
     [...tools].map(([name, tool]) => [
       name,
-      { tool, plugin, revision: 'builtin', ...loaded, ...toolDigests(tool) },
+      {
+        tool,
+        plugin,
+        revision: 'builtin',
+        ...loaded,
+        digest: toolDigests(tool).digest,
+      },
     ]),
   );

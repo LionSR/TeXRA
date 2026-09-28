@@ -5,9 +5,9 @@
  * (`AppState.changes`), the catalog reloads and every roster view repaints
  * (`agentRosterChanged`). No plugin writer refreshes it itself. The one
  * other reload is a file tool's approved write into the custom agents
- * directory (`@tools/approval/approvedWrite`): the `creator` agent tests the
- * agent it just wrote in its next call, so that reload is part of the write
- * rather than a watcher's later event.
+ * directory (`applyApprovedFileEdit` in `@tools/fileEditFlow`): the
+ * `creator` agent tests the agent it just wrote in its next call, so that
+ * reload is part of the write rather than a watcher's later event.
  *
  * It follows a host's packaged catalog, so it runs only where the agent
  * directories name a packaged resources root: an embedder, and the CLI
