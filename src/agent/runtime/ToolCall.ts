@@ -6,6 +6,7 @@ import type {
   WorkPlanState,
 } from '@agent/core/state/AgentWorkspaceState';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import type { StepRoot } from '@utils/files/externalRoots';
 import type { AgentRunShape } from './run/AgentRun';
 
 export interface ToolCallShape {
@@ -13,6 +14,9 @@ export interface ToolCallShape {
   readonly roots: WorkspaceRoots;
   readonly toolCallId?: string;
   readonly workingDirectory?: string;
+  /** The read-only roots the step that offered the call admits: the skill
+   *  directories it lists or its user activated. None outside a run. */
+  readonly stepRoots?: readonly StepRoot[];
   /** The run's file-interaction record; absent outside an agent run. */
   readonly tracker?: FileInteractionState;
   readonly userInstruction?: string;
