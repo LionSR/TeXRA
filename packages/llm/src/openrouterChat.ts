@@ -308,6 +308,12 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
         reasoning = part.evidence;
       } else if (part.kind === 'local-call' && part.evidence === undefined)
         calls.push(part);
+      else if (
+        part.kind === 'reasoning' &&
+        !sameModelOrigin(message.origin, turn)
+      )
+        // Another model's reasoning (a mid-run model switch) is omitted.
+        continue;
       else
         return yield* new ModelError({
           kind: 'unsupported',

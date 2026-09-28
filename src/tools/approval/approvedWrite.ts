@@ -119,6 +119,10 @@ export const writeApprovedContent = Effect.fn('writeApprovedContent')(
         }
         appliedContent = merged;
       }
+      // A new file lands in its directories as an editor's save does: the
+      // parents are created inside the same view the file is written through.
+      if (!exists)
+        yield* fs.makeDirectory(nodePath.dirname(path), { recursive: true });
       yield* fs.writeFile(path, Buffer.from(appliedContent, 'utf-8'));
       return { appliedContent, baseContent };
     }).pipe(withPerKeyLane(approvedWriteLanes, lane));

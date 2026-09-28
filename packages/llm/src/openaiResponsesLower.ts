@@ -117,16 +117,24 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
       });
       continue;
     }
+    // History another model of this protocol wrote (a mid-run model switch)
+    // replays as plain content: its item ids, reasoning and encrypted content
+    // are that model's, and the new one is sent none of them.
+    const own = sameModelOrigin(message.origin, turn);
     for (const part of message.content) {
-      if (part.evidence != null && !sameModelOrigin(message.origin, turn)) {
+      if (
+        part.evidence != null &&
+        !own &&
+        message.origin.protocol !== turn.protocol
+      ) {
         return yield* new ModelError({
           kind: 'unsupported',
-          message: 'Provider content evidence belongs to another model origin.',
+          message: 'Provider content evidence belongs to another protocol.',
         });
       }
       switch (part.kind) {
         case 'message': {
-          if (part.evidence) {
+          if (part.evidence && own) {
             if (part.evidence.kind !== 'openai-responses-message') {
               return yield* new ModelError({
                 kind: 'unsupported',
@@ -150,7 +158,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           } else {
             const text: string[] = [];
             for (const child of part.content) {
-              if (child.kind !== 'text') {
+              if (child.kind !== 'text' && own) {
                 return yield* new ModelError({
                   kind: 'unsupported',
                   message:
@@ -164,6 +172,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           break;
         }
         case 'reasoning': {
+          if (!own) break;
           if (part.evidence?.kind !== 'openai-responses-reasoning') {
             return yield* new ModelError({
               kind: 'unsupported',
@@ -212,10 +221,10 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             call_id: part.providerCallId,
             name: part.name,
             arguments: part.argumentsText,
-            ...(part.evidence?.itemId !== undefined
+            ...(own && part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }
               : {}),
-            ...(part.evidence?.status !== undefined
+            ...(own && part.evidence?.status !== undefined
               ? { status: part.evidence.status }
               : {}),
           });

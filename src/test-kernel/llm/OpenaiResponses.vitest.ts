@@ -2495,6 +2495,72 @@ describe('native OpenAI Responses protocol', () => {
   );
 
   it.effect(
+    "replays another model's history as plain content after a model switch",
+    () =>
+      Effect.gen(function* () {
+        const fetch = vi
+          .fn<typeof globalThis.fetch>()
+          .mockImplementationOnce(async () => response(events(OUTPUT)))
+          .mockImplementation(async () => response(events([MESSAGE])));
+        const first = yield* modelWith(fetch)
+          .prepareTurn(REQUEST)
+          .pipe(
+            Effect.flatMap((turn) => {
+              assert(turn.mode === 'foreground');
+              return completedTurn(modelWith(fetch).streamTurn(turn));
+            }),
+          );
+        // The same route, another model: the run switched after this turn.
+        const switched = modelWith(fetch, {
+          ...CONFIG,
+          requestedModel: 'switched-model',
+        });
+        const next = yield* switched.prepareTurn({
+          ...REQUEST,
+          messages: [
+            ...REQUEST.messages,
+            {
+              role: 'assistant',
+              origin: first.requestedOrigin,
+              content: first.content,
+            },
+            {
+              role: 'tool',
+              results: [0, 1].map((callOrdinal) => ({
+                callOrdinal,
+                status: 'success' as const,
+                content: [{ kind: 'text' as const, text: 'ok' }],
+              })),
+            },
+          ],
+        });
+        assert(next.mode === 'foreground');
+        yield* completedTurn(switched.streamTurn(next));
+        // No reasoning item, item id, status or encrypted content of the
+        // model that wrote the history reaches the one it switched to.
+        expect(
+          JSON.parse(String(fetch.mock.calls[1]?.[1]?.body)).input.slice(1),
+        ).toEqual([
+          { role: 'assistant', content: 'I will check.Then compare.' },
+          {
+            type: 'function_call',
+            call_id: 'call_1',
+            name: 'read_file',
+            arguments: '{"path":"a"}',
+          },
+          {
+            type: 'function_call',
+            call_id: 'call_2',
+            name: 'read_file',
+            arguments: '{"path":"b"}',
+          },
+          { type: 'function_call_output', call_id: 'call_1', output: 'ok' },
+          { type: 'function_call_output', call_id: 'call_2', output: 'ok' },
+        ]);
+      }),
+  );
+
+  it.effect(
     'freezes selected controls and distinguishes absent controls, explicit null and numeric zero',
     () =>
       Effect.gen(function* () {

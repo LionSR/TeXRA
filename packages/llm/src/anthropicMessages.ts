@@ -348,10 +348,9 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
             name: part.name,
             input: yield* parseOutboundToolArguments(part.argumentsText),
           });
-        } else if (
-          part.kind === 'reasoning' &&
-          sameModelOrigin(message.origin, origin)
-        ) {
+        } else if (part.kind === 'reasoning') {
+          // Another model's thinking (a mid-run switch) is omitted, as Google's.
+          if (!sameModelOrigin(message.origin, origin)) continue;
           if (
             part.evidence?.kind === 'anthropic-thinking-signature' &&
             part.content?.length === 1
