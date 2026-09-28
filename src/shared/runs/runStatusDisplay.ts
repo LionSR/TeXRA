@@ -1,17 +1,15 @@
 import {
-  AgentCategory,
   ownerIdentity,
   RUN_PHASE,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
   type OwnerId,
   type RoundStage,
-  type LoopPosition,
   type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
 } from '@shared/schemas';
-import type { RunGroup } from '@shared/session/sessionView';
+import type { LoopCoordinate, RunGroup } from '@shared/session/sessionView';
 
 export type RunStatusDisplayKey =
   | Exclude<RunLifecycleStatus, typeof RUN_LIFECYCLE_READY>
@@ -163,35 +161,6 @@ export function formatRoundStageLabel(
   return stage.total !== undefined ? `${current}/${stage.total}` : current;
 }
 
-/** Where a run's loop stands, in the coordinate its category counts in. */
-interface LoopCoordinate {
-  readonly kind: 'round' | 'turn';
-  readonly index: number;
-}
-
-/**
- * The coordinate a run counts its position in. The loop advances `turn`;
- * `turn` is one-based — the loop commits `state.turn + 1` from a zero start
- * and the child loop counts its first turn as 1. The row's `round` counts
- * model calls, not rounds, so no surface reads it; this rule has one home
- * rather than one copy per surface.
- *
- * A workflow agent counts rounds: each round is one turn, so its zero-based
- * round index is the turn less one, and a run that has not opened its first
- * turn has none. A caller that does not know the run's category passes
- * `undefined` and reads the turn.
- */
-export function loopPositionLabel(
-  flow: LoopPosition | null | undefined,
-  category: AgentCategory | undefined,
-): LoopCoordinate | undefined {
-  if (flow?.turn == null) return undefined;
-  if (category !== AgentCategory.Workflow) {
-    return { kind: 'turn', index: flow.turn };
-  }
-  return flow.turn > 0 ? { kind: 'round', index: flow.turn - 1 } : undefined;
-}
-
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for
  *  a round, `t2` for the row's second turn. A total counts planned rounds, so
  *  a turn ignores it. */
@@ -201,15 +170,15 @@ export function formatLoopPositionLabel(
 ): string;
 
 export function formatLoopPositionLabel(
-  position: Readonly<LoopCoordinate> | undefined,
+  position: Readonly<LoopCoordinate> | null | undefined,
   total?: number,
 ): string | undefined;
 
 export function formatLoopPositionLabel(
-  position: Readonly<LoopCoordinate> | undefined,
+  position: Readonly<LoopCoordinate> | null | undefined,
   total?: number,
 ): string | undefined {
-  if (position === undefined) return undefined;
+  if (position == null) return undefined;
   if (position.kind === 'turn') return `t${position.index}`;
   return formatRoundStageLabel({
     index: position.index,
@@ -218,13 +187,13 @@ export function formatLoopPositionLabel(
 }
 
 /** Spelled-out counterpart of {@link formatLoopPositionLabel} on the same
- *  category-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
- *  word the position instead of abbreviating it. Only `round` gains one, for
- *  the reason {@link loopPositionLabel} states. */
+ *  coordinate — `Round 2`, `Turn 2` — for the surfaces that word the
+ *  position instead of abbreviating it. Only `round` gains one: its index is
+ *  zero-based, a turn's one-based. */
 export function formatLoopPositionTitle(
-  position: Readonly<LoopCoordinate> | undefined,
+  position: Readonly<LoopCoordinate> | null | undefined,
 ): string | undefined {
-  if (position === undefined) return undefined;
+  if (position == null) return undefined;
   return position.kind === 'round'
     ? `Round ${position.index + 1}`
     : `Turn ${position.index}`;

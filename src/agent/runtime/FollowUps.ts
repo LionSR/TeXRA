@@ -58,7 +58,7 @@ import {
   snapshotRow,
   positionRow,
   type Message,
-  type ToolUseFlowState,
+  type ToolUseLoopState,
 } from './loop/rows';
 import { resolveActivations } from './loop/step';
 import type { AgentRunShape } from './run/AgentRun';
@@ -72,7 +72,7 @@ import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSp
 export interface JoinedFollowUps {
   readonly rows: readonly RunLedgerDraft[];
   readonly recorded: Partial<
-    Pick<ToolUseFlowState, 'instruction' | 'activated'>
+    Pick<ToolUseLoopState, 'instruction' | 'activated'>
   >;
   /** Whether the rows carry a message a turn answers. */
   readonly turn: boolean;
@@ -265,7 +265,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           .map(({ content }) => content.text),
       ),
     );
-    const current = state.flow?.activated ?? [];
+    const current = state.loop?.activated ?? [];
     const activated = found.some((name) => !current.includes(name))
       ? [
           ...new Set([
@@ -324,8 +324,8 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           ? [
               snapshotRow(runId, state, {
                 runtime: { lastError: null },
-                ...(state.flow
-                  ? { state: { ...state.flow, ...joined.recorded } }
+                ...(state.loop
+                  ? { state: { ...state.loop, ...joined.recorded } }
                   : {}),
               }),
               positionRow(runId, state, 'turn.ready'),

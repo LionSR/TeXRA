@@ -1,13 +1,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
-import type {
-  AgentCategory,
-  ConversationProgress,
-  LoopPosition,
-} from '@shared/schemas';
-import {
-  loopPositionLabel,
-  formatLoopPositionTitle,
-} from '@shared/runs/runStatusDisplay';
+import type { ConversationProgress } from '@shared/schemas';
+import { formatLoopPositionTitle } from '@shared/runs/runStatusDisplay';
+import type { LoopCoordinate } from '@shared/session/sessionView';
 import { formatResultCount } from '@utils/text/stringUtils';
 
 /**
@@ -18,10 +12,8 @@ import { formatResultCount } from '@utils/text/stringUtils';
  */
 export function renderProgressBadgeContent(
   progress: ConversationProgress | undefined,
-  flow: LoopPosition | null,
-  category: AgentCategory,
+  position: LoopCoordinate | null,
 ): TemplateResult | typeof nothing {
-  const position = loopPositionLabel(flow, category);
   const tools = progress?.toolCallCount ?? 0;
   const label = [
     position?.kind === 'round' ? formatLoopPositionTitle(position) : undefined,
@@ -35,14 +27,11 @@ export function renderProgressBadgeContent(
 /** The spelled-out position and count: "Turn 1 · 3 tool calls". */
 export function getProgressBadgeTitle(
   progress: ConversationProgress | undefined,
-  flow: LoopPosition | null,
-  category: AgentCategory,
+  position: LoopCoordinate | null,
 ): string | undefined {
   const parts: string[] = [];
-  const flowTitle = formatLoopPositionTitle(loopPositionLabel(flow, category));
-  if (flowTitle) {
-    parts.push(flowTitle);
-  }
+  const title = formatLoopPositionTitle(position);
+  if (title) parts.push(title);
   if (progress?.toolCallCount) {
     parts.push(formatResultCount(progress.toolCallCount, 'tool call'));
   }

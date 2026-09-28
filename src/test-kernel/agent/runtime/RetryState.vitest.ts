@@ -331,7 +331,7 @@ const freshState = (): RunState => ({
   pendingIntents: {},
   requests: {},
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
+  loop: null,
   roundOutputs: [],
   overflowRecoveredAtTurn: null,
   offeredTools: null,

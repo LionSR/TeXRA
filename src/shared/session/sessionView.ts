@@ -29,7 +29,6 @@ import {
   requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
   RunIdentitySchema,
-  LoopPositionSchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
   RUN_SUBSTATE,
@@ -84,6 +83,34 @@ const RunGroupSchema = z.enum(['running', 'waiting', 'interrupted', 'recent']);
 /** The section a run sorts into. Its labels and section order are one
  *  table in `@shared/runs/runStatusDisplay`, not a per-host switch. */
 export type RunGroup = z.infer<typeof RunGroupSchema>;
+
+/**
+ * Where a run's loop stands, in the one coordinate its category counts: a
+ * workflow agent counts zero-based rounds (each round is one turn), every
+ * other run its one-based turn. The row's `round` counts model calls, not
+ * rounds, so no surface reads it.
+ */
+const LoopCoordinateSchema = z.strictObject({
+  kind: z.enum(['round', 'turn']),
+  index: z.int().nonnegative(),
+});
+export type LoopCoordinate = z.infer<typeof LoopCoordinateSchema>;
+
+/**
+ * The coordinate a run counts its position in: the one rule, applied by the
+ * fold, that every surface reads through `RunView.position`. The loop
+ * advances `turn`, one-based (the loop commits `state.turn + 1` from a zero
+ * start, and the child loop counts its first turn as 1). A workflow agent
+ * counts rounds: each round is one turn, so its zero-based round index is
+ * the turn less one, and a run that has not opened its first turn has none.
+ */
+export function loopCoordinate(
+  turn: number,
+  category: AgentCategory,
+): LoopCoordinate | null {
+  if (category !== AgentCategory.Workflow) return { kind: 'turn', index: turn };
+  return turn > 0 ? { kind: 'round', index: turn - 1 } : null;
+}
 
 const RunViewCommonSchema = z.object({
   /** The run id: the aggregate's logical id, minted once at launch. */
@@ -144,11 +171,12 @@ const RunViewCommonSchema = z.object({
   runStartedAt: z.int().positive().nullable(),
   lastTimestamp: z.number().nullable(),
   conversationProgress: ConversationProgressSchema,
-  /** The loop's latest `run.position`: family, where it stands, and its
-   *  coordinates. Null before the first position and after every
-   *  activation, and null for the whole life of a run with no loop of its own — an agent-CLI child
-   *  parks through `child.park`, which carries a phase and no position. */
-  position: LoopPositionSchema.nullable(),
+  /** Where the run's loop stands, in the coordinate its category counts,
+   *  folded from its latest `run.position`. Null before the first position
+   *  and after every activation, and null for the whole life of a run with
+   *  no loop of its own — an agent-CLI child parks through `child.park`,
+   *  which carries a phase and no position. */
+  position: LoopCoordinateSchema.nullable(),
   followUpSupport: UserFollowUpSupportSchema,
   /** A native tool-use resume can target this run: a plain agent identity in
    *  the tool-use category. The rule lives here so no host restates it. */

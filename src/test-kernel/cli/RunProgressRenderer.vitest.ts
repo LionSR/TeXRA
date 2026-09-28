@@ -224,16 +224,15 @@ async function handleOrchestratorRootRun(
     inputFiles: [],
   });
 }
-/** A workflow run's round as `run.position` states it: round `n` is turn
- *  `n + 1`. `RunView.position` carries the coordinate alone: a planned total is
- *  the agent registry's fact. */
+/** A workflow run's round as the fold states it. `RunView.position` carries
+ *  the coordinate alone: a planned total is the agent registry's fact. */
 async function handleRound(
   renderer: TestRunProgressRenderer,
   runId: string,
   round: number,
 ): Promise<void> {
   await renderer.set(runId, {
-    position: { family: 'toolUse', at: 'turn.begin', turn: round + 1 },
+    position: { kind: 'round', index: round },
   });
 }
 async function handleConversationProgress(
