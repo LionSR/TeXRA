@@ -295,10 +295,14 @@ const liveToolsLayer = (
                 (plugin) =>
                   loading && installed.get(plugin.id)?.key !== plugin.key,
               ),
+              // Recorded as the load returns, with no gap an interruption
+              // could land in: only the load itself is interruptible.
               (plugin) =>
-                Effect.map(holds.loadInstalled(plugin), (load) => {
-                  started.push(load);
-                }),
+                Effect.uninterruptibleMask((restore) =>
+                  Effect.map(restore(holds.loadInstalled(plugin)), (load) => {
+                    started.push(load);
+                  }),
+                ),
               { discard: true },
             );
             return yield* locked(
@@ -381,9 +385,12 @@ const liveToolsLayer = (
         const read = yield* loader(declared);
         const loaded = new Map<string, string | undefined>();
         for (const plugin of read.plugins) {
+          // The start is interruptible: `holdServer` stops what it started
+          // on any exit before it returns.
           const { failure } = yield* Effect.acquireRelease(
             holds.holdServer(plugin, true),
             ({ id }) => holds.release(id),
+            { interruptible: true },
           );
           loaded.set(plugin.id, failure);
         }

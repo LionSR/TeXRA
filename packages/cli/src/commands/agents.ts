@@ -3,6 +3,8 @@ import { Effect } from 'effect';
 
 import { getCustomAgentScanIssues } from '@agent/index';
 import { loadAgentSettingAndPrompts } from '@agent/runtime';
+import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
+import { AppState } from '@platform/interfaces';
 import { AgentCategory } from '@shared/schemas';
 
 import {
@@ -81,7 +83,10 @@ export function showAgent(context: CliContext, name: string) {
       entry.source === 'remote' &&
       entry.category === AgentCategory.Workflow
     ) {
-      const [setting] = yield* loadAgentSettingAndPrompts(entry);
+      const [setting] = yield* loadAgentSettingAndPrompts(
+        entry,
+        yield* readInstalledPluginLoadOnce({ globalState: yield* AppState }),
+      );
       // A scanned entry omits the field rather than carrying an empty list;
       // a loaded definition with nothing declared reads the same way.
       if (setting.defaultOutputFiles.length > 0)

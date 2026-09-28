@@ -28,6 +28,7 @@ import { byName } from '@utils/core';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 import { scanDirectory } from './agentYamlScanner';
+import { signedOut, untilFollowerLoaded } from './catalogReadiness';
 import { enabledToolUseRoots } from './BundledAgentDirectories';
 import { scanPluginAgents } from './pluginAgents';
 import { loadRemoteAgents } from './remoteAgentMeta';
@@ -55,10 +56,6 @@ const LOOKUP_PRIORITY: AgentSource[] = [
   'plugin',
   'remote',
 ];
-
-// =============================================================================
-// STATE
-// =============================================================================
 
 /** The cache. Just a Map. */
 const cache = new Map<string, AgentEntry>();
@@ -107,9 +104,10 @@ type RemoteMode = boolean | undefined;
 // =============================================================================
 
 /**
- * Load all agents into cache. Call once at activation.
- * Concurrent calls join the in-flight load through the lane and re-check what
- * it published, so only one scan runs.
+ * Load all agents into cache, unless a load already published them. Where a
+ * catalog follower runs, its first reload is the initial load and this waits
+ * for it. Concurrent calls join the in-flight load through the lane and
+ * re-check what it published, so only one scan runs.
  */
 export function loadAgents(
   options: LoadAgentsOptions = {},
@@ -119,11 +117,17 @@ export function loadAgents(
   AgentCatalogServices
 > {
   const includeRemote = options.includeRemote ?? true;
-  return onCatalogLoadLane(
-    Effect.suspend(() =>
-      catalog && (!includeRemote || catalog.includesRemote)
-        ? Effect.void
-        : queueLoad(includeRemote, epoch),
+  return Effect.andThen(
+    untilFollowerLoaded,
+    onCatalogLoadLane(
+      Effect.gen(function* () {
+        if (
+          catalog &&
+          (!includeRemote || catalog.includesRemote || (yield* signedOut))
+        )
+          return;
+        yield* queueLoad(includeRemote, epoch);
+      }),
     ),
   );
 }
@@ -291,10 +295,6 @@ export function invalidateRemoteAgentsAfterSignOut(): Effect.Effect<
     }),
   );
 }
-
-// =============================================================================
-// KEY HELPERS
-// =============================================================================
 
 // =============================================================================
 // VISIBLE AGENTS (for dropdowns)

@@ -19,6 +19,7 @@ import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
 import { buildUserVars } from '@agent/prompt/userVars';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
+import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
 import {
   attachErrorPresentationClaimed,
   hasErrorPresentationClaimed,
@@ -249,13 +250,11 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
           category: fullConfig.agentCategory,
         },
       ));
-    // `loadAgentSettingAndPrompts` already fills the built-in tool-use category
-    // default before parsing, and `AgentSettingSchema` prefaults `agentCategory`
-    // (to Workflow when absent), so `setting.agentCategory` is always populated
-    // here; a second defaulting pass would be a guaranteed no-op. The load reads
-    // nothing from the run's ALS frame (absolute paths, the registry cache, the
-    // remote fetch), so it yields directly rather than entering `runInSession`.
-    const [setting, prompt] = yield* loadAgentSettingAndPrompts(agentEntry);
+    const installed = yield* readInstalledPluginLoadOnce(input.session.roots);
+    const [setting, prompt] = yield* loadAgentSettingAndPrompts(
+      agentEntry,
+      installed,
+    );
 
     // Block category mismatch. Resolution is already category-scoped; this
     // catches what the registry's pre-merge category can't see: an agent that
@@ -290,7 +289,7 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
       agentCategory: setting.agentCategory,
       agentSource: agentEntry.source,
     };
-    return { config, setting, prompt, agentEntry, modelConfig };
+    return { config, setting, prompt, agentEntry, modelConfig, installed };
   },
   // No run exists yet, so no `result` event will present this failure: the
   // generic toast is its one surface. Once assembly begins, the terminal
@@ -335,7 +334,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     Error,
     Secrets | AppState | UsageLog | FileSystem.FileSystem | Scope.Scope
   > {
-    const { config, setting, prompt, agentEntry, modelConfig } =
+    const { config, setting, prompt, agentEntry, modelConfig, installed } =
       input.definition;
     // The run's working directory is decided here, once: absolute or absent.
     // Every tool call of the run carries it as `ToolCall.workingDirectory`
@@ -446,6 +445,7 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
           storageRoot: session.roots.storage,
           config: session.roots.config,
           settings: session.roots,
+          installed,
           stageId,
         },
       );

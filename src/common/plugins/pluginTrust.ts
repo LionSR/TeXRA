@@ -16,7 +16,7 @@
 import * as path from 'node:path';
 
 // Third-party imports
-import { Effect, type FileSystem, Result } from 'effect';
+import { Effect, FileSystem, Result } from 'effect';
 
 // Local imports - shared contracts
 import type { SettingsStores } from '@shared/config/settingsAccess';
@@ -290,3 +290,22 @@ export function readInstalledPluginLoad(
     ),
   );
 }
+
+/**
+ * {@link readInstalledPluginLoad}, run once on first use and then answered
+ * from that read: what one launch's consumers share (a plugin agent's check
+ * and the skill catalog). Nothing is read if none asks. A run's steps never
+ * take it: each step reads the plugins again, as the trust and ordering
+ * authority for what the run loads.
+ */
+export const readInstalledPluginLoadOnce = (
+  stores: Pick<SettingsStores, 'globalState'>,
+) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    return yield* Effect.cached(
+      readInstalledPluginLoad(stores).pipe(
+        Effect.provideService(FileSystem.FileSystem, fs),
+      ),
+    );
+  });

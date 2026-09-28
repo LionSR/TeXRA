@@ -10,7 +10,11 @@ import {
   readCliSkills as readCliSkillsEffect,
 } from '@cli/runtime/skills';
 import { installPlugins, removePlugin } from '@common/plugins/installedPlugins';
-import { disablePlugin, enablePlugin } from '@common/plugins/pluginTrust';
+import {
+  disablePlugin,
+  enablePlugin,
+  readInstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
 import { initializeNodeRuntimeSkills } from '@platform/defaults/nodeHost';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { foldSkillSources, hostSkillContributions } from '@skills/skillSources';
@@ -292,6 +296,13 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
           );
         });
         const stores = makeFakeSettingsStores().stores;
+        // The run catalog over the installed plugins as they load now.
+        const catalogNow = () =>
+          loadRuntimeSkillCatalog({
+            workspacePath: resources,
+            settings: stores,
+            installed: readInstalledPluginLoad(stores),
+          });
         const env = {
           globalState: stores.globalState,
           globalStorage: resources,
@@ -309,11 +320,9 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         });
         expect(installed?.commit).toBeUndefined();
         // Installed, it is disabled until the user trusts it.
-        expect(
-          JSON.stringify(
-            (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
-          ),
-        ).not.toContain('plugin paper-protocol');
+        expect(JSON.stringify((yield* catalogNow()).catalog)).not.toContain(
+          'plugin paper-protocol',
+        );
         const asked: string[] = [];
         yield* enablePlugin('paper-protocol', env, (review) =>
           Effect.sync(() => {
@@ -323,7 +332,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         );
         expect(asked).toEqual(['paper-protocol 1.0.0']);
 
-        const catalog = yield* loadRuntimeSkillCatalog(resources, stores);
+        const catalog = yield* catalogNow();
         const fromPlugin = catalog.skills.filter((skill) =>
           skill.name.startsWith('paper-protocol:'),
         );
@@ -346,7 +355,7 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
 
         // Disabled, the plugin stays installed and contributes nothing.
         yield* disablePlugin('paper-protocol', env);
-        const disabled = yield* loadRuntimeSkillCatalog(resources, stores);
+        const disabled = yield* catalogNow();
         expect(JSON.stringify(disabled.catalog)).not.toContain(
           'plugin paper-protocol',
         );
@@ -357,14 +366,12 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         yield* enablePlugin('paper-protocol', env, () =>
           Effect.die('trust asked again'),
         );
-        expect(
-          JSON.stringify(
-            (yield* loadRuntimeSkillCatalog(resources, stores)).catalog,
-          ),
-        ).toContain('plugin paper-protocol');
+        expect(JSON.stringify((yield* catalogNow()).catalog)).toContain(
+          'plugin paper-protocol',
+        );
 
         yield* removePlugin('paper-protocol', env);
-        const after = yield* loadRuntimeSkillCatalog(resources, stores);
+        const after = yield* catalogNow();
         expect(JSON.stringify(after.catalog)).not.toContain(
           'plugin paper-protocol',
         );

@@ -22,6 +22,12 @@ import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { resolveToolPath } from '@tools/pathResolution';
 
 const tempRoots = useTempDirs();
+/** The run catalog of `workspacePath`, with no installed plugin loading. */
+const runCatalog = (workspacePath: string) => ({
+  workspacePath,
+  settings: testWorkspaceRoots(),
+  installed: Effect.succeed({ loadable: [], withheld: [] }),
+});
 
 const loadRuntimeSkillCatalog = (
   ...args: Parameters<typeof loadRuntimeSkillCatalogEffect>
@@ -101,10 +107,7 @@ describe('runtime skills', () => {
     );
     installTestSkillRoots([{ tier: 'project', path: root }]);
 
-    const result = await loadRuntimeSkillCatalog(
-      WORKSPACE_ROOT,
-      testWorkspaceRoots(),
-    );
+    const result = await loadRuntimeSkillCatalog(runCatalog(WORKSPACE_ROOT));
 
     expect(catalogText(result.catalog)).toContain(
       '- manuscript-review: Review mathematical manuscripts.',
@@ -157,8 +160,7 @@ describe('runtime skills', () => {
       yield* testWorkspaceRoots().config.update(key, value);
 
       const result = yield* loadRuntimeSkillCatalogEffect(
-        WORKSPACE_ROOT,
-        testWorkspaceRoots(),
+        runCatalog(WORKSPACE_ROOT),
       );
 
       expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
@@ -181,10 +183,7 @@ describe('runtime skills', () => {
     );
     installTestSkillRoots([{ tier: 'project', path: root }]);
 
-    const result = await loadRuntimeSkillCatalog(
-      WORKSPACE_ROOT,
-      testWorkspaceRoots(),
-    );
+    const result = await loadRuntimeSkillCatalog(runCatalog(WORKSPACE_ROOT));
     const catalogNames = catalogSkillNames(result.catalog);
     const snapshotNames = result.skills.map((skill) => skill.name);
 
@@ -216,7 +215,7 @@ describe('runtime skills', () => {
       installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
       const projectA = path.resolve(path.sep, 'project-a');
       const projectB = path.resolve(path.sep, 'project-b');
-      yield* loadRuntimeSkillCatalogEffect(projectA, testWorkspaceRoots()).pipe(
+      yield* loadRuntimeSkillCatalogEffect(runCatalog(projectA)).pipe(
         Effect.provide(nodePlatformLayer),
       );
       const resolveFrom = (workspace: string) =>

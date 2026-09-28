@@ -16,9 +16,8 @@ import {
 import { mergeInheritedAgentObject } from '@agent/core/definition/agentDefinitionInheritance';
 import { loadRemoteAgent } from '@agent/remote/RemoteAgentLoader';
 import { parseYamlWith, safeParseYaml } from '@common/parsing/safeParseYaml';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
-import { AppState } from '@platform/interfaces';
 import { agentKey, AgentCategory } from '@shared/schemas';
 import { ensureError } from '@utils/errors/errorMessage';
 import { readNormalizedFile } from '@utils/files/fsDurability';
@@ -94,11 +93,13 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   'agentLoad.loadAgentSettingAndPrompts',
 )(function* (
   entry: AgentEntry,
+  /** The installed plugins that load, as the launch reads them. */
+  installed: Effect.Effect<InstalledPluginLoad, never, FileSystem.FileSystem>,
   seen: ReadonlySet<string> = new Set(),
 ): Effect.fn.Return<
   [AgentSetting, AgentPrompt],
   Error,
-  FileSystem.FileSystem | HttpClient.HttpClient | AppState
+  FileSystem.FileSystem | HttpClient.HttpClient
 > {
   // Handle remote agents
   if (entry.source === 'remote') {
@@ -114,9 +115,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
   // run.
   if (entry.source === 'plugin') {
     const plugin = entry.name.slice(0, entry.name.indexOf(':'));
-    const load = yield* readInstalledPluginLoad({
-      globalState: yield* AppState,
-    });
+    const load = yield* installed;
     if (!load.loadable.some(({ record }) => record.name === plugin))
       return yield* Effect.fail(
         new Error(
@@ -182,6 +181,7 @@ export const loadAgentSettingAndPrompts = Effect.fn(
     }
     const [parentSettings, parentPrompts] = yield* loadAgentSettingAndPrompts(
       parentEntry,
+      installed,
       nextSeen,
     );
 

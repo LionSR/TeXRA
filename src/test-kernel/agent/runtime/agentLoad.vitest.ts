@@ -130,7 +130,10 @@ describe('loadAgentSettingAndPrompts', () => {
 
   /** The loader on the process filesystem it reads its definitions through. */
   const loadDefinition = (entry: AgentEntry) =>
-    loadAgentSettingAndPrompts(entry).pipe(
+    loadAgentSettingAndPrompts(
+      entry,
+      Effect.succeed({ loadable: [], withheld: [] }),
+    ).pipe(
       Effect.provide(
         Layer.mergeAll(
           nodePlatformLayer,

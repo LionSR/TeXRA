@@ -81,59 +81,63 @@ export function makeServerHolds(catalog: {
    *  its `load` key (its trust) is part of the hold key, so a re-trusted
    *  plugin whose files changed starts new processes. */
   const holdServer = (plugin: LoadedPlugin, own: boolean, load = '') =>
-    Effect.gen(function* () {
-      const id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}${load && `#${load}`}`;
-      const revision = sha256({ spec: plugin.spec, env: plugin.revision });
-      const held = yield* locked(
-        Effect.sync(() => {
-          const open = servers.get(id);
-          if (open) open.count += 1;
-          return open;
-        }),
-      );
-      if (held) return { id, revision, ...held };
-      // Started outside the lock: a slow server does not hold up every
-      // run's step. A concurrent hold of the same key keeps the first.
-      const serverScope = yield* Scope.fork(scope);
-      // Until it is published, the scope is this call's: a failure or an
-      // interruption before then stops the process it started.
-      const answered = yield* plugin.acquire.pipe(
-        Effect.provideService(ChildProcessSpawner, spawner),
-        Scope.provide(serverScope),
-        Effect.onError(() => Scope.close(serverScope, Exit.void)),
-      );
-      const open = yield* locked(
-        Effect.gen(function* () {
-          const open = servers.get(id);
-          if (open) {
-            open.count += 1;
-            yield* Scope.close(serverScope, Exit.void);
+    Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const id = `${plugin.id}#${sha256(plugin.spec)}#${plugin.revision}${load && `#${load}`}`;
+        const revision = sha256({ spec: plugin.spec, env: plugin.revision });
+        const held = yield* locked(
+          Effect.sync(() => {
+            const open = servers.get(id);
+            if (open) open.count += 1;
             return open;
-          }
-          const failure =
-            answered.failure ??
-            (own
-              ? yield* contribute(
-                  plugin.id,
-                  entriesOf(plugin.id, answered.tools, {
-                    revision,
-                    server: id,
-                  }),
-                  serverScope,
-                )
-              : undefined);
-          const created = {
-            count: 1,
-            scope: serverScope,
-            tools: answered.tools,
-            failure,
-          };
-          servers.set(id, created);
-          return created;
-        }),
-      ).pipe(Effect.onError(() => Scope.close(serverScope, Exit.void)));
-      return { id, revision, ...open };
-    });
+          }),
+        );
+        if (held) return { id, revision, ...held };
+        // Started outside the lock: a slow server does not hold up every
+        // run's step. A concurrent hold of the same key keeps the first.
+        // Until it is published, the scope is this call's: a failure or an
+        // interruption at any point before then (only the start itself is
+        // interruptible) stops the process it started.
+        const serverScope = yield* Scope.fork(scope);
+        const answered = yield* restore(
+          plugin.acquire.pipe(
+            Effect.provideService(ChildProcessSpawner, spawner),
+            Scope.provide(serverScope),
+          ),
+        ).pipe(Effect.onError(() => Scope.close(serverScope, Exit.void)));
+        const open = yield* locked(
+          Effect.gen(function* () {
+            const open = servers.get(id);
+            if (open) {
+              open.count += 1;
+              yield* Scope.close(serverScope, Exit.void);
+              return open;
+            }
+            const failure =
+              answered.failure ??
+              (own
+                ? yield* contribute(
+                    plugin.id,
+                    entriesOf(plugin.id, answered.tools, {
+                      revision,
+                      server: id,
+                    }),
+                    serverScope,
+                  )
+                : undefined);
+            const created = {
+              count: 1,
+              scope: serverScope,
+              tools: answered.tools,
+              failure,
+            };
+            servers.set(id, created);
+            return created;
+          }),
+        ).pipe(Effect.onError(() => Scope.close(serverScope, Exit.void)));
+        return { id, revision, ...open };
+      }),
+    );
 
   return {
     release,
@@ -160,44 +164,48 @@ export function makeServerHolds(catalog: {
     /** Load an installed plugin at its key: hold its servers and contribute
      *  their tools under its one id. */
     loadInstalled: (plugin: InstalledToolPlugin) =>
-      Effect.gen(function* () {
-        const holds = yield* Scope.fork(scope);
-        const contribution = yield* Scope.fork(scope);
-        // Not loaded after all (a failure, an interruption): nothing stays.
-        const drop = Effect.andThen(
-          Scope.close(contribution, Exit.void),
-          Scope.close(holds, Exit.void),
-        );
-        const held = yield* Effect.forEach(plugin.servers, (server) =>
-          Effect.acquireRelease(
-            holdServer(server, false, plugin.key),
-            ({ id }) => release(id),
-          ),
-        ).pipe(
-          Scope.provide(holds),
-          Effect.onError(() => drop),
-        );
-        const conflict = yield* locked(
-          contribute(
-            plugin.id,
-            new Map(
-              held.flatMap(({ id, revision, tools }) => [
-                ...entriesOf(plugin.id, tools, { revision, server: id }),
-              ]),
+      Effect.uninterruptibleMask((restore) =>
+        Effect.gen(function* () {
+          // Both scopes are this call's until it returns: a failure or an
+          // interruption at any point (only the server starts are
+          // interruptible) closes them, and so stops what they hold.
+          const holds = yield* Scope.fork(scope);
+          const contribution = yield* Scope.fork(scope);
+          const drop = Effect.andThen(
+            Scope.close(contribution, Exit.void),
+            Scope.close(holds, Exit.void),
+          );
+          const held = yield* restore(
+            Effect.forEach(plugin.servers, (server) =>
+              Effect.acquireRelease(
+                holdServer(server, false, plugin.key),
+                ({ id }) => release(id),
+                { interruptible: true },
+              ),
+            ).pipe(Scope.provide(holds)),
+          ).pipe(Effect.onError(() => drop));
+          const conflict = yield* locked(
+            contribute(
+              plugin.id,
+              new Map(
+                held.flatMap(({ id, revision, tools }) => [
+                  ...entriesOf(plugin.id, tools, { revision, server: id }),
+                ]),
+              ),
+              contribution,
             ),
+          ).pipe(Effect.onError(() => drop));
+          return {
+            id: plugin.id,
+            key: plugin.key,
             contribution,
-          ),
-        ).pipe(Effect.onError(() => drop));
-        return {
-          id: plugin.id,
-          key: plugin.key,
-          contribution,
-          holds,
-          failures: [
-            ...held.flatMap(({ failure }) => failure ?? []),
-            ...(conflict === undefined ? [] : [conflict]),
-          ],
-        } satisfies InstalledLoad;
-      }),
+            holds,
+            failures: [
+              ...held.flatMap(({ failure }) => failure ?? []),
+              ...(conflict === undefined ? [] : [conflict]),
+            ],
+          } satisfies InstalledLoad;
+        }),
+      ),
   };
 }

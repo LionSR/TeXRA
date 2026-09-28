@@ -31,6 +31,8 @@ const buildUserVars = (...args: Parameters<typeof buildUserVarsEffect>) =>
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
+/** The launch's read of the installed plugins: none installed. */
+const NO_INSTALLED_PLUGINS = Effect.succeed({ loadable: [], withheld: [] });
 
 setupPlatform({}, { config: fakeConfig });
 
@@ -71,6 +73,7 @@ describe('buildUserVars round count', () => {
         storageRoot: testWorkspaceRoots().storage,
         config: testWorkspaceRoots().config,
         settings: testWorkspaceRoots(),
+        installed: NO_INSTALLED_PLUGINS,
       },
     );
 
@@ -115,6 +118,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
             storageRoot: testWorkspaceRoots().storage,
             config: testWorkspaceRoots().config,
             settings: testWorkspaceRoots(),
+            installed: NO_INSTALLED_PLUGINS,
           },
         ),
       );
@@ -143,6 +147,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
         storageRoot: testWorkspaceRoots().storage,
         config: testWorkspaceRoots().config,
         settings: testWorkspaceRoots(),
+        installed: NO_INSTALLED_PLUGINS,
       },
     );
 
@@ -182,6 +187,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
         storageRoot: testWorkspaceRoots().storage,
         config: testWorkspaceRoots().config,
         settings: testWorkspaceRoots(),
+        installed: NO_INSTALLED_PLUGINS,
       },
     );
 
@@ -214,6 +220,7 @@ describe('buildUserVars runtime skill diagnostics', () => {
         storageRoot: testWorkspaceRoots().storage,
         config: testWorkspaceRoots().config,
         settings: testWorkspaceRoots(),
+        installed: NO_INSTALLED_PLUGINS,
       },
     );
 
@@ -274,6 +281,7 @@ describe('output file prompt variables', () => {
         storageRoot: testWorkspaceRoots().storage,
         config: testWorkspaceRoots().config,
         settings: testWorkspaceRoots(),
+        installed: NO_INSTALLED_PLUGINS,
       },
     );
 
@@ -308,6 +316,7 @@ function buildVars(
       storageRoot: testWorkspaceRoots().storage,
       config: testWorkspaceRoots().config,
       settings: testWorkspaceRoots(),
+      installed: NO_INSTALLED_PLUGINS,
     },
   );
 }

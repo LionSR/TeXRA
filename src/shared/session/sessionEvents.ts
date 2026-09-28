@@ -140,6 +140,13 @@ export class SessionEvents extends Context.Service<
     readonly pendingFollowUps: (
       aggregateId: AggregateId,
     ) => readonly QueuedFollowUp[];
+    /** Whether a row of the aggregate named this follow-up id, queued or
+     *  consumed: the replay key, kept with {@link pendingFollowUps} and
+     *  whole on the same terms. */
+    readonly followUpNamed: (
+      aggregateId: AggregateId,
+      followUpId: string,
+    ) => boolean;
     /** Seed a run's `pendingFollowUps` from its committed rows, when the
      *  claim just moved here (`claimMoved`) or this publisher has not seeded
      *  it yet: `rows` when the caller just read them, else a read of its
@@ -189,5 +196,6 @@ export type SessionEventReads = Pick<
   | 'aggregate'
   | 'openWork'
   | 'pendingFollowUps'
+  | 'followUpNamed'
   | 'hydrateFollowUps'
 >;

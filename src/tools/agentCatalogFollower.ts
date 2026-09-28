@@ -17,6 +17,7 @@ import { Cause, Effect, Layer, Schedule, Stream } from 'effect';
 
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
 import { refresh as refreshAgentCatalog } from '@agent/index/agentRegistry';
+import { followerOwnsInitialLoad } from '@agent/index/catalogReadiness';
 import { emitAppSignal } from '@eventBus/AppSignals';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -34,7 +35,11 @@ export const agentCatalogFollower = Layer.effectDiscard(
         plugin.agents === true ? [plugin.id] : [],
       ),
     );
+    // The first element's reload is the catalog's initial load: a host's
+    // `loadAgents` waits for it rather than scanning beside it.
+    const landed = yield* followerOwnsInitialLoad;
     const reload = Effect.suspend(() => refreshAgentCatalog()).pipe(
+      Effect.ensuring(landed),
       Effect.andThen(
         Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
       ),

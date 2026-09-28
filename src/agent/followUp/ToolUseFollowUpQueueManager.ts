@@ -11,11 +11,7 @@ import {
 } from '@shared/schemas';
 import { heldElsewhereBy } from '@shared/session/database';
 import { runRelation } from '@shared/session/runRelation';
-import {
-  foldRunRows,
-  freshRunRows,
-  type QueuedFollowUp,
-} from '@shared/session/runRows';
+import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { Append } from '@shared/session/sessionEvents';
 import { createBoundedIdSet } from '@utils/core/boundedIdSet';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -558,15 +554,22 @@ export class ToolUseFollowUpQueue {
           // This job is the only admission running, so an id is judged
           // against rows that committed, never against one being written: a
           // replayed id the rows already name is not written again, and it
-          // stays queued unless the rows consumed it.
-          const rows =
-            replayable.size > 0
-              ? foldRunRows(yield* port.rows(runId))
-              : freshRunRows();
-          const pending = new Set(rows.followUps.map((f) => f.followUpId));
-          const known = ({ followUpId }: QueuedFollowUp) =>
-            replayable.has(followUpId) && rows.followUpIds.has(followUpId);
-          const fresh = followUps.filter((f) => !known(f));
+          // stays queued unless the rows consumed it. The publisher keeps the
+          // run's follow-up slice whole while this process holds the claim
+          // (seeded where the claim moved here), so the judgment reads that
+          // slice by id rather than the run's rows.
+          const replayed = new Set(
+            followUps.flatMap(({ followUpId }) =>
+              replayable.has(followUpId) && port.named(runId, followUpId)
+                ? [followUpId]
+                : [],
+            ),
+          );
+          const pending =
+            replayed.size === 0
+              ? new Set<string>()
+              : new Set(port.pending(runId).map((f) => f.followUpId));
+          const fresh = followUps.filter((f) => !replayed.has(f.followUpId));
           if (fresh.length > 0) {
             yield* append(
               fresh.map((followUp): SessionEventDraft => ({
@@ -578,7 +581,8 @@ export class ToolUseFollowUpQueue {
           }
           return {
             queued: followUps.filter(
-              (f) => !known(f) || pending.has(f.followUpId),
+              ({ followUpId }) =>
+                !replayed.has(followUpId) || pending.has(followUpId),
             ),
             wrote: fresh.length > 0,
           };

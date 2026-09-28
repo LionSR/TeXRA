@@ -1,8 +1,11 @@
 import { realpathSync } from 'node:fs';
 
-import { Effect } from 'effect';
+import { Effect, type FileSystem } from 'effect';
 
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import {
+  readInstalledPluginLoad,
+  type InstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
 
 import {
   ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
@@ -76,18 +79,18 @@ export function installSkillContributions(
 
 /**
  * Discover the installed contributions folded for one folder, with the
- * installed plugins that load now: the enabled ones the user trusts as they
- * are. Why each other enabled plugin loads nothing is a discovery issue, so
- * every listing names it. `options` replaces the installed options for one
- * call: the CLI's `skills list` flags.
+ * installed plugins that load (`plugins`, as the caller read them): the
+ * enabled ones the user trusts as they are. Why each other enabled plugin
+ * loads nothing is a discovery issue, so every listing names it. `options`
+ * replaces the installed options for one call: the CLI's `skills list`
+ * flags.
  */
 export function discoverRuntimeSkillSources(
   cwd: string,
-  stores: SettingsStores,
+  plugins: InstalledPluginLoad,
   options: SkillSourceOptions = installed.options,
 ) {
   return Effect.gen(function* () {
-    const plugins = yield* readInstalledPluginLoad(stores);
     const result = yield* discoverSkillSources(
       foldSkillSources(installed.contributions, {
         cwd,
@@ -121,11 +124,11 @@ export function discoverRuntimeSkillSources(
  */
 const discoverRuntimeSkills = (
   workspaceRoot: string | undefined,
-  stores: SettingsStores,
+  plugins: InstalledPluginLoad,
 ) =>
   discoverRuntimeSkillSources(
     workspaceRoot ?? safeHomedir() ?? '/nonexistent',
-    stores,
+    plugins,
   );
 
 function sourceLabel(source: SkillSource): string {
@@ -197,7 +200,10 @@ export function skillDisplayItem(
 export const loadRuntimeSkillDisplay = Effect.fn('skills.runtimeDisplay')(
   function* (workspaceRoot: string | undefined, stores: SettingsStores) {
     const disabled = yield* readDisabledSkills(stores);
-    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
+    const result = yield* discoverRuntimeSkills(
+      workspaceRoot,
+      yield* readInstalledPluginLoad(stores),
+    );
     return {
       // A switched-off plugin's skills are hidden, not listed as disabled:
       // the plugin's switch is their one control.
@@ -233,11 +239,11 @@ export function filterDiscoveredSkills(
  */
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
-  stores: SettingsStores,
+  plugins: InstalledPluginLoad,
   disabled: DisabledSkills,
 ) {
   return Effect.gen(function* () {
-    const result = yield* discoverRuntimeSkills(workspaceRoot, stores);
+    const result = yield* discoverRuntimeSkills(workspaceRoot, plugins);
     const enabled = filterDiscoveredSkills(result, disabled);
     for (const { skill } of enabled.skills) {
       // Hosts hand the workspace root over already canonical, and a
@@ -293,12 +299,24 @@ export function formatRuntimeSkillActivation({
 }
 
 export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
-  function* (workspaceRoot: string | undefined, stores: SettingsStores) {
+  function* (run: {
+    /** The run's workspace root; undefined with no folder open. */
+    readonly workspacePath: string | undefined;
+    /** The run's setting slots, which hold its disabled-skill lists. */
+    readonly settings: SettingsStores;
+    /** The installed plugins that load, as the run's launch reads them. */
+    readonly installed: Effect.Effect<
+      InstalledPluginLoad,
+      never,
+      FileSystem.FileSystem
+    >;
+  }) {
     // The enabled set the hosts list, with every tool plugin's skills
     // whatever its switch: each step lists those of the plugins it pinned,
     // so a switch flipped mid-conversation reaches the prompt.
-    const disabled = yield* readDisabledSkills(stores);
-    const result = yield* loadEnabledRuntimeSkills(workspaceRoot, stores, {
+    const disabled = yield* readDisabledSkills(run.settings);
+    const plugins = yield* run.installed;
+    const result = yield* loadEnabledRuntimeSkills(run.workspacePath, plugins, {
       ...disabled,
       plugins: [],
     });

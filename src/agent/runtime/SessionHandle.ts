@@ -337,7 +337,8 @@ export class SessionHandle {
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
       parentOf: (runId) =>
         SubscriptionRef.getUnsafe(graph.view).runs.get(runId)?.parentId,
-      rows: (runId) => graph.aggregateRows(run(runId)),
+      named: (runId, followUpId) =>
+        graph.events.followUpNamed(run(runId), followUpId),
       acquireClaim: (runId) => this.acquireClaims(run(runId)),
     });
     this.modelRetries = init.modelRetries;
