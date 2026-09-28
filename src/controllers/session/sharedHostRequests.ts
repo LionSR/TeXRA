@@ -334,6 +334,7 @@ export function handleSharedHostRequest(
       case 'clean': {
         const operation = yield* ports.runActions.workflowFileOperationRequest(
           request.runId,
+          request.kind,
         );
         if (operation) {
           yield* host.runWorkflowFileOperation(request.kind, operation);

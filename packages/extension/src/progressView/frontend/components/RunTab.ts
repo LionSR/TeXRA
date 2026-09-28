@@ -266,7 +266,7 @@ export class RunTab extends LitElement {
           }</wa-tooltip
         >
         ${
-          run.group === 'interrupted' && !run.readOnly
+          run.group === 'interrupted' && run.actions.includes('resume')
             ? html`<wa-button
                 id="run-tab-resume-button"
                 class="tab-resume"

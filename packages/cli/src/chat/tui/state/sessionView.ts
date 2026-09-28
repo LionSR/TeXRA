@@ -97,18 +97,19 @@ export function runViewOf(
   return runId === undefined ? undefined : view.runs.get(runId);
 }
 
-/** The run to stop when a child is still running or waiting. */
+/** The child run a kill targets, while its `actions` offers a stop. */
 export function killableRunId(run: RunView | undefined): RunId | undefined {
-  return run &&
-    run.parentId !== null &&
-    (run.group === 'running' || run.group === 'waiting')
+  return run && run.parentId !== null && run.actions.includes('stop')
     ? run.id
     : undefined;
 }
 
-/** The run to resume when it was interrupted and can pick up again. */
+/** The interrupted run a native resume picks up, while its `actions` offers
+ *  one (the TUI resumes tool-use agents: `resumeEligible`). */
 export function resumableRunId(run: RunView | undefined): RunId | undefined {
-  return run?.group === 'interrupted' && run.resumeEligible
+  return run?.group === 'interrupted' &&
+    run.resumeEligible &&
+    run.actions.includes('resume')
     ? run.id
     : undefined;
 }

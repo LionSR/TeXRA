@@ -21,6 +21,7 @@ import {
   type SessionView,
   type RunView,
 } from '@shared/session/sessionView';
+import { runActions } from '@shared/session/runActions';
 import { compareByNewestCreationTime } from '@shared/runs/runOrdering';
 import {
   isInFlightPhase,
@@ -51,8 +52,17 @@ type RunViewOverrides = Partial<Omit<RunView, 'category'>> & {
 };
 
 /** One stream as the fold would state it; every field explicit. The label,
- *  tone, and group follow the status the way the fold derives them. */
+ *  tone, and group follow the status the way the fold derives them, and the
+ *  actions follow the final fields through the fold's own rule. */
 export function makeRunView(over: RunViewOverrides): RunView {
+  const run = runViewFields(over);
+  // A case may blank the identity to stand for metadata not yet folded; the
+  // fold never states such a run, so it offers nothing.
+  const identity = run.identity as RunView['identity'] | undefined;
+  return { ...run, actions: identity ? runActions(run) : [] };
+}
+
+function runViewFields(over: RunViewOverrides): RunView {
   const id = over.id as RunId;
   const status = over.status ?? RUN_PHASE.RUNNING;
   const copy = runStatusCopy(status, {
@@ -93,6 +103,7 @@ export function makeRunView(over: RunViewOverrides): RunView {
     rollup: { total: 0, running: 0, finished: 0 },
     approval: 'none' as const,
     readOnly: false,
+    actions: [],
     forceExpanded: false,
     group: isInFlightPhase(status) ? ('running' as const) : ('recent' as const),
     usage: { inputTokens: 0, outputTokens: 0, cost: 0 },

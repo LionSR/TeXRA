@@ -28,6 +28,7 @@ import {
   PlanSchema,
   requestParksItsCaller,
   RoundKeyedOutputSidecarValueSchemas,
+  RunActionSchema,
   RunIdentitySchema,
   RunOutcomeSchema,
   RUN_LIFECYCLE_READY,
@@ -202,6 +203,8 @@ const RunViewCommonSchema = z.object({
   approval: z.enum(['none', 'own', 'descendant']),
   /** This process cannot act on it: another live owner, or unreadable (5.2). */
   readOnly: z.boolean(),
+  /** What a host may offer on the run now (`runActions`). */
+  actions: z.array(RunActionSchema).readonly(),
   /** This run or a descendant needs the user; outranks the surface's
    *  collapsed choice. */
   forceExpanded: z.boolean(),

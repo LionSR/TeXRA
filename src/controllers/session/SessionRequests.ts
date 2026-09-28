@@ -40,7 +40,7 @@ import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
 } from '@shared/schemas';
-import type { LocalRuntimeState, RunId } from '@shared/schemas';
+import type { LocalRuntimeState, RunAction, RunId } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import {
   DatabaseClaimRefused,
@@ -58,6 +58,7 @@ import {
 } from '@shared/session/requestErrors';
 import type { Outcome, RuntimeRequest } from '@shared/session/runtimeRequest';
 import type { SessionEventsShape } from '@shared/session/sessionEvents';
+import { runActionRefusal } from '@shared/session/runActions';
 import { recordInquiryDecision } from '@tools/inquiry/inquiryActions';
 import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 import { toErrorMessage } from '@utils/errors/errorMessage';
@@ -97,6 +98,7 @@ export function sessionRequests(
   const request = Effect.fn('SessionRequests.request')(function* (
     req: RuntimeRequest,
   ) {
+    yield* requireRunAction(session, req);
     const admitted = yield* admit(log, local, req);
     return yield* handle(
       session,
@@ -116,10 +118,9 @@ export function sessionRequests(
     mode: DeletionMode,
     expectedStartCommit: number,
   ) {
-    const admitted = yield* admit(log, local, {
-      kind: 'run.delete',
-      runId,
-    });
+    const req = { kind: 'run.delete', runId } as const;
+    yield* requireRunAction(session, req);
+    const admitted = yield* admit(log, local, req);
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
         new Unavailable({
@@ -133,6 +134,32 @@ export function sessionRequests(
     );
   });
   return { approvals, request, removeRun };
+}
+
+/** The run action a request performs, where the run's `actions` gates it. */
+const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
+  'run.delete': 'delete',
+  'run.compact': 'compact',
+};
+
+/**
+ * Refuse a delete or compaction the run's current `actions` no longer holds,
+ * with its reason: the host rendered the action from an earlier view, and
+ * the run may have started since. A run the view has not folded yet, or one
+ * another process holds, is left to `admit` and the claim, which answer
+ * `NotOwner` for the latter. A stop is not gated: it is always safe to
+ * ask, and a run just launched may not have folded live.
+ */
+function requireRunAction(
+  session: Pick<SessionHandle, 'view'>,
+  req: RuntimeRequest,
+): Effect.Effect<void, RequestError> {
+  const action = GATED_ACTIONS[req.kind];
+  if (action === undefined || req.kind === 'policy.set') return Effect.void;
+  const run = SubscriptionRef.getUnsafe(session.view).runs.get(req.runId);
+  return run === undefined || run.readOnly || run.actions.includes(action)
+    ? Effect.void
+    : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
 }
 
 /** Admit against current sequence-row existence and claims. A foreign owner

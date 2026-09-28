@@ -284,6 +284,13 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **A run's menu offers only what its state allows** — "Delete output files"
+  was offered on a workflow run that was still starting, and Delete session
+  on a run another TeXRA window held. Every surface now offers the same
+  actions for the same run state, and an action clicked just as the run
+  changed (it started, or another process took it) is refused with the
+  reason instead of acting on a running run.
+
 - **Switching to another model of the same provider mid-chat keeps
   working** — after `/model` moved a chat to another model of the same
   provider (for example DeepSeek V4.1 Flash to V4 Pro), the next message
