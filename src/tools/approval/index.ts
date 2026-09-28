@@ -55,7 +55,7 @@ export function configureDelegatedChildApprovals(
 /**
  * Release all agent resources held for a deleted run: approval state AND
  * the follow-up queue. `forgetRunAncestry` clears the run's ancestry edges
- * and its explicit bypass values; `followUps.terminalize` drops the queue.
+ * and its explicit bypass values; `followUps.forget` drops the queue.
  * These always need to be cleared together when a run is removed, so this
  * is the single function hosts should call. The run's open requests need no
  * sweep: the fold drops them with the run's tombstone.
@@ -68,5 +68,5 @@ export function releaseRunResources(
   session: SessionHandle,
 ): void {
   session.approvals.forgetRunAncestry(runId);
-  session.followUps.terminalize(runId);
+  session.followUps.forget(runId);
 }

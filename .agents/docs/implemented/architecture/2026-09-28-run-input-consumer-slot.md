@@ -1,7 +1,9 @@
 # A run's input has one consumer slot
 
-Status: proposed, 2026-09-28, revision 2. Design only; no code until this
-is read. Follows #13468, which put the follow-up holds on the
+Status: implemented, 2026-09-28, revision 3. Revision 2 proposed an
+asynchronous slot that takes its claim hold in a publisher job; what landed
+is the synchronous slot described under "What landed" at the end. Follows
+#13468, which put the follow-up holds on the
 `followup.queued` row (`holdUntil`), made the take rule row-only
 (`ToolUseFollowUpQueue.takeable`), and woke a waiting take when a sender's
 terminal row folds.
@@ -164,6 +166,74 @@ itself; those are rewritten to the slot state they stand for:
   `GitHubSubscriptionProgressEvents.vitest.ts`,
   `ToolUseFollowUpProgressEvents.vitest.ts`, `RetryState.vitest.ts`,
   `UsageLogService.vitest.ts`.
+
+## What landed (revision 3)
+
+The slot is synchronous. `QueueEntry.slot` holds the lease and, for a
+recovery slot, the claim hold the admission took (`Slot.hold`), which
+replaces `adoptedClaim`. A releasing slot (`Slot.releasing`) is taken by
+nobody while its hold is given back on the publisher, which replaces the
+`releasing` set. `followup.closed` replaces the in-memory `terminalized`
+set and its cap.
+
+**Why the slot stays synchronous.** Revision 2's `acquire` takes the claim
+hold in a publisher job, so every claim would become an Effect. The claim
+API (`claimLive`, `claimChildRun`, `claimRecovery`, `useRecovery`,
+`attachInput`, `release`) is called at about 24 production sites and about
+74 test sites, and its callers depend on it being synchronous: a resume
+claims before any asynchronous preparation, and a loop claims before its
+first yield. Making it asynchronous would thread an Effect through each of
+those sites for no gain in exclusivity, because the slot is already the
+only record of a consumer. A synchronous slot also doesn't prove the claim
+is held for `loop` and `child` slots: those consumers hold the claim
+themselves (`holdRunClaim`), and `attachInput` gives the recovery hold back
+once a consumer attaches, because by then the consumer's own hold covers
+the claim.
+
+**`pendingRelease` stays.** Admission is a publisher job, but `release` and
+`terminalize` are synchronous calls from the consumer, so they can land
+while an admission's write is in flight. The rule that a committed row
+keeps the run recoverable needs the release to wait for that admission to
+settle. `pendingRelease` and `admitting` record exactly that, and nothing
+else does.
+
+**Teardown writes `followup.closed`; deletion reads `run.removed`.**
+`terminalize` (a torn-down park with nothing queued) forgets the entry and
+writes `followup.closed` under the run's claim, in one publisher job that
+gives the slot's hold back only after the row commits, so no other process
+can take the claim between the teardown and its row. Deletion calls
+`forget`, and its `run.removed` row is the close. `followup.reopened`
+wasn't needed: a run's slot, while held, admits regardless of the flag,
+and a `run.activate` clears it. An entry with no slot holds no claim, so it
+never answers "closed" from memory: an admission to it reads the flag, and
+reads it again once it holds the claim (a claim that moved here re-reads
+the run's rows first), so another process's close is seen. `lifecycleOf` in
+`runRows.ts` reads both flags from a run's `run.activate`, `run.end`,
+`run.removed` and `followup.closed` rows, latest lifecycle first.
+`SessionEvents` keeps the flags from committed rows and hydrates them when
+a claim moves to this process. So a closed run refuses a producer that is
+not a claim across restarts and processes, which the in-memory set could
+not do. This behavior is new: before, a restart forgot the close.
+
+**"Ended" means the latest lifecycle, with one owner.** `SessionEvents`
+keeps one lifecycle standing per run, folded from its lifecycle rows by
+commit: this process's commits, the reads at hydration, and the fold-gated
+tail's rows from every process (`foldLifecycle`). A row at or below the
+commit already applied is ignored, so a lagging source never rolls a newer
+standing back. The queue keeps no copy; a folded terminal row only wakes
+the takes (`wakeTakes`). So a result held from a reactivated child waits
+for that lifecycle's own `run.end`, and an activation another process
+commits reopens the sender here too.
+
+**Collected tombstones.** Deletion cleanup (`collectDeletion`) does collect
+a deleted root's aggregates, including a sender's `run.removed` row. The
+open check in revision 2 resolved to the extra clause: at hydration, a
+sender with no lifecycle rows and no `event_sequence` row is counted as
+ended. A run that sent a result has written rows (its activation at least),
+so losing both its rows and its `event_sequence` row means the aggregate was
+collected, which only deletion does.
+
+**Format.** `SESSION_EVENT_FORMAT` 42.
 
 ## E2E, with artifacts
 

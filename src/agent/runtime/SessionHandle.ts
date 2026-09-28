@@ -336,11 +336,12 @@ export class SessionHandle {
       SubscriptionRef.getUnsafe(graph.view).runs.get(runId);
     this.followUps = new ToolUseFollowUpQueue({
       exclusive: (job) => graph.exclusive(job),
-      detach: (job) => graph.detach(() => job),
+      detach: (job) => graph.detach(job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
       ended: (runId) =>
         graph.events.runEnded(run(runId)) ||
         viewOf(runId)?.durableOutcome != null,
+      inputClosed: (runId) => graph.events.inputClosed(run(runId)),
       parentOf: (runId) => viewOf(runId)?.parentId,
       named: (runId, followUpId) =>
         graph.events.followUpNamed(run(runId), followUpId),
@@ -1102,18 +1103,17 @@ export class SessionHandle {
   }
 
   /**
-   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the result
-   * listeners and the registry's folded-stop child sweep, which is why
-   * neither is on the raw tail above. Both read the run's view
-   * synchronously, so a notification ahead of the fold would hand them the
-   * state the row just replaced.
+   * One row of the fold-gated tail ({@link folded}, PRD 7.2): the follow-up
+   * lifecycle, the result listeners and the folded-stop child sweep, none on
+   * the raw tail above: each reads the run's view synchronously, and a
+   * notification ahead of the fold would hand it the state the row replaced.
    */
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       // The sweep and host notifications belong to the authoring process.
       const target = aggregateTarget(event.aggregateId);
-      if (target.kind === 'run' && endsRun(event))
-        this.followUps.wakeHeldFrom(target.id);
+      this.graph.events.foldLifecycle(event);
+      if (endsRun(event)) this.followUps.wakeTakes();
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
       if (target.kind !== 'run' || event.type !== 'run.end') return;

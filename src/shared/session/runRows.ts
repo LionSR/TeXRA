@@ -214,10 +214,34 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
 });
 
 /** The rows that end a run for its held input (`holdUntil: 'senderEnd'`):
- *  what `SessionEvents.runEnded` records and what wakes a waiting take. */
-export const RUN_TERMINAL_TYPES = ['run.end', 'run.removed'] as const;
+ *  what `SessionEvents.runEnded` records and what wakes a waiting take. A
+ *  `run.activate` starts the next lifecycle: "ended" is the latest one's. */
+const RUN_TERMINAL_TYPES = ['run.end', 'run.removed'] as const;
 export const endsRun = (row: Pick<SessionEvent, 'type'>): boolean =>
   (RUN_TERMINAL_TYPES as readonly string[]).includes(row.type);
+/** The rows that decide, latest first wins, whether a run has ended and
+ *  whether its input is closed. */
+export const RUN_LIFECYCLE_TYPES = [
+  ...RUN_TERMINAL_TYPES,
+  'run.activate',
+  'followup.closed',
+] as const;
+/** A run's lifecycle standing from its rows in commit order, after `from`:
+ *  ended when its latest `run.end` / `run.removed` follows its latest
+ *  `run.activate`, and input-closed when a `followup.closed` or
+ *  `run.removed` does. */
+export function lifecycleOf(
+  rows: readonly Pick<SessionEvent, 'type'>[],
+  from = { ended: false, closed: false },
+): { readonly ended: boolean; readonly closed: boolean } {
+  let { ended, closed } = from;
+  for (const { type } of rows) {
+    if (type === 'run.activate') ended = closed = false;
+    if (endsRun({ type })) ended = true;
+    if (type === 'followup.closed' || type === 'run.removed') closed = true;
+  }
+  return { ended, closed };
+}
 
 /** The shared rows that move a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
