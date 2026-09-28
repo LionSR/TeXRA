@@ -68,13 +68,13 @@ const PASS_THROUGH_CASES: ReadonlyArray<{
       draft: {
         type: 'run.position',
         aggregateId: runAggregate,
-        payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 2 },
+        payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
       },
     },
     event: 'run.position',
     payload: {
       aggregateId: runAggregate,
-      payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 2 },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 2 },
     },
   },
   {

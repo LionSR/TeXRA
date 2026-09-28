@@ -329,7 +329,7 @@ export const executeCliWorkflowConfig = Effect.fn('executeCliWorkflowConfig')(
       snapshot.runtime.lastError != null
         ? Effect.succeed(false)
         : Effect.map(
-            isTerminalWorkflowCheckpoint(runId, snapshot, session),
+            isTerminalWorkflowCheckpoint(runId, session),
             (terminal) => !terminal,
           );
     const writeResumeHint = (

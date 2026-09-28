@@ -311,6 +311,7 @@ function agentRun(
 const freshState = (): RunState => ({
   commit: 0,
   snapshotCommit: null,
+  lastSnapshot: null,
   rowsBeforeSnapshot: 0,
   family: 'toolUse',
   at: null,
@@ -370,8 +371,7 @@ const openRun = Effect.fn('openRun')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
         stateSlices: null,
       },

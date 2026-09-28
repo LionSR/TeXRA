@@ -62,9 +62,6 @@ beforeEach(async () => {
 });
 
 const SNAPSHOT_RUNTIME = {
-  phase: 'waiting',
-  round: 0,
-  turn: 0,
   modelId: 'deepseekT',
   modelCompatibilityKey: null,
   lastError: null,

@@ -53,7 +53,6 @@ import { ModelInvoker } from '../ModelInvoker';
 import { Runs } from '../runRegistry';
 import {
   appendRow,
-  rowAggregate,
   snapshotRow,
   positionRow,
   type SnapshotPatch,
@@ -166,14 +165,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   };
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
     snapshotRow(runId, state, { ...patch, state: loopState(state) });
-
-  const publishTouchedFiles = (): void => {
-    const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
-    if (paths.length === 0) return;
-    session.publish([
-      { type: 'run.workspaceFiles', aggregateId: rowAggregate(runId), paths },
-    ]);
-  };
 
   // A resumed root's first continuation-pinning step stands it down first.
   let resumeUnseen = start.resume;
@@ -288,8 +279,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
-      snapshotRow(runId, opening, {
-        phase: 'initial',
+      ...snapshotRow(runId, opening, {
         runtime: {
           modelId: bound.modelId,
           modelCompatibilityKey: bound.compatibilityKey,
@@ -365,7 +355,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         state = yield* cell.append([
           ...(advance ? [positionRow(runId, state, 'turn.end')] : []),
           ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
-          snapshot(state, { phase: 'model.ready', turn: state.turn + 1 }),
+          ...snapshot(state, {}),
           positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
       }
@@ -509,9 +499,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
                 force,
               }),
             );
-          state = yield* cell.append([
-            snapshot(state, { phase: 'model.ready', round: state.round + 1 }),
-          ]);
+          const admitted = snapshot(state, {});
+          if (admitted.length > 0) state = yield* cell.append(admitted);
         }
         const toolChoice =
           forcedTool !== null && bound.supportsForcedToolChoice
@@ -525,7 +514,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             ? yield* rounds.request(index)
             : {
                 system: step.system,
-                round: state.round,
+                // The model call this request is: the attempt row counts a
+                // new one, a retry of the open attempt is the same call.
+                round:
+                  state.openAttempt === null ? state.round + 1 : state.round,
                 debugName: 'tooluse',
               }),
         });
@@ -659,12 +651,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // close in its batch: a parked transcript never streams. The invoker
         // owns `lastError`; this snapshot does not restate it.
         state = yield* cell.append([
-          snapshot(state, { phase: 'waiting' }),
+          ...snapshot(state, {}),
           positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
           positionRow(runId, state, 'waiting'),
         ]);
-        publishTouchedFiles();
         if (turn.outcome === 'completed') {
           const interactions = workspace.interactions;
           const cost = state.usage.totalCost;
@@ -709,7 +700,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         yield* Effect.sync(attach);
         return yield* Effect.acquireUseRelease(
           enter,
-          roundPolicy ? roundLoop(roundPolicy, runTurn, snapshot) : loopBody,
+          roundPolicy ? roundLoop(roundPolicy, runTurn) : loopBody,
           (cell, exit) => settleRun(cell, logger, followUps)(exit),
         );
       }),

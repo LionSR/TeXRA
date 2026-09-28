@@ -303,9 +303,6 @@ function checkpointSnapshot(): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
-      phase: 'initial',
-      round: 0,
-      turn: 0,
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,

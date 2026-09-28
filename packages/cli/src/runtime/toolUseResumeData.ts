@@ -5,18 +5,14 @@ import { deriveResumability } from '@agent/storage';
 import type { SessionHandle } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import {
-  aggregateId,
   AgentCategory,
   HISTORY_RUN_STATUS,
   RUN_OUTCOME,
-  type RunSnapshotPayload,
   type HistoryRunStatus,
   type RunId,
   type RunLifecycleStatus,
 } from '@shared/schemas';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import { foldRunRows } from '@shared/session/runRows';
-import { ensureError } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'CliToolUseResumeData';
 
@@ -102,11 +98,7 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
     } else {
       resumable =
         decision.kind === 'checkpoint' &&
-        !(yield* isTerminalWorkflowCheckpoint(
-          facts.id,
-          decision.snapshot,
-          session,
-        ));
+        !(yield* isTerminalWorkflowCheckpoint(facts.id, session));
     }
   }
   const status =
@@ -119,30 +111,28 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
 /**
  * Whether a workflow checkpoint only replays a terminal compile rejection:
  * the last round's compile was rejected and no round is left to fix it. The
- * snapshot carries no such marker: it is `halted` with no model failure and
- * the loop's own `halted` step says FAILED, which only the rejection leaves
- * (output finalization's verdict is `run.end`'s, not the loop's). Rows that
- * cannot be read or folded leave the run offered, and refused at open time
- * like any unreadable run.
+ * rows carry no such marker: the loop concluded (`halted`, its last round
+ * closed) with no model failure, and its own `halted` position says FAILED,
+ * which only the rejection leaves (output finalization's verdict is
+ * `run.end`'s, not the loop's). Rows that cannot be read or folded leave the
+ * run offered, and refused at open time like any unreadable run.
  */
 export const isTerminalWorkflowCheckpoint = Effect.fn(
   'isTerminalWorkflowCheckpoint',
-)(function* (
-  id: RunId,
-  snapshot: RunSnapshotPayload,
-  session: SessionHandle,
-): Effect.fn.Return<boolean> {
-  const { runtime } = snapshot;
-  if (runtime.phase !== 'halted' || runtime.lastError != null) return false;
-  const verdict = yield* session.readAggregate(aggregateId('run', id)).pipe(
-    Effect.flatMap((rows) =>
-      Effect.try({ try: () => foldRunRows(rows).outcome, catch: ensureError }),
-    ),
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-    ),
+)(function* (id: RunId, session: SessionHandle): Effect.fn.Return<boolean> {
+  const state = yield* session.ledger
+    .load(id)
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+      ),
+    );
+  return (
+    state !== null &&
+    state.phase === 'halted' &&
+    state.lastError === null &&
+    state.outcome === RUN_OUTCOME.FAILED
   );
-  return verdict === RUN_OUTCOME.FAILED;
 });

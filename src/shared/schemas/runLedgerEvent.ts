@@ -82,12 +82,12 @@ const PositionAtSchema = z.enum([
 export type PositionAt = z.infer<typeof PositionAtSchema>;
 
 /** Where the loop stands (`at`, not "step": a step is one model call) and
- *  its coordinates. The fold projects `RunView.position` from them. */
+ *  the turn it stands in: the one record of the loop's position, which the
+ *  fold projects to `RunState.phase` and `RunView.position`. */
 export const RunPositionPayloadSchema = z
   .strictObject({
     family: RunFamilySchema,
     at: PositionAtSchema,
-    round: z.int().nonnegative().nullish(),
     turn: z.int().nonnegative().nullish(),
     /** The loop's own terminal word. The canonical terminal fact stays
      *  `run.end`, which also covers failures before the runtime starts. */
@@ -440,19 +440,6 @@ export const ToolResultPayloadSchema = z
   });
 export type ToolResultPayload = z.infer<typeof ToolResultPayloadSchema>;
 
-/* ----------------------------------------------------------- run.snapshot */
-
-/** The loop's phase vocabulary, apart from `RunPhaseSchema` (D9). */
-const RunLoopPhaseSchema = z.enum([
-  'initial',
-  'model.ready',
-  'model.submitted',
-  'results.ready',
-  'waiting',
-  'halted',
-]);
-export type RunLoopPhase = z.infer<typeof RunLoopPhaseSchema>;
-
 /* ------------------------------------------------------------ model.retry */
 
 const PendingRetrySchema = z.strictObject({
@@ -476,11 +463,15 @@ export const ModelRetryPayloadSchema = z.strictObject({
   permit: PendingRetrySchema.nullable(),
 });
 
-/** Coordinates and runtime-owned failure state, which no row carries. */
+/* ----------------------------------------------------------- run.snapshot */
+
+/**
+ * What the loop runs on, apart from where it stands: `run.position` is the
+ * one record of the loop's position and coordinates, so a snapshot never
+ * restates them and is written only when one of these, or the loop state
+ * beside them, changes.
+ */
 const SnapshotRuntimeSchema = z.strictObject({
-  phase: RunLoopPhaseSchema,
-  round: z.int().nonnegative(),
-  turn: z.int().nonnegative(),
   modelId: z.string().min(1),
   modelCompatibilityKey: ModelCompatibilityKeySchema.nullable(),
   /**

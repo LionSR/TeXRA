@@ -57,15 +57,7 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     const { snapshot } = resumability;
     yield* Effect.logDebug(
       `Retrieved ${type} resume data for run: ${runId}`,
-    ).pipe(
-      Effect.annotateLogs({
-        data: {
-          round: snapshot.runtime.round,
-          phase: snapshot.runtime.phase,
-        },
-      }),
-      withLogChannel(CHANNEL),
-    );
+    ).pipe(withLogChannel(CHANNEL));
     return {
       runId,
       agentConfig: { ...agentConfig, model: snapshot.runtime.modelId },

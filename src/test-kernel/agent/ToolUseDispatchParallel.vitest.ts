@@ -203,6 +203,7 @@ const dispatchRunId = (): RunId =>
 const freshState = (): RunState => ({
   commit: 0,
   snapshotCommit: null,
+  lastSnapshot: null,
   rowsBeforeSnapshot: 0,
   family: 'toolUse',
   at: null,
@@ -341,8 +342,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
         stateSlices: options.stateSlices ?? null,
       },

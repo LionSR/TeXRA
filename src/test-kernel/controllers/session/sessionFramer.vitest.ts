@@ -108,7 +108,7 @@ const waiting: SessionEventDraft = {
 const running: SessionEventDraft = {
   type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 1 },
+  payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
 };
 
 /** A running model reply with no text of its own: the row the live text for

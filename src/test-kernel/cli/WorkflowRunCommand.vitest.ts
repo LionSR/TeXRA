@@ -337,9 +337,6 @@ function workflowSnapshot(
   return {
     family: 'toolUse',
     runtime: {
-      phase: 'model.ready',
-      round: 0,
-      turn: 1,
       modelId: 'deepseekT',
       modelCompatibilityKey: null,
       lastError: null,
@@ -394,10 +391,20 @@ const seedResumableCheckpoint = (
       {
         type: 'run.snapshot',
         aggregateId: aggregate,
-        payload: workflowSnapshot(terminal ? { phase: 'halted' } : {}),
+        payload: workflowSnapshot(),
       },
       ...(terminal
         ? [
+            // The last round closed: the loop concluded, then halted.
+            {
+              type: 'run.position' as const,
+              aggregateId: aggregate,
+              payload: {
+                family: 'toolUse' as const,
+                at: 'turn.end' as const,
+                turn: 1,
+              },
+            },
             {
               type: 'run.position' as const,
               aggregateId: aggregate,
@@ -1403,6 +1410,9 @@ describe('CLI run command, workflow agents', () => {
       Effect.gen(function* () {
         mockWorkflowRun(workflowRun('abc001'));
         yield* seedResumableCheckpoint(currentSession(), 'abc001', true);
+        // The verdict is the rows', not the snapshot's: a second run whose
+        // loop did not conclude.
+        yield* seedResumableCheckpoint(currentSession(), 'abc002');
 
         yield* workflowProgram();
         const canAdvertise: CheckpointRefinement | undefined =
@@ -1410,17 +1420,14 @@ describe('CLI run command, workflow agents', () => {
 
         expect(
           yield* canAdvertise!(
-            {
-              kind: 'checkpoint',
-              snapshot: workflowSnapshot({ phase: 'halted' }),
-            },
+            { kind: 'checkpoint', snapshot: workflowSnapshot() },
             'abc001' as RunId,
           ),
         ).toBe(false);
         expect(
           yield* canAdvertise!(
             { kind: 'checkpoint', snapshot: workflowSnapshot() },
-            'abc001' as RunId,
+            'abc002' as RunId,
           ),
         ).toBe(true);
       }),

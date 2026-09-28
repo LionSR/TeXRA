@@ -322,7 +322,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         // the next turn's snapshot does not read the run as still failed.
         ...(joined.turn
           ? [
-              snapshotRow(runId, state, {
+              ...snapshotRow(runId, state, {
                 runtime: { lastError: null },
                 ...(state.loop
                   ? { state: { ...state.loop, ...joined.recorded } }

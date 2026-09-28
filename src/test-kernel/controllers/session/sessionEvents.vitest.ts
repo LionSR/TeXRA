@@ -557,7 +557,7 @@ describe('session events and view', () => {
         {
           type: 'run.position',
           aggregateId: qualifyAggregateId('run', RUN),
-          payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 1 },
+          payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
         },
       ]);
       // The first state with the run in it has all of the history: no
@@ -1824,7 +1824,7 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           {
             ...waiting,
-            payload: { family: 'toolUse', at: 'waiting', round: 1 },
+            payload: { family: 'toolUse', at: 'waiting' },
           },
           {
             type: 'response.finalized',
@@ -2362,17 +2362,12 @@ describe('RunLedger', () => {
       stageId: null,
     },
   ] as const;
-  const snapshot = (
-    phase: 'model.ready' | 'results.ready',
-  ): RunLedgerDraft => ({
+  const snapshot = (): RunLedgerDraft => ({
     type: 'run.snapshot',
     aggregateId: AGGREGATE,
     payload: {
       family: 'toolUse',
       runtime: {
-        phase,
-        round: 0,
-        turn: 0,
         modelId: 'gpt-test',
         modelCompatibilityKey: null,
         lastError: null,
@@ -2471,7 +2466,7 @@ describe('RunLedger', () => {
             ],
           },
         },
-        snapshot('model.ready'),
+        snapshot(),
       ]);
       state = yield* run.appendBatch(RUN, state, [
         {
@@ -2537,7 +2532,7 @@ describe('RunLedger', () => {
       ]);
       state = yield* run.appendBatch(RUN, state, [
         group,
-        snapshot('results.ready'),
+        snapshot(),
         {
           type: 'run.position',
           aggregateId: AGGREGATE,

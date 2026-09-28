@@ -32,7 +32,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
     snapshot: (
       state: RunState,
       patch: Omit<SnapshotPatch, 'state'>,
-    ) => RunLedgerDraft,
+    ) => readonly RunLedgerDraft[],
   ): Effect.fn.Return<
     RunState,
     Error,
@@ -73,8 +73,7 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
               usage: null,
             },
           },
-          snapshot(state, {
-            phase: state.phase ?? 'model.ready',
+          ...snapshot(state, {
             runtime: {
               modelId: next.modelId,
               modelCompatibilityKey: next.compatibilityKey,

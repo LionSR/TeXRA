@@ -46,9 +46,6 @@ const runtimeOf = (
   modelId: string,
   compatibilityKey: ModelCompatibilityKey | null,
 ): RunSnapshotPayload['runtime'] => ({
-  phase: 'initial',
-  round: 0,
-  turn: 0,
   modelId,
   modelCompatibilityKey: compatibilityKey,
   lastError: null,
