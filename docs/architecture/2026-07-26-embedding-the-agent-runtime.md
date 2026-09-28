@@ -536,7 +536,9 @@ Stopping the run (`session.runs.stop(runId)`, with the id
 the run. It does not answer or close the run's open requests: only a
 `request.decided` row resolves one (`projectRequests`,
 `src/shared/session/sessionFold.ts:1138-1156`, rebuilds a run's list from its
-unresolved rows), so an unanswered request stays listed until then. Stopping
+unresolved rows), so an unanswered request stays listed until then, or until
+the run is removed: `run.removed` drops every request of that run
+(`foldRunRemoved`, `src/shared/session/sessionFold.ts:1360-1378`). Stopping
 is the cancellation path, not a substitute for answering a run that should
 continue.
 
