@@ -65,6 +65,10 @@ test('desktop renderer boots past unreadable saved renderer state', async () => 
     // window, so a blank window fails the relaunch itself.
     launched = await launchTexraApp({ workspacePath, userDataPath });
     await expect(launched.page.locator('.shell-frame')).toBeVisible();
+    // The artifact: the booted window over the corrupt entry.
+    await launched.page.screenshot({
+      path: test.info().outputPath('corrupt-renderer-state.png'),
+    });
   } finally {
     if (launched) await closeTexraApp(launched);
     cleanupDirectory(workspacePath);
