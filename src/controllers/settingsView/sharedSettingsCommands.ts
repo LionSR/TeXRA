@@ -306,7 +306,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     getProviderDisplayName: (provider) =>
       profile.getProviderDisplayName(provider),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(roots, provider),
-    refreshAfterKeyChange: refreshAfterProviderKeyChange,
   });
   // A failed key write leaves the profile and the Models page showing the
   // key as it was before the attempt. The report is the notice: a repaint
@@ -443,7 +442,6 @@ export function createSettingsViewBody(ports: SettingsViewBodyPorts) {
     /** The LaTeX page's status, for the host's own LaTeX arms. */
     postLatexStatus: toolsPage.postLatexStatus,
     reported,
-    refreshAfterProviderKeyChange,
     signInSubscription,
     /** A TeXRA account change: the profile, the models it unlocks, and the
      *  agent catalog, which the host may be holding for a team sign-in. */

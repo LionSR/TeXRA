@@ -16,7 +16,7 @@ import type { StateReadFailed } from '@platform/interfaces';
 // Local imports - platform
 import type { PlatformSecrets } from '@platform/secrets';
 
-interface SettingsProfileKeyControllerDeps<R> {
+interface SettingsProfileKeyControllerDeps {
   /** The process secret store the host holds, where the keys are written. */
   secrets: PlatformSecrets;
   prompt: Pick<PromptHost, 'input' | 'info' | 'confirm'>;
@@ -27,25 +27,27 @@ interface SettingsProfileKeyControllerDeps<R> {
   getProviderKeyUrl(
     provider: string,
   ): Effect.Effect<string | undefined, StateReadFailed>;
-  refreshAfterKeyChange(provider: string): Effect.Effect<void, Error, R>;
 }
 
-/** Distinguishes a failed action from a failed refresh of a committed credential. */
+/**
+ * A key write or removal that failed. A committed change repaints nothing
+ * here: every host's secret store publishes `credentialChanged`, and each
+ * credential surface follows that signal.
+ */
 export class ProviderKeyActionFailed extends Data.TaggedError(
   'ProviderKeyActionFailed',
 )<{
-  readonly phase: 'write' | 'refresh';
   readonly message: string;
   readonly cause: unknown;
 }> {}
 
 /** Shared provider-key policy; hosts present failures at their own entry. */
-export class SettingsProfileKeyController<R = never> {
-  constructor(private readonly deps: SettingsProfileKeyControllerDeps<R>) {}
+export class SettingsProfileKeyController {
+  constructor(private readonly deps: SettingsProfileKeyControllerDeps) {}
 
   setProviderKey(
     provider: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, R> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
     return this.run(
       provider,
       'set',
@@ -55,8 +57,8 @@ export class SettingsProfileKeyController<R = never> {
           password: true,
           placeHolder: '************************************',
         });
-        if (apiKey == null) return false;
-        return yield* this.storeProviderKey(provider, apiKey);
+        if (apiKey == null) return;
+        yield* this.storeProviderKey(provider, apiKey);
       }),
     );
   }
@@ -64,13 +66,13 @@ export class SettingsProfileKeyController<R = never> {
   commitProviderKey(
     provider: string,
     apiKey: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, R> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
     return this.run(provider, 'set', this.storeProviderKey(provider, apiKey));
   }
 
   removeProviderKey(
     provider: string,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, R> {
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
     return this.run(
       provider,
       'remove',
@@ -80,11 +82,10 @@ export class SettingsProfileKeyController<R = never> {
           `Remove the ${displayName} API key? This cannot be undone.`,
           { confirmLabel: 'Remove', cancelLabel: 'Cancel', modal: false },
         );
-        if (!confirmed) return false;
+        if (!confirmed) return;
 
         yield* this.deps.secrets.delete(yield* secretNameFor(provider));
         yield* this.notify(`${displayName} API key has been removed`);
-        return true;
       }),
     );
   }
@@ -104,7 +105,7 @@ export class SettingsProfileKeyController<R = never> {
   private storeProviderKey(
     provider: string,
     apiKey: string,
-  ): Effect.Effect<boolean, Error> {
+  ): Effect.Effect<void, Error> {
     return Effect.gen({ self: this }, function* () {
       const displayName = yield* this.deps.getProviderDisplayName(provider);
       yield* storeCredential(this.deps.secrets, {
@@ -114,35 +115,22 @@ export class SettingsProfileKeyController<R = never> {
         label: displayName,
       });
       yield* this.notify(`${displayName} API key has been set`);
-      return true;
     });
   }
 
-  /** Refresh only after a committed change; interruption propagates naturally. */
+  /** Name a failed action after its provider; interruption propagates. */
   private run(
     provider: string,
     verb: 'set' | 'remove',
-    action: Effect.Effect<boolean, Error | PromptFailed>,
-  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed, R> {
+    action: Effect.Effect<void, Error | PromptFailed>,
+  ): Effect.Effect<void, ProviderKeyActionFailed | StateReadFailed> {
     return Effect.gen({ self: this }, function* () {
       const label = yield* this.deps.getProviderDisplayName(provider);
-      const changed = yield* action.pipe(
+      yield* action.pipe(
         Effect.mapError(
           (cause) =>
             new ProviderKeyActionFailed({
-              phase: 'write',
               message: `Failed to ${verb} ${label} API key`,
-              cause,
-            }),
-        ),
-      );
-      if (!changed) return;
-      yield* this.deps.refreshAfterKeyChange(provider).pipe(
-        Effect.mapError(
-          (cause) =>
-            new ProviderKeyActionFailed({
-              phase: 'refresh',
-              message: `Failed to refresh after ${verb === 'set' ? 'setting' : 'removing'} ${label} API key`,
               cause,
             }),
         ),

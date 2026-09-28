@@ -138,7 +138,6 @@ function createHandler(): SettingsViewMessageHandler {
     {
       refreshCatalogs: mocks.refreshCatalogs,
       refreshApiKeyStatus: Effect.void,
-      refreshOnboardingFunnel: () => Effect.void,
     },
   );
   return handler;

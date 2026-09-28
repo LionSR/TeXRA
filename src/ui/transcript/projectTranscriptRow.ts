@@ -459,11 +459,8 @@ export function logPayloadRow(
     // A compaction lifecycle row is not a row of its own: the correlated
     // block the fold projects from several of them is, via
     // `compactionActivityRow`. `internal` is a durable marker nothing
-    // renders. Context utilization is
-    // a status surface on both hosts, read off `RunView.context`, so it has
-    // no transcript row either.
+    // renders.
     case MESSAGE_TYPES.CONTEXT_COMPACTION_ACTIVITY:
-    case MESSAGE_TYPES.CONTEXT_STATE:
     case MESSAGE_TYPES.INTERNAL:
       return undefined;
 

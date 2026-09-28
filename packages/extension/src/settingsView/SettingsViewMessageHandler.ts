@@ -44,7 +44,7 @@ import type { StateStore } from '@platform/interfaces';
 import type { ProcessRuntime, ProcessServices } from '@platform/processRuntime';
 import type { StorageFs } from '@platform/rootedFs';
 import type { PlatformSecrets } from '@platform/secrets';
-import { ProgressViewProvider } from '@progressView/ProgressViewProvider';
+import type { ProgressViewProvider } from '@progressView/ProgressViewProvider';
 import {
   getProgressRunLabel,
   revealProgressRun,
@@ -119,7 +119,7 @@ export class SettingsViewMessageHandler {
     private readonly session: SessionHandle,
     private readonly progressView: Pick<
       ProgressViewProvider,
-      'refreshCatalogs' | 'refreshApiKeyStatus' | 'refreshOnboardingFunnel'
+      'refreshCatalogs' | 'refreshApiKeyStatus'
     >,
   ) {
     this.body = createSettingsViewBody({
@@ -180,18 +180,8 @@ export class SettingsViewMessageHandler {
             })
             .pipe(Effect.asVoid),
         // The launcher's API-key banner reads the same credential probe from
-        // the host snapshot.
-        refreshCredentialStatus: Effect.suspend(() =>
-          Effect.all(
-            [
-              ProgressViewProvider.getInstance()?.snapshot.refreshHostBanners ??
-                Effect.void,
-              progressView.refreshApiKeyStatus,
-              progressView.refreshOnboardingFunnel(),
-            ],
-            { discard: true },
-          ),
-        ),
+        // the host snapshot; the funnel follows the banner.
+        refreshCredentialStatus: progressView.refreshApiKeyStatus,
         signInSubscription: (providerId) =>
           Effect.asVoid(
             signInWithSubscription(session.roots, this.channel, providerId),
@@ -249,13 +239,6 @@ export class SettingsViewMessageHandler {
    */
   public signInSubscription(providerId: SubscriptionProviderId) {
     return this.body.signInSubscription(providerId);
-  }
-
-  /** Repaint every credential-dependent surface after an API-key change. */
-  public refreshAfterProviderKeyChange(
-    provider: string,
-  ): Effect.Effect<void, Error, ProcessServices> {
-    return this.body.refreshAfterProviderKeyChange(provider);
   }
 
   /** Repaint what a TeXRA account change touches. */

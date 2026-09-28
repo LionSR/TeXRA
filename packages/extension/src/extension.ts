@@ -525,10 +525,8 @@ const activateExtension = Effect.fn('activateExtension')(function* (
           signInWithSubscription(roots, 'welcomeView', 'chatgpt'),
         ),
       ),
-      // No settings view exists before a folder is open, so there is no
-      // credential surface to refresh after the key write.
       vscode.commands.registerCommand(EXTENSION_COMMANDS.SET_API_KEY, () =>
-        runtime.runPromise(apiSetApiKey(roots, secrets, () => Effect.void)),
+        runtime.runPromise(apiSetApiKey(roots, secrets)),
       ),
     );
     registerWalkthroughWorkspaceAction(context, false, runtime);
@@ -829,23 +827,13 @@ const activateWorkspace = Effect.fn('activateWorkspace')(function* (
     { startImmediately: true },
   );
 
-  context.subscriptions.push(
-    statusBarItem,
-    // Registered here rather than through the shared command registry because
-    // the handler closes over this activation's status-bar refresh queue.
-    // A credential changed outside the panel's own round trip (palette,
-    // walkthrough, a tool): the API-key banner, and with it the setup pill
-    // and the onboarding funnel, re-read.
-    vscode.commands.registerCommand('texra.refreshApiKeyStatus', () =>
-      runtime.runPromise(progressViewProvider.refreshApiKeyStatus),
-    ),
-  );
+  context.subscriptions.push(statusBarItem);
 
   // Gating commandPalette / keybindings / menus / views on `texra.activated`
   // keeps them hidden until every command handler is registered. This must run
-  // after ALL `registerCommand` calls in this function (including the late one
-  // for `texra.refreshApiKeyStatus`), otherwise palette entries can fire before
-  // their handlers exist and produce "command not found" errors.
+  // after ALL `registerCommand` calls in this function, otherwise palette
+  // entries can fire before their handlers exist and produce "command not
+  // found" errors.
   yield* Effect.tryPromise({
     try: () =>
       vscode.commands.executeCommand('setContext', 'texra.activated', true),

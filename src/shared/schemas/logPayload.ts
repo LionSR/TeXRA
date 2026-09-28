@@ -3,7 +3,6 @@ import { z } from 'zod';
 import {
   CompactionActivityDataSchema,
   ContextManagementDataSchema,
-  ContextStateDataSchema,
 } from './contextManagement';
 import { parseDiffResultEntries } from './diffResult';
 import { ErrorLogDataSchema } from './errors';
@@ -44,7 +43,6 @@ const LOG_PAYLOAD_SCHEMAS = {
   [MESSAGE_TYPES.ERROR]: ErrorLogDataSchema.optional(),
   [MESSAGE_TYPES.INTERNAL]: z.unknown().optional(),
   [MESSAGE_TYPES.CONTEXT_MANAGEMENT]: ContextManagementDataSchema,
-  [MESSAGE_TYPES.CONTEXT_STATE]: ContextStateDataSchema,
   [MESSAGE_TYPES.WORKFLOW_TASK]: WorkflowCallProgressSchema,
   [MESSAGE_TYPES.DEFAULT]: z.unknown().optional(),
 } satisfies Record<MessageType, z.ZodType>;

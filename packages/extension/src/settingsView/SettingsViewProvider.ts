@@ -102,17 +102,6 @@ export class SettingsViewProvider {
   }
 
   /**
-   * Refresh every credential-dependent surface after any API-key mutation.
-   * The program, not its settlement: the caller that owns the key write runs
-   * it as part of that write's own action.
-   */
-  public refreshAfterProviderKeyChange(
-    provider: string,
-  ): Effect.Effect<void, Error, ProcessServices> {
-    return this.messageHandler.refreshAfterProviderKeyChange(provider);
-  }
-
-  /**
    * Create and show the webview panel (for command palette activation)
    * @param tab Optional page, or `page/section`, to switch to after showing
    * @param agentSubTab Optional sub-tab for the agents tab ('workflow' | 'toolUse')

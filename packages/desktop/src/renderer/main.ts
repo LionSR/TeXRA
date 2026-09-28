@@ -140,17 +140,33 @@ const startupTeamPanel = createStartupTeamPanel({
 // The conversation is the permanent task canvas. Project navigation stays in
 // the left sidebar, while files and tools share one optional right workbench.
 
-// The renderer's own interaction state survives a reload in
-// `localStorage`; the preload bridge's `getState` is in-memory only.
+// Renderer state survives a reload in `localStorage` (the preload `getState`
+// is in-memory). Reads run at module load: unreadable storage or non-JSON
+// falls back to the default, a refused write goes unsaved, both loudly.
 const rendererState: KeyValueStore = {
   get<T>(key: string, defaultValue?: T): T {
-    const raw = window.localStorage.getItem(key);
-    if (raw === null) return defaultValue as T;
-    return JSON.parse(raw) as T;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null) return defaultValue as T;
+      return JSON.parse(raw) as T;
+    } catch (error) {
+      console.warn(
+        `[desktop] Saved renderer state "${key}" is unreadable; falling back to defaults.`,
+        error,
+      );
+      return defaultValue as T;
+    }
   },
   update(key, value) {
-    if (value === undefined) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, JSON.stringify(value));
+    try {
+      if (value === undefined) window.localStorage.removeItem(key);
+      else window.localStorage.setItem(key, JSON.stringify(value));
+    } catch (error) {
+      console.warn(
+        `[desktop] Could not save renderer state "${key}"; it will not survive a reload.`,
+        error,
+      );
+    }
   },
 };
 // The one Shell of this window (PRD 9): which projects are open and which one

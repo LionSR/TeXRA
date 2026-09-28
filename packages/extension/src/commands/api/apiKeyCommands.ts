@@ -13,7 +13,6 @@ import {
   loadApiKeyStatusMap,
   type ApiProvider,
 } from '@model/apiProviders';
-import type { ProcessServices } from '@platform/processRuntime';
 import type { PlatformSecrets } from '@platform/secrets';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { PROVIDER_DISPLAY_NAMES } from '@shared/constants/providers';
@@ -36,10 +35,7 @@ interface ApiProviderQuickPickItem extends vscode.QuickPickItem {
 function createProfileKeyController(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  refreshAfterKeyChange: (
-    provider: string,
-  ) => Effect.Effect<void, Error, ProcessServices>,
-): SettingsProfileKeyController<ProcessServices> {
+): SettingsProfileKeyController {
   return new SettingsProfileKeyController({
     secrets,
     prompt: vscodeUi,
@@ -51,7 +47,6 @@ function createProfileKeyController(
         PROVIDER_DISPLAY_NAMES[provider] ?? provider,
       ),
     getProviderKeyUrl: (provider) => getProviderKeyUrl(stores, provider),
-    refreshAfterKeyChange,
   });
 }
 
@@ -119,9 +114,6 @@ function pickApiProvider(
 export function setApiKey(
   stores: SettingsStores,
   secrets: PlatformSecrets,
-  refreshAfterKeyChange: (
-    provider: string,
-  ) => Effect.Effect<void, Error, ProcessServices>,
   provider?: ApiProvider,
 ) {
   return Effect.gen(function* () {
@@ -139,7 +131,7 @@ export function setApiKey(
     const apiKey = yield* Effect.promise(() => promptForApiKey(target, keyUrl));
     if (!apiKey) return;
 
-    yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+    yield* createProfileKeyController(stores, secrets)
       .commitProviderKey(target, apiKey)
       .pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>
@@ -153,13 +145,7 @@ export function setApiKey(
  * Remove an API key after a confirmation prompt. Migrated to the shared
  * command registry in #3781 batch 4.
  */
-export function removeApiKey(
-  stores: SettingsStores,
-  secrets: PlatformSecrets,
-  refreshAfterKeyChange: (
-    provider: string,
-  ) => Effect.Effect<void, Error, ProcessServices>,
-) {
+export function removeApiKey(stores: SettingsStores, secrets: PlatformSecrets) {
   return Effect.gen(function* () {
     const provider = yield* pickApiProvider(
       secrets,
@@ -171,7 +157,7 @@ export function removeApiKey(
       return;
     }
 
-    yield* createProfileKeyController(stores, secrets, refreshAfterKeyChange)
+    yield* createProfileKeyController(stores, secrets)
       .removeProviderKey(provider)
       .pipe(
         Effect.catchTag('ProviderKeyActionFailed', (error) =>

@@ -57,10 +57,6 @@ const commitProviderApiKeyVia = Effect.fn('commitProviderApiKeyVia')(function* (
     getProviderDisplayName: (candidate) =>
       getProviderDisplayName(stores, candidate, providerDisplayName(candidate)),
     getProviderKeyUrl: (candidate) => getProviderKeyUrl(stores, candidate),
-    // Nothing to repaint here: the store drops the API-key lookup cache on
-    // commit, and the chat TUI's `credentialChanged` subscriber bumps the
-    // subscription-preference level the status bar and model pickers read.
-    refreshAfterKeyChange: () => Effect.void,
   });
   yield* controller.commitProviderKey(provider, key).pipe(
     Effect.mapError((error) =>
