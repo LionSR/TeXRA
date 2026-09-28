@@ -48,12 +48,19 @@ dedup, so it's noted here and left alone.
 `src/shared/monaco/monacoLanguage.ts` hand-rolled
 `filePath.replaceAll('\\', '/').split('/').at(-1) ?? ''` to get a file's
 basename for its Dockerfile/Makefile check, instead of importing
-`getBasename` from `@utils/core`. Two owners of one fact, and not
-equivalent: the hand-rolled split returns `''` on a trailing slash (a
-directory-shaped path such as `/workspace/Dockerfile/`), so that path
-silently fell through to `plaintext` instead of being detected as a
-Dockerfile. `getBasename('/workspace/Dockerfile/')` correctly returns
-`'Dockerfile'`.
+`getBasename` from `@utils/core`. Two owners of one fact.
+
+This is a behavior-preserving dedup, not a bug fix. The two differ on a
+trailing-slash input (`getBasename('/workspace/Dockerfile/')` returns
+`'Dockerfile'`; the old split returned `''`), but that input isn't reachable
+through either production caller: `editorPane.ts`'s `readCurrentContents`
+and `desktopDiffHost.ts`'s `fs.readFileString` both read the file's content
+successfully before calling `monacoLanguageForPath`, and a directory-shaped
+trailing-slash path fails that read first (caught in review on this PR —
+the original draft of this note and the PR's first regression test
+overstated this as a live bug; both were corrected once Codex pointed at
+the actual call sites). For every path either caller can actually pass, the
+two implementations agree.
 
 This was flagged and deliberately left unfixed in the 2026-09-27 note
 because the file's own header warns "no `monaco-editor` import of any kind"
@@ -64,11 +71,12 @@ risk before landing the swap. It doesn't: `@utils/core` pulls in only the
 small, browser-safe `pathe` + `nanoid`, does no dynamic
 `import('...?worker')`, and is already the allowlisted browser-safe util
 this module's webview consumers are held to (`BROWSER_SAFE_UTILS` in
-`eslint.config.mjs`). That's confirmed
-by inspection, not assumption, so the fix ships in this PR rather than
-staying a documented-only candidate: one file changed, one regression test
-added for the trailing-slash case, `npm run typecheck`, the full
-`test:pure` tier (178 files), and `check:dead-code-ratchet` all pass.
+`eslint.config.mjs`). That's confirmed by inspection, not assumption, so
+the fix ships in this PR rather than staying a documented-only candidate:
+one file changed, no new test (a behavior-preserving refactor adds none —
+the existing `test:pure` tier passing, plus the two production callers'
+own coverage, is the evidence), `npm run typecheck`, the full `test:pure`
+tier (178 files), and `check:dead-code-ratchet` all pass.
 
 ### 2. Already resolved: the "two AI agent-creation systems" finding is stale
 
@@ -101,9 +109,8 @@ whoever picks it up, per the existing note.
 ## Estimated delta
 
 Finding 1 (shipped): +7/-1 production lines (net small positive: the
-import plus header note against the one-line simplification), +12 lines of
-regression test, one duplicate basename implementation removed, one latent
-trailing-slash misclassification fixed.
+import plus header note against the one-line simplification), no new test,
+one duplicate basename implementation removed.
 
 Finding 2: no code change; the wizard's deletion already shipped in #13416.
 This note's job was to catch that its citation here was stale, which it
