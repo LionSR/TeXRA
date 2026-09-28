@@ -28,7 +28,7 @@ import { ensureError } from '@utils/errors/errorMessage';
 
 import { AgentRun } from '../run/AgentRun';
 import { Runs } from '../runRegistry';
-import { haltedStepRow } from './rows';
+import { haltedPositionRow } from './rows';
 import type { FollowUps } from '../FollowUps';
 
 /**
@@ -212,7 +212,7 @@ export const settleRun =
         : Effect.gen(function* () {
             const state = yield* cell.current;
             yield* cell
-              .append([haltedStepRow(cell.runId, state, outcome)])
+              .append([haltedPositionRow(cell.runId, state, outcome)])
               .pipe(
                 Effect.catchTag('RunLedgerRefused', (error) =>
                   Effect.sync(() =>

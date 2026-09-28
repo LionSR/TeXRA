@@ -222,7 +222,7 @@ export class AgentWorkspaceState {
    * point for every caller, because there is one supported persisted format.
    *
    * A persisted snapshot hydrates where a loop reads it off the run's latest
-   * `flow.snapshot` (`@agent/runtime/loop/toolUse`);
+   * `run.snapshot` (`@agent/runtime/loop/toolUse`);
    * a loop re-deriving state from `toSnapshot()` output produced this run
    * runs the same parse.
    */

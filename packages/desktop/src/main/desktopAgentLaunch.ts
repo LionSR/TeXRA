@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 
 import {
   selectAutoOpenFinalOutput,
-  type AgentFlowResult,
+  type RunEndResult,
   type RunAgentOptions,
   type RunAgentRequest,
   type SessionHandle,
@@ -65,7 +65,7 @@ export function launchDesktopAgent(
 
 /** Open a settled run's final output, as a fresh launch and a resume both do. */
 export const presentDesktopFinalOutput =
-  (session: SessionHandle) => (result: AgentFlowResult) =>
+  (session: SessionHandle) => (result: RunEndResult) =>
     Effect.gen(function* () {
       const output = yield* selectAutoOpenFinalOutput(session.roots, result);
       if (!output) return;

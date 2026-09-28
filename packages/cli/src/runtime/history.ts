@@ -104,7 +104,7 @@ interface CliHistoryDetails {
   readonly conversation?: CliHistoryConversationPreview | null;
   readonly files: readonly RunGeneratedFile[];
   /** Whether a checkpoint file exists for this run. */
-  readonly hasFlowRecord: boolean;
+  readonly checkpointPresent: boolean;
   readonly currentModel?: string;
 }
 
@@ -271,7 +271,7 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
         ? { conversation: fullConversation }
         : {}),
       files,
-      hasFlowRecord: checkpointPresent,
+      checkpointPresent,
       currentModel,
     } satisfies CliHistoryDetails;
   },
@@ -543,7 +543,7 @@ export function formatCliHistoryDetailsText(
   );
   lines.push('', 'Config:', shown, '', `Files (${files.length}):`);
   lines.push(...(files.length ? files : ['(none)']));
-  if (details.hasFlowRecord) lines.push('', 'Flow record: present');
+  if (details.checkpointPresent) lines.push('', 'Checkpoint: present');
   return lines.join('\n');
 }
 

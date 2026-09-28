@@ -99,16 +99,16 @@ const runStart: SessionEventDraft = {
 
 /** The loop parked on a request: the fold reads the phase off this row. */
 const waiting: SessionEventDraft = {
-  type: 'flow.step',
+  type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', step: 'waiting' },
+  payload: { family: 'toolUse', at: 'waiting' },
 };
 
 /** The loop moving again, which is what makes the run running. */
 const running: SessionEventDraft = {
-  type: 'flow.step',
+  type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
+  payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 1 },
 };
 
 /** A running model reply with no text of its own: the row the live text for
@@ -419,9 +419,9 @@ describe('session framer', () => {
           ),
         ).toEqual([
           ['listing', 'run.start'],
-          ['listing', 'flow.step'],
+          ['listing', 'run.position'],
           ['aggregate', 'run.start'],
-          ['aggregate', 'flow.step'],
+          ['aggregate', 'run.position'],
         ]);
         expect(replay.at(-1)?.local?.self).toEqual([SELF]);
         // The tail: a commit after the replay is framed as an `all` row and

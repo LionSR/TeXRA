@@ -38,7 +38,7 @@ import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 
 /**
- * Move a run's phase the way its loop does: a `flow.step` row, which is the
+ * Move a run's phase the way its loop does: a `run.position` row, which is the
  * one fact the fold derives a live phase from (one run model, 3.3).
  */
 function foldRunPhase(
@@ -50,9 +50,9 @@ function foldRunPhase(
   return Effect.gen(function* () {
     session.publish([
       {
-        type: 'flow.step',
+        type: 'run.position',
         aggregateId: aggregateId('run', runId),
-        payload: { family: 'toolUse', step },
+        payload: { family: 'toolUse', at: step },
       },
     ]);
     yield* session.settlePublications().pipe(Effect.orDie);
@@ -290,7 +290,7 @@ describe('ExecutionsTool', () => {
           mocks.readReport.mockResolvedValue(
             '<subagent-result>full report</subagent-result>',
           );
-          session.followUps.claimLive(parentRunId, 'flow');
+          session.followUps.claimLive(parentRunId, 'loop');
           const delivery = {
             text: 'child result',
             from: { kind: 'run' as const, runId: childRunId },

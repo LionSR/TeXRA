@@ -15,7 +15,7 @@ import { getRunRecords } from '@agent/storage/runRecords';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
-import type { FlowSnapshotPayload, RunId } from '@shared/schemas';
+import type { RunSnapshotPayload, RunId } from '@shared/schemas';
 import { AgentCategory } from '@shared/schemas';
 import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
@@ -76,7 +76,7 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
 });
 
 /** The opening snapshot of a tool-use run, as the loop's first batch writes it. */
-const OPENING_SNAPSHOT: FlowSnapshotPayload = {
+const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
     phase: 'initial',
@@ -97,8 +97,8 @@ const OPENING_SNAPSHOT: FlowSnapshotPayload = {
  */
 const workflowSnapshot = (
   modelId: string,
-  modelCompatibilityKey: FlowSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
-): FlowSnapshotPayload => ({
+  modelCompatibilityKey: RunSnapshotPayload['runtime']['modelCompatibilityKey'] = null,
+): RunSnapshotPayload => ({
   family: 'toolUse',
   runtime: {
     phase: 'initial',
@@ -119,7 +119,7 @@ let seededSession: SessionHandle;
 async function seedRunRecord(seed: {
   readonly config?: AgentConfig | null;
   readonly checkpoint?: boolean;
-  readonly modelCompatibilityKey?: FlowSnapshotPayload['runtime']['modelCompatibilityKey'];
+  readonly modelCompatibilityKey?: RunSnapshotPayload['runtime']['modelCompatibilityKey'];
 }): Promise<void> {
   const session = await Effect.runPromise(createProcessSession());
   seededSession = session;
@@ -157,7 +157,7 @@ async function seedRunRecord(seed: {
     await Effect.runPromise(
       session.ledger.appendBatch(RUN_ID, null, [
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', RUN_ID),
           payload: snapshot,
         },

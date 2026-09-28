@@ -78,7 +78,7 @@ interface SessionExitControllerContext {
   readonly flushArtifacts: Effect.Effect<void, Error>;
   /** Repaint the TUI from a known origin after a `fg`/SIGCONT resume. */
   readonly repaintAfterTerminalResume: () => void;
-  /** Stop the active run (writes a `halted` `flow.step`). */
+  /** Stop the active run (writes a `halted` `run.position`). */
   readonly interruptActive: () => void;
   /** The user's own `--quiet`: the TUI silences the log sink regardless. */
   readonly quiet: boolean;
@@ -181,7 +181,7 @@ export function createSessionExitController(
       armExit();
     } else if (session.isResumableIdle()) {
       // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
-      // `flow.snapshot` on the run aggregate, so `texra resume` can continue
+      // `run.snapshot` on the run aggregate, so `texra resume` can continue
       // it. Preserve the session's current terminal status too; an
       // intentional idle exit after a successful turn should not report
       // SIGINT/130. The platform shutdown's session close still ends the
@@ -194,7 +194,7 @@ export function createSessionExitController(
     }
   };
   // Only interrupt an actively-running turn; an idle/WAITING session is left
-  // suspended so its `flow.snapshot` stays resumable (see handleSigint).
+  // suspended so its `run.snapshot` stays resumable (see handleSigint).
   const handleTermSignal = (exitCode: number) => (): void => {
     if (session.canStopVisibleRun()) {
       ctx.interruptActive();

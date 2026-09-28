@@ -68,7 +68,7 @@ The set has the right direction but the wrong grain, and four of its definitions
 
 **Merges**
 
-- **Pin → a property of Run and Composition.** A run holds one composition entry (process `Compositions` LayerMap, refcounted) and records its offered set in the opening `flow.snapshot`. It is not a separate owner of anything.
+- **Pin → a property of Run and Composition.** A run holds one composition entry (process `Compositions` LayerMap, refcounted) and records its offered set in the opening `run.snapshot`. It is not a separate owner of anything.
 - **Fold → a rule under Log, not a concept.** There are two named folds by design: `foldRunState` (strict, resume authority) and `sessionFold` (tolerant display). R1 in one-run-model §2 already says two folds are legitimate only for two questions. A contributor needs "read RunState or SessionView", not "Fold".
 - **Continuation → a source of Input, selected by the Agent's category from the pinned composition.**
   - It is not just "what at idle." `rounds` changes the run's mode: no input, no threshold compaction, a failed turn ends the run, and a child is wrapped as one turn (`loop/continuationPolicy.ts`, `loop/rounds.ts`, one-run-program note).

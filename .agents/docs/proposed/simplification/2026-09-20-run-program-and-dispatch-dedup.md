@@ -20,7 +20,7 @@ duplicated is scaffolding, not architecture.
 | One envelope module with a result/error builder pair, and five drivers that each re-select the same facts                                                                                  | `src/tools/delegation/deliveryEnvelope.ts`, `subagentResults.ts`, `bashDelivery.ts` (not `bash.ts`, which only delegates), `codex.ts`, `claudeAgent.ts`, `workflowScriptStrategy.ts` | ~70                       |
 | Two cancellation bridges onto one handle: one controller, one signal-to-`interrupt()` listener set                                                                                         | `childRunLoop.ts` `ChildRunInterruptible` / `nativeSubagentStrategy.ts` `bindAbortSignals`                                                                                           | blocked, see 2.4          |
 | Two halt writers in one file                                                                                                                                                               | `reflection.ts` `finish` and `finalize`                                                                                                                                              | small                     |
-| A synthesized `flow.step` under a fake `family:'toolUse'` for agent-CLI children with no ledger                                                                                            | `childRunLoop.ts`                                                                                                                                                                    | small                     |
+| A synthesized `run.position` under a fake `family:'toolUse'` for agent-CLI children with no ledger                                                                                         | `childRunLoop.ts`                                                                                                                                                                    | small                     |
 | Reflection output written to no row; results survive only inside the snapshot's family state                                                                                               | `reflection.ts` `roundsToPersisted`; `src/agent/implementations/flows/reflection/output/`                                                                                            | violates one-run-model R1 |
 | Two empty path segments                                                                                                                                                                    | `src/agent/implementations/flows/` holds only `reflection/`; there is no flow engine                                                                                                 | 0                         |
 
@@ -58,7 +58,7 @@ duplicated is scaffolding, not architecture.
 
    Fiber interruption cannot stand in for the bridge today.
    `RunHandle.attachInterruptHandler` stores exactly one handler and
-   overwrites it, and `runFlowWithLifecycle` (`AgentRunLifecycle.ts`) builds a
+   overwrites it, and `runWithLifecycle` (`AgentRunLifecycle.ts`) builds a
    fresh `RunHandle` per run and attaches its own `ctx.interrupt()` to it, so
    the handle a strategy captures in `onRun` is never the one any loop-level
    bind touched. The turn itself is wrapped in `Effect.uninterruptible`
@@ -75,7 +75,7 @@ duplicated is scaffolding, not architecture.
 
 5. Reflection output appends an `output.produced` row each round that
    carries the complete round map, not only the round just finished;
-   `flow.snapshot`'s family state drops to scalars. The complete map is
+   `run.snapshot`'s family state drops to scalars. The complete map is
    required, not a style choice: the cold listing (`READ_LISTING` and the
    run-record query in `Database.ts`) selects `MAX(seq)` per
    `(aggregate_id, type)`, so a per-round payload would keep only the
@@ -88,7 +88,7 @@ duplicated is scaffolding, not architecture.
    `src/agent/output/` and delete the `implementations/flows/` segments.
 6. Agent-CLI children get their own park row; stop borrowing
    `family:'toolUse'`. A dedicated row is required, not optional: the
-   `waiting` step (`childRunLoop.ts` `commitFlowStep`) is what moves the
+   `waiting` step (`childRunLoop.ts` `commitRunPosition`) is what moves the
    durable phase off RUNNING before the loop blocks, and
    `getToolUseFollowUpTarget` admits the next turn on that phase, so
    removing the borrowed row without a replacement leaves an idle child

@@ -38,13 +38,13 @@ import { SessionEvents } from '@shared/session/sessionEvents';
 import type { z } from 'zod';
 
 /**
- * Rows that may follow a `flow.snapshot` in its batch: a snapshot is the
+ * Rows that may follow a `run.snapshot` in its batch: a snapshot is the
  * loop's position, so the batch that writes one is closing, not opening,
  * work. A `stream.end` closes a streaming row the `waiting` step parks
  * beside.
  */
 const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
-  'flow.step',
+  'run.position',
   'tool.end',
   'request.decided',
   'stream.end',
@@ -80,22 +80,22 @@ function contractViolation(
     return `a ${foreign.type} targets ${foreign.aggregateId}, not ${aggregate}`;
   }
   // The one opening rule, stated here rather than only in `load`: the fold
-  // lets a `flow.step` or an undelivered `append` land on a fresh run and
+  // lets a `run.position` or an undelivered `append` land on a fresh run and
   // `load` refuses exactly those rows, so the batch that opens a run carries
-  // its `flow.snapshot`.
+  // its `run.snapshot`.
   if (
     (state === null || state.phase === null) &&
-    !rows.some((row) => row.type === 'flow.snapshot')
+    !rows.some((row) => row.type === 'run.snapshot')
   ) {
-    return 'a batch on an unopened run carries no opening flow.snapshot';
+    return 'a batch on an unopened run carries no opening run.snapshot';
   }
   for (const [index, row] of rows.entries()) {
-    if (row.type === 'flow.snapshot') {
+    if (row.type === 'run.snapshot') {
       const trailing = rows
         .slice(index + 1)
         .find((later) => !AFTER_SNAPSHOT.has(later.type));
       if (trailing !== undefined) {
-        return `${trailing.type} follows the flow.snapshot of its batch`;
+        return `${trailing.type} follows the run.snapshot of its batch`;
       }
     }
     if (row.type === 'model.compaction') {
@@ -292,7 +292,7 @@ const loaded = (
         run,
         new RunLedgerInconsistent({
           reason: 'out-of-order',
-          detail: 'ledger rows without an opening flow.snapshot',
+          detail: 'ledger rows without an opening run.snapshot',
           commit: state.commit,
         }),
       );

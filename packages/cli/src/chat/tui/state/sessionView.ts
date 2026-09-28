@@ -24,8 +24,8 @@ import type {
   RunView,
 } from '@shared/session/sessionView';
 import {
-  flowPosition,
-  formatFlowPositionLabel,
+  loopPositionLabel,
+  formatLoopPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import { formatWorkflowPhaseHeading } from '@ui/copy/workflowCall';
 
@@ -151,9 +151,9 @@ export function runningChildCount(
 
 /**
  * The nearest ancestor's position, for a child's location: a workflow
- * ancestor's round off `RunView.flow`, and the open phase for a
+ * ancestor's round off `RunView.position`, and the open phase for a
  * workflow-script ancestor, which drives no loop of its own — its child loop
- * is terminal on the first turn, so it never writes a `flow.step` and its
+ * is terminal on the first turn, so it never writes a `run.position` and its
  * `flow` stays null. A tool-use ancestor's turn is no position of the child:
  * it keeps counting after the child started, and the child's row already
  * shows its own turn, so the header and the status bar would name a third
@@ -168,10 +168,10 @@ export function ancestorPositionLabel(
   for (const ancestor of ancestors.toReversed()) {
     const run = runViewOf(view, ancestor.id);
     if (run === undefined) continue;
-    const position = flowPosition(run.flow, run.category);
+    const position = loopPositionLabel(run.position, run.category);
     const label =
       (position?.kind === 'round'
-        ? formatFlowPositionLabel(position)
+        ? formatLoopPositionLabel(position)
         : undefined) ?? openWorkflowPhaseLabel(run);
     if (label !== undefined) return label;
   }

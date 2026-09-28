@@ -6,7 +6,7 @@
  * function.
  *
  * The write points, in order (manifest section 1.2): the opening batch of a
- * fresh run (initial message, `flow.snapshot`); `turn.begin`; per round the
+ * fresh run (initial message, `run.snapshot`); `turn.begin`; per round the
  * invoker's `attempt` / `identified` / `response` rows; per barrier call its
  * `tool.intent`; per settled call its `tool.result` with its card; the
  * delivering `append` with the complete tool group; `turn.end` and `waiting`
@@ -55,7 +55,7 @@ import {
   appendRow,
   rowAggregate,
   snapshotRow,
-  stepRow,
+  positionRow,
   type SnapshotPatch,
   type ToolUseFlowState,
 } from './rows';
@@ -363,10 +363,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         workspace.assembly.accumulatedOutput = '';
         const content = rounds ? yield* rounds.open(index) : null;
         state = yield* cell.append([
-          ...(advance ? [stepRow(runId, state, 'turn.end')] : []),
+          ...(advance ? [positionRow(runId, state, 'turn.end')] : []),
           ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
           snapshot(state, { phase: 'model.ready', turn: state.turn + 1 }),
-          stepRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
+          positionRow(runId, { ...state, turn: state.turn + 1 }, 'turn.begin'),
         ]);
       }
       let forcedTool: string | null = null;
@@ -465,7 +465,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (replayCommitted) {
           replayCommitted = false;
           const last =
-            state.step === 'response.ready' && state.openAttempt === null
+            state.at === 'response.ready' && state.openAttempt === null
               ? state.messages.at(-1)
               : undefined;
           if (last?.role === 'assistant') {
@@ -576,7 +576,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         let state = yield* cell.current;
         const parked =
           (state.phase === 'waiting' || state.phase === 'halted') &&
-          state.step !== 'turn.ready';
+          state.at !== 'turn.ready';
         // The invoker commits the run's failure fact and the input that
         // recovers the run clears it, so the fold is the one place to read it.
         const afterError = state.lastError !== null;
@@ -587,7 +587,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             return finish(state, RUN_OUTCOME.FAILED);
           // Activation clears the visible step: restore an idle cursor's park.
           if (restoring && !followUps.hasQueued())
-            state = yield* cell.append([stepRow(runId, state, 'waiting')]);
+            state = yield* cell.append([positionRow(runId, state, 'waiting')]);
           restoring &&= followUps.hasQueued();
           // A child's idle is its parent's; the policy sees failed turns too.
           const canContinue =
@@ -660,9 +660,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // owns `lastError`; this snapshot does not restate it.
         state = yield* cell.append([
           snapshot(state, { phase: 'waiting' }),
-          stepRow(runId, state, 'turn.end'),
+          positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
-          stepRow(runId, state, 'waiting'),
+          positionRow(runId, state, 'waiting'),
         ]);
         publishTouchedFiles();
         if (turn.outcome === 'completed') {

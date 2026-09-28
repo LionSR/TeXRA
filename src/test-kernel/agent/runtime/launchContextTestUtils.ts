@@ -26,7 +26,7 @@ interface TestLaunchContextInit {
 }
 
 /**
- * A minimal tool-use `AgentLaunchContext` for driving `runFlowWithLifecycle`
+ * A minimal tool-use `AgentLaunchContext` for driving `runWithLifecycle`
  * without a real model handler or flow.
  */
 export function createTestLaunchContext({

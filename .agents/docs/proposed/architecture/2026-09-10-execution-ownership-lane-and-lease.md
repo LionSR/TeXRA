@@ -84,7 +84,7 @@ purpose other than telling it which storage root it is on.
 
 ### F4. `holdLive` and `handle.suspend(teardown)` both compensate for a scope that ends before its generation does
 
-A run parked at WAITING returns from `runFlowWithLifecycle`, so the
+A run parked at WAITING returns from `runWithLifecycle`, so the
 generation's scope closes — but the generation is not over: a later stop still
 has to run its teardown. The code recovers by stashing the teardown as an
 `Effect` field on the handle

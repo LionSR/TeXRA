@@ -2,15 +2,15 @@
  * One classification of a persisted run, read from disk facts, mutating
  * nothing.
  *
- * In-memory RUNNING/WAITING means exactly "a live flow context exists in this
+ * In-memory RUNNING/WAITING means exactly "a running loop exists in this
  * process's registry". Every other run in the shared bucket is one of these,
  * decided once here and never inferred:
  *
  * - `held_elsewhere`: its aggregate claim is held by an owner that is alive
  *   or cannot be proven dead (another TeXRA process). Shown read-only.
- * - `owned_here`: the claim is held by this very process, yet no live flow
- *   context exists for it: a registry/claim disagreement. Shown read-only.
- * - `resumable`: a `flow.snapshot` exists on the run aggregate and nobody
+ * - `owned_here`: the claim is held by this very process, yet no loop runs
+ *   for it here: a registry/claim disagreement. Shown read-only.
+ * - `resumable`: a `run.snapshot` exists on the run aggregate and nobody
  *   alive holds the claim. Continued only through the explicit Resume
  *   affordance.
  * - `finished`: no checkpoint.

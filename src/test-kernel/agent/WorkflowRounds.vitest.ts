@@ -22,7 +22,11 @@ import {
   AgentPromptSchema,
   AgentSettingSchema,
 } from '@agent/core/definition/AgentDataclass';
-import { rowAggregate, snapshotRow, stepRow } from '@agent/runtime/loop/rows';
+import {
+  rowAggregate,
+  snapshotRow,
+  positionRow,
+} from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { ModelInvoker, type InvokeRequest } from '@agent/runtime/ModelInvoker';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
@@ -370,7 +374,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
                       runtime: { lastError: null },
                     }),
                   ]),
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             if (init.afterResponse) yield* init.afterResponse(request.round);
             return {
@@ -578,7 +582,7 @@ describe('the workflow round loop', () => {
 
       expect(requests.map((request) => request.round)).toEqual([0, 1]);
       expect(result.outcome).toBe(RUN_OUTCOME.COMPLETED);
-      expect(state.step).toBe('halted');
+      expect(state.at).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.COMPLETED);
     }),
   );
@@ -1066,7 +1070,7 @@ describe('an interrupted workflow run', () => {
 
       const state = yield* interruptedAt({ runId, session, rounds: 2 }, 0);
 
-      expect(state.step).toBe('halted');
+      expect(state.at).toBe('halted');
       expect(state.outcome).toBe(RUN_OUTCOME.CANCELLED);
       // The round the stop interrupted is still the round a resume reopens:
       // round 0 is the run's first turn.

@@ -23,8 +23,8 @@ import {
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
-  flowPosition,
-  formatFlowPositionLabel,
+  loopPositionLabel,
+  formatLoopPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
@@ -252,7 +252,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     if (!root) return { line: '', state: '' };
     // The loop's own coordinate off the fold's `flow`, in the one its family
     // counts; a run that has not stepped yet carries none.
-    const position = flowPosition(root.flow, root.category);
+    const position = loopPositionLabel(root.position, root.category);
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const plannedRounds =
@@ -262,7 +262,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const parts: string[] = [];
     if (position !== undefined) {
       parts.push(
-        `[${formatFlowPositionLabel(
+        `[${formatLoopPositionLabel(
           position,
           isMultiRound(plannedRounds) ? plannedRounds : undefined,
         )}]`,

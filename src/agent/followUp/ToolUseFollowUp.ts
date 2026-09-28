@@ -31,7 +31,7 @@ import type {
  *   alone, so this is the refusal that cohort meets — never `finished`, which
  *   would claim the run ended normally.
  * - `owned_elsewhere`: another TeXRA process holds the run.
- * - `not_resumable`: the run has no live flow here and the submission was
+ * - `not_resumable`: the run has no running loop here and the submission was
  *   refused (a terminalized queue, a disposed session, a run this process
  *   cannot classify).
  */
@@ -39,7 +39,7 @@ export type FollowUpFailureReason =
   'finished' | 'unusable_checkpoint' | 'owned_elsewhere' | 'not_resumable';
 
 /**
- * Three outcomes: the input reached a live flow, it waits in the run's
+ * Three outcomes: the input reached a running loop, it waits in the run's
  * queue for the next turn, or it was not admitted for a worded reason. A
  * delivery the admission boundary had already accepted (#9531) is `sent`.
  * A queued input whose recovery resume did not reach the run is still
@@ -259,7 +259,7 @@ function admitFollowUp(
 }
 
 /**
- * Queue a submission on a run no live flow here holds: a waiting or resuming
+ * Queue a submission on a run no running loop here holds: a waiting or resuming
  * run, or one a user's message continues. A `recoverable` admission claims
  * the run's recovery when no consumer holds it, and that claim wakes it.
  */
@@ -292,11 +292,11 @@ function admitQueued(
 /**
  * The one mapping from a run classification to what the user's run shows
  * and what the refusal is called. Both refusal paths use it — a follow-up
- * with no live flow here, and a resume whose checkpoint read came back empty
+ * with no running loop here, and a resume whose checkpoint read came back empty
  * — so the two cannot word or settle the same fact differently.
  *
  * A refusal the user can see again is recorded on the run: the two
- * classifications that mean "no flow here can execute this run" — another
+ * classifications that mean "no loop here can execute this run" — another
  * process holds it, or this process holds a lease with no live run behind it
  * — become the run's read-only detail, so the tab keeps saying why after
  * the toast is gone. A classification that read the run's state and found it
@@ -353,7 +353,7 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   const routed = yield* admitFollowUp(runId, item, options, ownerSession);
   let dispatch: Exclude<Admission, { status: 'no_session' }>;
   if ('status' in routed && routed.status === 'no_session') {
-    // No live flow here: the persisted facts decide. Only the user's own
+    // No running loop here: the persisted facts decide. Only the user's own
     // message continues a run that stopped with a checkpoint, admitted the
     // way a waiting run's is: a run's message never restarts work the user
     // stopped. Anything else refuses with its worded reason. Only the one

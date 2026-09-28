@@ -45,8 +45,8 @@ import { PersistedJsonValueSchema, RunFactSchema } from './rowValues';
 import { RequestDecisionSchema } from './request';
 import { RunIdentitySchema } from './runIdentity';
 import {
-  FlowSnapshotPayloadSchema,
-  FlowStepPayloadSchema,
+  RunSnapshotPayloadSchema,
+  RunPositionPayloadSchema,
   ModelCompactionPayloadSchema,
   ModelMessagePayloadSchema,
   ModelRetryPayloadSchema,
@@ -394,12 +394,12 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   }),
   durable('approval.policy', { snapshot: ApprovalPolicySnapshotSchema }),
   /**
-   * The loop's position: family, step, and the coordinates it carries. The
-   * one run-ledger row renderers read: the fold derives the live phase from
-   * it (`waiting` parks the run, any other step is running) and `RunView.flow`
+   * The loop's position: family, `at`, and coordinates. The one run-ledger
+   * row renderers read: the fold derives the live phase from it (`waiting`
+   * parks the run, any other position is running) and `RunView.position`
    * carries its coordinates; its five siblings below are ledger-private.
    */
-  durable('flow.step', { payload: FlowStepPayloadSchema }),
+  durable('run.position', { payload: RunPositionPayloadSchema }),
   ...Object.values(TranscriptEventSchemas).map((schema) =>
     schema.extend({
       aggregateId: AggregateIdSchema.refine(
@@ -435,7 +435,7 @@ const RunLedgerEventDraftSchema = z.discriminatedUnion('type', [
   /** The human retry permit, written by the one retry owner
    *  (`ModelInvoker`): the gate a restart reads back. */
   durable('model.retry', { payload: ModelRetryPayloadSchema }),
-  durable('flow.snapshot', { payload: FlowSnapshotPayloadSchema }),
+  durable('run.snapshot', { payload: RunSnapshotPayloadSchema }),
   durable('tools.offered', { payload: ToolsOfferedPayloadSchema }),
   durable('context.blob', { payload: ContextBlobSchema }),
   /**
@@ -543,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 37;
+export const SESSION_EVENT_FORMAT = 38;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,
@@ -583,7 +583,7 @@ export function referencedAggregates(event: SessionEvent): AggregateId[] {
  * folds to one set, the follow-up pair likewise, and the lifecycle pair (`run.start`, `run.removed`)
  * shares one because it folds to one existence: a tombstone's commit then
  * outranks a replayed `run.start` below it, which is what makes the
- * tombstone final under every read (5.2, "Existence"). `flow.step` is a
+ * tombstone final under every read (5.2, "Existence"). `run.position` is a
  * listing key of its own: the phase is folded from it, so a cold listing
  * that dropped it would paint every parked run as ready. `stage.start` is
  * transcript tier alone: its display arm is a no-op and only the transcript
@@ -615,7 +615,7 @@ export function listingTypeOf(
     case 'tool.binding':
     case 'tool.result':
     case 'model.retry':
-    case 'flow.snapshot':
+    case 'run.snapshot':
     case 'tools.offered':
     case 'context.blob':
     case 'child.turn':
@@ -623,8 +623,8 @@ export function listingTypeOf(
     case 'workflow.journal':
     case 'workflow.attempt':
       // A priced turn is never "latest of type" (`listingKeyOf`). Run-ledger
-      // rows stay out, so a cold hydrate never pulls a `flow.snapshot` into
-      // every renderer (`flow.step` and `output.produced` are listing rows).
+      // rows stay out, so a cold hydrate never pulls a `run.snapshot` into
+      // every renderer (`run.position` and `output.produced` are listing rows).
       // Keyed records and the checkpoint journal are folded whole by their
       // readers. Not compiler-enforced; the fold suite pins it.
       return null;

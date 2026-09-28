@@ -6,7 +6,7 @@ import {
   RUN_SUBSTATE,
   type OwnerId,
   type RoundStage,
-  type RunFlow,
+  type LoopPosition,
   type RunId,
   type RunLifecycleStatus,
   type RunSubstate,
@@ -164,7 +164,7 @@ export function formatRoundStageLabel(
 }
 
 /** Where a run's loop stands, in the coordinate its category counts in. */
-interface FlowPosition {
+interface LoopCoordinate {
   readonly kind: 'round' | 'turn';
   readonly index: number;
 }
@@ -181,10 +181,10 @@ interface FlowPosition {
  * turn has none. A caller that does not know the run's category passes
  * `undefined` and reads the turn.
  */
-export function flowPosition(
-  flow: RunFlow | null | undefined,
+export function loopPositionLabel(
+  flow: LoopPosition | null | undefined,
   category: AgentCategory | undefined,
-): FlowPosition | undefined {
+): LoopCoordinate | undefined {
   if (flow?.turn == null) return undefined;
   if (category !== AgentCategory.Workflow) {
     return { kind: 'turn', index: flow.turn };
@@ -195,18 +195,18 @@ export function flowPosition(
 /** Compact position label: `r2` (or `r2/3` against a planned round total) for
  *  a round, `t2` for the row's second turn. A total counts planned rounds, so
  *  a turn ignores it. */
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition>,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate>,
   total?: number,
 ): string;
 
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition> | undefined,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate> | undefined,
   total?: number,
 ): string | undefined;
 
-export function formatFlowPositionLabel(
-  position: Readonly<FlowPosition> | undefined,
+export function formatLoopPositionLabel(
+  position: Readonly<LoopCoordinate> | undefined,
   total?: number,
 ): string | undefined {
   if (position === undefined) return undefined;
@@ -217,12 +217,12 @@ export function formatFlowPositionLabel(
   });
 }
 
-/** Spelled-out counterpart of {@link formatFlowPositionLabel} on the same
+/** Spelled-out counterpart of {@link formatLoopPositionLabel} on the same
  *  category-selected coordinate — `Round 2`, `Turn 2` — for the surfaces that
  *  word the position instead of abbreviating it. Only `round` gains one, for
- *  the reason {@link flowPosition} states. */
-export function formatFlowPositionTitle(
-  position: Readonly<FlowPosition> | undefined,
+ *  the reason {@link loopPositionLabel} states. */
+export function formatLoopPositionTitle(
+  position: Readonly<LoopCoordinate> | undefined,
 ): string | undefined {
   if (position === undefined) return undefined;
   return position.kind === 'round'

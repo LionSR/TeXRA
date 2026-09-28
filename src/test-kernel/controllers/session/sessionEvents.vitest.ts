@@ -168,9 +168,9 @@ const runStart: SessionEventDraft = {
 
 /** The loop parked on the request below: the phase the fold reads. */
 const waiting: SessionEventDraft = {
-  type: 'flow.step',
+  type: 'run.position',
   aggregateId: qualifyAggregateId('run', RUN),
-  payload: { family: 'toolUse', step: 'waiting' },
+  payload: { family: 'toolUse', at: 'waiting' },
 };
 
 const requested: SessionEventDraft = {
@@ -555,9 +555,9 @@ describe('session events and view', () => {
       ]);
       yield* events.publish([
         {
-          type: 'flow.step',
+          type: 'run.position',
           aggregateId: qualifyAggregateId('run', RUN),
-          payload: { family: 'toolUse', step: 'turn.begin', round: 1, turn: 1 },
+          payload: { family: 'toolUse', at: 'turn.begin', round: 1, turn: 1 },
         },
       ]);
       // The first state with the run in it has all of the history: no
@@ -890,16 +890,16 @@ describe('Sessions owner', () => {
           expect(session.now()).toBe(3);
           session.publish([
             {
-              type: 'flow.step',
+              type: 'run.position',
               aggregateId: qualifyAggregateId('run', RUN),
-              payload: { family: 'toolUse', step: 'waiting' },
+              payload: { family: 'toolUse', at: 'waiting' },
             },
           ]);
           session.publish([
             {
-              type: 'flow.step',
+              type: 'run.position',
               aggregateId: qualifyAggregateId('run', OLDER),
-              payload: { family: 'toolUse', step: 'waiting' },
+              payload: { family: 'toolUse', at: 'waiting' },
             },
           ]);
           yield* Effect.promise(() =>
@@ -917,12 +917,12 @@ describe('Sessions owner', () => {
             ),
           );
           expect(
-            received.flat().filter((event) => event.type === 'flow.step'),
+            received.flat().filter((event) => event.type === 'run.position'),
           ).toEqual([
             expect.objectContaining({
-              type: 'flow.step',
+              type: 'run.position',
               aggregateId: qualifyAggregateId('run', OLDER),
-              payload: { family: 'toolUse', step: 'waiting' },
+              payload: { family: 'toolUse', at: 'waiting' },
               seq: 2,
               commit: 4,
             }),
@@ -1714,8 +1714,8 @@ describe('the C1 event table and the C6 publisher', () => {
       yield* Effect.sync(() => {
         const raw = reader(storage);
         try {
-          raw.exec(`CREATE TRIGGER reject_flow_step BEFORE INSERT ON event
-            WHEN NEW.type = 'flow.step.1'
+          raw.exec(`CREATE TRIGGER reject_run_position BEFORE INSERT ON event
+            WHEN NEW.type = 'run.position.1'
             BEGIN SELECT RAISE(ABORT, 'injected storage failure'); END`);
         } finally {
           raw.close();
@@ -1824,7 +1824,7 @@ describe('the C1 event table and the C6 publisher', () => {
           },
           {
             ...waiting,
-            payload: { family: 'toolUse', step: 'waiting', round: 1 },
+            payload: { family: 'toolUse', at: 'waiting', round: 1 },
           },
           {
             type: 'response.finalized',
@@ -2365,7 +2365,7 @@ describe('RunLedger', () => {
   const snapshot = (
     phase: 'model.ready' | 'results.ready',
   ): RunLedgerDraft => ({
-    type: 'flow.snapshot',
+    type: 'run.snapshot',
     aggregateId: AGGREGATE,
     payload: {
       family: 'toolUse',
@@ -2543,9 +2543,9 @@ describe('RunLedger', () => {
         group,
         snapshot('results.ready'),
         {
-          type: 'flow.step',
+          type: 'run.position',
           aggregateId: AGGREGATE,
-          payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
+          payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
         },
       ]);
       expect(state.messages.map((m) => m.role)).toEqual([

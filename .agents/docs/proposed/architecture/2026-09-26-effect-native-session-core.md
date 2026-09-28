@@ -710,7 +710,7 @@ terminal, `runWithLaunchGuard` in `runLaunchGuard.ts`, guarded by
 
 ### Current state
 
-Native fresh, resumed and child runs already share `runFlowWithLifecycle` →
+Native fresh, resumed and child runs already share `runWithLifecycle` →
 `runToolUse`. Three wrappers each own a claim and a terminal: `runAgent`
 (`runAgent.ts:177-311`), `resumeToolUse` with `resumeToolUseWithOwnedLease`
 (`executeAgent.ts:527-666`), and `runWithLaunchGuard` plus the child-loop
@@ -1611,7 +1611,7 @@ declare const buildCatalog: (reads: readonly SourceRead[]) => Catalog;
   run-level `run.definition` row, and resume reads it next to the latest
   snapshot. That row is committed in the same `commitRegistration` batch as
   `run.start` (`SessionHandle.ts:862`), so no crash can leave a run that
-  exists without its pinned definition. It does not go on `flow.snapshot`: resume reads only the latest
+  exists without its pinned definition. It does not go on `run.snapshot`: resume reads only the latest
   snapshot (`AgentRun.ts:263`), and the loop replaces that at every turn and
   wait (`toolUse.ts:405,695`). A pin there would be lost or copied into
   every checkpoint. The definition is materialized before it is recorded.

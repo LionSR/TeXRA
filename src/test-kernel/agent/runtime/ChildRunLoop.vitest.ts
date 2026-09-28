@@ -713,7 +713,7 @@ describe('childRunLoop E2E fixtures', () => {
     () =>
       Effect.gen(function* () {
         const retryRunId = loopRunId();
-        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'flow')!;
+        const parentLease = session.followUps.claimLive(PARENT_RUN_ID, 'loop')!;
         const admissions: string[] = [];
         mocks.submitFollowUp.mockImplementation(
           (targetRunId, followUp, options) =>

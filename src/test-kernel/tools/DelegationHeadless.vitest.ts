@@ -383,7 +383,7 @@ function memoryChildRecords() {
 
 /**
  * Write the `run.end` fact production's `executeAgent` commits through
- * `runFlowWithLifecycle`: the flow's outcome, usage and output, plus the
+ * `runWithLifecycle`: the flow's outcome, usage and output, plus the
  * classified error it reported. A drain that rolled
  * this run's queued facts back is the row's outcome and its `artifact-drain`
  * kind, whatever the flow reported.

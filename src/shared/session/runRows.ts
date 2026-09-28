@@ -3,7 +3,7 @@
  *
  * `runStateFold` produces what the loop continues from and `sessionFold`
  * produces what people see, but five row types carry the same facts to both:
- * the loop's position (`flow.step`), the requests a run has open
+ * the loop's position (`run.position`), the requests a run has open
  * (`request.opened`, `request.decided`) and the input it has not taken
  * (`followup.queued`, `followup.consumed`). Folding them twice is how a row
  * type lands in one fold and not the other; this module holds the single
@@ -18,7 +18,7 @@
  * delivered, where the same row means the opening simply never arrived.
  */
 import {
-  type FlowStep,
+  type PositionAt,
   type PermissionPayload,
   type RequestDecision,
   type RoundOutput,
@@ -32,7 +32,7 @@ import {
 /** The rows this module owns, and the only rows it accepts. A type listed
  *  here and not handled by `applyRunRow` is a compile error there. */
 const SHARED_RUN_ROW_TYPES = {
-  'flow.step': true,
+  'run.position': true,
   'request.opened': true,
   'request.decided': true,
   'followup.queued': true,
@@ -74,7 +74,7 @@ export type QueuedFollowUp = Pick<
  */
 export type RunPosition = {
   readonly family: RunFamily | null;
-  readonly step: FlowStep | null;
+  readonly at: PositionAt | null;
   readonly outcome: RunOutcome | null;
   readonly round: number;
   readonly turn: number;
@@ -122,7 +122,7 @@ export function byId<T>(
 /** The position before any of these rows folded. */
 export const freshRunPosition = (): RunPosition => ({
   family: null,
-  step: null,
+  at: null,
   outcome: null,
   round: 0,
   turn: 0,
@@ -187,7 +187,7 @@ export function applyRunRow(
   // A follow-up row enters only through the `RunRows` overload.
   const slice = current as RunRows | null;
   switch (row.type) {
-    case 'flow.step': {
+    case 'run.position': {
       const p = row.payload;
       const rows = current ?? freshRunRows();
       for (const name of ['round', 'turn'] as const) {
@@ -201,10 +201,10 @@ export function applyRunRow(
       }
       return applied({
         family: p.family,
-        step: p.step,
+        at: p.at,
         round: p.round ?? rows.round,
         turn: p.turn ?? rows.turn,
-        outcome: p.step === 'halted' ? (p.outcome ?? null) : rows.outcome,
+        outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });
     }
     case 'request.opened': {
@@ -325,9 +325,9 @@ export function phaseMoveOf(row: SessionEvent): RunPhase | null {
   switch (row.type) {
     case 'run.activate':
       return RUN_PHASE.RUNNING;
-    case 'flow.step':
-      if (row.payload.step === 'halted') return null;
-      return row.payload.step === 'waiting'
+    case 'run.position':
+      if (row.payload.at === 'halted') return null;
+      return row.payload.at === 'waiting'
         ? RUN_PHASE.WAITING
         : RUN_PHASE.RUNNING;
     case 'child.park':

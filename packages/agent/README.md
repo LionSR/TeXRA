@@ -152,7 +152,7 @@ runtime completes disposal through its own scope.
 
 ## Run results
 
-There is exactly one result shape: `AgentFlowResult`, the run's `run.end`
+There is exactly one result shape: `RunEndResult`, the run's `run.end`
 payload plus the `runId` it belongs to. It carries an `outcome`, an optional
 `usage`, an `output`, and, on a failed run, a structured `error`. The output is
 a union discriminated on `output.category` (`'workflow'` | `'toolUse'`): a

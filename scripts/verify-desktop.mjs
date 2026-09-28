@@ -1629,8 +1629,8 @@ function startRun(log, { runId, agent, at, parentRunId }) {
     },
   });
   log.emit(runId, at, {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.begin' },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.begin' },
   });
 }
 

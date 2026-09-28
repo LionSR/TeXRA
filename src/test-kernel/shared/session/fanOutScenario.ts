@@ -286,8 +286,8 @@ export function buildScenario({ proposal = false } = {}) {
   // The loop's position: an agent run reads as initializing until its first
   // step, so a mid-flight fixture carries one (one run model, 3.3).
   log.emit(CHILD, T.childProgress, {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
   });
   log.emit(CHILD, T.childProgress, {
     type: 'conversation.progress',
@@ -332,8 +332,8 @@ export function buildScenario({ proposal = false } = {}) {
     category: AgentCategory.ToolUse,
   });
   log.emit(GRANDCHILD, T.grandchild, {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
   });
   log.emit(GRANDCHILD, T.grandchildFiles, {
     type: 'output.produced',
@@ -917,8 +917,8 @@ function boardView({
         category: AgentCategory.ToolUse,
       });
       log.emit(kid.id, kid.startedAt, {
-        type: 'flow.step',
-        payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+        type: 'run.position',
+        payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
       });
       if (kid.latest) {
         log.emit(kid.id, kid.startedAt + 1, {

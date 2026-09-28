@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { finalWorkflowOutput, RUN_OUTCOME } from '@shared/schemas';
 import { readSettingFrom } from '@utils/config/platformSettings';
@@ -26,7 +26,7 @@ import { readSettingFrom } from '@utils/config/platformSettings';
  */
 export function selectAutoOpenFinalOutput(
   stores: SettingsStores,
-  result: AgentFlowResult,
+  result: RunEndResult,
 ) {
   return Effect.gen(function* () {
     if (

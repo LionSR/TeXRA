@@ -22,12 +22,15 @@ import type { EventsFrame, Subscribe } from '@shared/session/sessionFrames';
 import type { TraceDocument } from '@transcript';
 
 /** One position of the run's loop: the row the scrubber cuts the trace at. */
-export type TraceStep = Extract<DisplaySessionEvent, { type: 'flow.step' }>;
+export type TracePosition = Extract<
+  DisplaySessionEvent,
+  { type: 'run.position' }
+>;
 
-/** The run's `flow.step` rows in commit order — the scrubber's positions. */
-export function traceSteps(trace: TraceDocument): TraceStep[] {
+/** The run's `run.position` rows in commit order — the scrubber's positions. */
+export function tracePositions(trace: TraceDocument): TracePosition[] {
   return trace.events.filter(
-    (event): event is TraceStep => event.type === 'flow.step',
+    (event): event is TracePosition => event.type === 'run.position',
   );
 }
 
@@ -64,10 +67,10 @@ function traceHost(trace: TraceDocument): HostSnapshot {
  * marker, an empty local snapshot, and the trace's host snapshot. A trace has
  * no tail.
  *
- * `cut` is the scrubber's position: the index of the `flow.step` the view is
+ * `cut` is the scrubber's position: the index of the `run.position` the view is
  * read at, `null` for the whole document. A cut is a commit — the prefix the
  * live plane would have delivered at that moment — so the phase, the progress
- * counters and the transcript are all the fold's own reading at step k, with
+ * counters and the transcript are all the fold's own reading at position k, with
  * no separate rule per tier.
  *
  * Sending the listing facts on both reads mirrors the live reader
@@ -80,11 +83,11 @@ export function traceFrame(
   subscribe: Subscribe,
   cut: number | null = null,
 ): EventsFrame {
-  const step = cut === null ? undefined : traceSteps(trace)[cut];
+  const position = cut === null ? undefined : tracePositions(trace)[cut];
   const events =
-    step === undefined
+    position === undefined
       ? trace.events
-      : trace.events.filter((event) => event.commit <= step.commit);
+      : trace.events.filter((event) => event.commit <= position.commit);
   const named = subscribe.aggregates.some(
     (aggregate) => aggregate.id === qualifyAggregateId('run', trace.runId),
   );

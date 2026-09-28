@@ -24,7 +24,7 @@ import {
 import type { ITool } from '@agent/core/tools/ToolTypes';
 import { ModelInvoker } from '@agent/runtime/ModelInvoker';
 import { turnText } from '@agent/runtime/run/turnText';
-import { rowAggregate, stepRow } from '@agent/runtime/loop/rows';
+import { rowAggregate, positionRow } from '@agent/runtime/loop/rows';
 import { runToolUse } from '@agent/runtime/loop/toolUse';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -191,7 +191,7 @@ function invokerLayer(turns: readonly TurnResult[]) {
                   usage: null,
                 },
               },
-              stepRow(run.runId, state, 'response.ready'),
+              positionRow(run.runId, state, 'response.ready'),
             ]);
             return {
               kind: 'response' as const,

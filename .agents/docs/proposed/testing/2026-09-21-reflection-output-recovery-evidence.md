@@ -49,7 +49,7 @@ Every branch then advances the recorded offset to `expected + fragmentBytes`
 (`reflection.ts:649`), and that value is persisted in the next snapshot. The
 offset is part of the durable snapshot vocabulary:
 `rawOutputBytes` is `ReflectionSnapshotStateSchema.rawOutputBytes`
-(`src/shared/schemas/runFlowState.ts:334-339`), the snapshot rows are stamped
+(`src/shared/schemas/runSnapshotState.ts:334-339`), the snapshot rows are stamped
 by `SESSION_EVENT_FORMAT` (`src/shared/schemas/sessionEvent.ts:588`, currently
 `7`), and `src/test-kernel/schemas/sessionEventFormat.vitest.ts` pins the
 stored shape so a vocabulary change cannot land without a version bump.
@@ -150,7 +150,7 @@ field, so `SESSION_EVENT_FORMAT` stays at `7` and
 `sessionEventFormat.vitest.ts` stays green.
 
 If a content digest is genuinely required, that is a durable-shape change:
-it would add a field to `ReflectionSnapshotStateSchema` (`runFlowState.ts`),
+it would add a field to `ReflectionSnapshotStateSchema` (`runSnapshotState.ts`),
 bump `SESSION_EVENT_FORMAT` (`sessionEvent.ts:588`), regenerate the
 `sessionEventFormat.json` snapshot, and accept that every existing `texra.db`
 is cleared by the bump — the session-format version rule. That is not done

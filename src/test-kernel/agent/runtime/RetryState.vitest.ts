@@ -313,7 +313,7 @@ const freshState = (): RunState => ({
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
   family: 'toolUse',
-  step: null,
+  at: null,
   outcome: null,
   phase: null,
   round: 0,

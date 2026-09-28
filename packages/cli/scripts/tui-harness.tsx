@@ -533,7 +533,7 @@ function seedRun(
 
 /**
  * Place a run in a phase the way production does: `run.activate` opens the
- * running window and a `flow.step` parks it (one run model, 3.3). A terminal
+ * running window and a `run.position` parks it (one run model, 3.3). A terminal
  * phase is `run.end`, so a fixture that names one lands there instead.
  *
  * The run window opens at the activation row's publish clock, which the
@@ -557,15 +557,15 @@ function seedPhase(runId: RunId, phase: RunPhase): void {
   }
   if (phase === RUN_PHASE.WAITING) {
     publish({
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'waiting' },
+      payload: { family: 'toolUse', at: 'waiting' },
     });
   } else if (category === AgentCategory.ToolUse) {
     publish({
-      type: 'flow.step',
+      type: 'run.position',
       aggregateId: qualifyAggregateId('run', runId),
-      payload: { family: 'toolUse', step: 'turn.begin', turn: 1 },
+      payload: { family: 'toolUse', at: 'turn.begin', turn: 1 },
     });
   }
 }

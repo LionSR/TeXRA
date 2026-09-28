@@ -277,7 +277,7 @@ nine-value status enums for one concept.
 > settings view's `ToolStatus` is a different concept, dependency availability,
 > that only shares a name, so it is renamed rather than merged.
 
-**D. Terminal result.** `AgentFlowResult`, `AgentFinalResult` and `ResultEvent`
+**D. Terminal result.** `RunEndResult`, `AgentFinalResult` and `ResultEvent`
 are three declarations of one run result (141 references across 38 files), with
 `totalCostUsd` and `cost` as two names for one number. The outcome is persisted
 twice and reconciled at read time. A run's description is carried by two

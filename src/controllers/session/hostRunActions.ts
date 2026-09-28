@@ -22,7 +22,7 @@ import {
   AgentConfigSchema,
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
-import type { AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import type { RunEndResult } from '@agent/runtime/RunEndResult';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { presentRunFailure } from '@agent/runtime/terminalResultToast';
 import type { MessageHost, NotificationFailed } from '@hosts/uiHosts';
@@ -127,7 +127,7 @@ export interface HostRunActionPorts {
     },
   ): Effect.Effect<void, Error>;
   /** Open a resumed workflow's final output, as the launcher does a fresh one's. */
-  openWorkflowOutput(result: AgentFlowResult): Effect.Effect<void, Error>;
+  openWorkflowOutput(result: RunEndResult): Effect.Effect<void, Error>;
   loadModelOptions(): Effect.Effect<
     readonly ProgressFollowUpModelOption[],
     ModelHostFactUnreadable | StateReadFailed

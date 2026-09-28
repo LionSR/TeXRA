@@ -1,5 +1,5 @@
 /**
- * The agent flow state a `flow.snapshot` row restores: the run-state and
+ * The agent flow state a `run.snapshot` row restores: the run-state and
  * workspace snapshots, the model compatibility key, and the message-free
  * core of the tool-use flow. Host-neutral so the
  * run ledger (`runLedgerEvent.ts`) composes them without reaching the agent

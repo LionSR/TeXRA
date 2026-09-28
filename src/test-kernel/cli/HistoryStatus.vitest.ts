@@ -24,10 +24,10 @@ import {
   aggregateId,
   CLI_RUN_STATUS,
   AgentCategory,
-  FlowSnapshotPayloadSchema,
+  RunSnapshotPayloadSchema,
   HISTORY_RUN_STATUS,
 } from '@shared/schemas';
-import type { FlowSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
+import type { RunSnapshotPayload, RunId, RunOutcome } from '@shared/schemas';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { setupPlatform } from '@test/support/setupPlatform';
@@ -71,9 +71,9 @@ const SNAPSHOT_RUNTIME = {
   declinedRoutes: [],
 };
 
-/** A run's opening `flow.snapshot`. */
-function snapshotPayload(): FlowSnapshotPayload {
-  return FlowSnapshotPayloadSchema.parse({
+/** A run's opening `run.snapshot`. */
+function snapshotPayload(): RunSnapshotPayload {
+  return RunSnapshotPayloadSchema.parse({
     family: 'toolUse',
     runtime: SNAPSHOT_RUNTIME,
     state: { stateSlices: null },
@@ -94,7 +94,7 @@ async function seedSnapshot(
   await Effect.runPromise(
     testDefaultSession().commit([
       {
-        type: 'flow.snapshot',
+        type: 'run.snapshot',
         aggregateId: aggregateId('run', id),
         payload: snapshotPayload(),
       },
@@ -178,11 +178,11 @@ describe('CLI history status formatting', () => {
           readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
         );
 
-        expect(details?.hasFlowRecord).toBe(true);
+        expect(details?.checkpointPresent).toBe(true);
         expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
         expect(details?.status).not.toBe(CLI_RUN_STATUS.COMPLETED);
         expect(formatCliHistoryDetailsText(details!)).toContain(
-          'Flow record: present',
+          'Checkpoint: present',
         );
       }),
   );
@@ -197,10 +197,10 @@ describe('CLI history status formatting', () => {
         readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
       );
 
-      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.checkpointPresent).toBe(true);
       expect(details?.status).toBe(HISTORY_RUN_STATUS.RESUMABLE);
       expect(formatCliHistoryDetailsText(details!)).toContain(
-        'Flow record: present',
+        'Checkpoint: present',
       );
     }),
   );
@@ -222,7 +222,7 @@ describe('CLI history status formatting', () => {
       ]);
       yield* testDefaultSession().commit([
         {
-          type: 'flow.snapshot',
+          type: 'run.snapshot',
           aggregateId: aggregateId('run', id),
           payload: snapshotPayload(),
         },
@@ -233,7 +233,7 @@ describe('CLI history status formatting', () => {
         readCliHistoryDetails(Effect.succeed(testDefaultSession()), id),
       );
 
-      expect(details?.hasFlowRecord).toBe(true);
+      expect(details?.checkpointPresent).toBe(true);
       expect(details?.status).not.toBe(HISTORY_RUN_STATUS.RESUMABLE);
     }),
   );

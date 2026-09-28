@@ -13,7 +13,7 @@ concern they carry:
 What is **not** here, and where it lives instead:
 
 - The run snapshot and the run usage totals are schemas, not classes:
-  `runFlowState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
+  `runSnapshotState.ts` and `usage.ts` in `@shared/schemas`. There is no usage
   accumulator type in `core`.
 - The run program is `@agent/runtime/loop/toolUse.ts` (workflow agents run
   it in round mode, `loop/rounds.ts`), its per-run services

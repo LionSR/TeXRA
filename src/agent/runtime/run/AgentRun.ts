@@ -176,7 +176,7 @@ interface AgentRunLayerInput {
 
 /**
  * Build the run's service from its launch context. The model identity of a
- * resumed run comes from the latest `flow.snapshot` (the one indexed read
+ * resumed run comes from the latest `run.snapshot` (the one indexed read
  * L0 provided), never from a file; a fresh run binds the launch's model
  * under the route the launch context already resolved.
  */

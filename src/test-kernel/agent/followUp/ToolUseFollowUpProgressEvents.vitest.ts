@@ -58,7 +58,7 @@ describe('tool-use follow-up progress events', () => {
     return session;
   }
 
-  function trackToolUseFlow({
+  function trackRunControls({
     session,
   }: {
     readonly session?: SessionHandle;
@@ -82,9 +82,9 @@ describe('tool-use follow-up progress events', () => {
         const session = trackSession();
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        const lease = session.followUps.claimLive(runId, 'flow')!;
+        const lease = session.followUps.claimLive(runId, 'loop')!;
 
-        trackToolUseFlow({ session });
+        trackRunControls({ session });
 
         const result = yield* submitFollowUp(
           runId,
@@ -121,7 +121,7 @@ describe('tool-use follow-up progress events', () => {
         // these rows stand in for that driver, so the claim they took goes
         // back here too: a hold taken and let go releases it.
         yield* Effect.scoped(testDefaultSession().holdRunClaim(runId));
-        trackToolUseFlow();
+        trackRunControls();
 
         const result = yield* submitFollowUp(
           runId,

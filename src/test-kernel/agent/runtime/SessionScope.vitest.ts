@@ -90,8 +90,8 @@ describe('session-owned transcripts and follow-up queues', () => {
       );
       const runId = generateRunId();
 
-      expect(a.followUps.claimLive(runId, 'flow')).toBeDefined();
-      expect(b.followUps.claimLive(runId, 'flow')).toBeDefined();
+      expect(a.followUps.claimLive(runId, 'loop')).toBeDefined();
+      expect(b.followUps.claimLive(runId, 'loop')).toBeDefined();
 
       a.followUps.terminalize(runId);
 

@@ -6,7 +6,7 @@
 
 import { Effect } from 'effect';
 
-import { type AgentFlowResult } from '@agent/runtime/AgentFlowResult';
+import { type RunEndResult } from '@agent/runtime/RunEndResult';
 import { AgentEngine } from '@agent/runtime/AgentEngine';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { ExecuteAgentOptions } from '@agent/runtime/executeAgent';
@@ -90,14 +90,14 @@ type NativeSubagentStrategyParams = NativeSubagentStrategyBase &
 
 export function createNativeSubagentStrategy(
   params: NativeSubagentStrategyParams,
-): ChildRunStrategy<AgentFlowResult, AgentRunServices> {
+): ChildRunStrategy<RunEndResult, AgentRunServices> {
   const config = params.definition
     ? params.definition.config
     : params.resume.identity.agentConfig;
   // A child's provider/runtime failure rides its turn's `error`
-  // (`runFlowWithLifecycle` returns a terminal failed result rather than
+  // (`runWithLifecycle` returns a terminal failed result rather than
   // rejecting); a thrown call reaches `formatError` as its `err`.
-  let lastResult: AgentFlowResult | undefined;
+  let lastResult: RunEndResult | undefined;
   // Result construction computes and persists diffs, so every consumer of a
   // turn shares one result. Formatting remains separate: if it throws, the
   // already-built result manifest is still available for persistence.
@@ -106,7 +106,7 @@ export function createNativeSubagentStrategy(
 
   const runNative = Effect.fn('nativeSubagent.runTurn')(function* (
     ports: ChildRunPorts,
-    call: Effect.Effect<AgentFlowResult, Error, AgentRunServices>,
+    call: Effect.Effect<RunEndResult, Error, AgentRunServices>,
   ) {
     lastResult = undefined;
     cachedBuilt = undefined;
@@ -124,7 +124,7 @@ export function createNativeSubagentStrategy(
   });
 
   const buildResult = Effect.fn('nativeSubagent.buildResult')(function* (
-    turn: AgentFlowResult,
+    turn: RunEndResult,
   ) {
     if (!cachedBuilt) {
       cachedBuilt = yield* buildSubagentResult(
@@ -174,7 +174,7 @@ export function createNativeSubagentStrategy(
               ports.notify(update),
             turns: {
               turnPermit: turns.turnPermit,
-              onTurnBoundary: (turn: AgentFlowResult) =>
+              onTurnBoundary: (turn: RunEndResult) =>
                 Effect.suspend(() => {
                   lastResult = turn;
                   cachedBuilt = undefined;
@@ -212,7 +212,7 @@ export function createNativeSubagentStrategy(
     isTurnError: (turn) => turn.error !== undefined,
 
     formatDelivery: Effect.fn('nativeSubagent.formatDelivery')(function* (
-      turn: AgentFlowResult,
+      turn: RunEndResult,
     ) {
       if (cachedDelivery === undefined) {
         const built = yield* buildResult(turn);

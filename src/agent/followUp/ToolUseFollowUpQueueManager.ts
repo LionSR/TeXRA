@@ -38,7 +38,7 @@ export interface FollowUpQueueInput {
   readonly deliveryId?: string;
 }
 
-type FollowUpConsumerKind = 'flow' | 'child' | 'recovery';
+type FollowUpConsumerKind = 'loop' | 'child' | 'recovery';
 
 interface QueueEntry {
   /** At most one consumer; an unowned entry is a recoverable persisted run. */
@@ -71,7 +71,7 @@ interface QueueEntry {
  *
  * The manager issues at most one lease per entry. Claims are synchronous,
  * and a lease is valid only while it is the entry's owner, so a release from
- * an older flow/child cannot clear or terminalize a successor. Producers
+ * an older loop/child cannot clear or terminalize a successor. Producers
  * submit through the manager and cannot manufacture a consumer.
  */
 export interface FollowUpConsumerLease {
@@ -86,7 +86,7 @@ export interface FollowUpRecoveryLease extends FollowUpConsumerLease {
 /**
  * How one submission landed, decided from the run's owner after its rows
  * committed: every follow-up a replay of a delivery a turn already carried;
- * input a live flow consumer holds this turn; input queued on the run (with
+ * input a running loop holds this turn; input queued on the run (with
  * the recovery lease when this submission claimed it), which a consumer
  * holds or the next resume delivers from its rows; or a refusal. A refusal
  * without a reason means the boundary has no entry to join (disposed
@@ -163,7 +163,7 @@ export class ToolUseFollowUpQueue {
     };
   }
 
-  /** Claim a live flow/child consumer. A competing owner is rejected. */
+  /** Claim a running loop or child consumer. A competing owner is rejected. */
   claimLive(
     runId: RunId,
     kind: Exclude<FollowUpConsumerKind, 'recovery'>,
@@ -213,7 +213,7 @@ export class ToolUseFollowUpQueue {
 
   /**
    * Submit one follow-up through the ownership boundary. `live_owner` joins
-   * a live flow or child consumer, or queues without claiming when the
+   * a running loop or child consumer, or queues without claiming when the
    * entry has no owner (so live notifications can reach a WAITING parent).
    * `recoverable` admits a registry-approved persisted run, creates its
    * entry when needed, and claims its recovery lease when no consumer holds
@@ -255,7 +255,7 @@ export class ToolUseFollowUpQueue {
   /** Read-only lifecycle probe used by diagnostics and teardown assertions. */
   hasLiveOwner(runId: RunId): boolean {
     const owner = this.entries.get(runId)?.owner;
-    return owner?.kind === 'flow' || owner?.kind === 'child';
+    return owner?.kind === 'loop' || owner?.kind === 'child';
   }
 
   /**
@@ -273,7 +273,7 @@ export class ToolUseFollowUpQueue {
     if (!entry || !owner || entry.pendingRelease !== undefined) {
       return undefined;
     }
-    if (lease ? owner !== lease : owner.kind === 'flow') return undefined;
+    if (lease ? owner !== lease : owner.kind === 'loop') return undefined;
     const adopted = entry.adoptedClaim;
     entry.adoptedClaim = undefined;
     if (adopted) this.port.detach(this.releaseClaim(runId, adopted));
@@ -403,10 +403,10 @@ export class ToolUseFollowUpQueue {
         entry = this.createEntry(runId);
       }
       const admitted = entry;
-      // A live flow or child holds the run's claim for as long as it holds
+      // A running loop or child holds the run's claim for as long as it holds
       // the lease; every other admission claims the run before writing.
       const consumerHoldsClaim =
-        admitted.owner?.kind === 'flow' || admitted.owner?.kind === 'child';
+        admitted.owner?.kind === 'loop' || admitted.owner?.kind === 'child';
       // Stamped inside the admission job, so the parentage a run sender's
       // relation to the recipient is read from is committed state.
       const stamped = followUps.map(({ from, ...input }): QueuedFollowUp => ({
@@ -475,7 +475,7 @@ export class ToolUseFollowUpQueue {
       // the caller re-submits once its own ordering allows, and the offer
       // happens then.
       const liveConsumer =
-        owner?.kind === 'flow' ||
+        owner?.kind === 'loop' ||
         owner?.kind === 'child' ||
         (owner?.kind === 'recovery' && admitted.input !== undefined);
       const liveOfferDeferred =
@@ -506,7 +506,7 @@ export class ToolUseFollowUpQueue {
           admitted.adoptedClaim = releaseClaim;
         } else {
           // Every other hold this admission took is given back now: no owner
-          // needs it, a flow or child that claimed the run meanwhile holds
+          // needs it, a loop or child that claimed the run meanwhile holds
           // the claim itself, and a recovery owner already keeps one.
           yield* this.releaseClaim(runId, releaseClaim);
         }
@@ -517,7 +517,7 @@ export class ToolUseFollowUpQueue {
       // was accepted before and changes nothing.
       if (lease) return { kind: 'queued', lease };
       if (!wrote) return { kind: 'duplicate' };
-      if (owner?.kind === 'flow' && !liveOfferDeferred)
+      if (owner?.kind === 'loop' && !liveOfferDeferred)
         return { kind: 'delivered_live' };
       return { kind: 'queued' };
     });

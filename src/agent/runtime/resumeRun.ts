@@ -29,7 +29,7 @@ import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
-import { type AgentFlowResult } from './AgentFlowResult';
+import { type RunEndResult } from './RunEndResult';
 import {
   ResumeSessionUnavailableError,
   resumeToolUseFromResumeData,
@@ -46,17 +46,17 @@ import {
 import type { SessionHandle } from './SessionHandle';
 import type { AgentRunServices } from './runRegistry';
 
-type ResumeRunCompletion = Effect.Effect<AgentFlowResult['outcome'], Error>;
+type ResumeRunCompletion = Effect.Effect<RunEndResult['outcome'], Error>;
 /** A resume settles at the run's idle turn or at run termination, after admitted input is consumed. */
 export type ResumeRunResult =
   | {
       readonly started: true;
       readonly delivered: boolean;
-      readonly outcome?: AgentFlowResult['outcome'] | typeof RUN_PHASE.WAITING;
+      readonly outcome?: RunEndResult['outcome'] | typeof RUN_PHASE.WAITING;
       /** A root's lifetime past its idle acknowledgement; children have none. */
       readonly completion?: ResumeRunCompletion;
       /** A workflow resume settles with its whole run: this is that run. */
-      readonly result?: AgentFlowResult;
+      readonly result?: RunEndResult;
     }
   | { readonly failed: FollowUpFailureReason };
 
@@ -363,7 +363,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     admitted.has(input.followUpId);
   const queuedInput = queuedFollowUps(session, runId);
   // A root holds no lease of its own: its exit releases this one by the rows.
-  const releaseRecovery = (exit: Exit.Exit<AgentFlowResult, Error>) =>
+  const releaseRecovery = (exit: Exit.Exit<RunEndResult, Error>) =>
     queuedInput.pipe(
       Effect.map((queued) => queued.length > 0),
       Effect.catchCause((cause) =>
@@ -388,7 +388,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
         if (!pending.some(isAdmitted)) Deferred.doneUnsafe(idle, Effect.void);
       };
       const parentRunId = yield* persistedParentRunId(session, runId);
-      let completion: Fiber.Fiber<AgentFlowResult | undefined, Error>;
+      let completion: Fiber.Fiber<RunEndResult | undefined, Error>;
       if (parentRunId === undefined) {
         // Released on the run's own fiber, before it leaves the registry, so a
         // run no longer live here holds no lease; a refused launch never ran.

@@ -88,8 +88,8 @@ export { getHelperModelName } from './helperModelName';
 
 // RunHandle
 
-// AgentFlowResult
-export type { AgentFlowResult, WorkflowFlowResult } from './AgentFlowResult';
+// RunEndResult
+export type { RunEndResult, WorkflowRunEndResult } from './RunEndResult';
 
 // core/definition config contract used by host launch/resume seams.
 export {

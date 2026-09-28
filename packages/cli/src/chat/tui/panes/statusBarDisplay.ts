@@ -21,8 +21,8 @@ import {
 } from '@shared/schemas';
 import { isActivePhase } from '@shared/runs/runStatus';
 import {
-  flowPosition,
-  formatFlowPositionLabel,
+  loopPositionLabel,
+  formatLoopPositionLabel,
 } from '@shared/runs/runStatusDisplay';
 import type { RunView, SessionView } from '@shared/session/sessionView';
 import { RUNNING_SESSION, SESSION_LIST, SUBAGENT } from '@ui/copy/nestedRuns';
@@ -819,11 +819,11 @@ export function buildStatusBarDisplay(
 
   // One slot carries a workflow run's round (mirrors the SubagentList row's
   // `flowLabel`). A chat's turn count is not something anyone acts on.
-  const position = flowPosition(run?.flow, run?.category);
+  const position = loopPositionLabel(run?.position, run?.category);
   // Every direct and nested subagent the displayed run owns.
   const subagents = run?.rollup.total ?? 0;
   const flowText =
-    position?.kind === 'turn' ? undefined : formatFlowPositionLabel(position);
+    position?.kind === 'turn' ? undefined : formatLoopPositionLabel(position);
   left.push(
     ...(
       [

@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 import { Effect, Result } from 'effect';
 
-import {
-  selectAutoOpenFinalOutput,
-  type AgentFlowResult,
-} from '@agent/runtime';
+import { selectAutoOpenFinalOutput, type RunEndResult } from '@agent/runtime';
 import { withLogChannel } from '@logger/effectLog';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { ensureError } from '@utils/errors/errorMessage';
@@ -21,7 +18,7 @@ const CHANNEL = 'FinalOutputOpener';
  * supplies the VS Code open verb and status-bar hint.
  */
 export const openFinalOutputIfAvailable =
-  (stores: SettingsStores) => (result: AgentFlowResult) =>
+  (stores: SettingsStores) => (result: RunEndResult) =>
     Effect.gen(function* () {
       const primary = yield* selectAutoOpenFinalOutput(stores, result);
       if (!primary) return;

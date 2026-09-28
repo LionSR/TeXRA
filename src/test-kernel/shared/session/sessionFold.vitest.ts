@@ -1311,7 +1311,7 @@ const RUNTIME = {
   declinedRoutes: [],
 };
 const toolUseSnapshot = (runtime: Record<string, unknown> = {}) => ({
-  type: 'flow.snapshot',
+  type: 'run.snapshot',
   payload: {
     family: 'toolUse',
     runtime: { ...RUNTIME, ...runtime },
@@ -1430,8 +1430,8 @@ const TURN_ROWS: readonly SessionEvent[] = [
   }),
   toolUseSnapshot({ phase: 'results.ready' }),
   {
-    type: 'flow.step',
-    payload: { family: 'toolUse', step: 'turn.end', turn: 1 },
+    type: 'run.position',
+    payload: { family: 'toolUse', at: 'turn.end', turn: 1 },
   },
 ].map((draft, index) => ledgerRow(index + 1, draft));
 
@@ -1671,10 +1671,10 @@ describe('foldRunState', () => {
       () => {
         const state = stateOf(
           through(11, {
-            type: 'flow.step',
+            type: 'run.position',
             payload: {
               family: 'toolUse',
-              step: 'halted',
+              at: 'halted',
               outcome: 'completed',
             },
           }),
@@ -1814,7 +1814,7 @@ describe('foldRunState', () => {
     expect(state?.usage.totalCacheReadInputTokens).toBe(4);
     // The turn's stamped price plus the settlement's `add` operation.
     expect(state?.usage.totalCost).toBe(0.75);
-    expect(state?.step).toBe('turn.end');
+    expect(state?.at).toBe('turn.end');
     expect(state?.turn).toBe(1);
     // Incremental and cold folds are the same computation.
     const half = stateOf(foldRunState(null, TURN_ROWS.slice(0, 6)));
@@ -1852,7 +1852,7 @@ describe('foldRunState', () => {
     expect(reasonOf(run())).toBe(reason);
   });
 
-  it('keeps the private ledger types out of the listing and off the transport, and lists flow.step', () => {
+  it('keeps the private ledger types out of the listing and off the transport, and lists run.position', () => {
     const ledgerTypes = [
       'model.message',
       'model.compaction',
@@ -1860,14 +1860,14 @@ describe('foldRunState', () => {
       'tool.binding',
       'tool.result',
       'model.retry',
-      'flow.snapshot',
+      'run.snapshot',
     ] as const;
     for (const type of ledgerTypes) expect(listingTypeOf({ type })).toBeNull();
     // The one ledger row the listing keys: a cold hydrate that dropped it
     // would paint every parked run as ready (ruling A9-5).
-    expect(listingTypeOf({ type: 'flow.step' })).toBe('flow.step');
+    expect(listingTypeOf({ type: 'run.position' })).toBe('run.position');
     for (const row of TURN_ROWS) {
-      expect(isDisplaySessionEvent(row)).toBe(row.type === 'flow.step');
+      expect(isDisplaySessionEvent(row)).toBe(row.type === 'run.position');
     }
     // D7: the day a codec version 2 exists, persisted origins must accept a
     // union of version literals while execution admits only the current one.
