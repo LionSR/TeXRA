@@ -70,21 +70,21 @@ staying a documented-only candidate: one file changed, one regression test
 added for the trailing-slash case, `npm run typecheck`, the full
 `test:pure` tier (178 files), and `check:dead-code-ratchet` all pass.
 
-### 2. Documented, not actioned: two AI agent-creation systems (needs an owner ruling)
+### 2. Already resolved: the "two AI agent-creation systems" finding is stale
 
-Re-confirmed still open and still accurate: TeXRA ships two ways to create
-an agent with AI — the VS Code-only `texra.createAgentWithAI` wizard
-(`agentCreatorFlow.ts`, `TOOL_GROUPS`) and the bundled `creator` tool-use
-agent (`packages/extension/resources/tool_use_agents/creator.yaml`), each
-with its own tool taxonomy. Full evidence and both options are already
-written up in
-`.agents/docs/proposed/simplification/2026-09-23-ssot-ownership-survey.md`
-section 2. Not re-litigated here: collapsing this changes user-visible
-behavior and reverses two recorded rulings (the 2026-07-12 "keep validated
-template" fallback-audit ruling, and the 2026-09-17 readiness-reverify
-decision to keep the `runAgentCreator` boundary open pending a
-`HostInteractions` design), so it is a product decision for the repo owner,
-not something to fold into an unsupervised structural-audit PR.
+The 2026-09-23 SSOT survey (section 2) flagged two parallel agent-creation
+systems — the VS Code-only `texra.createAgentWithAI` wizard and the bundled
+`creator` tool-use agent — as needing an owner ruling, since collapsing them
+would reverse two recorded rulings. This draft originally re-cited that
+finding as still open without re-verifying it against current `main`. It
+isn't: commit `cacc2b07` (#13416, "remove: the Create agent with AI wizard
+(use the creator agent or New from template)"), merged the evening before
+this audit ran, already deleted the wizard — `agentCreatorFlow.ts`,
+`TOOL_GROUPS`, `texra.createAgentWithAI` and the rest of the stack named in
+that survey's evidence section are gone, and `CHANGELOG.md:600-601` records
+it. The owner already made the ruling. `creator.yaml` is now the one AI
+agent-creation system; there is nothing left to consolidate here. (Caught by
+review on this PR — see the PR discussion for the correction.)
 
 ### 3. Documented, not actioned: path-segment splitting duplicates `pathCore.ts`
 
@@ -100,10 +100,14 @@ whoever picks it up, per the existing note.
 
 ## Estimated delta
 
-Finding 1 (shipped): +8/-1 production lines (net small positive: the
-import plus header note against the one-line simplification), +28 lines of
+Finding 1 (shipped): +7/-1 production lines (net small positive: the
+import plus header note against the one-line simplification), +12 lines of
 regression test, one duplicate basename implementation removed, one latent
 trailing-slash misclassification fixed.
 
-Findings 2 and 3: no code change; both already tracked with full evidence
-in their originating notes, re-verified current here.
+Finding 2: no code change; the wizard's deletion already shipped in #13416.
+This note's job was to catch that its citation here was stale, which it
+now does.
+
+Finding 3: no code change; tracked with full evidence in its originating
+note, re-verified current here.
