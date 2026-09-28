@@ -156,6 +156,11 @@ export const pragmaValue = Effect.fnUntraced(function* (
 /**
  * Event history and bounded current application records.
  *
+ * `current_value` is application state, not history: one row per family and
+ * key, replaced in place. The format stamp names the event vocabulary only,
+ * so moving an older store aside drops the event tables and keeps it; a
+ * value decodes with its family's schema when read.
+ *
  * `commit` is a SQLite keyword, so the column is quoted at every site (an
  * unquoted `commit INTEGER` is a syntax error on every host floor). Every
  * query in `Database` aliases the snake-case columns onto the unquoted
@@ -215,6 +220,14 @@ CREATE TABLE IF NOT EXISTS event (
   at           INTEGER NOT NULL,
   data         TEXT NOT NULL,
   UNIQUE (aggregate_id, seq)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS current_value (
+  family TEXT NOT NULL,
+  key    TEXT NOT NULL,
+  value  TEXT NOT NULL,
+  at     INTEGER NOT NULL,
+  PRIMARY KEY (family, key)
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS event_agg_type_seq ON event(aggregate_id, type, seq);

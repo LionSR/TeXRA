@@ -413,7 +413,7 @@ export function createChatSessionController(
     Effect.gen(function* () {
       const cliMultiAgentPresetId = config.cli?.multiAgentPresetId ?? undefined;
       const teamName = yield* readCliMultiAgentPresetName(
-        runtimeSession.roots.workspaceState,
+        runtimeSession.roots.repoState,
         cliMultiAgentPresetId,
       );
       patchSessionMeta({

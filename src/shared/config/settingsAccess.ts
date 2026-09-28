@@ -37,6 +37,7 @@ export interface SettingsStores {
   readonly host: SettingHost;
   readonly config: ConfigProvider;
   readonly workspaceState: StateStore;
+  readonly repoState: StateStore;
   readonly globalState: StateStore;
 }
 

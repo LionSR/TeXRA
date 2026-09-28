@@ -19,6 +19,7 @@ export interface FakeSettingsStores {
   readonly stores: SettingsStores;
   readonly config: FakeConfigProvider;
   readonly workspaceState: FakeStateStore;
+  readonly repoState: FakeStateStore;
   readonly globalState: FakeStateStore;
 }
 
@@ -27,11 +28,13 @@ export function makeFakeSettingsStores(
 ): FakeSettingsStores {
   const config = new FakeConfigProvider();
   const workspaceState = new FakeStateStore();
+  const repoState = new FakeStateStore();
   const globalState = new FakeStateStore();
   return {
-    stores: { host, config, workspaceState, globalState },
+    stores: { host, config, workspaceState, repoState, globalState },
     config,
     workspaceState,
+    repoState,
     globalState,
   };
 }

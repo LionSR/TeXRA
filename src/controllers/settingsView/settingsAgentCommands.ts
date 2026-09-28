@@ -48,7 +48,7 @@ import type {
 type HostEffect = Effect.Effect<void, Error, ProcessServices>;
 
 interface SettingsAgentCommandsPorts {
-  readonly roots: Pick<WorkspaceRoots, 'workspaceState' | 'globalState'>;
+  readonly roots: Pick<WorkspaceRoots, 'repoState' | 'globalState'>;
   /** The packaged resources root; the agent templates live under it. */
   readonly resourcesPath: string;
   readonly bindings: SettingsHostBindings;
@@ -61,7 +61,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
   const { globalState } = ports.roots;
   const roster = createWorkspaceAgentRosterController(ports.roots);
   const catalog = new SettingsAgentCatalogController({
-    workspaceState: ports.roots.workspaceState,
+    repoState: ports.roots.repoState,
     roster,
     getAgents: getAgentsByCategory,
   });

@@ -247,7 +247,7 @@ export async function runChat(
         cwd: context.cwd,
         approvalPolicy: runtimeSession.approvalPolicy,
         teamName: yield* readCliMultiAgentPresetName(
-          runtimeSession.roots.workspaceState,
+          runtimeSession.roots.repoState,
           initialPresetId,
         ),
         cliMultiAgentPresetId: initialPresetId,

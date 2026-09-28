@@ -1,7 +1,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, relative } from 'node:path';
-import { Cause, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
+import { Cause, Context, Effect, Exit, FileSystem, Layer, Scope } from 'effect';
 import { it as effectIt } from '@effect/vitest';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -19,6 +19,7 @@ import {
   processOwnerId,
 } from '@platform/defaults/nodeProcesses';
 import { resolveGlobalStoragePath } from '@platform/defaults/workspaceStorage';
+import { DatabaseWriteFailed, GlobalDatabase } from '@shared/session/database';
 import { ProcessIdentity } from '@shared/session/sessionEvents';
 import { nodePlatformLayer } from '@test/support/fsTestUtils';
 import { createFakeHost } from '@test/support/setupPlatform';
@@ -35,7 +36,7 @@ import { DESKTOP_SRC_DIR, REPO_ROOT } from './desktopTestPaths.ts';
  * scope owns: the process runtime holds one in production, and these suites
  * reopen the same root to prove what survives a closed handle.
  */
-const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
+const globalDatabaseOf = Effect.fnUntraced(function* (profile: string) {
   const owner = processOwnerId(yield* nodeProcesses.selfIdentity());
   const context = yield* Layer.build(
     globalDatabaseLayer(resolveGlobalStoragePath(profile)).pipe(
@@ -44,8 +45,12 @@ const projectRecordsOf = Effect.fnUntraced(function* (profile: string) {
       Layer.orDie,
     ),
   );
-  return yield* Effect.provide(openDesktopProjectRecords, context);
+  return Context.get(context, GlobalDatabase);
 });
+const projectRecordsOf = (profile: string) =>
+  Effect.flatMap(globalDatabaseOf(profile), (database) =>
+    Effect.provideService(openDesktopProjectRecords, GlobalDatabase, database),
+  );
 
 describe('desktop composition root and launch environment', () => {
   const tempDirs = useTempDirs();
@@ -137,7 +142,13 @@ describe('desktop composition root and launch environment', () => {
             processScope: yield* Scope.make(),
             globalConfigStore: config,
             stores: { ...host.roots, secrets: host.secrets },
-          }).pipe(Effect.provideService(DesktopProjectRecords, records));
+          }).pipe(
+            Effect.provideService(DesktopProjectRecords, records),
+            Effect.provideService(
+              GlobalDatabase,
+              yield* globalDatabaseOf(profile),
+            ),
+          );
           yield* Effect.addFinalizer(() => registry.dispose());
           const successorRoot = join(profile, 'successor');
           yield* fs.makeDirectory(successorRoot);
@@ -147,7 +158,10 @@ describe('desktop composition root and launch environment', () => {
           const remembered = yield* records.read;
           yield* project.roots.workspaceState.update('scope-test', 'live');
           const disposed = vi.spyOn(project, 'dispose');
-          const failure = new Error('Unable to save project closure');
+          const failure = new DatabaseWriteFailed({
+            path: profile,
+            cause: new Error('Unable to save project closure'),
+          });
           vi.spyOn(records, 'forget').mockReturnValueOnce(Effect.fail(failure));
           expect(yield* Effect.flip(registry.close(project.root!))).toBe(
             failure,
@@ -224,7 +238,13 @@ describe('desktop composition root and launch environment', () => {
           processScope: yield* Scope.make(),
           globalConfigStore: config,
           stores: { ...host.roots, secrets: host.secrets },
-        }).pipe(Effect.provideService(DesktopProjectRecords, records));
+        }).pipe(
+          Effect.provideService(DesktopProjectRecords, records),
+          Effect.provideService(
+            GlobalDatabase,
+            yield* globalDatabaseOf(profile),
+          ),
+        );
         yield* Effect.addFinalizer(() =>
           registry.dispose().pipe(Effect.ignore),
         );

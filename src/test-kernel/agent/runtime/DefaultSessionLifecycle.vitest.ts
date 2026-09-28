@@ -61,6 +61,7 @@ describe('default session lifecycle', () => {
           globalStorage: installedRoots.globalStorage,
           config: installedRoots.config,
           workspaceState: installedRoots.workspaceState,
+          repoState: installedRoots.repoState,
           globalState: installedRoots.globalState,
         } satisfies WorkspaceRoots;
         // The opener may hand over a record whose slots are inherited rather

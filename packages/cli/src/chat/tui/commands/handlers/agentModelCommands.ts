@@ -95,10 +95,11 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       setTransientNotice(fixedTeamNotice);
       return;
     }
-    const workspaceState = context.runtimeSession.roots.workspaceState;
     const resolution = yield* resolveTeamLaunch({
       teamId,
-      ...(yield* createTeamCatalogPorts(workspaceState)),
+      ...(yield* createTeamCatalogPorts(
+        context.runtimeSession.roots.repoState,
+      )),
       providedChoice: 'continue',
       choose: () => Effect.succeed('continue' as const),
       signIn: () => Effect.succeed(false),
@@ -136,7 +137,7 @@ export const applyCliTeamSelection = Effect.fn('applyCliTeamSelection')(
       return;
     }
     const teamName = yield* readCliMultiAgentPresetName(
-      workspaceState,
+      context.runtimeSession.roots.repoState,
       fields.cli.multiAgentPresetId,
     );
     patchSessionMeta({

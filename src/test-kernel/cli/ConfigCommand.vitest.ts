@@ -74,7 +74,7 @@ setupPlatform({}, { agentDirectories: bundledAgentDirectories() });
 /** The selection the real roster controller last persisted. */
 function readSelection(): Promise<unknown> {
   return Effect.runPromise(
-    installedHost().roots.workspaceState.get(
+    installedHost().roots.repoState.get(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
     ),
   );
@@ -92,7 +92,7 @@ describe('CLI config command', () => {
     // test starts from an unset selection.
     const host = installedHost();
     await Effect.runPromise(
-      host.roots.workspaceState.update(
+      host.roots.repoState.update(
         WorkspaceStateKey.AGENT_ROSTER_SELECTION,
         undefined,
       ),

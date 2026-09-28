@@ -150,7 +150,7 @@ export function launchApprovalOptions(
 export function prepareSurfaceLaunch(
   { launch, instruction }: LaunchRequest,
   host: MainViewRunLaunchHost,
-  workspaceState: StateStore,
+  repoState: StateStore,
   /** The requesting session's storage root, carried as data: the pasted-image
    *  paths it names are joined onto it rather than resolved from an ambient
    *  read at this depth. */
@@ -182,7 +182,7 @@ export function prepareSurfaceLaunch(
         return yield* new Rejected({ reason: TEAM_SELECTION_REQUIRED_MESSAGE });
       const resolution = yield* resolveTeamLaunch({
         teamId,
-        ...(yield* createTeamCatalogPorts(workspaceState)),
+        ...(yield* createTeamCatalogPorts(repoState)),
         choose: (unavailableNames) =>
           host.chooseTeamAvailability(unavailableNames),
         signIn: host.signInForRemoteAgentCatalog,

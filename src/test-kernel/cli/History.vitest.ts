@@ -305,6 +305,7 @@ describe('CLI history runtime', () => {
         globalStorage: host.roots.globalStorage,
         config: host.roots.config,
         workspaceState: host.roots.workspaceState,
+        repoState: host.roots.repoState,
         globalState: host.roots.globalState,
         secrets: host.secrets,
         session: Effect.succeed(testDefaultSession()),

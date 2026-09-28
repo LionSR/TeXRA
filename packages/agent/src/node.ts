@@ -87,6 +87,7 @@ export function nodePlatform(options: NodePlatformOptions): AgentPlatform {
       // from, or written to, the user's `.texra/config.json`.
       config: new MemoryConfigProvider(),
       workspaceState: new MemoryStateStore(),
+      repoState: new MemoryStateStore(),
       globalState,
     }),
   };

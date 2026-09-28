@@ -113,7 +113,7 @@ function createController(options?: {
   const getAgents = (category: AgentCategory) =>
     options?.agents?.[category] ?? AGENTS[category];
   const roster = new AgentRosterController({
-    workspaceState,
+    repoState: workspaceState,
     globalState: new FakeStateStore(),
     getAgents,
     resolveAgent: (category, identifier) =>
@@ -127,7 +127,7 @@ function createController(options?: {
   });
   return {
     controller: new SettingsAgentCatalogController({
-      workspaceState,
+      repoState: workspaceState,
       roster,
       getAgents,
       now: () => options?.now ?? 123,

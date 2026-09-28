@@ -19,14 +19,16 @@ import {
   openSessionEffect,
   type SessionHandle,
 } from '@agent/runtime';
-import { openProjectStateStore } from '@controllers/session/appStateStore';
+import {
+  openProjectStateStore,
+  openRepoStateStore,
+} from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type { ConfigStore } from '@platform/defaults/jsonConfigProvider';
 import { createNodeWorkspaceRoots } from '@platform/defaults/nodeHost';
 import { openTexraWorkspaceConfigStore } from '@platform/defaults/nodeStores';
-import { openWorktreeStateStore } from '@platform/defaults/worktreeStateStore';
 import { canonicalizeWorkspacePath } from '@platform/defaults/nodeWorkspace';
 import {
   resolveGlobalStoragePath,
@@ -36,7 +38,10 @@ import {
   TEXRA_APPROVAL_POLICY_CONFIG_KEY,
   type TexraApprovalPolicy,
 } from '@shared/approvalPolicy';
-import type { ProjectDatabases } from '@shared/session/database';
+import {
+  GlobalDatabase,
+  type ProjectDatabases,
+} from '@shared/session/database';
 import {
   projectDisplayOf,
   type ProjectDisplay,
@@ -238,9 +243,14 @@ function openProjectSession(
  */
 export function openDesktopProjectRegistry(
   options: DesktopProjectRegistryOptions,
-): Effect.Effect<DesktopProjectRegistry, Error, DesktopProjectRecords> {
+): Effect.Effect<
+  DesktopProjectRegistry,
+  Error,
+  DesktopProjectRecords | GlobalDatabase
+> {
   return Effect.gen(function* () {
     const records = yield* DesktopProjectRecords;
+    const globalDatabase = yield* GlobalDatabase;
     const lanes = new Map<string | symbol, PerKeyLane>();
     const selection = Symbol();
     const fallback = yield* Effect.uninterruptible(
@@ -284,23 +294,19 @@ export function openDesktopProjectRegistry(
           const storage = resolveWorkspaceStoragePath(options.dataRoot, root);
           const projectScope = yield* Scope.make();
           return yield* Effect.gen(function* () {
-            const [workspaceState, workspaceConfig] = yield* Effect.all(
-              [
-                openProjectStateStore(storage).pipe(
-                  Effect.flatMap((projectState) =>
-                    openWorktreeStateStore(
-                      projectState,
-                      options.stores.globalState,
-                      root,
-                    ),
+            const [workspaceState, repoState, workspaceConfig] =
+              yield* Effect.all(
+                [
+                  openProjectStateStore(storage),
+                  openRepoStateStore(root, storage).pipe(
+                    Effect.provideService(GlobalDatabase, globalDatabase),
                   ),
-                ),
-                openTexraWorkspaceConfigStore(storage, root, (message) =>
-                  console.warn(`[desktop] ${message}`),
-                ),
-              ],
-              { concurrency: 'unbounded' },
-            );
+                  openTexraWorkspaceConfigStore(storage, root, (message) =>
+                    console.warn(`[desktop] ${message}`),
+                  ),
+                ],
+                { concurrency: 'unbounded' },
+              );
             const roots = createNodeWorkspaceRoots({
               host: 'desktop',
               workspacePath: root,
@@ -311,6 +317,7 @@ export function openDesktopProjectRegistry(
                 global: options.globalConfigStore,
               },
               workspaceState,
+              repoState,
               globalState: options.stores.globalState,
             });
             // Acquire the session and install its registry owner before

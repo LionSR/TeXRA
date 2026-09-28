@@ -13,20 +13,16 @@ import { z } from 'zod';
 import { AggregateIdSchema, OwnerIdSchema } from '@shared/schemas';
 import type {
   AggregateId,
-  JsonValue,
-  PersistedJsonValue,
   CommitOrdinal,
+  CurrentValue,
+  CurrentValueFamily,
+  DeletableFamily,
   DisplaySessionEvent,
   RunId,
   OwnerId,
   OwnerLiveness,
   SessionEvent,
   SessionEventDraft,
-  InquiryThreadRecord,
-  InquiryThreadId,
-  UpdateCheckHost,
-  UpdateCheckRecord,
-  UpdateCheckChange,
 } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -180,6 +176,65 @@ export interface SessionStoreMovedAside {
   readonly storedFormat: number;
 }
 
+type RetainedFamily = Exclude<CurrentValueFamily, DeletableFamily>;
+
+/**
+ * A root's current values (`current_value`): one row per family and key,
+ * replaced in place, outside the event history, so an event-format bump
+ * leaves them. Every write is one `BEGIN IMMEDIATE` with no aggregate claim;
+ * a value decodes with its family's schema where it is read, and a row that
+ * no longer decodes fails that read.
+ */
+export interface CurrentValues {
+  readonly get: <F extends CurrentValueFamily>(
+    family: F,
+    key: string,
+  ) => Effect.Effect<CurrentValue<F> | undefined, DatabaseReadFailed>;
+  /**
+   * Change one value from the one read under the write lock: `change`
+   * answers with its result and the next value, with its result alone to
+   * write nothing, or refuses and nothing is written. Only a deletable
+   * family's change may answer `undefined`, which deletes the row; a caller
+   * holding a bare family matches neither overload and narrows first.
+   */
+  readonly modify: {
+    <F extends DeletableFamily, A, E = never>(
+      family: F,
+      key: string,
+      change: (
+        current: CurrentValue<F> | undefined,
+      ) => Result.Result<
+        readonly [A] | readonly [A, CurrentValue<F> | undefined],
+        E
+      >,
+    ): Effect.Effect<A, E | DatabaseWriteFailed>;
+    <F extends RetainedFamily, A, E = never>(
+      family: F,
+      key: string,
+      change: (
+        current: CurrentValue<F> | undefined,
+      ) => Result.Result<readonly [A] | readonly [A, CurrentValue<F>], E>,
+    ): Effect.Effect<A, E | DatabaseWriteFailed>;
+  };
+  /** Every row of a family, latest write first. */
+  readonly list: <F extends CurrentValueFamily>(
+    family: F,
+  ) => Effect.Effect<
+    readonly { readonly key: string; readonly value: CurrentValue<F> }[],
+    DatabaseReadFailed
+  >;
+  /**
+   * Emits as subscribed, then after each commit, by this process or
+   * another, that changed one of `keys`' values: the root's wake level
+   * narrowed inside the store to those rows. A read that fails is logged and
+   * retried, so no change is missed.
+   */
+  readonly changes: (
+    family: CurrentValueFamily,
+    keys: readonly string[],
+  ) => Stream.Stream<void>;
+}
+
 /** Why a session's root could not be opened: its database would not open,
  *  or the reads the session is built from failed. */
 export type SessionOpenError = DatabaseOpenFailed | DatabaseReadFailed;
@@ -250,52 +305,8 @@ export class Database extends Context.Service<
     readonly appendInputHistory: (
       record: InputHistoryRecord,
     ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** Latest desktop profile record, selected directly by its aggregate index. */
-    readonly readDesktopProjects: (
-      id: AggregateId,
-    ) => Effect.Effect<SessionEvent | undefined, DatabaseReadFailed>;
-    /** Latest committed value of one key; a missing or deleted key is absent. */
-    readonly readAppStateKey: (
-      key: string,
-    ) => Effect.Effect<JsonValue | undefined, DatabaseReadFailed>;
-    /**
-     * Emits as subscribed, then after each commit, by this process or
-     * another, that wrote one of `keys`: the wake level narrowed inside the
-     * store to those keys' latest rows. A read that fails is logged and
-     * counts as a change, so a reader re-reads rather than misses one.
-     */
-    readonly appStateChanges: (keys: readonly string[]) => Stream.Stream<void>;
-    /** Change one key from its latest value while the write transaction is
-     *  held; a refusal writes nothing. */
-    readonly updateAppStateKey: <E>(
-      key: string,
-      change: (
-        current: JsonValue | undefined,
-      ) => Result.Result<PersistedJsonValue, E>,
-    ) => Effect.Effect<
-      Result.Result<PersistedJsonValue, E>,
-      DatabaseWriteFailed
-    >;
-    readonly readUpdateCheck: (
-      host: UpdateCheckHost,
-    ) => Effect.Effect<UpdateCheckRecord | null, DatabaseReadFailed>;
-    readonly recordUpdateCheck: (
-      host: UpdateCheckHost,
-      change: UpdateCheckChange,
-    ) => Effect.Effect<void, DatabaseWriteFailed>;
-    /** Canonical global inquiry content, never a project display projection. */
-    readonly readInquiryRecord: (
-      id: InquiryThreadId,
-    ) => Effect.Effect<InquiryThreadRecord | null, DatabaseReadFailed>;
-    readonly listInquiryRecords: () => Effect.Effect<
-      readonly InquiryThreadRecord[],
-      DatabaseReadFailed
-    >;
-    /** Validate and change a global thread while its SQL write transaction is held. */
-    readonly updateInquiryRecord: <A extends InquiryThreadRecord | null>(
-      id: InquiryThreadId,
-      change: (current: InquiryThreadRecord | null) => Result.Result<A, Error>,
-    ) => Effect.Effect<Result.Result<A, Error>, DatabaseWriteFailed>;
+    /** The root's current values: application state, not history. */
+    readonly values: CurrentValues;
     /** One aggregate's rows from `fromSeq`, or only those of `types`
      *  through the `(aggregate_id, type, seq)` index, in seq order. */
     readonly readAggregate: (
@@ -381,37 +392,24 @@ export class Database extends Context.Service<
  * The process's one handle on the global storage root, built beside
  * `GlobalStorageFs` by the entry that installs the process runtime and held
  * for that runtime's life. Every application record of that root — the
- * inquiry threads, the update check, the CLI's input history, the desktop's
- * remembered projects — reads and writes through it, so the root's
- * `data_version` poll is forked once per process instead of once per
- * operation, and the connection is neither opened nor torn down on a
- * single-row read. The per-workspace {@link Database} of a session's root is
- * unchanged and unrelated.
+ * settings, the repository settings, the inquiry threads, the update check,
+ * the CLI's input history, the desktop's remembered projects — reads and
+ * writes through it, so the root's `data_version` poll is forked once per
+ * process instead of once per operation, and the connection is neither
+ * opened nor torn down on a single-row read. The per-workspace
+ * {@link Database} of a session's root is unchanged and unrelated.
  *
- * The shape is that handle's application-record surface and nothing else:
- * the global root holds no session, so its reactive members (`level`,
- * `observedCommit`, `cleared`) and the run-ledger reads over them have no
- * reader here, and a tag that offered them would invite one. What does
- * follow this root is a reader of named app-state keys (the tool switches,
- * the plugin install record), which `appStateChanges` serves already
- * narrowed to them.
+ * The shape is that handle's current values and input history, and nothing
+ * else: the global root holds no session and no event rows, so its event
+ * reads, claims and moved-aside report have no reader here. What does follow this root is a
+ * reader of named settings (the tool switches, the plugin install record),
+ * which `values.changes` serves already narrowed to them.
  */
 export class GlobalDatabase extends Context.Service<
   GlobalDatabase,
   Pick<
     Context.Service.Shape<typeof Database>,
-    | 'appendAll'
-    | 'readAppStateKey'
-    | 'appStateChanges'
-    | 'updateAppStateKey'
-    | 'readInputHistory'
-    | 'appendInputHistory'
-    | 'readDesktopProjects'
-    | 'readUpdateCheck'
-    | 'recordUpdateCheck'
-    | 'readInquiryRecord'
-    | 'listInquiryRecords'
-    | 'updateInquiryRecord'
+    'values' | 'readInputHistory' | 'appendInputHistory'
   >
 >()('@texra/session/GlobalDatabase') {}
 

@@ -404,6 +404,7 @@ export function fakeStores(): ModelOptionStores {
     secrets: new FakeSecrets(),
     config: new FakeConfigProvider(),
     workspaceState: new FakeStateStore(),
+    repoState: new FakeStateStore(),
     globalState: new FakeStateStore(),
   };
 }
@@ -471,7 +472,10 @@ export type FakeHostOverrides = Partial<FakeProcessPorts> &
 export function createFakeWorkspaceRoots(
   options: FakePlatformOptions = {},
   overrides: Partial<
-    Pick<WorkspaceRoots, 'config' | 'workspaceState' | 'globalState'>
+    Pick<
+      WorkspaceRoots,
+      'config' | 'workspaceState' | 'repoState' | 'globalState'
+    >
   > = {},
 ): WorkspaceRoots {
   return {
@@ -484,6 +488,7 @@ export function createFakeWorkspaceRoots(
     config: overrides.config ?? new FakeConfigProvider(options.config),
     workspaceState:
       overrides.workspaceState ?? new FakeStateStore(options.workspaceState),
+    repoState: overrides.repoState ?? new FakeStateStore(),
     globalState:
       overrides.globalState ?? new FakeStateStore(options.globalState),
   };

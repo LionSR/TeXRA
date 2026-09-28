@@ -64,6 +64,7 @@ const mocks = vi.hoisted(() => ({
     storage: '/workspace/.texra/storage',
     config: { get: (_key: string, def: unknown) => def },
     workspaceState: {},
+    repoState: {},
     // The shared bootstrap seeds the first-install tool defaults through the
     // roots' own `globalState` slot, which is the store the init opened.
     globalState: mocks.cliGlobalState,
@@ -124,6 +125,7 @@ vi.mock('@platform/defaults/nodeWorkspace', () => ({
 vi.mock('@controllers/session/appStateStore', () => ({
   appStateStoreFromDatabase: vi.fn(() => mocks.cliGlobalState),
   openProjectStateStore: vi.fn(() => Effect.succeed({})),
+  openRepoStateStore: vi.fn(() => Effect.succeed({})),
 }));
 
 vi.mock('@cli/runtime/cliSecrets', () => ({

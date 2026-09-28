@@ -387,22 +387,19 @@ if (
   process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
 ) {
   await harnessRuntime.runPromise(
-    harnessRoots.workspaceState.update(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-      {
-        kind: 'custom',
-        agentKeys: {
-          workflow:
-            process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
-              ? HARNESS_VISIBLE_WORKFLOW_AGENTS
-              : 'all',
-          toolUse:
-            process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
-              ? HARNESS_VISIBLE_TOOL_USE_AGENTS
-              : 'all',
-        },
+    harnessRoots.repoState.update(WorkspaceStateKey.AGENT_ROSTER_SELECTION, {
+      kind: 'custom',
+      agentKeys: {
+        workflow:
+          process.env.HARNESS_VISIBLE_WORKFLOW_AGENTS !== undefined
+            ? HARNESS_VISIBLE_WORKFLOW_AGENTS
+            : 'all',
+        toolUse:
+          process.env.HARNESS_VISIBLE_TOOL_USE_AGENTS !== undefined
+            ? HARNESS_VISIBLE_TOOL_USE_AGENTS
+            : 'all',
       },
-    ),
+    }),
   );
 }
 if (process.env.HARNESS_VISIBLE_MODELS !== undefined) {

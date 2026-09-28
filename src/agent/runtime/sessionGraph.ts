@@ -258,6 +258,7 @@ function snapshotRoots(init: SessionHandleInit): SessionHandleInit {
       globalStorage: roots.globalStorage,
       config: roots.config,
       workspaceState: roots.workspaceState,
+      repoState: roots.repoState,
       globalState: roots.globalState,
     },
   };

@@ -35,7 +35,7 @@ import type { SetupPlatformShape } from '@tools/setup/platform';
 import { createFakeSetupPlatform } from './fixtures';
 
 function workspaceRoster() {
-  return testWorkspaceRoots().workspaceState.get<AgentRosterSelection>(
+  return testWorkspaceRoots().repoState.get<AgentRosterSelection>(
     WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   );
 }
@@ -65,7 +65,7 @@ async function clearOnboardingState(): Promise<void> {
   signIn.mockReset();
   signIn.mockReturnValue(Effect.succeed(false));
   await Effect.runPromise(
-    testWorkspaceRoots().workspaceState.update(
+    testWorkspaceRoots().repoState.update(
       WorkspaceStateKey.AGENT_ROSTER_SELECTION,
       undefined,
     ),

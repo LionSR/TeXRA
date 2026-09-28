@@ -74,11 +74,7 @@ const APPEND_CALL = /(?:\.appendAll|\.prepareRunRemoval|\bappendPrepared)\s*\(/;
  */
 const APPENDS_OUTSIDE_PUBLISHER: Readonly<Record<string, string>> = {
   [DATABASE_MODULE]:
-    'defines appendAll and appendPrepared; its read-modify-append methods run appendPrepared inside their own write transaction, and the run-removal transaction it prepares runs as a publisher job',
-  'src/controllers/session/appStateStore.ts':
-    'project and profile application state: a project store is opened for the project scope with no session, so no publisher exists to route through (current values move to their own authority, move 12)',
-  'packages/desktop/src/main/desktopProjectRecords.ts':
-    'desktop project records on the global database, which holds no session and has no publisher',
+    'defines appendAll and appendPrepared; the run-removal transaction it prepares runs as a publisher job',
 };
 
 /** A numbered SQL parameter (`?1`, `?NNN`). A terminal private-mode escape
