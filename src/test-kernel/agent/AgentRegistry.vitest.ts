@@ -16,7 +16,6 @@ import {
   refresh,
 } from '@agent/index/agentRegistry';
 import { installPluginAgentDirectories } from '@agent/index/BundledAgentDirectories';
-import { registerAgentDirectoryRoots } from '@frontend/setup';
 import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { setLogSink } from '@logger/logSink';
 import {
@@ -36,7 +35,7 @@ import {
 } from '@test/support/fsTestUtils';
 import { hostStores, installPlatform } from '@test/support/setupPlatform';
 import { captureLogEntries } from '@test/support/logSinkCapture';
-import type * as vscode from 'vscode';
+import { agentCatalogFollower } from '@tools/agentCatalogFollower';
 
 /**
  * A catalog program over the process's global storage view. This suite's fake
@@ -158,19 +157,23 @@ describe('agent registry', () => {
   });
 
   it.effect(
-    'registers packaged roots and loads the local catalog in startup order',
+    'registers the agent directories for every host as the catalog follower is built',
     () =>
       Effect.gen(function* () {
-        expect(
-          yield* onGlobalStorage(
-            registerAgentDirectoryRoots({
-              extensionPath,
-            } as vscode.ExtensionContext),
+        yield* Effect.scoped(Layer.build(agentCatalogFollower)).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              unusedGlobalStorageFs(),
+              nodePlatformLayer,
+              testHttpClientLayer,
+              AgentDirectories.layer({
+                ...mutableAgentDirectories,
+                resourcesRoot: resourcesPath,
+              }),
+              AppState.layer(new FakeStateStore()),
+            ),
           ),
-        ).toBeUndefined();
-        expect(
-          yield* onGlobalStorage(loadAgents({ includeRemote: false })),
-        ).toBeUndefined();
+        );
 
         expect(registerExternalRoot).toHaveBeenCalledWith(
           resolve(resourcesPath, 'agents'),
@@ -180,7 +183,20 @@ describe('agent registry', () => {
           resolve(resourcesPath, 'tool_use_agents'),
           expect.objectContaining({ kind: 'builtInToolUse', writable: false }),
         );
-      }),
+        expect(registerExternalRoot).toHaveBeenCalledWith(
+          resolve(resourcesPath, 'docs', 'agent-creation'),
+          expect.objectContaining({ kind: 'agentDocs', writable: false }),
+        );
+        expect(registerExternalRoot).toHaveBeenCalledWith(
+          expect.any(String),
+          expect.objectContaining({ kind: 'custom', writable: true }),
+        );
+      }).pipe(
+        // The follower installs the plugin agent directories, module state.
+        Effect.ensuring(
+          Effect.sync(() => installPluginAgentDirectories(resourcesPath, [])),
+        ),
+      ),
   );
 
   it.effect(

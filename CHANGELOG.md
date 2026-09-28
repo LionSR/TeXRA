@@ -255,6 +255,11 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
+- **The `creator` agent works in the terminal and the desktop app** — it can
+  now see the built-in agents and its reference docs and save the new agent
+  into your custom agents folder, as it already could in VS Code. Before, its
+  instructions named no folders and saving outside the project was refused.
+
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
   underlying cause, such as the history file being locked by another process.
