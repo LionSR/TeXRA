@@ -83,6 +83,8 @@ function recordedFollowUps(
 ) {
   const rows: SessionEvent[] = [];
   const claims: RunId[] = [];
+  /** Runs whose terminal row has folded: a `senderEnd` hold's release. */
+  const ended = new Set<RunId>();
   let failWrites = options.failWrites ?? 0;
   const publisher = Semaphore.makeUnsafe(1);
   const append: Append = (events) =>
@@ -122,6 +124,7 @@ function recordedFollowUps(
       Effect.runFork(publisher.withPermits(1)(job));
     },
     pending: (runId) => foldRunRows(runRows(runId)).followUps,
+    ended: (runId) => ended.has(runId),
     parentOf: () => undefined,
     named: (runId, followUpId) =>
       foldRunRows(runRows(runId)).followUpIds.has(followUpId),
@@ -151,6 +154,7 @@ function recordedFollowUps(
   return {
     followUps,
     claims,
+    endRun: (runId: RunId) => ended.add(runId),
     queuedRows,
     queued: (runId: RunId) => queuedRows(runId).map((row) => row.content.text),
   };
@@ -951,7 +955,7 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         // woken. The post-finalize resubmit of the same delivery id is a
         // replay against the committed row, and THAT offer is what reaches
         // the consumer.
-        const { followUps, queued } = recordedFollowUps();
+        const { followUps, queued, endRun } = recordedFollowUps();
         const id = generateRunId();
         const recovery =
           consumer === 'loop' ? undefined : followUps.claimRecovery(id, true);
@@ -982,6 +986,8 @@ describe('ToolUseFollowUpQueue delivery identity (#9531)', () => {
         );
         expect(yield* taken(followUps, lease)).toEqual(['user input']);
 
+        // The child finalizes (its run.end), then re-submits.
+        endRun(delivery.from.runId);
         expect(yield* followUps.submit(id, delivery, 'recoverable')).toEqual({
           kind: 'duplicate',
         });

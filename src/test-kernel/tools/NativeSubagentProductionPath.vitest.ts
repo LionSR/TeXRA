@@ -63,9 +63,11 @@ import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
 import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
+  aggregateId,
   RUN_OUTCOME,
   RUN_PHASE,
   type RunId,
+  type SessionEvent,
   AgentCategory,
 } from '@shared/schemas';
 import { FakeStateStore } from '@test/support/FakePlatform';
@@ -924,17 +926,25 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
   );
 
   it.live(
-    'combines concurrent distinct follow-ups into one ordered batch turn, not an overwritten result',
+    'delivers concurrent distinct follow-ups in admission order, each exactly once',
     () =>
       Effect.gen(function* () {
-        // Two child turns: the initial launch plus one batch turn that drains both
-        // concurrent follow-ups together.
+        // Delivery is immediate on admission, so two concurrent sends reach
+        // the child in one batch turn or in two, whichever the turn boundary
+        // finds pending. What is guaranteed is the order the rows were
+        // admitted in and exactly-once delivery: a third scripted turn covers
+        // the two-batch case.
         const parentTurns = [
           { text: 'Parent ready.' },
           { text: 'Parent received result A.' },
           { text: 'Parent received result B.' },
+          { text: 'Parent received result C.' },
         ];
-        const childTurns = [{ text: 'Result A.' }, { text: 'Result B.' }];
+        const childTurns = [
+          { text: 'Result A.' },
+          { text: 'Result B.' },
+          { text: 'Result C.' },
+        ];
         const { runId, parentContext } = yield* Effect.promise(() =>
           launchWaitingChild({ parentTurns, childTurns }),
         );
@@ -942,10 +952,6 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         yield* Effect.promise(() => waitForPersistedResult(runId, 'Result A.'));
         yield* waitForParentTurns(1);
 
-        // Submit two follow-ups concurrently, before the child drains the queue.
-        // The resumed child takes the whole queued batch and runs one turn
-        // with the combined batch, so both instructions reach the child in one
-        // ordered turn rather than sharing/overwriting one turn result.
         const [first, second] = yield* Effect.promise(() =>
           Promise.all([
             queueSecondAssertionFollowUp(
@@ -963,32 +969,67 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
         expect(first.status).toBe('executed');
         expect(second.status).toBe('executed');
 
-        yield* Effect.promise(() => waitForPersistedResult(runId, 'Result B.'));
-        yield* waitForParentTurns(2);
-
-        // The child transcript has turn 1 (Result A) and the batch turn (Result B),
-        // with BOTH follow-up instructions recorded as user messages in the batch.
-        yield* session.settlePublications();
-        const archivedChild = yield* readCompletedRunConversation(
-          runId,
-          session,
+        // Both follow-ups consumed and answered, however they were batched.
+        const followUpTexts = (rows: readonly SessionEvent[]) =>
+          rows.flatMap((row) =>
+            row.type === 'followup.queued' ? [row.content.text] : [],
+          );
+        const childNodes = yield* Effect.promise(() =>
+          vi.waitFor(
+            async () => {
+              await Effect.runPromise(session.settlePublications());
+              const archived = await Effect.runPromise(
+                readCompletedRunConversation(runId, session),
+              );
+              const nodes = archived.conversation ?? [];
+              const text = JSON.stringify(nodes);
+              expect(text).toContain('second assertion');
+              expect(text).toContain('third assertion');
+              expect(nodes.at(-1)?.kind).toBe('assistant-text');
+              expect(session.runView(runId)?.status).toBe(RUN_PHASE.WAITING);
+              return nodes;
+            },
+            { timeout: 20_000 },
+          ),
         );
-        const childText = JSON.stringify(archivedChild.conversation);
-        expect(childText.match(/Result A\./g)).toHaveLength(1);
-        expect(childText.match(/Result B\./g)).toHaveLength(1);
-        expect(childText).toContain('second assertion');
-        expect(childText).toContain('third assertion');
+        const results = childNodes.flatMap((node) =>
+          node.kind === 'assistant-text' ? [node.text] : [],
+        );
+        const batches = results.length - 1;
+        expect([1, 2]).toContain(batches);
+        yield* waitForParentTurns(results.length);
 
-        // The parent received each distinct result exactly once.
+        // Admission order is the rows' commit order, and the child reads the
+        // sends in exactly that order, each once.
+        const admitted = followUpTexts(
+          yield* session.readAggregate(aggregateId('run', runId)),
+        )
+          .map((text) => text.match(/(second|third) assertion/)?.[1])
+          .filter((word) => word !== undefined);
+        expect([...admitted].sort()).toEqual(['second', 'third']);
+        const childText = JSON.stringify(childNodes);
+        const read = [...childText.matchAll(/(second|third) assertion/g)].map(
+          (match) => match[1],
+        );
+        expect(read).toEqual(admitted);
+
+        // Every child result reached the child's transcript and the parent
+        // exactly once, and no scripted turn is left over or missing.
         const archivedParent = yield* readCompletedRunConversation(
           PARENT_RUN_ID,
           session,
         );
         const parentText = JSON.stringify(archivedParent.conversation);
-        expect(parentText.match(/Result A\./g)).toHaveLength(1);
-        expect(parentText.match(/Result B\./g)).toHaveLength(1);
+        for (const result of results) {
+          expect(childText.split(result)).toHaveLength(2);
+          expect(parentText.split(result)).toHaveLength(2);
+        }
+        expect(results).toEqual(
+          ['Result A.', 'Result B.', 'Result C.'].slice(0, batches + 1),
+        );
         expect(resumedRuns).toEqual([]);
-        expect(parentTurns).toHaveLength(0);
+        expect(childTurns).toHaveLength(2 - batches);
+        expect(parentTurns).toHaveLength(2 - batches);
       }),
     60_000,
   );

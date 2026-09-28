@@ -64,7 +64,7 @@ type RequestState = {
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content'
+  'followUpId' | 'content' | 'holdUntil'
 >;
 
 /**
@@ -186,6 +186,12 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
   rows,
 });
 
+/** The rows that end a run for its held input (`holdUntil: 'senderEnd'`):
+ *  what `SessionEvents.runEnded` records and what wakes a waiting take. */
+export const RUN_TERMINAL_TYPES = ['run.end', 'run.removed'] as const;
+export const endsRun = (row: Pick<SessionEvent, 'type'>): boolean =>
+  (RUN_TERMINAL_TYPES as readonly string[]).includes(row.type);
+
 /** The shared rows that move a run's pending input, not its position. */
 export const FOLLOW_UP_TYPES = [
   'followup.queued',
@@ -285,7 +291,11 @@ export function applyRunRow(
       return applied({
         followUps: [
           ...rows.followUps,
-          { followUpId: row.followUpId, content: row.content },
+          {
+            followUpId: row.followUpId,
+            content: row.content,
+            ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
+          },
         ],
         followUpIds: new Set([...rows.followUpIds, row.followUpId]),
       });

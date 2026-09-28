@@ -79,7 +79,7 @@ import {
   type SessionView,
 } from '@shared/session/sessionView';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
-import { foldRunRows } from '@shared/session/runRows';
+import { endsRun, foldRunRows } from '@shared/session/runRows';
 import type {
   Append,
   OpenWork,
@@ -332,12 +332,16 @@ export class SessionHandle {
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
     const run = (runId: RunId) => qualifyAggregateId('run', runId);
+    const viewOf = (runId: RunId) =>
+      SubscriptionRef.getUnsafe(graph.view).runs.get(runId);
     this.followUps = new ToolUseFollowUpQueue({
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(() => job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
-      parentOf: (runId) =>
-        SubscriptionRef.getUnsafe(graph.view).runs.get(runId)?.parentId,
+      ended: (runId) =>
+        graph.events.runEnded(run(runId)) ||
+        viewOf(runId)?.durableOutcome != null,
+      parentOf: (runId) => viewOf(runId)?.parentId,
       named: (runId, followUpId) =>
         graph.events.followUpNamed(run(runId), followUpId),
       acquireClaim: (runId) => this.acquireClaims(run(runId)),
@@ -1107,9 +1111,11 @@ export class SessionHandle {
   receiveFoldedEvent(event: SessionEvent): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
       // The sweep and host notifications belong to the authoring process.
+      const target = aggregateTarget(event.aggregateId);
+      if (target.kind === 'run' && endsRun(event))
+        this.followUps.wakeHeldFrom(target.id);
       const { self } = yield* SubscriptionRef.get(this.graph.local);
       if (event.origin == null || !self.includes(event.origin)) return;
-      const target = aggregateTarget(event.aggregateId);
       if (target.kind !== 'run' || event.type !== 'run.end') return;
       // A throwing listener is logged and never stops the ones after it.
       yield* Effect.forEach(

@@ -140,6 +140,11 @@ export class SessionEvents extends Context.Service<
     readonly pendingFollowUps: (
       aggregateId: AggregateId,
     ) => readonly QueuedFollowUp[];
+    /** Whether a committed terminal row (`run.end`, or `run.removed`) for
+     *  the run aggregate is known here: this publisher's own commits, and,
+     *  for the senders of held follow-ups, a read at {@link hydrateFollowUps}.
+     *  A run with no such row known is not ended. */
+    readonly runEnded: (aggregateId: AggregateId) => boolean;
     /** Whether a row of the aggregate named this follow-up id, queued or
      *  consumed: the replay key, kept with {@link pendingFollowUps} and
      *  whole on the same terms. */
@@ -197,5 +202,6 @@ export type SessionEventReads = Pick<
   | 'openWork'
   | 'pendingFollowUps'
   | 'followUpNamed'
+  | 'runEnded'
   | 'hydrateFollowUps'
 >;
