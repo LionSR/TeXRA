@@ -18,7 +18,10 @@ import type {
   StateWriteFailed,
 } from '@platform/interfaces';
 import {
+  AGENT_CATEGORIES,
   AGENT_SOURCE,
+  type AgentCategory,
+  type AgentRosterCategorySelection,
   agentKeyOf,
   agentMatchesIdentifier,
   AgentRosterSelectionSchema,
@@ -119,23 +122,32 @@ export function unlistedCustomAgents<Entry extends RosterEntry>(
 }
 
 /**
- * Record which of `entries`' custom agents a written list turns on and off:
- * one it leaves out is hidden, one it names is shown again, and `'all'`
- * shows them all. The caller holds the roster's write lane.
+ * Record which custom agents the written lists turn on and off: in a
+ * category `selections` names, one its list leaves out is hidden, one it
+ * names is shown again, and `'all'` shows them all; elsewhere a custom agent
+ * keeps its choice. The hidden keys are rebuilt from the agents that exist,
+ * in every category (a key names an agent whatever its category), so a
+ * deleted agent's key goes with it. The caller holds the roster's write lane.
  */
 export function recordCustomChoices(
   repoState: StateStore,
-  entries: readonly RosterEntry[],
-  selection: 'all' | readonly string[],
+  agentsOf: (category: AgentCategory) => readonly RosterEntry[],
+  selections: Partial<Record<AgentCategory, AgentRosterCategorySelection>>,
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
-    const hidden = yield* readHidden(repoState);
-    for (const entry of entries) {
-      if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
-      const key = agentKeyOf(entry);
-      if (selection === 'all' || listNames(selection, entry))
-        hidden.delete(key);
-      else hidden.add(key);
+    const stored = yield* readHidden(repoState);
+    const hidden = new Set<string>();
+    for (const category of AGENT_CATEGORIES) {
+      const selection = selections[category];
+      for (const entry of agentsOf(category)) {
+        if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
+        const key = agentKeyOf(entry);
+        const hide =
+          selection === undefined
+            ? stored.has(key)
+            : selection !== 'all' && !listNames(selection, entry);
+        if (hide) hidden.add(key);
+      }
     }
     yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
       ...hidden,

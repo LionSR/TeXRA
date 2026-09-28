@@ -180,12 +180,13 @@ export function createSessionExitController(
       ctx.interruptActive();
       armExit();
     } else if (session.isResumableIdle()) {
-      // Exit WITHOUT interrupting. The suspended tool-use run keeps its latest
+      // Exit WITHOUT a user stop. The suspended tool-use run keeps its latest
       // `flow.snapshot` on the run aggregate, so `texra resume` can continue
       // it. Preserve the session's current terminal status too; an
       // intentional idle exit after a successful turn should not report
-      // SIGINT/130. Signal teardown calls process.exit, appending no `halted`
-      // step.
+      // SIGINT/130. The platform shutdown's session close still ends the
+      // generation with its cancelled `run.end` (see
+      // `TuiSession.isResumableIdle`).
       void teardown({ kind: 'signal', exitCode: session.runExitCode });
     } else {
       ctx.interruptActive();
@@ -270,12 +271,11 @@ export function createSessionExitController(
       return;
     }
 
-    // A suspended (idle/WAITING) root session is resumable, so it is left
-    // uninterrupted: the checkpoint survives either way since #11304/#11315,
-    // but interrupting would persist a CANCELLED outcome, clear approvals and
-    // sweep active children. See TuiSession.isResumableIdle for the live-flow
-    // check that distinguishes this state from a resume slot that is still
-    // rehydrating.
+    // A suspended (idle/WAITING) root session is resumable, so it takes no
+    // user stop: the checkpoint survives either way since #11304/#11315, and
+    // the session's close ends the generation on its own. See
+    // TuiSession.isResumableIdle for the live-flow check that distinguishes
+    // this state from a resume slot that is still rehydrating.
     //
     // Scope: this owns the policy for the GRACEFUL path only — `/exit` and
     // Ctrl-C's `clean-exit`, both via `requestInputExit`. Signal quits

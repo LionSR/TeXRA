@@ -169,8 +169,8 @@ a `request.opened` row the run's fold lists, closed by the
 `request.decided` row a surface's decision commits
 (`src/agent/runtime/HostInteractions.ts:85-91`). An unanswered request stays
 parked on its row. The adapter in the example below only receives
-presentation events, and `approvalPromptsUnavailable` (§3) keeps the
-approval-gated tools away from the model.
+presentation events, and says `approvalPromptsUnavailable: true` (§3), which
+keeps the approval-gated tools away from the model.
 
 ### Putting it together
 
@@ -234,11 +234,14 @@ await runtime.runPromise(
 
     const session = yield* initializeDefaultSession({ roots });
     const detachHostInteractions = yield* session.interactions.use({
+      // §3: this host can answer no approval, so no run of the session is
+      // offered a tool that would ask for one.
+      approvalPromptsUnavailable: true,
       emit: (event, payload) => {
         console.error(`[texra] ${event}`, payload);
       },
     });
-    // §3 — DO NOT SKIP: approvalPromptsUnavailable below removes every tool
+    // §3 — DO NOT SKIP: approvalPromptsUnavailable above removes every tool
     // that opens a request, but a provider failure still opens a `retry`, and
     // nothing answers it unless this process does. Deny each one once.
     const answered = new Set<string>();
@@ -289,10 +292,7 @@ await runtime.runPromise(
     if (!validated.valid) throw new Error(validated.message);
 
     yield* Effect.ensuring(
-      runAgent(validated.request, {
-        session,
-        approvalPromptsUnavailable: true,
-      }),
+      runAgent(validated.request, { session }),
       Effect.andThen(
         Fiber.interrupt(retryDenier),
         Effect.sync(detachHostInteractions),
@@ -482,23 +482,27 @@ and parks nothing.
 
 ### Removing the requests: `approvalPromptsUnavailable`
 
-`runAgent`'s `approvalPromptsUnavailable: true` withholds every
-`requiresApproval` tool from the model before the first turn, so a run cannot
-open the requests those tools would raise. `executeAgent` threads the option
+A host attached with `approvalPromptsUnavailable: true`
+(`HostInteractions`, `src/agent/runtime/HostInteractions.ts:96`) withholds
+every `requiresApproval` tool from the model before the first turn, so a run
+cannot open the requests those tools would raise. It is a fact of the
+session, not a launch option: `executeAgent` reads the attached host's answer
 into the run context on a fresh launch and on a resume
-(`src/agent/runtime/executeAgent.ts:478`, `:632`); the run layer forwards it
-to tool resolution (`src/agent/runtime/run/AgentRun.ts:208`); and
-`resolveAgentTools` drops the gated tools
-(`src/agent/runtime/agentToolResolution.ts:142-148`). The tools that open
+(`src/agent/runtime/executeAgent.ts:360`, `:521`), so a delegated child,
+which runs on its parent's session, and a run the session wakes on its own
+get the same answer. The run layer forwards it to tool resolution
+(`src/agent/runtime/run/AgentRun.ts:243`), and `resolveAgentTools` drops the
+gated tools (`src/agent/runtime/agentToolResolution.ts:245-249`). The tools that open
 `toolEdit`, `bash`, `proposal`, `planApproval`, `externalInquiry` and
 `userQuestion` requests all declare `requiresApproval: true`. This is a loud,
 defined degradation — an agent that cannot ask is not given the tools that
 ask — rather than a hang.
 
-The CLI derives the flag from its approval policy
-(`packages/cli/src/runtime/approval/settleApprovals.ts:59` —
-`cliApprovalPromptsUnavailable`) and passes it to its `runAgent` call
-(`packages/cli/src/runtime/executeCli.ts:556`).
+The CLI's hosts answer it from the approval policy
+(`cliApprovalPromptsUnavailable`,
+`packages/cli/src/runtime/approval/settleApprovals.ts`), through the headless
+adapter's getter (`packages/cli/src/runtime/approvalAdapter.ts:320`) and the
+TUI's.
 
 ### Answering the rest: `retry`
 
@@ -532,7 +536,7 @@ A request is a durable row, answerable by any surface that folds the session
 — the TUI, a reattached desktop window, a resumed process. A built-in
 decider could not tell a session nobody watches from one whose surface has
 not attached yet, and it would answer requests a person was meant to see.
-The caller knows which case it is in, and says so with
+The caller knows which case it is in, and says so with a host attached with
 `approvalPromptsUnavailable` plus a decider for `retry`.
 
 ---

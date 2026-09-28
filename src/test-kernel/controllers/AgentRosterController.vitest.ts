@@ -291,6 +291,31 @@ describe('AgentRosterController', () => {
   );
 
   it.effect(
+    "forgets a deleted custom agent's hidden key, and keeps another category's",
+    () =>
+      Effect.gen(function* () {
+        const workspaceState = new FakeStateStore({
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: [
+            'custom:review',
+            'custom:deleted-long-ago',
+          ],
+        });
+        const roster = controller(workspaceState);
+
+        yield* roster.setAgentEnabled({
+          category: 'toolUse',
+          source: 'builtInToolUse',
+          name: 'lead',
+          enabled: false,
+        });
+
+        expect(
+          yield* workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS),
+        ).toEqual(['custom:review']);
+      }),
+  );
+
+  it.effect(
     'serializes concurrent category changes through one workspace owner',
     () =>
       Effect.gen(function* () {
