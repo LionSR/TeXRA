@@ -75,6 +75,7 @@ export const ROOT_POLICY: ApprovalPolicySnapshot = {
   policy: 'ask',
   bypasses: { bash: false, toolEdit: true, superYolo: false },
   own: {},
+  goal: [],
 };
 
 /** A durable arm without its envelope: what a publisher builds before the

@@ -298,7 +298,8 @@ describe('child subagent stream approval inheritance', () => {
       },
     };
     expect(durable.child.own).toEqual({ toolEdit: 'off' });
-    expect(durable.goalChild.own).toEqual({ toolEdit: 'autonomous' });
+    expect(durable.goalChild.own).toEqual({});
+    expect(durable.goalChild.goal).toEqual(['toolEdit']);
 
     // A new process: the edges come back before the restore runs.
     approvals.clearAll();

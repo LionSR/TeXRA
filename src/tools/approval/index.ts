@@ -43,12 +43,12 @@ export function configureDelegatedChildApprovals(
   // The child's `run.start` is published by the time this runs, so the
   // write is not pre-activation setup: it publishes the child's
   // `approval.policy` like any other bypass change.
-  // A grant a goal's autonomous proposal bypass made stays autonomous on
-  // the child, so a resume leaves it off until a human re-arms the goal.
-  if (policy !== 'inherit') {
-    session.approvals.toolEdit.bypass.setBypass(childRunId, true, {
-      autonomous: policy === 'goal-approved',
-    });
+  // A child a goal's grant approved gets a goal grant of its own, never a
+  // human value, so a resume leaves it off until a human re-arms the goal.
+  if (policy === 'goal-approved') {
+    session.approvals.setGoalGrant(childRunId, ['toolEdit']);
+  } else if (policy === 'auto-approved') {
+    session.approvals.toolEdit.bypass.setBypass(childRunId, true);
   }
 }
 

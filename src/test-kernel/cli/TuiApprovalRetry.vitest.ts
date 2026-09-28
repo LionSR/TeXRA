@@ -88,7 +88,6 @@ import { makeFakeSettingsStores } from '@test/support/settingsStoresFake';
 import { publishTestRunStart } from '@test/support/sessionTestUtils';
 import { testRunHandle } from '@test/support/runHandleFixtures';
 import { setGoalSessionAutoApproval } from '@tools/goal';
-import { GoalGrants } from '@tools/goal/goalAutoApproval';
 import { requestToolEditApproval } from '@tools/approval/toolEditApproval';
 import { bashApprovalRequest } from '../agent/progressTestUtils';
 
@@ -436,31 +435,28 @@ describe('TUI request decisions', () => {
   );
 
   it.effect(
-    'sets the run command bypass for a goal and revokes only what the goal granted',
+    'sets the run command bypass for a goal and leaves the latest human choice when it ends',
     () =>
       Effect.gen(function* () {
         tui();
         const runId = runIdFor('goal-bypass');
         yield* ensureRun(runId);
 
-        const { approvals } = testDefaultSession();
-        const grants = new Map() as GoalGrants['Service'];
-        yield* setGoalSessionAutoApproval(
-          testDefaultSession(),
-          runId,
-          'commands',
-        ).pipe(Effect.provideService(GoalGrants, grants));
+        const session = testDefaultSession();
+        const { approvals } = session;
+        approvals.bash.bypass.setBypass(runId, false);
+        setGoalSessionAutoApproval(session, runId, 'commands');
         expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
-        // The user answers an edit prompt with "approve for this session"
-        // while the goal runs; ending the goal must not revoke that grant.
+        // The human turns commands off, then on again, while the goal runs,
+        // and approves edits for the session; ending the goal must write
+        // none of the values from before it back.
+        approvals.bash.bypass.setBypass(runId, false);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(false);
+        approvals.bash.bypass.setBypass(runId, true);
         approvals.toolEdit.bypass.setBypass(runId, true);
 
-        yield* setGoalSessionAutoApproval(
-          testDefaultSession(),
-          runId,
-          false,
-        ).pipe(Effect.provideService(GoalGrants, grants));
-        expect(approvals.bash.bypass.isBypassed(runId)).toBe(false);
+        setGoalSessionAutoApproval(session, runId, false);
+        expect(approvals.bash.bypass.isBypassed(runId)).toBe(true);
         expect(approvals.toolEdit.bypass.isBypassed(runId)).toBe(true);
       }),
   );

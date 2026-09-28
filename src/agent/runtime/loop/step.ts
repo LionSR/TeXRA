@@ -230,6 +230,10 @@ const openStep = Effect.fn('Step.open')(function* (
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
+  // A goal grant is autonomy the run's continuation drives: a step with no
+  // continuation (its plugin switched off) ends it, as the plugin's tools
+  // leave: from the run's next step.
+  if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
   // The plugins the step's system text draws on: the built-in ones' sections
   // and skills, and the installed ones' skills. The skills it lists are the
   // ones the run grants tools to read.

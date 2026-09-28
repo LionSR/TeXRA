@@ -34,7 +34,6 @@ import type {
   CodexThreads,
 } from '@tools/agentCliSessionStores';
 import type { GitHubSubscriptions } from '@tools/github/subscriptionBindings';
-import type { GoalGrants } from '@tools/goal/goalAutoApproval';
 import type { LeanLanguageServices } from '@tools/lean/leanLanguageServices';
 import type { SetupPlatform } from '@tools/setup/platform';
 import type { LiveTools } from '@tools/liveTools';
@@ -97,7 +96,7 @@ export type ProcessServices =
  * plugin, which provides the pinned layers' services to the call.
  */
 export type PluginServices =
-  GitHubSubscriptions | GoalGrants | CodexThreads | ClaudeAgentSessions;
+  GitHubSubscriptions | CodexThreads | ClaudeAgentSessions;
 
 /** No plugin service is a process service (compile-time guard). */
 type AssertNever<T extends never> = T;

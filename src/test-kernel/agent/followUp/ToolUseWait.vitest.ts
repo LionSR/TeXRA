@@ -1176,17 +1176,8 @@ describe('an active goal at the wait', () => {
         const session = yield* goalSession();
         const runId = startedRun(session);
         yield* startGoal(session, runId, 'finish the refactor');
-        // The grant an approved plan makes; pausing revokes what it granted.
-        // Through the session's goal services, as the plan tool's step would.
-        yield* Effect.scoped(
-          Effect.flatMap(
-            session.runs.pinPlugins(0, new Set(['goal']), new Set(['goal'])),
-            (services) =>
-              setGoalSessionAutoApproval(session, runId, 'commands').pipe(
-                Effect.provide(services),
-              ),
-          ),
-        );
+        // The grant an approved plan makes; pausing ends it.
+        setGoalSessionAutoApproval(session, runId, 'commands');
         const recorded = recordSessionEvents(session);
 
         try {
