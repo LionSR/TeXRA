@@ -698,7 +698,7 @@ const CORE_SETTING_ROWS: Record<
     description:
       'Expose enabled TeXRA and imported skills to tool-use agent prompts. Skills are off by default.',
     category: 'tools',
-    honoredBy: everyHost('src/agent/prompt/userVars.ts'),
+    honoredBy: everyHost('src/agent/prompt/templateInputs.ts'),
     surfaces: { settingsView: 'skills', cliConfig: true },
   },
   'toolUse.requireEditApproval': {

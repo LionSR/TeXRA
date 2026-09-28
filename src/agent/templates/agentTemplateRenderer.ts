@@ -1,6 +1,6 @@
 import nunjucks from 'nunjucks';
 
-import { buildUserVarPassthrough } from '@agent/prompt/userVars';
+import { buildTemplatePassthrough } from '@agent/prompt/templateInputs';
 import { createTexraNunjucksEnvironment } from '@utils/prompt';
 
 type AgentTemplateKind = 'toolUse' | 'workflowSingle';
@@ -16,7 +16,7 @@ const env = createTexraNunjucksEnvironment(nunjucks);
 
 // Frozen so the shared module-level instance can't be mutated even if a
 // caller forgets to spread it before passing to nunjucks.renderString.
-const PASSTHROUGH = buildUserVarPassthrough();
+const PASSTHROUGH = buildTemplatePassthrough();
 
 export const DEFAULT_AGENT_TEMPLATE_TOOLS_YAML = [
   'bash',

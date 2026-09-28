@@ -232,7 +232,6 @@ const IGNORED_ROW_TYPES: Readonly<
   'stage.end': true,
   'workflow.plan': true,
   'workflow.call': true,
-  'skills.snapshot': true,
   usage: true,
   'context.state': true,
   'stream.start': true,

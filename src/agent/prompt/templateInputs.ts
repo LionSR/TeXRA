@@ -1,17 +1,10 @@
 import * as path from 'node:path';
 
 import { Effect, FileSystem } from 'effect';
+import { z } from 'zod';
 
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
-import {
-  AgentSetting,
-  AgentPrompt,
-} from '@agent/core/definition/AgentDataclass';
-import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
-import {
-  USER_VAR_RUNTIME_TOKENS,
-  type BuiltUserVars,
-} from '@agent/core/definition/AgentCycleOptions';
+import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
 import type { ConfigProvider } from '@platform/interfaces';
@@ -19,7 +12,7 @@ import type { SettingsStores } from '@shared/config/settingsAccess';
 import type {
   AttachedMemoryMiss,
   FileListEntry,
-  UserVars,
+  SkillCatalogEntry,
 } from '@shared/schemas';
 import {
   AGENT_SKILLS_CONFIG_KEY,
@@ -43,15 +36,77 @@ import {
   setVarFromFile,
 } from '@utils/files/varsUtils';
 
-/** Transient user-variable key carrying the run's live model id. */
-export const USER_VAR_MODEL = 'MODEL';
-/** Transient user-variable key carrying the current user instruction. */
-export const USER_VAR_INSTRUCTION = 'INSTRUCTION';
+/**
+ * The fixed template vocabulary {@link buildTemplateInputs} produces to
+ * render an agent's prompts at launch: one validator per runtime token, and
+ * the single source of truth for the vocabulary. The object is closed on
+ * purpose: a misspelled fixed variable is a compile error at the producer
+ * and at every typed reader instead of a silently empty substitution.
+ * Nothing persists it: a tool-use run records the text it rendered, and
+ * what follows the step (the tool-call mechanics, the skills) is rendered
+ * per request (`stepInstructions`).
+ *
+ * Agent-YAML `requiredFilesInternal` variables have user-defined names, so
+ * they are not in this vocabulary; they ride beside it as custom string keys
+ * (see {@link TemplateVars}) and only templates read them.
+ */
+const TemplateInputsSchema = z.object({
+  /** The launch instruction. */
+  INSTRUCTION: z.string(),
+  /** Provider gate for Anthropic-specific agent prompt blocks. */
+  IS_ANTHROPIC_MODEL: z.boolean(),
+  /** Workspace root the run operates in. */
+  CWD: z.string(),
+  /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
+  BUILTIN_WORKFLOW_DIR: z.string(),
+  BUILTIN_TOOLUSE_DIR: z.string(),
+  CUSTOM_AGENTS_DIR: z.string(),
+  AGENT_DOCS_DIR: z.string(),
+  /** Per-category primary file and its content, null when none is readable. */
+  INPUT_FILE: z.string().nullable(),
+  INPUT_CONTENT: z.string().nullable(),
+  CONTEXT_FILE: z.string().nullable(),
+  CONTEXT_CONTENT: z.string().nullable(),
+  EDITED_FILE: z.string().nullable(),
+  EDITED_CONTENT: z.string().nullable(),
+  /** Per-category readable files as prompt-displayed names. */
+  INPUT_FILES: z.array(z.string()),
+  CONTEXT_FILES: z.array(z.string()),
+  EDITED_FILES: z.array(z.string()),
+  /** Per-category XML bundle of readable files, null when none are readable. */
+  ALL_INPUTS: z.string().nullable(),
+  ALL_CONTEXTS: z.string().nullable(),
+  ALL_EDITEDS: z.string().nullable(),
+  /** Per-category comma-separated readable file list, '' when empty. */
+  LIST_OF_ALL_INPUTS: z.string(),
+  LIST_OF_ALL_CONTEXTS: z.string(),
+  LIST_OF_ALL_EDITEDS: z.string(),
+  /** First attached media file; content is never inlined (display-only). */
+  MEDIA_FILE: z.string().nullable(),
+  /** The run's output file list; absent when it has none. */
+  OUTPUT_FILES: z.array(z.string()).optional(),
+  /** XML block of attached memory contents, null when none are attached. */
+  ATTACHED_MEMORIES: z.string().nullable(),
+});
+
+type TemplateInputs = z.infer<typeof TemplateInputsSchema>;
+
+/**
+ * The template-variable map accepted at the render boundary (PromptBuilder):
+ * fixed variables may be absent (template rendering keeps `throwOnUndefined`
+ * off, so templates must tolerate absence), and agent-defined
+ * `requiredFilesInternal` variables add custom keys beside the fixed ones.
+ */
+export type TemplateVars = Partial<TemplateInputs> & Record<string, unknown>;
+
+/** The fixed vocabulary as a runtime list; both readers build a set or a
+ *  map from it, so its order is irrelevant. */
+const TEMPLATE_INPUT_TOKENS = Object.keys(
+  TemplateInputsSchema.shape,
+) as (keyof TemplateInputs)[];
 
 /** Runtime view of the fixed vocabulary for the required-file collision guard. */
-const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
-  USER_VAR_RUNTIME_TOKENS,
-);
+const FIXED_TEMPLATE_KEYS: ReadonlySet<string> = new Set(TEMPLATE_INPUT_TOKENS);
 
 /**
  * Render the fixed runtime template variables as literal `{{ TOKEN }}` text.
@@ -63,10 +118,10 @@ const FIXED_USER_VAR_KEYS: ReadonlySet<string> = new Set(
  * fixed list; they remain caller-supplied names and `throwOnUndefined` stays
  * disabled until there is a separate validation story for them.
  */
-export function buildUserVarPassthrough(): Readonly<Record<string, string>> {
+export function buildTemplatePassthrough(): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
-      USER_VAR_RUNTIME_TOKENS.map((token) => [token, `{{ ${token} }}`]),
+      TEMPLATE_INPUT_TOKENS.map((token) => [token, `{{ ${token} }}`]),
     ),
   );
 }
@@ -81,7 +136,7 @@ type LoadedFileEntry = FileListEntry & {
   varName: string;
 };
 
-interface BuildUserVarsOptions {
+interface BuildTemplateInputsOptions {
   /**
    * Workspace root of the session this run belongs to, held as data: prompt
    * file names, the readable-file reads and `CWD` all resolve against it, so
@@ -97,8 +152,8 @@ interface BuildUserVarsOptions {
   storageRoot: string;
   /**
    * Configuration of the same session, held as data for the same reason: the
-   * skills master switch and the default bibliography path answer for this
-   * project, not for whichever roots the calling fiber carries.
+   * skills master switch answers for this project, not for whichever roots
+   * the calling fiber carries.
    */
   config: ConfigProvider;
   /**
@@ -115,7 +170,7 @@ interface BuildUserVarsOptions {
 /**
  * Agent-defined `requiredFilesInternal` variables: each YAML-named variable
  * `X` contributes a string `X_FILE`/`X_CONTENT` pair. The names are dynamic
- * by design, so they live outside the fixed {@link UserVars} vocabulary.
+ * by design, so they live outside the fixed {@link TemplateInputs} vocabulary.
  */
 type RequiredFileVars = Record<string, string>;
 
@@ -133,19 +188,30 @@ type AttachedMemoriesResult = {
 };
 
 /**
- * Build all user variables needed for prompt rendering.
+ * What a launch opens from: the template inputs its prompts render from,
+ * with the agent's required-file pairs beside the fixed vocabulary; the
+ * skill catalog a tool-use run records (empty for a workflow run, or with
+ * skills switched off); and the attached memories that could not be read.
+ */
+export interface TemplateOpening {
+  readonly inputs: TemplateVars;
+  readonly catalog: readonly SkillCatalogEntry[];
+  readonly attachedMemoryMisses: AttachedMemoryMiss[];
+}
+
+/**
+ * Build what a launch renders its prompts from.
  *
  * @param options.workspacePath - Workspace root of the run's session.
  */
-export const buildUserVars = Effect.fn('buildUserVars')(function* (
+export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   agentConfig: AgentConfig,
   agentSetting: AgentSetting,
-  agentPrompt: AgentPrompt,
   agentPath: string,
   isAnthropicModel: boolean,
   logger: AgentTrace,
-  options: BuildUserVarsOptions,
-): Effect.fn.Return<BuiltUserVars, Error, FileSystem.FileSystem> {
+  options: BuildTemplateInputsOptions,
+): Effect.fn.Return<TemplateOpening, Error, FileSystem.FileSystem> {
   // Parallelize independent I/O: required files, memories, and skills
   const [
     { vars: requiredVars, files: requiredFiles },
@@ -155,18 +221,16 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
     [
       getRequiredFileVars(agentSetting, agentPath),
       getAttachedMemories(agentConfig.memories, options.storageRoot),
-      // Only a tool-use run's steps list AVAILABLE_SKILLS, so the catalog (a
+      // Only a tool-use run's steps list skills, so the catalog (a
       // multi-source readdir + per-skill realpath/read/parse) is dead work
       // for workflow agents. The settings toggle gives users a hard off
-      // switch that skips discovery and leaves AVAILABLE_SKILLS empty.
+      // switch that skips discovery and leaves the catalog empty.
       agentSetting.agentCategory === AgentCategory.ToolUse &&
       AgentSkillsEnabledSchema.parse(
         options.config.get(AGENT_SKILLS_CONFIG_KEY),
       )
         ? loadRuntimeSkillCatalog(options)
-        : // A fresh object per call, not a shared constant: `skills` is handed
-          // to the snapshot consumer, and a shared array would accumulate.
-          Effect.succeed({ catalog: [], skills: [], issues: [] }),
+        : Effect.succeed({ catalog: [], issues: [] }),
     ],
     { concurrency: 'unbounded' },
   );
@@ -178,28 +242,8 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
     });
   }
 
-  if (agentSetting.agentCategory === AgentCategory.ToolUse) {
-    logger.emit({
-      type: 'skills.snapshot',
-      skills: runtimeSkills.skills,
-      stageId: options.stageId,
-    });
-  }
-
-  // The resolved output list is also the run's normalized `config.outputFiles`:
-  // the documents plugin, output validation, and the XML manager all read it
-  // back off the config after this point, so the write happens here in the
-  // open rather than inside a helper the spread below hides.
-  const { outputFiles, vars: outputFileVars } = resolveOutputFiles(
-    agentConfig,
-    agentSetting,
-  );
-  agentConfig.outputFiles = outputFiles;
-
-  // Merge all variable sources using spread operator.
-  // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary
-  // (BuiltUserVars) and reach templates through the channel boundary.
-  const userVars: BuiltUserVars = {
+  // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary.
+  const inputs: TemplateInputs & Record<string, unknown> = {
     ...getBasicVars(agentConfig, isAnthropicModel, options),
     ...(yield* getFileVars(
       agentConfig,
@@ -209,11 +253,11 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
       options.stageId,
     )),
     ...requiredVars,
-    ...outputFileVars,
-    ...getRoundsVar(agentSetting, agentPrompt),
+    // `prepareAgentDefinition` normalized the list.
+    ...(agentConfig.outputFiles.length > 0
+      ? { OUTPUT_FILES: agentConfig.outputFiles }
+      : {}),
     ATTACHED_MEMORIES: attachedMemories.xml,
-    ATTACHED_MEMORY_MISSES: attachedMemories.misses,
-    AVAILABLE_SKILLS: runtimeSkills.catalog,
   };
 
   // Emit aggregated file list if any files were loaded
@@ -221,16 +265,18 @@ export const buildUserVars = Effect.fn('buildUserVars')(function* (
     logFilesLoaded(logger, 'all', requiredFiles, options.stageId);
   }
 
-  return userVars;
+  return {
+    inputs,
+    catalog: runtimeSkills.catalog,
+    attachedMemoryMisses: attachedMemories.misses,
+  };
 });
 
 type BasicVars = Pick<
-  UserVars,
-  | 'MODEL'
+  TemplateInputs,
   | 'INSTRUCTION'
   | 'IS_ANTHROPIC_MODEL'
   | 'CWD'
-  | 'DEFAULT_BIB_PATH'
   | 'BUILTIN_WORKFLOW_DIR'
   | 'BUILTIN_TOOLUSE_DIR'
   | 'CUSTOM_AGENTS_DIR'
@@ -240,17 +286,12 @@ type BasicVars = Pick<
 function getBasicVars(
   agentConfig: AgentConfig,
   isAnthropicModel: boolean,
-  options: BuildUserVarsOptions,
+  options: BuildTemplateInputsOptions,
 ): BasicVars {
-  // Get default bib path from settings (empty string if not configured)
-  const defaultBibPath = options.config.get<string>('texra.bib.defaultPath');
-
   return {
-    MODEL: agentConfig.model,
     INSTRUCTION: agentConfig.instruction,
     IS_ANTHROPIC_MODEL: isAnthropicModel,
     CWD: options.workspacePath ?? '.',
-    DEFAULT_BIB_PATH: defaultBibPath,
     ...getAgentDirectoryVars(),
   };
 }
@@ -264,7 +305,7 @@ function getBasicVars(
  * (e.g. in tests that don't run activation).
  */
 type AgentDirectoryVars = Pick<
-  UserVars,
+  TemplateInputs,
   | 'BUILTIN_WORKFLOW_DIR'
   | 'BUILTIN_TOOLUSE_DIR'
   | 'CUSTOM_AGENTS_DIR'
@@ -351,7 +392,7 @@ type FileCategoryVars = {
 };
 
 /** File-based variables: readable categories plus the display-only MEDIA slots. */
-type FileVars = FileCategoryVars & Pick<UserVars, 'MEDIA_FILE'>;
+type FileVars = FileCategoryVars & Pick<TemplateInputs, 'MEDIA_FILE'>;
 
 const getFileVars = Effect.fn('userVars.getFileVars')(function* (
   agentConfig: AgentConfig,
@@ -451,7 +492,7 @@ const getFileVars = Effect.fn('userVars.getFileVars')(function* (
 
 /**
  * A required-file variable `X` generates the `X_FILE`/`X_CONTENT` pair, which
- * `buildUserVars` spreads after the fixed variables — so a name like `MEDIA`
+ * `buildTemplateInputs` spreads after the fixed variables — so a name like `MEDIA`
  * or `INPUT` would silently override a fixed variable. Fail loudly when the
  * variables are built instead.
  */
@@ -459,7 +500,7 @@ function assertNoFixedVarCollision(
   varName: string,
 ): Effect.Effect<void, Error> {
   for (const generatedKey of [`${varName}_FILE`, `${varName}_CONTENT`]) {
-    if (FIXED_USER_VAR_KEYS.has(generatedKey)) {
+    if (FIXED_TEMPLATE_KEYS.has(generatedKey)) {
       return Effect.fail(
         new Error(
           `requiredFilesInternal name "${varName}" generates "${generatedKey}", which collides with a fixed template variable. Rename the required-file variable.`,
@@ -562,52 +603,3 @@ const getAttachedMemories = Effect.fn('userVars.getAttachedMemories')(
     };
   },
 );
-
-/**
- * The run's normalized output list plus the prompt variable derived from it.
- * The caller owns writing the list back onto the config; see `buildUserVars`.
- */
-function resolveOutputFiles(
-  agentConfig: AgentConfig,
-  agentSetting: AgentSetting,
-): { outputFiles: string[]; vars: Pick<UserVars, 'OUTPUT_FILES'> } {
-  const explicitOutputFiles = (agentConfig.outputFiles ?? []).filter(Boolean);
-  const defaultOutputFiles = (agentSetting.defaultOutputFiles ?? []).filter(
-    Boolean,
-  );
-  const inputFiles = (agentConfig.inputFiles ?? []).filter(Boolean);
-  const explicitFilesAreSubsetOfInputs = explicitOutputFiles.every((file) =>
-    inputFiles.includes(file),
-  );
-  // An empty defaultOutputFiles is already `[]`, so this single ternary covers
-  // the "no usable outputs" case without a nested fallback branch.
-  const useExplicit =
-    explicitOutputFiles.length > 0 && !explicitFilesAreSubsetOfInputs;
-  const outputFiles = useExplicit ? explicitOutputFiles : defaultOutputFiles;
-
-  return {
-    outputFiles,
-    vars: outputFiles.length > 0 ? { OUTPUT_FILES: outputFiles } : {},
-  };
-}
-
-type RoundsVar = Pick<UserVars, 'ROUNDS'>;
-
-function getRoundsVar(
-  agentSetting: AgentSetting,
-  agentPrompt: AgentPrompt,
-): RoundsVar {
-  const flags: RoundsVar = {};
-
-  // Only compute ROUNDS for workflow agents, not tool-use agents
-  if (agentSetting.agentCategory !== AgentCategory.ToolUse) {
-    const configuredRounds =
-      'rounds' in agentSetting ? agentSetting.rounds : undefined;
-    flags.ROUNDS = Math.max(
-      configuredRounds ?? 2,
-      userRequestTemplateCount(agentPrompt.userRequest),
-    );
-  }
-
-  return flags;
-}

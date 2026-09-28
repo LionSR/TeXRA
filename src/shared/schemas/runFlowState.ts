@@ -1,7 +1,7 @@
 /**
  * The agent flow state a `flow.snapshot` row restores: the run-state and
- * workspace snapshots, the user-variable channels, the model compatibility
- * key, and the message-free core of the tool-use flow. Host-neutral so the
+ * workspace snapshots, the model compatibility key, and the message-free
+ * core of the tool-use flow. Host-neutral so the
  * run ledger (`runLedgerEvent.ts`) composes them without reaching the agent
  * layer; the agent modules import them back.
  */
@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { TurnProtocolSchema } from '@texra-ai/llm/turn';
 
+import { SKILL_CATALOG_MAX_SKILLS } from './activeSkills';
 import { JsonValueSchema } from './jsonValue';
 import { LineCountSchema } from './lineChanges';
 import { Sha256Schema } from './offeredTools';
@@ -158,7 +159,7 @@ export type AgentWorkspaceSnapshot = z.output<
   typeof AgentWorkspaceStateSnapshotSchema
 >;
 
-// ------------------------------------------------------- user variables
+// ------------------------------------------------------------ launch facts
 
 export const AttachedMemoryMissSchema = z.object({
   path: z.string(),
@@ -166,101 +167,33 @@ export const AttachedMemoryMissSchema = z.object({
 });
 export type AttachedMemoryMiss = z.infer<typeof AttachedMemoryMissSchema>;
 
-/** One skill in a run's catalog, as the prompt lists it, with the tool
- *  plugin that ships it (null for a core source). */
+/** One skill in a run's catalog, as the prompt lists it, with the plugin
+ *  that ships it (null for a core source) and the directory tools may read
+ *  while a step lists it (null when the workspace already holds it). */
 const SkillCatalogEntrySchema = z.strictObject({
   plugin: z.string().min(1).nullable(),
+  name: z.string().min(1),
   text: z.string(),
+  directory: z.string().min(1).nullable(),
 });
 export type SkillCatalogEntry = z.infer<typeof SkillCatalogEntrySchema>;
 
-/**
- * The fixed template-variable vocabulary `buildUserVars`
- * (`@agent/prompt/userVars`) produces for prompt rendering — one validator per
- * runtime token, and the single source of truth for the vocabulary: the
- * {@link UserVars} type is inferred from it, the persisted channel shape below
- * is built from its shape, and `@agent/prompt/userVars` derives its
- * passthrough token list from the same keys. The object is closed on purpose:
- * a misspelled fixed variable is a compile error at the producer and at every
- * typed reader instead of a silently empty substitution.
- *
- * Agent-YAML `requiredFilesInternal` variables have user-defined names, so
- * they are not in this vocabulary; they ride beside it as custom string keys
- * (see `TemplateVars` in `@agent/core/definition/AgentCycleOptions`) and only
- * templates read them.
- *
- * The schema lives beside the channels below, not in the prompt layer, because
- * `UserVariableChannels` (persisted and resumed by the tool-use flow) is its
- * primary carrier.
- */
-const UserVarsSchema = z.object({
-  /** Live model id for the run. */
-  MODEL: z.string(),
-  /** Current user instruction. */
-  INSTRUCTION: z.string(),
-  /** Provider gate for Anthropic-specific prompt blocks. */
-  IS_ANTHROPIC_MODEL: z.boolean(),
-  /** Workspace root the run operates in. */
-  CWD: z.string(),
-  /** Configured default bibliography path, '' when unset. */
-  DEFAULT_BIB_PATH: z.string(),
-  /** Absolute agent-directory paths from the external-roots registry, '' when unregistered. */
-  BUILTIN_WORKFLOW_DIR: z.string(),
-  BUILTIN_TOOLUSE_DIR: z.string(),
-  CUSTOM_AGENTS_DIR: z.string(),
-  AGENT_DOCS_DIR: z.string(),
-  /** Per-category primary file and its content, null when none is readable. */
-  INPUT_FILE: z.string().nullable(),
-  INPUT_CONTENT: z.string().nullable(),
-  CONTEXT_FILE: z.string().nullable(),
-  CONTEXT_CONTENT: z.string().nullable(),
-  EDITED_FILE: z.string().nullable(),
-  EDITED_CONTENT: z.string().nullable(),
-  /** Per-category readable files as prompt-displayed names. */
-  INPUT_FILES: z.array(z.string()),
-  CONTEXT_FILES: z.array(z.string()),
-  EDITED_FILES: z.array(z.string()),
-  /** Per-category XML bundle of readable files, null when none are readable. */
-  ALL_INPUTS: z.string().nullable(),
-  ALL_CONTEXTS: z.string().nullable(),
-  ALL_EDITEDS: z.string().nullable(),
-  /** Per-category comma-separated readable file list, '' when empty. */
-  LIST_OF_ALL_INPUTS: z.string(),
-  LIST_OF_ALL_CONTEXTS: z.string(),
-  LIST_OF_ALL_EDITEDS: z.string(),
-  /** First attached media file; content is never inlined (display-only). */
-  MEDIA_FILE: z.string().nullable(),
-  /** Resolved output file list; absent when no usable outputs are configured. */
-  OUTPUT_FILES: z.array(z.string()).optional(),
-  /** Effective round count; workflow agents only. */
-  ROUNDS: z.number().optional(),
-
-  /** XML block of attached memory contents, null when none are attached. */
-  ATTACHED_MEMORIES: z.string().nullable(),
-  /** Attached memories that could not be read. */
-  ATTACHED_MEMORY_MISSES: z.array(AttachedMemoryMissSchema),
-  /** The skill catalog, read once at open with every plugin's skills: each
-   *  step lists those of core sources and of the plugins it pinned
-   *  (`stepInstructions`). Empty when skills are disabled. */
-  AVAILABLE_SKILLS: z.array(SkillCatalogEntrySchema),
-});
-
-/** Derived from UserVarsSchema - single source of truth. */
-export type UserVars = z.infer<typeof UserVarsSchema>;
+/** A tool-use run's skill catalog, read once at open with every plugin's
+ *  skills and recorded as a `context.blob` its snapshots address. */
+export const SkillCatalogSchema = z.array(SkillCatalogEntrySchema);
 
 /**
- * The persisted channel shape is a loose record because a run's custom
- * `requiredFilesInternal` keys are not enumerable here; each known fixed key
- * is validated with its per-key type when present, and the custom keys pass
- * through untouched. Known keys are optional because a checkpoint may have
- * dropped variables.
+ * The catalog entries a step lists: those of core sources and of the
+ * plugins it names, bounded after the filter, so a withdrawn plugin's skills
+ * never push a listed one out.
  */
-export const UserVariableChannelsSchema = z
-  .looseObject(UserVarsSchema.shape)
-  .partial();
-
-/** Derived from UserVariableChannelsSchema - single source of truth. */
-export type UserVariableChannels = z.output<typeof UserVariableChannelsSchema>;
+export const listedSkills = (
+  catalog: readonly SkillCatalogEntry[],
+  plugins: ReadonlySet<string>,
+): SkillCatalogEntry[] =>
+  catalog
+    .filter(({ plugin }) => plugin === null || plugins.has(plugin))
+    .slice(0, SKILL_CATALOG_MAX_SKILLS);
 
 // --------------------------------------------------- model compatibility
 
@@ -287,7 +220,6 @@ export const ModelCompatibilityKeySchema = z.enum(MODEL_COMPATIBILITY_KEYS);
 
 const StateSlicesSchema = z.object({
   workspaceSnapshot: AgentWorkspaceStateSnapshotSchema,
-  userChannels: UserVariableChannelsSchema,
 });
 
 /**
@@ -308,6 +240,15 @@ export const ToolUseSnapshotStateSchema = z.object({
    *  (`stepInstructions`): a `context.blob` of the run, never restated in
    *  every snapshot. */
   system: Sha256Schema.optional(),
+  /** The address of the run's skill catalog (`SkillCatalogSchema`), a
+   *  `context.blob` of the run: each step lists part of it. */
+  skills: Sha256Schema.optional(),
+  /** The address of the instruction the run's latest turn answers, a
+   *  `context.blob` recorded when a delivery changes it; absent while it is
+   *  the launch's. */
+  instruction: Sha256Schema.optional(),
+  /** The attached memories the opening could not read. */
+  memoryMisses: z.array(AttachedMemoryMissSchema).optional(),
   /** Validated terminal-tool result retained across interrupt and resume. */
   structured: JsonValueSchema.optional(),
 });

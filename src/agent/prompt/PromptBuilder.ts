@@ -4,12 +4,9 @@ import { Effect, FileSystem } from 'effect';
 // Local imports - agent
 import type { AgentTrace } from '@agent/trace/AgentTrace';
 import type { AgentPrompt } from '@agent/core/definition/AgentDataclass';
-import type { TemplateVars } from '@agent/core/definition/AgentCycleOptions';
+import type { TemplateVars } from '@agent/prompt/templateInputs';
 import type { SettingsStores } from '@shared/config/settingsAccess';
-import {
-  ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
-  type SkillCatalogEntry,
-} from '@shared/schemas';
+import type { SkillCatalogEntry } from '@shared/schemas';
 import type { PromptContribution, PromptSection } from '@tools/toolTable';
 
 // Local imports - utilities
@@ -20,15 +17,8 @@ import { buildWorkspaceInfoBlock } from '@utils/system/workspaceInfo';
 import type { ChildProcessSpawner } from 'effect/unstable/process/ChildProcessSpawner';
 
 /**
- * Instructions appended to tool-use agent prompts.
- *
- * The tool-call mechanics block is provider-gated: OpenAI-compatible providers
- * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
- * guardrails and the sequential-call constraint (Google/DeepSeek thought-
- * signature batching assumes ordered follow-ups). Anthropic models handle
- * parallel tool calls natively — the handler batches parallel results into the
- * canonical single-assistant/single-user shape — so they get the parallel
- * encouragement instead of the weak-model boilerplate.
+ * Instructions appended to tool-use agent prompts at open. What depends on
+ * the model or the settings is rendered by each step (`stepInstructions`).
  */
 const TOOL_USE_INSTRUCTIONS = `<tool_use_instructions>
 Working directory: the bash tool already executes every command from {{ CWD }}. You are already in the workspace, so run commands directly with relative paths (e.g., \`ls src/\`, \`find . -name "*.tex"\`, \`cat README.md\`). Scope file searches to \`.\` or a subdirectory, or use the glob/grep tools.
@@ -36,43 +26,51 @@ Explicit user constraints override general workflow guidance elsewhere in the ag
 
 Prefer using tools over asking the user to take manual actions.
 If you say you will perform an action, immediately call the corresponding tool.
-{% if IS_ANTHROPIC_MODEL %}Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
-{% else %}When using a tool, follow the JSON schema exactly and include all required properties.
-Always produce valid JSON when calling a tool.
-Do not call tools that are not provided or any multi_tool_use variants.
-Call tools sequentially and wait for the output before calling another.
-{% endif %}Do only what the task requires. Do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
+Do only what the task requires. Do not refactor, restructure, or "improve" material beyond it. When the user describes a problem without asking for a change, deliver your assessment before editing files.
 When an approved plan or autonomous objective is active, work toward it end to end. Keep going and verify against real evidence rather than pausing to confirm each step or summarize progress. Stop only when it is verifiably done or you are genuinely blocked on something only the user can provide.
 In replies, lead with the outcome. Keep responses short by being selective about what to include, not by compressing the writing.
 Never mention tool names when speaking to the user.
 For math in responses, use $...$ or \\(...\\) for inline and $$...$$ or \\[...\\] for display math. Wrap LaTeX environments like align or gather inside $$...$$ (e.g., $$\\begin{align}...\\end{align}$$) so they render correctly.
-{% if DEFAULT_BIB_PATH %}The default bibliography file is {{ DEFAULT_BIB_PATH }}. You can grep or read this file to search for citations and references.{% endif %}
-
 </tool_use_instructions>`;
 
 /**
- * The system text a step adds after the run's recorded prompt: the skill
- * catalog, holding the skills of core sources and of the plugins the step
- * pinned, then each pinned plugin's section, in plugin id order. It is built
- * from the step's record (its offered tools and pinned contributors) and the
- * catalog the run recorded at open, so a resume rebuilds it.
+ * The tool-call mechanics are provider-gated: OpenAI-compatible providers
+ * (DeepSeek, Kimi, GLM, MiniMax, …) need the schema/JSON/multi_tool_use
+ * guardrails and the sequential-call constraint (Google/DeepSeek thought-
+ * signature batching assumes ordered follow-ups). Anthropic models handle
+ * parallel tool calls natively, so they get the parallel encouragement
+ * instead of the weak-model boilerplate.
+ */
+const ANTHROPIC_TOOL_CALLS = `Independent tool calls may be issued together in one response. Sequence only calls that depend on an earlier result.
+Do not create excessive markdown files or documentation unless explicitly requested.`;
+const SEQUENTIAL_TOOL_CALLS = `When using a tool, follow the JSON schema exactly and include all required properties.
+Always produce valid JSON when calling a tool.
+Do not call tools that are not provided or any multi_tool_use variants.
+Call tools sequentially and wait for the output before calling another.`;
+
+/**
+ * The system text a step adds after the run's recorded prompt: the tool-call
+ * mechanics of the step's model and the configured bibliography, the skills
+ * the step lists, then each pinned plugin's section, in plugin id order. It
+ * is built from the step (its model, settings, offered tools and pinned
+ * contributors) and the catalog the run recorded at open, so a model switch
+ * or a setting change reaches the next request, and a resume rebuilds it.
  */
 export function stepInstructions(
   prompt: ReadonlyMap<string, PromptContribution>,
-  catalog: readonly SkillCatalogEntry[] | undefined,
+  skills: readonly SkillCatalogEntry[],
   ctx: Parameters<PromptSection>[0],
 ): string {
-  // Bounded after the filter, so a switched-off plugin's skills never push
-  // an enabled one out.
-  const skills = (catalog ?? [])
-    .flatMap(({ plugin, text }) =>
-      plugin === null || prompt.get(plugin)?.skills === true ? [text] : [],
-    )
-    .slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
   return [
+    ctx.isAnthropic ? ANTHROPIC_TOOL_CALLS : SEQUENTIAL_TOOL_CALLS,
+    ...(ctx.bibPath
+      ? [
+          `The default bibliography file is ${ctx.bibPath}. You can grep or read this file to search for citations and references.`,
+        ]
+      : []),
     ...(skills.length > 0
       ? [
-          `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.join('\n')}\n</available_skills>`,
+          `<available_skills>\nThe following imported skills are available. If one is relevant, inspect its SKILL.md at the listed path before applying it.\n${skills.map(({ text }) => text).join('\n')}\n</available_skills>`,
         ]
       : []),
     ...[...prompt.values()].flatMap(({ section }) => section?.(ctx) || []),

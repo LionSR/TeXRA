@@ -99,6 +99,9 @@ export class LiveTools extends Context.Service<
         /** Why each enabled installed plugin, or one of its servers, offers
          *  no tools; empty unless the installed plugins were loaded. */
         readonly warnings: readonly string[];
+        /** The ids of the installed plugins this step's read loads; empty
+         *  unless the installed plugins were loaded. */
+        readonly installed: readonly string[];
       },
       E,
       Scope.Scope
@@ -267,7 +270,7 @@ const liveToolsLayer = (
           const readId = reading ? ++reads : 0;
           const read = reading
             ? yield* installedReader
-            : { plugins: [], warnings: [] };
+            : { loaded: [], plugins: [], warnings: [] };
           // Loads started here and not yet adopted by the catalog: an
           // interruption or failure before adoption drops them.
           const started: InstalledLoad[] = [];
@@ -357,6 +360,7 @@ const liveToolsLayer = (
                   continuations: generation,
                   sections: pinned.generation,
                   layersFor,
+                  installed: loading ? read.loaded : [],
                   warnings: [
                     ...read.warnings,
                     ...(loading
@@ -409,7 +413,7 @@ const liveToolsLayer = (
   );
 
 /** Loads no plugins, from configuration or installed. */
-const NONE = Effect.succeed({ plugins: [], warnings: [] });
+const NONE = Effect.succeed({ loaded: [], plugins: [], warnings: [] });
 
 /**
  * `table` as the `ToolRegistry`, and the live catalog over it, the plugins

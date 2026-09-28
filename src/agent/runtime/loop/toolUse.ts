@@ -22,14 +22,11 @@
  * turn, run once per round by the round loop, with no tools and no input.
  */
 import { Effect, Exit, type Scope, SynchronizedRef } from 'effect';
+import { z } from 'zod';
 
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import type { FollowUpBatch } from '@agent/followUp/RunInput';
-import {
-  buildInitialToolUsePrompts,
-  stepInstructions,
-} from '@agent/prompt/PromptBuilder';
-import { USER_VAR_INSTRUCTION, USER_VAR_MODEL } from '@agent/prompt/userVars';
+import { buildInitialToolUsePrompts } from '@agent/prompt/PromptBuilder';
 import { logUserMessage } from '@agent/trace';
 import type { ProcessServices } from '@platform/processRuntime';
 import { LanguageModel } from '@platform/languageModel';
@@ -41,16 +38,17 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
-  type UserVariableChannels,
+  SkillCatalogSchema,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
 import { sha256 } from '@tools/catalogEntries';
+import { releaseSkillRoots } from '@utils/files/externalRoots';
 
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { storedText } from '../run/requestContext';
+import { blobRows, stored } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
@@ -73,7 +71,7 @@ import {
   type RunCell,
 } from './runProgram';
 import { dispatchPendingResponse, type TurnContext } from './toolUseDispatch';
-import { stepFor, type RenderSystem } from './step';
+import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
 import type { SessionHandle } from '../SessionHandle';
@@ -153,7 +151,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  const userChannels: UserVariableChannels = { ...run.userVarChannels };
+  // The opening's catalog and memory misses, and the instruction the latest
+  // turn answers: a restore reads all three back.
+  let catalog = run.opening?.catalog ?? [];
+  let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
+  let instruction = run.config.instruction;
   let systemPrompt: string | undefined;
   let response = '';
   // A `/compact` the host admitted: honoured at the next model boundary,
@@ -166,23 +168,20 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       workspaceSnapshot: workspace.toSnapshot({
         excludeAssemblyStrings: true,
       }),
-      userChannels,
     },
     ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
+    ...(catalog.length > 0 ? { skills: sha256(catalog) } : {}),
+    ...(instruction !== run.config.instruction
+      ? { instruction: sha256(instruction) }
+      : {}),
+    ...(memoryMisses.length > 0 ? { memoryMisses } : {}),
     ...(run.structured.value !== undefined
       ? { structured: run.structured.value }
       : {}),
   });
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
-    snapshotRow(runId, state, {
-      ...patch,
-      state: flowState(),
-    });
+    snapshotRow(runId, state, { ...patch, state: flowState() });
 
-  const instruct = (instruction: string | undefined): void => {
-    if (instruction !== undefined)
-      userChannels[USER_VAR_INSTRUCTION] = instruction;
-  };
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
     if (paths.length === 0) return;
@@ -194,16 +193,16 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // A resumed root's first step that pins a continuation stands it down,
   // before anything this activation decides can re-arm it.
   let resumeUnseen = start.resume;
-  // A step's system text: the run's recorded prompt and what its plugins add.
-  const render: RenderSystem = (prompt, offered) => ({
-    base: systemPrompt,
-    added: stepInstructions(prompt, userChannels.AVAILABLE_SKILLS, {
-      offered,
-      isChild: isChild(),
-    }),
-  });
+  // What a step's system text is built from; its skill grants end with us.
+  const system: RunSystem = {
+    base: () => systemPrompt,
+    catalog: () => catalog,
+    isChild,
+    activated: new Map(),
+  };
+  yield* Effect.addFinalizer(() => Effect.sync(() => releaseSkillRoots(runId)));
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
-    Effect.tap(stepFor(run, state, rounds !== null, kind, render), (step) => {
+    Effect.tap(stepFor(run, state, rounds !== null, kind, system), (step) => {
       if (!resumeUnseen || step.continuation === null || isChild())
         return Effect.void;
       resumeUnseen = false;
@@ -251,13 +250,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         // A round-mode run opens with no message and offers no tools. A
         // tool-use run's first step is recorded with its opening.
         if (rounds) return { bound, content: null, offered: [] };
-        const promptVars = {
-          ...run.userVarChannels,
-          [USER_VAR_MODEL]: bound.modelId,
-        };
+        const { inputs } =
+          run.opening ?? (yield* Effect.die(new Error(`${runId}: no opening`)));
         const prompts = yield* buildInitialToolUsePrompts(
           run.prompt,
-          promptVars,
+          inputs,
           logger,
           {
             workspace: session.roots.workspace,
@@ -301,7 +298,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
         content.push(...media.value.parts);
         if (userRequest) content.push({ kind: 'text', text: userRequest });
-        userChannels[USER_VAR_MODEL] = bound.modelId;
         workspace = AgentWorkspaceState.create();
         return { bound, content, offered: step.rows };
       }),
@@ -309,6 +305,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
+      // The catalog is stored once, before the snapshot that names it.
+      ...(catalog.length > 0 ? blobRows(runId, opening, [catalog]) : []),
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
@@ -331,10 +329,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       workspace = AgentWorkspaceState.fromSnapshot(
         flow.stateSlices.workspaceSnapshot,
       );
-      Object.assign(userChannels, flow.stateSlices.userChannels);
     }
-    systemPrompt =
-      flow.system === undefined ? undefined : storedText(state, flow.system);
+    systemPrompt = flow.system && stored(state, flow.system, z.string());
+    catalog = flow.skills ? stored(state, flow.skills, SkillCatalogSchema) : [];
+    memoryMisses = flow.memoryMisses ?? [];
+    if (flow.instruction)
+      instruction = stored(state, flow.instruction, z.string());
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
@@ -363,7 +363,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const turnContext: TurnContext = {
       workspace,
       get userInstruction() {
-        return userChannels[USER_VAR_INSTRUCTION];
+        return instruction;
       },
     };
     let continuedAt: number | null = null;
@@ -474,12 +474,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
       // skip the blank-turn continuation and the forced structured output.
       let replayCommitted = true;
       for (;;) {
-        state = yield* applyPendingModelSwitch(
-          state,
-          cell,
-          userChannels,
-          snapshot,
-        );
+        state = yield* applyPendingModelSwitch(state, cell, snapshot);
         if (state.pendingResponse !== null) {
           // A user's follow-up to a stopped response joins its delivery.
           const joined = followUps && (yield* followUps.joinStopped(state));
@@ -490,7 +485,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
             joined?.rows,
           );
           state = dispatched.state;
-          instruct(joined?.delivered());
+          // Its blob commits with the rows that consume the follow-ups.
+          instruction = joined?.delivered() ?? instruction;
           if (dispatched.endTurn && !joined) return completeTurn(state);
           continue;
         }
@@ -666,7 +662,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           );
           state = yield* cell.adopt(consumed.state);
           if (!consumed.turn) continue;
-          instruct(consumed.instruction);
+          instruction = consumed.instruction ?? instruction;
         }
         restoring = false;
         const turn: TurnExit = yield* start.turns

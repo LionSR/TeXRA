@@ -6,14 +6,12 @@
 import { MODEL_CONFIGS } from 'llm-zoo';
 import { Effect, Scope, SynchronizedRef } from 'effect';
 
-import { USER_VAR_MODEL } from '@agent/prompt/userVars';
 import { configChange } from '@agent/storage/runLifecycle';
 import {
   resolveModelRoute,
   routeCompatibilityKey,
 } from '@agent/runtime/modelRoutes';
 import { LanguageModel } from '@platform/languageModel';
-import type { UserVariableChannels } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { AgentRun, type AgentRunShape } from '../run/AgentRun';
@@ -28,8 +26,6 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
   function* (
     state: RunState,
     cell: RunCell,
-    /** The loop's user channels, which name the model the run is on. */
-    userChannels: UserVariableChannels,
     /** The loop's snapshot row, family state included. */
     snapshot: (
       state: RunState,
@@ -58,7 +54,6 @@ export const applyPendingModelSwitch = Effect.fn('toolUse.applyModelSwitch')(
       agentCategory: run.config.agentCategory,
       temperature: run.setting.temperature,
     }).pipe(Scope.provide(run.scope));
-    userChannels[USER_VAR_MODEL] = next.modelId;
     // The snapshot's model id is the loop's model fact; the run's
     // configuration row, which a listing, a resume and every renderer read,
     // changes with it in the same batch, so no reader sees one without the

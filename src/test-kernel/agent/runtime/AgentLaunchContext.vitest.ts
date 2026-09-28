@@ -15,7 +15,9 @@ vi.mock('@agent/index', () => ({
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
 }));
-vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
+vi.mock('@agent/prompt/templateInputs', () => ({
+  buildTemplateInputs: mocks.buildVars,
+}));
 
 import { registerRun } from '@agent/storage/runLifecycle';
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -352,7 +354,7 @@ describe('AgentLaunchContext', () => {
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
         mocks.buildVars.mockReturnValueOnce(
-          Effect.succeed({ ATTACHED_MEMORY_MISSES: [] }),
+          Effect.succeed({ inputs: {}, catalog: [], attachedMemoryMisses: [] }),
         );
         const config = AgentConfigSchema.parse({
           agent: 'chat',
@@ -409,7 +411,11 @@ describe('AgentLaunchContext', () => {
             Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
           );
           mocks.buildVars.mockReturnValueOnce(
-            Effect.succeed({ ATTACHED_MEMORY_MISSES: [] }),
+            Effect.succeed({
+              inputs: {},
+              catalog: [],
+              attachedMemoryMisses: [],
+            }),
           );
         };
         yield* registerRun(session, EXECUTION_ID, config, {
@@ -519,7 +525,7 @@ describe('AgentLaunchContext', () => {
       );
       expect(error).toBe(failure);
 
-      expect(mocks.buildVars.mock.calls.at(-1)?.at(6)).toEqual({
+      expect(mocks.buildVars.mock.calls.at(-1)?.at(5)).toEqual({
         workspacePath: session.roots.workspace,
         storageRoot: session.roots.storage,
         config: session.roots.config,

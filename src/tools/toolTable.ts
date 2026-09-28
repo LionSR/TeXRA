@@ -94,14 +94,6 @@ export type PluginLoader = (declared: readonly string[]) => Effect.Effect<{
   readonly warnings: readonly string[];
 }>;
 
-/** The id every installed Claude Code or Codex plugin's contributions
- *  carry: `plugin:<name>`. */
-export const installedPluginId = (name: string): string => `plugin:${name}`;
-
-/** Whether a catalog entry's plugin is an installed plugin. */
-export const isInstalledPluginId = (plugin: string): boolean =>
-  plugin.startsWith('plugin:');
-
 /**
  * An installed plugin a step loads while it is enabled and trusted: its MCP
  * servers, whose tools the catalog contributes under its one id and every
@@ -115,10 +107,12 @@ export interface InstalledToolPlugin {
 }
 
 /**
- * The installed plugins that load now, read at each step, and why each
- * enabled one that does not load is held back.
+ * The installed plugins that load now, read at each step: the ids of all of
+ * them, those with servers to start, and why each enabled one that does not
+ * load is held back.
  */
 export type InstalledToolReader = Effect.Effect<{
+  readonly loaded: readonly string[];
   readonly plugins: readonly InstalledToolPlugin[];
   readonly warnings: readonly string[];
 }>;
@@ -153,6 +147,10 @@ export interface Continuation {
 export type PromptSection = (ctx: {
   readonly offered: readonly string[];
   readonly isChild: boolean;
+  /** The step's bound model is an Anthropic model. */
+  readonly isAnthropic: boolean;
+  /** The configured default bibliography, '' when unset. */
+  readonly bibPath: string;
 }) => string;
 
 /** What a plugin adds to the system text of each request whose step pins

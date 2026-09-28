@@ -351,9 +351,9 @@ export function getVisibleAgents(
  * Resolve delegation targets for a run: the scope's pinned keys when a
  * delegation scope is active, or the workspace-visible roster otherwise. The
  * single resolver behind both the "Available agents:" tool-description block
- * (`delegationAvailability.ts`) and the prompt-template agent lists
- * (`userVars.ts`), so a delegating agent's tool description and its own
- * prompt vars can never list a different roster for the same run.
+ * (`delegationAvailability.ts`) and the delegation tools' agent lookup
+ * (`proposalFlow.ts`), so a delegating agent's tool description can never
+ * list a different roster from the one its calls are resolved against.
  */
 export function resolveDelegationScopeAgents(
   stores: AgentRosterStores,

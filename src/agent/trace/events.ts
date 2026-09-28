@@ -62,7 +62,6 @@ export type AgentEvent =
       | 'tool.end'
       | 'workflow.plan'
       | 'workflow.call'
-      | 'skills.snapshot'
       | 'usage'
       | 'conversation.progress'
       | 'run.fact'

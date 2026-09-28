@@ -216,6 +216,14 @@ export function listPlugins(env: PluginEnv) {
   });
 }
 
+/** The id every installed Claude Code or Codex plugin's contributions
+ *  carry, its tools and its skills alike: `plugin:<name>`. */
+export const installedPluginId = (name: string): string => `plugin:${name}`;
+
+/** Whether a catalog entry's plugin is an installed plugin. */
+export const isInstalledPluginId = (plugin: string): boolean =>
+  plugin.startsWith('plugin:');
+
 /** An enabled plugin the user trusts as it is, as read now. */
 export interface LoadablePlugin {
   readonly record: InstalledPlugin;

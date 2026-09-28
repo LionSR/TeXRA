@@ -4,7 +4,10 @@ import { Cause, Effect, FileSystem, Layer, Schedule, Stream } from 'effect';
 // Local imports
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { revisionKey } from '@common/plugins/mcpServers';
-import { readInstalledPluginLoad } from '@common/plugins/pluginTrust';
+import {
+  installedPluginId,
+  readInstalledPluginLoad,
+} from '@common/plugins/pluginTrust';
 import { AppState } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import type { SettingHost } from '@shared/state/stateSettings';
@@ -34,7 +37,6 @@ import { goalContinuation } from '@tools/goal/goalContinuation';
 import { memoryPromptSection } from '@tools/memory/memoryPromptSection';
 import { sha256 } from '@tools/catalogEntries';
 import {
-  installedPluginId,
   toolTable,
   type Continuation,
   type InstalledToolReader,
@@ -339,6 +341,9 @@ export const toolRegistryLayer = (
         const load = yield* readInstalledPluginLoad({
           globalState: appState,
         }).pipe(Effect.provideService(FileSystem.FileSystem, fs));
+        const loaded = load.loadable.map(({ record }) =>
+          installedPluginId(record.name),
+        );
         const withServers = load.loadable.filter(
           ({ plugin }) => plugin.mcpServers.length > 0,
         );
@@ -346,10 +351,11 @@ export const toolRegistryLayer = (
           ...load.withheld,
           ...withServers.flatMap(({ plugin }) => plugin.warnings),
         ];
-        if (withServers.length === 0) return { plugins: [], warnings };
+        if (withServers.length === 0) return { loaded, plugins: [], warnings };
         const key = yield* Effect.result(envKey);
         if (key._tag === 'Failure')
           return {
+            loaded,
             plugins: [],
             warnings: [
               ...warnings,
@@ -357,6 +363,7 @@ export const toolRegistryLayer = (
             ],
           };
         return {
+          loaded,
           plugins: withServers.map(({ record, plugin, trust }) => {
             const id = installedPluginId(record.name);
             const servers = plugin.mcpServers.map((server) =>

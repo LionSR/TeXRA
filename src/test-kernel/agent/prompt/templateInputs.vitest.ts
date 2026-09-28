@@ -7,12 +7,10 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import {
-  AgentPromptSchema,
   AgentWorkflowSettingSchema,
-  type AgentPrompt,
   type AgentSetting,
 } from '@agent/core/definition/AgentDataclass';
-import { buildUserVars as buildUserVarsEffect } from '@agent/prompt/userVars';
+import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { AgentCategory } from '@shared/schemas';
 import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
@@ -25,8 +23,8 @@ import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
 
 /** The harness runtime supplies the standard-library filesystem prompt
  *  assembly reads through. */
-const buildUserVars = (...args: Parameters<typeof buildUserVarsEffect>) =>
-  testRuntime().runPromise(buildUserVarsEffect(...args));
+const buildOpening = (...args: Parameters<typeof buildTemplateInputs>) =>
+  testRuntime().runPromise(buildTemplateInputs(...args));
 
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
@@ -46,12 +44,6 @@ const baseSetting: AgentSetting = {
   tools: [],
 };
 
-const basePrompt: AgentPrompt = {
-  systemPrompt: '',
-  userPrefix: '',
-  userRequest: '',
-};
-
 const baseConfig: AgentConfig = AgentConfigSchema.parse({
   model: 'test',
   agent: 'agent',
@@ -59,29 +51,7 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   inputFile: 'input.tex',
 });
 
-describe('buildUserVars round count', () => {
-  it('derives the round count from additional userRequest entries', async () => {
-    const vars = await buildUserVars(
-      baseConfig,
-      { ...baseSetting, rounds: 1 },
-      { ...basePrompt, userRequest: ['round0', 'reflect1', 'reflect2'] },
-      fakePath('agents/generic'),
-      false,
-      noopTrace,
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-        installed: NO_INSTALLED_PLUGINS,
-      },
-    );
-
-    expect(vars.ROUNDS).toBe(3);
-  });
-});
-
-describe('buildUserVars runtime skill diagnostics', () => {
+describe('buildTemplateInputs runtime skill diagnostics', () => {
   const missingSource = fakePath('missing/runtime-skill-source');
   const tempRoots = useTempDirs();
 
@@ -103,16 +73,14 @@ describe('buildUserVars runtime skill diagnostics', () => {
     Effect.gen(function* () {
       yield* fakeConfig.update('texra.skills.enabled', undefined);
       const warn = vi.fn();
-      const emit = vi.fn();
 
-      const vars = yield* Effect.promise(() =>
-        buildUserVars(
+      const opening = yield* Effect.promise(() =>
+        buildOpening(
           baseConfig,
           { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-          basePrompt,
           fakePath('agents/generic'),
           false,
-          spiedTrace({ warn, emit }),
+          spiedTrace({ warn }),
           {
             workspacePath: fakePath('workspace'),
             storageRoot: testWorkspaceRoots().storage,
@@ -123,25 +91,19 @@ describe('buildUserVars runtime skill diagnostics', () => {
         ),
       );
 
-      expect(vars.AVAILABLE_SKILLS).toEqual([]);
+      expect(opening.catalog).toEqual([]);
       expect(warn).not.toHaveBeenCalled();
-      expect(emit).toHaveBeenCalledExactlyOnceWith({
-        type: 'skills.snapshot',
-        skills: [],
-      });
     }),
   );
 
-  it('emits catalog load issues and the exact accepted snapshot through the agent trace', async () => {
+  it('emits catalog load issues through the agent trace', async () => {
     const warn = vi.fn();
-    const emit = vi.fn();
-    const vars = await buildUserVars(
+    const opening = await buildOpening(
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      basePrompt,
       fakePath('agents/generic'),
       false,
-      spiedTrace({ warn, emit }),
+      spiedTrace({ warn }),
       {
         workspacePath: fakePath('workspace'),
         storageRoot: testWorkspaceRoots().storage,
@@ -151,18 +113,14 @@ describe('buildUserVars runtime skill diagnostics', () => {
       },
     );
 
-    expect(vars.AVAILABLE_SKILLS).toEqual([]);
+    expect(opening.catalog).toEqual([]);
     expect(warn).toHaveBeenCalledExactlyOnceWith(
       `Skill import error: Skill source does not exist (${missingSource})`,
       { stageId: undefined },
     );
-    expect(emit).toHaveBeenCalledExactlyOnceWith({
-      type: 'skills.snapshot',
-      skills: [],
-    });
   });
 
-  it('emits the raw accepted catalog without changing prompt membership', async () => {
+  it('catalogs an accepted skill with the directory tools may read', async () => {
     const root = await makeTempDir('texra-user-vars-skills-', tempRoots);
     const rawDescription =
       'Use \u001b[31mcare\u001b[0m with clients/acme/private key.';
@@ -173,106 +131,10 @@ describe('buildUserVars runtime skill diagnostics', () => {
       'Apply the skill.',
     );
     installTestSkillRoots([{ tier: 'project', path: root }]);
-    const emit = vi.fn();
 
-    const vars = await buildUserVars(
+    const opening = await buildOpening(
       baseConfig,
       { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      basePrompt,
-      fakePath('agents/generic'),
-      false,
-      spiedTrace({ emit }),
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-        installed: NO_INSTALLED_PLUGINS,
-      },
-    );
-
-    expect(emit).toHaveBeenCalledExactlyOnceWith({
-      type: 'skills.snapshot',
-      skills: [
-        {
-          name: 'client-review',
-          description: rawDescription,
-          source: 'project',
-        },
-      ],
-    });
-    expect(vars.AVAILABLE_SKILLS).toEqual([
-      { plugin: null, text: expect.stringContaining('- client-review:') },
-    ]);
-  });
-
-  it('does not publish a parent catalog for workflow runs', async () => {
-    const emit = vi.fn();
-    await buildUserVars(
-      baseConfig,
-      baseSetting,
-      basePrompt,
-      fakePath('agents/generic'),
-      false,
-      spiedTrace({ emit }),
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-        installed: NO_INSTALLED_PLUGINS,
-      },
-    );
-
-    expect(emit).not.toHaveBeenCalled();
-  });
-});
-
-// buildUserVars normalizes the output list onto the config and exposes it as
-// the OUTPUT_FILES prompt variable; both reads come from the same resolution.
-describe('output file prompt variables', () => {
-  it.each([
-    {
-      name: 'exposes declared generated outputs without using an order variable',
-      config: {
-        inputFiles: ['draft.tex', 'notes.tex'],
-        outputFiles: ['main.tex', 'appendix.tex'],
-      },
-      setting: {},
-      expectedOutputFiles: ['main.tex', 'appendix.tex'],
-    },
-    {
-      name: 'falls back to default generated outputs',
-      config: {},
-      setting: { defaultOutputFiles: ['slides.tex'] },
-      expectedOutputFiles: ['slides.tex'],
-    },
-    {
-      name: 'leaves input-named outputs implicit',
-      config: { inputFiles: ['main.tex', 'appendix.tex'], outputFiles: [] },
-      setting: { defaultOutputFiles: [] },
-      expectedOutputFiles: [],
-    },
-    {
-      name: 'ignores stale output lists that only name selected inputs',
-      config: {
-        inputFiles: ['main.tex', 'appendix.tex'],
-        outputFiles: ['appendix.tex'],
-      },
-      setting: { defaultOutputFiles: [] },
-      expectedOutputFiles: [],
-    },
-  ])('$name', async ({ config, setting, expectedOutputFiles }) => {
-    const agentConfig = AgentConfigSchema.parse({
-      agent: 'generic',
-      model: 'test-model',
-      ...config,
-    });
-
-    const vars = await buildUserVars(
-      agentConfig,
-      { ...baseSetting, ...setting },
-      basePrompt,
       fakePath('agents/generic'),
       false,
       noopTrace,
@@ -285,10 +147,14 @@ describe('output file prompt variables', () => {
       },
     );
 
-    expect(agentConfig.outputFiles).toEqual(expectedOutputFiles);
-    expect(vars.OUTPUT_FILES).toEqual(
-      expectedOutputFiles.length > 0 ? expectedOutputFiles : undefined,
-    );
+    expect(opening.catalog).toEqual([
+      {
+        plugin: null,
+        name: 'client-review',
+        text: expect.stringContaining('- client-review:'),
+        directory: expect.stringContaining('client-review'),
+      },
+    ]);
   });
 });
 
@@ -298,16 +164,14 @@ describe('output file prompt variables', () => {
 function buildVars(
   agentConfig: ReturnType<typeof AgentConfigSchema.parse>,
   requiredFilesInternal: Record<string, string> = {},
-): ReturnType<typeof buildUserVars> {
+): ReturnType<typeof buildOpening> {
   const agentSetting = AgentWorkflowSettingSchema.parse({
     agentCategory: AgentCategory.Workflow,
     requiredFilesInternal,
   });
-  const agentPrompt = AgentPromptSchema.parse({});
-  return buildUserVars(
+  return buildOpening(
     agentConfig,
     agentSetting,
-    agentPrompt,
     fakePath('agents/generic'),
     false,
     noopTrace,
@@ -321,7 +185,7 @@ function buildVars(
   );
 }
 
-describe('buildUserVars with missing configured files', () => {
+describe('buildTemplateInputs with missing configured files', () => {
   beforeEach(async () => {
     await installPlatform({
       workspacePath: fakePath('workspace'),
@@ -335,7 +199,7 @@ describe('buildUserVars with missing configured files', () => {
   });
 
   it('keeps prompt file metadata in sync with readable prompt XML', async () => {
-    const vars = await buildVars(
+    const { inputs: vars } = await buildVars(
       AgentConfigSchema.parse({
         agent: 'generic',
         model: 'test-model',
@@ -362,7 +226,7 @@ describe('buildUserVars with missing configured files', () => {
   });
 
   it('records attached memory read misses from the prompt-load pass', async () => {
-    const vars = await buildVars(
+    const { inputs: vars, attachedMemoryMisses } = await buildVars(
       AgentConfigSchema.parse({
         agent: 'generic',
         model: 'test-model',
@@ -373,7 +237,7 @@ describe('buildUserVars with missing configured files', () => {
     expect(vars.ATTACHED_MEMORIES).toBe(
       '<attached_memories>\n<memory name="/memories/present.md">\nRemember this convention.\n</memory>\n</attached_memories>',
     );
-    expect(vars.ATTACHED_MEMORY_MISSES).toEqual([
+    expect(attachedMemoryMisses).toEqual([
       expect.objectContaining({ path: '/memories/missing.md' }),
     ]);
   });
@@ -405,7 +269,7 @@ describe('requiredFilesInternal custom variables', () => {
   );
 
   it('passes custom required-file variables through beside the fixed vocabulary', async () => {
-    const vars = await buildVars(
+    const { inputs: vars } = await buildVars(
       AgentConfigSchema.parse({ agent: 'generic', model: 'test-model' }),
       { BRIEF: 'brief.txt' },
     );
@@ -414,6 +278,6 @@ describe('requiredFilesInternal custom variables', () => {
     expect(vars['BRIEF_CONTENT']).toBe('briefing notes');
     // The fixed slots the collision guard protects keep their built values.
     expect(vars.MEDIA_FILE).toBeNull();
-    expect(vars.MODEL).toBe('test-model');
+    expect(vars.INSTRUCTION).toBe('');
   });
 });

@@ -930,7 +930,6 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
     case 'tool.end':
     case 'workflow.plan':
     case 'workflow.call':
-    case 'skills.snapshot':
     case 'stream.start':
     case 'stream.end':
     case 'response.finalized':

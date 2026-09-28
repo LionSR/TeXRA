@@ -1678,43 +1678,6 @@ describe('the C1 event table and the C6 publisher', () => {
   );
 
   it.effect(
-    'commits a skill snapshot with its envelope and sanitized payload',
-    () =>
-      Effect.gen(function* () {
-        const db = yield* Database;
-        const rows = yield* db.appendAll([
-          runStart,
-          {
-            type: 'skills.snapshot',
-            aggregateId: runStart.aggregateId,
-            stageId: 'skills-stage',
-            skills: [
-              {
-                name: 'proof-review',
-                description: 'Review proofs\n  carefully',
-                source: 'project',
-              },
-            ],
-          },
-        ]);
-        expect(rows[1]).toMatchObject({
-          type: 'skills.snapshot',
-          stageId: 'skills-stage',
-          seq: 2,
-          commit: 2,
-          skills: [
-            {
-              name: 'proof-review',
-              description: 'Review proofs carefully',
-              source: 'project',
-            },
-          ],
-        });
-        expect(yield* db.readAll(0)).toEqual(rows);
-      }).pipe(Effect.provide(substrate(workspace()))),
-  );
-
-  it.effect(
     'rejects malformed present configuration before creating the run',
     () => {
       const storage = workspace();

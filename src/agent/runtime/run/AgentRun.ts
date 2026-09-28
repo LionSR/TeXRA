@@ -23,6 +23,7 @@ import {
   type StepToolInputs,
 } from '@agent/runtime/agentToolResolution';
 import type { UsageMonitor } from '@agent/runtime/UsageMonitor';
+import type { TemplateOpening } from '@agent/prompt/templateInputs';
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import type { LanguageModel } from '@platform/languageModel';
 import {
@@ -36,7 +37,6 @@ import {
   type OfferedTool,
   type RunId,
   type SubagentProgressUpdate,
-  type UserVariableChannels,
 } from '@shared/schemas';
 import type { ApprovalPolicyDenial } from '@shared/approvalPolicy';
 import { RunLedger } from '@shared/session/runLedger';
@@ -106,7 +106,9 @@ export interface AgentRunShape {
   /** The process stores the launch read; every route and credential read
    *  below the loop takes them from here. */
   readonly stores: ModelOptionStores;
-  readonly userVarChannels: UserVariableChannels;
+  /** What the run opens from; null for a tool-use run whose rows hold its
+   *  opening, which a resume never renders again. */
+  readonly opening: TemplateOpening | null;
   /** Initial user row to log after the loop has inserted launch media. */
   readonly initialUserMessageForTranscript: string | undefined;
   readonly fileService: RunFileService;
@@ -320,7 +322,7 @@ export const agentRunLayer = (
         delegationAgentScope: ctx.delegationAgentScope,
         onApprovalPolicyDenial: input.onApprovalPolicyDenial,
         stores: ctx.stores,
-        userVarChannels: ctx.userVarChannels,
+        opening: ctx.opening,
         initialUserMessageForTranscript: ctx.initialUserMessageForTranscript,
         fileService: new RunFileService(runId, session.roots),
         toolInputs,

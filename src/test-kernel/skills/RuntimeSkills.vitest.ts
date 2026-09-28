@@ -4,13 +4,11 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, describe, expect } from 'vitest';
 
-import {
-  ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
-  ActiveSkillsSnapshotSchema,
-  ToolError,
-} from '@shared/schemas';
+import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  activatedSkillDirectories,
+  activatedSkillNames,
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
@@ -20,6 +18,7 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { resolveToolPath } from '@tools/pathResolution';
+import { grantSkillRoots } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
@@ -114,13 +113,9 @@ describe('runtime skills', () => {
     );
     expect(catalogText(result.catalog)).toContain('Source: project');
     expect(catalogText(result.catalog)).toContain(`Path: ${skillPath}`);
-    expect(result.skills).toStrictEqual([
-      {
-        name: 'manuscript-review',
-        description: 'Review mathematical manuscripts.',
-        source: 'project',
-      },
-    ]);
+    expect(
+      result.catalog.map(({ plugin, name }) => ({ plugin, name })),
+    ).toStrictEqual([{ plugin: null, name: 'manuscript-review' }]);
     expect(result.issues).toEqual([]);
   });
 
@@ -163,13 +158,13 @@ describe('runtime skills', () => {
         runCatalog(WORKSPACE_ROOT),
       );
 
-      expect(result.skills.map((skill) => skill.name)).toStrictEqual(expected);
+      expect(result.catalog.map(({ name }) => name)).toStrictEqual(expected);
     }).pipe(Effect.provide(nodePlatformLayer)),
   );
 
-  it('bounds the accepted set once before prompt and snapshot projection', async () => {
+  it('bounds the catalog of one source', async () => {
     const root = await createTempRoot();
-    const discoveredCount = ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS + 2;
+    const discoveredCount = SKILL_CATALOG_MAX_SKILLS + 2;
     await Promise.all(
       Array.from({ length: discoveredCount }, (_, index) => {
         const name = `skill-${index.toString().padStart(3, '0')}`;
@@ -185,49 +180,74 @@ describe('runtime skills', () => {
 
     const result = await loadRuntimeSkillCatalog(runCatalog(WORKSPACE_ROOT));
     const catalogNames = catalogSkillNames(result.catalog);
-    const snapshotNames = result.skills.map((skill) => skill.name);
 
-    expect(snapshotNames).toHaveLength(ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS);
-    expect(catalogNames).toStrictEqual(snapshotNames);
-    expect(snapshotNames.at(-1)).toBe('skill-199');
+    expect(catalogNames).toHaveLength(SKILL_CATALOG_MAX_SKILLS);
+    expect(result.catalog.map(({ name }) => name)).toStrictEqual(catalogNames);
+    expect(catalogNames.at(-1)).toBe('skill-199');
     expect(catalogText(result.catalog)).not.toContain('skill-200');
-
-    expect(
-      ActiveSkillsSnapshotSchema.parse({ skills: result.skills }),
-    ).toStrictEqual({ skills: result.skills });
   });
 
-  // Fails if a skill root registered for one project admits file access in
-  // another project's session, or if scoping cuts off the registering project
-  // itself. The skill sits outside both projects, so neither workspace
-  // contains it and only the external-root allowlist can admit it.
-  it.effect("admits one project's skill directory to that project only", () =>
-    Effect.gen(function* () {
-      const skillsRoot = yield* Effect.promise(createTempRoot);
-      const skillPath = yield* Effect.promise(() =>
-        writeSkill(
-          skillsRoot,
-          'shared-notes',
-          { name: 'shared-notes', description: 'Shared notes.' },
-          'Read the notes.',
-        ),
-      );
-      installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
-      const projectA = path.resolve(path.sep, 'project-a');
-      const projectB = path.resolve(path.sep, 'project-b');
-      yield* loadRuntimeSkillCatalogEffect(runCatalog(projectA)).pipe(
-        Effect.provide(nodePlatformLayer),
-      );
-      const resolveFrom = (workspace: string) =>
-        resolveToolPath(
-          { roots: { ...testWorkspaceRoots(), workspace } },
-          skillPath,
+  // Fails if a skill root granted for one project admits file access in
+  // another project's session, if scoping cuts off the granting project
+  // itself, or if a grant outlives the listing that made it. The skill sits
+  // outside both projects, so neither workspace contains it and only the
+  // external-root allowlist can admit it.
+  it.effect(
+    "admits one project's listed skill directory to that project only",
+    () =>
+      Effect.gen(function* () {
+        const skillsRoot = yield* Effect.promise(createTempRoot);
+        const skillPath = yield* Effect.promise(() =>
+          writeSkill(
+            skillsRoot,
+            'shared-notes',
+            { name: 'shared-notes', description: 'Shared notes.' },
+            'Read the notes.',
+          ),
         );
+        installTestSkillRoots([{ tier: 'user', path: skillsRoot }]);
+        const projectA = path.resolve(path.sep, 'project-a');
+        const projectB = path.resolve(path.sep, 'project-b');
+        const { catalog } = yield* loadRuntimeSkillCatalogEffect(
+          runCatalog(projectA),
+        ).pipe(Effect.provide(nodePlatformLayer));
+        const grant = (listed: typeof catalog) =>
+          grantSkillRoots(
+            'run',
+            projectA,
+            listed.flatMap(({ name, directory }) =>
+              directory === null ? [] : [{ name, directory }],
+            ),
+          );
+        expect(grant(catalog)).toEqual([]);
+        const resolveFrom = (workspace: string) =>
+          resolveToolPath(
+            { roots: { ...testWorkspaceRoots(), workspace } },
+            skillPath,
+          );
 
-      expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
-      expect(yield* Effect.flip(resolveFrom(projectB))).toBeInstanceOf(
-        ToolError,
-      );
-    }),
+        expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
+        expect(yield* Effect.flip(resolveFrom(projectB))).toBeInstanceOf(
+          ToolError,
+        );
+        // A step that no longer lists the skill withdraws the grant.
+        grant([]);
+        expect(yield* Effect.flip(resolveFrom(projectA))).toBeInstanceOf(
+          ToolError,
+        );
+        // A skill the user activated by name is granted again, even unlisted.
+        const named = activatedSkillNames(
+          '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
+        );
+        expect(named).toEqual(['shared-notes']);
+        const activated = yield* activatedSkillDirectories(
+          new Set(named),
+          projectA,
+          testWorkspaceRoots(),
+        ).pipe(Effect.provide(nodePlatformLayer));
+        expect(grantSkillRoots('run', projectA, activated)).toEqual([]);
+        expect((yield* resolveFrom(projectA)).external?.writable).toBe(false);
+        grant([]);
+      }),
   );
 });

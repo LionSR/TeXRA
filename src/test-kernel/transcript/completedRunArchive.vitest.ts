@@ -4,7 +4,6 @@ import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => ({
-  buildVars: vi.fn(),
   loadAgent: vi.fn(),
   resolveAgent: vi.fn(),
 }));
@@ -16,10 +15,6 @@ vi.mock('@agent/index', async (importActual) => ({
 vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   ...(await importActual<typeof import('@agent/runtime/agentLoad')>()),
   loadAgentSettingAndPrompts: launchMocks.loadAgent,
-}));
-vi.mock('@agent/prompt/userVars', async (importActual) => ({
-  ...(await importActual<typeof import('@agent/prompt/userVars')>()),
-  buildUserVars: launchMocks.buildVars,
 }));
 
 import { getRunRecords } from '@agent/storage';
@@ -377,9 +372,6 @@ describe('completedRunArchive facade', () => {
         ]);
         yield* session.settlePublications();
 
-        const launchFailure = new Error(
-          'stop after resumed writer acquisition',
-        );
         launchMocks.resolveAgent.mockReturnValue(
           Effect.succeed({
             path: '/agents/orchestrator.yaml',
@@ -388,7 +380,6 @@ describe('completedRunArchive facade', () => {
         launchMocks.loadAgent.mockReturnValue(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        launchMocks.buildVars.mockReturnValueOnce(Effect.fail(launchFailure));
 
         // The one fact a resume reads: the run aggregate's latest
         // `flow.snapshot`, committed here as this run's opening row.
@@ -437,13 +428,11 @@ describe('completedRunArchive facade', () => {
             ]);
           });
 
+        // The resumed launch stops once its writer is open: the run's rows
+        // hold its opening, and no provider key binds its model.
         expect(
-          yield* Effect.flip(
-            resumeRun(runId, {
-              session,
-            }),
-          ),
-        ).toBe(launchFailure);
+          (yield* Effect.flip(resumeRun(runId, { session }))).message,
+        ).toContain('Missing API key');
 
         expect(resumedWriter).toHaveBeenCalledWith(runId, expect.anything());
         const released = yield* Effect.result(
