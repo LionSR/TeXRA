@@ -31,10 +31,8 @@ import {
   snapshotRow,
   stepRow,
 } from '@agent/runtime/loop/rows';
-import {
-  runToolUse,
-  type ToolUseFlowContext,
-} from '@agent/runtime/loop/toolUse';
+import { runToolUse } from '@agent/runtime/loop/toolUse';
+import type { RunControls } from '@agent/runtime/RunHandle';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
 import { dispatchFactsFor } from '@agent/runtime/run/tools';
@@ -256,8 +254,8 @@ interface LoopInit {
   readonly ledger?: RunLedger['Service'];
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
-    attach(context: ToolUseFlowContext): void;
-    detach(context: ToolUseFlowContext): void;
+    attach(controls: RunControls): void;
+    detach(controls: RunControls): void;
   };
 }
 
@@ -1370,7 +1368,7 @@ describe('the host wiring a run attaches', () => {
       const session = quietSession();
       const runId = startedRun(session);
       const attachFailure = new Error('host wiring failed');
-      const detached: ToolUseFlowContext[] = [];
+      const detached: RunControls[] = [];
 
       const exit = yield* Effect.exit(
         loopProgram(
@@ -1382,8 +1380,8 @@ describe('the host wiring a run attaches', () => {
               attach: () => {
                 throw attachFailure;
               },
-              detach: (context) => {
-                detached.push(context);
+              detach: (controls) => {
+                detached.push(controls);
               },
             },
           },

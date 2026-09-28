@@ -23,7 +23,6 @@ import {
   type Scope,
 } from 'effect';
 
-import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { SessionApprovals } from '@agent/runtime/runApprovalQueue';
 import type {
   FinalizeRunInput,
@@ -42,7 +41,7 @@ import {
 import { isInFlightPhase } from '@shared/runs/runStatus';
 import type { RunView } from '@shared/session/sessionView';
 import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
-import type { LiveToolUseFlowContext, RunHandle, RunParent } from './RunHandle';
+import type { RunHandle, RunParent } from './RunHandle';
 
 /** A generation, a hold or a retained owner already has the run here: the one
  *  refusal for that fact. Hosts word it from `message`; a resume reads the tag
@@ -105,14 +104,11 @@ export interface ChildRunActivation {
   readonly retainsTerminalParent: boolean;
 }
 
-/** Where a follow-up for a run goes: a live flow context, the run's retained
+/** Where a follow-up for a run goes: its running loop, the run's retained
  *  queue (a WAITING or resuming cursor, or a parent whose children are still
  *  active), or nowhere in this process. */
 export type ToolUseFollowUpTarget =
-  | {
-      readonly kind: 'active';
-      readonly context: LiveToolUseFlowContext;
-    }
+  | { readonly kind: 'active' }
   | { readonly kind: 'queue' }
   | {
       readonly kind: 'no_session';
@@ -120,11 +116,7 @@ export type ToolUseFollowUpTarget =
     };
 
 export type ManualCompactionRequestResult =
-  | {
-      readonly kind: 'requested';
-      readonly runId: RunId;
-      readonly session: SessionHandle;
-    }
+  | { readonly kind: 'requested'; readonly runId: RunId }
   | {
       readonly kind: 'no_active_tool_use';
       readonly runId?: RunId;
@@ -357,27 +349,23 @@ export class RunRegistry {
   }
 
   /**
-   * Request manual compaction from the active tool-use flow, if one exists.
-   * Hosts own the user-facing message, but the registry owns the live-flow
+   * Request manual compaction from the run's running loop, if one exists.
+   * Hosts own the user-facing message, but the registry owns the live-loop
    * lookup so CLI and extension do not rederive the same runtime facts.
    */
   requestManualCompaction(
     runId: RunId | undefined,
   ): ManualCompactionRequestResult {
     if (!runId) return { kind: 'no_active_tool_use' };
-    const context = this.getHandle(runId)?.getToolUseFlow();
-    if (!context) return { kind: 'no_active_tool_use', runId };
+    const controls = this.getHandle(runId)?.controls;
+    if (!controls) return { kind: 'no_active_tool_use', runId };
 
-    context.requestImmediateCompaction();
-    return {
-      kind: 'requested',
-      runId,
-      session: context.ownerSession,
-    };
+    controls.requestImmediateCompaction();
+    return { kind: 'requested', runId };
   }
 
   /** Decide how a tool-use follow-up is admitted, from one registry-owned
-   *  snapshot of run status, active flow context, and child runs. */
+   *  snapshot of run status, running loop, and child runs. */
   getToolUseFollowUpTarget(runId: RunId): ToolUseFollowUpTarget {
     const run = this.init.runView(runId);
     const status: RunPhase | undefined =
@@ -393,8 +381,7 @@ export class RunRegistry {
       return { kind: 'no_session', runStatus: status };
     }
 
-    const context = this.getHandle(runId)?.getToolUseFlow();
-    if (context) return { kind: 'active', context };
+    if (this.getHandle(runId)?.controls) return { kind: 'active' };
 
     if (
       run?.substate === RUN_SUBSTATE.RESUMING ||

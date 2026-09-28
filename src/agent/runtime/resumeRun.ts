@@ -356,7 +356,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     return REFUSED;
   }
 
-  let cancelledAtFlowAttachment = false;
   let runOwnsQueue = false;
   let rootCompletion: ResumeRunCompletion | undefined;
   const admitted = new Set<string>();
@@ -381,12 +380,7 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     Effect.gen(function* () {
       for (const input of yield* queuedInput) admitted.add(input.followUpId);
       const idle = yield* Deferred.make<void>();
-      const launchOptions = {
-        ...runLaunchOptions(options),
-        onCancellationAtFlowAttachment: () => {
-          cancelledAtFlowAttachment = true;
-        },
-      };
+      const launchOptions = runLaunchOptions(options);
       const onIdle = (): void => {
         const pending = session.events.pendingFollowUps(
           aggregateId('run', runId),
@@ -451,7 +445,6 @@ const resumeQueuedToolUse = Effect.fn('resumeQueuedToolUse')(function* (
     return yield* Effect.fail(resumed.failure);
   }
   const settled = resumed.success;
-  if (cancelledAtFlowAttachment) return REFUSED;
   const waiting = settled === RUN_PHASE.WAITING;
   const undelivered =
     runOwnsQueue && !waiting && (yield* queuedInput).some(isAdmitted);

@@ -115,7 +115,7 @@ export function snapshotRow(
   state: RunState,
   patch: SnapshotPatch,
 ): RunLedgerDraft {
-  const flow = patch.state ?? state.flow?.state ?? null;
+  const flow = patch.state ?? state.flow;
   const phase = patch.phase ?? state.phase;
   if (flow === null || phase === null) {
     throw new Error('A flow.snapshot presupposes an opened run.');

@@ -100,11 +100,8 @@ export class RunLedgerInconsistent extends Data.TaggedError(
   readonly commit: CommitOrdinal | null;
 }> {}
 
-/** The flow state a `flow.snapshot` restores. */
-const FlowStateSchema = FlowSnapshotPayloadSchema.pick({
-  family: true,
-  state: true,
-});
+/** The loop state a `flow.snapshot` restores. */
+const FlowStateSchema = FlowSnapshotPayloadSchema.shape.state;
 type FlowState = z.output<typeof FlowStateSchema>;
 type Message = z.output<typeof MessageSchema>;
 
@@ -330,7 +327,7 @@ function applyMutations(
   if (ops.length === 0) return Result.succeed(state);
   let document: unknown = {
     usage: state.usage,
-    state: state.flow === null ? null : state.flow.state,
+    state: state.flow,
   };
   for (const op of ops) {
     const next = mutate(document, op.path, op);
@@ -352,10 +349,7 @@ function applyMutations(
     }
     return Result.succeed({ ...state, usage: usage.data });
   }
-  const flow = FlowStateSchema.safeParse({
-    family: state.flow.family,
-    state: document.state,
-  });
+  const flow = FlowStateSchema.safeParse(document.state);
   if (!flow.success) {
     return refuse('invalid-mutation', flow.error.message, commit);
   }
@@ -430,7 +424,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         snapshotCommit: commit,
         family: p.family,
         ...p.runtime,
-        flow: { family: p.family, state: p.state },
+        flow: p.state,
       });
     }
     case 'model.message': {

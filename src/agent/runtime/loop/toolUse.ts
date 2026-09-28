@@ -71,7 +71,7 @@ import { dispatchPendingResponse } from './toolUseDispatch';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
-import type { SessionHandle } from '../SessionHandle';
+import type { RunControls } from '../RunHandle';
 import type { ChildRunTurns } from '../childRunLoop';
 
 const IMMEDIATE_COMPACTION_FOLLOW_UP =
@@ -80,17 +80,6 @@ const BLANK_TOOL_RESULT_CONTINUATION =
   'The previous assistant turn after a tool result was blank. Continue now with the final answer or next required action.';
 const FINAL_TOOL_INSTRUCTION = 'Submit the final structured output now.';
 
-/** The live control surface a host reaches through the run handle. */
-export interface ToolUseFlowContext {
-  readonly ownerSession: SessionHandle;
-  interrupt(): void;
-  requestImmediateCompaction(): void;
-  modelSwitchDisabledReason(
-    model: string,
-  ): Effect.Effect<string | undefined, Error>;
-  switchModel(model: string): Effect.Effect<void, Error>;
-}
-
 export interface ToolUseStart {
   /** The caller launched this as a resume; the ledger decides what it is. */
   readonly resume: boolean;
@@ -98,8 +87,8 @@ export interface ToolUseStart {
   readonly turns?: ChildRunTurns<ToolUseResult>;
   /** Host wiring that is live while the loop can accept an interrupt. */
   readonly attachment?: {
-    attach(context: ToolUseFlowContext): void;
-    detach(context: ToolUseFlowContext): void;
+    attach(controls: RunControls): void;
+    detach(controls: RunControls): void;
   };
 }
 
@@ -159,7 +148,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
    *  and activated skills are the folded state's: only the transaction that
    *  consumes a delivery changes them. */
   const flowState = (state: RunState): ToolUseFlowState => {
-    const { instruction, activated } = state.flow?.state ?? {};
+    const { instruction, activated } = state.flow ?? {};
     return {
       stateSlices: {
         workspaceSnapshot: workspace.toSnapshot({
@@ -195,7 +184,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     activated: (state) =>
       state.flow === null
         ? (run.opening?.activated ?? [])
-        : (state.flow.state.activated ?? []),
+        : (state.flow.activated ?? []),
     isChild,
   };
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
@@ -210,11 +199,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ------------------------------------------------------------ host port
   let live = false;
-  const flowContext: ToolUseFlowContext = {
-    ownerSession: session,
-    interrupt(): void {
-      runs.interrupt(runId);
-    },
+  const controls: RunControls = {
     requestImmediateCompaction(): void {
       compactionRequested = true;
       // A parked loop wakes on a synthetic turn; the compaction runs before
@@ -228,12 +213,12 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   const attach = (): void => {
     if (live) return;
     live = true;
-    start.attachment?.attach(flowContext);
+    start.attachment?.attach(controls);
   };
   const detach = (): void => {
     if (!live) return;
     live = false;
-    start.attachment?.detach(flowContext);
+    start.attachment?.detach(controls);
   };
 
   // -------------------------------------------------------------- opening
@@ -320,8 +305,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const restore = (state: RunState): void => {
-    const flow = state.flow?.state;
-    if (flow === undefined) {
+    const flow = state.flow;
+    if (flow === null) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
     if (flow.stateSlices)

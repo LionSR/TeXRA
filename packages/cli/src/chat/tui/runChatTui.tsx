@@ -327,8 +327,8 @@ export async function runChat(
   // bridged into a signal, its transcript tier subscribed for the runs this
   // terminal paints. Bound before anything reads the view: the terminal
   // title below derives its attention state from it on install.
-  const session = new TuiSession((runId) =>
-    runtimeSession.runs.getHandle(runId)?.getToolUseFlow(),
+  const session = new TuiSession(
+    (runId) => runtimeSession.runs.getHandle(runId)?.controls,
   );
   // A dead fold (`viewChanges` failing) is the end of this session: the
   // composer closes on the reason, Ctrl-C still exits, and the exit is a
@@ -377,7 +377,7 @@ export async function runChat(
       return Effect.succeed(undefined);
     }
     return (
-      session.activeToolUseFlow()?.modelSwitchDisabledReason(candidateModel) ??
+      session.activeRunControls()?.modelSwitchDisabledReason(candidateModel) ??
       Effect.succeed(undefined)
     );
   };

@@ -176,15 +176,15 @@ export const applyCliModelSelection = Effect.fn('applyCliModelSelection')(
       return;
     }
 
-    const activeFlow = context.session.activeToolUseFlow();
-    if (!activeFlow) {
+    const controls = context.session.activeRunControls();
+    if (!controls) {
       appendLocalAssistantTranscript(
         'Model switching is only available for an active tool-use chat. Start a new chat with texra chat --model=<name> to choose a different root model.',
       );
       return;
     }
 
-    yield* activeFlow.switchModel(nextModel);
+    yield* controls.switchModel(nextModel);
     setCliSessionModelOverride(nextModel);
     // The switch already reached the live run; only the persisted default is
     // at stake here, so a write failure is reported beside the switch rather

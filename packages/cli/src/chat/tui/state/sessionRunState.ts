@@ -9,11 +9,9 @@ import { registerCliStateResetHook } from './cliState';
 import { runPhaseOf, runViewOf, sessionView } from './sessionView';
 import type { Effect } from 'effect';
 
-type ToolUseFlowOf = (
+type RunControlsOf = (
   runId: RunId,
-) => ReturnType<
-  NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['getToolUseFlow']
->;
+) => NonNullable<ReturnType<SessionHandle['runs']['getHandle']>>['controls'];
 
 /**
  * The claimed root run's settlement, as the slot holds it: the program that
@@ -67,7 +65,7 @@ export const runStopFacts = computed((): ChatTuiRunStopFacts => {
  */
 export class TuiSession {
   /** A new session starts with no claim. */
-  constructor(private readonly toolUseFlowOf: ToolUseFlowOf) {
+  constructor(private readonly runControlsOf: RunControlsOf) {
     rootRunClaim.set(NO_CLAIM);
   }
 
@@ -132,10 +130,10 @@ export class TuiSession {
     return runStopFacts.get().status;
   }
 
-  /** The claimed run's live tool-use flow, if it has one. */
-  activeToolUseFlow(): ReturnType<ToolUseFlowOf> {
+  /** The claimed run's live controls, while its loop runs. */
+  activeRunControls(): ReturnType<RunControlsOf> {
     const { runId } = this;
-    return runId ? this.toolUseFlowOf(runId) : undefined;
+    return runId ? this.runControlsOf(runId) : undefined;
   }
 
   /** Model selection is open with no pending run, or at a tool-use wait. */
@@ -143,7 +141,7 @@ export class TuiSession {
     return (
       chatTuiCanStartRootRun(this) ||
       (this.status() === RUN_PHASE.WAITING &&
-        this.activeToolUseFlow() !== undefined)
+        this.activeRunControls() !== undefined)
     );
   }
 
@@ -167,7 +165,7 @@ export class TuiSession {
       this.runId !== undefined &&
       chatTuiRunPending(this) &&
       !this.canStopVisibleRun() &&
-      this.activeToolUseFlow() !== undefined
+      this.activeRunControls() !== undefined
     );
   }
 }

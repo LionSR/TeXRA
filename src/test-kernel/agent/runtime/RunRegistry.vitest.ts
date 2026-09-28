@@ -6,13 +6,9 @@ import { describe, expect, vi } from 'vitest';
 // Local imports
 import type { AgentTrace } from '@agent/trace';
 import { finalizeRun } from '@agent/storage/runLifecycle';
-import type {
-  RunHandle,
-  LiveToolUseFlowContext,
-} from '@agent/runtime/RunHandle';
+import type { RunHandle, RunControls } from '@agent/runtime/RunHandle';
 import { RunRegistry } from '@agent/runtime/runRegistry';
 import { RunLive } from '@agent/runtime/runRegistry';
-import { type SessionHandle } from '@agent/runtime/SessionHandle';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import {
   aggregateId as qualifyAggregateId,
@@ -193,16 +189,12 @@ function trackInterruptibleHandle(
   return handle;
 }
 
-/** The `LiveToolUseFlowContext` fixture shared by the tool-use-admission tests. */
-function createLiveToolUseFlowContext(
-  overrides: Partial<LiveToolUseFlowContext> = {},
-): LiveToolUseFlowContext {
+/** The `RunControls` fixture shared by the tool-use-admission tests. */
+function createRunControls(overrides: Partial<RunControls> = {}): RunControls {
   return {
-    ownerSession: {} as SessionHandle,
     requestImmediateCompaction: vi.fn(),
     modelSwitchDisabledReason: vi.fn(() => Effect.succeed(undefined)),
     switchModel: vi.fn(() => Effect.void),
-    interrupt: vi.fn(),
     ...overrides,
   };
 }
@@ -968,11 +960,7 @@ describe('runRegistry', () => {
     const { registry } = createRegistry();
     const runId = generateRunId();
     const requestImmediateCompaction = vi.fn();
-    const ownerSession = {} as SessionHandle;
-    const context = createLiveToolUseFlowContext({
-      ownerSession,
-      requestImmediateCompaction,
-    });
+    const controls = createRunControls({ requestImmediateCompaction });
 
     try {
       expect(registry.requestManualCompaction(undefined)).toEqual({
@@ -986,13 +974,12 @@ describe('runRegistry', () => {
       const handle = createHandle(runId, null, {
         agentName: 'test-tool-use',
       });
-      handle.attachToolUseFlow(context);
+      handle.attachControls(controls);
       registry.track(handle);
 
       expect(registry.requestManualCompaction(runId)).toEqual({
         kind: 'requested',
         runId,
-        session: ownerSession,
       });
       expect(requestImmediateCompaction).toHaveBeenCalledOnce();
     } finally {
@@ -1006,19 +993,18 @@ describe('runRegistry', () => {
     const resumingRunId = generateRunId();
     const waitingRunId = generateRunId();
     const stoppedRunId = generateRunId();
-    const context = createLiveToolUseFlowContext();
+    const controls = createRunControls();
 
     try {
       const activeHandle = createHandle(activeRunId, null, {
         agentName: 'test-tool-use',
       });
-      activeHandle.attachToolUseFlow(context);
+      activeHandle.attachControls(controls);
       registry.track(activeHandle);
       phases.set(activeRunId, RUN_PHASE.RUNNING);
 
       expect(registry.getToolUseFollowUpTarget(activeRunId)).toEqual({
         kind: 'active',
-        context,
       });
 
       phases.set(resumingRunId, RUN_PHASE.RUNNING, {

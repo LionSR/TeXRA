@@ -265,7 +265,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
           .map(({ content }) => content.text),
       ),
     );
-    const current = state.flow?.state.activated ?? [];
+    const current = state.flow?.activated ?? [];
     const activated = found.some((name) => !current.includes(name))
       ? [
           ...new Set([
@@ -325,7 +325,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
               snapshotRow(runId, state, {
                 runtime: { lastError: null },
                 ...(state.flow
-                  ? { state: { ...state.flow.state, ...joined.recorded } }
+                  ? { state: { ...state.flow, ...joined.recorded } }
                   : {}),
               }),
               stepRow(runId, state, 'turn.ready'),
