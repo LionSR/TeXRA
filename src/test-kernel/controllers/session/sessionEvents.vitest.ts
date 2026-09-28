@@ -95,6 +95,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
@@ -751,6 +752,69 @@ describe('Sessions owner', () => {
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
         });
+      }).pipe(
+        Effect.provide(graph([runStart])),
+        Effect.provide(
+          inquiryRecordsLayer.pipe(
+            Layer.provide(
+              globalDatabaseLayer(
+                createFakeWorkspaceRoots().globalStorage,
+              ).pipe(
+                Layer.provide(ProcessIdentity.layer(SELF)),
+                Layer.provide(nodePlatformLayer),
+                Layer.orDie,
+              ),
+            ),
+          ),
+        ),
+      ),
+  );
+
+  it.effect(
+    'refuses a delete rendered before the run started, with the reason',
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const view = yield* SessionViewService;
+        const removeRun = vi.fn((yield* SessionEvents).removeRun);
+        const requests = sessionRequests(
+          { view: view.ref } as unknown as SessionHandle,
+          createSessionApprovals(),
+          { ...db, removeRun },
+          yield* SubscriptionRef.make(
+            LocalRuntimeStateSchema.parse({
+              self: [SELF],
+              dead: [],
+              unreadable: [],
+            }),
+          ),
+          yield* InquiryRecords,
+        );
+        yield* settle(view.ref, (v) => v.runs.has(RUN));
+        // The host rendered Delete session from this view; by the time the
+        // click is handled the run has started in this process.
+        yield* SubscriptionRef.update(view.ref, (v) => ({
+          ...v,
+          runs: new Map(
+            [...v.runs].map(([id, run]) => {
+              const started = {
+                ...run,
+                status: RUN_PHASE.RUNNING,
+                group: 'running' as const,
+                readOnly: false,
+              };
+              return [id, { ...started, actions: runActions(started) }];
+            }),
+          ),
+        }));
+        const refused = yield* requests
+          .request({ kind: 'run.delete', runId: RUN })
+          .pipe(Effect.flip);
+        expect(refused).toMatchObject({
+          _tag: 'Rejected',
+          reason: expect.stringContaining('stop it first'),
+        });
+        expect(removeRun).not.toHaveBeenCalled();
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(

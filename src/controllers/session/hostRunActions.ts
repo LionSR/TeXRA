@@ -52,6 +52,7 @@ import { runActionRefusal } from '@shared/session/runActions';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
+import { type PerKeyLane, withPerKeyLane } from '@utils/core/perKeyQueue';
 import { entryExists } from '@utils/files/fsEntryExists';
 import {
   locateInWorkspace,
@@ -175,22 +176,23 @@ export interface HostRunActions {
   readConfig(
     runId: RunId,
   ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
-  /** The workflow toolbar's latexdiff and pack/clean requests, built from the
-   *  run's saved config and its outputs as the view holds them. `undefined`
-   *  when the run has no config or is not a workflow: the action is a no-op. */
+  /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
   workflowDiffRequest(
     runId: RunId,
   ): Effect.Effect<
     WorkflowDiffRequest | undefined,
     Rejected | RunConfigUnreadable
   >;
-  workflowFileOperationRequest(
+  /** Pack or clean a workflow run's outputs, from its saved config and the
+   *  outputs the view holds: the action check and `perform` are one step on
+   *  the run's lane. No workflow config is a no-op. */
+  workflowFileOperation<E, R>(
     runId: RunId,
     operation: 'pack' | 'clean',
-  ): Effect.Effect<
-    WorkflowFileOperationRequest | undefined,
-    Rejected | RunConfigUnreadable
-  >;
+    perform: (
+      request: WorkflowFileOperationRequest,
+    ) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E | Rejected | RunConfigUnreadable, R>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -230,6 +232,11 @@ export const createHostRunActions = (
     const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
+    /** A resume, pack or clean checks the run's actions and acts in one step
+     *  on the run's lane, so one cannot start between another's two. */
+    const lanes = new Map<RunId, PerKeyLane>();
+    const onRunFileLane = <A, E, R>(e: Effect.Effect<A, E, R>, id: RunId) =>
+      withPerKeyLane(lanes, id)(e);
 
     /** Validate a request an action built, then launch it: one that does
      *  not validate is refused before anything starts, a refusal the
@@ -314,8 +321,7 @@ export const createHostRunActions = (
       },
     );
 
-    /** The run's `actions` must still hold `action` when the request is
-     *  handled, not only when the host rendered it: it may have moved since. */
+    /** The run's `actions` must hold `action` as it is handled, not only as rendered. */
     const requireAction = (runId: RunId, action: RunAction) =>
       Effect.suspend(() => {
         const run = session.runView(runId);
@@ -624,7 +630,7 @@ export const createHostRunActions = (
           yield* ports
             .openWorkflowOutput(resumed.result)
             .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
-      }),
+      }, onRunFileLane),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
@@ -637,25 +643,24 @@ export const createHostRunActions = (
           return config ? { runId } : undefined;
         },
       ),
-      workflowFileOperationRequest: Effect.fn(
-        'HostRunActions.workflowFileOperationRequest',
-      )(function* (runId, operation) {
-        yield* requireAction(runId, operation);
-        const config = yield* workflowConfig(runId);
-        if (!config) return undefined;
-        return {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles[0] ?? '',
-          outputFiles: unique(
-            [
-              ...config.outputFiles,
-              ...runOutputs.getKnownWorkspaceOutputPaths(runId),
-            ].filter(Boolean),
-          ),
-          runId,
-        };
-      }),
+      workflowFileOperation: (runId, operation, perform) =>
+        Effect.gen(function* () {
+          yield* requireAction(runId, operation);
+          const config = yield* workflowConfig(runId);
+          if (!config) return;
+          yield* perform({
+            agent: config.agent,
+            model: config.model,
+            inputFile: config.inputFiles[0] ?? '',
+            outputFiles: unique(
+              [
+                ...config.outputFiles,
+                ...runOutputs.getKnownWorkspaceOutputPaths(runId),
+              ].filter(Boolean),
+            ),
+            runId,
+          });
+        }).pipe((effect) => onRunFileLane(effect, runId)),
       runCompileFixer: Effect.fn(function* (runId) {
         if (!view().runs.has(runId)) {
           return yield* Effect.fail(

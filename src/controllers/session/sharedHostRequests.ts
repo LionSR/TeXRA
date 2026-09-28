@@ -332,13 +332,11 @@ export function handleSharedHostRequest(
       }
       case 'pack':
       case 'clean': {
-        const operation = yield* ports.runActions.workflowFileOperationRequest(
+        yield* ports.runActions.workflowFileOperation(
           request.runId,
           request.kind,
+          (operation) => host.runWorkflowFileOperation(request.kind, operation),
         );
-        if (operation) {
-          yield* host.runWorkflowFileOperation(request.kind, operation);
-        }
         return done;
       }
       case 'latexdiffs':
