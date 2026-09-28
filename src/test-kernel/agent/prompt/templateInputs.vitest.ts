@@ -1,6 +1,4 @@
-import { it } from '@effect/vitest';
-import { Effect } from 'effect';
-import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   AgentConfigSchema,
@@ -16,9 +14,6 @@ import { noopTrace } from '@test/support/noopTrace';
 import { testWorkspaceRoots } from '@test/support/testWorkspaceRoots';
 import { installPlatform, setupPlatform } from '@test/support/setupPlatform';
 import { testRuntime } from '@test/support/testProcessRuntime';
-import { spiedTrace } from '@test/support/spiedTrace';
-import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
-import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { FakeConfigProvider, fakePath } from '@test/support/FakePlatform';
 
 /** The harness runtime supplies the standard-library filesystem prompt
@@ -29,8 +24,6 @@ const buildOpening = (...args: Parameters<typeof buildTemplateInputs>) =>
 // getConfig reads through the platform config provider; drive the setting
 // via this provider instead of patching the ESM export.
 const fakeConfig = new FakeConfigProvider();
-/** The launch's read of the installed plugins: none installed. */
-const NO_INSTALLED_PLUGINS = Effect.succeed({ loadable: [], withheld: [] });
 
 setupPlatform({}, { config: fakeConfig });
 
@@ -49,113 +42,6 @@ const baseConfig: AgentConfig = AgentConfigSchema.parse({
   agent: 'agent',
   instruction: '',
   inputFile: 'input.tex',
-});
-
-describe('buildTemplateInputs runtime skill diagnostics', () => {
-  const missingSource = fakePath('missing/runtime-skill-source');
-  const tempRoots = useTempDirs();
-
-  beforeEach(() => {
-    fakeConfig.set('texra.skills.enabled', true);
-    installTestSkillRoots([
-      { tier: 'bundled', path: missingSource, required: true },
-    ]);
-  });
-
-  afterEach(async () => {
-    installTestSkillRoots([]);
-    await Effect.runPromise(
-      fakeConfig.update('texra.skills.enabled', undefined),
-    );
-  });
-
-  it.effect('keeps skills off until the master switch is enabled', () =>
-    Effect.gen(function* () {
-      yield* fakeConfig.update('texra.skills.enabled', undefined);
-      const warn = vi.fn();
-
-      const opening = yield* Effect.promise(() =>
-        buildOpening(
-          baseConfig,
-          { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-          fakePath('agents/generic'),
-          false,
-          spiedTrace({ warn }),
-          {
-            workspacePath: fakePath('workspace'),
-            storageRoot: testWorkspaceRoots().storage,
-            config: testWorkspaceRoots().config,
-            settings: testWorkspaceRoots(),
-            installed: NO_INSTALLED_PLUGINS,
-          },
-        ),
-      );
-
-      expect(opening.catalog).toEqual([]);
-      expect(warn).not.toHaveBeenCalled();
-    }),
-  );
-
-  it('emits catalog load issues through the agent trace', async () => {
-    const warn = vi.fn();
-    const opening = await buildOpening(
-      baseConfig,
-      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      fakePath('agents/generic'),
-      false,
-      spiedTrace({ warn }),
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-        installed: NO_INSTALLED_PLUGINS,
-      },
-    );
-
-    expect(opening.catalog).toEqual([]);
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      `Skill import error: Skill source does not exist (${missingSource})`,
-      { stageId: undefined },
-    );
-  });
-
-  it('catalogs an accepted skill with the directory tools may read', async () => {
-    const root = await makeTempDir('texra-user-vars-skills-', tempRoots);
-    const rawDescription =
-      'Use \u001b[31mcare\u001b[0m with clients/acme/private key.';
-    await writeSkill(
-      root,
-      'client-review',
-      { name: 'client-review', description: rawDescription },
-      'Apply the skill.',
-    );
-    installTestSkillRoots([{ tier: 'project', path: root }]);
-
-    const opening = await buildOpening(
-      baseConfig,
-      { ...baseSetting, agentCategory: AgentCategory.ToolUse },
-      fakePath('agents/generic'),
-      false,
-      noopTrace,
-      {
-        workspacePath: fakePath('workspace'),
-        storageRoot: testWorkspaceRoots().storage,
-        config: testWorkspaceRoots().config,
-        settings: testWorkspaceRoots(),
-        installed: NO_INSTALLED_PLUGINS,
-      },
-    );
-
-    expect(opening.catalog).toEqual([
-      {
-        plugin: null,
-        name: 'client-review',
-        text: expect.stringContaining('- client-review:'),
-        directory: expect.stringContaining('client-review'),
-      },
-    ]);
-  });
 });
 
 // The describes below replace the whole global platform in their own
@@ -178,9 +64,6 @@ function buildVars(
     {
       workspacePath: fakePath('workspace'),
       storageRoot: testWorkspaceRoots().storage,
-      config: testWorkspaceRoots().config,
-      settings: testWorkspaceRoots(),
-      installed: NO_INSTALLED_PLUGINS,
     },
   );
 }

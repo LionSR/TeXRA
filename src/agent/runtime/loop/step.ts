@@ -39,18 +39,20 @@ import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginServices } from '@platform/processRuntime';
 import {
+  AGENT_SKILLS_CONFIG_KEY,
+  AgentSkillsEnabledSchema,
   listedSkills,
   sameIdentity,
   type OfferedTool,
-  type SkillCatalogEntry,
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import { loadRuntimeSkillCatalog } from '@skills/runtimeSkills';
 import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
-import { skillRoots, type StepRoot } from '@utils/files/externalRoots';
+import type { StepRoot } from '@utils/files/externalRoots';
 
 import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
@@ -72,12 +74,11 @@ export interface StepTools {
 }
 
 /** What a step's system text and skill roots are built from that the run
- *  holds, all recorded in its rows: its base text, its skill catalog, the
- *  skills its user activated, and whether it is a child. */
+ *  holds, all recorded in its rows: its base text, the names of the skills
+ *  its user activated, and whether it is a child. */
 export interface RunSystem {
   readonly base: () => string | undefined;
-  readonly catalog: () => readonly SkillCatalogEntry[];
-  readonly activated: (state: RunState) => readonly SkillCatalogEntry[];
+  readonly activated: (state: RunState) => readonly string[];
   readonly isChild: () => boolean;
 }
 
@@ -226,31 +227,43 @@ const openStep = Effect.fn('Step.open')(function* (
       ),
     };
   }).pipe(Effect.onError(() => Scope.close(scope, Exit.void)));
-  // The plugins the step's system text draws on: the built-in ones' sections
-  // and skills, and the installed ones' skills. The skills it lists are the
-  // ones its calls may read.
-  const sections = [...step.prompt.keys(), ...step.installed].toSorted();
+  const { roots } = run.session;
+  // The plugins whose skills the step draws on: the built-in ones that ship
+  // skills and the installed ones it accepted, whose skills are discovered
+  // as the step accepted them, so a plugin enabled or updated since reaches
+  // this step's text. The skills it lists are the ones its calls may read.
   const contributors = new Set([
     ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
-    ...step.installed,
+    ...step.installed.keys(),
   ]);
-  const listed = listedSkills(runSystem.catalog(), contributors);
-  // An activated skill is readable while the step would list it: its
-  // plugin, if any, still contributes, so one disabled or untrusted since
-  // loses it.
-  const activated = runSystem
-    .activated(state)
-    .filter(({ plugin }) => plugin === null || contributors.has(plugin));
-  const readable = skillRoots(
-    [...listed, ...activated].flatMap(({ name, directory }) =>
-      directory === null ? [] : [{ name, directory }],
-    ),
+  // The settings toggle turns the listing off; a skill the user activated
+  // is still resolved.
+  const listing = AgentSkillsEnabledSchema.parse(
+    roots.config.get(AGENT_SKILLS_CONFIG_KEY),
   );
-  for (const name of readable.refused)
-    run.logger.warn(
-      `Skill ${name} is not readable by tools: its directory cannot be verified.`,
-    );
-  const tools = { ...step.tools, stepRoots: readable.roots };
+  const names = runSystem.activated(state);
+  const catalog =
+    listing || names.length > 0
+      ? yield* loadRuntimeSkillCatalog({
+          workspacePath: roots.workspace,
+          settings: roots,
+          plugins: { loadable: [...step.installed.values()], withheld: [] },
+        })
+      : { catalog: [], issues: [] };
+  const listed = listing ? listedSkills(catalog.catalog, contributors) : [];
+  // An activated skill is readable while its plugin, if any, still
+  // contributes, so one disabled or untrusted since loses it.
+  const activated = catalog.catalog.filter(
+    ({ name, plugin }) =>
+      names.includes(name) && (plugin === null || contributors.has(plugin)),
+  );
+  // Its catalog entries carry their directories canonical already.
+  const stepRoots = [...listed, ...activated].flatMap(({ name, directory }) =>
+    directory === null
+      ? []
+      : [{ absolutePath: directory, label: `Skill ${name}` }],
+  );
+  const tools = { ...step.tools, stepRoots };
   const previous = yield* SynchronizedRef.getAndSet(run.steps, {
     tools,
     scope,
@@ -265,7 +278,6 @@ const openStep = Effect.fn('Step.open')(function* (
   // continuation (its plugin switched off) ends it, as the plugin's tools
   // leave: from the run's next step.
   if (continuation === null) run.session.approvals.setGoalGrant(run.runId, []);
-  const { roots } = run.session;
   // The model-dependent text follows the step's model and settings.
   const model = yield* SynchronizedRef.get(run.model);
   const base = runSystem.base();
@@ -279,12 +291,11 @@ const openStep = Effect.fn('Step.open')(function* (
     base === undefined || added === '' ? base : `${base}\n${added}`;
   const address = system === undefined ? null : sha256(system);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
-  // An installed plugin that ships only skills changes the sections alone.
-  const sectionsChanged =
-    sections.join('\0') !== state.offeredSections.join('\0');
+  const skills = listed.map(({ name }) => name);
+  const skillsChanged = skills.join('\0') !== state.offeredSkills.join('\0');
   const changed =
     toolsChanged ||
-    sectionsChanged ||
+    skillsChanged ||
     state.offeredContinuation !== continuation ||
     state.offeredSystem !== address;
   // What is withheld can change while the offered set does not (a plugin
@@ -293,7 +304,15 @@ const openStep = Effect.fn('Step.open')(function* (
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
   const warnings = [
-    ...(toolsChanged || sectionsChanged ? step.warnings : []),
+    ...(toolsChanged || skillsChanged
+      ? [
+          ...step.warnings,
+          ...catalog.issues.map(
+            ({ severity, message, path }) =>
+              `Skill import ${severity}: ${message}${path ? ` (${path})` : ''}`,
+          ),
+        ]
+      : []),
     ...(withheldChanged
       ? [
           `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
@@ -330,7 +349,7 @@ const openStep = Effect.fn('Step.open')(function* (
             payload: {
               tools: step.tools.offered,
               continuation,
-              sections,
+              skills,
               system: address,
             },
           } satisfies RunLedgerDraft,

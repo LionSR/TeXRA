@@ -287,7 +287,6 @@ function agentRun(
     toolPolicy: {},
     opening: {
       inputs: {},
-      catalog: [],
       activated: [],
       attachedMemoryMisses: [],
     },
@@ -342,7 +341,7 @@ const freshState = (): RunState => ({
   overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
-  offeredSections: [],
+  offeredSkills: [],
   offeredSystem: null,
   contents: {},
 });

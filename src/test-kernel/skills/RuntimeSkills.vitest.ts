@@ -7,7 +7,7 @@ import { afterEach, describe, expect } from 'vitest';
 import { SKILL_CATALOG_MAX_SKILLS, ToolError } from '@shared/schemas';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
-  activatedSkillEntries,
+  activatedSkillNames,
   formatRuntimeSkillActivation,
   loadRuntimeSkillCatalog as loadRuntimeSkillCatalogEffect,
 } from '@skills/runtimeSkills';
@@ -17,14 +17,14 @@ import { setupPlatform } from '@test/support/setupPlatform';
 import { installTestSkillRoots, writeSkill } from '@test/support/skillFixtures';
 import { makeTempDir, useTempDirs } from '@test/support/tempDirPlatform';
 import { resolveToolPath } from '@tools/pathResolution';
-import { skillRoots, type StepRoot } from '@utils/files/externalRoots';
+import type { StepRoot } from '@utils/files/externalRoots';
 
 const tempRoots = useTempDirs();
 /** The run catalog of `workspacePath`, with no installed plugin loading. */
 const runCatalog = (workspacePath: string) => ({
   workspacePath,
   settings: testWorkspaceRoots(),
-  installed: Effect.succeed({ loadable: [], withheld: [] }),
+  plugins: { loadable: [], withheld: [] },
 });
 
 const loadRuntimeSkillCatalog = (
@@ -208,15 +208,12 @@ describe('runtime skills', () => {
         const { catalog } = yield* loadRuntimeSkillCatalogEffect(
           runCatalog(projectA),
         ).pipe(Effect.provide(nodePlatformLayer));
-        const rootsOf = (listed: typeof catalog) => {
-          const { roots, refused } = skillRoots(
-            listed.flatMap(({ name, directory }) =>
-              directory === null ? [] : [{ name, directory }],
-            ),
+        const rootsOf = (listed: typeof catalog) =>
+          listed.flatMap(({ name, directory }) =>
+            directory === null
+              ? []
+              : [{ absolutePath: directory, label: `Skill ${name}` }],
           );
-          expect(refused).toEqual([]);
-          return roots;
-        };
         const resolveFrom = (stepRoots: readonly StepRoot[]) =>
           resolveToolPath(
             {
@@ -232,14 +229,11 @@ describe('runtime skills', () => {
         // Another run's call, or a step that no longer lists the skill.
         expect(yield* Effect.flip(resolveFrom([]))).toBeInstanceOf(ToolError);
         // A skill the user activated by name is granted again, even unlisted.
-        const activated = yield* activatedSkillEntries(
-          [
-            '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
-          ],
-          projectA,
-          testWorkspaceRoots(),
-        ).pipe(Effect.provide(nodePlatformLayer));
-        expect(activated.map(({ name }) => name)).toEqual(['shared-notes']);
+        const names = activatedSkillNames([
+          '<skill_activation>\nThe user selected it.\n<skill name="shared-notes">\n</skill>\n</skill_activation>',
+        ]);
+        expect(names).toEqual(['shared-notes']);
+        const activated = catalog.filter(({ name }) => names.includes(name));
         expect(
           (yield* resolveFrom(rootsOf(activated))).external?.writable,
         ).toBe(false);

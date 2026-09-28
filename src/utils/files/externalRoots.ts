@@ -71,7 +71,8 @@ interface ExternalRootOptions {
 }
 
 /** A read-only directory one step admits for its own calls, beside the
- *  registered roots: a skill it lists or its user activated. Canonical. */
+ *  registered roots: a skill it lists or its user activated, canonical as
+ *  its catalog entry records it (`canonicalizePath`). */
 export interface StepRoot {
   readonly absolutePath: string;
   readonly label: string;
@@ -183,31 +184,6 @@ export function registerExternalRoot(
 }
 
 /**
- * The step roots of `skills`, canonicalised. Fails closed: a directory that
- * cannot be canonicalised is not admitted, and the names of those are
- * returned for the caller to report.
- */
-export function skillRoots(
-  skills: readonly { readonly name: string; readonly directory: string }[],
-): { readonly roots: StepRoot[]; readonly refused: string[] } {
-  const admitted: StepRoot[] = [];
-  const refused: string[] = [];
-  for (const { name, directory } of skills) {
-    try {
-      admitted.push(
-        Object.freeze({
-          absolutePath: canonicalizePath(directory),
-          label: `Skill ${name}`,
-        }),
-      );
-    } catch {
-      refused.push(name);
-    }
-  }
-  return { roots: admitted, refused };
-}
-
-/**
  * Return the registered root that contains `absolutePath`, or null when no
  * registered root matches or the path cannot be canonicalised (fail closed).
  * `stepRoots` are the read-only roots the asking call's step admits; a call
@@ -223,9 +199,9 @@ export function findExternalRoot(
   stepRoots: readonly StepRoot[] = [],
 ): MatchedExternalRoot | null {
   if (!path.isAbsolute(absolutePath)) return null;
-  // Nothing registered means nothing can match. Checked before
-  // canonicalisation so hosts that register no roots do not pay a realpath
-  // syscall on every path a tool resolves.
+  // No registered root and no step root means nothing can match. Checked
+  // before canonicalisation so a lookup with nothing to match pays no
+  // realpath syscall.
   if (roots.size === 0 && stepRoots.length === 0) return null;
 
   let resolved: string;

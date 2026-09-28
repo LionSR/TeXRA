@@ -6,23 +6,9 @@ import { z } from 'zod';
 import { logFileCategory, logFilesLoaded, type AgentTrace } from '@agent/trace';
 import { AgentSetting } from '@agent/core/definition/AgentDataclass';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
-import type { InstalledPluginLoad } from '@common/plugins/pluginTrust';
-import type { ConfigProvider } from '@platform/interfaces';
-import type { SettingsStores } from '@shared/config/settingsAccess';
-import type {
-  AttachedMemoryMiss,
-  FileListEntry,
-  SkillCatalogEntry,
-} from '@shared/schemas';
-import {
-  AGENT_SKILLS_CONFIG_KEY,
-  AgentCategory,
-  AgentSkillsEnabledSchema,
-} from '@shared/schemas';
-import {
-  activatedSkillEntries,
-  loadRuntimeSkillCatalog,
-} from '@skills/runtimeSkills';
+import type { AttachedMemoryMiss, FileListEntry } from '@shared/schemas';
+import { AgentCategory } from '@shared/schemas';
+import { activatedSkillNames } from '@skills/runtimeSkills';
 import { parseFrontmatter } from '@tools/memory/memoryMeta';
 import { displayToStoragePath } from '@tools/memory/memoryUtils';
 import { filterNotNull, unique } from '@utils/core';
@@ -150,9 +136,6 @@ type LoadedFileEntry = FileListEntry & {
 interface BuildTemplateInputsOptions {
   workspacePath: string | undefined;
   storageRoot: string;
-  config: ConfigProvider;
-  settings: SettingsStores;
-  installed: Effect.Effect<InstalledPluginLoad>;
   /** Explicit trace stage for diagnostics emitted while loading variables. */
   stageId?: string;
 }
@@ -179,14 +162,13 @@ type AttachedMemoriesResult = {
 
 /**
  * What a launch opens from: the template inputs (the agent's required-file
- * pairs beside the fixed vocabulary); a tool-use run's skill catalog (empty
- * with skills off) and the skills its instruction activated; and the
- * attached memories that could not be read.
+ * pairs beside the fixed vocabulary); the names of the skills a tool-use
+ * run's instruction activated; and the attached memories that could not be
+ * read.
  */
 export interface TemplateOpening {
   readonly inputs: TemplateVars;
-  readonly catalog: readonly SkillCatalogEntry[];
-  readonly activated: readonly SkillCatalogEntry[];
+  readonly activated: readonly string[];
   readonly attachedMemoryMisses: AttachedMemoryMiss[];
 }
 
@@ -203,43 +185,15 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
   logger: AgentTrace,
   options: BuildTemplateInputsOptions,
 ): Effect.fn.Return<TemplateOpening, Error, FileSystem.FileSystem> {
-  const toolUse = agentSetting.agentCategory === AgentCategory.ToolUse;
-  // Parallelize independent I/O: required files, memories, and skills
-  const [
-    { vars: requiredVars, files: requiredFiles },
-    attachedMemories,
-    runtimeSkills,
-    activated,
-  ] = yield* Effect.all(
-    [
-      getRequiredFileVars(agentSetting, agentPath),
-      getAttachedMemories(agentConfig.memories, options.storageRoot),
-      // Only a tool-use run's steps list skills, so the catalog (a
-      // multi-source readdir + per-skill realpath/read/parse) is dead work
-      // for workflow agents. The settings toggle gives users a hard off
-      // switch that skips discovery and leaves the catalog empty.
-      toolUse &&
-      AgentSkillsEnabledSchema.parse(
-        options.config.get(AGENT_SKILLS_CONFIG_KEY),
-      )
-        ? loadRuntimeSkillCatalog(options)
-        : Effect.succeed({ catalog: [], issues: [] }),
-      // What the launch instruction activates (`/skills`), switch or not.
-      activatedSkillEntries(
-        toolUse ? [agentConfig.instruction] : [],
-        options.workspacePath,
-        options.settings,
-      ),
-    ],
-    { concurrency: 'unbounded' },
-  );
-
-  for (const issue of runtimeSkills.issues) {
-    const location = issue.path ? ` (${issue.path})` : '';
-    logger.warn(`Skill import ${issue.severity}: ${issue.message}${location}`, {
-      stageId: options.stageId,
-    });
-  }
+  // Parallelize independent I/O: required files and memories
+  const [{ vars: requiredVars, files: requiredFiles }, attachedMemories] =
+    yield* Effect.all(
+      [
+        getRequiredFileVars(agentSetting, agentPath),
+        getAttachedMemories(agentConfig.memories, options.storageRoot),
+      ],
+      { concurrency: 'unbounded' },
+    );
 
   // The custom `requiredFilesInternal` keys ride beside the fixed vocabulary.
   const inputs: TemplateInputs & Record<string, unknown> = {
@@ -266,8 +220,12 @@ export const buildTemplateInputs = Effect.fn('buildTemplateInputs')(function* (
 
   return {
     inputs,
-    catalog: runtimeSkills.catalog,
-    activated,
+    // What the launch instruction activates (`/skills`): each step resolves
+    // the names against its own catalog.
+    activated:
+      agentSetting.agentCategory === AgentCategory.ToolUse
+        ? activatedSkillNames([agentConfig.instruction])
+        : [],
     attachedMemoryMisses: attachedMemories.misses,
   };
 });

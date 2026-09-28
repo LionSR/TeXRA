@@ -42,10 +42,8 @@ export type OfferedTool = z.infer<typeof OfferedToolSchema>;
 export const ToolsOfferedPayloadSchema = z.strictObject({
   tools: z.array(OfferedToolSchema).readonly(),
   continuation: z.string().min(1).nullable(),
-  /** Sorted plugin ids: the section each built-in one adds, and the skills
-   *  each ships in the run's catalog (every installed plugin the step
-   *  loads). */
-  sections: z.array(z.string().min(1)).readonly(),
+  /** The names of the skills the step lists, in listing order. */
+  skills: z.array(z.string().min(1)).readonly(),
   /** The address of the system text the step's requests send, the run's
    *  base text with every section rendered: a section reworded by an update
    *  is a new offered set. Null when the run sends none. */

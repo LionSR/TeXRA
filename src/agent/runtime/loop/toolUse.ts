@@ -38,7 +38,6 @@ import {
   type RetryErrorInfo,
   type RunOutcome,
   type RunUsageTotals,
-  SkillCatalogSchema,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
 import { type RunState } from '@shared/session/runStateFold';
@@ -47,7 +46,7 @@ import { sha256 } from '@tools/catalogEntries';
 import { AgentRun } from '../run/AgentRun';
 import { compactIfNeeded } from '../run/compaction';
 import { mediaInputParts, type InputPart } from '../run/mediaInput';
-import { blobRows, stored } from '../run/requestContext';
+import { stored } from '../run/requestContext';
 import { toolDefinitionsFor } from '../run/tools';
 import { claimFollowUps, type ConsumedFollowUps } from '../FollowUps';
 import { ModelInvoker } from '../ModelInvoker';
@@ -150,8 +149,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
 
   // ---------------------------------------------------------------- state
   let workspace = AgentWorkspaceState.create();
-  // Recorded facts a restore reads back (catalog, misses).
-  let catalog = run.opening?.catalog ?? [];
+  // Recorded facts a restore reads back.
   let memoryMisses = run.opening?.attachedMemoryMisses ?? [];
   let systemPrompt: string | undefined;
   let response = '';
@@ -170,7 +168,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         }),
       },
       ...(systemPrompt !== undefined ? { system: sha256(systemPrompt) } : {}),
-      ...(catalog.length > 0 ? { skills: sha256(catalog) } : {}),
       ...(instruction !== undefined ? { instruction } : {}),
       ...(activated !== undefined ? { activated } : {}),
       ...(memoryMisses.length > 0 ? { memoryMisses } : {}),
@@ -195,13 +192,11 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   // What a step's system text and skill roots are built from.
   const system: RunSystem = {
     base: () => systemPrompt,
-    catalog: () => catalog,
     // The opening's before its snapshot records them.
-    activated: (state) => {
-      if (state.flow === null) return run.opening?.activated ?? [];
-      const { activated } = state.flow.state;
-      return activated ? stored(state, activated, SkillCatalogSchema) : [];
-    },
+    activated: (state) =>
+      state.flow === null
+        ? (run.opening?.activated ?? [])
+        : (state.flow.state.activated ?? []),
     isChild,
   };
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
@@ -309,12 +304,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     const opened = yield* ledger.appendBatch(runId, null, [
       ...(content ? [appendRow(runId, [{ role: 'user', content }])] : []),
       ...offered,
-      // The catalog is stored once, before the snapshot that names it.
-      ...blobRows(
-        runId,
-        opening,
-        [catalog, activated].filter((l) => l.length),
-      ),
       snapshotRow(runId, opening, {
         phase: 'initial',
         runtime: {
@@ -323,7 +312,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         },
         state: {
           ...flowState(opening),
-          ...(activated.length > 0 ? { activated: sha256(activated) } : {}),
+          ...(activated.length > 0 ? { activated: [...activated] } : {}),
         },
       }),
     ]);
@@ -341,7 +330,6 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         flow.stateSlices.workspaceSnapshot,
       );
     systemPrompt = flow.system && stored(state, flow.system, z.string());
-    catalog = flow.skills ? stored(state, flow.skills, SkillCatalogSchema) : [];
     memoryMisses = flow.memoryMisses ?? [];
     if (flow.structured !== undefined) run.structured.value = flow.structured;
     logger.debug('Resuming tool-use run from the ledger.');

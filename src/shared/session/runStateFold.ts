@@ -188,8 +188,8 @@ export type RunState = RunPosition & {
   readonly offeredTools: readonly OfferedTool[] | null;
   /** The plugin whose continuation the latest `tools.offered` row pinned. */
   readonly offeredContinuation: string | null;
-  /** The plugins whose prompt contributions it pinned. */
-  readonly offeredSections: readonly string[];
+  /** The names of the skills it listed. */
+  readonly offeredSkills: readonly string[];
   readonly offeredSystem: string | null; // its system text's address
   /** The run's `context.blob` rows: model-facing content by address. */
   readonly contents: Readonly<Record<string, JsonValue>>;
@@ -273,7 +273,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
-  offeredSections: [],
+  offeredSkills: [],
   offeredSystem: null,
   contents: {},
 });
@@ -662,7 +662,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         ...advance(current ?? freshRunState(commit)),
         offeredTools: row.payload.tools,
         offeredContinuation: row.payload.continuation,
-        offeredSections: row.payload.sections,
+        offeredSkills: row.payload.skills,
         offeredSystem: row.payload.system,
       });
     case 'context.blob': {

@@ -353,7 +353,8 @@ export const toolRegistryLayer = (
             `No installed plugin's MCP servers start: ${key.failure.message}`,
           );
         return {
-          plugins: load.loadable.map(({ record, plugin, trust }) => {
+          plugins: load.loadable.map((source) => {
+            const { record, plugin, trust } = source;
             const id = installedPluginId(record.name);
             const servers =
               key?._tag === 'Success'
@@ -368,6 +369,7 @@ export const toolRegistryLayer = (
                 servers: servers.map(({ spec, revision }) => [spec, revision]),
               }),
               servers,
+              source,
             };
           }),
           warnings,

@@ -311,7 +311,6 @@ function agentRunTestLayer(init: LoopInit) {
         toolPolicy: { stopAfterCycle: true },
         opening: {
           inputs: {},
-          catalog: [],
           activated: [],
           attachedMemoryMisses: [],
         },

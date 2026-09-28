@@ -1,4 +1,4 @@
-import { Effect, FileSystem } from 'effect';
+import { Effect } from 'effect';
 
 import {
   readInstalledPluginLoad,
@@ -16,7 +16,8 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { isPathWithin } from '@utils/core/pathCore';
-import { toErrorMessage } from '@utils/errors/errorMessage';
+import { canonicalizePath } from '@utils/files/externalRoots';
+import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
@@ -234,18 +235,20 @@ export function loadEnabledRuntimeSkills(
 }
 
 /**
- * One discovered skill as a run records it: its plugin, name and listing
- * text, and the directory tools may read while a step lists or activated
- * it: its physical place, when outside the workspace, which already holds
- * the rest. One whose place cannot be verified is not granted, which is
- * worth a warning, not a run.
+ * One discovered skill as a step lists it: its plugin, name and listing
+ * text, and the directory tools may read while the step lists or activated
+ * it: its canonical place (the one pipeline external-root lookups use), when
+ * outside the workspace, which already holds the rest. One whose place
+ * cannot be verified is not granted, which is worth a warning, not a run.
  */
 const catalogEntry = (
-  fs: FileSystem.FileSystem,
   workspaceRoot: string | undefined,
   { skill, source }: SourcedSkill,
 ): Effect.Effect<SkillCatalogEntry> =>
-  fs.realPath(skill.baseDir).pipe(
+  Effect.try({
+    try: () => canonicalizePath(skill.baseDir),
+    catch: ensureError,
+  }).pipe(
     Effect.map((real) =>
       workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)
         ? null
@@ -268,36 +271,20 @@ const catalogEntry = (
   );
 
 /**
- * The skills a user activated in `texts` (each `<skill_activation>` block
- * names its skill as {@link formatRuntimeSkillActivation} writes it) that
- * discovery enables now, as the run records them: each step grants one
- * while its plugin, if any, still contributes. No activation, no discovery.
+ * The names of the skills a user activated in `texts`: each
+ * `<skill_activation>` block names its skill as
+ * {@link formatRuntimeSkillActivation} writes it. The run records the names;
+ * each step resolves them against its own catalog.
  */
-export const activatedSkillEntries = Effect.fn('skills.activated')(function* (
-  texts: readonly string[],
-  workspaceRoot: string | undefined,
-  stores: SettingsStores,
-) {
-  const named = new Set(
+export const activatedSkillNames = (texts: readonly string[]): string[] => [
+  ...new Set(
     texts.flatMap((text) =>
       [
         ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
       ].map(([, name]) => name),
     ),
-  );
-  if (named.size === 0) return [];
-  const enabled = yield* loadEnabledRuntimeSkills(
-    workspaceRoot,
-    yield* readInstalledPluginLoad(stores),
-    yield* readDisabledSkills(stores),
-  );
-  const fs = yield* FileSystem.FileSystem;
-  return yield* Effect.forEach(
-    enabled.skills.filter(({ skill }) => named.has(skill.name)),
-    (entry) => catalogEntry(fs, workspaceRoot, entry),
-    { concurrency: 'unbounded' },
-  );
-});
+  ),
+];
 
 export function formatRuntimeSkillActivation({
   skill,
@@ -324,18 +311,13 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     readonly workspacePath: string | undefined;
     /** The run's setting slots, which hold its disabled-skill lists. */
     readonly settings: SettingsStores;
-    /** The installed plugins that load, as the run's launch reads them. */
-    readonly installed: Effect.Effect<
-      InstalledPluginLoad,
-      never,
-      FileSystem.FileSystem
-    >;
+    /** The installed plugins the step accepted. */
+    readonly plugins: InstalledPluginLoad;
   }) {
     // The enabled set the hosts list, with every tool plugin's skills
-    // whatever its switch: each step lists those of the plugins it pinned,
-    // so a switch flipped mid-conversation reaches the prompt.
+    // whatever its switch: the step lists those of the plugins it pinned.
     const disabled = yield* readDisabledSkills(run.settings);
-    const plugins = yield* run.installed;
+    const plugins = run.plugins;
     const result = yield* loadEnabledRuntimeSkills(run.workspacePath, plugins, {
       ...disabled,
       plugins: [],
@@ -352,12 +334,9 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
       kept.set(source.plugin, count + 1);
       return count < SKILL_CATALOG_MAX_SKILLS;
     });
-    const fs = yield* FileSystem.FileSystem;
     return {
-      catalog: yield* Effect.forEach(
-        catalog,
-        (entry) => catalogEntry(fs, run.workspacePath, entry),
-        { concurrency: 'unbounded' },
+      catalog: yield* Effect.forEach(catalog, (entry) =>
+        catalogEntry(run.workspacePath, entry),
       ),
       issues: result.errors,
     } satisfies RuntimeSkillCatalogResult;

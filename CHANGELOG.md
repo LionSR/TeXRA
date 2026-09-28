@@ -289,11 +289,13 @@ All notable changes to this project will be documented in this file.
   every command. Before, commands that print their own output, `texra run`
   among them, dropped it. `--quiet` still hides it.
 
-- **A re-trusted plugin's changed MCP server answers the next request** —
-  after you edit an installed plugin's server code and trust it again, the
-  chat's next request calls the new server, not the old one, even when its
-  command, settings and tools look the same. A plugin being started while
-  you disable it no longer shows its tools to any request.
+- **An updated plugin's tools and skills reach an open chat at its next
+  request** — after you change an installed plugin and trust it again, the
+  chat's next request uses the plugin as it now is: its tools run the new
+  version and its skills show the new text. A plugin enabled mid-chat brings
+  its skills along with its tools, and the skills on/off setting applies at
+  the next request. A plugin you disable while it is still starting never
+  offers its tools to any request.
 
 - **A message typed after you stop a chat continues that conversation, in
   order** — the terminal hands it to the session, which queues it on the
