@@ -341,8 +341,7 @@ const openDispatch = Effect.fn('openDispatch')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
         stateSlices: options.stateSlices ?? null,
       },

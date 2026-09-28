@@ -38,10 +38,11 @@ import { SessionEvents } from '@shared/session/sessionEvents';
 import type { z } from 'zod';
 
 /**
- * Rows that may follow a `run.snapshot` in its batch: a snapshot is the
- * loop's position, so the batch that writes one is closing, not opening,
- * work. A `stream.end` closes a streaming row the `waiting` step parks
- * beside.
+ * Rows that may follow a `run.snapshot` in its batch: none moves what it
+ * records (loop state, model, failure, declined routes). A `run.position`
+ * (position is not in the snapshot), a `tool.end`, a `request.decided`, or
+ * the `stream.end` of a row the `waiting` position parks beside. Each folded
+ * field then has one writer, whose last row is what a resume reads.
  */
 const AFTER_SNAPSHOT = new Set<RunLedgerDraft['type']>([
   'run.position',

@@ -1,7 +1,23 @@
 # One writer of loop position
 
-Status: proposed, 2026-09-28. No code yet; this note is for review before the
-change (PR D).
+Status: implemented, 2026-09-28 (session format 40). Where the change
+departs from the plan below:
+
+- `RunState.phase` stays, as a fold-only fact derived from positions
+  (`PHASE_AT` in `runStateFold.ts`), so the loop's resume branches read it
+  unchanged. A `halted` position moves no phase: a stop keeps the phase the
+  loop stopped in, which is how a resumed run knows whether it stopped
+  inside a turn or at a park.
+- `model.ready` maps onto `turn.begin`. The per-model-call snapshot that
+  wrote `model.ready` is gone; nothing distinguished it from `turn.begin`.
+- The round loop's conclusion is a `turn.end` that opens no next round, and
+  the fold reads that as `halted`, replacing the `phase: 'halted'`
+  snapshot.
+- `round` (model calls, read only for debug file names) is counted by the
+  fold from each new invocation's `attempt` row, and `run.position` no
+  longer carries it.
+- A snapshot is written only when the loop state or a runtime field differs
+  from the folded one: `snapshotRow` answers an empty list otherwise.
 
 ## Two writers today
 

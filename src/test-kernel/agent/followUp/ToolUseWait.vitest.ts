@@ -175,7 +175,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               // The runtime snapshot the invoker writes on a failed attempt:
               // the error a resumed run reads back off the fold.
               const failed = yield* cell.append([
-                snapshotRow(run.runId, state, {
+                ...snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: scripted.failWith,
                     declinedRoutes: [],
@@ -474,13 +474,12 @@ const seedCommittedResponse = Effect.fn('test.seedCommittedResponse')(
       appendRow(runId, [
         { role: 'user', content: [{ kind: 'text', text: 'Do the thing.' }] },
       ]),
-      snapshotRow(runId, fresh, {
-        phase: 'model.ready',
-        turn: 1,
+      ...snapshotRow(runId, fresh, {
         state: {
           stateSlices: null,
         },
       }),
+      positionRow(runId, { ...fresh, turn: 1 }, 'turn.begin'),
     ]);
     const invocation = { invocationId: randomUUID(), attempt: 1 };
     return yield* ledger.appendBatch(runId, opened, [
@@ -868,7 +867,7 @@ describe('a parked root run', () => {
         appendRow(runId, [
           { role: 'user', content: [{ kind: 'text', text: 'answer me' }] },
         ]),
-        snapshotRow(runId, parked, { runtime: { lastError: null } }),
+        ...snapshotRow(runId, parked, { runtime: { lastError: null } }),
         positionRow(runId, parked, 'turn.ready'),
       ]);
 

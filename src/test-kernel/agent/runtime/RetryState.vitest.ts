@@ -370,8 +370,7 @@ const openRun = Effect.fn('openRun')(function* (
     appendRow(runId, [
       { role: 'user', content: [{ kind: 'text', text: 'go' }] },
     ]),
-    snapshotRow(runId, freshState(), {
-      phase: 'initial',
+    ...snapshotRow(runId, freshState(), {
       state: {
         stateSlices: null,
       },

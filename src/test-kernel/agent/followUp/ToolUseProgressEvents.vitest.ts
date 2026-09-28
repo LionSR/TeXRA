@@ -194,7 +194,7 @@ function invokerLayer(script: readonly ScriptedTurn[], seen: InvokeRequest[]) {
               return {
                 kind: 'failed' as const,
                 state: yield* cell.append([
-                  snapshotRow(run.runId, state, {
+                  ...snapshotRow(run.runId, state, {
                     runtime: { lastError: scripted.failWith },
                   }),
                 ]),

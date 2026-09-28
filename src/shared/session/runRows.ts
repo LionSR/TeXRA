@@ -76,13 +76,48 @@ export type RunPosition = {
   readonly family: RunFamily | null;
   readonly at: PositionAt | null;
   readonly outcome: RunOutcome | null;
-  readonly round: number;
   readonly turn: number;
   /** By request id, in the order the rows opened them. */
   readonly requests: Readonly<Record<string, RequestState>>;
   /** Complete output collection from the newest `output.produced` row. */
   readonly roundOutputs: RoundOutput[];
 };
+
+/**
+ * Where the loop stands, as its own branches read it: a settled boundary
+ * (`initial`, `waiting`, `halted`) or somewhere inside a turn. Fold-only,
+ * never written: derived from the run's `run.position` rows.
+ */
+export type RunLoopPhase =
+  | 'initial'
+  | 'model.ready'
+  | 'model.submitted'
+  | 'results.ready'
+  | 'waiting'
+  | 'halted';
+
+/**
+ * The phase a position leaves an opened loop in. A `halted` position moves
+ * none: a stop keeps the phase the loop stopped in, so a resume continues
+ * from there. `turn.ready` is input consumed at a park, still a boundary;
+ * a `turn.end` that no `waiting` or `turn.begin` follows in its batch is the
+ * round loop's last round closed, the run concluded before its terminal
+ * row. An unopened run stays unopened, for `load` to refuse.
+ */
+const PHASE_AT: Readonly<Record<Exclude<PositionAt, 'halted'>, RunLoopPhase>> =
+  {
+    'turn.ready': 'waiting',
+    'turn.begin': 'model.ready',
+    'response.ready': 'model.submitted',
+    'results.ready': 'results.ready',
+    'turn.end': 'halted',
+    waiting: 'waiting',
+  };
+export const phaseAfter = (
+  phase: RunLoopPhase | null,
+  at: PositionAt | null | undefined,
+): RunLoopPhase | null =>
+  at == null || at === 'halted' || phase === null ? phase : PHASE_AT[at];
 
 /**
  * What these rows say about one run: its position and the input it has not
@@ -124,7 +159,6 @@ export const freshRunPosition = (): RunPosition => ({
   family: null,
   at: null,
   outcome: null,
-  round: 0,
   turn: 0,
   requests: byId([]),
   roundOutputs: [],
@@ -190,19 +224,15 @@ export function applyRunRow(
     case 'run.position': {
       const p = row.payload;
       const rows = current ?? freshRunRows();
-      for (const name of ['round', 'turn'] as const) {
-        const value = p[name];
-        if (value != null && value < rows[name]) {
-          return {
-            kind: 'contradiction',
-            detail: `${name} ${value} is below ${rows[name]}`,
-          };
-        }
+      if (p.turn != null && p.turn < rows.turn) {
+        return {
+          kind: 'contradiction',
+          detail: `turn ${p.turn} is below ${rows.turn}`,
+        };
       }
       return applied({
         family: p.family,
         at: p.at,
-        round: p.round ?? rows.round,
         turn: p.turn ?? rows.turn,
         outcome: p.at === 'halted' ? (p.outcome ?? null) : rows.outcome,
       });

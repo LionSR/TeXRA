@@ -48,17 +48,11 @@ function mintRunId(): RunId {
   return `beef${runCounter.toString(16).padStart(2, '0')}` as RunId;
 }
 
-/**
- * A workflow run's snapshot. A terminal rejection is a halted snapshot with no
- * model failure whose loop halted FAILED; anything else stays continuable.
- */
-function workflowSnapshot(terminal: boolean): RunSnapshotPayload {
+/** A workflow run's snapshot: what the loop runs on, no position. */
+function workflowSnapshot(): RunSnapshotPayload {
   return {
     family: 'toolUse',
     runtime: {
-      phase: terminal ? 'halted' : 'model.ready',
-      round: 0,
-      turn: 1,
       modelId: config.model,
       modelCompatibilityKey: null,
       lastError: null,
@@ -86,8 +80,9 @@ describe('CLI listing resumability', () => {
     );
   }
 
-  /** Open the run aggregate the way a round does, halting it FAILED when
-   *  `terminal`. */
+  /** Open the run aggregate the way a round does. A terminal rejection is a
+   *  loop that concluded (its last round closed) with no model failure and
+   *  halted FAILED; anything else stays continuable. */
   async function writeSnapshot(runId: RunId, terminal: boolean): Promise<void> {
     publishTestRunStart(session, runId);
     await Effect.runPromise(session.settlePublications());
@@ -97,10 +92,19 @@ describe('CLI listing resumability', () => {
         {
           type: 'run.snapshot',
           aggregateId: aggregateId('run', runId),
-          payload: workflowSnapshot(terminal),
+          payload: workflowSnapshot(),
         },
         ...(terminal
           ? [
+              {
+                type: 'run.position' as const,
+                aggregateId: aggregateId('run', runId),
+                payload: {
+                  family: 'toolUse' as const,
+                  at: 'turn.end' as const,
+                  turn: 1,
+                },
+              },
               {
                 type: 'run.position' as const,
                 aggregateId: aggregateId('run', runId),

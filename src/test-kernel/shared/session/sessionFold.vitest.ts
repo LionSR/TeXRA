@@ -1302,9 +1302,6 @@ const TURN_USAGE = {
   serverToolRequests: 1,
 };
 const RUNTIME = {
-  phase: 'model.ready',
-  round: 0,
-  turn: 0,
   modelId: 'gpt-test',
   modelCompatibilityKey: null,
   lastError: null,
@@ -1426,7 +1423,7 @@ const TURN_ROWS: readonly SessionEvent[] = [
     messages: [TOOL_GROUP],
     sourceResponse: RESPONSE_ID,
   }),
-  toolUseSnapshot({ phase: 'results.ready' }),
+  toolUseSnapshot(),
   {
     type: 'run.position',
     payload: { family: 'toolUse', at: 'turn.end', turn: 1 },

@@ -322,7 +322,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
             if (init.beforeResponse) yield* init.beforeResponse(request.round);
             if ('failWith' in turnScript) {
               const failed = yield* cell.append([
-                snapshotRow(run.runId, state, {
+                ...snapshotRow(run.runId, state, {
                   runtime: {
                     lastError: turnScript.failWith,
                     declinedRoutes: [],
@@ -370,7 +370,7 @@ function invokerLayer(init: LoopInit, requests: InvokeRequest[]) {
               ...(state.lastError === null
                 ? []
                 : [
-                    snapshotRow(run.runId, state, {
+                    ...snapshotRow(run.runId, state, {
                       runtime: { lastError: null },
                     }),
                   ]),

@@ -934,8 +934,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const delivered = yield* cell.append((state) => [
     appendRow(runId, [group], responseId),
     ...(joined?.rows ?? []),
-    snapshotRow(runId, state, {
-      phase: 'results.ready',
+    ...snapshotRow(runId, state, {
       state: { ...saved, stateSlices, ...joined?.recorded },
     }),
     positionRow(runId, state, 'results.ready'),

@@ -24,9 +24,6 @@ import { setupPlatform } from '@test/support/setupPlatform';
 const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
-    phase: 'initial',
-    round: 0,
-    turn: 0,
     modelId: 'test-model',
     modelCompatibilityKey: null,
     lastError: null,

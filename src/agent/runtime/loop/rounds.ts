@@ -43,12 +43,12 @@ import {
   type RunOutcome,
 } from '@shared/schemas';
 import { RunLedger } from '@shared/session/runLedger';
-import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import type { RunState } from '@shared/session/runStateFold';
 import { extractScratchpad } from '@utils/text/xmlExtraction';
 
 import { compactIfNeeded } from '../run/compaction';
 import { turnText } from '../run/turnText';
-import { appendRow, positionRow, type SnapshotPatch } from './rows';
+import { appendRow, positionRow } from './rows';
 import { ModelInvoker } from '../ModelInvoker';
 import type { AgentRunShape } from '../run/AgentRun';
 import type { InputPart } from '../run/mediaInput';
@@ -296,7 +296,9 @@ type TurnExit = { readonly state: RunState; readonly outcome: RunOutcome };
  * The round loop, over the tool-use loop's turn. `runTurn(cell, next)` opens
  * a round when `next` is set (closing the completed one) or the run is at a
  * fresh or halted boundary, and otherwise continues the round the rows left
- * open. `snapshot` is the loop's own snapshot row, family state included.
+ * open. The run concludes on a `turn.end` that opens no next round: the
+ * fold reads it as `halted`, so a resume between it and the terminal row
+ * does not open another round.
  */
 export const roundLoop =
   <R>(
@@ -305,10 +307,6 @@ export const roundLoop =
       cell: RunCell,
       next: boolean,
     ) => Effect.Effect<TurnExit, Error, R>,
-    snapshot: (
-      state: RunState,
-      patch: Omit<SnapshotPatch, 'state'>,
-    ) => RunLedgerDraft,
   ) =>
   (cell: RunCell) =>
     Effect.gen(function* () {
@@ -326,8 +324,7 @@ export const roundLoop =
           if (finish !== null) {
             if (state.phase === 'halted') return { state, outcome: finish };
             const halted = yield* cell.append([
-              ...(completed ? [positionRow(runId, state, 'turn.end')] : []),
-              snapshot(state, { phase: 'halted' }),
+              positionRow(runId, state, 'turn.end'),
             ]);
             return { state: halted, outcome: finish };
           }

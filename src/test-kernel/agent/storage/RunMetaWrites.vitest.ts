@@ -95,8 +95,7 @@ describe('run metadata updates', () => {
           appendRow(id, [
             { role: 'user', content: [{ kind: 'text', text: 'go' }] },
           ]),
-          snapshotRow(id, opening, {
-            phase: 'initial',
+          ...snapshotRow(id, opening, {
             state: {
               stateSlices: null,
             },

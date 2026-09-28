@@ -536,9 +536,7 @@ export const modelInvokerLayer = (): Layer.Layer<
               usage,
             },
           },
-          ...(state.lastError === null
-            ? []
-            : [snapshotRow(runId, state, { runtime: { lastError: null } })]),
+          ...snapshotRow(runId, state, { runtime: { lastError: null } }),
           positionRow(runId, state, 'response.ready'),
         ]);
         logRetryLifecycle(operationId, 'attempt_succeeded', bound, {
@@ -1235,11 +1233,11 @@ export const modelInvokerLayer = (): Layer.Layer<
               failure.formatted,
             );
             // The invoker is the one writer of the run's failure fact.
-            const failed = yield* cell.append((state) => [
+            const failed = yield* cell.append((state) =>
               snapshotRow(runId, state, {
                 runtime: { lastError: failure.info },
               }),
-            ]);
+            );
             return { kind: 'failed', state: failed, error: failure.info };
           }
           admission = 'decision';

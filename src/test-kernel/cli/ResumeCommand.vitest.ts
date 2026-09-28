@@ -79,9 +79,6 @@ const WORKFLOW_CONFIG = AgentConfigSchema.parse({
 const OPENING_SNAPSHOT: RunSnapshotPayload = {
   family: 'toolUse',
   runtime: {
-    phase: 'initial',
-    round: 0,
-    turn: 0,
     modelId: 'gpt54',
     modelCompatibilityKey: null,
     lastError: null,
@@ -101,9 +98,6 @@ const workflowSnapshot = (
 ): RunSnapshotPayload => ({
   family: 'toolUse',
   runtime: {
-    phase: 'initial',
-    round: 0,
-    turn: 0,
     modelId,
     modelCompatibilityKey,
     lastError: null,

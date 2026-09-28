@@ -390,9 +390,6 @@ describe('completedRunArchive facade', () => {
             payload: RunSnapshotPayloadSchema.parse({
               family: 'toolUse',
               runtime: {
-                phase: 'waiting',
-                round: 0,
-                turn: 0,
                 modelId: config.model,
                 modelCompatibilityKey: 'OpenAIResponse',
                 lastError: null,

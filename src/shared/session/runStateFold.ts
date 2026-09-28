@@ -18,7 +18,6 @@ import {
   addTurnUsage,
   EMPTY_RUN_USAGE_TOTALS,
   RunSnapshotPayloadSchema,
-  RunUsageTotalsSchema,
   requestParksItsCaller,
   type CommitOrdinal,
   type DispatchFacts,
@@ -28,7 +27,6 @@ import {
   type OfferedTool,
   type PendingRetry,
   type RetryErrorInfo,
-  type RunLoopPhase,
   type RunUsageTotals,
   type SessionEvent,
   type SessionEventDraft,
@@ -43,6 +41,8 @@ import {
   freshRunPosition,
   isFollowUpRow,
   isSharedRunRow,
+  phaseAfter,
+  type RunLoopPhase,
   type RunPosition,
   type SharedRunRow,
 } from './runRows';
@@ -146,14 +146,16 @@ type PendingIntent = {
  * from the row that produced it.
  */
 export type RunState = RunPosition & {
+  /** Model calls: a new invocation's `attempt` row counts one, a retry none. */
+  readonly round: number;
   /** The last folded row. */
   readonly commit: CommitOrdinal;
   readonly snapshotCommit: CommitOrdinal | null;
   /** Ledger rows folded into this state: zero means nothing but queued
    *  input has folded, which is what tells an unopened run from a broken one. */
   readonly rowsBeforeSnapshot: number;
-  /** `null` until the opening `run.snapshot`: no row that presupposes an
-   *  opened run folds before it. */
+  /** `null` until the opening `run.snapshot` (then `initial`, moved by
+   *  {@link phaseAfter}): no row that presupposes an opened run precedes it. */
   readonly phase: RunLoopPhase | null;
   readonly modelId: string | null;
   readonly modelCompatibilityKey: ModelCompatibilityKey | null;
@@ -250,6 +252,7 @@ const IGNORED = new Set<string>(Object.keys(IGNORED_ROW_TYPES));
  *  yet. The run program opens from this and stamps its family. */
 export const freshRunState = (commit: CommitOrdinal): RunState => ({
   ...freshRunPosition(),
+  round: 0,
   commit,
   snapshotCommit: null,
   rowsBeforeSnapshot: 0,
@@ -315,9 +318,9 @@ const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
   a.invocationId === b.invocationId && a.attempt === b.attempt;
 
 /**
- * Apply a settlement's operations over the run's mutable slices, `usage` and
- * the loop `state`, and re-validate both through their schemas so the
- * state stays typed without a cast.
+ * Apply a settlement's operations over the loop `state` (the only slice a
+ * call may set; `StateOperationSchema` refuses any other path), and
+ * re-validate it through its schema so the state stays typed without a cast.
  */
 function applyMutations(
   state: RunState,
@@ -325,10 +328,7 @@ function applyMutations(
   commit: CommitOrdinal,
 ): Fold {
   if (ops.length === 0) return Result.succeed(state);
-  let document: unknown = {
-    usage: state.usage,
-    state: state.loop,
-  };
+  let document: unknown = { state: state.loop };
   for (const op of ops) {
     const next = mutate(document, op.path, op);
     if (Result.isFailure(next)) {
@@ -339,21 +339,16 @@ function applyMutations(
   if (!isObject(document)) {
     return refuse('invalid-mutation', 'the slices are not an object', commit);
   }
-  const usage = RunUsageTotalsSchema.safeParse(document.usage);
-  if (!usage.success) {
-    return refuse('invalid-mutation', usage.error.message, commit);
-  }
   if (state.loop === null) {
-    if (document.state !== null) {
-      return refuse('invalid-mutation', 'no loop state to mutate', commit);
-    }
-    return Result.succeed({ ...state, usage: usage.data });
+    return document.state === null
+      ? Result.succeed(state)
+      : refuse('invalid-mutation', 'no loop state to mutate', commit);
   }
   const loop = LoopStateSchema.safeParse(document.state);
   if (!loop.success) {
     return refuse('invalid-mutation', loop.error.message, commit);
   }
-  return Result.succeed({ ...state, usage: usage.data, loop: loop.data });
+  return Result.succeed({ ...state, loop: loop.data });
 }
 
 const opened = (state: RunState | null): state is RunState =>
@@ -402,26 +397,28 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
       return refuse('out-of-order', verdict.detail, commit);
     }
     const state = current ?? freshRunState(commit);
+    const at = verdict.rows.at;
     return Result.succeed({
       ...state,
       commit,
       // Only the loop's own position is a ledger row; queued input, output
       // and the requests a session opens do not open a run.
-      rowsBeforeSnapshot:
-        state.rowsBeforeSnapshot + (verdict.rows.at === undefined ? 0 : 1),
+      rowsBeforeSnapshot: state.rowsBeforeSnapshot + (at === undefined ? 0 : 1),
       ...verdict.rows,
+      phase: phaseAfter(state.phase, at),
     });
   }
   switch (row.type) {
     case 'run.snapshot': {
-      // Flow state and the coordinates the loop owns, and nothing else: no
-      // reference set to reconcile, so there is no way for a snapshot to
+      // The loop state and what the loop runs on, and nothing else: no
+      // position and no reference set, so there is no way for a snapshot to
       // disagree with the rows below it (single-owner note, section 3.3).
       const p = row.payload;
       const state = current ?? freshRunState(commit);
       return Result.succeed({
         ...advance(state),
         snapshotCommit: commit,
+        phase: state.phase ?? 'initial',
         family: p.family,
         ...p.runtime,
         loop: p.state,
@@ -455,6 +452,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
           return Result.succeed({
             ...state,
             phase: 'model.submitted',
+            round: p.invocation.attempt === 1 ? state.round + 1 : state.round,
             openAttempt: {
               invocation: p.invocation,
               request: p.request,
