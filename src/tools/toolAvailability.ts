@@ -52,6 +52,7 @@ import {
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
 import { SharedAttempt } from '@utils/core/sharedAttempt';
+import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
@@ -197,7 +198,7 @@ export const toolAvailabilityLayer: Layer.Layer<
           return probeUntilSettled(lane, inputs);
         }),
       );
-    const refresh = (inputs: ToolProbeInputs) =>
+    const probe = (inputs: ToolProbeInputs) =>
       Effect.suspend(() => {
         const key = inputs.workspace;
         const lane = lanes.get(key) ?? {
@@ -224,7 +225,13 @@ export const toolAvailabilityLayer: Layer.Layer<
       });
     return {
       results,
-      refresh,
+      // Every caller is a trigger (Re-check, a key saved, an extension or
+      // folder added), so a tool it just installed must not be answered
+      // from a remembered miss. A probe in flight is rerun after the clear.
+      refresh: (inputs) =>
+        Effect.andThen(Effect.sync(forgetToolMisses), probe(inputs)),
+      // A session's own probe answers from the miss cache, so opening
+      // sessions back to back does not repeat the lookups.
       hold: (roots) =>
         Effect.acquireRelease(
           Effect.sync(() =>
@@ -247,10 +254,7 @@ export const toolAvailabilityLayer: Layer.Layer<
                 return next;
               });
             }),
-        ).pipe(
-          Effect.andThen(Effect.forkScoped(refresh(roots))),
-          Effect.asVoid,
-        ),
+        ).pipe(Effect.andThen(Effect.forkScoped(probe(roots))), Effect.asVoid),
     };
   }),
 );

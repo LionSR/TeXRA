@@ -38,7 +38,9 @@ export class ToolAvailability extends Context.Service<
     readonly results: SubscriptionRef.SubscriptionRef<AvailabilityResults>;
     /**
      * Probe every plugin for `inputs`' workspace now and publish the
-     * results, joining the probe in flight for that root. Each plugin's
+     * results, joining the probe in flight for that root. Tools recently
+     * found missing are looked up again, so one installed since shows up.
+     * Each plugin's
      * probe has its own deadline and reports a failure as `unknown`, so this
      * never fails.
      */

@@ -59,6 +59,17 @@ const findToolCache = new LRUCache<string, { readonly path: string | null }>({
   max: 64,
 });
 
+/**
+ * Drop every remembered miss, so the next lookup of a tool the user may have
+ * just installed searches again. Found paths are kept.
+ */
+export function forgetToolMisses(): void {
+  const misses = [...findToolCache.entries()].filter(
+    ([, entry]) => entry.path === null,
+  );
+  for (const [tool] of misses) findToolCache.delete(tool);
+}
+
 function toolCandidates(tool: string): string[] {
   const candidates = [tool];
   if (!hasExtension(tool, '.pl')) candidates.push(`${tool}.pl`);

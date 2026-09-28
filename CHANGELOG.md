@@ -274,14 +274,10 @@ All notable changes to this project will be documented in this file.
   trust, and are readable only by the chat that activated or lists it, not
   by another chat in the same folder.
 
-- **Opening a session no longer leaves `kpsewhich` processes spinning** —
-  the tool check that runs when a session opens asked the TeX database for
-  non-TeX programs such as Lean's `lake`, and a lookup still running when
-  TeXRA quit was left behind, one more for every session. TeX's database is
-  now asked only for the TeX Live scripts it holds, with a short deadline;
-  checks still running are stopped when TeXRA shuts down; and a tool that is
-  not installed is looked up again after a minute rather than on every
-  session open.
+- **Closing TeXRA or opening many sessions no longer leaves background
+  processes using CPU** — the check for which external tools are installed
+  could leave a search running after TeXRA quit, one more for every session
+  opened. Tools installed while TeXRA runs are found on Re-check.
 
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the
