@@ -28,6 +28,7 @@ import {
   createProcessSession,
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
+import { seedReport } from '@test/support/runRecordSeeds';
 import { launchAgentCliSession } from '@tools/agentCliShared';
 import { createChildRun } from '@tools/delegation/childRun';
 
@@ -409,9 +410,7 @@ describe('child run progress events', () => {
         expect(yield* session.ownsRun(id)).toBe(false);
         expect(
           Exit.isFailure(
-            yield* Effect.exit(
-              getRunRecords(session, id).writeReport('unowned'),
-            ),
+            yield* Effect.exit(seedReport(session, id, 'unowned')),
           ),
         ).toBe(true);
       }),

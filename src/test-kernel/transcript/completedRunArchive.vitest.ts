@@ -17,7 +17,6 @@ vi.mock('@agent/runtime/agentLoad', async (importActual) => ({
   loadAgentSettingAndPrompts: launchMocks.loadAgent,
 }));
 
-import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -50,6 +49,7 @@ import {
 } from '@test/support/sessionTestUtils';
 import { nativeToolTestLayer } from '@test/support/nativeToolTestLayer';
 import { settleSessionEvents } from '@test/agent/progressTestUtils';
+import { seedRunRecord, seedReport } from '@test/support/runRecordSeeds';
 import { ExecutionsTool } from '@tools/ExecutionsTool';
 import {
   hasCompletedRunConversationEvidence,
@@ -236,7 +236,7 @@ describe('completedRunArchive facade', () => {
             Effect.gen(function* () {
               publishTestRunStart(session, runId);
               yield* session.settlePublications();
-              yield* getRunRecords(session, runId).writeRunRecord({
+              yield* seedRunRecord(session, runId, {
                 ...runConfig(label),
                 instruction: label,
               });
@@ -289,7 +289,7 @@ describe('completedRunArchive facade', () => {
         const runId = 'abc123abc123' as RunId;
         yield* Effect.promise(() => writeArchiveFixture(runId));
 
-        yield* getRunRecords(taskSession, runId).writeRunRecord({
+        yield* seedRunRecord(taskSession, runId, {
           ...runConfig('orchestrator'),
           instruction: 'Fix the lemma.',
         });
@@ -355,7 +355,7 @@ describe('completedRunArchive facade', () => {
         taskSession = session;
         publishTestRunStart(session, runId);
         yield* session.settlePublications();
-        yield* getRunRecords(session, runId).writeRunRecord(config);
+        yield* seedRunRecord(session, runId, config);
         session.publish([
           {
             type: 'log',
@@ -436,7 +436,7 @@ describe('completedRunArchive facade', () => {
 
         expect(resumedWriter).toHaveBeenCalledWith(runId, expect.anything());
         const released = yield* Effect.result(
-          getRunRecords(session, runId).writeReport('late write'),
+          seedReport(session, runId, 'late write'),
         );
         expect(released._tag).toBe('Failure');
         expect(

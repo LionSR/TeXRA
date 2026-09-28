@@ -11,7 +11,6 @@ import {
   type AgentConfig,
 } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { getRunRecords } from '@agent/storage/runRecords';
 import { CliUsageError, type CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import { aggregateId } from '@shared/schemas';
@@ -21,6 +20,7 @@ import { DatabaseReadFailed } from '@shared/session/database';
 import { testRuntime } from '@test/support/testProcessRuntime';
 import { createProcessSession } from '@test/support/sessionTestUtils';
 import { createTestCliContext } from '@test/cli/fixtures/cliContext';
+import { seedRunRecord as commitRunRecord } from '@test/support/runRecordSeeds';
 
 const mocks = vi.hoisted(() => ({
   assertOutputDirAvailable: vi.fn(),
@@ -143,9 +143,7 @@ async function seedRunRecord(seed: {
     ]),
   );
   if (seed.config)
-    await Effect.runPromise(
-      getRunRecords(session, RUN_ID).writeRunRecord(seed.config),
-    );
+    await Effect.runPromise(commitRunRecord(session, RUN_ID, seed.config));
   if (seed.checkpoint !== false) {
     // The snapshot's family matches the seeded category: the real retrieval
     // refuses a contradiction, so the seed must be one a run could write.

@@ -2,7 +2,6 @@ import { it } from '@effect/vitest';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, vi } from 'vitest';
 
-import { getRunRecords } from '@agent/storage';
 import {
   AgentConfigSchema,
   type AgentConfig,
@@ -28,6 +27,7 @@ import {
   useTempDirs,
 } from '@test/support/tempDirPlatform';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedRunRecord } from '@test/support/runRecordSeeds';
 import { assembleTrace } from '@transcript';
 
 const tempDirs = useTempDirs();
@@ -67,9 +67,7 @@ async function writeRun(
 ): Promise<void> {
   publishTestRunStart(session, runId);
   await Effect.runPromise(session.settlePublications());
-  await Effect.runPromise(
-    getRunRecords(session, runId).writeRunRecord(runConfigRecord),
-  );
+  await Effect.runPromise(seedRunRecord(session, runId, runConfigRecord));
   // The terminal fact is `run.end`; the view's outcome is folded from it.
   if (meta.outcome)
     await Effect.runPromise(

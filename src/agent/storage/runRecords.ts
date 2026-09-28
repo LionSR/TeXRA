@@ -12,7 +12,6 @@ import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import {
   isAgentRunRecord,
-  RunRecordSchema,
   type RunRecord,
 } from '@agent/core/definition/RunRecord';
 import type {
@@ -29,6 +28,7 @@ import {
   aggregateId,
   roundOutputsToCompileFailureSummaries,
   roundOutputsToOutputSummaries,
+  RunWorkspaceFilesSchema,
   type AggregateId,
   type DeliveredResult,
   type ResultMeta,
@@ -258,8 +258,25 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
       ),
     readReport: (): Effect.Effect<string | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.report')?.report ?? null),
+    /**
+     * The workspace files the run edited: the edits its latest `run.snapshot`
+     * restates in the loop state's workspace snapshot, the one record of
+     * them, read as one indexed row. A run with no snapshot (no ledger, or
+     * a closed run) edited nothing here.
+     */
     readWorkspaceFiles: (): Effect.Effect<string[], DatabaseReadFailed> =>
-      read((rows) => latestOfType(rows, id, 'run.workspaceFiles')?.paths ?? []),
+      session.ledger
+        .latestSnapshot(runId)
+        .pipe(
+          Effect.map((row) =>
+            RunWorkspaceFilesSchema.parse(
+              (
+                row?.payload.state.stateSlices?.workspaceSnapshot.interactions
+                  .edits ?? []
+              ).map((edit) => edit.path),
+            ),
+          ),
+        ),
     readResultMeta: (): Effect.Effect<ResultMeta | null, DatabaseReadFailed> =>
       read((rows) => latestOfType(rows, id, 'run.result')?.result ?? null),
     /** The run's terminal result ({@link runEndOf}), or null while the
@@ -286,24 +303,8 @@ export function getRunRecords(session: SessionHandle, runId: RunId) {
           output: deliveredOutput(meta, end?.output ?? workflowOutputOf(rows)),
         };
       }),
-    writeRunRecord: (record: RunRecord) =>
-      Effect.suspend(() =>
-        write({
-          type: 'run.config',
-          aggregateId: id,
-          config: RunRecordSchema.parse(record),
-        }),
-      ),
     clearReport: () =>
       write({ type: 'run.report', aggregateId: id, report: null }),
-    writeReport: (report: string) =>
-      write({ type: 'run.report', aggregateId: id, report }),
-    writeWorkspaceFiles: (paths: readonly string[]) =>
-      write({
-        type: 'run.workspaceFiles',
-        aggregateId: id,
-        paths: [...paths],
-      }),
     writeResultMeta: (result: DeliveredResult) =>
       Effect.suspend(() =>
         write({

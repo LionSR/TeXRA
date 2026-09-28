@@ -41,7 +41,7 @@ import { absentReason } from '@utils/files/fsEntryExists';
 
 import { CliUsageError } from './cliContext';
 import { cliErrorMessage } from './logSinks';
-import { cliRunStanding, readCliResumedModel } from './toolUseResumeData';
+import { cliRunStanding } from './toolUseResumeData';
 import {
   formatCliHistoryAgentLabel,
   formatCliHistorySubject,
@@ -105,6 +105,7 @@ interface CliHistoryDetails {
   readonly files: readonly RunGeneratedFile[];
   /** Whether a checkpoint file exists for this run. */
   readonly checkpointPresent: boolean;
+  /** The model the run is on; `config.model` is its launch model. */
   readonly currentModel?: string;
 }
 
@@ -207,9 +208,8 @@ export const readCliHistoryDetails = Effect.fn('cli.readCliHistoryDetails')(
       ],
       { concurrency: 8 },
     );
-    const currentModel = config
-      ? yield* readCliResumedModel(session, id, config)
-      : undefined;
+    // The model the run is on, as the view folds it for the listing too.
+    const currentModel = config ? (run?.model ?? undefined) : undefined;
     // The same rule the listing applies, from the same facts: `status` is a
     // frozen contract, so `history show` must not answer it differently from
     // `history list` for the run in the row the caller just read.

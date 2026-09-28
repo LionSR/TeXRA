@@ -12,6 +12,7 @@ import {
   publishTestRunStart,
 } from '@test/support/sessionTestUtils';
 import { setupPlatform } from '@test/support/setupPlatform';
+import { seedReport } from '@test/support/runRecordSeeds';
 
 setupPlatform({ workspacePath: '/workspace/root' });
 const baseConfig = AgentConfigSchema.parse({
@@ -138,11 +139,11 @@ describe('run registration and finalization', () => {
         );
         expect(yield* Effect.flip(register())).toBe(failure);
         const refused = yield* Effect.flip(
-          getRunRecords(session, runId).writeReport('unowned'),
+          seedReport(session, runId, 'unowned'),
         );
         expect(refused).toBeInstanceOf(Error);
         yield* session.acquireClaims(aggregateId('run', runId));
-        yield* getRunRecords(session, runId).writeReport('owned');
+        yield* seedReport(session, runId, 'owned');
         expect(yield* getRunRecords(session, runId).readReport()).toBe('owned');
       }),
   );

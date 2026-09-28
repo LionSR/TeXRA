@@ -46,6 +46,7 @@ export {
   RunRecordFieldsSchema,
   ResultMetaSchema,
   RunEndSchema,
+  RunWorkspaceFilesSchema,
   storedResultMeta,
   storedRunOutput,
   ToolUseRunEndOutputSchema,
