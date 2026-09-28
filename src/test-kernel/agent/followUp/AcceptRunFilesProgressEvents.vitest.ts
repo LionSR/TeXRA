@@ -132,6 +132,7 @@ function withStubbedFiles<A, E, R>(program: Effect.Effect<A, E, R>) {
           workspaceWrites(target, Buffer.from(content).toString('utf-8'));
           return Effect.void;
         },
+        makeDirectory: () => Effect.void,
         remove: () => Effect.void,
       }),
       Effect.provideService(FileSystem.FileSystem, {

@@ -10,7 +10,11 @@ import {
   type ResolvedTurn,
   type TurnResult,
 } from './turn.js';
-import { ContinuationSchema, type Continuation } from './message.js';
+import {
+  ContinuationSchema,
+  replayableHistory,
+  type Continuation,
+} from './message.js';
 import { sameModelOrigin } from './protocol.js';
 import { ModelError } from './errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -84,7 +88,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
-  for (const message of messages) {
+  for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
         // A settlement that carries only text keeps the plain string output

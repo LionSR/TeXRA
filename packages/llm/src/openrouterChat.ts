@@ -24,6 +24,7 @@ import {
   type TurnResult,
 } from './turn.js';
 import { decodeTurnRequest } from './turnInput.js';
+import { replayableHistory } from './message.js';
 import { sameModelOrigin } from './protocol.js';
 import {
   ModelError,
@@ -199,7 +200,7 @@ const requestBody = Effect.fn('llm.openrouterRequest')(function* (
   if (turn.system !== undefined)
     messages.push({ role: 'system', content: turn.system });
   let calls: Extract<Part, { kind: 'local-call' }>[] = [];
-  for (const message of turn.messages) {
+  for (const message of replayableHistory(turn.messages, turn)) {
     if (message.role === 'tool') {
       const toolResults = yield* chatToolResultMessages(
         message.results,

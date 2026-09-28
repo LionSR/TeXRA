@@ -24,9 +24,9 @@ import {
   type TurnResult,
 } from './turn.js';
 import { decodeTurnRequest, initialTextInput } from './turnInput.js';
+import { replayableHistory } from './message.js';
 import { JsonObjectSchema, sameModelOrigin } from './protocol.js';
-import { ModelError, enrichModelError } from './errors.js';
-import { sdkModelError } from './errors.js';
+import { ModelError, enrichModelError, sdkModelError } from './errors.js';
 import {
   ownedAbortSafeRequest,
   parseInboundToolArguments,
@@ -303,7 +303,7 @@ const invocationBody = Effect.fn('llm.anthropic.invocationBody')(function* (
   const messages: MessageParam[] = [];
   let calls: Extract<TurnResult['content'][number], { kind: 'local-call' }>[] =
     [];
-  for (const message of turn.messages) {
+  for (const message of replayableHistory(turn.messages, origin)) {
     if (message.role === 'user') {
       messages.push({
         role: 'user',
