@@ -68,6 +68,7 @@ import {
   type RunExit,
 } from './runProgram';
 import { dispatchPendingResponse } from './toolUseDispatch';
+import { openingHooks, stopHooks } from './hooks';
 import { stepFor, type RunSystem } from './step';
 import { applyPendingModelSwitch, modelSwitchPort } from './modelSwitch';
 import { roundLoop, roundsContinuation } from './rounds';
@@ -272,8 +273,10 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (Exit.isFailure(media)) return yield* Effect.failCause(media.cause);
         content.push(...media.value.parts);
         if (userRequest) content.push({ kind: 'text', text: userRequest });
+        const hooked = yield* openingHooks(run, opening, userRequest);
+        content.push(...hooked.parts);
         workspace = AgentWorkspaceState.create();
-        return { bound, content, offered: step.rows };
+        return { bound, content, offered: [...step.rows, ...hooked.rows] };
       }),
     );
     const activated = run.opening?.activated ?? [];
@@ -635,22 +638,19 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
         if (turn.outcome === 'cancelled') {
           return finish(state, RUN_OUTCOME.CANCELLED);
         }
-        // The turn's trace rows publish fire-and-forget while the ledger
-        // appends here, so the `waiting` row would commit ahead of them and
-        // the fold would drop this turn's stream rows, parking a run with no
-        // answer in its transcript. Settling this run's publications (by run
-        // id: a session-wide settle misses this run's rollback) orders the
-        // two paths. Its failure ends the run through the failure path, whose
-        // terminal row carries the `artifact-drain` marker while the drain
-        // that decides it still finds the lost fact.
+        // The turn's trace rows publish fire-and-forget, so `waiting` would
+        // commit ahead of them and the fold would drop its stream rows,
+        // parking a run with no answer. Settling this run's publications (by
+        // run id: a session-wide settle misses its rollback) orders the two. A
+        // failure ends the run, the `artifact-drain` marker on its last row.
         yield* session.settlePublications(runId, { consume: false });
-        // The turn boundary: the snapshot precedes the steps in one batch, so
-        // a viewer cut at either step sees the fields, and a stop between the
-        // turn and its wait cannot leave the turn unended. The `waiting` step
-        // parks the run (one run model, 3.3), so the streaming rows still open
-        // close in its batch: a parked transcript never streams. The invoker
-        // owns `lastError`; this snapshot does not restate it.
+        // The turn boundary, in one batch: a completed turn's Stop hooks, then
+        // the snapshot before the steps, so a viewer cut at either step sees
+        // the fields and a stop between turn and wait cannot leave it unended.
+        // `waiting` parks the run (one run model, 3.3), so open streaming rows
+        // close here. The invoker owns `lastError`; the snapshot omits it.
         state = yield* cell.append([
+          ...(yield* stopHooks(run, turn, response)),
           ...snapshot(state, {}),
           positionRow(runId, state, 'turn.end'),
           ...session.streamClosureFacts(runId),
