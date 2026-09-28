@@ -359,7 +359,9 @@ export function executeAgent(
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        approvalPromptsUnavailable:
+          options.approvalPromptsUnavailable === true ||
+          options.session.interactions.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
         parentOffered: options.parentOffered,
       },
@@ -519,7 +521,9 @@ export function resumeToolUseFromResumeData(
       modelCompatibilityKey: resume.modelCompatibilityKey,
       session: runSession,
       toolPolicy: {
-        approvalPromptsUnavailable: options.approvalPromptsUnavailable,
+        approvalPromptsUnavailable:
+          options.approvalPromptsUnavailable === true ||
+          runSession.interactions.approvalPromptsUnavailable,
       },
     });
     return yield* runFlowWithLifecycle(

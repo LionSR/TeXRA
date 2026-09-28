@@ -161,8 +161,8 @@ export function createDesktopHostRequests(
   });
   const runActions = runtime.runSync(
     createHostRunActions({
+      ...run, // this window's launcher and output opener
       session,
-      runValidated: run.runValidated,
       loadModelOptions: () =>
         withProcessServices(
           runtime,

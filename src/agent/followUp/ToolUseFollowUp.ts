@@ -1,13 +1,18 @@
-import { Effect, Fiber } from 'effect';
+import { Cause, Effect, Fiber } from 'effect';
 /** Tool-use follow-up routing and continuation ownership. */
 
 import {
   classifyRun,
   type RunClassification,
 } from '@agent/runtime/runClassification';
+import { AgentEngine } from '@agent/runtime/AgentEngine';
+import type { ResumeRunResult } from '@agent/runtime/resumeRun';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import {
+  presentRunFailure,
+  trackTerminalResultPresentation,
+} from '@agent/runtime/terminalResultToast';
 import { withLogChannel } from '@logger/effectLog';
-import { AgentResume } from '@platform/interfaces';
 import { ownerPid, type RunId } from '@shared/schemas';
 import {
   runHeldMessage,
@@ -97,46 +102,109 @@ export function presentFollowUpResult(
 
 const CHANNEL = 'ToolUseFollowUp';
 
+const RESUME_REFUSED: ResumeRunResult = { failed: 'not_resumable' };
+
 /**
- * Wake a recovery lease whose follow-up row is already durable. The wake
- * owns its settlement: a declined or faulted attempt releases the lease here,
- * so whoever starts it — a submitter that stays to collect the answer, or one
- * that does not — the next attempt can claim it. {@link submitFollowUp}
- * dispatches it detached for exactly that.
+ * The resume every automatic wake and every host's Resume takes: the one
+ * resume (`resumeClaimedRun`) on the session that holds the run, started on
+ * the fork the session's launches run on, so the attempt belongs to the
+ * session and outlives a caller that stops waiting. It reaches that resume
+ * through {@link AgentEngine}, because a resumed run's child loop wakes its
+ * parent through here in turn.
+ *
+ * What the run did not take is told to the user here, once: a refusal by its
+ * reason, a fault as a failure unless the run's own terminal result already
+ * presented it. A fault answers as a refusal, so the caller reads one fact:
+ * whether the run took the resume. A recovery it did not take goes back for
+ * the next attempt. The attempt is cancelled for good once the run has left
+ * the session's view: a run id deleted and re-created is not the run it was
+ * admitted for.
+ */
+export function resumeOnSession(
+  runId: RunId,
+  options: {
+    readonly session: SessionHandle;
+    readonly recovery?: FollowUpRecoveryLease;
+    /** The caller's own monotone stop (a user who stopped the run). */
+    readonly isCancellationRequested?: () => boolean;
+  },
+): Effect.Effect<ResumeRunResult> {
+  const { session, recovery } = options;
+  const attempt = Effect.suspend(() => {
+    let runMissing = false;
+    const isCancellationRequested = (): boolean => {
+      runMissing ||= session.runView(runId) === undefined;
+      return runMissing || options.isCancellationRequested?.() === true;
+    };
+    const terminalResult = trackTerminalResultPresentation(
+      session,
+      (event) => event.runId === runId,
+    );
+    return Effect.flatMap(AgentEngine, (engine) =>
+      engine.resumeClaimedRun(runId, { ...options, isCancellationRequested }),
+    ).pipe(
+      Effect.tap((result) =>
+        'failed' in result && !isCancellationRequested()
+          ? session.interactions.emit(
+              'requestShowInstruction',
+              {
+                key: 'resumeRefused',
+                message: describeFollowUpFailure(result.failed),
+                showSuppress: false,
+              },
+              { replayWhenAttached: true },
+            )
+          : Effect.void,
+      ),
+      Effect.catchCause((cause) => {
+        if (Cause.hasInterruptsOnly(cause) || isCancellationRequested())
+          return Effect.succeed(RESUME_REFUSED);
+        const error = Cause.squash(cause);
+        return Effect.logError(`Failed to resume run ${runId}`).pipe(
+          Effect.annotateLogs({ data: error }),
+          withLogChannel(CHANNEL),
+          Effect.andThen(
+            terminalResult.reportUnhandled(() =>
+              presentRunFailure(session.interactions, error, 'Resume failed: '),
+            ) ?? Effect.void,
+          ),
+          Effect.as(RESUME_REFUSED),
+        );
+      }),
+      Effect.tap((result) =>
+        Effect.sync(() => {
+          const lease = recovery && session.followUps.useRecovery(recovery);
+          if (lease && !('started' in result && result.delivered))
+            session.followUps.release(lease, 'recoverable');
+        }),
+      ),
+      Effect.ensuring(Effect.sync(terminalResult.dispose)),
+    );
+  });
+  return Effect.flatMap(session.runs.fork(attempt), Fiber.join);
+}
+
+/**
+ * Wake a recovery lease whose follow-up row is already durable: the session
+ * resumes the run on its own fork ({@link resumeOnSession}), which gives the
+ * lease back when the run does not take the resume, whether or not the
+ * caller stays for the answer. True when the run took the resume.
  */
 export function startFollowUpWake(
   runId: RunId,
   recovery: FollowUpRecoveryLease,
   session: SessionHandle,
-): Effect.Effect<boolean, never, AgentResume> {
-  return Effect.flatMap(AgentResume, (resume) =>
-    resume.tryResumeRun(runId, recovery),
-  ).pipe(
-    Effect.tap((resumed) =>
-      Effect.sync(() => {
-        if (!resumed) session.followUps.release(recovery, 'recoverable');
-      }),
-    ),
-    // A faulted attempt is `false` to this caller: the retry decision is what
-    // it asked for. This handler is what releases the lease on that path; the
-    // success path releases it in the `tap` above unless the host accepted the
-    // resume, in which case the resumed run owns it.
-    Effect.catch((error) =>
-      Effect.logWarning(`Resume attempt failed for run ${runId}`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.map(() => {
-          session.followUps.release(recovery, 'recoverable');
-          return false;
-        }),
-      ),
-    ),
+  isCancellationRequested?: () => boolean,
+): Effect.Effect<boolean> {
+  return Effect.map(
+    resumeOnSession(runId, { session, recovery, isCancellationRequested }),
+    (result) => 'started' in result && result.delivered,
   );
 }
 
 type Admission =
   | SubmitFollowUpResult
-  | { readonly resume: Effect.Effect<boolean, never, AgentResume> }
+  | { readonly resume: Effect.Effect<boolean> }
   | { status: 'no_session' };
 
 /**
@@ -152,7 +220,7 @@ function admitFollowUp(
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
   ownerSession: SessionHandle,
-): Effect.Effect<Admission, Error, AgentResume> {
+): Effect.Effect<Admission, Error> {
   return Effect.suspend(() => {
     const target = ownerSession.runs.getToolUseFollowUpTarget(runId);
 
@@ -287,20 +355,13 @@ export const submitFollowUp = Effect.fn('submitFollowUp')(function* (
   runId: RunId,
   item: FollowUpQueueInput,
   options: SubmitFollowUpOptions,
-): Effect.fn.Return<SubmitFollowUpResult, Error, AgentResume> {
+): Effect.fn.Return<SubmitFollowUpResult, Error> {
   const ownerSession = options.session;
   const dispatch = yield* admitFollowUp(runId, item, options, ownerSession);
   if ('resume' in dispatch) {
-    // The wake starts in the same step that admitted it, so an interrupt
-    // cannot leave the durable row behind a claimed lease with no host ever
-    // asked. Detached, so the wake settles that lease on its own whether or
-    // not this fiber stays to collect the answer.
-    const wake = yield* Effect.forkDetach(dispatch.resume, {
-      startImmediately: true,
-    });
-    const resumed = yield* Fiber.join(wake);
-    if (resumed) return { status: 'queued' };
-    return { status: 'queued', wake: 'failed' };
+    return (yield* dispatch.resume)
+      ? { status: 'queued' }
+      : { status: 'queued', wake: 'failed' };
   }
   if (dispatch.status === 'no_session') {
     return {

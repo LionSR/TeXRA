@@ -14,7 +14,6 @@ import type {
 } from '@agent/runtime/childRunLoop';
 import { Runs } from '@agent/runtime/runRegistry';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
-import { AgentResume } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   aggregateTarget,
@@ -25,7 +24,6 @@ import {
   AgentCategory,
 } from '@shared/schemas';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-import { fakeHostAgentResume } from '@test/support/setupPlatform';
 import {
   createProcessSession,
   publishTestRunStart,
@@ -418,7 +416,7 @@ describe('child run progress events', () => {
             ),
           ),
         ).toBe(true);
-      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
+      }),
   );
 
   it.effect(
@@ -471,7 +469,7 @@ describe('child run progress events', () => {
         expect(
           yield* getRunRecords(session, childRunId).readRunEnd(),
         ).toMatchObject({ outcome: 'failed' });
-      }).pipe(Effect.provideService(AgentResume, fakeHostAgentResume)),
+      }),
   );
 
   // A stopped child ends cancelled: the loop observes its own stop (its

@@ -8,7 +8,6 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 
 // Local imports
 import { withLogChannel } from '@logger/effectLog';
-import { AgentResume } from '@platform/interfaces';
 import type { AcceptCopyMeta, RunId } from '@shared/schemas';
 import type { HostRequest } from '@shared/session/hostRequest';
 import type { HostRequestFailure } from '@shared/session/requestErrors';
@@ -26,20 +25,18 @@ const CHANNEL = 'ProgressWorkflowFileActions';
 type ProgressWorkflowFileActionsState = RunOutputsSource;
 
 /**
- * What a file action runs on: the process `FileSystem` its run-storage reads
- * take, and the resume port the accepted-edit follow-up is delivered through.
- * Both hosts' request dispatchers already carry them, so an action is
- * `yield*`ed there rather than settled here.
- */
-type FileActionServices = FileSystem.FileSystem | AgentResume;
-
-/**
  * One file action. Its failure channel is the host's own vocabulary: every
  * host answers a request with a tag ({@link HostRequestFailure}), so a
  * refusal a host already worded — the desktop error notice is one — travels
- * as itself and no arm re-enters a runtime to settle this.
+ * as itself and no arm re-enters a runtime to settle this. It runs on the
+ * process `FileSystem` its run-storage reads take, which both hosts' request
+ * dispatchers already carry, so it is `yield*`ed there, not settled here.
  */
-type FileAction<A> = Effect.Effect<A, HostRequestFailure, FileActionServices>;
+type FileAction<A> = Effect.Effect<
+  A,
+  HostRequestFailure,
+  FileSystem.FileSystem
+>;
 
 interface ProgressWorkflowFileActionsHost {
   compareFiles(baseFile: string, editedFile: string): FileAction<void>;
@@ -61,10 +58,7 @@ interface ProgressWorkflowFileActionsControllerDeps {
   host: ProgressWorkflowFileActionsHost;
   /** Storage root of the session whose runs this controller acts on. */
   storageRoot: string;
-  sendFollowUp(
-    stream: RunId,
-    text: string,
-  ): Effect.Effect<void, never, AgentResume>;
+  sendFollowUp(stream: RunId, text: string): Effect.Effect<void>;
 }
 
 export class ProgressWorkflowFileActionsController {

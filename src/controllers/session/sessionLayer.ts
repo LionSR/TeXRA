@@ -43,6 +43,7 @@ import {
   executeAgent,
   resumeToolUseFromResumeData,
 } from '@agent/runtime/executeAgent';
+import { resumeClaimedRun } from '@agent/runtime/resumeRun';
 import { EditorModel } from '@agent/runtime/run/modelBinding';
 import { createSessionApprovals } from '@agent/runtime/runApprovalQueue';
 import { RunRegistry } from '@agent/runtime/runRegistry';
@@ -72,10 +73,8 @@ import {
 } from '@platform/processRuntime';
 import {
   AgentDirectories,
-  AgentResume,
   AppState,
   ToolMissingReporter,
-  type AgentResumePort,
   type ToolMissingHandler,
 } from '@platform/interfaces';
 import { LanguageModel, type LanguageModelPort } from '@platform/languageModel';
@@ -216,7 +215,6 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
       const identity = yield* ProcessIdentity;
       const ledger = yield* RunLedger;
       const inquiryRecords = yield* InquiryRecords;
-      const agentResume = yield* AgentResume;
       const view = yield* SessionViewService;
       const local = yield* LocalRuntimeSource;
       const inputs = yield* SessionInputs;
@@ -502,7 +500,6 @@ const sessionHandleLayer = (key: SessionKey, held: HeldSessions) =>
             { ...eventLog, removeRun },
             local.ref,
             inquiryRecords,
-            agentResume,
           ),
           now,
         };
@@ -991,12 +988,6 @@ interface ProcessRuntimeOptions {
   readonly pluginLayers?: HostPluginLayers;
   readonly secrets: PlatformSecrets;
   /**
-   * The root's agent-resume port, served as `AgentResume`: the same value the
-   * root wires into its platform, required of every entry even where it always
-   * answers `false` (the agent package's embedder default).
-   */
-  readonly agentResume: AgentResumePort;
-  /**
    * The host's agent-directory layer, which can capture AppState at construction
    * without exposing that dependency in its readers.
    */
@@ -1104,7 +1095,6 @@ export function installProcessRuntime({
   appState,
   auth,
   languageModel,
-  agentResume,
   agentDirectories,
   toolMissingReporter,
   setup,
@@ -1132,14 +1122,17 @@ export function installProcessRuntime({
     Secrets.layer(secrets),
     SupabaseAuth.layer(auth),
     LanguageModel.layer(languageModel),
-    AgentResume.layer(agentResume),
     Layer.provideMerge(agentCatalogFollower, agentDirectories),
     toolMissingReporter === undefined
       ? Layer.empty
       : ToolMissingReporter.layer(toolMissingReporter),
     SetupPlatform.layer(setup),
     toolRegistryLayer(mcpConfigPath, pluginLayers),
-    Layer.succeed(AgentEngine)({ executeAgent, resumeToolUseFromResumeData }),
+    Layer.succeed(AgentEngine)({
+      executeAgent,
+      resumeToolUseFromResumeData,
+      resumeClaimedRun,
+    }),
     editorModel === undefined
       ? Layer.empty
       : Layer.succeed(EditorModel)(editorModel),

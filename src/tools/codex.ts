@@ -35,7 +35,6 @@ import type { Runs } from '@agent/runtime/runRegistry';
 import type { ChildRunPort } from '@agent/runtime/childRunLoop';
 import { ToolCall } from '@agent/runtime/ToolCall';
 import { formatDelivery } from '@agent/runtime/deliveryEnvelope';
-import type { AgentResume } from '@platform/interfaces';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import type {
   CodexApprovalPolicy,
@@ -462,12 +461,7 @@ const runCodex = Effect.fn('CodexTool.run')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  | ToolCall
-  | Runs
-  | CodexThreads
-  | AgentResume
-  | ChildProcessSpawner
-  | FileSystem.FileSystem
+  ToolCall | Runs | CodexThreads | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const toolCall = yield* ToolCall;
   const sandboxMode = yield* codexSandboxMode(input, toolCall.roots);
@@ -520,7 +514,7 @@ const launchCodexSession = Effect.fn('codex.launchCodexSession')(function* (
 ): Effect.fn.Return<
   ToolResult,
   ToolError,
-  ToolCall | Runs | AgentResume | ChildProcessSpawner | FileSystem.FileSystem
+  ToolCall | Runs | ChildProcessSpawner | FileSystem.FileSystem
 > {
   const { roots } = yield* ToolCall;
   const thread = yield* createCodexThread(

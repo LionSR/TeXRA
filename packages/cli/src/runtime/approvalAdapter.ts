@@ -26,6 +26,7 @@ import type { SessionView } from '@shared/session/sessionView';
 import { type ToolEditApprovalRequest } from '@tools/approval/toolEditApproval';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import {
+  cliToolUseApprovalOptions,
   settleExecutable,
   settleHumanInputDenial,
   settleRetry,
@@ -315,6 +316,11 @@ export function createHeadlessCliHostInteractions(
 
   return {
     emit: hooks.emit,
+    // What the session withholds on every run it launches or resumes.
+    get approvalPromptsUnavailable() {
+      return cliToolUseApprovalOptions(session, context)
+        .approvalPromptsUnavailable;
+    },
     presentToolEdit(request) {
       previews.set(request.permission.requestId, request);
     },

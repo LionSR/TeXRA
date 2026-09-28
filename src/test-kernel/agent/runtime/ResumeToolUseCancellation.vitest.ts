@@ -156,6 +156,8 @@ const LANE_SESSION = {
       catch: ensureError,
     }),
   status: {},
+  // A surface that can present approval prompts.
+  interactions: { approvalPromptsUnavailable: false },
   settlePublications,
   commitRunEnd: SessionHandle.prototype.commitRunEnd,
 } as never;
@@ -256,6 +258,34 @@ describe('resumeToolUseFromResumeData cancellation handoff', () => {
           yield* Effect.flip(resumeToolUseFromResumeData(snapshot)),
         ).toBeInstanceOf(ResumeSessionUnavailableError);
         expect(mocks.buildAgentLaunchContext).not.toHaveBeenCalled();
+      }),
+  );
+
+  it.effect(
+    'withholds approval-gated tools on a resume when the session surface cannot present prompts',
+    () =>
+      Effect.gen(function* () {
+        // An automatic resume passes no approval option: the fact is the
+        // session's, as an embedder with no approval channel declares it.
+        const runId = 'e80490' as RunId;
+        mocks.buildAgentLaunchContext.mockResolvedValueOnce(
+          buildResumeContext(runId),
+        );
+        mocks.runToolUse.mockReturnValueOnce(Effect.succeed(completedTurn()));
+        yield* Effect.provide(
+          resumeOnLane(createToolUseResumeData({ runId }), {
+            session: {
+              ...(LANE_SESSION as object),
+              interactions: { approvalPromptsUnavailable: true },
+            } as never,
+          }),
+          fakeProcessServices(),
+        ).pipe(Effect.ignore);
+        expect(mocks.buildAgentLaunchContext).toHaveBeenCalledWith(
+          expect.objectContaining({
+            toolPolicy: { approvalPromptsUnavailable: true },
+          }),
+        );
       }),
   );
 

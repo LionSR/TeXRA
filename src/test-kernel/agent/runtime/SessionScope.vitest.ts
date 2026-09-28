@@ -4,7 +4,6 @@ import { describe, expect } from 'vitest';
 
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { TraceEmitter } from '@agent/trace';
-import { AgentResume } from '@platform/interfaces';
 import { MESSAGE_TYPES } from '@shared/schemas';
 import { closeSessionOf } from '@test/support/sessionEnd';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
@@ -142,10 +141,6 @@ describe('sendFollowUp host-path session routing', () => {
             {
               session: processSession,
             },
-          ).pipe(
-            Effect.provideService(AgentResume, {
-              tryResumeRun: () => Effect.succeed(false),
-            }),
           ),
         ).toEqual({ status: 'queued', wake: 'failed' });
 
@@ -160,10 +155,6 @@ describe('sendFollowUp host-path session routing', () => {
             {
               session: testDefaultSession(),
             },
-          ).pipe(
-            Effect.provideService(AgentResume, {
-              tryResumeRun: () => Effect.succeed(false),
-            }),
           ),
         ).toEqual({
           status: 'failed',

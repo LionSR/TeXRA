@@ -23,7 +23,6 @@ import {
   type ChildRunPort,
   type ChildRunStrategy,
 } from '@agent/runtime/childRunLoop';
-import type { AgentResume } from '@platform/interfaces';
 import { RUN_OUTCOME } from '@shared/schemas';
 
 /** The strategy wiring a launch site supplies inside the guard. */
@@ -92,7 +91,7 @@ export function startDetachedChildRunLoop<
 ): Effect.Effect<
   { completion: Fiber.Fiber<TTurn | undefined, Error> },
   Error,
-  R | Runs | AgentResume
+  R | Runs
 > {
   return runWithLaunchGuard(
     input.session,

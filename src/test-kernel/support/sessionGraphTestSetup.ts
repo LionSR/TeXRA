@@ -10,7 +10,6 @@ import { unprobedToolAvailability } from './toolAvailabilityTestLayer';
 import { createFakeWorkspaceRoots } from './FakePlatform';
 import {
   fakeHostAgentDirectories,
-  fakeHostAgentResume,
   fakeHostAppState,
   fakeHostAuth,
   fakeHostLanguageModel,
@@ -64,7 +63,6 @@ const runtime = installProcessRuntime({
   // answers signed-out.
   auth: fakeHostAuth,
   languageModel: fakeHostLanguageModel,
-  agentResume: fakeHostAgentResume,
   agentDirectories: AgentDirectories.layer(fakeHostAgentDirectories),
   setup: fakeSetupPlatform,
   toolAvailability: unprobedToolAvailability,

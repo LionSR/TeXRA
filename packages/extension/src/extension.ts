@@ -26,7 +26,6 @@ import { setApiKey as apiSetApiKey } from '@commands/api/apiKeyCommands';
 import { signIn as authSignIn } from '@commands/auth/authCommands';
 import { openGettingStarted } from '@commands/system/walkthroughCommands';
 import { createSampleProjectWithoutWorkspace } from '@commands/system/sampleProjectCommands';
-import { tryResumeFromResumeData } from '@commands/agent/resumeFromResumeData';
 import { isFileNotFoundError } from '@common/errors';
 import { WORKSPACE_STORAGE_LAYOUT } from '@common/storage/storageLayout';
 import {
@@ -74,7 +73,7 @@ import { effectDiagnosticsLayer } from '@logger/effectDiagnostics';
 import { withLogChannel } from '@logger/effectLog';
 import { setLogSink } from '@logger/logSink';
 import { AppState } from '@platform/interfaces';
-import type { AgentResumePort, ToolMissingHandler } from '@platform/interfaces';
+import type { ToolMissingHandler } from '@platform/interfaces';
 import {
   withProcessServices,
   type ProcessRuntime,
@@ -196,22 +195,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
   }).pipe(
     Effect.catch((error) => Effect.succeed(unavailableSupabaseAuth(error))),
   );
-  // The resume port closes over the runtime installed just below and is only
-  // invoked after activation has returned, served as `AgentResume`. It
-  // resumes into the workspace path's default session; the credential-only
-  // path never opens one, and no resume request arrives there.
-  const agentResume: AgentResumePort = {
-    tryResumeRun: (runId, recovery) => {
-      const session = tryDefaultSession();
-      return session
-        ? tryResumeFromResumeData(runId, runtime, session, recovery)
-        : Effect.die(
-            new Error(
-              'The credential-only activation has no session to resume into.',
-            ),
-          );
-    },
-  };
   // Usage logging is a runtime service that runs without Supabase sign-in.
   const extensionVersion =
     typeof context.extension.packageJSON?.version === 'string'
@@ -231,7 +214,6 @@ const initVscodePlatform = Effect.fn('initVscodePlatform')(function* (
     // The editor's LM API on the workspace path, unavailable on the
     // credential-only one. The one defaulting site for this host.
     languageModel: extras.languageModel ?? UNAVAILABLE_LANGUAGE_MODEL_PORT,
-    agentResume,
     agentDirectories: agentDirectoriesLayer(context.extensionPath),
     toolMissingReporter: extras.toolMissingHandler,
     setup: vscodeSetupPlatform,

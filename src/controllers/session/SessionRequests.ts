@@ -36,7 +36,6 @@ import type {
   SessionApprovals,
   SessionRequests,
 } from '@agent/runtime/runApprovalQueue';
-import { AgentResume, type AgentResumePort } from '@platform/interfaces';
 import {
   aggregateId as qualifyAggregateId,
   requestParksItsCaller,
@@ -84,7 +83,6 @@ export function sessionRequests(
   log: SessionRequestLog,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
   inquiryRecords: Context.Service.Shape<typeof InquiryRecords>,
-  agentResume: AgentResumePort,
 ): SessionRequests {
   /**
    * One in-process serial lane per request id. `decideRequest`'s checked
@@ -111,7 +109,6 @@ export function sessionRequests(
     ).pipe(
       Effect.provideService(InquiryRecords, inquiryRecords),
       Effect.provideService(Runs, session.runs),
-      Effect.provideService(AgentResume, agentResume),
     );
   });
   const removeRun = Effect.fn('SessionRequests.removeRun')(function* (
@@ -209,7 +206,7 @@ function decide(
   req: Extract<RuntimeRequest, { kind: 'request.decide' }>,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-): Effect.Effect<Outcome, RequestError, InquiryRecords | AgentResume> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords> {
   // A run whose owner is gone (proved dead, or a claim already released)
   // takes no append until this process holds its claim: the decision
   // acquires it with the fencing resume uses and gives it back, so a later
@@ -348,7 +345,7 @@ function handle(
   log: SessionRequestLog,
   admitted: AggregateState,
   local: SubscriptionRef.SubscriptionRef<LocalRuntimeState>,
-): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs | AgentResume> {
+): Effect.Effect<Outcome, RequestError, InquiryRecords | Runs> {
   switch (req.kind) {
     case 'run.stop':
       return Effect.gen(function* () {

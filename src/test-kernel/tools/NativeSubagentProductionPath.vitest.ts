@@ -60,13 +60,7 @@ import {
 // Local imports - shared/runtime boundaries
 import { submitFollowUp } from '@agent/followUp/ToolUseFollowUp';
 import { launchDesktopAgent } from '@desktop/main/desktopAgentLaunch';
-import {
-  AgentDirectories,
-  AgentResume,
-  AgentResumeFailed,
-  AppState,
-  type RecoveryContinuation,
-} from '@platform/interfaces';
+import { AgentDirectories, AppState } from '@platform/interfaces';
 import { withProcessServices } from '@platform/processRuntime';
 import {
   RUN_OUTCOME,
@@ -91,7 +85,6 @@ import {
 } from '@test/support/tempDirPlatform';
 import {
   fakeHostAgentDirectories,
-  fakeHostAgentResume,
   setupPlatform,
   type FakeHost,
 } from '@test/support/setupPlatform';
@@ -317,32 +310,6 @@ function scriptedBoundModel(
   };
 }
 
-function resumePersistedRun(
-  runId: RunId,
-  recovery?: RecoveryContinuation,
-): Effect.Effect<boolean, AgentResumeFailed> {
-  // The port's contract, not convenience: the fixture answers with the
-  // program the port declares, and records its ordering inside it.
-  return Effect.tryPromise({
-    try: async () => {
-      resumedRuns.push(runId);
-      const resumed = await testRuntime().runPromise(
-        resumeRun(runId, {
-          session,
-          recovery,
-        }),
-      );
-      return 'started' in resumed && resumed.delivered;
-    },
-    catch: (cause) =>
-      new AgentResumeFailed({
-        runId,
-        message: 'Fixture resume failed.',
-        cause,
-      }),
-  });
-}
-
 async function integrationPlatform(): Promise<FakeHost> {
   const host = await createTempDirPlatform('texra-9531-production-', tempDirs);
   const agentsDir = await makeTempDir('texra-9531-agents-', tempDirs);
@@ -357,7 +324,6 @@ async function integrationPlatform(): Promise<FakeHost> {
   ]);
   return {
     ...host,
-    agentResume: { tryResumeRun: resumePersistedRun },
     platform: {
       ...host.platform,
       agentDirectories: {
@@ -647,7 +613,20 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
     publishTestRunStart(session, OUTER_RUN_ID);
     await Effect.runPromise(session.settlePublications());
     childId = undefined;
+    // Every wake: an admission that claimed the run's recovery.
     resumedRuns = [];
+    const followUps = session.followUps;
+    const submitBatch = followUps.submitBatch.bind(followUps);
+    vi.spyOn(followUps, 'submitBatch').mockImplementation((runId, ...rest) =>
+      submitBatch(runId, ...rest).pipe(
+        Effect.tap((submitted) =>
+          Effect.sync(() => {
+            if (submitted.kind === 'queued' && submitted.lease)
+              resumedRuns.push(runId);
+          }),
+        ),
+      ),
+    );
     parentFiber = undefined;
   });
 
@@ -797,7 +776,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
           {
             session,
           },
-        ).pipe(Effect.provide(AgentResume.layer(fakeHostAgentResume)));
+        );
         yield* Effect.promise(() =>
           waitForPersistedResult(runId, 'Recovered result D.'),
         );
@@ -1055,7 +1034,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
               deliveryId,
             },
             { session },
-          ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+          );
         }
         yield* session.settlePublications();
         const afterReplay = JSON.stringify(
@@ -1074,7 +1053,7 @@ describe('native subagent production delivery path', { retry: 2 }, () => {
             deliveryId: `${deliveryId}:other`,
           },
           { session },
-        ).pipe(Effect.provideService(AgentResume, fakeHostAgentResume));
+        );
         yield* waitForParentTurns(2);
         yield* session.settlePublications();
         const afterDistinct = JSON.stringify(

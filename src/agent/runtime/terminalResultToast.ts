@@ -30,9 +30,15 @@ function isChildResult(session: SessionHandle, event: ResultEvent): boolean {
   return run !== undefined && run.parentId !== null;
 }
 
+/** The terminal-result presenters attached to each session (see
+ *  {@link attachTerminalResultToast}): a failure is presented by one only
+ *  while one is attached. */
+const presenters = new WeakMap<SessionHandle, number>();
+
 /**
  * Track whether a matching terminal result has already claimed failure
- * presentation for a caller that otherwise needs a direct fallback.
+ * presentation for a caller that otherwise needs a direct fallback: an
+ * abort, or a classified failure with a presenter attached to show it.
  */
 export function trackTerminalResultPresentation(
   session: SessionHandle,
@@ -47,7 +53,8 @@ export function trackTerminalResultPresentation(
       if (!matches(event)) return;
       handled =
         event.error?.kind === 'abort' ||
-        (!isChildResult(session, event) &&
+        ((presenters.get(session) ?? 0) > 0 &&
+          !isChildResult(session, event) &&
           event.error !== undefined &&
           agentErrorPresentation(event.error) !== null);
     }),
@@ -103,9 +110,17 @@ export function attachTerminalResultToast(
   interactions: SessionHostInteractions,
   options: { replayWhenAttached?: boolean } = {},
 ): () => void {
-  return session.onResult((event) =>
+  presenters.set(session, (presenters.get(session) ?? 0) + 1);
+  const detach = session.onResult((event) =>
     !event.error || isChildResult(session, event)
       ? Effect.void
       : presentAgentFailure(interactions, event.error, options),
   );
+  let detached = false;
+  return () => {
+    if (detached) return;
+    detached = true;
+    presenters.set(session, (presenters.get(session) ?? 1) - 1);
+    detach();
+  };
 }
