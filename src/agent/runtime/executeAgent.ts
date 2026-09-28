@@ -277,8 +277,6 @@ interface SubagentRunOptions {
   parentRunId?: RunId;
   /** Fires on meaningful progress: todo changes and tool call milestones. */
   onProgress?: (update: SubagentProgressUpdate) => void;
-  /** Hide tools whose approval prompts cannot be answered in this host mode. */
-  approvalPromptsUnavailable?: boolean;
   /**
    * What the parent's step offered when it launched this fresh delegated
    * child, which the child can only narrow. A resume is held to its own
@@ -358,8 +356,8 @@ export function executeAgent(
       session: options.session,
       ownApiKeyFallback: options.ownApiKeyFallback,
       toolPolicy: {
+        // The session's host decides whether an approval can be asked.
         approvalPromptsUnavailable:
-          options.approvalPromptsUnavailable === true ||
           options.session.interactions.approvalPromptsUnavailable,
         stopAfterCycle: options.stopAfterCycle,
         parentOffered: options.parentOffered,
@@ -521,7 +519,6 @@ export function resumeToolUseFromResumeData(
       session: runSession,
       toolPolicy: {
         approvalPromptsUnavailable:
-          options.approvalPromptsUnavailable === true ||
           runSession.interactions.approvalPromptsUnavailable,
       },
     });

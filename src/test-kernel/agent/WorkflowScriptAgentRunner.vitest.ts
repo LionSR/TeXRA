@@ -668,7 +668,6 @@ describe('createWorkflowScriptAgentRunner', () => {
       expect(mocks.preparedOptions[0]).toEqual(
         expect.objectContaining({
           parentRunId: runId,
-          approvalPromptsUnavailable: true,
           configPayload: expect.objectContaining({
             agent: 'correct',
             agentSource: 'builtInWorkflow',

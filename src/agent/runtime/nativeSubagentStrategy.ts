@@ -46,7 +46,6 @@ export interface ChildRunLaunchOptions {
   /** The launching run: the child's parent edge. */
   readonly parentRunId: RunId;
   readonly session: SessionHandle;
-  readonly approvalPromptsUnavailable?: boolean;
   /**
    * What the parent's step offered, which a fresh child can only narrow; a
    * resumed child is held to its own record.
@@ -168,7 +167,6 @@ export function createNativeSubagentStrategy(
           const executeOptions: ExecuteAgentOptions = {
             ...params.resume?.options,
             session: params.session,
-            approvalPromptsUnavailable: params.approvalPromptsUnavailable,
             parentOffered: params.parentOffered,
             onApprovalPolicyDenial: params.onApprovalPolicyDenial,
             onRunResolved: params.onRunResolved,
