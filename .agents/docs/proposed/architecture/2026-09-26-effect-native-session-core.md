@@ -801,14 +801,26 @@ Most of the shrunk move had already landed or does not pay.
   resources for. Routing the SDK through it would add three switches to save
   one call.
 - **Process fibers**: the reprobe and the app-signal listeners are already
-  `forkScoped`; the last two process-lifetime `forkDetach` calls (the
-  extension's welcome and the desktop's unopened-projects dialog) moved onto
-  the activation and process scopes. The watcher fibers are owned by their VS
-  Code disposables and stay.
-- **`AppSignals` finalizer: not done.** `emitAppSignal` is synchronous and is
-  called from secret stores and VS Code callbacks that hold no Effect context,
-  so a tag would sit beside the module reference, not replace it, and the
-  hub holds nothing once its subscribers are interrupted.
+  `forkScoped`; the extension's welcome and the desktop's unopened-projects
+  dialog were the startup-time `forkDetach` calls and moved onto the
+  activation and process scopes. The watcher fibers are owned by their VS Code
+  disposables and stay. Two desktop `forkDetach` calls remain on purpose, each
+  started by one user action: the setup run in `desktopOnboardingIpc.ts`
+  (it outlives the card action, and its run stops when the sessions close at
+  shutdown) and the browser sign-in attempt in `desktopSupabaseAuth.ts`.
+  Moving them onto `processScope` means threading that scope, which only the
+  startup program holds, through both factories' options for a fiber the
+  process exit ends anyway. The per-command `forkDetach` calls under
+  `packages/extension/src/commands` and `frontend` are the same class.
+- **`AppSignals` finalizer: not done.** The desktop and CLI secret stores emit
+  inside `Effect.ensuring`, so they could take a hub from the context. The
+  other emitters cannot: the VS Code callbacks and command handlers in
+  `extension.ts` and the settings view, and the plain synchronous code in
+  `src/tools` (`AcceptRunFilesTool`, `ApplyTeamTool`, `PollingSourceBase`,
+  `RunSubscriptionRegistry`) and `desktopProgressFileActions.ts` hold no
+  Effect context, and `emitAppSignal` stays synchronous for them. A service
+  hub would sit beside the module reference for those callers, not replace
+  it, and the hub holds nothing once its subscribers are interrupted.
 - **Owner-id nonce: deferred.** The second-graph guard stays, so nothing
   consumes the nonce yet. Adding it now would also strand a disposed graph's
   leases as `alive` in a live process, where today the same id reclaims them.
