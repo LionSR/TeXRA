@@ -16,7 +16,11 @@ import {
   attachProviderError,
   attachSdkUsageRoute,
 } from '@common/errors/sdkError/errorMetadata';
-import { isModelScopedRateLimitBody } from '@common/errors/sdkError/errorInspection';
+import {
+  getErrorClassNames,
+  isModelScopedRateLimitBody,
+} from '@common/errors/sdkError/errorInspection';
+import { causeChain } from '@common/errors/errorPredicates';
 import {
   isProviderErrorAutoRetryable,
   normalizeProviderError,
@@ -45,10 +49,10 @@ export interface ModelRouteVerdict {
   readonly exhaustionReason: ExhaustionReason | undefined;
   /**
    * The failure carries evidence about a shared wire route (provider +
-   * credential + endpoint): a transport failure, a 5xx/408 server failure, or
-   * a rate limit without an explicit model scope — that one uses its own
-   * recovery scope. A 409, retryable per request, stays node-local: a
-   * conflict does not imply the route is unhealthy.
+   * credential + endpoint): a transport failure with network evidence, a
+   * 5xx/408 server failure, or a rate limit without an explicit model scope —
+   * that one uses its own recovery scope. A 409, retryable per request, stays
+   * node-local: a conflict does not imply the route is unhealthy.
    */
   readonly wireRouteFailure: boolean;
   /** The provider's own `retry-after` guidance, as the package read it. */
@@ -76,6 +80,27 @@ function isPackageContextOverflow(error: ModelError): boolean {
 }
 
 /**
+ * The package labels every non-HTTP, non-parse failure `transport`, including
+ * local ones (a stale persistent socket, a bug in stream handling). Only a
+ * failure whose cause chain shows the network itself (an errno or undici code,
+ * an SDK connection or timeout class, a bare `fetch failed`) is evidence about
+ * the shared route; the rest is the caller's own to retry.
+ */
+function hasNetworkEvidence(error: ModelError): boolean {
+  return causeChain(error.cause).some((link) => {
+    const { code, message } = link as { code?: unknown; message?: unknown };
+    return (
+      (typeof code === 'string' && /^(?:E[A-Z]+|UND_ERR_\w+)$/.test(code)) ||
+      (typeof message === 'string' &&
+        /^(?:fetch failed|failed to fetch)$/i.test(message.trim())) ||
+      getErrorClassNames(link).some((name) =>
+        /(?:Connection|Timeout)Error$/.test(name),
+      )
+    );
+  });
+}
+
+/**
  * Reads a failed attempt on `bound`. The bound route is the credential route
  * the attempt ran under: SuperGrok and Kimi Code share their API-key host, so
  * it is the only signal that separates a subscription quota failure from a key
@@ -98,7 +123,13 @@ export function classifyModelFailure(
   }
   attachSdkUsageRoute(error, bound.usageRoute);
   const formatted = normalizeProviderError(error);
-  const statusCode = packageError?.status ?? formatted.statusCode;
+  // A sub-400 package status (an SSE 200 carrying an error body) never
+  // outranks the status the body resolves to.
+  const packageStatus = packageError?.status;
+  const statusCode =
+    packageStatus !== undefined && packageStatus >= 400
+      ? packageStatus
+      : (formatted.statusCode ?? packageStatus);
   const withPackageFacts: ProviderError = {
     ...formatted,
     provider: bound.config.provider,
@@ -146,7 +177,8 @@ export function classifyModelFailure(
       exhaustionReason: getExhaustionReason(withPackageFacts),
       wireRouteFailure:
         rateLimitScope === 'wire' ||
-        packageError?.kind === 'transport' ||
+        (packageError?.kind === 'transport' &&
+          hasNetworkEvidence(packageError)) ||
         statusCode === StatusCodes.REQUEST_TIMEOUT ||
         (statusCode !== undefined && statusCode >= 500),
       retryAfterMs: packageError?.retryAfterMs,
