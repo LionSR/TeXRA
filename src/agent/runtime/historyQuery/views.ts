@@ -47,9 +47,14 @@ SELECT
     json_extract(s.data, '$.identity.tool')
   ) AS name,
   json_extract(s.data, '$.category') AS category,
-  (SELECT json_extract(c.data, '$.config.model') FROM events c
-    WHERE c.run_id = s.run_id AND c.type = 'run.config'
-    ORDER BY c.position DESC LIMIT 1) AS model,
+  COALESCE(
+    (SELECT json_extract(m.data, '$.model') FROM events m
+      WHERE m.run_id = s.run_id AND m.type = 'run.model'
+      ORDER BY m.position DESC LIMIT 1),
+    (SELECT json_extract(c.data, '$.config.model') FROM events c
+      WHERE c.run_id = s.run_id AND c.type = 'run.config'
+      ORDER BY c.position DESC LIMIT 1)
+  ) AS model,
   (SELECT json_extract(x.data, '$.description') FROM events x
     WHERE x.run_id = s.run_id AND x.type = 'run.description'
     ORDER BY x.position DESC LIMIT 1) AS description,
@@ -162,7 +167,7 @@ export const HISTORY_VIEW_SUMMARY = `- runs(id, parent_id, kind, name, category,
 - run_tree(ancestor_id, id, depth) - every ancestor of every run; depth 1 is the direct parent.
 - messages(position, run_id, at, role, text) - user turns and assistant replies, role 'user' or 'assistant'.
 - tool_calls(position, run_id, call_id, tool, input, status, result, started_at, ended_at) - input and result are JSON text; status/result are NULL while the call is open.
-- usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model turn.
+- usage(position, run_id, at, input_tokens, output_tokens, cache_read_input_tokens, reasoning_tokens, cost) - one row per priced model call (turns and compaction summaries).
 - todos(run_id, item, content, status) - each run's current task list.
 - events(position, run_id, type, at, data) - every row above is derived from this: the session's display rows, data as JSON text.
 Times are ISO-8601 UTC text. Order by position for load order.`;

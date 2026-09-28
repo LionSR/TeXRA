@@ -52,19 +52,24 @@ function pinRunWorkingDirectory(
  * The `run.config` row an activation owes, or null when the run's newest
  * row already says it. A run's configuration is written with its
  * registration and afterwards only when it changes, so the newest row is the
- * configuration and no activation restates it. Its callers hold the run's
- * claim (an activation after registration, the loop's model switch), so no
- * other writer can move the row between the read and the write.
+ * configuration and no activation restates it. Its model stays the one the
+ * run was launched with: the model the run is on is its snapshot's, which a
+ * resume's configuration carries and this row never restates. Its caller
+ * holds the run's claim, so no other writer can move the row between the
+ * read and the write.
  */
 export const configChange = Effect.fn('configChange')(function* (
   session: SessionHandle,
   runId: RunId,
   config: RunRecord,
 ) {
-  const next = RunRecordFieldsSchema.parse(
-    pinRunWorkingDirectory(config, session.roots.workspace),
-  );
   const stored = yield* getRunRecords(session, runId).readRunRecord();
+  const next = RunRecordFieldsSchema.parse(
+    pinRunWorkingDirectory(
+      stored?.model === undefined ? config : { ...config, model: stored.model },
+      session.roots.workspace,
+    ),
+  );
   if (stored !== null && stableStringify(stored) === stableStringify(next))
     return null;
   return {

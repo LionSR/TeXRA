@@ -47,7 +47,7 @@ export const LISTING_GROUP = `aggregate_id, type, json_extract(data, '$.fact.key
  * `json_patch` drops the fields a response left out. Every display read
  * unions it in; a ledger read never sees it.
  */
-export const USAGE_ROWS = `(
+const USAGE_ROWS = `(
 SELECT e."commit" AS "commit", e.aggregate_id AS aggregateId, e.seq,
   'usage.1' AS type, e.origin AS origin, e.at,
   json_object('usage', json_patch('{}', json_object(
@@ -90,6 +90,30 @@ WHERE cost > 0
 )`;
 
 /**
+ * The `run.model` rows no run stores, projected from its `flow.snapshot`
+ * rows: one at each snapshot whose `modelId` differs from the one before it,
+ * so a run that never switched projects none and reads its launch model from
+ * `run.config`. Each keeps its snapshot's envelope.
+ */
+const MODEL_ROWS = `(
+SELECT "commit", aggregateId, seq, 'run.model.1' AS type, origin, at,
+  json_object('model', model) AS data
+FROM (
+  SELECT e."commit" AS "commit", e.aggregate_id AS aggregateId, e.seq,
+    e.origin AS origin, e.at,
+    json_extract(e.data, '$.payload.runtime.modelId') AS model,
+    LAG(json_extract(e.data, '$.payload.runtime.modelId')) OVER (
+      PARTITION BY e.aggregate_id ORDER BY e.seq) AS previous
+  FROM event e WHERE e.type = 'flow.snapshot.1'
+)
+WHERE previous IS NOT NULL AND model IS NOT previous
+)`;
+
+/** Every projected display row: a run's spend and its model changes. */
+export const PROJECTED_ROWS = `(SELECT * FROM ${USAGE_ROWS}
+UNION ALL SELECT * FROM ${MODEL_ROWS})`;
+
+/**
  * One `usage` row per run for the listing: the envelope of the run's newest
  * priced row and, as its `data`, every priced row's data in commit order,
  * which {@link totalRunUsage} sums. A fold takes it as the run's spend
@@ -107,7 +131,8 @@ GROUP BY aggregateId
 )`;
 
 /** The listing: each run's latest listing rows, its open requests and
- *  queued follow-ups, and its spend (`RUN_USAGE`), in commit order. */
+ *  queued follow-ups, its spend (`RUN_USAGE`) and its current model where
+ *  it switched (`MODEL_ROWS`), in commit order. */
 export const READ_LISTING = `
 WITH latest AS (
   SELECT aggregate_id, type, MAX(seq) AS seq FROM event
@@ -135,6 +160,10 @@ WITH latest AS (
   )
   UNION ALL
   SELECT * FROM ${RUN_USAGE}
+  UNION ALL
+  SELECT "commit", aggregateId, seq, type, origin, at, data FROM (
+    SELECT *, MAX("commit") FROM ${MODEL_ROWS} GROUP BY aggregateId
+  )
 )
 SELECT * FROM selected
 ORDER BY "commit"

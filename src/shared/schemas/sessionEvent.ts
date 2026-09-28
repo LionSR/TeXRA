@@ -305,6 +305,8 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   /** What the run runs with, written at registration and then only when it
    *  changes: the newest row is the configuration every reader reads. */
   durable('run.config', { config: RunRecordFieldsSchema }),
+  /** A run's snapshot model where it changes, projected (`MODEL_ROWS`); never stored. */
+  durable('run.model', { model: z.string().min(1) }),
   /**
    * The parent edge severed: a child promoted to the top level by a stop
    * that detaches its children. The only fact after `run.start` that moves

@@ -307,6 +307,7 @@ function scriptedBoundModel(
       config.name,
     ]),
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 

@@ -239,6 +239,7 @@ function testBoundModel(): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -423,6 +424,10 @@ function agentRunTestLayer(init: LoopInit) {
         finalToolName: null,
         structured: { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },

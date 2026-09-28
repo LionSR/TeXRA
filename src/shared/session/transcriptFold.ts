@@ -351,7 +351,8 @@ export function foldTranscriptEvent(
   if (phase !== null) moveBoundary(d, phase);
   // The model a later priced turn ran on, in row order: a statistics row
   // reads the model of its own turn, not the run's newest.
-  else if (event.type === 'run.config') d.ix.model = event.config.model;
+  else if (event.type === 'run.config') d.ix.model ??= event.config.model;
+  else if (event.type === 'run.model') d.ix.model = event.model;
   else if (isTranscriptEvent(event)) {
     record(d, event);
     // A transcript event writes at most one slot; its position is the row's

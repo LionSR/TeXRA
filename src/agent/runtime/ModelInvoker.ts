@@ -29,7 +29,6 @@ import {
   type FileSystem,
   Layer,
   Result,
-  Scope,
   Stream,
   SynchronizedRef,
 } from 'effect';
@@ -84,7 +83,6 @@ import { estimateInputTokensOrNull } from './run/estimateInputTokens';
 import {
   backgroundDelivery,
   bindModel,
-  releaseBindingUploads,
   type BoundModel,
 } from './run/modelBinding';
 import { classifyModelFailure, type ModelFailure } from './run/modelFailure';
@@ -861,36 +859,41 @@ export const modelInvokerLayer = (): Layer.Layer<
         })(attemptOnce(cell, invocation, request, bound, operationId));
       };
 
-      /** Rebuild the model binding a retry runs on. */
+      /** Rebind a retry, retiring the failed binding; a failure keeps it, loudly. */
       const rebind = (
         selection: RetryCredentials,
         failed: BoundModel,
         declinedRoutes: readonly DeclinableUsageRoute[],
       ) =>
-        SynchronizedRef.updateEffect(run.model, (current) =>
-          Effect.gen(function* () {
+        run
+          .swapModel((current) =>
             // A switch may have landed while the panel waited; never undo it.
-            if (current !== failed) return current;
-            // A personal-key retry leaves the failed route's overlay behind
-            // (subscription window, prices, PDF admission, a Kimi coding
-            // endpoint) and binds the catalog model.
-            const config =
-              selection === 'personal'
-                ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
-                : failed.config;
-            const next = yield* bindModel({
-              config,
-              stores: run.stores,
-              compatibilityKey: failed.compatibilityKey,
-              declinedRoutes,
-              agentCategory: run.config.agentCategory,
-              temperature: run.setting.temperature,
-            }).pipe(Scope.provide(run.scope));
-            yield* releaseBindingUploads(current.model, current.modelId);
-            logger.debug('Refreshed model binding before manual retry');
-            return next;
-          }),
-        );
+            current !== failed
+              ? Effect.succeed(current)
+              : bindModel({
+                  // A personal-key retry leaves the failed route's overlay
+                  // behind (subscription window, prices, PDF admission, a
+                  // Kimi coding endpoint) and binds the catalog model.
+                  config:
+                    selection === 'personal'
+                      ? (MODEL_CONFIGS[failed.modelId] ?? failed.config)
+                      : failed.config,
+                  stores: run.stores,
+                  compatibilityKey: failed.compatibilityKey,
+                  declinedRoutes,
+                  agentCategory: run.config.agentCategory,
+                  temperature: run.setting.temperature,
+                }),
+          )
+          .pipe(
+            Effect.catch((error) =>
+              Effect.sync(() =>
+                logger.warn('Failed to refresh the model binding', {
+                  data: error,
+                }),
+              ),
+            ),
+          );
 
       type Decision = 'retry' | 'deny' | 'cancel';
 
@@ -1028,17 +1031,8 @@ export const modelInvokerLayer = (): Layer.Layer<
               : declined;
           // Always rebuild the binding: a key or preference may have changed
           // while the panel waited, and a personal answer declines the offered
-          // route. A rebind that fails leaves the binding as it is, loudly.
-          yield* rebind(selection, failed, declinedRoutes).pipe(
-            Effect.catch((error) =>
-              Effect.sync(() =>
-                logger.warn(
-                  'Failed to refresh the model binding before retry',
-                  { data: error },
-                ),
-              ),
-            ),
-          );
+          // route.
+          yield* rebind(selection, failed, declinedRoutes);
           yield* cell.append((state) =>
             retryRows(runId, state, pendingRetry('authorized'), {
               lastError: info,
@@ -1221,6 +1215,12 @@ export const modelInvokerLayer = (): Layer.Layer<
               { data: failure.info.message },
             );
             yield* Effect.sleep(RETRY_BACKOFF_MS);
+            // A failed turn (or 55 minutes' age) kills a socket: reacquire it.
+            const failed = yield* SynchronizedRef.get(run.model);
+            if (failed.persistentConnection) {
+              const { declinedRoutes } = yield* cell.current;
+              yield* rebind('configured', failed, declinedRoutes);
+            }
             continue;
           }
           if (

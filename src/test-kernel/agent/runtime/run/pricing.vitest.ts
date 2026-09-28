@@ -68,6 +68,7 @@ const boundAnthropic: BoundModel = {
   wireRouteKey: 'test-route',
   modelRetryRouteKey: 'test-route/test-model',
   backgroundCapable: false,
+  persistentConnection: false,
 };
 
 function anthropicUsage(breakdown: {

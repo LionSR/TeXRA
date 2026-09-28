@@ -102,6 +102,7 @@ function testBoundModel(overrides: Partial<BoundModel> = {}): BoundModel {
     wireRouteKey: 'test-route',
     modelRetryRouteKey: 'test-route/test-model',
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -323,6 +324,10 @@ function agentRunTestLayer(init: LoopInit) {
         finalToolName: init.finalToolName ?? null,
         structured: init.structured ?? { value: undefined },
         model,
+        swapModel: (next) =>
+          SynchronizedRef.updateAndGetEffect(model, (current) =>
+            Effect.scoped(next(current)),
+          ),
         scope,
         declinedRoutes: [],
         pendingModelSwitch: { value: null },

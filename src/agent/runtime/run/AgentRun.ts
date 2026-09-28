@@ -8,7 +8,7 @@
  * the loop and the invoker take it from context.
  */
 import { MODEL_CONFIGS } from 'llm-zoo';
-import { Context, Effect, Layer, Scope, SynchronizedRef } from 'effect';
+import { Context, Effect, Exit, Layer, Scope, SynchronizedRef } from 'effect';
 
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type {
@@ -124,8 +124,20 @@ export interface AgentRunShape {
   /** The value the terminal tool captured, read by the loop at its exit. A
    *  plain slot: the tool's capture callback is synchronous. */
   readonly structured: { value: JsonValue | undefined };
-  /** The run's live model binding; a mid-run switch replaces it. */
+  /** The run's live model binding; replaced only through `swapModel`. */
   readonly model: SynchronizedRef.SynchronizedRef<BoundModel>;
+  /**
+   * Replace the binding: `next` binds into a scope of its own, forked from
+   * the run's, and the binding it returns goes into force; the retired
+   * binding's scope closes at once, releasing its socket, ping fiber and
+   * uploads. `next` returning the binding it was handed keeps it, and a
+   * failure or interruption closes the fork and leaves the binding as it
+   * was. The one writer of `model`: a switch, a manual retry's rebind and a
+   * reacquired connection all come through here.
+   */
+  readonly swapModel: <E, R>(
+    next: (current: BoundModel) => Effect.Effect<BoundModel, E, R>,
+  ) => Effect.Effect<BoundModel, E, Exclude<R, Scope.Scope>>;
   /**
    * Subscription routes this run must not bind: the launch's own-API-key
    * fallback, plus every retry the user answered with their own key. The
@@ -136,12 +148,9 @@ export interface AgentRunShape {
   readonly declinedRoutes: readonly DeclinableUsageRoute[];
   /**
    * The run's scope: a parallel-strategy child of the layer's, closed when
-   * the run's layer is released. A model bound mid-run (a manual retry's
-   * rebind, a host-admitted switch) is acquired into it, so an editor model
-   * or uploaded file it holds retires with the run. Parallel, so a run that
-   * replaced its binding repeatedly closes every retained release — each
-   * already bounded — concurrently, instead of paying one release per
-   * replaced binding in sequence.
+   * the run's layer is released. What the run holds for its whole life (its
+   * plugins, its step, the binding in force) is a child of it, so they close
+   * together rather than one after another.
    */
   readonly scope: Scope.Scope;
   /**
@@ -186,9 +195,8 @@ export const agentRunLayer = (
       const { logger, config } = ctx;
       const ledger = yield* RunLedger;
       const layerScope = yield* Effect.scope;
-      // One parallel child holds every binding the run acquires: at close,
-      // each replaced binding's remaining release runs concurrently under
-      // its own deadline rather than one after another.
+      // One parallel child holds what the run holds for its life; at close
+      // each release runs concurrently under its own deadline.
       const scope = yield* Scope.fork(layerScope, 'parallel');
 
       const { setting } = ctx;
@@ -295,6 +303,10 @@ export const agentRunLayer = (
       // writes the user's stored preferences.
       const declinedRoutes =
         persisted?.declinedRoutes ?? launchDeclinedRoutes(ctx);
+      // Each binding owns a scope forked from the run's; only the one in
+      // force is open. `bindingScope` is written only inside the ref's
+      // update, which serializes every swap.
+      let bindingScope = yield* Scope.fork(scope);
       const bound = yield* bindModel({
         config: modelConfig,
         stores: ctx.stores,
@@ -303,8 +315,27 @@ export const agentRunLayer = (
         declinedRoutes,
         agentCategory: config.agentCategory,
         temperature: setting.temperature,
-      }).pipe(Scope.provide(scope));
+      }).pipe(Scope.provide(bindingScope));
       const model = yield* SynchronizedRef.make(bound);
+      const swapModel: AgentRunShape['swapModel'] = (next) =>
+        SynchronizedRef.updateAndGetEffect(model, (current) =>
+          Effect.gen(function* () {
+            const fork = yield* Scope.fork(scope);
+            const replacement = yield* next(current).pipe(
+              Scope.provide(fork),
+              Effect.onExit((exit) =>
+                Exit.isSuccess(exit) && exit.value !== current
+                  ? Effect.void
+                  : Scope.close(fork, Exit.void),
+              ),
+            );
+            if (replacement === current) return current;
+            const retired = bindingScope;
+            bindingScope = fork;
+            yield* Scope.close(retired, Exit.void);
+            return replacement;
+          }),
+        );
       const pendingModelSwitch: { value: string | null } = { value: null };
 
       return {
@@ -328,6 +359,7 @@ export const agentRunLayer = (
         finalToolName,
         structured,
         model,
+        swapModel,
         declinedRoutes,
         scope,
         pendingModelSwitch,

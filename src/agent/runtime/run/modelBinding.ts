@@ -137,6 +137,9 @@ export interface BoundModel {
   readonly modelRetryRouteKey: string;
   /** The binding can run a turn as background work (submit + observe). */
   readonly backgroundCapable: boolean;
+  /** One connection a failed turn invalidates (the Responses WebSocket): the
+   *  invoker rebinds before it tries again. */
+  readonly persistentConnection: boolean;
 }
 
 interface BindModelInput {
@@ -852,6 +855,7 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
       requestedModel,
     ),
     backgroundCapable: false,
+    persistentConnection: false,
   };
 });
 
@@ -872,28 +876,6 @@ const withReasoningLevelOverride = Effect.fn('withReasoningLevelOverride')(
     };
   },
 );
-
-/**
- * Delete every file this binding uploaded. Idempotent: a second call finds
- * nothing. A delete the provider refuses or leaves unanswered is logged and
- * left to the upload's own expiry; it never fails.
- */
-export function releaseBindingUploads(
-  model: Model,
-  modelId: string,
-): Effect.Effect<void> {
-  const release = model.releaseUploads;
-  if (release === undefined) return Effect.void;
-  return release().pipe(
-    Effect.flatMap((unreleased) =>
-      unreleased.length === 0
-        ? Effect.void
-        : Effect.logWarning(
-            `Could not delete ${unreleased.length} uploaded file(s) when the ${modelId} binding closed; the provider expires them on its own.`,
-          ).pipe(Effect.annotateLogs({ unreleased })),
-    ),
-  );
-}
 
 /**
  * Bind one model for a run. The route is `resolveModelRoute`'s one decision,
@@ -938,6 +920,7 @@ export const bindModel = Effect.fn('bindModel')(function* (
       supportsForcedToolChoice: true,
       ...routeKeys([requested.provider, 'validation'], requested.fullName),
       backgroundCapable: false,
+      persistentConnection: false,
     };
   }
   if (
@@ -996,11 +979,22 @@ export const bindModel = Effect.fn('bindModel')(function* (
           try: () => constructModel(configuration, credential),
           catch: ensureError,
         });
-  // Uploads live only in this model's memory. They are deleted when a
-  // switch or retry replaces the binding, and again when the run's scope
-  // closes (a second release retries IDs the first pass did not confirm).
-  if (model.releaseUploads !== undefined) {
-    yield* Effect.addFinalizer(() => releaseBindingUploads(model, config.name));
+  // Uploads live only in this model's memory: they are deleted when the
+  // binding's scope closes. A delete the provider refuses or leaves
+  // unanswered is logged and left to the upload's own expiry.
+  const release = model.releaseUploads;
+  if (release !== undefined) {
+    yield* Effect.addFinalizer(() =>
+      release().pipe(
+        Effect.flatMap((unreleased) =>
+          unreleased.length === 0
+            ? Effect.void
+            : Effect.logWarning(
+                `Could not delete ${unreleased.length} uploaded file(s) when the ${config.name} binding closed; the provider expires them on its own.`,
+              ).pipe(Effect.annotateLogs({ unreleased })),
+        ),
+      ),
+    );
   }
   const origin: ModelOrigin = {
     protocol: configuration.protocol,
@@ -1039,5 +1033,6 @@ export const bindModel = Effect.fn('bindModel')(function* (
     ),
     // The socket carries one turn at a time and submits no background work.
     backgroundCapable: !onWebSocket && backgroundCapable(configuration),
+    persistentConnection: onWebSocket,
   };
 });

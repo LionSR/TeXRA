@@ -191,6 +191,7 @@ function boundModel(): BoundModel {
     wireRouteKey: 'wire',
     modelRetryRouteKey: 'wire:gpt54',
     backgroundCapable: false,
+    persistentConnection: false,
   };
 }
 
@@ -277,6 +278,10 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
+    swapModel: (next) =>
+      SynchronizedRef.updateAndGetEffect(model, (current) =>
+        Effect.scoped(next(current)),
+      ),
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: pendingSwitch },

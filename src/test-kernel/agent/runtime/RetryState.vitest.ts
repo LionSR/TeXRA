@@ -238,6 +238,7 @@ function boundModel(
       'gpt54',
     ]),
     backgroundCapable: false,
+    persistentConnection: false,
     ...overrides,
   };
 }
@@ -295,6 +296,10 @@ function agentRun(
     finalToolName: null,
     structured: { value: undefined },
     model,
+    swapModel: (next) =>
+      SynchronizedRef.updateAndGetEffect(model, (current) =>
+        Effect.scoped(next(current)),
+      ),
     scope: Scope.makeUnsafe(),
     declinedRoutes: [],
     pendingModelSwitch: { value: null },

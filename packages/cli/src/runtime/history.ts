@@ -568,10 +568,9 @@ const toCliHistoryEntry = Effect.fn('history.toCliHistoryEntry')(function* (
     id: entry.id,
     timestamp: entry.timestamp,
     agent: config.agent,
-    // The model the run is on: a model switch rewrites the record in the
-    // ledger batch that commits the new model, so the record and the
-    // checkpoint `history show` reads name the same model.
-    model: config.model,
+    // The model the run is on, as the listing folds it from the run's
+    // snapshots; the record keeps the model it was launched with.
+    model: entry.model ?? config.model,
     status,
     resumable,
     inputBasename,
