@@ -144,9 +144,6 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
 interface ProbeLane {
   readonly attempt: SharedAttempt<readonly ExternalToolCheckResult[], never>;
   pendingRerun: boolean;
-  /** Callers in the lane: it leaves its map when the last one settles, as a
-   *  `withPerKeyLane` lane does. */
-  callers: number;
 }
 
 /**
@@ -201,25 +198,24 @@ export const toolAvailabilityLayer: Layer.Layer<
         const lane = lanes.get(key) ?? {
           attempt: new SharedAttempt(),
           pendingRerun: false,
-          callers: 0,
         };
         lanes.set(key, lane);
-        lane.callers += 1;
         // The latch resets in the segment that claims the slot, not on the
         // detached fiber: a caller joining before that fiber's first step
         // must not have its rerun wiped.
         lane.pendingRerun = lane.attempt.inFlight;
-        return lane.attempt
-          .run(() => probeUntilSettled(lane, inputs))
-          .pipe(
+        // The lane leaves its map when its detached attempt settles, not when
+        // its callers do: while the probe runs, a later caller joins it
+        // rather than starting a second probe that could finish first.
+        return lane.attempt.run(() =>
+          probeUntilSettled(lane, inputs).pipe(
             Effect.ensuring(
               Effect.sync(() => {
-                lane.callers -= 1;
-                if (lane.callers === 0 && lanes.get(key) === lane)
-                  lanes.delete(key);
+                if (lanes.get(key) === lane) lanes.delete(key);
               }),
             ),
-          );
+          ),
+        );
       });
     return {
       results,

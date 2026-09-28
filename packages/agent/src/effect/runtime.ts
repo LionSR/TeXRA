@@ -169,22 +169,25 @@ export const acquireProcess = (
 > =>
   Effect.acquireRelease(
     processChanges.withPermit(
-      // The first-install tool switches every host's bootstrap seeds, before
-      // any hold is taken: the opt-in plugins stay off until the embedder
-      // switches them on. A store that cannot be read or written is a
-      // platform defect, not a conflict the embedder can handle.
-      seedDisabledToolDefaults(platform.roots.globalState).pipe(
-        Effect.orDie,
-        Effect.andThen(
-          Effect.try({
-            try: () => composeProcess(platform),
-            catch: (thrown) => thrown,
-          }),
-        ),
+      Effect.try({
+        try: () => composeProcess(platform),
+        catch: (thrown) => thrown,
+      }).pipe(
         Effect.catch((thrown) =>
           thrown instanceof PlatformConflict
             ? Effect.fail(thrown)
             : Effect.die(thrown),
+        ),
+        // The first-install tool switches every host's bootstrap seeds, once
+        // the hold is taken: an acquisition refused as a conflict writes
+        // nothing to another embedder's store, and the opt-in plugins stay
+        // off until the embedder switches them on. A store that cannot be
+        // read or written is a platform defect; the hold it took is ended.
+        Effect.tap((hold) =>
+          seedDisabledToolDefaults(platform.roots.globalState).pipe(
+            Effect.orDie,
+            Effect.onError(() => hold.release),
+          ),
         ),
       ),
     ),

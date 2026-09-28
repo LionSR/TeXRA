@@ -295,22 +295,24 @@ export const resolveStepTools = Effect.fn('resolveStepTools')(function* (
   const resolvedNames = new Set<string>();
   const offer = (name: string, source: 'declared' | 'injected'): void => {
     if (resolvedNames.has(name) || !narrowed(name)) return;
+    // A missing dependency says so where the run declared the tool, before
+    // any other gate, so an approval-gated tool's reason is not lost to the
+    // approval notice.
+    const missing = probedOff.get(generation.entries.get(name)?.plugin ?? '');
+    if (missing !== undefined) {
+      if (source === 'declared')
+        warnings.push(
+          `Tool "${name}" is not offered: ${missing.name} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
+        );
+      return;
+    }
     if (!passesRuntimeGates(name)) return;
     const entry = enabled.get(name);
     if (!entry) {
       // A name with no registration is a configuration error (typo, or a
       // tool retired from the table): dropping it silently would strip the
       // agent's capability with no trace. One whose plugin is switched off
-      // is withheld quietly, and one whose dependency is missing says so
-      // where the run declared it; an MCP name was reported above.
-      const missing = probedOff.get(generation.entries.get(name)?.plugin ?? '');
-      if (missing !== undefined) {
-        if (source === 'declared')
-          warnings.push(
-            `Tool "${name}" is not offered: ${missing.name} is not available in this workspace${missing.statusDetail ? ` (${missing.statusDetail})` : ''}.`,
-          );
-        return;
-      }
+      // is withheld quietly; an MCP name was reported above.
       if (!table.get(name) && mcpServerOfToolName(name) === undefined)
         warnings.push(
           `${source === 'declared' ? 'Declared' : 'Injected'} tool not found in registry: ${name}`,
