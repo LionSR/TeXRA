@@ -362,6 +362,8 @@ const DisplaySessionEventDraftSchema = z.discriminatedUnion('type', [
   durable('followup.queued', {
     followUpId: z.string().min(1),
     content: FollowUpContentSchema,
+    /** Held until the sender's terminal row (#8093) or an instruction. */
+    holdUntil: z.enum(['senderEnd', 'instruction']).optional(),
   }),
   /**
    * The follow-up became the message a turn carries (C3): committed in the
@@ -541,7 +543,7 @@ export type DisplaySessionEvent = z.infer<typeof DisplaySessionEventSchema>;
  * with any change to the stored shape of `SessionEventSchema` (pinned by
  * `sessionEventFormat.vitest.ts`) or of a payload read out of untyped `data`.
  */
-export const SESSION_EVENT_FORMAT = 40;
+export const SESSION_EVENT_FORMAT = 41;
 
 export const SessionEventSchema = z.discriminatedUnion('type', [
   ...DisplaySessionEventSchema.options,

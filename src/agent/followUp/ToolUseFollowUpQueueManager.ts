@@ -21,6 +21,13 @@ import type { FollowUpRowPort } from './followUpRowPort';
 
 const CHANNEL = 'ToolUseFollowUpQueue';
 
+/** The row's hold for each live offer: what releases it to a take. */
+const HOLD_OF = {
+  immediate: undefined,
+  deferred: 'senderEnd',
+  none: 'instruction',
+} as const;
+
 /** What a producer hands the admission boundary. */
 export interface FollowUpQueueInput {
   readonly text: string;
@@ -45,13 +52,6 @@ interface QueueEntry {
   owner?: FollowUpConsumerLease;
   /** The owner's input, once its consumer attached one. */
   input?: RunInput;
-  /**
-   * Pending rows held out of this generation's takes, keyed by what frees
-   * them: `resubmit` (#8093) its producer's re-submission, `nextInput` (a
-   * `none` offer) a take that also holds an instruction. Live-only: the
-   * generation's end clears it; the next one reads them from the rows.
-   */
-  readonly deferred: Map<string, 'resubmit' | 'nextInput'>;
   /** The admission job running for this run (at most one: jobs are serial). */
   admitting: boolean;
   /** A release its owner asked for while an admission was running, applied
@@ -102,13 +102,14 @@ type FollowUpSubmission =
 
 interface FollowUpSubmitOptions {
   /**
-   * `deferred` admits the rows but holds them back from a live consumer's
-   * input: a child loop whose own finalize must land before the parent can
-   * wake (#8093) takes this path, then re-submits the same delivery id once
-   * finalization completes; the replay check finds the rows durable and
-   * pending, and the offer happens then. `immediate` (the default) offers as
-   * soon as the rows commit. `none` wakes nobody: the rows ride with the
-   * next take that holds an instruction, parked or busy.
+   * `deferred` admits the rows held until their sending run has ended
+   * (`holdUntil: 'senderEnd'`): a child loop whose own finalize must land
+   * before the parent can wake (#8093) takes this path, then re-submits the
+   * same delivery id once finalization completes, which offers the rows its
+   * terminal row has released. `immediate` (the default) offers as soon as
+   * the rows commit. `none` wakes nobody and holds the rows until a take
+   * also carries an instruction (`holdUntil: 'instruction'`), parked or busy.
+   * The hold is on the row, so it outlives this process.
    */
   readonly liveOffer?: 'immediate' | 'deferred' | 'none';
 }
@@ -277,17 +278,7 @@ export class ToolUseFollowUpQueue {
     const adopted = entry.adoptedClaim;
     entry.adoptedClaim = undefined;
     if (adopted) this.port.detach(this.releaseClaim(runId, adopted));
-    // What a take may hold: no row awaiting re-submission, and a `nextInput`
-    // row only beside an instruction, so it never starts a turn alone.
-    const held = ({ followUpId }: QueuedFollowUp) =>
-      entry.deferred.get(followUpId);
-    entry.input ??= new RunInput(() => {
-      const rows = this.port
-        .pending(runId)
-        .filter((f) => held(f) !== 'resubmit');
-      const asked = rows.some((f) => !held(f) && isInstruction(f.content));
-      return asked ? rows : rows.filter((f) => !held(f));
-    });
+    entry.input ??= new RunInput(() => this.takeable(runId));
     return entry.input;
   }
 
@@ -332,6 +323,26 @@ export class ToolUseFollowUpQueue {
     }
     this.finishTerminalize(runId, entry);
     return true;
+  }
+
+  /**
+   * What a take may hold, from the rows alone: no row whose sending run has
+   * not ended yet, and an `instruction`-held row only beside an unheld
+   * instruction, so it never starts a turn alone.
+   */
+  private takeable(runId: RunId): readonly QueuedFollowUp[] {
+    const rows = this.port
+      .pending(runId)
+      .filter(
+        ({ holdUntil, content }) =>
+          holdUntil !== 'senderEnd' ||
+          content.from.kind !== 'run' ||
+          this.port.ended(content.from.runId),
+      );
+    const asked = rows.some(
+      (f) => f.holdUntil !== 'instruction' && isInstruction(f.content),
+    );
+    return asked ? rows : rows.filter((f) => f.holdUntil !== 'instruction');
   }
 
   /** Consume, with no turn, the run's pending deliveries from `childRunId`
@@ -409,8 +420,10 @@ export class ToolUseFollowUpQueue {
         admitted.owner?.kind === 'loop' || admitted.owner?.kind === 'child';
       // Stamped inside the admission job, so the parentage a run sender's
       // relation to the recipient is read from is committed state.
+      const holdUntil = HOLD_OF[options?.liveOffer ?? 'immediate'];
       const stamped = followUps.map(({ from, ...input }): QueuedFollowUp => ({
         followUpId: input.deliveryId ?? randomUUID(),
+        ...(holdUntil ? { holdUntil } : {}),
         content: {
           text: input.text,
           displayText: input.displayText,
@@ -485,15 +498,11 @@ export class ToolUseFollowUpQueue {
           lease = this.claim(admitted, runId, 'recovery');
           owner = lease;
         }
-        if (liveOfferDeferred || options?.liveOffer === 'none') {
-          // A consumer not yet live reads the rows when its generation starts.
-          const until = liveOfferDeferred ? 'resubmit' : 'nextInput';
-          if (liveConsumer)
-            for (const { followUpId } of queued)
-              admitted.deferred.set(followUpId, until);
-        } else if (owner !== undefined) {
-          this.offer(admitted, queued);
-        }
+        // A held row is offered by whatever releases it: its sender's
+        // re-submission once that run has ended (a replay of the held row,
+        // stamped with no new hold), or the next instruction's own offer.
+        if (owner !== undefined && holdUntil === undefined)
+          admitted.input?.notify();
       }
       if (releaseClaim) {
         if (
@@ -594,13 +603,6 @@ export class ToolUseFollowUpQueue {
     });
   }
 
-  /** The rows are pending for the owner: release any it held back, and
-   *  wake its consumer. */
-  private offer(entry: QueueEntry, followUps: readonly QueuedFollowUp[]): void {
-    for (const { followUpId } of followUps) entry.deferred.delete(followUpId);
-    entry.input?.notify();
-  }
-
   /**
    * Tombstone the run: any outstanding lease is stale, the entry is gone,
    * and no producer can recreate it until an explicit claim reopens it.
@@ -680,7 +682,6 @@ export class ToolUseFollowUpQueue {
   private endInput(entry: QueueEntry): void {
     entry.input?.end();
     entry.input = undefined;
-    entry.deferred.clear();
   }
 
   private notifyReleaseObservers(runId: RunId): void {
@@ -695,7 +696,7 @@ export class ToolUseFollowUpQueue {
   }
 
   private createEntry(runId: RunId): QueueEntry {
-    const entry: QueueEntry = { deferred: new Map(), admitting: false };
+    const entry: QueueEntry = { admitting: false };
     this.entries.set(runId, entry);
     return entry;
   }

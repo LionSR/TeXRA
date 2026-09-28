@@ -64,7 +64,7 @@ type RequestState = {
 /** A follow-up queued for the run and not yet consumed, as its row holds it. */
 export type QueuedFollowUp = Pick<
   Extract<SessionEvent, { type: 'followup.queued' }>,
-  'followUpId' | 'content'
+  'followUpId' | 'content' | 'holdUntil'
 >;
 
 /**
@@ -285,7 +285,11 @@ export function applyRunRow(
       return applied({
         followUps: [
           ...rows.followUps,
-          { followUpId: row.followUpId, content: row.content },
+          {
+            followUpId: row.followUpId,
+            content: row.content,
+            ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
+          },
         ],
         followUpIds: new Set([...rows.followUpIds, row.followUpId]),
       });

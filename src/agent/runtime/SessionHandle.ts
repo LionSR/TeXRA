@@ -49,6 +49,7 @@ import type { ResponseTextProcessing } from '@latex/texraResponseTextProcessing'
 import { withLogChannel } from '@logger/effectLog';
 import { writeLogLine } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
+import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
 import {
   TEXRA_APPROVAL_POLICY_DEFAULT,
   type TexraApprovalPolicy,
@@ -332,12 +333,17 @@ export class SessionHandle {
     this.subscriptions = graph.subscriptions;
     this.runs = graph.runs;
     const run = (runId: RunId) => qualifyAggregateId('run', runId);
+    const viewOf = (runId: RunId) =>
+      SubscriptionRef.getUnsafe(graph.view).runs.get(runId);
     this.followUps = new ToolUseFollowUpQueue({
       exclusive: (job) => graph.exclusive(job),
       detach: (job) => graph.detach(() => job),
       pending: (runId) => graph.events.pendingFollowUps(run(runId)),
-      parentOf: (runId) =>
-        SubscriptionRef.getUnsafe(graph.view).runs.get(runId)?.parentId,
+      ended: (runId) => {
+        const status = viewOf(runId)?.status;
+        return status === undefined || isTerminalOutcomePhase(status);
+      },
+      parentOf: (runId) => viewOf(runId)?.parentId,
       named: (runId, followUpId) =>
         graph.events.followUpNamed(run(runId), followUpId),
       acquireClaim: (runId) => this.acquireClaims(run(runId)),
