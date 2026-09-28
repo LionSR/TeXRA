@@ -394,7 +394,6 @@ export class RunHeader extends LitElement {
     const progressTitle = getProgressBadgeTitle(
       run.conversationProgress,
       run.position,
-      run.category,
     );
 
     return html`
@@ -619,10 +618,10 @@ export class RunHeader extends LitElement {
   }
 
   private renderProgressBadge(run: RunView): TemplateResult | typeof nothing {
-    const { conversationProgress: progress, position, category } = run;
-    const content = renderProgressBadgeContent(progress, position, category);
+    const { conversationProgress: progress, position } = run;
+    const content = renderProgressBadgeContent(progress, position);
     if (content === nothing) return nothing;
-    const progressTitle = getProgressBadgeTitle(progress, position, category);
+    const progressTitle = getProgressBadgeTitle(progress, position);
     return html`<wa-tag
         id=${ELEMENT_IDS.PROGRESS_BADGE}
         class="progress-badge"

@@ -113,7 +113,7 @@ import {
   resetTranscriptOwnership,
 } from './transcriptState';
 
-import { emptySessionView, isLiveRun } from './sessionView';
+import { emptySessionView, isLiveRun, loopCoordinate } from './sessionView';
 import type { SessionView, RunView } from './sessionView';
 
 type RunStartEvent = Extract<DisplaySessionEvent, { type: 'run.start' }>;
@@ -1030,9 +1030,8 @@ function applyOwnArm(run: RunView, event: OwnEvent): RunView {
 /** The run's loop position, projected from the slice the rows folded
  *  (one run model, 3.3), moved to the phase {@link phaseMoveOf} names. */
 function withPosition(run: RunView, rows: RunRows, row: SharedRunRow) {
-  const { family, at, round, turn } = rows;
-  if (family === null || at === null) return run;
-  const position = { family, at, round, turn };
+  if (rows.family === null || rows.at === null) return run;
+  const position = loopCoordinate(rows.turn, run.category);
   const phase = phaseMoveOf(row);
   return phase === null
     ? { ...run, position }

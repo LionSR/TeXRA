@@ -24,7 +24,7 @@ import type { z } from 'zod';
 
 export type Message = z.infer<typeof MessageSchema>;
 
-export type ToolUseFlowState = RunSnapshotPayload['state'];
+export type ToolUseLoopState = RunSnapshotPayload['state'];
 
 export function rowAggregate(runId: RunId) {
   return qualifyAggregateId('run', runId);
@@ -101,13 +101,13 @@ export interface SnapshotPatch {
       'modelId' | 'modelCompatibilityKey' | 'lastError' | 'declinedRoutes'
     >
   >;
-  /** Defaults to the flow state the run last wrote. */
-  readonly state?: ToolUseFlowState;
+  /** Defaults to the loop state the run last wrote. */
+  readonly state?: ToolUseLoopState;
 }
 
 /**
  * The one `run.snapshot` constructor. Coordinates and runtime fields come
- * from the folded state unless the patch moves them; the flow state is the
+ * from the folded state unless the patch moves them; the loop state is the
  * one the run last wrote unless the patch rewrites it.
  */
 export function snapshotRow(
@@ -115,9 +115,9 @@ export function snapshotRow(
   state: RunState,
   patch: SnapshotPatch,
 ): RunLedgerDraft {
-  const flow = patch.state ?? state.flow;
+  const loop = patch.state ?? state.loop;
   const phase = patch.phase ?? state.phase;
-  if (flow === null || phase === null) {
+  if (loop === null || phase === null) {
     throw new Error('A run.snapshot presupposes an opened run.');
   }
   // A snapshot's model id is a required durable fact (resume and every
@@ -146,7 +146,7 @@ export function snapshotRow(
   return {
     type: 'run.snapshot',
     aggregateId: rowAggregate(runId),
-    payload: { family: 'toolUse', runtime, state: flow },
+    payload: { family: 'toolUse', runtime, state: loop },
   };
 }
 

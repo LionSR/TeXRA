@@ -81,24 +81,22 @@ const PositionAtSchema = z.enum([
 ]);
 export type PositionAt = z.infer<typeof PositionAtSchema>;
 
-/** Where the loop stands (`at`, not "step": a step is one model call), as
- *  `RunView.position` carries it: without the halt's outcome. */
-export const LoopPositionSchema = z.strictObject({
-  family: RunFamilySchema,
-  at: PositionAtSchema,
-  round: z.int().nonnegative().nullish(),
-  turn: z.int().nonnegative().nullish(),
-});
-export type LoopPosition = z.infer<typeof LoopPositionSchema>;
-
-export const RunPositionPayloadSchema = LoopPositionSchema.extend({
-  /** The loop's own terminal word. The canonical terminal fact stays
-   *  `run.end`, which also covers failures before the runtime starts. */
-  outcome: RunOutcomeSchema.nullish(),
-}).refine(
-  (p) => (p.at === 'halted') === (p.outcome != null),
-  'Only a halted position carries an outcome, and it always carries one.',
-);
+/** Where the loop stands (`at`, not "step": a step is one model call) and
+ *  its coordinates. The fold projects `RunView.position` from them. */
+export const RunPositionPayloadSchema = z
+  .strictObject({
+    family: RunFamilySchema,
+    at: PositionAtSchema,
+    round: z.int().nonnegative().nullish(),
+    turn: z.int().nonnegative().nullish(),
+    /** The loop's own terminal word. The canonical terminal fact stays
+     *  `run.end`, which also covers failures before the runtime starts. */
+    outcome: RunOutcomeSchema.nullish(),
+  })
+  .refine(
+    (p) => (p.at === 'halted') === (p.outcome != null),
+    'Only a halted position carries an outcome, and it always carries one.',
+  );
 
 /* ---------------------------------------------------------- model.message */
 

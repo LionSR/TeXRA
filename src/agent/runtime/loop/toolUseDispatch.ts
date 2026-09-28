@@ -264,7 +264,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
   const { responseId } = pending;
   const calls = localCallsOf(pending.turn);
   // The calls answer the instruction the committed state records.
-  const at = initial.flow?.instruction;
+  const at = initial.loop?.instruction;
   const userInstruction =
     run.config.rootUserInstruction ??
     (at ? stored(initial, at, z.string()) : run.config.instruction);
@@ -286,7 +286,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
    * call the resume will not run again whose effects on the run are gone.
    */
   const workspaceMutation = (state: RunState): readonly StateOperation[] => {
-    if (state.flow?.stateSlices == null) return [];
+    if (state.loop?.stateSlices == null) return [];
     return [
       {
         op: 'set',
@@ -947,14 +947,14 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     );
   }
   const group: Message = { role: 'tool', results };
-  const flow = settledState.flow;
-  if (flow === null)
+  const saved = settledState.loop;
+  if (saved === null)
     return yield* Effect.die(new Error('Delivery needs an opened run.'));
   const stateSlices =
-    flow.stateSlices === null
+    saved.stateSlices === null
       ? null
       : {
-          ...flow.stateSlices,
+          ...saved.stateSlices,
           workspaceSnapshot: workspace.toSnapshot({
             excludeAssemblyStrings: true,
           }),
@@ -964,7 +964,7 @@ export const dispatchPendingResponse = Effect.fn('toolUse.dispatch')(function* (
     ...(joined?.rows ?? []),
     snapshotRow(runId, state, {
       phase: 'results.ready',
-      state: { ...flow, stateSlices, ...joined?.recorded },
+      state: { ...saved, stateSlices, ...joined?.recorded },
     }),
     positionRow(runId, state, 'results.ready'),
   ]);

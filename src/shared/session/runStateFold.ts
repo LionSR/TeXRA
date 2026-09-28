@@ -101,8 +101,8 @@ export class RunLedgerInconsistent extends Data.TaggedError(
 }> {}
 
 /** The loop state a `run.snapshot` restores. */
-const FlowStateSchema = RunSnapshotPayloadSchema.shape.state;
-type FlowState = z.output<typeof FlowStateSchema>;
+const LoopStateSchema = RunSnapshotPayloadSchema.shape.state;
+type LoopState = z.output<typeof LoopStateSchema>;
 type Message = z.output<typeof MessageSchema>;
 
 type OpenAttempt = {
@@ -179,7 +179,7 @@ export type RunState = RunPosition & {
   readonly usage: RunUsageTotals;
   /** The turn the last `context-window` compaction (one per round) hit. */
   readonly overflowRecoveredAtTurn: number | null;
-  readonly flow: FlowState | null;
+  readonly loop: LoopState | null;
   /** The latest `tools.offered` row's set; `null` before the first. */
   readonly offeredTools: readonly OfferedTool[] | null;
   /** The plugin whose continuation the latest `tools.offered` row pinned. */
@@ -266,7 +266,7 @@ export const freshRunState = (commit: CommitOrdinal): RunState => ({
   pendingResponse: null,
   pendingIntents: byId([]),
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
+  loop: null,
   overflowRecoveredAtTurn: null,
   offeredTools: null,
   offeredContinuation: null,
@@ -316,7 +316,7 @@ const sameInvocation = (a: InvocationRef, b: InvocationRef): boolean =>
 
 /**
  * Apply a settlement's operations over the run's mutable slices, `usage` and
- * the flow `state`, and re-validate both through their schemas so the
+ * the loop `state`, and re-validate both through their schemas so the
  * state stays typed without a cast.
  */
 function applyMutations(
@@ -327,7 +327,7 @@ function applyMutations(
   if (ops.length === 0) return Result.succeed(state);
   let document: unknown = {
     usage: state.usage,
-    state: state.flow,
+    state: state.loop,
   };
   for (const op of ops) {
     const next = mutate(document, op.path, op);
@@ -343,17 +343,17 @@ function applyMutations(
   if (!usage.success) {
     return refuse('invalid-mutation', usage.error.message, commit);
   }
-  if (state.flow === null) {
+  if (state.loop === null) {
     if (document.state !== null) {
-      return refuse('invalid-mutation', 'no flow state to mutate', commit);
+      return refuse('invalid-mutation', 'no loop state to mutate', commit);
     }
     return Result.succeed({ ...state, usage: usage.data });
   }
-  const flow = FlowStateSchema.safeParse(document.state);
-  if (!flow.success) {
-    return refuse('invalid-mutation', flow.error.message, commit);
+  const loop = LoopStateSchema.safeParse(document.state);
+  if (!loop.success) {
+    return refuse('invalid-mutation', loop.error.message, commit);
   }
-  return Result.succeed({ ...state, usage: usage.data, flow: flow.data });
+  return Result.succeed({ ...state, usage: usage.data, loop: loop.data });
 }
 
 const opened = (state: RunState | null): state is RunState =>
@@ -424,7 +424,7 @@ function foldRow(current: RunState | null, row: SessionEvent): Fold | null {
         snapshotCommit: commit,
         family: p.family,
         ...p.runtime,
-        flow: p.state,
+        loop: p.state,
       });
     }
     case 'model.message': {

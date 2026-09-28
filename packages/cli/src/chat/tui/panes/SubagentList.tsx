@@ -8,10 +8,7 @@ import { useLiveNowMsSince } from '@cli/tui/useLiveNowMs';
 import { truncateSummaryToWidth } from '@cli/runtime/terminalText';
 import { AgentCategory, type RunId } from '@shared/schemas';
 import type { RunView } from '@shared/session/sessionView';
-import {
-  loopPositionLabel,
-  formatLoopPositionLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatWorkflowTally } from '@ui/copy/workflowCall';
 import { formatResultCount } from '@utils/text/stringUtils';
 
@@ -112,9 +109,7 @@ function SessionRow({
     nowMs,
   );
   const approval = pendingApprovalRowDisplay(pendingKinds);
-  const flowLabel = formatLoopPositionLabel(
-    loopPositionLabel(run.position, run.category),
-  );
+  const positionLabel = formatLoopPositionLabel(run.position);
   const modelLabel = run.parentId === null ? undefined : run.modelLabel;
   const metadataText = metadataColumn
     ? childRowMetadataText({
@@ -154,7 +149,7 @@ function SessionRow({
       <RowSegment bold={active} color={color} flexShrink={1}>
         {run.label}
         {statusLabel ? ` ${statusLabel}` : ''}
-        {flowLabel ? ` · ${flowLabel}` : ''}
+        {positionLabel ? ` · ${positionLabel}` : ''}
         {modelLabel ? ` · ${modelLabel}` : ''}
         {!metadataColumn && elapsed ? ` · ${elapsed}` : ''}
       </RowSegment>

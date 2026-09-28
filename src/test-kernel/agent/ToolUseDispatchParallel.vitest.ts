@@ -56,7 +56,7 @@ import {
   appendRow,
   rowAggregate,
   snapshotRow,
-  type ToolUseFlowState,
+  type ToolUseLoopState,
 } from '@agent/runtime/loop/rows';
 import { AgentRun, type AgentRunShape } from '@agent/runtime/run/AgentRun';
 import type { BoundModel } from '@agent/runtime/run/modelBinding';
@@ -223,7 +223,7 @@ const freshState = (): RunState => ({
   pendingIntents: {},
   requests: {},
   usage: EMPTY_RUN_USAGE_TOTALS,
-  flow: null,
+  loop: null,
   roundOutputs: [],
   overflowRecoveredAtTurn: null,
   offeredTools: null,
@@ -309,7 +309,7 @@ interface HarnessOptions {
   readonly logger?: AgentTrace;
   /** Opened with the slices a real run carries, for the cases that read the
    *  workspace a settlement persisted. */
-  readonly stateSlices?: ToolUseFlowState['stateSlices'];
+  readonly stateSlices?: ToolUseLoopState['stateSlices'];
   /** The run's binding, for the cases that read more than capabilities. */
   readonly bound?: BoundModel;
   /** A model switch waiting for the next boundary, for the upload gating. */
@@ -317,7 +317,7 @@ interface HarnessOptions {
 }
 
 /** The slices of a run that has yet to touch a file. */
-const emptySlices = (): NonNullable<ToolUseFlowState['stateSlices']> => ({
+const emptySlices = (): NonNullable<ToolUseLoopState['stateSlices']> => ({
   workspaceSnapshot: AgentWorkspaceState.create().toSnapshot({
     excludeAssemblyStrings: true,
   }),
@@ -810,7 +810,7 @@ describe('tool-use dispatch', () => {
       ]);
       // No delivery ran, so this workspace can only have come from the
       // settlement's own state operation.
-      const slices = folded!.flow?.stateSlices;
+      const slices = folded!.loop?.stateSlices;
       expect(slices?.workspaceSnapshot.interactions.edits).toEqual([
         { path: 'notes.tex', added: 3, removed: 1 },
       ]);

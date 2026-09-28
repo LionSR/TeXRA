@@ -22,10 +22,7 @@ import {
   type RunView,
 } from '@shared/session/sessionView';
 import { isTerminalOutcomePhase } from '@shared/runs/runStatus';
-import {
-  loopPositionLabel,
-  formatLoopPositionLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import { formatCompactDuration, pluralize } from '@utils/text/stringUtils';
 
 import {
@@ -250,9 +247,9 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
   } {
     const root = this.root();
     if (!root) return { line: '', state: '' };
-    // The loop's own coordinate off the fold's `flow`, in the one its family
-    // counts; a run that has not stepped yet carries none.
-    const position = loopPositionLabel(root.position, root.category);
+    // The fold's coordinate, in the one its category counts; a run whose
+    // loop has not moved yet carries none.
+    const { position } = root;
     const agentName =
       root.identity?.kind === 'agent' ? root.identity.agent : undefined;
     const plannedRounds =
@@ -260,7 +257,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
         ? this.plannedRoundsFor(agentName)
         : undefined;
     const parts: string[] = [];
-    if (position !== undefined) {
+    if (position !== null) {
       parts.push(
         `[${formatLoopPositionLabel(
           position,
@@ -274,7 +271,7 @@ class DefaultRunProgressRenderer implements RunProgressRenderer {
     const phase = livePhaseText(root);
     parts.push(subject || phase || 'Running');
     if (subject && phase && phase !== 'Running') parts.push(phase);
-    if (position === undefined && isMultiRound(plannedRounds)) {
+    if (position === null && isMultiRound(plannedRounds)) {
       parts.push(`${plannedRounds} rounds`);
     }
     const runStartedAt = root.runStartedAt ?? this.attachedAt;

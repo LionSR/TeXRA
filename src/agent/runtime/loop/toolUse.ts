@@ -57,7 +57,7 @@ import {
   snapshotRow,
   positionRow,
   type SnapshotPatch,
-  type ToolUseFlowState,
+  type ToolUseLoopState,
 } from './rows';
 import {
   loadRun,
@@ -147,8 +147,8 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   /** The family state every snapshot of this run carries. The instruction
    *  and activated skills are the folded state's: only the transaction that
    *  consumes a delivery changes them. */
-  const flowState = (state: RunState): ToolUseFlowState => {
-    const { instruction, activated } = state.flow ?? {};
+  const loopState = (state: RunState): ToolUseLoopState => {
+    const { instruction, activated } = state.loop ?? {};
     return {
       stateSlices: {
         workspaceSnapshot: workspace.toSnapshot({
@@ -165,7 +165,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     };
   };
   const snapshot = (state: RunState, patch: Omit<SnapshotPatch, 'state'>) =>
-    snapshotRow(runId, state, { ...patch, state: flowState(state) });
+    snapshotRow(runId, state, { ...patch, state: loopState(state) });
 
   const publishTouchedFiles = (): void => {
     const paths = workspace.interactions.toSnapshot().edits.map((e) => e.path);
@@ -182,9 +182,9 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
     base: () => systemPrompt,
     // The opening's before its snapshot records them.
     activated: (state) =>
-      state.flow === null
+      state.loop === null
         ? (run.opening?.activated ?? [])
-        : (state.flow.activated ?? []),
+        : (state.loop.activated ?? []),
     isChild,
   };
   const openStep = (state: RunState, kind: 'request' | 'dispatch' | 'park') =>
@@ -295,7 +295,7 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
           modelCompatibilityKey: bound.compatibilityKey,
         },
         state: {
-          ...flowState(opening),
+          ...loopState(opening),
           ...(activated.length > 0 ? { activated: [...activated] } : {}),
         },
       }),
@@ -305,17 +305,17 @@ export const runToolUse = Effect.fn('toolUse.run')(function* (
   });
 
   const restore = (state: RunState): void => {
-    const flow = state.flow;
-    if (flow === null) {
+    const saved = state.loop;
+    if (saved === null) {
       throw new Error(`Run ${runId} is not a toolUse run; resume it as one.`);
     }
-    if (flow.stateSlices)
+    if (saved.stateSlices)
       workspace = AgentWorkspaceState.fromSnapshot(
-        flow.stateSlices.workspaceSnapshot,
+        saved.stateSlices.workspaceSnapshot,
       );
-    systemPrompt = flow.system && stored(state, flow.system, z.string());
-    memoryMisses = flow.memoryMisses ?? [];
-    if (flow.structured !== undefined) run.structured.value = flow.structured;
+    systemPrompt = saved.system && stored(state, saved.system, z.string());
+    memoryMisses = saved.memoryMisses ?? [];
+    if (saved.structured !== undefined) run.structured.value = saved.structured;
     logger.debug('Resuming tool-use run from the ledger.');
   };
 

@@ -12,10 +12,7 @@ import 'katex/dist/katex.min.css';
 import '@progressView/frontend/ProgressApp';
 import { mountProgressWebview } from '@progressView/frontend/progressWebview';
 import type { ProgressApp } from '@progressView/frontend/ProgressApp';
-import {
-  loopPositionLabel,
-  formatLoopPositionLabel,
-} from '@shared/runs/runStatusDisplay';
+import { formatLoopPositionLabel } from '@shared/runs/runStatusDisplay';
 import type { TraceDocument } from '@transcript';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
@@ -44,17 +41,17 @@ function renderLoadError(err: unknown): void {
   document.querySelector('progress-app')?.replaceWith(errorRegion);
 }
 
-/** One position, as the slider's readout spells it: the single coordinate
- *  its family counts in, in the wording every run surface prints. A row
- *  carries all three coordinates, the ones its family never advances
- *  included, so reading them all would label a tool-use turn with the round
- *  and cycle it never left. */
+/** One `run.position` row, as the slider's readout spells it: its family,
+ *  where the loop stands, and the row's own turn. A row carries all three
+ *  coordinates, the ones its family never advances included, so reading
+ *  them all would label a tool-use turn with the round it never left. */
 function positionLabel(position: TracePosition): string {
-  const where = formatLoopPositionLabel(
-    // A position names its family, not its run's category: the raw coordinate.
-    loopPositionLabel(position.payload, undefined),
-  );
-  return `${position.payload.family} ${position.payload.at}${where ? ` (${where})` : ''}`;
+  const { family, at, turn } = position.payload;
+  const where =
+    turn == null
+      ? undefined
+      : formatLoopPositionLabel({ kind: 'turn', index: turn });
+  return `${family} ${at}${where ? ` (${where})` : ''}`;
 }
 
 /**
