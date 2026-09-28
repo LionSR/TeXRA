@@ -75,7 +75,7 @@ export interface StepTools {
 export interface RunSystem {
   readonly base: () => string | undefined;
   readonly catalog: () => readonly SkillCatalogEntry[];
-  readonly activated: () => readonly SkillCatalogEntry[];
+  readonly activated: (state: RunState) => readonly SkillCatalogEntry[];
   readonly isChild: () => boolean;
 }
 
@@ -242,7 +242,7 @@ const openStep = Effect.fn('Step.open')(function* (
   // An activated skill is granted while the step would list it: its plugin,
   // if any, still contributes, so one disabled or untrusted since loses it.
   const activated = runSystem
-    .activated()
+    .activated(state)
     .filter(({ plugin }) => plugin === null || contributors.has(plugin));
   const { roots } = run.session;
   for (const name of grantSkillRoots(
