@@ -942,11 +942,13 @@ export class SessionHandle {
   }
 
   /** Every committed row of one aggregate, private rows included, for the
-   *  readers that fold a keyed record or a journal over the whole aggregate. */
+   *  readers that fold a keyed record or a journal over the whole aggregate;
+   *  with `types`, only the rows of those types, through the type index. */
   readAggregate(
     id: AggregateId,
+    types?: readonly SessionEvent['type'][],
   ): Effect.Effect<readonly SessionEvent[], DatabaseReadFailed> {
-    return this.graph.aggregateRows(id);
+    return this.graph.aggregateRows(id, types);
   }
 
   /** The run aggregate's committed display rows, its projected `usage`

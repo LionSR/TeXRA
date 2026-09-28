@@ -5,8 +5,6 @@ import { withLogChannel } from '@logger/effectLog';
 import { type FlowSnapshotPayload, type RunId } from '@shared/schemas';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
-import { getRunRecords } from './runRecords';
-
 const CHANNEL = 'Resumability';
 
 /**
@@ -24,9 +22,10 @@ export type ResumabilityDecision =
  * Single storage-owned resumability decision.
  *
  * A checkpoint means exactly one thing: the run aggregate carries a
- * `flow.snapshot`, read through the indexed latest-snapshot read. The
- * terminal record is read only to prove the run's metadata is readable at
- * all: the outcome never blocks, because rows live until explicit deletion
+ * `flow.snapshot`, read through the indexed latest-snapshot read. The run's
+ * records are read only to prove its metadata is readable at all, never its
+ * whole aggregate, which the resume's claim reads once: the terminal outcome
+ * never blocks, because rows live until explicit deletion
  * (C9), so a failed or cancelled run is offered as "continue from its last
  * snapshot". Ownership is not decided here; `classifyRun`
  * (`@agent/runtime/runClassification`) combines this decision with the run
@@ -36,13 +35,11 @@ export const deriveResumability = Effect.fn('deriveResumability')(function* (
   runId: RunId,
   session: SessionHandle,
 ): Effect.fn.Return<ResumabilityDecision> {
-  const endResult = yield* getRunRecords(session, runId)
-    .readRunEnd()
-    .pipe(Effect.result);
-  if (endResult._tag === 'Failure') {
-    const error = endResult.failure;
+  const records = yield* session.readRunRecords(runId).pipe(Effect.result);
+  if (records._tag === 'Failure') {
+    const error = records.failure;
     yield* Effect.logDebug(
-      `Failed to read the terminal record for ${runId}: ${toErrorMessage(error)}`,
+      `Failed to read the run records for ${runId}: ${toErrorMessage(error)}`,
     ).pipe(withLogChannel(CHANNEL));
     return {
       kind: 'unreadable',

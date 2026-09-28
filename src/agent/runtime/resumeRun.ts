@@ -29,7 +29,7 @@ import {
 import { runHeldMessage } from '@shared/runs/runStatusDisplay';
 import { claimStanding, heldElsewhereBy } from '@shared/session/database';
 import { RunLedgerRefused } from '@shared/session/runLedger';
-import { foldRunRows } from '@shared/session/runRows';
+import { FOLLOW_UP_TYPES, foldRunRows } from '@shared/session/runRows';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { createNativeSubagentStrategy } from './nativeSubagentStrategy';
 
@@ -281,8 +281,13 @@ const runLaunchOptions = (options: ResumeRunOptions) => ({
 
 /** The follow-ups still queued on the run, folded from its durable rows. */
 const queuedFollowUps = (session: SessionHandle, runId: RunId) =>
-  Effect.flatMap(session.readAggregate(aggregateId('run', runId)), (rows) =>
-    Effect.try({ try: () => foldRunRows(rows).followUps, catch: ensureError }),
+  Effect.flatMap(
+    session.readAggregate(aggregateId('run', runId), FOLLOW_UP_TYPES),
+    (rows) =>
+      Effect.try({
+        try: () => foldRunRows(rows).followUps,
+        catch: ensureError,
+      }),
   );
 
 const warnUnreadable = (runId: RunId, failure: unknown): Effect.Effect<void> =>

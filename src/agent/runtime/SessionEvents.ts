@@ -45,6 +45,7 @@ import {
   closesRunWindow,
   foldRunRows,
   freshRunRows,
+  FOLLOW_UP_TYPES,
   isFollowUpRow,
   type RunRows,
 } from '@shared/session/runRows';
@@ -374,9 +375,10 @@ export const sessionEventsLayer = Layer.effect(
           if (aggregateTarget(aggregateId).kind !== 'run') return;
           if (!claimMoved && hydrated.has(aggregateId)) return;
           const read = foldRunRows(
-            (rows ?? (yield* log.readAggregate(aggregateId, 1))).filter(
-              isFollowUpRow,
-            ),
+            (
+              rows ??
+              (yield* log.readAggregate(aggregateId, 1, FOLLOW_UP_TYPES))
+            ).filter(isFollowUpRow),
           );
           const live = followUps.get(aggregateId) ?? freshRunRows();
           const livePending = new Set(live.followUps.map((f) => f.followUpId));

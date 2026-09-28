@@ -690,8 +690,9 @@ export function listingTypeOf(
  * never suppresses another's.
  */
 export function listingKeyOf(event: SessionEvent): string | null {
-  // A priced turn is its own fact; the listing returns every one.
-  if (event.type === 'usage') return `usage/${event.seq}`;
+  // A run's spend: the listing returns its total at its newest priced row,
+  // so one key per run orders every read's turns by commit.
+  if (event.type === 'usage') return 'usage';
   const type = listingTypeOf(event);
   if (type === null) return null;
   if (event.type === 'plugin.fact')

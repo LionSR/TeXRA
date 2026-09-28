@@ -153,9 +153,13 @@ const applied = (rows: Partial<RunRows>): RunRowVerdict => ({
 });
 
 /** The shared rows that move a run's pending input, not its position. */
+export const FOLLOW_UP_TYPES = [
+  'followup.queued',
+  'followup.consumed',
+] as const;
 type FollowUpRow = Extract<
   SharedRunRow,
-  { type: 'followup.queued' | 'followup.consumed' }
+  { type: (typeof FOLLOW_UP_TYPES)[number] }
 >;
 
 export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>

@@ -32,6 +32,7 @@ import {
   type SessionEvent,
   type UserFollowUpSupport,
 } from '@shared/schemas';
+import type { DatabaseReadFailed } from '@shared/session/database';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 import { getRunRecords, runEndFromEvents } from './runRecords';
 
@@ -77,16 +78,23 @@ export const configChange = Effect.fn('configChange')(function* (
  * The approval snapshot a run's re-activation stamps. Enforcement is the
  * session's in-memory state, so a process holding none of the run's grants
  * (a resume in a new process) first rebuilds them from the run's last
- * durable `approval.policy` (`SessionApprovals.restoreRun`) rather than
- * stamping an empty snapshot over them.
+ * durable snapshot (`SessionApprovals.restoreRun`) rather than stamping an
+ * empty snapshot over them. The durable snapshot is the run's own record,
+ * the newer of its `approval.policy` and the one its `run.start` carried.
  */
 const reactivatedApprovalPolicy = (
   session: SessionHandle,
   runId: RunId,
-): Effect.Effect<ApprovalPolicySnapshot> =>
-  session.readView([]).pipe(
-    Effect.map((view) => {
-      const durable = view.policy.get(runId);
+): Effect.Effect<ApprovalPolicySnapshot, DatabaseReadFailed> =>
+  session.readRunRecords(runId).pipe(
+    Effect.map((rows) => {
+      const latest = rows.findLast(
+        (row) => row.type === 'approval.policy' || row.type === 'run.start',
+      );
+      const durable =
+        latest?.type === 'approval.policy'
+          ? latest.snapshot
+          : latest?.approvalPolicy;
       if (durable) session.approvals.restoreRun(runId, durable);
       return session.approvalPolicySnapshotFor(runId);
     }),
