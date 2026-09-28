@@ -121,10 +121,13 @@ describe('AgentRosterController', () => {
       expect(
         (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
       ).toEqual(['lead']);
-      expect(yield* roster.getEnabledAgentKeys('toolUse')).toEqual([
-        'builtInToolUse:lead',
-      ]);
-      expect(yield* roster.getEnabledAgentKeys('workflow')).toBeUndefined();
+      // Editing one category leaves the others symbolic, so agents added
+      // later still appear there.
+      yield* roster.setEnabledAgentKeys('workflow', ['write']);
+      expect((yield* roster.snapshot()).selection).toEqual({
+        kind: 'custom',
+        agentKeys: { workflow: ['write'], toolUse: 'all' },
+      });
     }),
   );
 

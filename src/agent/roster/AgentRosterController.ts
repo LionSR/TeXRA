@@ -189,12 +189,7 @@ export class AgentRosterController<
         category,
         yield* this.allPresets(),
       );
-      if (identifiers === undefined) {
-        // `all` stays symbolic until a hidden custom agent needs a list.
-        const all = this.deps.getAgents(category);
-        const shown = yield* visibleAgents(this.deps.repoState, all);
-        return shown.length === all.length ? undefined : shown.map(agentKeyOf);
-      }
+      if (identifiers === undefined) return undefined;
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
       const keys =
@@ -288,15 +283,6 @@ export class AgentRosterController<
         )) ?? 'all'
       );
     });
-  }
-
-  private materializeCategorySelection(
-    selection: AgentRosterCategorySelection,
-    category: AgentCategory,
-  ): string[] {
-    return selection === 'all'
-      ? this.deps.getAgents(category).map(agentKeyOf)
-      : [...selection];
   }
 
   private writeSelection(
@@ -422,10 +408,13 @@ export class AgentRosterController<
         const selections = yield* Effect.all(
           byCategory((category) => this.effectiveCategorySelection(category)),
         );
-        const target = this.materializeCategorySelection(
-          selections[input.category],
-          input.category,
-        );
+        const target =
+          selections[input.category] === 'all'
+            ? (yield* visibleAgents(
+                this.deps.repoState,
+                this.deps.getAgents(input.category),
+              )).map(agentKeyOf)
+            : [...selections[input.category]];
         const key = agentKeyOf(input);
         const index = target.findIndex((candidate) =>
           agentMatchesIdentifier(input, candidate),
