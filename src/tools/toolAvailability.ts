@@ -230,7 +230,10 @@ export const toolAvailabilityLayer: Layer.Layer<
           if (!again) return probed;
         }
       }).pipe(
-        Effect.onInterrupt(() =>
+        // However the fiber ends (settled, interrupted, or a defect the
+        // groups did not absorb), its lane leaves the map, so the next
+        // caller starts a fresh probe instead of joining a dead fiber.
+        Effect.ensuring(
           Effect.sync(() => {
             if (lanes.get(key)?.round === round) lanes.delete(key);
           }),
@@ -331,7 +334,7 @@ export const toolAvailabilityLayer: Layer.Layer<
  * result. Some groups (Codex, Zotero, GitHub PR) touch async local state, so
  * running the callbacks independently can duplicate the same probe work.
  */
-const checkToolGroup = Effect.fn('probeToolGroup')(function* (
+const checkToolGroup = Effect.fn('checkToolGroup')(function* (
   {
     id,
     toolNames,
@@ -368,12 +371,29 @@ const checkToolGroup = Effect.fn('probeToolGroup')(function* (
   };
 });
 
-/** {@link checkToolGroup} under the group deadline; a failure is `unknown`. */
+/**
+ * {@link checkToolGroup} under the group deadline. A failure or a defect
+ * (a callback that throws) is logged and reported as `unknown`; only an
+ * interrupt ends the probe.
+ */
 const probeToolGroup = (
   plugin: ProbedToolPlugin,
   inputs: ToolProbeInputs,
-): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> =>
-  checkToolGroup(plugin, inputs).pipe(
+): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> => {
+  const unknown = (error: unknown) =>
+    Effect.logWarning(`Availability probe failed for ${plugin.name}`).pipe(
+      Effect.annotateLogs({ data: error }),
+      withLogChannel(CHANNEL),
+      Effect.as({
+        id: plugin.id,
+        tools: plugin.toolNames,
+        name: plugin.name,
+        status: 'unknown' as const,
+        statusLabel: undefined,
+        statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
+      }),
+    );
+  return checkToolGroup(plugin, inputs).pipe(
     Effect.timeoutOrElse({
       duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
       orElse: () =>
@@ -383,21 +403,10 @@ const probeToolGroup = (
           ),
         ),
     }),
-    Effect.catch((error) =>
-      Effect.logWarning(`Availability probe failed for ${plugin.name}`).pipe(
-        Effect.annotateLogs({ data: error }),
-        withLogChannel(CHANNEL),
-        Effect.as({
-          id: plugin.id,
-          tools: plugin.toolNames,
-          name: plugin.name,
-          status: 'unknown' as const,
-          statusLabel: undefined,
-          statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
-        }),
-      ),
-    ),
+    Effect.catch(unknown),
+    Effect.catchDefect(unknown),
   );
+};
 
 function resolveOptionalStatus(
   getStatus:

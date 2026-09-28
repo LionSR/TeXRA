@@ -253,10 +253,34 @@ describe('tool availability service', () => {
                 ),
               },
             },
+            {
+              // A callback that throws, as an eager configuration read can.
+              id: 'throwing-probe',
+              toolNames: ['throwing'],
+              name: 'Throwing probe',
+              category: 'ai-agents',
+              availability: {
+                probe: vi.fn(() => {
+                  throw new Error('config read threw');
+                }),
+                check: vi.fn(() => Effect.succeed(true)),
+              },
+            },
           ],
         }));
         const availability = yield* availabilityService;
+        const throwing = expect.objectContaining({
+          id: 'throwing-probe',
+          status: 'unknown',
+          statusDetail: 'Availability check failed: config read threw',
+        });
 
+        // A defect is reported, not fatal: the root's next check probes
+        // again rather than joining a dead fiber.
+        for (const _ of [1, 2])
+          expect(yield* availability.refresh(probeInputs)).toContainEqual(
+            throwing,
+          );
         expect(yield* availability.refresh(probeInputs)).toEqual([
           expect.objectContaining({
             id: 'broken-probe',
@@ -270,6 +294,7 @@ describe('tool availability service', () => {
             status: 'available',
             statusDetail: undefined,
           }),
+          throwing,
         ]);
       }).pipe(Effect.provide(probeServices)),
   );
