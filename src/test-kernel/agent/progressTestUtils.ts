@@ -104,7 +104,7 @@ export function recordingTrace(): {
   return { trace, events };
 }
 
-export function traceEventsOfType<T extends AgentEvent['type']>(
+function traceEventsOfType<T extends AgentEvent['type']>(
   events: readonly AgentEvent[],
   type: T,
 ): Array<Extract<AgentEvent, { type: T }>> {

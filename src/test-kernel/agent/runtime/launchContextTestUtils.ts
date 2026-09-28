@@ -1,5 +1,4 @@
 // Third-party imports
-import { ModelProvider } from 'llm-zoo';
 
 // Local imports
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
@@ -14,27 +13,6 @@ import { noopTrace } from '@test/support/noopTrace';
 import { fakeStores } from '@test/support/FakePlatform';
 import { buildTestModelConfig } from '@test/support/modelConfigTestUtils';
 import { testDefaultSession } from '@test/support/defaultSessionTestSetup';
-
-/**
- * The zero-priced OpenAI model every runtime fixture bills against, shaped
- * as the binding the invoker's usage report reads.
- */
-export const testModelInfo = {
-  config: {
-    provider: ModelProvider.OPENAI,
-    name: 'test-model',
-    fullName: 'Test Model',
-    inputPrice: 0,
-    openRouterOnly: false,
-    requiresResponsesAPI: false,
-    capabilities: {
-      supportsPromptCaching: false,
-      supportsAutoPromptCaching: false,
-      supportsReasoning: false,
-      cacheDiscountFactor: 0,
-    },
-  },
-};
 
 interface TestLaunchContextInit {
   runId: RunId;
