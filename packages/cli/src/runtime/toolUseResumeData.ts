@@ -120,13 +120,15 @@ export const cliRunStanding = Effect.fn('cliRunStanding')(function* (
 export const isTerminalWorkflowCheckpoint = Effect.fn(
   'isTerminalWorkflowCheckpoint',
 )(function* (id: RunId, session: SessionHandle): Effect.fn.Return<boolean> {
-  const state = yield* session.ledger.load(id).pipe(
-    Effect.catch((error) =>
-      Effect.logWarning(
-        `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
-      ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
-    ),
-  );
+  const state = yield* session.ledger
+    .load(id)
+    .pipe(
+      Effect.catch((error) =>
+        Effect.logWarning(
+          `Advertising workflow ${id} as resumable without its loop verdict: ${error.message}`,
+        ).pipe(withLogChannel(CHANNEL), Effect.as(null)),
+      ),
+    );
   return (
     state !== null &&
     state.phase === 'halted' &&
