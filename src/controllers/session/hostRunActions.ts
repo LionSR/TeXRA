@@ -37,7 +37,6 @@ import {
   AgentCategory,
   agentKey,
   agentName,
-  type RunAction,
   type RunId,
 } from '@shared/schemas';
 import type { DatabaseReadFailed } from '@shared/session/database';
@@ -48,7 +47,6 @@ import {
   Unavailable,
   type RequestRefusal,
 } from '@shared/session/requestErrors';
-import { runActionRefusal } from '@shared/session/runActions';
 import { LaunchSurfaceSchema } from '@shared/session/surface';
 import { getUseOpenRouter } from '@utils/config/providerConfig';
 import { unique } from '@utils/core';
@@ -69,6 +67,7 @@ import {
   type ProgressFollowUpModelOption,
   type ProgressFollowUpState,
 } from '../progressView/ProgressFollowUpController';
+import { runActionGuard } from './runActionGuard';
 
 const CHANNEL = 'HostRunActions';
 
@@ -175,22 +174,23 @@ export interface HostRunActions {
   readConfig(
     runId: RunId,
   ): Effect.Effect<AgentConfig | undefined, RunConfigUnreadable>;
-  /** The workflow toolbar's latexdiff and pack/clean requests, built from the
-   *  run's saved config and its outputs as the view holds them. `undefined`
-   *  when the run has no config or is not a workflow: the action is a no-op. */
+  /** The toolbar's latexdiff; `undefined` (a no-op) with no workflow config. */
   workflowDiffRequest(
     runId: RunId,
   ): Effect.Effect<
     WorkflowDiffRequest | undefined,
     Rejected | RunConfigUnreadable
   >;
-  workflowFileOperationRequest(
+  /** Pack or clean a workflow run's outputs, from its saved config and the
+   *  outputs the view holds: the action check, then `perform` with the run
+   *  held (claim included). No workflow config is a no-op. */
+  workflowFileOperation<E, R>(
     runId: RunId,
     operation: 'pack' | 'clean',
-  ): Effect.Effect<
-    WorkflowFileOperationRequest | undefined,
-    Rejected | RunConfigUnreadable
-  >;
+    perform: (
+      request: WorkflowFileOperationRequest,
+    ) => Effect.Effect<void, E, R>,
+  ): Effect.Effect<void, E | Rejected | RunConfigUnreadable, R>;
   /** The retry's switch onto the user's own key. The host arm that took the
    *  request runs it where it stands. */
   useOwnApiKey(
@@ -230,6 +230,7 @@ export const createHostRunActions = (
     const fs = yield* FileSystem.FileSystem;
     const { session } = ports;
     const view = () => SubscriptionRef.getUnsafe(session.view);
+    const guard = runActionGuard(session);
 
     /** Validate a request an action built, then launch it: one that does
      *  not validate is refused before anything starts, a refusal the
@@ -314,22 +315,10 @@ export const createHostRunActions = (
       },
     );
 
-    /** The run's `actions` must still hold `action` when the request is
-     *  handled, not only when the host rendered it: it may have moved since. */
-    const requireAction = (runId: RunId, action: RunAction) =>
-      Effect.suspend(() => {
-        const run = session.runView(runId);
-        return run === undefined || run.actions.includes(action)
-          ? Effect.void
-          : Effect.fail(
-              new Rejected({ reason: runActionRefusal(run, action) }),
-            );
-      });
-
     /** A run the launcher can relaunch: a TeXRA agent with a saved config. */
     const nativeAgentRun = Effect.fn('HostRunActions.nativeAgentRun')(
       function* (runId: RunId, action: 'resume' | 'runNew' | 'restore') {
-        yield* requireAction(runId, action);
+        yield* guard.require(runId, action);
         const config = yield* readConfig(runId);
         if (!config) {
           return yield* Effect.fail(
@@ -624,7 +613,7 @@ export const createHostRunActions = (
           yield* ports
             .openWorkflowOutput(resumed.result)
             .pipe(Effect.ignore({ log: 'Warn' }), withLogChannel(CHANNEL));
-      }),
+      }, guard.resuming),
       runNew: Effect.fn('HostRunActions.runNew')(function* (runId) {
         const config = yield* nativeAgentRun(runId, 'runNew');
         yield* runAgentRequest({ config });
@@ -632,30 +621,31 @@ export const createHostRunActions = (
       readConfig,
       workflowDiffRequest: Effect.fn('HostRunActions.workflowDiffRequest')(
         function* (runId) {
-          yield* requireAction(runId, 'diff');
+          yield* guard.idle(runId);
+          yield* guard.require(runId, 'diff');
           const config = yield* workflowConfig(runId);
           return config ? { runId } : undefined;
         },
       ),
-      workflowFileOperationRequest: Effect.fn(
-        'HostRunActions.workflowFileOperationRequest',
-      )(function* (runId, operation) {
-        yield* requireAction(runId, operation);
-        const config = yield* workflowConfig(runId);
-        if (!config) return undefined;
-        return {
-          agent: config.agent,
-          model: config.model,
-          inputFile: config.inputFiles[0] ?? '',
-          outputFiles: unique(
-            [
-              ...config.outputFiles,
-              ...runOutputs.getKnownWorkspaceOutputPaths(runId),
-            ].filter(Boolean),
-          ),
-          runId,
-        };
-      }),
+      workflowFileOperation: (runId, operation, perform) =>
+        Effect.gen(function* () {
+          yield* guard.require(runId, operation);
+          yield* guard.hold(runId);
+          const config = yield* workflowConfig(runId);
+          if (!config) return;
+          yield* perform({
+            agent: config.agent,
+            model: config.model,
+            inputFile: config.inputFiles[0] ?? '',
+            outputFiles: unique(
+              [
+                ...config.outputFiles,
+                ...runOutputs.getKnownWorkspaceOutputPaths(runId),
+              ].filter(Boolean),
+            ),
+            runId,
+          });
+        }).pipe(Effect.scoped),
       runCompileFixer: Effect.fn(function* (runId) {
         if (!view().runs.has(runId)) {
           return yield* Effect.fail(
@@ -688,7 +678,10 @@ export const createHostRunActions = (
         });
       },
       restoreState: Effect.fn('HostRunActions.restoreState')(function* (runId) {
-        return yield* nativeAgentRun(runId, 'restore');
+        return yield* nativeAgentRun(runId, 'restore').pipe(
+          Effect.tap(() => guard.hold(runId)),
+          Effect.scoped,
+        );
       }),
     };
   });

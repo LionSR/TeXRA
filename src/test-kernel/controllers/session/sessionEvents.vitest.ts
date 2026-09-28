@@ -71,6 +71,7 @@ import {
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { collectPendingDeletions } from '@controllers/session/deletionCleanup';
 import { sessionRequests } from '@controllers/session/SessionRequests';
+import { runActionGuard } from '@controllers/session/runActionGuard';
 import {
   LocalRuntimeSource,
   TextChunkSource,
@@ -95,6 +96,7 @@ import {
 } from '@shared/schemas';
 import { InquiryRecords } from '@shared/session/inquiryRecords';
 import { Database } from '@shared/session/database';
+import { runActions } from '@shared/session/runActions';
 import { GlobalStateKey } from '@shared/state/stateKeys';
 import { RunLedger, RunLedgerRefused } from '@shared/session/runLedger';
 import type { RunLedgerDraft } from '@shared/session/runStateFold';
@@ -751,6 +753,87 @@ describe('Sessions owner', () => {
         expect(stop).toHaveBeenCalledExactlyOnceWith(RUN, {
           detachActiveChildren: true,
         });
+      }).pipe(
+        Effect.provide(graph([runStart])),
+        Effect.provide(
+          inquiryRecordsLayer.pipe(
+            Layer.provide(
+              globalDatabaseLayer(
+                createFakeWorkspaceRoots().globalStorage,
+              ).pipe(
+                Layer.provide(ProcessIdentity.layer(SELF)),
+                Layer.provide(nodePlatformLayer),
+                Layer.orDie,
+              ),
+            ),
+          ),
+        ),
+      ),
+  );
+
+  it.effect(
+    'refuses a delete rendered before the run started, and a second concurrent resume',
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const view = yield* SessionViewService;
+        const removeRun = vi.fn((yield* SessionEvents).removeRun);
+        const requests = sessionRequests(
+          { view: view.ref } as unknown as SessionHandle,
+          createSessionApprovals(),
+          { ...db, removeRun },
+          yield* SubscriptionRef.make(
+            LocalRuntimeStateSchema.parse({
+              self: [SELF],
+              dead: [],
+              unreadable: [],
+            }),
+          ),
+          yield* InquiryRecords,
+        );
+        yield* settle(view.ref, (v) => v.runs.has(RUN));
+        // The host rendered Delete session from this view; by the time the
+        // click is handled the run has started in this process.
+        yield* SubscriptionRef.update(view.ref, (v) => ({
+          ...v,
+          runs: new Map(
+            [...v.runs].map(([id, run]) => {
+              const started = {
+                ...run,
+                status: RUN_PHASE.RUNNING,
+                group: 'running' as const,
+                readOnly: false,
+              };
+              return [id, { ...started, actions: runActions(started) }];
+            }),
+          ),
+        }));
+        const refused = yield* requests
+          .request({ kind: 'run.delete', runId: RUN })
+          .pipe(Effect.flip);
+        expect(refused).toMatchObject({
+          _tag: 'Rejected',
+          reason: expect.stringContaining('stop it first'),
+        });
+        expect(removeRun).not.toHaveBeenCalled();
+
+        // A second Resume while the first is in flight is refused at once,
+        // not queued behind the first's whole run.
+        const guard = runActionGuard(
+          {} as Pick<SessionHandle, 'runView' | 'runs'>,
+        );
+        const finish = yield* Deferred.make<void>();
+        const first = yield* Effect.forkChild(
+          guard.resuming(Deferred.await(finish), RUN),
+          { startImmediately: true },
+        );
+        const second = yield* guard
+          .resuming(Effect.void, RUN)
+          .pipe(Effect.flip);
+        expect(second.reason).toBe('This run is already resuming.');
+        yield* Deferred.succeed(finish, undefined);
+        yield* Fiber.join(first);
+        yield* guard.resuming(Effect.void, RUN);
       }).pipe(
         Effect.provide(graph([runStart])),
         Effect.provide(

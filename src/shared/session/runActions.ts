@@ -11,19 +11,18 @@ import {
 
 import { isLiveRun, type RunView } from './sessionView';
 
-const INSPECT_ACTIONS: readonly RunAction[] = [
-  'openRunStorage',
-  'export',
-  'copy',
-];
+/** Opening the run's folder, exporting or copying its conversation: what
+ *  any run offers, a fresh list per run so no two views share one array. */
+const inspectActions = (): RunAction[] => ['openRunStorage', 'export', 'copy'];
 
 /**
  * The one rule for which actions a run's state licenses, applied by the fold
  * into `RunView.actions`. A run another process holds (or one this process
- * cannot read) is inspect-only. A working run (running or waiting) can be
- * stopped, and a tool-use agent's takes grants and compaction; nothing that
- * rewrites or removes its files or history is offered until it has stopped.
- * Any other run can be deleted; a plain agent's can be resumed (an
+ * cannot read) is inspect-only. A live run (`isLiveRun`: working, waiting,
+ * or spawned and not started yet) can only be stopped; while it works, an
+ * agent's run takes approval grants and a tool-use agent's compaction.
+ * Nothing that rewrites or removes a run's files or history is offered while
+ * it is live. After, it can be deleted; a plain agent's can be resumed (an
  * interrupted one, or a workflow from its saved outputs), run again, or
  * restored into the launcher; a workflow agent's outputs can be diffed,
  * archived, or removed.
@@ -33,34 +32,31 @@ export function runActions(
     RunView,
     'readOnly' | 'group' | 'status' | 'substate' | 'identity' | 'category'
   >,
-): readonly RunAction[] {
-  if (run.readOnly) return INSPECT_ACTIONS;
-  if (run.group === 'running' || run.group === 'waiting') {
-    const toolUseAgent =
-      run.substate !== RUN_SUBSTATE.STARTING &&
+): RunAction[] {
+  if (run.readOnly) return inspectActions();
+  if (isLiveRun(run)) {
+    const working = run.group === 'running' || run.group === 'waiting';
+    const agent = working && run.identity.kind === 'agent';
+    const compact =
+      agent &&
       run.category === AgentCategory.ToolUse &&
-      run.identity.kind === 'agent';
+      run.substate !== RUN_SUBSTATE.STARTING;
     return [
       'stop',
-      ...(toolUseAgent ? (['grant', 'compact'] as const) : []),
-      ...INSPECT_ACTIONS,
+      ...(agent ? (['grant'] as const) : []),
+      ...(compact ? (['compact'] as const) : []),
+      ...inspectActions(),
     ];
   }
-  // Not working: ended, interrupted, paused, or a spawned run that has not
-  // started (which can still be stopped). Whether nothing holds it any more
-  // is the run registry's to say when a delete acts (`RunLive`).
-  const actions: RunAction[] = isLiveRun(run) ? ['stop', 'delete'] : ['delete'];
+  const actions: RunAction[] = ['delete'];
   if (isPlainAgentIdentity(run.identity)) {
-    if (
-      run.group === 'interrupted' ||
-      (run.category === AgentCategory.Workflow && !isLiveRun(run))
-    )
+    if (run.group === 'interrupted' || run.category === AgentCategory.Workflow)
       actions.push('resume');
     actions.push('runNew', 'restore');
   }
   if (run.identity.kind === 'agent' && run.category === AgentCategory.Workflow)
     actions.push('diff', 'pack', 'clean');
-  return [...actions, ...INSPECT_ACTIONS];
+  return [...actions, ...inspectActions()];
 }
 
 /** Why a run no longer takes `action`: the refusal every handler words. */
@@ -70,8 +66,8 @@ export function runActionRefusal(
 ): string {
   const what = ACTION_LABEL[action];
   if (run.readOnly)
-    return `${what} is not available: “${run.label}” is held by another TeXRA process.`;
-  if (run.group === 'running' || run.group === 'waiting')
+    return `${what} is not available: this TeXRA process cannot act on “${run.label}”.`;
+  if (isLiveRun(run))
     return `${what} is not available while “${run.label}” is running; stop it first.`;
   return `${what} is not available for “${run.label}” in its current state.`;
 }

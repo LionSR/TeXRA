@@ -118,9 +118,14 @@ export function sessionRequests(
     mode: DeletionMode,
     expectedStartCommit: number,
   ) {
-    const req = { kind: 'run.delete', runId } as const;
-    yield* requireRunAction(session, req);
-    const admitted = yield* admit(log, local, req);
+    // Listing-driven removal (`texra history delete`, the leftover-shell
+    // sweep) acts through the registry's inactive-run step and the claim,
+    // which refuse a run anything still holds; the view's liveness of a
+    // spawned run this process registered and never started is not theirs.
+    // Deliberately not gated on `actions` either: an explicit delete is how
+    // a user clears a run this process cannot read (the UI never offers
+    // it), and the claim still protects a run a live process holds.
+    const admitted = yield* admit(log, local, { kind: 'run.delete', runId });
     if (admitted.startCommit !== expectedStartCommit) {
       return yield* Effect.fail(
         new Unavailable({
@@ -140,24 +145,31 @@ export function sessionRequests(
 const GATED_ACTIONS: Partial<Record<RuntimeRequest['kind'], RunAction>> = {
   'run.delete': 'delete',
   'run.compact': 'compact',
+  'policy.set': 'grant',
 };
 
 /**
- * Refuse a delete or compaction the run's current `actions` no longer holds,
- * with its reason: the host rendered the action from an earlier view, and
- * the run may have started since. A run the view has not folded yet, or one
- * another process holds, is left to `admit` and the claim, which answer
- * `NotOwner` for the latter. A stop is not gated: it is always safe to
- * ask, and a run just launched may not have folded live.
+ * Refuse a delete, compaction or approval grant the run's current `actions`
+ * no longer holds, with its reason: the host rendered it from an earlier
+ * view, and the run may have started or ended since. A run the view has not
+ * folded yet, and one another process holds, are left to `admit` and the
+ * claim (the latter answers `NotOwner`); any other run this process cannot
+ * act on is refused here. A stop is not gated: it is always safe to ask,
+ * and a run just launched may not have folded live.
  */
 function requireRunAction(
   session: Pick<SessionHandle, 'view'>,
   req: RuntimeRequest,
 ): Effect.Effect<void, RequestError> {
   const action = GATED_ACTIONS[req.kind];
-  if (action === undefined || req.kind === 'policy.set') return Effect.void;
-  const run = SubscriptionRef.getUnsafe(session.view).runs.get(req.runId);
-  return run === undefined || run.readOnly || run.actions.includes(action)
+  if (action === undefined) return Effect.void;
+  const runId = req.kind === 'policy.set' ? req.change.runId : req.runId;
+  const run = SubscriptionRef.getUnsafe(session.view).runs.get(runId);
+  // `readOnly` with a foreign owner: a live one (a dead owner's run is not
+  // read-only), whose claim answers for the run.
+  const heldElsewhere =
+    run !== undefined && run.readOnly && run.ownerId !== null && !run.ownedHere;
+  return run === undefined || heldElsewhere || run.actions.includes(action)
     ? Effect.void
     : Effect.fail(new Rejected({ reason: runActionRefusal(run, action) }));
 }
