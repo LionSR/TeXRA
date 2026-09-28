@@ -197,8 +197,8 @@ export class RepoPollingSource extends PollingSourceBase<
   private readonly pollRepo = Effect.fn('RepoPollingSource.pollRepo')(
     function* (this: RepoPollingSource, state: SubscriptionState) {
       const { owner, repo } = state;
-      const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.issueComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
-      const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}&since=${encodeURIComponent(state.reviewComments.sinceCursor ?? '')}&sort=updated&direction=asc`;
+      const issuePath = `/repos/${owner}/${repo}/issues/comments?per_page=${PER_PAGE}${state.issueComments.sinceCursor ? `&since=${encodeURIComponent(state.issueComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
+      const reviewPath = `/repos/${owner}/${repo}/pulls/comments?per_page=${PER_PAGE}${state.reviewComments.sinceCursor ? `&since=${encodeURIComponent(state.reviewComments.sinceCursor)}` : ''}&sort=updated&direction=asc`;
       // The /pulls list endpoint does NOT support `since`; we get the top
       // 100 most-recently-updated PRs every tick. The `prStateByNumber`
       // transition tracker is what makes that safe.

@@ -120,17 +120,14 @@ function transcriptTimeline(
     ),
     (group) => group.parentGroupId as string,
   );
-  const rowsByGroup = new Map<string, TranscriptRow[]>();
-  const ungrouped: TranscriptRow[] = [];
-  for (const row of rows.toSorted(compareRows)) {
-    if (row.groupId && groupIds.has(row.groupId)) {
-      const bucket = rowsByGroup.get(row.groupId) ?? [];
-      bucket.push(row);
-      rowsByGroup.set(row.groupId, bucket);
-    } else {
-      ungrouped.push(row);
-    }
-  }
+  const sortedRows = rows.toSorted(compareRows);
+  const isGroupedRow = (row: TranscriptRow) =>
+    Boolean(row.groupId && groupIds.has(row.groupId));
+  const rowsByGroup = groupBy(
+    sortedRows.filter(isGroupedRow),
+    (row) => row.groupId as string,
+  );
+  const ungrouped = sortedRows.filter((row) => !isGroupedRow(row));
   const node = (group: TaskGroup): GroupTree => ({
     group,
     children: (children.get(group.id) ?? []).sort(compareGroups).map(node),
