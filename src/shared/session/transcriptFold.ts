@@ -223,10 +223,7 @@ function record(d: Draft, event: TranscriptEvent): void {
       d.touched = true;
       return;
 
-    // The run's facts, not transcript rows: `context.state` folds into
-    // `RunView.context`, and the newest `skills.snapshot` is read from the
-    // run's committed rows by the one surface that shows it.
-    case 'skills.snapshot':
+    // A run fact, not a transcript row: it folds into `RunView.context`.
     case 'context.state':
       return;
 

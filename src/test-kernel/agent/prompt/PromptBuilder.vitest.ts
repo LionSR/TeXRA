@@ -42,6 +42,8 @@ describe('PromptBuilder', () => {
     const instructionSuffix = memoryPromptSection({
       offered: ['memory'],
       isChild: false,
+      isAnthropic: false,
+      bibPath: '',
     });
 
     // Behavioral contract, not exact prose (review note on #7959): pinned

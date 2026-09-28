@@ -296,7 +296,7 @@ function agentRunTestLayer(init: LoopInit) {
         // The launch stores a real run carries; no fixture reads through them.
         stores: hostStores(),
         toolPolicy: { stopAfterCycle: init.stopAfterCycle === true },
-        userVarChannels: {},
+        opening: { inputs: {}, catalog: [], attachedMemoryMisses: [] },
         initialUserMessageForTranscript: 'Do the thing.',
         fileService: new RunFileService(init.runId, init.session.roots),
         ...testRunTools(hostStores()),

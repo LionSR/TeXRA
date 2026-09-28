@@ -16,7 +16,7 @@ import { commitResumedActivation } from '@agent/storage/runLifecycle';
 import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import { loadAgentSettingAndPrompts } from '@agent/runtime/agentLoad';
 import { getDisplayedInstruction } from '@agent/runtime/sessionDescription';
-import { buildUserVars } from '@agent/prompt/userVars';
+import { buildTemplateInputs } from '@agent/prompt/templateInputs';
 import { UsageMonitor } from '@agent/runtime/UsageMonitor';
 import { AgentError } from '@common/errors';
 import { readInstalledPluginLoadOnce } from '@common/plugins/pluginTrust';
@@ -31,7 +31,6 @@ import {
   type AttachedMemoryMiss,
   type ModelCompatibilityKey,
   type RunId,
-  type UserVariableChannels,
 } from '@shared/schemas';
 import {
   AgentCategory,
@@ -68,7 +67,7 @@ type LaunchResolvedRunFacts = Pick<
   | 'parentStage'
   | 'toolPolicy'
   | 'stores'
-  | 'userVarChannels'
+  | 'opening'
   | 'initialUserMessageForTranscript'
   | 'usageMonitor'
 >;
@@ -182,19 +181,6 @@ const validateModelExists = Effect.fn('AgentLaunchContext.validateModelExists')(
 );
 
 /**
- * The conversation format a resumed run's rows are in, read off its latest
- * `flow.snapshot` (the one indexed read); a run with no snapshot has no
- * persisted format and binds today's default route.
- */
-const inferLaunchModelCompatibilityKey = Effect.fn(
-  'inferLaunchModelCompatibilityKey',
-)(function* (runId: RunId, session: SessionHandle) {
-  const snapshot = yield* session.ledger.latestSnapshot(runId);
-  if (snapshot === null) return undefined;
-  return snapshot.payload.runtime.modelCompatibilityKey ?? undefined;
-});
-
-/**
  * Create a "Run:" stage, optionally logging a user instruction first.
  *
  * ORDERING INVARIANT: The instruction is emitted BEFORE the stage is created.
@@ -283,11 +269,20 @@ export const prepareAgentDefinition = Effect.fn('prepareAgentDefinition')(
     );
 
     // Stamp the resolved source so the run record carries the decided identity;
-    // `agent` stays as the caller spelled it (the resume-id contract).
+    // `agent` stays as the caller spelled it (the resume-id contract). The
+    // output list is normalized once, for the record and every reader: the
+    // explicit list unless it names only inputs (an editing agent writes its
+    // inputs back), else the agent's defaults.
+    const explicit = fullConfig.outputFiles.filter(Boolean);
     const config: AgentConfig = {
       ...fullConfig,
       agentCategory: setting.agentCategory,
       agentSource: agentEntry.source,
+      outputFiles: explicit.some(
+        (file) => !fullConfig.inputFiles.includes(file),
+      )
+        ? explicit
+        : (setting.defaultOutputFiles ?? []).filter(Boolean),
     };
     return { config, setting, prompt, agentEntry, modelConfig, installed };
   },
@@ -348,9 +343,15 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
+    // A resumed run's latest snapshot (one indexed read): its format, its
+    // opening's memory misses; a run with none binds today's default route.
+    const snapshot = input.resumed
+      ? yield* session.ledger.latestSnapshot(runId)
+      : null;
+    const recorded = snapshot?.payload.state;
     const modelCompatibilityKey =
       input.modelCompatibilityKey ??
-      (yield* inferLaunchModelCompatibilityKey(runId, session)) ??
+      snapshot?.payload.runtime.modelCompatibilityKey ??
       null;
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
@@ -430,10 +431,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
 
     const agentPath = path.dirname(agentEntry.path);
     const buildVars = (stageId?: string) =>
-      buildUserVars(
+      buildTemplateInputs(
         config,
         setting,
-        prompt,
         agentPath,
         modelConfig.provider === ModelProvider.ANTHROPIC,
         agentLogger,
@@ -450,8 +450,10 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
         },
       );
 
-    const baseVars = yield* Effect.suspend(() => {
-      if (setting.agentCategory === AgentCategory.ToolUse) return buildVars();
+    // A tool-use run whose rows hold its opening renders nothing again.
+    const opening = yield* Effect.suspend(() => {
+      if (setting.agentCategory === AgentCategory.ToolUse)
+        return recorded === undefined ? buildVars() : Effect.succeed(null);
 
       const initStage = parentStage.child('Init');
       return buildVars(initStage.id).pipe(
@@ -463,9 +465,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
         ),
       );
     });
-
-    const userVarChannels: UserVariableChannels = { ...baseVars };
-    const attachedMemoryMisses = baseVars.ATTACHED_MEMORY_MISSES;
 
     const usageMonitor = new UsageMonitor(
       {
@@ -496,8 +495,9 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       stores,
       logger: agentLogger,
       parentStage,
-      userVarChannels,
-      attachedMemoryMisses,
+      opening,
+      attachedMemoryMisses:
+        opening?.attachedMemoryMisses ?? recorded?.memoryMisses ?? [],
       usageMonitor,
       initialUserMessageForTranscript: initialMediaMayBeInserted
         ? initialInstruction

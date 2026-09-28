@@ -18,6 +18,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { AgentWorkflowSetting } from '@agent/core/definition/AgentDataclass';
 import { AgentWorkspaceState } from '@agent/core/state/AgentWorkspaceState';
 import { userRequestTemplateCount } from '@agent/index/agentYamlScanner';
+import type { TemplateVars } from '@agent/prompt/templateInputs';
 import { compileFailuresOf, runCompileCheck } from '@agent/output/compileCheck';
 import {
   appendCompileFailureRoundContext,
@@ -94,6 +95,8 @@ interface OutputExecResult {
  */
 export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
   setting: AgentWorkflowSetting,
+  /** The launch's template inputs, which every round's prompts render from. */
+  inputs: TemplateVars,
 ) {
   const run = yield* AgentRun;
   const { runId, session, logger, config, prompt, fileService } = run;
@@ -125,12 +128,7 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
     fileService,
     roots,
   );
-  const promptBuilder = new PromptBuilder(
-    prompt,
-    run.userVarChannels,
-    roots.workspace,
-    logger,
-  );
+  const prompts = new PromptBuilder(prompt, inputs, roots.workspace, logger);
   const latexMediaManager = new LatexMediaManager(logger, roots, fileService);
   const totalRounds = Math.max(
     setting.rounds ?? 2,
@@ -219,12 +217,12 @@ export const makeDocumentRounds = Effect.fn('documentRounds.make')(function* (
 
     let requestText: string;
     if (round === 0) {
-      const initialPrompts = yield* promptBuilder.buildInitialPrompts();
+      const initialPrompts = yield* prompts.buildInitialPrompts();
       const prefix = initialPrompts.userPrefix.trim();
       if (prefix) content.push({ kind: 'text', text: prefix });
       requestText = initialPrompts.userRequest.trim();
     } else {
-      const request = yield* promptBuilder.buildUserRequest(round);
+      const request = yield* prompts.buildUserRequest(round);
       requestText = appendCompileFailureRoundContext(
         request,
         compile.compileFailureContext,

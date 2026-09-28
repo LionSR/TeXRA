@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 
-import { type SessionHandle } from '@agent/runtime';
+import { listedSkillNames, type SessionHandle } from '@agent/runtime';
 import { defaultShortcutModifierLabel } from '@cli/runtime/shortcutLabels';
 import { formatCliSessionStatus } from '@cli/chat/tui/sessionStatus';
 import {
@@ -65,22 +65,14 @@ export function showCliWorkPlan(session: SessionHandle): void {
   }
 }
 
-/** The skills the run's newest `skills.snapshot` row names. Read from the
- *  run's committed rows: the snapshot is no listing row, so the view holds it
- *  only for a run whose transcript tier some port subscribes. */
-function activeSkillNamesFor(session: SessionHandle, runId: RunId | undefined) {
-  if (runId === undefined) return Effect.succeed([]);
-  return session
-    .readRunEvents(runId)
-    .pipe(
-      Effect.map(
-        (events) =>
-          events
-            .findLast((event) => event.type === 'skills.snapshot')
-            ?.skills.map((skill) => skill.name) ?? [],
-      ),
-    );
-}
+/** The skills the run's latest step lists, read from its rows. */
+const activeSkillNamesFor = Effect.fn('activeSkillNamesFor')(function* (
+  session: SessionHandle,
+  runId: RunId | undefined,
+) {
+  const state = runId === undefined ? null : yield* session.ledger.load(runId);
+  return state === null ? [] : yield* listedSkillNames(state);
+});
 
 export const showCliSessionStatus = Effect.fn('showCliSessionStatus')(
   function* (context: SlashCommandContext) {

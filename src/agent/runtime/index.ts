@@ -81,6 +81,12 @@ export type {
   RuntimePresentationEventPayloads,
 } from './runtimePresentationEvents';
 
+// requestContext: the skills a run's latest step lists, from its rows.
+export {
+  listedSkillNames,
+  RecordedSkillsUnreadable,
+} from './run/requestContext';
+
 // selectAutoOpenFinalOutput
 export { selectAutoOpenFinalOutput } from './selectAutoOpenFinalOutput';
 

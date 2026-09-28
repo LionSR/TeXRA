@@ -2,7 +2,6 @@
 // Shared contracts and utilities
 import { z } from 'zod';
 
-import { ActiveSkillsSnapshotSchema } from './activeSkills';
 import { ContextStateDataSchema } from './contextManagement';
 import { LogLevelSchema } from './log';
 import { ToolCallStatusSchema } from './progressView/data';
@@ -58,9 +57,6 @@ export const TranscriptEventSchemas = {
   workflowCall: trace('workflow.call', {
     logId: z.string(),
     call: WorkflowCallProgressSchema,
-  }),
-  skills: trace('skills.snapshot', {
-    skills: ActiveSkillsSnapshotSchema.shape.skills.readonly(),
   }),
   /**
    * One priced model turn of the row's run: never a running total, so a

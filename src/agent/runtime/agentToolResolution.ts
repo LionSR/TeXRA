@@ -41,6 +41,7 @@ import { Effect, SubscriptionRef } from 'effect';
 import type { RuntimeTool as ITool } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import type { AgentToolUseSetting } from '@agent/core/definition/AgentDataclass';
+import { isInstalledPluginId } from '@common/plugins/pluginTrust';
 import { withLogChannel } from '@logger/effectLog';
 import {
   modelOptionsFrom,
@@ -64,7 +65,7 @@ import {
 import { mcpPluginId, mcpServerOfToolName } from '@tools/mcp/mcpServer';
 import { findToolPlugin } from '@tools/plugins';
 import { ToolAvailability } from '@tools/toolAvailabilityService';
-import { isInstalledPluginId, ToolRegistry } from '@tools/toolTable';
+import { ToolRegistry } from '@tools/toolTable';
 import {
   annotateDelegationAvailability,
   availableModelNamesFromOptions,

@@ -333,24 +333,26 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         expect(asked).toEqual(['paper-protocol 1.0.0']);
 
         const catalog = yield* catalogNow();
-        const fromPlugin = catalog.skills.filter((skill) =>
+        const fromPlugin = catalog.catalog.filter((skill) =>
           skill.name.startsWith('paper-protocol:'),
         );
+        // Tagged with the installed plugin, so a step that no longer loads
+        // it lists none of them.
         expect(fromPlugin).toEqual([
           expect.objectContaining({
             name: 'paper-protocol:load-paper',
-            source: 'user',
+            plugin: 'plugin:paper-protocol',
           }),
           expect.objectContaining({
             name: 'paper-protocol:publish-paper',
-            source: 'user',
+            plugin: 'plugin:paper-protocol',
           }),
         ]);
         expect(JSON.stringify(catalog.catalog)).toContain(
           '- paper-protocol:load-paper: Load a published paper repository.\\n  Source: plugin paper-protocol',
         );
-        expect(catalog.skills).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        expect(catalog.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
 
         // Disabled, the plugin stays installed and contributes nothing.
@@ -359,8 +361,8 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         expect(JSON.stringify(disabled.catalog)).not.toContain(
           'plugin paper-protocol',
         );
-        expect(disabled.skills).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        expect(disabled.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
         // The version it trusts is not asked about again.
         yield* enablePlugin('paper-protocol', env, () =>
@@ -375,8 +377,8 @@ it.layer(nodePlatformLayer)('CLI skills runtime', (it) => {
         expect(JSON.stringify(after.catalog)).not.toContain(
           'plugin paper-protocol',
         );
-        expect(after.skills).toContainEqual(
-          expect.objectContaining({ name: 'load-paper', source: 'bundled' }),
+        expect(after.catalog).toContainEqual(
+          expect.objectContaining({ name: 'load-paper', plugin: null }),
         );
         // A local plugin is referenced in place, so removing it keeps it.
         yield* Effect.promise(() =>

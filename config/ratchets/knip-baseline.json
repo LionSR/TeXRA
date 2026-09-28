@@ -536,12 +536,6 @@
       "name": "packageCommandContributions"
     },
     {
-      "file": "src/shared/schemas/activeSkills.ts",
-      "category": "production-dead",
-      "kind": "exports",
-      "name": "ActiveSkillSummarySchema"
-    },
-    {
       "file": "src/shared/schemas/subscriptionUsage.ts",
       "category": "production-dead",
       "kind": "exports",

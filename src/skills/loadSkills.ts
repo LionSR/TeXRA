@@ -35,14 +35,15 @@ interface SkillRootScan {
 }
 
 /** Scope vocabulary comes from the shared wire-contract enum
- *  (`@shared/schemas/activeSkills`) so the loader and the persisted snapshot
- *  can't drift. */
+ *  (`@shared/schemas/activeSkills`) so the loader and the persisted
+ *  disabled-source setting can't drift. */
 export interface SkillSource {
   readonly scope: ActiveSkillSourceScope;
   readonly path: string;
   readonly label?: string;
   readonly required?: boolean;
-  /** The tool plugin that ships these skills, whose switch gates them. */
+  /** The plugin that ships these skills: a tool plugin, whose switch gates
+   *  them, or an installed plugin (`plugin:<name>`). */
   readonly plugin?: string;
   /** The installed plugin whose skills these are, named `<namespace>:<name>`. */
   readonly namespace?: string;

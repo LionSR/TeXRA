@@ -37,15 +37,17 @@ import { isPathWithin } from '@utils/core/pathCore';
  *   built-in agents dir).
  * - The registry keys on `ExternalRootKind`, not on the path — each kind
  *   gets exactly one slot, except `skill`, which holds one read-only slot per
- *   skill directory and project (a run can import skills from several
- *   roots). Two different kinds may canonicalise to the
+ *   skill directory a holder (a run) grants. Two different kinds may canonicalise to the
  *   same path (legitimate when a user overlays a custom dir on a built-in
  *   one) and both coexist; tiebreaking in `findExternalRoot` makes the
  *   read-only one win for permission purposes.
- * - A `skill` root belongs to the project whose skill discovery registered
- *   it: a process hosting several projects (the desktop) admits it only for
+ * - A `skill` root belongs to the project of the run whose step listed it:
+ *   a process hosting several projects (the desktop) admits it only for
  *   lookups made on behalf of that project, so one project's enabled skills
- *   never open a path to another project's session.
+ *   never open a path to another project's session. A run's grants are
+ *   exactly what its latest step lists (`grantSkillRoots`), so a skill whose
+ *   plugin was disabled or lost its trust stops being readable at the next
+ *   step, and they end with the run (`releaseSkillRoots`).
  */
 
 /** Stable identifier for each registered root. Label strings are for display
@@ -62,32 +64,28 @@ export interface ExternalRoot {
   readonly writable: boolean;
   /** Human-readable label shown in workspace_info. */
   readonly label: string;
-  /** A `skill` root's project: the workspace root that registered it,
-   *  `undefined` with no folder open. Other kinds serve every project. */
+  /** A `skill` root's project: the workspace root of the run that granted
+   *  it, `undefined` with no folder open. Other kinds serve every project. */
   readonly project?: string;
 }
 
-/** Registration options: a `skill` root names the project it serves. */
-type ExternalRootOptions =
-  | {
-      readonly kind: Exclude<ExternalRootKind, 'skill'>;
-      readonly writable: boolean;
-      readonly label: string;
-    }
-  | {
-      readonly kind: 'skill';
-      readonly writable: false;
-      readonly label: string;
-      readonly project: string | undefined;
-    };
+/** Registration options of every kind but `skill`, which runs grant. */
+interface ExternalRootOptions {
+  readonly kind: Exclude<ExternalRootKind, 'skill'>;
+  readonly writable: boolean;
+  readonly label: string;
+}
 
 export interface MatchedExternalRoot extends ExternalRoot {
   /** Path component relative to `absolutePath` (POSIX separators, '' for the root itself). */
   readonly relative: string;
 }
 
-/** Keyed by kind; a `skill` root keys by its project and canonical path as well. */
+/** Keyed by kind; a `skill` root keys by its holder and canonical path. */
 const roots = new Map<string, ExternalRoot>();
+
+/** Each holder's granted skill directories, as it last listed them. */
+const grants = new Map<string, string>();
 
 /**
  * Canonicalise a path: resolve `.`/`..` segments, then walk symlinks via
@@ -151,8 +149,7 @@ function readLinkOrUndefined(entry: string): string | undefined {
 /**
  * Register or replace the external root for the given kind. Calling again
  * with the same kind (e.g. when the custom agents dir changes) replaces
- * the previous entry for that kind in place; a `skill` root replaces only the
- * entry for the same directory and project.
+ * the previous entry for that kind in place.
  */
 export function registerExternalRoot(
   absolutePath: string,
@@ -175,17 +172,59 @@ export function registerExternalRoot(
   // `listExternalRoots`, and a mutated `writable` or `absolutePath` would
   // silently widen the allowlist for every later lookup.
   roots.set(
-    options.kind === 'skill'
-      ? `skill:${options.project ?? ''}:${canonicalPath}`
-      : options.kind,
+    options.kind,
     Object.freeze({
       kind: options.kind,
       absolutePath: canonicalPath,
       writable: options.writable,
       label: options.label,
-      ...(options.kind === 'skill' && { project: options.project }),
     }),
   );
+}
+
+/**
+ * Make `skills` the read-only skill directories `holder` grants to its
+ * project, replacing what it granted before; unchanged grants cost nothing.
+ * Fails closed: a directory that cannot be canonicalised is not granted, and
+ * the names of those are returned for the caller to report.
+ */
+export function grantSkillRoots(
+  holder: string,
+  project: string | undefined,
+  skills: readonly { readonly name: string; readonly directory: string }[],
+): string[] {
+  const key = JSON.stringify([project, skills]);
+  if (grants.get(holder) === key) return [];
+  releaseSkillRoots(holder);
+  const refused: string[] = [];
+  for (const { name, directory } of skills) {
+    let absolutePath: string;
+    try {
+      absolutePath = canonicalizePath(directory);
+    } catch {
+      refused.push(name);
+      continue;
+    }
+    roots.set(
+      `skill:${holder}:${absolutePath}`,
+      Object.freeze({
+        kind: 'skill',
+        absolutePath,
+        writable: false,
+        label: `Skill ${name}`,
+        project,
+      }),
+    );
+  }
+  grants.set(holder, key);
+  return refused;
+}
+
+/** Withdraw every skill directory `holder` granted. */
+export function releaseSkillRoots(holder: string): void {
+  grants.delete(holder);
+  const prefix = `skill:${holder}:`;
+  for (const key of roots.keys()) if (key.startsWith(prefix)) roots.delete(key);
 }
 
 /**

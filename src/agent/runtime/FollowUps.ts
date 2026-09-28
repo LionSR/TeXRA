@@ -44,6 +44,7 @@ import type { QueuedFollowUp } from '@shared/session/runRows';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
 
 import { type InputPart, mediaInputParts } from './run/mediaInput';
+import { blobRows } from './run/requestContext';
 import {
   appendRow,
   rowAggregate,
@@ -206,9 +207,11 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     }
   };
 
-  /** The rows that consume one batch: its `followup.consumed` rows and
-   *  the one user message they become. */
+  /** The rows that consume one batch: its `followup.consumed` rows, the one
+   *  user message they become, and the instruction they carry, stored in
+   *  the same batch so the snapshot that names it never outlives it. */
   const batchRows = Effect.fn('FollowUps.batchRows')(function* (
+    state: RunState,
     batch: FollowUpBatch,
   ): Effect.fn.Return<
     JoinedFollowUps,
@@ -236,9 +239,15 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
         `Consumed ${all.length - followUps.length} progress notice(s) of ended subagents without delivering them.`,
       );
     }
+    const instruction = userFollowUpInstruction(
+      followUps.map((followUp) => followUp.content),
+    );
     return {
       turn,
       rows: [
+        ...(instruction === undefined
+          ? []
+          : blobRows(runId, state, [instruction])),
         ...all.map((followUp) => ({
           type: 'followup.consumed' as const,
           aggregateId: rowAggregate(runId),
@@ -249,9 +258,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
       // The user's rows are durable; the transcript shows what was asked.
       delivered: () => {
         logFollowUps(followUps, built.kinds);
-        return userFollowUpInstruction(
-          followUps.map((followUp) => followUp.content),
-        );
+        return instruction;
       },
     };
   });
@@ -264,7 +271,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
     Error,
     FileSystem.FileSystem | ChildProcessSpawner
   > {
-    const joined = yield* batchRows(batch);
+    const joined = yield* batchRows(state, batch);
     const committed = yield* Effect.uninterruptible(
       ledger.appendBatch(runId, state, [
         ...joined.rows,
@@ -314,7 +321,7 @@ export const claimFollowUps = Effect.fn('FollowUps.claim')(function* (
             return batch === null ||
               !batch.followUps.some((f) => isInstruction(f.content))
               ? Effect.succeed(null)
-              : batchRows(batch);
+              : batchRows(state, batch);
           })
         : Effect.succeed(null),
     release: (next) => {

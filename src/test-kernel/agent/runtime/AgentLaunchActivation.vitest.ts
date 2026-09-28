@@ -18,7 +18,9 @@ vi.mock('@agent/index', () => ({
 vi.mock('@agent/runtime/agentLoad', () => ({
   loadAgentSettingAndPrompts: mocks.load,
 }));
-vi.mock('@agent/prompt/userVars', () => ({ buildUserVars: mocks.buildVars }));
+vi.mock('@agent/prompt/templateInputs', () => ({
+  buildTemplateInputs: mocks.buildVars,
+}));
 vi.mock('@agent/runtime/SessionResumeRetrieval', () => ({
   retrieveSessionResumeData: mocks.retrieveSessionResumeData,
 }));
@@ -330,7 +332,9 @@ describe('native agent launch activation', () => {
         mocks.load.mockReturnValueOnce(
           Effect.succeed([{ agentCategory: AgentCategory.ToolUse }, {}]),
         );
-        mocks.buildVars.mockReturnValueOnce(Effect.succeed({}));
+        mocks.buildVars.mockReturnValueOnce(
+          Effect.succeed({ inputs: {}, catalog: [], attachedMemoryMisses: [] }),
+        );
 
         const session = createTestSession();
         yield* Effect.addFinalizer(() => closeSessionOf(session));

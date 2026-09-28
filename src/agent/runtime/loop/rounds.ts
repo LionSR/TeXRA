@@ -130,7 +130,14 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
   if (setting.agentCategory !== AgentCategory.Workflow) {
     return yield* Effect.die(new Error('Round mode requires a workflow run.'));
   }
-  const docs = yield* makeDocumentRounds(setting);
+  // Every round renders its prompts from the launch's template inputs.
+  if (run.opening === null) {
+    return yield* Effect.die(
+      new Error('A workflow run launches with its template inputs.'),
+    );
+  }
+  const { inputs } = run.opening;
+  const docs = yield* makeDocumentRounds(setting, inputs);
   const { totalRounds } = docs;
 
   /** A context-window overflow is recovered once per round: force the
@@ -196,7 +203,7 @@ export const roundsContinuation = Effect.fn('rounds.policy')(function* (
       Effect.map(
         getSystemPromptWithRules(
           prompt.systemPrompt,
-          run.userVarChannels,
+          inputs,
           session.roots.workspace,
         ),
         (system) => ({ system, round: index, debugName: `r${index}` }),

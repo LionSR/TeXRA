@@ -200,7 +200,12 @@ describe('run-scoped tool resolution', () => {
             state!,
             false,
             'request',
-            () => ({ base: undefined, added: '' }),
+            {
+              base: () => undefined,
+              catalog: () => [],
+              isChild: () => false,
+              activated: new Map(),
+            },
           );
           return { state: state!, step };
         }).pipe(

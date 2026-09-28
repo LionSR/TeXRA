@@ -31,21 +31,30 @@
  * from the latest record unrecorded.
  */
 import { Context, Effect, Exit, Scope, SynchronizedRef } from 'effect';
+import { ModelProvider } from 'llm-zoo';
 
+import { stepInstructions } from '@agent/prompt/PromptBuilder';
 import type { RuntimeToolRegistry } from '@agent/runtime/ToolServices';
 import { MapToolRegistry } from '@agent/core/tools/ToolTypes';
 import { withLogChannel } from '@logger/effectLog';
 import type { PluginServices } from '@platform/processRuntime';
 import {
+  listedSkills,
   sameIdentity,
   type OfferedTool,
+  type SkillCatalogEntry,
   type ToolDefinition,
 } from '@shared/schemas';
 import type { RunLedgerDraft, RunState } from '@shared/session/runStateFold';
+import {
+  activatedSkillDirectories,
+  activatedSkillNames,
+} from '@skills/runtimeSkills';
 import { sha256, type ContinuationEntry } from '@tools/catalogEntries';
 import { LiveTools } from '@tools/liveTools';
 import { readDisabledTools, switchedOffPlugins } from '@tools/plugins';
 import type { PromptContribution } from '@tools/toolTable';
+import { grantSkillRoots } from '@utils/files/externalRoots';
 
 import { resolveStepTools } from '../agentToolResolution';
 import { blobRows } from '../run/requestContext';
@@ -64,12 +73,41 @@ export interface StepTools {
   readonly services: Context.Context<PluginServices>;
 }
 
-/** The system text a step's requests send: the run's base text, and the
- *  prompt contributions the step pinned rendered for the tools it offers. */
-export type RenderSystem = (
-  prompt: ReadonlyMap<string, PromptContribution>,
-  offered: readonly string[],
-) => { readonly base: string | undefined; readonly added: string };
+/** What a step's system text is built from that the run holds: its
+ *  recorded base text and skill catalog, and whether it is a child; and the
+ *  skills its user activated by name, which each step grants beside those
+ *  it lists (null: not an enabled skill, nothing to grant). */
+export interface RunSystem {
+  readonly base: () => string | undefined;
+  readonly catalog: () => readonly SkillCatalogEntry[];
+  readonly isChild: () => boolean;
+  readonly activated: Map<string, SkillGrant | null>;
+}
+
+type SkillGrant = { readonly name: string; readonly directory: string };
+
+/** Resolve, once each, the skills the user activated in the rows. */
+const noteActivations = Effect.fn('Step.activations')(function* (
+  run: AgentRunShape,
+  state: RunState,
+  activated: RunSystem['activated'],
+) {
+  const named = new Set(
+    state.messages
+      .flatMap((m) => (m.role === 'user' ? m.content : []))
+      .flatMap((p) => (p.kind === 'text' ? activatedSkillNames(p.text) : []))
+      .filter((name) => !activated.has(name)),
+  );
+  if (named.size === 0) return;
+  for (const name of named) activated.set(name, null);
+  const { roots } = run.session;
+  for (const grant of yield* activatedSkillDirectories(
+    named,
+    roots.workspace,
+    roots,
+  ))
+    activated.set(grant.name, grant);
+});
 
 /** The run's current step, the scope that holds its pin, the tools it
  *  withheld for approval, its continuation, and its prompt contributions by
@@ -159,7 +197,7 @@ const openStep = Effect.fn('Step.open')(function* (
   state: RunState,
   recorded: readonly OfferedTool[] | null,
   holding: boolean,
-  render: RenderSystem,
+  runSystem: RunSystem,
 ) {
   const live = yield* LiveTools;
   const scope = yield* Scope.fork(run.scope);
@@ -204,6 +242,7 @@ const openStep = Effect.fn('Step.open')(function* (
       ],
       withheld: resolved.withheldForApproval,
       continuation,
+      installed: pinned.installed,
       prompt: new Map(
         [...pinned.sections.entries].toSorted(
           ([a], [b]) => Number(a > b) - Number(a < b),
@@ -221,25 +260,56 @@ const openStep = Effect.fn('Step.open')(function* (
   });
   if (previous !== null) yield* Scope.close(previous.scope, Exit.void);
   const continuation = step.continuation?.plugin ?? null;
-  const sections = [...step.prompt.keys()];
-  const names = step.tools.definitions.map(({ name }) => name);
-  const { base, added } = render(step.prompt, names);
+  // The plugins the step's system text draws on: the built-in ones' sections
+  // and skills, and the installed ones' skills. The skills it lists are the
+  // ones the run grants tools to read.
+  const sections = [...step.prompt.keys(), ...step.installed].toSorted();
+  const listed = listedSkills(
+    runSystem.catalog(),
+    new Set([
+      ...[...step.prompt].flatMap(([id, { skills }]) => (skills ? [id] : [])),
+      ...step.installed,
+    ]),
+  );
+  const { roots } = run.session;
+  yield* noteActivations(run, state, runSystem.activated);
+  for (const name of grantSkillRoots(run.runId, roots.workspace, [
+    ...listed.flatMap(({ name, directory }) =>
+      directory === null ? [] : [{ name, directory }],
+    ),
+    ...[...runSystem.activated.values()].flatMap((grant) => grant ?? []),
+  ]))
+    run.logger.warn(
+      `Skill ${name} is not readable by tools: its directory cannot be verified.`,
+    );
+  // The model-dependent text follows the step's model and settings.
+  const model = yield* SynchronizedRef.get(run.model);
+  const base = runSystem.base();
+  const added = stepInstructions(step.prompt, listed, {
+    offered: step.tools.definitions.map(({ name }) => name),
+    isChild: runSystem.isChild(),
+    isAnthropic: model.config.provider === ModelProvider.ANTHROPIC,
+    bibPath: roots.config.get<string>('texra.bib.defaultPath') ?? '',
+  });
   const system =
     base === undefined || added === '' ? base : `${base}\n${added}`;
   const address = system === undefined ? null : sha256(system);
   const toolsChanged = !sameSet(state.offeredTools, step.tools.offered);
+  // An installed plugin that ships only skills changes the sections alone.
+  const sectionsChanged =
+    sections.join('\0') !== state.offeredSections.join('\0');
   const changed =
     toolsChanged ||
+    sectionsChanged ||
     state.offeredContinuation !== continuation ||
-    state.offeredSystem !== address ||
-    sections.join('\0') !== state.offeredSections.join('\0');
+    state.offeredSystem !== address;
   // What is withheld can change while the offered set does not (a plugin
   // switched on whose tools all need approval): reported on its own.
   const withheldChanged =
     step.withheld.length > 0 &&
     step.withheld.join('\0') !== (previous?.withheld ?? []).join('\0');
   const warnings = [
-    ...(toolsChanged ? step.warnings : []),
+    ...(toolsChanged || sectionsChanged ? step.warnings : []),
     ...(withheldChanged
       ? [
           `Not offering ${step.withheld.join(', ')}: these tools need approval, and this run can neither show an approval prompt nor auto-approve under its approval policy. Use the yolo approval policy to allow them.`,
@@ -303,7 +373,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
   state: RunState,
   roundMode: boolean,
   kind: 'request' | 'dispatch' | 'park',
-  render: RenderSystem,
+  runSystem: RunSystem,
 ) {
   if (roundMode)
     return {
@@ -328,7 +398,7 @@ export const stepFor = Effect.fn('Step.for')(function* (
     state,
     held ? state.offeredTools : null,
     held && kind === 'park',
-    render,
+    runSystem,
   );
   return kind === 'dispatch' ? { ...step, rows: [] } : step;
 });

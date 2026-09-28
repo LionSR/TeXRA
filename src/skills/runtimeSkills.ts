@@ -1,6 +1,4 @@
-import { realpathSync } from 'node:fs';
-
-import { Effect, type FileSystem } from 'effect';
+import { Effect, FileSystem } from 'effect';
 
 import {
   readInstalledPluginLoad,
@@ -8,9 +6,8 @@ import {
 } from '@common/plugins/pluginTrust';
 
 import {
-  ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS,
+  SKILL_CATALOG_MAX_SKILLS,
   type ActiveSkillSourceScope,
-  type RawAcceptedSkill,
   type SkillCatalogEntry,
   type SkillDisplayItem,
 } from '@shared/schemas';
@@ -19,8 +16,7 @@ import { escapeAttr, escapeText } from '@shared/utils/xmlEscape';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { isPathWithin } from '@utils/core/pathCore';
-import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
-import { registerExternalRoot } from '@utils/files/externalRoots';
+import { toErrorMessage } from '@utils/errors/errorMessage';
 import { safeHomedir } from '@utils/system/platformPaths';
 
 import { issue } from './skillLoader';
@@ -59,7 +55,6 @@ let installed: SkillContributionsInstall = {
 
 interface RuntimeSkillCatalogResult {
   catalog: SkillCatalogEntry[];
-  skills: RawAcceptedSkill[];
   issues: SkillLoadIssue[];
 }
 
@@ -227,57 +222,81 @@ export function filterDiscoveredSkills(
   };
 }
 
-/**
- * Discover only skills that may be injected or explicitly activated.
- *
- * The catalog and an activation both point the model at a skill's `SKILL.md`
- * and its directory, so each enabled skill outside the workspace is
- * registered as a read-only external root of this project: `read_file` can
- * read the skill and its resources in this project's sessions only, and no
- * tool can write them. A skill inside the
- * workspace is already readable and stays writable like any project file.
- */
+/** Discover only skills that may be injected or explicitly activated. */
 export function loadEnabledRuntimeSkills(
   workspaceRoot: string | undefined,
   plugins: InstalledPluginLoad,
   disabled: DisabledSkills,
 ) {
-  return Effect.gen(function* () {
-    const result = yield* discoverRuntimeSkills(workspaceRoot, plugins);
-    const enabled = filterDiscoveredSkills(result, disabled);
-    for (const { skill } of enabled.skills) {
-      // Hosts hand the workspace root over already canonical, and a
-      // discovered skill directory exists, so its realpath is its physical
-      // place. Registration fails closed on a path it cannot verify; that
-      // skill then stays unreadable to tools, worth a warning, not a run.
-      yield* Effect.try({
-        try: () => {
-          const directory = realpathSync(skill.baseDir);
-          if (
-            workspaceRoot !== undefined &&
-            isPathWithin(workspaceRoot, directory)
-          ) {
-            return;
-          }
-          registerExternalRoot(directory, {
-            kind: 'skill',
-            writable: false,
-            label: `Skill ${skill.name}`,
-            project: workspaceRoot,
-          });
-        },
-        catch: ensureError,
-      }).pipe(
-        Effect.catch((error) =>
-          Effect.logWarning(
-            `Skill ${skill.name} is not readable by tools: ${toErrorMessage(error)}`,
-          ),
-        ),
-      );
-    }
-    return enabled;
-  });
+  return Effect.map(discoverRuntimeSkills(workspaceRoot, plugins), (result) =>
+    filterDiscoveredSkills(result, disabled),
+  );
 }
+
+/** The names of the skills a user activated in `text`: each
+ *  `<skill_activation>` block names its skill as
+ *  {@link formatRuntimeSkillActivation} writes it. */
+export const activatedSkillNames = (text: string): string[] =>
+  text.includes('<skill_activation>')
+    ? [
+        ...text.matchAll(/<skill_activation>[\s\S]*?<skill name="([^"]+)">/g),
+      ].map(([, name]) => name)
+    : [];
+
+/**
+ * The directory tools may read while a run lists or activated the skill: its
+ * physical place, when outside the workspace, which already holds the rest.
+ * One whose place cannot be verified is not granted, which is worth a
+ * warning, not a run.
+ */
+const skillDirectory = (
+  fs: FileSystem.FileSystem,
+  workspaceRoot: string | undefined,
+  skill: SourcedSkill['skill'],
+) =>
+  fs.realPath(skill.baseDir).pipe(
+    Effect.map((real) =>
+      workspaceRoot !== undefined && isPathWithin(workspaceRoot, real)
+        ? null
+        : real,
+    ),
+    Effect.catch((error) =>
+      Effect.as(
+        Effect.logWarning(
+          `Skill ${skill.name} is not readable by tools: ${toErrorMessage(error)}`,
+        ),
+        null,
+      ),
+    ),
+  );
+
+/**
+ * The directories of the `named` skills a user activated that discovery
+ * still enables, for the run that received the activation to grant.
+ */
+export const activatedSkillDirectories = Effect.fn('skills.activated')(
+  function* (
+    named: ReadonlySet<string>,
+    workspaceRoot: string | undefined,
+    stores: SettingsStores,
+  ) {
+    const enabled = yield* loadEnabledRuntimeSkills(
+      workspaceRoot,
+      yield* readInstalledPluginLoad(stores),
+      yield* readDisabledSkills(stores),
+    );
+    const fs = yield* FileSystem.FileSystem;
+    const found = yield* Effect.forEach(
+      enabled.skills.filter(({ skill }) => named.has(skill.name)),
+      ({ skill }) =>
+        Effect.map(skillDirectory(fs, workspaceRoot, skill), (directory) =>
+          directory === null ? [] : [{ name: skill.name, directory }],
+        ),
+      { concurrency: 'unbounded' },
+    );
+    return found.flat();
+  },
+);
 
 export function formatRuntimeSkillActivation({
   skill,
@@ -330,22 +349,25 @@ export const loadRuntimeSkillCatalog = Effect.fn('skills.runtimeCatalog')(
     const catalog = result.skills.filter(({ source }) => {
       const count = kept.get(source.plugin) ?? 0;
       kept.set(source.plugin, count + 1);
-      return count < ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS;
+      return count < SKILL_CATALOG_MAX_SKILLS;
     });
+    const fs = yield* FileSystem.FileSystem;
     return {
-      catalog: catalog.map(({ skill, source }) => ({
-        plugin: source.plugin ?? null,
-        text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
-      })),
-      // The snapshot names the skills of the switches read at open.
-      skills: catalog
-        .filter(({ source }) => !pluginOff(source, disabled))
-        .slice(0, ACTIVE_SKILLS_SNAPSHOT_MAX_SKILLS)
-        .map(({ skill, source }) => ({
-          name: skill.name,
-          description: skill.description,
-          source: source.scope,
-        })),
+      // Each entry names the directory tools may read while a step lists
+      // the skill (`grantSkillRoots`).
+      catalog: yield* Effect.forEach(
+        catalog,
+        ({ skill, source }) =>
+          skillDirectory(fs, run.workspacePath, skill).pipe(
+            Effect.map((directory) => ({
+              plugin: source.plugin ?? null,
+              name: skill.name,
+              text: `- ${skill.name}: ${skill.description}\n  Source: ${sourceLabel(source)}\n  Path: ${skill.path}`,
+              directory,
+            })),
+          ),
+        { concurrency: 'unbounded' },
+      ),
       issues: result.errors,
     } satisfies RuntimeSkillCatalogResult;
   },

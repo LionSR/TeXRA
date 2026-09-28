@@ -16,7 +16,7 @@
  * before a request leaves the process, that the rows it just committed,
  * read back from the store, rebuild that turn exactly.
  */
-import { Effect } from 'effect';
+import { Data, Effect } from 'effect';
 import stableStringify from 'safe-stable-stringify';
 import { z } from 'zod';
 import {
@@ -29,7 +29,9 @@ import {
 
 import {
   JsonValueSchema,
+  listedSkills,
   Sha256Schema,
+  SkillCatalogSchema,
   type InvocationRef,
   type RunId,
 } from '@shared/schemas';
@@ -141,9 +143,36 @@ export function attemptRows(
   ];
 }
 
-/** A stored text, such as the base system text a snapshot names. */
-export const storedText = (state: RunState, digest: string): string =>
-  z.string().parse(blob(state, digest));
+/** A stored value, such as the base system text or the skill catalog a
+ *  snapshot names. */
+export const stored = <T>(
+  state: RunState,
+  digest: string,
+  schema: z.ZodType<T>,
+): T => schema.parse(blob(state, digest));
+
+/** A run's recorded skill catalog is missing or corrupt. */
+export class RecordedSkillsUnreadable extends Data.TaggedError(
+  'RecordedSkillsUnreadable',
+)<{ readonly message: string }> {}
+
+/** The names of the skills the run's latest step lists: its recorded
+ *  catalog, read and verified, as that step's sections filter it. */
+export const listedSkillNames = (state: RunState) =>
+  Effect.try({
+    try: () => {
+      const digest = state.flow?.state.skills;
+      if (digest === undefined) return [];
+      return listedSkills(
+        stored(state, digest, SkillCatalogSchema),
+        new Set(state.offeredSections),
+      ).map(({ name }) => name);
+    },
+    catch: (cause) =>
+      new RecordedSkillsUnreadable({
+        message: `The run's recorded skill catalog cannot be read: ${toErrorMessage(cause)}`,
+      }),
+  });
 
 /** One stored blob, verified against its address: a blob that is missing
  *  or does not hash to its digest is a corrupt record. */
@@ -173,7 +202,7 @@ function recordedTurn(state: RunState) {
       mode: recorded.mode,
       ...(recorded.system === null
         ? {}
-        : { system: storedText(state, recorded.system) }),
+        : { system: stored(state, recorded.system, z.string()) }),
       messages: state.messages,
       tools: recorded.tools.map((digest) =>
         DeclarationSchema.parse(blob(state, digest)),

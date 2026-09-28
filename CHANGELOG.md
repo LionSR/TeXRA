@@ -6,6 +6,14 @@ All notable changes to this project will be documented in this file.
 
 ### Breaking Changes
 
+- **Agent prompt templates lose `{{ MODEL }}`, `{{ ROUNDS }}` and
+  `{{ DEFAULT_BIB_PATH }}`.** None of TeXRA's agents used them; a custom
+  agent that does now renders them empty. The default bibliography is named
+  in every tool-use request instead, and follows the setting when it changes.
+  A mid-conversation model switch now updates the tool-call guidance the
+  model gets, and switching off an installed plugin withdraws its skills
+  from the next request. Session history from earlier builds is cleared the
+  first time this build opens a workspace.
 - **Session history starts over again with this build.** The first time it
   opens a workspace, the history an earlier build wrote is moved aside
   (`texra.db.format<N>`) and TeXRA says so; runs from those builds cannot be
