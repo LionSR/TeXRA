@@ -284,13 +284,12 @@ All notable changes to this project will be documented in this file.
 
 ### Bug Fixes
 
-- **Switching model mid-chat keeps the conversation going** — after `/model`
-  moved a chat to another model of the same provider (for example DeepSeek
-  V4.1 Flash to V4 Pro), the next turn failed with "Provider content evidence
-  belongs to another model origin". The earlier model's replies and tool calls
-  are now sent to the new model as plain history, without that model's
-  reasoning or response ids. Anthropic and OpenRouter models likewise no
-  longer send an earlier model's thinking to the model switched to.
+- **Switching to another model of the same provider mid-chat keeps
+  working** — after `/model` moved a chat to another model of the same
+  provider (for example DeepSeek V4.1 Flash to V4 Pro), the next message
+  failed with "Provider content evidence belongs to another model origin" and
+  the chat could not continue. The conversation now carries on with the new
+  model, which sees the earlier replies and tool results.
 
 - **`write_file` creates missing folders** — writing a new file into a folder
   that does not exist yet creates the folder inside the workspace, as an

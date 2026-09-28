@@ -10,7 +10,11 @@ import {
   type ResolvedTurn,
   type TurnResult,
 } from './turn.js';
-import { ContinuationSchema, type Continuation } from './message.js';
+import {
+  ContinuationSchema,
+  replayableHistory,
+  type Continuation,
+} from './message.js';
 import { sameModelOrigin } from './protocol.js';
 import { ModelError } from './errors.js';
 import { prefixFingerprint } from './prefixFingerprint.js';
@@ -84,7 +88,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
   const content = (part: Parameters<typeof responsesContent>[0]) =>
     responsesContent(part, documents);
   const input: OpenAI.Responses.ResponseInput = [];
-  for (const message of messages) {
+  for (const message of replayableHistory(messages, turn)) {
     if (message.role === 'tool') {
       for (const result of message.results) {
         // A settlement that carries only text keeps the plain string output
@@ -117,24 +121,16 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
       });
       continue;
     }
-    // History another model of this protocol wrote (a mid-run model switch)
-    // replays as plain content: its item ids, reasoning and encrypted content
-    // are that model's, and the new one is sent none of them.
-    const own = sameModelOrigin(message.origin, turn);
     for (const part of message.content) {
-      if (
-        part.evidence != null &&
-        !own &&
-        message.origin.protocol !== turn.protocol
-      ) {
+      if (part.evidence != null && !sameModelOrigin(message.origin, turn)) {
         return yield* new ModelError({
           kind: 'unsupported',
-          message: 'Provider content evidence belongs to another protocol.',
+          message: 'Provider content evidence belongs to another model origin.',
         });
       }
       switch (part.kind) {
         case 'message': {
-          if (part.evidence && own) {
+          if (part.evidence) {
             if (part.evidence.kind !== 'openai-responses-message') {
               return yield* new ModelError({
                 kind: 'unsupported',
@@ -158,7 +154,7 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           } else {
             const text: string[] = [];
             for (const child of part.content) {
-              if (child.kind !== 'text' && own) {
+              if (child.kind !== 'text') {
                 return yield* new ModelError({
                   kind: 'unsupported',
                   message:
@@ -172,7 +168,6 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
           break;
         }
         case 'reasoning': {
-          if (!own) break;
           if (part.evidence?.kind !== 'openai-responses-reasoning') {
             return yield* new ModelError({
               kind: 'unsupported',
@@ -221,10 +216,10 @@ const lowerMessages = Effect.fn('llm.responses.lowerMessages')(function* (
             call_id: part.providerCallId,
             name: part.name,
             arguments: part.argumentsText,
-            ...(own && part.evidence?.itemId !== undefined
+            ...(part.evidence?.itemId !== undefined
               ? { id: part.evidence.itemId }
               : {}),
-            ...(own && part.evidence?.status !== undefined
+            ...(part.evidence?.status !== undefined
               ? { status: part.evidence.status }
               : {}),
           });

@@ -375,6 +375,56 @@ describe('canonical Anthropic Messages protocol', () => {
     },
   );
 
+  it.effect(
+    "sends no switched-from model's thinking and no empty assistant turn",
+    () =>
+      Effect.gen(function* () {
+        fetchModel.mockImplementation(async () => response(signedEvents()));
+        const bound = model();
+        // An earlier Claude model's turn that ended while thinking: once its
+        // thinking is left out, the turn has nothing left to send.
+        const turn = yield* bound.prepareTurn({
+          messages: [
+            { role: 'user', content: [{ kind: 'text', text: 'first' }] },
+            {
+              role: 'assistant',
+              origin: {
+                protocol: 'anthropic-messages',
+                codecVersion: 1,
+                requestedModel: 'earlier-claude',
+                deployment: CONFIG.deployment,
+              },
+              content: [
+                {
+                  kind: 'reasoning',
+                  summary: [],
+                  content: [{ kind: 'text', text: 'thinking' }],
+                  evidence: {
+                    kind: 'anthropic-thinking-signature',
+                    signature: 'sig',
+                  },
+                },
+              ],
+            },
+            { role: 'user', content: [{ kind: 'text', text: 'second' }] },
+          ],
+        });
+        assert(turn.mode === 'foreground');
+        yield* completedTurn(bound.streamTurn(turn));
+        expect(
+          JSON.parse(fetchModel.mock.calls[0]![1]!.body as string).messages,
+        ).toEqual([
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'first' },
+              { type: 'text', text: 'second' },
+            ],
+          },
+        ]);
+      }),
+  );
+
   it.effect.each([
     [undefined, '1h'],
     ['', '1h'],
