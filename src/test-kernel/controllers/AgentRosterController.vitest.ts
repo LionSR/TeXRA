@@ -112,6 +112,18 @@ describe('AgentRosterController', () => {
     }),
   );
 
+  it.effect('reads a bare name in a written list as choosing that agent', () =>
+    Effect.gen(function* () {
+      const roster = controller(new FakeStateStore());
+      // The CLI writes bare names (`--tool-use lead,search`).
+      yield* roster.setEnabledAgentKeys('toolUse', ['lead', 'search']);
+      yield* roster.setTeam('test-team');
+      expect(
+        (yield* roster.getVisibleAgents('toolUse')).map((agent) => agent.name),
+      ).toEqual(['lead', 'search']);
+    }),
+  );
+
   it.effect(
     'preserves symbolic roster semantics when a toggle changes nothing',
     () =>

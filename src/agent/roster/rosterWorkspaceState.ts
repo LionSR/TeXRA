@@ -20,6 +20,7 @@ import type {
 import {
   AGENT_SOURCE,
   agentKeyOf,
+  agentMatchesIdentifier,
   AgentRosterSelectionSchema,
   type AgentSource,
   HiddenCustomAgentKeysSchema,
@@ -94,18 +95,24 @@ function readHidden(
   });
 }
 
+/** Whether a stored list names `entry`, by the roster's identity rule: a
+ *  bare name (as the CLI writes) names it as its source-qualified key does. */
+function listNames(listed: readonly string[], entry: RosterEntry): boolean {
+  return listed.some((identifier) => agentMatchesIdentifier(entry, identifier));
+}
+
 /** The custom agents among `entries` that `listed` leaves out and the user
  *  did not hide: shown all the same. */
 export function unlistedCustomAgents<Entry extends RosterEntry>(
   workspaceState: StateStore,
   entries: readonly Entry[],
-  listed: ReadonlySet<string>,
+  listed: readonly string[],
 ): Effect.Effect<Entry[], StateReadFailed> {
   return Effect.map(readHidden(workspaceState), (hidden) =>
     entries.filter(
       (entry) =>
         entry.source === AGENT_SOURCE.CUSTOM &&
-        !listed.has(agentKeyOf(entry)) &&
+        !listNames(listed, entry) &&
         !hidden.has(agentKeyOf(entry)),
     ),
   );
@@ -123,11 +130,11 @@ export function recordCustomChoices(
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
     const hidden = yield* readHidden(workspaceState);
-    const enabled = selection === 'all' ? undefined : new Set(selection);
     for (const entry of entries) {
       if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
       const key = agentKeyOf(entry);
-      if (enabled === undefined || enabled.has(key)) hidden.delete(key);
+      if (selection === 'all' || listNames(selection, entry))
+        hidden.delete(key);
       else hidden.add(key);
     }
     yield* workspaceState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [

@@ -297,9 +297,7 @@ export const applyApprovedFileEdit = Effect.fn('applyApprovedFileEdit')(
       : yield* Effect.flatMap(WorkspaceFs, (workspace) =>
           workspace.resolve(path),
         );
-    if (
-      findExternalRoot(absolutePath, call.roots.workspace)?.kind === 'custom'
-    ) {
+    if (findExternalRoot(absolutePath, call.run?.runId)?.kind === 'custom') {
       yield* reloadAgentCatalog.pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning(

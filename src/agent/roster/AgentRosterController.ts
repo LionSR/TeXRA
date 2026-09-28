@@ -144,7 +144,7 @@ export class AgentRosterController<
         ...(yield* unlistedCustomAgents(
           this.deps.workspaceState,
           this.deps.getAgents(category),
-          new Set(entries.map(agentKeyOf)),
+          entries.map(agentKeyOf),
         )),
       ];
     });
@@ -207,7 +207,7 @@ export class AgentRosterController<
       const unlisted = yield* unlistedCustomAgents(
         this.deps.workspaceState,
         this.deps.getAgents(category),
-        new Set(keys),
+        keys,
       );
       return [...keys, ...unlisted.map(agentKeyOf)];
     });
