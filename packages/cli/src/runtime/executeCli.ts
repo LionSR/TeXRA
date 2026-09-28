@@ -31,7 +31,7 @@ import {
 import { aggregateError, generateRunId } from '@utils/core';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
 
-import { cliToolUseApprovalOptions } from './approval/settleApprovals';
+import { cliApprovalDenialHandler } from './approval/settleApprovals';
 import { createHeadlessCliHostInteractions } from './approvalAdapter';
 import {
   advertisesInterruptedRun,
@@ -556,7 +556,7 @@ export function executeCliRequest(
           ownedRunId = runId;
         },
         stopAfterCycle: options.stopAfterCycle,
-        ...cliToolUseApprovalOptions(session, runContext),
+        onApprovalPolicyDenial: cliApprovalDenialHandler(session, runContext),
       });
 
     let runResult:

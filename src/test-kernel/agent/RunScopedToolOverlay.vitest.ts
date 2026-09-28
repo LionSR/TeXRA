@@ -4,6 +4,15 @@ import { it } from '@effect/vitest';
 import { Effect, Layer, SynchronizedRef } from 'effect';
 import { describe, expect, vi } from 'vitest';
 
+// Every launch here binds the deterministic in-process model, as a guarded
+// package-validation run does: the route decision takes the validation arm.
+vi.mock('@agent/runtime/run/validationModel', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@agent/runtime/run/validationModel')
+  >()),
+  shouldUseInternalValidationModel: () => Effect.succeed(true),
+}));
+
 import { AgentConfigSchema } from '@agent/core/definition/AgentConfig';
 import {
   AgentPromptSchema,
@@ -56,11 +65,7 @@ function approvalGatedTool(name: string): ITool {
   return { ...tool(name), requiresApproval: true };
 }
 
-/**
- * A launch whose model binds without a credential: the run layer reads the
- * compatibility key off the launch context, and the validation key binds the
- * deterministic in-process model.
- */
+/** A launch whose model binds without a credential (the validation model). */
 function validationLaunch(
   init: Parameters<typeof createTestLaunchContext>[0],
   config: AgentLaunchContext['config'],
@@ -72,7 +77,6 @@ function validationLaunch(
     // Headless: the turn ends the run instead of parking for input.
     toolPolicy: { stopAfterCycle: true },
     modelConfig: buildTestModelConfig(),
-    modelCompatibilityKey: 'Validation',
   };
 }
 

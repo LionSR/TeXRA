@@ -67,19 +67,14 @@ export function cliApprovalPromptsUnavailable(
   );
 }
 
-/** The approval options of every CLI tool-use launch: a policy denial warns
- *  once. */
-export function cliToolUseApprovalOptions(
+/** Every CLI tool-use launch's `onApprovalPolicyDenial`: a policy denial
+ *  warns once. */
+export function cliApprovalDenialHandler(
   session: SessionHandle,
   context: CliContext,
   runId?: RunId,
-): {
-  readonly onApprovalPolicyDenial: (denial: ApprovalPolicyDenial) => void;
-} {
-  return {
-    onApprovalPolicyDenial: (denial) =>
-      warnApprovalDenied(session, context, denial, runId),
-  };
+): (denial: ApprovalPolicyDenial) => void {
+  return (denial) => warnApprovalDenied(session, context, denial, runId);
 }
 
 /** The policy's answer for a gated executable request, or `undefined` to

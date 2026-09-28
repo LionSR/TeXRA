@@ -105,8 +105,9 @@ src/transcript/                   ← TeXRA transcript plane
 └── StreamLogStore.ts             ← transcript persistence (file-backed)
 
 src/telemetry/
-└── UsageLogService.ts            ← usage write path, fed by
-                                    `src/agent/runtime/UsageMonitor.ts`
+└── UsageLogService.ts            ← usage write path, fed per priced call by
+                                    `reportUsage` (`src/agent/runtime/run/modelCall.ts`,
+                                    called from `ModelInvoker` and `modelCall`)
 ```
 
 ## Single-resolve invariant

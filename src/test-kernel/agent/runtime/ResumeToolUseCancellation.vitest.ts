@@ -172,7 +172,6 @@ function buildResumeContext(runId: RunId): AgentLaunchContext {
       attachedMemoryMisses: [],
     },
     attachedMemoryMisses: [],
-    usageMonitor: { recordUsage: vi.fn() },
   } as unknown as AgentLaunchContext;
 }
 

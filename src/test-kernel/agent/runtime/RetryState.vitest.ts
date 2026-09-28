@@ -310,9 +310,8 @@ function agentRun(
 /** The opening state of a fresh tool-use run, as the loop authors it. */
 const freshState = (): RunState => ({
   commit: 0,
-  snapshotCommit: null,
   lastSnapshot: null,
-  rowsBeforeSnapshot: 0,
+  ledgerRows: 0,
   family: 'toolUse',
   at: null,
   outcome: null,

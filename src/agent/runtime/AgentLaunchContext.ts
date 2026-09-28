@@ -26,11 +26,7 @@ import {
 import type { ModelOptionStores } from '@model/computeModelOptions';
 import { AppState } from '@platform/interfaces';
 import { Secrets } from '@platform/secrets';
-import {
-  type AttachedMemoryMiss,
-  type ModelCompatibilityKey,
-  type RunId,
-} from '@shared/schemas';
+import { type AttachedMemoryMiss, type RunId } from '@shared/schemas';
 import {
   AgentCategory,
   INSTRUCTION_ACTION,
@@ -72,15 +68,10 @@ type LaunchResolvedRunFacts = Pick<
 export interface AgentLaunchContext extends LaunchResolvedRunFacts {
   /**
    * The registry config of the launch model. The run's `AgentRun` service
-   * binds it (or the model a resumed run's snapshot names) under the route
-   * `modelCompatibilityKey` records; a mid-run switch rebinds there.
+   * binds it (or the model and route a resumed run's snapshot names); a
+   * mid-run switch rebinds there.
    */
   readonly modelConfig: ModelConfig;
-  /**
-   * The conversation format a resumed run persisted, or null for a fresh run
-   * whose route the binding resolves from today's settings.
-   */
-  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
   /**
    * This launch is the user's own-API-key fallback: the retry they answered
    * that way relaunched the run here, so it declines the editor's Copilot
@@ -118,8 +109,6 @@ interface AgentLaunchInput {
   onTraceEvent?: (event: AgentEvent) => void;
   /** Session owning this run's coordination state. */
   session: SessionHandle;
-  /** Resume using this persisted provider-message format instead of today's default route. */
-  modelCompatibilityKey?: ModelCompatibilityKey | null;
   /** This launch is the user's own-API-key fallback for a quota-exhausted
    *  retry: it declines the Copilot route and every subscription route. */
   ownApiKeyFallback?: boolean;
@@ -340,16 +329,12 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
     // and carried in, so a delegated launch inherits the parent run's session
     // policy and a root launch gets the process default exactly once.
     const { session, runId } = input;
-    // A resumed run's latest snapshot (one indexed read): its format, its
-    // opening's memory misses; a run with none binds today's default route.
+    // A resumed run's latest snapshot (one indexed read): whether its rows
+    // hold its opening, and that opening's memory misses.
     const snapshot = input.resumed
       ? yield* session.ledger.latestSnapshot(runId)
       : null;
     const recorded = snapshot?.payload.state;
-    const modelCompatibilityKey =
-      input.modelCompatibilityKey ??
-      snapshot?.payload.runtime.modelCompatibilityKey ??
-      null;
     // The run's model is bound from the stores the launch already has: the
     // session's own setting slots, so routing and the provider switches
     // answer for this run's workspace, and the process secret store.
@@ -464,7 +449,6 @@ export const buildAgentLaunchContext = Effect.fn('buildAgentLaunchContext')(
       setting,
       prompt,
       modelConfig,
-      modelCompatibilityKey,
       ownApiKeyFallback: input.ownApiKeyFallback ?? false,
       // Frozen so nothing mutates it mid-run.
       toolPolicy: Object.freeze({ ...input.toolPolicy }),

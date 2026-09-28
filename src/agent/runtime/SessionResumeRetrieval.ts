@@ -11,7 +11,7 @@ import type { AgentConfig } from '@agent/core/definition/AgentConfig';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
 import { deriveResumability } from '@agent/storage/resumability';
 import { withLogChannel } from '@logger/effectLog';
-import type { ModelCompatibilityKey, RunId } from '@shared/schemas';
+import type { RunId } from '@shared/schemas';
 
 const CHANNEL = 'SessionResumeRetrieval';
 
@@ -20,8 +20,6 @@ export interface ResumeData {
   /** The run's configuration, its model being the one the snapshot names. */
   readonly agentConfig: AgentConfig;
   readonly runId: RunId;
-  /** The conversation format the run's rows are in. */
-  readonly modelCompatibilityKey: ModelCompatibilityKey | null;
 }
 
 /**
@@ -61,7 +59,6 @@ export const retrieveSessionResumeData = Effect.fn('retrieveSessionResumeData')(
     return {
       runId,
       agentConfig: { ...agentConfig, model: snapshot.runtime.modelId },
-      modelCompatibilityKey: snapshot.runtime.modelCompatibilityKey,
     };
   },
 );

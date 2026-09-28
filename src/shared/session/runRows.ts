@@ -154,6 +154,33 @@ export function byId<T>(
   return record;
 }
 
+/** A fresh null-prototype copy of an id-keyed record. */
+export const copyById = <T>(record: Readonly<Record<string, T>>) =>
+  byId(Object.entries(record));
+
+/**
+ * The containers one fold pass created. A pass (one fold over a batch of
+ * rows) copies a container the first time a row writes it and writes that
+ * copy in place after, so a batch costs one copy per container instead of one
+ * per row, and nothing reachable from the state the pass started from is ever
+ * written. Only the pass's result escapes it; the next pass copies again.
+ */
+export type FoldPass = WeakSet<object>;
+
+/** `value` itself when this pass created it, else a copy the pass now owns.
+ *  Without a pass every write copies, one row at a time. */
+export function writable<T extends object, W extends T>(
+  pass: FoldPass | undefined,
+  value: T,
+  copy: (value: T) => W,
+): W {
+  // Only `copy` put a value in the pass, so an owned value is a `W`.
+  if (pass?.has(value) === true) return value as W;
+  const fresh = copy(value);
+  pass?.add(fresh);
+  return fresh;
+}
+
 /** The position before any of these rows folded. */
 export const freshRunPosition = (): RunPosition => ({
   family: null,
@@ -210,19 +237,23 @@ export const isFollowUpRow = (row: SessionEvent): row is FollowUpRow =>
  * for the run yet: queued input and the loop's own position open one, a
  * request, a consumption or an output presupposes it and moves nothing. A
  * reader that folds only the position (`RunState`) applies only the rows
- * that move it.
+ * that move it. A fold over a batch passes its `pass`, and the containers a
+ * verdict carries are then the pass's own, written in place by later rows.
  */
 export function applyRunRow(
   current: RunPosition | null,
   row: Exclude<SharedRunRow, FollowUpRow>,
+  pass?: FoldPass,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunRows | null,
   row: SharedRunRow,
+  pass?: FoldPass,
 ): RunRowVerdict;
 export function applyRunRow(
   current: RunPosition | null,
   row: SharedRunRow,
+  pass?: FoldPass,
 ): RunRowVerdict {
   // A follow-up row enters only through the `RunRows` overload.
   const slice = current as RunRows | null;
@@ -251,20 +282,14 @@ export function applyRunRow(
           detail: `request ${row.requestId} opened twice`,
         };
       }
-      return applied({
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            {
-              payload: row.payload,
-              thread: row.thread ?? null,
-              resolved: false,
-              decision: null,
-            },
-          ],
-        ]),
-      });
+      const requests = writable(pass, current.requests, copyById);
+      requests[row.requestId] = {
+        payload: row.payload,
+        thread: row.thread ?? null,
+        resolved: false,
+        decision: null,
+      };
+      return applied({ requests });
     }
     case 'request.decided': {
       if (current === null) return { kind: 'unchanged' };
@@ -272,15 +297,13 @@ export function applyRunRow(
       if (request === undefined) {
         return { kind: 'unresolved', requestId: row.requestId };
       }
-      return applied({
-        requests: byId([
-          ...Object.entries(current.requests),
-          [
-            row.requestId,
-            { ...request, resolved: true, decision: row.decision },
-          ],
-        ]),
-      });
+      const requests = writable(pass, current.requests, copyById);
+      requests[row.requestId] = {
+        ...request,
+        resolved: true,
+        decision: row.decision,
+      };
+      return applied({ requests });
     }
     case 'followup.queued': {
       // Queued input may precede everything else a run writes, so it opens
@@ -288,17 +311,19 @@ export function applyRunRow(
       // delivery id is the same follow-up, already queued once.
       const rows = slice ?? freshRunRows();
       if (rows.followUpIds.has(row.followUpId)) return { kind: 'unchanged' };
-      return applied({
-        followUps: [
-          ...rows.followUps,
-          {
-            followUpId: row.followUpId,
-            content: row.content,
-            ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
-          },
-        ],
-        followUpIds: new Set([...rows.followUpIds, row.followUpId]),
+      const followUps = writable(pass, rows.followUps, (f) => [...f]);
+      followUps.push({
+        followUpId: row.followUpId,
+        content: row.content,
+        ...(row.holdUntil ? { holdUntil: row.holdUntil } : {}),
       });
+      const followUpIds = writable(
+        pass,
+        rows.followUpIds,
+        (ids) => new Set(ids),
+      );
+      followUpIds.add(row.followUpId);
+      return applied({ followUps, followUpIds });
     }
     case 'followup.consumed': {
       // The consumer commits this with the message the follow-up became. An
@@ -313,10 +338,14 @@ export function applyRunRow(
       if (!removed && slice.followUpIds.has(row.followUpId)) {
         return { kind: 'unchanged' };
       }
-      return applied({
-        ...(removed ? { followUps } : {}),
-        followUpIds: new Set([...slice.followUpIds, row.followUpId]),
-      });
+      if (removed) pass?.add(followUps);
+      const followUpIds = writable(
+        pass,
+        slice.followUpIds,
+        (ids) => new Set(ids),
+      );
+      followUpIds.add(row.followUpId);
+      return applied({ ...(removed ? { followUps } : {}), followUpIds });
     }
     case 'output.produced':
       // Each row carries the run's whole collection: the newest replaces it.
@@ -335,9 +364,10 @@ export function applyRunRow(
  */
 export function foldRunRows(rows: readonly SessionEvent[]): RunRows {
   let slice = freshRunRows();
+  const pass: FoldPass = new WeakSet();
   for (const row of rows) {
     if (!isSharedRunRow(row)) continue;
-    const verdict = applyRunRow(slice, row);
+    const verdict = applyRunRow(slice, row, pass);
     if (verdict.kind === 'contradiction' || verdict.kind === 'unresolved') {
       throw new Error(
         `${row.type} on ${row.aggregateId}: ${

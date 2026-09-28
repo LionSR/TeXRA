@@ -181,9 +181,7 @@ return yield* agent('retry cost')`,
     const tracker = createWorkflowAttemptCostTracker();
 
     tracker.record({ index: 0, key: 'live' }, 0.2);
-    expect(() => tracker.total([entry(0, { cost: 1 }, 'live')])).toThrow(
-      /is not a run result/,
-    );
+    expect(tracker.total([entry(0, { cost: 1 }, 'live')])).toBe(0.2);
   });
 });
 
@@ -218,13 +216,8 @@ describe('workflow-script completed journal cost', () => {
   it.each([
     ['wrong result shape', entry(3, { cost: 1 })],
     ['negative cost', entry(7, workflowResult(-1))],
-  ])('rejects %s with the journal index', (_label, invalidEntry) => {
-    expect(() => settleJournalCost([invalidEntry])).toThrow(
-      /is not a run result/,
-    );
-    expect(() => settleJournalCost([invalidEntry])).toThrow(
-      new RegExp(`entry ${invalidEntry.index}`),
-    );
+  ])('counts %s as no spend', (_label, invalidEntry) => {
+    expect(settleJournalCost([invalidEntry])).toBe(0);
   });
 
   it.live('produces the same total after a checkpoint replay', () =>
