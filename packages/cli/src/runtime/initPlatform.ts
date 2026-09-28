@@ -12,12 +12,7 @@ import {
 import { bootstrapHost } from '@controllers/hostBootstrap';
 import { openProjectStateStore } from '@controllers/session/appStateStore';
 import { createTexraResponseTextProcessing } from '@latex/texraResponseTextProcessing';
-import {
-  consoleLogSink,
-  setLogSink,
-  silentLogSink,
-  writeLogLine,
-} from '@logger/logSink';
+import { consoleLogSink, setLogSink, silentLogSink } from '@logger/logSink';
 import type { WorkspaceRoots } from '@platform/workspaceRoots';
 import {
   AppState,
@@ -50,6 +45,7 @@ import {
   flushNdjsonStdout,
   flushTextStderr,
   writeTextStderr,
+  writeTextStderrAndWait,
 } from './logSinks';
 import { CliExitCode } from './exitCodes';
 import { terminalForegroundHeld } from './foregroundCommand';
@@ -156,21 +152,24 @@ export type CliPlatformServices = SettingsStores & {
  * before the flushes run, and a teardown path must not depend on the thing
  * it is tearing down.
  */
-export async function runCliPlatformShutdownSequence(): Promise<void> {
+export async function runCliPlatformShutdownSequence(options: {
+  /** The user's own `--quiet`, never a command's silenced log sink. */
+  readonly quiet: boolean;
+}): Promise<void> {
   // Each step is best effort, so a failure never stops termination, but it
-  // is said: the process runtime is gone by the flushes, so the warning goes
-  // straight to the log sink rather than through a runtime's logger.
+  // is said, on stderr: the process runtime is gone by the flushes, and the
+  // log sink is silent under the chat TUI (which has unmounted by now), so
+  // only an explicit `--quiet` keeps it unsaid.
   const bestEffort = (step: string, effect: Effect.Effect<void>) =>
     effect.pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() =>
-          writeLogLine(
-            'WARN',
-            'cli',
-            `Shutdown: ${step} failed`,
-            Cause.pretty(cause),
-          ),
-        ),
+        options.quiet
+          ? Effect.void
+          : Effect.promise(() =>
+              writeTextStderrAndWait(
+                `[warn] [cli.shutdown] ${step} failed: ${Cause.pretty(cause)}`,
+              ),
+            ),
       ),
     );
   await Effect.runPromise(
@@ -185,7 +184,7 @@ export async function runCliPlatformShutdownSequence(): Promise<void> {
   );
 }
 
-export function installCliShutdownSignalHandlers(): void {
+export function installCliShutdownSignalHandlers(quiet: boolean): void {
   if (shutdownHandlers) return;
   const handlers = new DisposableStore();
   shutdownHandlers = handlers;
@@ -200,7 +199,7 @@ export function installCliShutdownSignalHandlers(): void {
         process.once(signal, handler);
         return;
       }
-      await runCliPlatformShutdownSequence();
+      await runCliPlatformShutdownSequence({ quiet });
       process.exit(exitCode);
     };
     process.once(signal, handler);
@@ -416,7 +415,7 @@ export function initCliPlatform(
           installedRoots = roots;
           sessionOpen = openSession;
           if (context.installSignalHandlers !== false) {
-            installCliShutdownSignalHandlers();
+            installCliShutdownSignalHandlers(context.quietLogs);
           }
           return { globalState, roots };
         }).pipe(

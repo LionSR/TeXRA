@@ -66,6 +66,7 @@ describe('chat TUI session exit controller', () => {
       flushArtifacts: Effect.fail(new Error('disk full')),
       repaintAfterTerminalResume: vi.fn(),
       interruptActive: vi.fn(),
+      quiet: false,
     });
     return { controller, terminal };
   }

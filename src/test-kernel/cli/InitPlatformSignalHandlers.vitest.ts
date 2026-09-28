@@ -54,7 +54,7 @@ describe('CLI platform signal handlers', () => {
     // sequence runs first is a no-op; the flush and exit still follow.
     const { installCliShutdownSignalHandlers } =
       await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers();
+    installCliShutdownSignalHandlers(false);
 
     expect(handlers.has('SIGINT')).toBe(true);
     expect(handlers.has('SIGTERM')).toBe(true);
@@ -86,7 +86,7 @@ describe('CLI platform signal handlers', () => {
 
     const { installCliShutdownSignalHandlers } =
       await import('@cli/runtime/initPlatform');
-    installCliShutdownSignalHandlers();
+    installCliShutdownSignalHandlers(false);
     const sigint = handlers.get('SIGINT');
     handlers.delete('SIGINT');
 
@@ -131,9 +131,11 @@ describe('CLI platform signal handlers', () => {
     writeTextStderr('shutdown diagnostic');
 
     let resolved = false;
-    const shutdown = runCliPlatformShutdownSequence().then(() => {
-      resolved = true;
-    });
+    const shutdown = runCliPlatformShutdownSequence({ quiet: false }).then(
+      () => {
+        resolved = true;
+      },
+    );
     await secondWriteCaptured.promise;
 
     expect(stderrWrite.mock.calls.map(([text]) => text)).toEqual([
@@ -165,7 +167,9 @@ describe('CLI platform signal handlers', () => {
     const { runCliPlatformShutdownSequence } =
       await import('@cli/runtime/initPlatform');
 
-    await expect(runCliPlatformShutdownSequence()).resolves.toBeUndefined();
+    await expect(
+      runCliPlatformShutdownSequence({ quiet: false }),
+    ).resolves.toBeUndefined();
     expect(order).toEqual(['flush']);
   });
 });
