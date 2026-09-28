@@ -475,8 +475,10 @@ export const MANIFEST = [
     category: 'ai-agents',
     description:
       'Expose arXiv search, web fetch, and Crossref search to GitHub Copilot Chat and agent mode as #texra_arxiv_search, #texra_web_fetch, and #texra_crossref_search. Each is exposed while its own plugin is on.',
-    configNotes:
-      'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
+    setup: Object.freeze({
+      configNotes:
+        'VS Code only. Turning this off removes every TeXRA tool from Copilot.',
+    }),
     unavailableHosts: ['cli', 'desktop'],
     toggleable: true,
     onByDefault: true,
