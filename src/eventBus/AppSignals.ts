@@ -67,10 +67,10 @@ export interface AppSignalPayloads {
    * Consumed by: extension and desktop (an `apiKey.*` change repaints the
    * credential-dependent settings, launcher and model surfaces), the CLI chat
    * TUI (an `apiKey.*` change bumps the subscription-preference version its
-   * status bar reads), and `@tools/credentialReprobe` on every host (a key a
-   * plugin lists in `reprobeOnSecrets`, such as the GitHub token, re-probes
-   * tool availability for each held workspace, which the next step's tool
-   * list reads from the `ToolAvailability` service).
+   * status bar reads), and the `ToolAvailability` process service on every
+   * host and the agent package (a key a plugin lists in `reprobeOnSecrets`,
+   * such as the GitHub token, re-probes each workspace it holds, which the
+   * next step's tool list reads).
    */
   credentialChanged: { key: string };
 

@@ -284,7 +284,12 @@ All notable changes to this project will be documented in this file.
 - **Closing TeXRA or opening many sessions no longer leaves background
   processes using CPU** — the check for which external tools are installed
   could leave a search running after TeXRA quit, one more for every session
-  opened. Tools installed while TeXRA runs are found on Re-check.
+  opened. Tools installed while TeXRA runs are found on Re-check and by
+  the setup assistant's `verify_setup` right away. A tool whose status
+  detail stalls is reported as unknown after 20 seconds instead of holding
+  the whole check, and
+  saving a GitHub token updates the tools offered in every open project,
+  also for apps built on the Agent SDK.
 
 - **History errors say what went wrong** — when reading or saving a
   workspace's history failed, the error gave no reason; it now includes the

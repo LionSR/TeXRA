@@ -8,11 +8,12 @@
  * {@link @tools/plugins}.
  *
  * The composition root builds the service with the process runtime, so every
- * host probes the same way: each session forks a probe of its workspace when
- * it opens, the credential re-probe and the host triggers (an extension
- * installed, a folder opened, the Re-check button) refresh it, the tool
- * resolver reads the last results and the Tools dashboard follows them. No
- * UI has to be open for a run to be offered what its workspace can run.
+ * host probes the same way: each session holds its workspace, which probes it
+ * when it opens; a committed write to a secret a plugin declares re-probes
+ * every held workspace; the host triggers (an extension installed, a folder
+ * opened, the Re-check button) refresh it; the tool resolver reads the last
+ * results and the Tools dashboard follows them. No UI has to be open for a
+ * run to be offered what its workspace can run.
  *
  * Results are keyed by workspace root: the probes read the workspace (the
  * GitHub group asks whether it is a git repository, Zotero reads its
@@ -23,15 +24,20 @@
 // Third-party imports
 import {
   Cause,
+  Deferred,
   Duration,
   Effect,
+  Fiber,
   Layer,
+  Queue,
   Result,
   Scope,
+  Semaphore,
   SubscriptionRef,
 } from 'effect';
 
 // Local imports
+import { onAppSignal } from '@eventBus/AppSignals';
 import { withLogChannel } from '@logger/effectLog';
 import type { StateStore } from '@platform/interfaces';
 import { GlobalStateKey } from '@shared/state/stateKeys';
@@ -51,18 +57,18 @@ import {
   type AvailabilityResults,
   type ExternalToolCheckResult,
 } from '@tools/toolAvailabilityService';
-import { SharedAttempt } from '@utils/core/sharedAttempt';
 import { forgetToolMisses } from '@utils/system/binaryResolver';
 import { toErrorMessage } from '@utils/errors/errorMessage';
 
 const CHANNEL = 'toolAvailability';
 
 /**
- * Deadline on one group's probe and check. The probe runs detached from its
- * callers ({@link SharedAttempt}), so no caller's interrupt can end a stalled
- * child-process lookup or SDK import: without this bound one hung group would
- * hold the shared slot, and every caller joining it, indefinitely. A group
- * that misses it reports `unknown`, like any other probe failure.
+ * Deadline on one group's probe, check, status label and detail. A probe is
+ * shared by every caller of its root, so no caller's interrupt ends a stalled
+ * child-process lookup, SDK import or secret read: without this bound one
+ * hung group would hold its root's probe, and every caller joining it, until
+ * the process closed. A group that misses it reports `unknown`, like any
+ * other probe failure.
  */
 const GROUP_PROBE_TIMEOUT_MS = 20_000;
 
@@ -137,21 +143,31 @@ const PROBED_PLUGINS = TOOL_PLUGINS.filter(
   (plugin): plugin is ProbedToolPlugin => plugin.availability !== undefined,
 );
 
+/** Every secret key some plugin's availability answer reads. */
+const REPROBE_SECRETS: ReadonlySet<string> = new Set(
+  PROBED_PLUGINS.flatMap(
+    (plugin) => plugin.availability.reprobeOnSecrets ?? [],
+  ),
+);
+
+type ProbeResults = readonly ExternalToolCheckResult[];
+
 /**
- * One workspace root's single-flight probe: callers join the probe in flight,
- * and one that arrives after it started reading its inputs schedules a
- * follow-up, so the results end on the latest state and a stale probe cannot
- * overwrite a fresh one by finishing last.
+ * What the next round of a root's probe reads. A caller arriving while the
+ * probe runs replaces the inputs and asks for another round, so the results
+ * end on the latest state and a stale probe cannot overwrite a fresh one by
+ * finishing last.
  */
-interface ProbeLane {
-  readonly attempt: SharedAttempt<readonly ExternalToolCheckResult[], never>;
-  pendingRerun: boolean;
+interface ProbeRound {
+  inputs: ToolProbeInputs;
+  again: boolean;
 }
 
 /**
  * The process's {@link ToolAvailability}, built once over the services the
  * probes read: every host's composition root installs it with the process
- * runtime.
+ * runtime. The layer's scope owns every probe and the credential listener,
+ * so closing the runtime interrupts and settles all of them.
  */
 export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
@@ -161,20 +177,24 @@ export const toolAvailabilityLayer: Layer.Layer<
   ToolAvailability,
   Effect.gen(function* () {
     const services = yield* Effect.context<ToolProbeServices>();
-    // Probes run in the layer's scope: out of every caller's reach, but
-    // interrupted when the runtime is disposed, so a probe's child process
-    // is stopped with its host instead of outliving it.
     const layerScope = yield* Scope.Scope;
     const results = yield* SubscriptionRef.make<AvailabilityResults>(new Map());
-    const lanes = new Map<string | undefined, ProbeLane>();
-    // How many holders keep each root's results (see `hold`).
-    const holders = new Map<string | undefined, number>();
-    // Recurses instead of looping: a caller joining mid-probe can set
-    // `pendingRerun` again before this settles.
-    const probeUntilSettled = (
-      lane: ProbeLane,
-      inputs: ToolProbeInputs,
-    ): Effect.Effect<readonly ExternalToolCheckResult[]> =>
+    // Each root's probe in flight: at most one per root.
+    const lanes = new Map<
+      string | undefined,
+      { readonly round: ProbeRound; readonly fiber: Fiber.Fiber<ProbeResults> }
+    >();
+    // Each held root's holders' inputs, newest last: while any are left the
+    // root's results are kept, and the newest is what a credential change
+    // re-probes (a project reopened with new configuration supersedes the
+    // inputs it was first opened with).
+    const held = new Map<string | undefined, ToolProbeInputs[]>();
+    // Claiming a lane with its fork, and a lane deciding between another
+    // round and leaving the map, each run under this permit: no caller can
+    // join a lane after its last round, or find the lane but no fiber.
+    const claim = yield* Semaphore.make(1);
+
+    const probeRound = (inputs: ToolProbeInputs) =>
       Effect.forEach(
         PROBED_PLUGINS,
         (plugin) => probeToolGroup(plugin, inputs),
@@ -186,80 +206,132 @@ export const toolAvailabilityLayer: Layer.Layer<
         // Only a held root's results are kept: one no session holds is
         // answered, not remembered.
         Effect.tap((probed) =>
-          SubscriptionRef.update(results, (held) =>
-            holders.has(inputs.workspace)
-              ? new Map(held).set(inputs.workspace, probed)
-              : held,
+          SubscriptionRef.update(results, (current) =>
+            held.has(inputs.workspace)
+              ? new Map(current).set(inputs.workspace, probed)
+              : current,
           ),
         ),
-        Effect.flatMap((probed) => {
-          if (!lane.pendingRerun) return Effect.succeed(probed);
-          lane.pendingRerun = false;
-          return probeUntilSettled(lane, inputs);
-        }),
       );
-    const probe = (inputs: ToolProbeInputs) =>
-      Effect.suspend(() => {
-        const key = inputs.workspace;
-        const lane = lanes.get(key) ?? {
-          attempt: new SharedAttempt(layerScope),
-          pendingRerun: false,
-        };
-        lanes.set(key, lane);
-        // The latch resets in the segment that claims the slot, not on the
-        // detached fiber: a caller joining before that fiber's first step
-        // must not have its rerun wiped.
-        lane.pendingRerun = lane.attempt.inFlight;
-        // The lane leaves its map when its detached attempt settles, not when
-        // its callers do: while the probe runs, a later caller joins it
-        // rather than starting a second probe that could finish first.
-        return lane.attempt.run(() =>
-          probeUntilSettled(lane, inputs).pipe(
-            Effect.ensuring(
-              Effect.sync(() => {
-                if (lanes.get(key) === lane) lanes.delete(key);
-              }),
-            ),
+    const probeUntilSettled = (key: string | undefined, round: ProbeRound) =>
+      Effect.gen(function* () {
+        while (true) {
+          const probed = yield* probeRound(round.inputs);
+          const again = yield* claim.withPermit(
+            Effect.sync(() => {
+              if (round.again) {
+                round.again = false;
+                return true;
+              }
+              lanes.delete(key);
+              return false;
+            }),
+          );
+          if (!again) return probed;
+        }
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            if (lanes.get(key)?.round === round) lanes.delete(key);
+          }),
+        ),
+      );
+    // Start probing `inputs`' root, or hand the probe in flight another
+    // round with them. The fiber lives in the layer's scope, out of every
+    // caller's reach, so a caller's interrupt abandons only its own wait.
+    // Uninterruptible, so an interrupt cannot land between the fork and the
+    // lane that records it.
+    const start = (inputs: ToolProbeInputs) =>
+      claim
+        .withPermit(
+          Effect.suspend(() => {
+            const key = inputs.workspace;
+            const running = lanes.get(key);
+            if (running) {
+              running.round.inputs = inputs;
+              running.round.again = true;
+              return Effect.succeed(running.fiber);
+            }
+            const round: ProbeRound = { inputs, again: false };
+            return Effect.forkIn(
+              probeUntilSettled(key, round),
+              layerScope,
+            ).pipe(
+              Effect.tap((fiber) =>
+                Effect.sync(() => lanes.set(key, { round, fiber })),
+              ),
+            );
+          }),
+        )
+        .pipe(Effect.uninterruptible);
+    // Every trigger (Re-check, a key saved, an extension or folder added)
+    // may follow an install, so a tool it just installed must not be
+    // answered from a remembered miss.
+    const trigger = (inputs: ToolProbeInputs) =>
+      Effect.andThen(Effect.sync(forgetToolMisses), start(inputs));
+
+    // A committed write to a declared secret re-probes every held root with
+    // its newest inputs. The bus delivers to a synchronous listener, so the
+    // listener only enqueues the key; the loop below owns the refreshes.
+    const changes = yield* Queue.unbounded<string>();
+    const subscribed = yield* Deferred.make<void>();
+    yield* Effect.forkScoped(
+      onAppSignal(
+        'credentialChanged',
+        ({ key }) => {
+          if (REPROBE_SECRETS.has(key)) Queue.offerUnsafe(changes, key);
+        },
+        subscribed,
+      ),
+    );
+    yield* Deferred.await(subscribed);
+    yield* Effect.forkScoped(
+      Effect.forever(
+        Effect.andThen(Queue.take(changes), () =>
+          Effect.forEach(
+            [...held.values()].flatMap((holders) => holders.slice(-1)),
+            trigger,
+            { discard: true },
           ),
-        );
-      });
+        ),
+      ),
+    );
+
     return {
       results,
-      // Every caller is a trigger (Re-check, a key saved, an extension or
-      // folder added), so a tool it just installed must not be answered
-      // from a remembered miss. A probe in flight is rerun after the clear.
-      refresh: (inputs) =>
-        Effect.andThen(Effect.sync(forgetToolMisses), probe(inputs)),
+      refresh: (inputs) => Effect.flatMap(trigger(inputs), Fiber.join),
       // A session's own probe answers from the miss cache, so opening
       // sessions back to back does not repeat the lookups.
       hold: (roots) =>
         Effect.acquireRelease(
-          Effect.sync(() =>
-            holders.set(
-              roots.workspace,
-              (holders.get(roots.workspace) ?? 0) + 1,
-            ),
-          ),
+          Effect.sync(() => {
+            const holders = held.get(roots.workspace) ?? [];
+            holders.push(roots);
+            held.set(roots.workspace, holders);
+          }),
           () =>
             Effect.suspend(() => {
-              const left = (holders.get(roots.workspace) ?? 1) - 1;
-              if (left > 0) {
-                holders.set(roots.workspace, left);
-                return Effect.void;
-              }
-              holders.delete(roots.workspace);
-              return SubscriptionRef.update(results, (held) => {
-                const next = new Map(held);
+              const holders = held.get(roots.workspace) ?? [];
+              holders.splice(holders.lastIndexOf(roots), 1);
+              if (holders.length > 0) return Effect.void;
+              held.delete(roots.workspace);
+              return SubscriptionRef.update(results, (current) => {
+                const next = new Map(current);
                 next.delete(roots.workspace);
                 return next;
               });
             }),
-        ).pipe(Effect.andThen(Effect.forkScoped(probe(roots))), Effect.asVoid),
+        ).pipe(Effect.andThen(start(roots)), Effect.asVoid),
     };
   }),
 );
 
-const probeToolGroup = Effect.fn('probeToolGroup')(function* (
+/**
+ * Run one group's check, status label and detail from one shared probe
+ * result. Some groups (Codex, Zotero, GitHub PR) touch async local state, so
+ * running the callbacks independently can duplicate the same probe work.
+ */
+const checkToolGroup = Effect.fn('probeToolGroup')(function* (
   {
     id,
     toolNames,
@@ -267,15 +339,41 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
     availability: { probe, check, statusLabel: getStatusLabel, detailCheck },
   }: ProbedToolPlugin,
   inputs: ToolProbeInputs,
-): Effect.fn.Return<ExternalToolCheckResult, never, ToolProbeServices> {
-  // Run check/status/detail from one shared probe result. Some groups
-  // (Codex, Zotero, GitHub PR) touch async local state, so running the
-  // callbacks independently can duplicate the same probe work.
-  const probed = yield* Effect.gen(function* () {
-    const probeResult = probe ? yield* probe(inputs) : undefined;
-    const available = yield* check(probeResult);
-    return { failure: undefined, probeResult, available };
-  }).pipe(
+): Effect.fn.Return<
+  ExternalToolCheckResult,
+  ToolProbeError,
+  ToolProbeServices
+> {
+  const probeResult = probe ? yield* probe(inputs) : undefined;
+  const available = yield* check(probeResult);
+  const statusDetail = yield* resolveOptionalStatus(
+    detailCheck,
+    probeResult,
+    name,
+    'status detail',
+  );
+  const statusLabel = yield* resolveOptionalStatus(
+    getStatusLabel,
+    probeResult,
+    name,
+    'status label',
+  );
+  return {
+    id,
+    tools: toolNames,
+    name,
+    status: available ? 'available' : 'not-found',
+    statusLabel,
+    statusDetail,
+  };
+});
+
+/** {@link checkToolGroup} under the group deadline; a failure is `unknown`. */
+const probeToolGroup = (
+  plugin: ProbedToolPlugin,
+  inputs: ToolProbeInputs,
+): Effect.Effect<ExternalToolCheckResult, never, ToolProbeServices> =>
+  checkToolGroup(plugin, inputs).pipe(
     Effect.timeoutOrElse({
       duration: Duration.millis(GROUP_PROBE_TIMEOUT_MS),
       orElse: () =>
@@ -286,46 +384,20 @@ const probeToolGroup = Effect.fn('probeToolGroup')(function* (
         ),
     }),
     Effect.catch((error) =>
-      Effect.logWarning(`Availability probe failed for ${name}`).pipe(
+      Effect.logWarning(`Availability probe failed for ${plugin.name}`).pipe(
         Effect.annotateLogs({ data: error }),
         withLogChannel(CHANNEL),
         Effect.as({
-          failure: { error },
-          probeResult: undefined,
-          available: false,
+          id: plugin.id,
+          tools: plugin.toolNames,
+          name: plugin.name,
+          status: 'unknown' as const,
+          statusLabel: undefined,
+          statusDetail: `Availability check failed: ${toErrorMessage(error)}`,
         }),
       ),
     ),
   );
-  const detectedStatus = probed.available ? 'available' : 'not-found';
-  const status: ExternalToolCheckResult['status'] = probed.failure
-    ? 'unknown'
-    : detectedStatus;
-  const statusDetail = probed.failure
-    ? `Availability check failed: ${toErrorMessage(probed.failure.error)}`
-    : yield* resolveOptionalStatus(
-        detailCheck,
-        probed.probeResult,
-        name,
-        'status detail',
-      );
-  const statusLabel = probed.failure
-    ? undefined
-    : yield* resolveOptionalStatus(
-        getStatusLabel,
-        probed.probeResult,
-        name,
-        'status label',
-      );
-  return {
-    id,
-    tools: toolNames,
-    name,
-    status,
-    statusLabel,
-    statusDetail,
-  };
-});
 
 function resolveOptionalStatus(
   getStatus:
