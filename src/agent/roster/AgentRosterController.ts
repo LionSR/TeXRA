@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 
 import { teamPresets } from '@common/teams/TeamPresets';
-import { withLogChannel } from '@logger/effectLog';
 import type {
   StateStore,
   StateWriteFailed,
@@ -31,9 +30,13 @@ import {
 } from '@shared/state/onboardingState';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import { unique } from '@utils/core';
-import { withPerKeyLane, type PerKeyLane } from '@utils/core/perKeyQueue';
 
-const CHANNEL = 'AgentRosterController';
+import {
+  readAgentRosterSelection,
+  recordCustomChoices,
+  serializeWorkspaceWrite,
+  unlistedCustomAgents,
+} from './rosterWorkspaceState';
 
 export interface AgentRosterEntry {
   readonly name: string;
@@ -62,46 +65,6 @@ export interface AgentRosterControllerDeps<
     category: AgentCategory,
     identifier: string,
   ) => Entry | undefined;
-}
-
-/**
- * One write at a time per store, module-wide. The roster's write is a
- * read-modify-write of one key: two selection changes that interleave would
- * let the second read the selection the first has not stored yet. The lane
- * is the store, and its lifetime is the last fiber holding or waiting on it.
- */
-const workspaceWriteLanes = new Map<StateStore, PerKeyLane>();
-
-function serializeWorkspaceWrite<A, E>(
-  store: StateStore,
-  write: Effect.Effect<A, E>,
-): Effect.Effect<A, E> {
-  return write.pipe(withPerKeyLane(workspaceWriteLanes, store));
-}
-
-/**
- * Read the canonical workspace selection. The reader is deliberately pure. It
- * used to repair the stored value in place, but the read-modify-write
- * mutations (`setEnabledAgentKeys`, `setAgentEnabled`, `removeTeamPreset`)
- * read the selection while already holding the write mutex, so a repair
- * issued from here either races that mutation or, if serialized behind it,
- * overwrites the selection the mutation just committed. The mutations own
- * every durable write.
- */
-function readAgentRosterSelection(workspaceState: StateStore) {
-  return Effect.gen(function* () {
-    const raw = yield* workspaceState.get<unknown>(
-      WorkspaceStateKey.AGENT_ROSTER_SELECTION,
-    );
-    if (raw === undefined) return INHERITED_AGENT_ROSTER;
-    const parsed = AgentRosterSelectionSchema.safeParse(raw);
-    if (parsed.success) return parsed.data;
-    yield* Effect.logWarning(
-      `Ignoring malformed roster selection; falling back to ` +
-        `the inherited roster: ${parsed.error.message}`,
-    ).pipe(withLogChannel(CHANNEL));
-    return INHERITED_AGENT_ROSTER;
-  });
 }
 
 function selectedIdentifiers(
@@ -175,7 +138,15 @@ export class AgentRosterController<
         yield* this.allPresets(),
       );
       if (identifiers === undefined) return this.deps.getAgents(category);
-      return this.resolveIdentifiers(category, identifiers).entries;
+      const { entries } = this.resolveIdentifiers(category, identifiers);
+      return [
+        ...entries,
+        ...(yield* unlistedCustomAgents(
+          this.deps.workspaceState,
+          this.deps.getAgents(category),
+          entries.map(agentKeyOf),
+        )),
+      ];
     });
   }
 
@@ -229,8 +200,16 @@ export class AgentRosterController<
       if (identifiers === undefined) return undefined;
       // A custom selection already stores keys, so only an `all`/team selection
       // has names left to resolve; the kind is the same for every identifier.
-      if (selection.kind === 'custom') return unique(identifiers);
-      return this.resolveIdentifiers(category, identifiers).keys;
+      const keys =
+        selection.kind === 'custom'
+          ? unique(identifiers)
+          : this.resolveIdentifiers(category, identifiers).keys;
+      const unlisted = yield* unlistedCustomAgents(
+        this.deps.workspaceState,
+        this.deps.getAgents(category),
+        keys,
+      );
+      return [...keys, ...unlisted.map(agentKeyOf)];
     });
   }
 
@@ -363,14 +342,26 @@ export class AgentRosterController<
 
   setCustom(
     agentKeys: ByCategory<AgentRosterCategorySelection>,
-  ): Effect.Effect<void, StateWriteFailed> {
-    return this.setSelection({
-      kind: 'custom',
-      agentKeys: byCategory((category) => {
-        const selection = agentKeys[category];
-        return selection === 'all' ? 'all' : unique(selection);
+  ): Effect.Effect<void, StateWriteFailed | StateReadFailed> {
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
+      Effect.gen({ self: this }, function* () {
+        for (const category of AGENT_CATEGORIES) {
+          yield* recordCustomChoices(
+            this.deps.workspaceState,
+            this.deps.getAgents(category),
+            agentKeys[category],
+          );
+        }
+        yield* this.writeSelection({
+          kind: 'custom',
+          agentKeys: byCategory((category) => {
+            const selection = agentKeys[category];
+            return selection === 'all' ? 'all' : unique(selection);
+          }),
+        });
       }),
-    });
+    );
   }
 
   setEnabledAgentKeys(
@@ -385,6 +376,11 @@ export class AgentRosterController<
       // constructed back to back would otherwise both start from the same
       // pre-lane snapshot and one update would be lost.
       Effect.gen({ self: this }, function* () {
+        yield* recordCustomChoices(
+          this.deps.workspaceState,
+          this.deps.getAgents(category),
+          enabledKeys,
+        );
         return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: yield* Effect.all(
@@ -399,8 +395,18 @@ export class AgentRosterController<
     );
   }
 
+  /** Every agent, the hidden custom ones included. */
   setAll(): Effect.Effect<void, StateWriteFailed> {
-    return this.setSelection({ kind: 'all' });
+    return serializeWorkspaceWrite(
+      this.deps.workspaceState,
+      Effect.andThen(
+        this.deps.workspaceState.update(
+          WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
+          [],
+        ),
+        this.writeSelection({ kind: 'all' }),
+      ),
+    );
   }
 
   setInherited(): Effect.Effect<void, StateWriteFailed> {
@@ -434,6 +440,11 @@ export class AgentRosterController<
         } else {
           target.splice(index, 1);
         }
+        yield* recordCustomChoices(
+          this.deps.workspaceState,
+          this.deps.getAgents(input.category),
+          target,
+        );
         return yield* this.writeSelection({
           kind: 'custom',
           agentKeys: byCategory((category) =>

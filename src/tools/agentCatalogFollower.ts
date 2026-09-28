@@ -3,7 +3,11 @@
  * switch, an installed plugin's agents the install record. After a change
  * to either, written by this process or another sharing the global state
  * (`AppState.changes`), the catalog reloads and every roster view repaints
- * (`agentRosterChanged`). The one path: no writer refreshes it itself.
+ * (`agentRosterChanged`). No plugin writer refreshes it itself. The one
+ * other reload is a file tool's approved write into the custom agents
+ * directory (`@tools/approval/approvedWrite`): the `creator` agent tests the
+ * agent it just wrote in its next call, so that reload is part of the write
+ * rather than a watcher's later event.
  *
  * It follows a host's packaged catalog, so it runs only where the agent
  * directories name a packaged resources root: an embedder, and the CLI
@@ -51,17 +55,38 @@ const registerRoot = <E, R>(
     ),
   );
 
+/**
+ * Register the custom agents directory the setting names now, writable.
+ * Registering the same kind replaces its slot, so a changed setting needs no
+ * unregister step. The settings view runs it in the same step that writes
+ * the setting, so a run launched right after sees the new directory; the
+ * follower runs it for a change written anywhere else.
+ */
+export const registerCustomAgentRoot = Effect.flatMap(
+  AgentDirectories,
+  (directories) =>
+    registerRoot(directories.custom(), {
+      kind: 'custom',
+      writable: true,
+      label: 'Custom agents',
+    }),
+);
+
+/** Rescan the agent catalog and repaint every roster view. */
+export const reloadAgentCatalog = Effect.suspend(() =>
+  refreshAgentCatalog(),
+).pipe(
+  Effect.andThen(
+    Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
+  ),
+);
+
 export const agentCatalogFollower = Layer.effectDiscard(
   Effect.gen(function* () {
     const appState = yield* AppState;
     const directories = yield* AgentDirectories;
     const { resourcesRoot } = directories;
     if (resourcesRoot === undefined || resourcesRoot === '') return;
-    const registerCustomRoot = registerRoot(directories.custom(), {
-      kind: 'custom',
-      writable: true,
-      label: 'Custom agents',
-    });
     yield* Effect.all(
       [
         registerRoot(directories.builtIn(), {
@@ -78,14 +103,14 @@ export const agentCatalogFollower = Layer.effectDiscard(
           Effect.succeed(path.join(resourcesRoot, 'docs', 'agent-creation')),
           { kind: 'agentDocs', writable: false, label: 'Agent creation docs' },
         ),
-        registerCustomRoot,
+        registerCustomAgentRoot,
       ],
       { discard: true },
     );
-    // Registering the same kind replaces its slot, so a changed setting
-    // needs no unregister step.
+    // A change written by another process, or by a writer other than the
+    // settings view.
     yield* appState.changes([GlobalStateKey.CUSTOM_AGENT_DIR]).pipe(
-      Stream.runForEach(() => registerCustomRoot),
+      Stream.runForEach(() => registerCustomAgentRoot),
       Effect.forkScoped,
     );
     installPluginAgentDirectories(
@@ -97,11 +122,8 @@ export const agentCatalogFollower = Layer.effectDiscard(
     // The first element's reload is the catalog's initial load: a host's
     // `loadAgents` waits for it rather than scanning beside it.
     const landed = yield* followerOwnsInitialLoad;
-    const reload = Effect.suspend(() => refreshAgentCatalog()).pipe(
+    const reload = reloadAgentCatalog.pipe(
       Effect.ensuring(landed),
-      Effect.andThen(
-        Effect.sync(() => emitAppSignal('agentRosterChanged', undefined)),
-      ),
       // A transient read failure is tried again: 200 ms doubling, six times.
       Effect.retry({ schedule: Schedule.exponential('200 millis'), times: 6 }),
       Effect.catchCause((cause) =>

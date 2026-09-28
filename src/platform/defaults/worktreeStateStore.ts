@@ -26,6 +26,7 @@ import type {
 const WORKTREE_SHARED_KEYS: ReadonlySet<string> = new Set<string>([
   WorkspaceStateKey.AGENT_ROSTER_SELECTION,
   WorkspaceStateKey.CUSTOM_AGENT_PRESETS,
+  WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS,
   WorkspaceStateKey.CODEX_SANDBOX_MODE,
   WorkspaceStateKey.CODEX_REASONING_EFFORT,
   WorkspaceStateKey.CODEX_APPROVAL_POLICY,

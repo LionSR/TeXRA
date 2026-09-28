@@ -245,11 +245,18 @@ export class AgentsTab extends LitElement {
   }
 
   private renderLibrary(): TemplateResult {
+    // Point to the creator agent only where the selector offers it.
+    const creatorShown = this.agents.toolUse.some(
+      (agent) => agent.name === 'creator' && agent.enabled,
+    );
     return html`
       ${renderSettingsSectionHeading({
         title: 'Agent library',
-        description:
-          'Choose which agents appear in the agent selector, or create your own from a template. To have one drafted for you, run the creator agent.',
+        description: `Choose which agents appear in the agent selector, or create your own from a template.${
+          creatorShown
+            ? ' To have one drafted for you, run the creator agent.'
+            : ''
+        }`,
         icon: 'robot',
       })}
       <div class="settings-section">

@@ -34,6 +34,14 @@ export const AgentRosterSelectionSchema = z.discriminatedUnion('kind', [
 
 export type AgentRosterSelection = z.infer<typeof AgentRosterSelectionSchema>;
 
+/**
+ * The custom agents a workspace has hidden. A custom agent is shown unless it
+ * is listed here, whatever the roster selection: one the user adds to the
+ * custom folder (the `creator` agent's, say) appears in the selector without a
+ * separate step, and one the user turned off stays off.
+ */
+export const HiddenCustomAgentKeysSchema = AgentKeyListSchema;
+
 export const INHERITED_AGENT_ROSTER: AgentRosterSelection = Object.freeze({
   kind: 'inherit',
 });

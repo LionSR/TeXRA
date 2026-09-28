@@ -11,6 +11,7 @@ import { findTeamPreset, teamPresets } from '@common/teams/TeamPresets';
 import { SettingsAgentCatalogController } from '@controllers/settingsView/SettingsAgentCatalogController';
 import { WorkspaceStateKey } from '@shared/state/stateKeys';
 import {
+  AGENT_CATEGORIES,
   agentKeyOf,
   agentMatchesIdentifier,
   byCategory,
@@ -90,6 +91,22 @@ function createController(options?: {
                 'all',
             ),
           },
+        }
+      : {}),
+    // A `visible` roster is the user's choice: the custom agents it leaves out
+    // were turned off.
+    ...(options?.visible
+      ? {
+          [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: AGENT_CATEGORIES.flatMap(
+            (category) =>
+              (options.agents?.[category] ?? AGENTS[category])
+                .filter(
+                  (entry) =>
+                    entry.source === 'custom' &&
+                    !options.visible?.[category]?.includes(entry),
+                )
+                .map(agentKeyOf),
+          ),
         }
       : {}),
   });
