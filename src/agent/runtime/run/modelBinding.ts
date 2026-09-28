@@ -11,7 +11,7 @@
  */
 import { createHash } from 'node:crypto';
 
-import { Context, Effect, Option, type Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 import { ModelProvider, ReasoningEffort, type ModelConfig } from 'llm-zoo';
 import { anthropicMessagesModel } from '@texra-ai/llm/anthropic-messages';
 import { googleInteractionsModel } from '@texra-ai/llm/google-interactions';
@@ -23,9 +23,7 @@ import { openrouterChatModel } from '@texra-ai/llm/openrouter-chat';
 import {
   type Model,
   type ModelConfiguration,
-  type ModelError,
   type ModelOrigin,
-  type VscodeLanguageModelConfiguration,
 } from '@texra-ai/llm/turn';
 
 import {
@@ -47,7 +45,7 @@ import type { CopilotModelRoute } from '@model/copilotRouting';
 import { routeConfig, type ModelRoute } from '@model/modelRoute';
 import { longRunningModelFetch } from '@platform/defaults/longRunningModelTransport';
 import type { StateStore } from '@platform/interfaces';
-import type { LanguageModel } from '@platform/languageModel';
+import { LanguageModel } from '@platform/languageModel';
 import { OPENAI_DEFAULT_ENDPOINT } from '@shared/constants/modelProviderPlugins';
 import {
   AgentCategory,
@@ -64,23 +62,6 @@ import type { HttpClient } from 'effect/unstable/http';
 
 /** Tool-use runs keep output headroom for context growth. */
 const TOOL_USE_MAX_OUTPUT_FACTOR = 0.5;
-
-/**
- * The host's editor language models (R2). An extension host that reaches the
- * editor's language-model API provides one at its process root and the run
- * layer binds `vscode-lm` models through it; a host without an editor
- * provides none, and binding such a model there fails with that fact. The
- * package keeps only the protocol; the acquired model lives in the scope it
- * is acquired into (the run's).
- */
-export class EditorModel extends Context.Service<
-  EditorModel,
-  {
-    readonly acquire: (
-      configuration: VscodeLanguageModelConfiguration,
-    ) => Effect.Effect<Model, ModelError, Scope.Scope>;
-  }
->()('@texra/agent/EditorModel') {}
 
 /**
  * The efforts a wire route can be asked for: llm-zoo's vocabulary minus the
@@ -805,15 +786,8 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
   config: ModelConfig,
   compatibilityKey: ModelCompatibilityKey,
   route: CopilotModelRoute,
-): Effect.fn.Return<BoundModel, Error, Scope.Scope> {
-  const editor = yield* Effect.serviceOption(EditorModel);
-  if (Option.isNone(editor)) {
-    return yield* Effect.fail(
-      new Error(
-        `Model ${config.name} is served by the editor's language-model API, which this host does not expose.`,
-      ),
-    );
-  }
+): Effect.fn.Return<BoundModel, Error, Scope.Scope | LanguageModel> {
+  const editor = yield* LanguageModel;
   // The discovered route carries the editor's own context ceiling and the
   // subscription's pricing: the config the run accounts against.
   const routed = route.effectiveConfig;
@@ -822,16 +796,14 @@ const bindEditorModel = Effect.fn('bindEditorModel')(function* (
     vendor: route.reference.vendor,
     version: route.version,
   } as const;
-  const model = yield* editor.value
-    .acquire({
-      protocol: 'vscode-lm',
-      requestedModel,
-      deployment,
-      supportsImageInput: routed.capabilities.supportsVision,
-      supportsToolCalling: routed.capabilities.supportsFunctionCalling,
-      defaults: { justification: 'Run the selected TeXRA agent.' },
-    })
-    .pipe(Effect.mapError(ensureError));
+  const model = yield* editor.acquire({
+    protocol: 'vscode-lm',
+    requestedModel,
+    deployment,
+    supportsImageInput: routed.capabilities.supportsVision,
+    supportsToolCalling: routed.capabilities.supportsFunctionCalling,
+    defaults: { justification: 'Run the selected TeXRA agent.' },
+  });
   return {
     modelId: config.name,
     config: routed,

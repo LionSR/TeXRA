@@ -1,16 +1,12 @@
 // Third-party imports
 import {
-  APIConnectionError as AnthropicAPIConnectionError,
-  APIConnectionTimeoutError as AnthropicAPIConnectionTimeoutError,
   APIUserAbortError as AnthropicAPIUserAbortError,
   AuthenticationError as AnthropicAuthenticationError,
 } from '@anthropic-ai/sdk';
 import {
-  APIConnectionError as OpenAIAPIConnectionError,
   APIConnectionTimeoutError as OpenAIAPIConnectionTimeoutError,
   APIError as OpenAIAPIError,
   APIUserAbortError as OpenAIAPIUserAbortError,
-  AuthenticationError as OpenAIAuthenticationError,
   BadRequestError as OpenAIBadRequestError,
   RateLimitError as OpenAIRateLimitError,
 } from 'openai';
@@ -39,18 +35,7 @@ class APIError extends Error {}
 
 class BadRequestError extends APIError {}
 
-class KimiAPIError extends APIError {}
-
 class APIUserAbortError extends APIError {}
-
-class UnknownSdkApiError extends APIError {}
-
-function withHeaders<T extends Error>(
-  error: T,
-  headers: Record<string, string>,
-): T & { headers: Headers } {
-  return Object.assign(error, { headers: new Headers(headers) });
-}
 
 /**
  * An OpenAI SDK 400 carrying `body` with an explicit wrapper message. The SDK
@@ -79,35 +64,6 @@ function providerAttributedError(body: unknown): Error {
 }
 
 describe('formatProviderHttpError', () => {
-  it('matches generic SDK API errors through the prototype chain', () => {
-    const formatted = formatProviderHttpError(
-      new UnknownSdkApiError('new provider error shape'),
-    );
-
-    expect(formatted.message).toBe('new provider error shape');
-    expect(formatted.userRetryable).toBe(false);
-  });
-
-  it('detects OpenAI provider errors without importing SDK classes at runtime', () => {
-    const formatted = formatProviderHttpError(
-      new OpenAIRateLimitError(429, {}, 'rate limited', new Headers()),
-    );
-
-    expect(formatted.provider).toBe('openai');
-    expect(formatted.statusCode).toBe(429);
-    expect(formatted.userRetryable).toBe(true);
-  });
-
-  it('detects Anthropic provider errors without importing SDK classes at runtime', () => {
-    const formatted = formatProviderHttpError(
-      new AnthropicAuthenticationError(401, {}, 'bad key', new Headers()),
-    );
-
-    expect(formatted.provider).toBe('anthropic');
-    expect(formatted.statusCode).toBe(401);
-    expect(formatted.userRetryable).toBe(false);
-  });
-
   it('preserves native SDK abort detection for packaged builds', () => {
     expect(isUserAbort(new OpenAIAPIUserAbortError())).toBe(true);
     expect(isUserAbort(new AnthropicAPIUserAbortError())).toBe(true);
@@ -117,155 +73,12 @@ describe('formatProviderHttpError', () => {
     expect(isUserAbort(new DOMException('aborted', 'AbortError'))).toBe(true);
   });
 
-  it('preserves provider context for native OpenAI HTTP errors', () => {
+  it('keeps SDK user aborts non-retryable', () => {
     const formatted = formatProviderHttpError(
-      new OpenAIAuthenticationError(
-        401,
-        { message: 'invalid api key', type: 'invalid_request_error' },
-        'invalid api key',
-        new Headers({ 'x-request-id': 'req-openai' }),
-      ),
+      new APIUserAbortError('aborted by user'),
     );
-
-    expect(formatted.provider).toBe('openai');
-    expect(formatted.requestId).toBe('req-openai');
-    expect(formatted.statusCode).toBe(401);
-  });
-
-  it.each([
-    {
-      provider: 'openai',
-      connection: () =>
-        new OpenAIAPIConnectionError({
-          message: 'network unavailable',
-          cause: new Error('socket closed'),
-        }),
-      timeout: () =>
-        new OpenAIAPIConnectionTimeoutError({ message: 'timed out' }),
-    },
-    {
-      provider: 'anthropic',
-      connection: () =>
-        new AnthropicAPIConnectionError({
-          message: 'network unavailable',
-          cause: new Error('socket closed'),
-        }),
-      timeout: () =>
-        new AnthropicAPIConnectionTimeoutError({ message: 'timed out' }),
-    },
-  ])(
-    'preserves provider context for native $provider connection errors without response headers',
-    ({ provider, connection, timeout }) => {
-      const connectionError = formatProviderHttpError(connection());
-      const timeoutError = formatProviderHttpError(timeout());
-
-      expect(connectionError.provider).toBe(provider);
-      expect(connectionError.userRetryable).toBe(true);
-      expect(timeoutError.provider).toBe(provider);
-      expect(timeoutError.userRetryable).toBe(true);
-    },
-  );
-
-  it('preserves provider context for native Anthropic HTTP errors', () => {
-    const formatted = formatProviderHttpError(
-      new AnthropicAuthenticationError(
-        401,
-        {
-          type: 'error',
-          error: { type: 'authentication_error', message: 'invalid api key' },
-        },
-        'invalid api key',
-        new Headers({ 'request-id': 'req-anthropic' }),
-      ),
-    );
-
-    expect(formatted.provider).toBe('anthropic');
-    expect(formatted.requestId).toBe('req-anthropic');
-    expect(formatted.statusCode).toBe(401);
-  });
-
-  it('prefers Anthropic request-id when response headers include both request id styles', () => {
-    const err = withHeaders(new UnknownSdkApiError('upstream auth failed'), {
-      'request-id': 'req-anthropic',
-      'x-request-id': 'req-openai-compatible',
-    });
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.provider).toBe('anthropic');
-    expect(formatted.requestId).toBe('req-anthropic');
-  });
-
-  it('does not infer OpenAI from generic x-request-id headers', () => {
-    const err = withHeaders(
-      new UnknownSdkApiError('openai-compatible gateway failed'),
-      { 'x-request-id': 'req-compatible' },
-    );
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.provider).toBeUndefined();
-    expect(formatted.requestId).toBe('req-compatible');
-  });
-
-  it('prefers SDK class provider hints over OpenAI-compatible request headers', () => {
-    const err = withHeaders(new KimiAPIError('moonshot auth failed'), {
-      'x-request-id': 'req-kimi',
-    });
-
-    const formatted = formatProviderHttpError(err);
-
-    expect(formatted.provider).toBe('moonshot');
-    expect(formatted.requestId).toBe('req-kimi');
-  });
-
-  it.each([
-    {
-      provider: 'openai',
-      makeError: () => new BadRequestError('invalid request'),
-      stack: String.raw`BadRequestError: invalid request
-    at request (C:\repo\node_modules\.pnpm\openai@5.0.0\node_modules\openai\core\error.mjs:12:10)`,
-      statusCode: 400,
-    },
-    {
-      provider: 'anthropic',
-      makeError: () => new APIError('provider failed'),
-      stack: String.raw`APIError: provider failed
-    at request (C:\repo\node_modules\.pnpm\@anthropic-ai+sdk@1.0.0\node_modules\@anthropic-ai\sdk\index.mjs:12:10)`,
-      statusCode: undefined,
-    },
-    {
-      provider: 'google',
-      makeError: () => new APIError('provider failed'),
-      stack: String.raw`APIError: provider failed
-    at request (C:\repo\node_modules\.pnpm\@google+genai@1.0.0\node_modules\@google\genai\dist\index.mjs:12:10)`,
-      statusCode: undefined,
-    },
-  ])(
-    'detects $provider provider from Windows pnpm stack paths',
-    ({ provider, makeError, stack, statusCode }) => {
-      const err = makeError();
-      err.stack = stack;
-
-      const formatted = formatProviderHttpError(err);
-
-      expect(formatted.provider).toBe(provider);
-      if (statusCode !== undefined) {
-        expect(formatted.statusCode).toBe(statusCode);
-      }
-      expect(formatted.userRetryable).toBe(false);
-    },
-  );
-
-  it('keeps SDK user aborts non-retryable while preserving provider attribution', () => {
-    const err = new APIUserAbortError('aborted by user');
-    err.stack = String.raw`APIUserAbortError: aborted by user
-    at request (C:\repo\node_modules\.pnpm\openai@5.0.0\node_modules\openai\core\error.mjs:12:10)`;
-
-    const formatted = formatProviderHttpError(err);
 
     expect(formatted.message).toBe('Request aborted');
-    expect(formatted.provider).toBe('openai');
     expect(formatted.userRetryable).toBe(false);
   });
 
@@ -274,9 +87,8 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.message).toBe('Connection timed out');
+    expect(formatted.message).toBe('Request timed out.');
     expect(formatted.userRetryable).toBe(true);
   });
 
@@ -292,7 +104,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(500);
     expect(formatted.userRetryable).toBe(true);
     expect(formatted.rawErrorBody).toEqual(body);
@@ -309,7 +120,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(503);
     expect(formatted.userRetryable).toBe(true);
     expect(isProviderErrorAutoRetryable(error)).toBe(true);
@@ -329,20 +139,6 @@ describe('formatProviderHttpError', () => {
     expect(formatProviderHttpError(codeOnlyError).statusCode).toBe(503);
   });
 
-  it('keeps unknown status-less OpenAI API errors non-retryable', () => {
-    const body = {
-      type: 'unexpected_error',
-      code: 'unexpected_error',
-      message: 'Unexpected provider failure.',
-    };
-    const error = new OpenAIAPIError(undefined, body, body.message, undefined);
-
-    const formatted = formatProviderHttpError(error);
-
-    expect(formatted.statusCode).toBeUndefined();
-    expect(formatted.userRetryable).toBe(false);
-  });
-
   it('formats OpenAI HTTP errors with status metadata', () => {
     const error = new OpenAIBadRequestError(
       400,
@@ -353,12 +149,10 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(400);
     expect(formatted.statusText).toBe('Bad Request');
     expect(formatted.message).toContain('HTTP 400 Bad Request');
     expect(formatted.message).toContain('bad payload');
-    expect(formatted.requestId).toBe('req_123');
     expect(formatted.userRetryable).toBe(false);
   });
 
@@ -486,7 +280,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(429);
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
@@ -505,7 +298,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(429);
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
@@ -520,7 +312,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBeUndefined();
     expect(formatted.classification).toStrictEqual({ kind: 'upstream-credit' });
     expect(formatted.userRetryable).toBe(true);
@@ -534,7 +325,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('openai');
     expect(formatted.statusCode).toBe(500);
     expect(formatted.classification).toBeUndefined();
     expect(formatted.userRetryable).toBe(true);
@@ -556,7 +346,6 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('anthropic');
     expect(formatted.message).toBe('Request aborted');
     expect(formatted.userRetryable).toBe(false);
   });
@@ -574,12 +363,10 @@ describe('formatProviderHttpError', () => {
 
     const formatted = formatProviderHttpError(error);
 
-    expect(formatted.provider).toBe('anthropic');
     expect(formatted.statusCode).toBe(401);
     expect(formatted.statusText).toBe('Unauthorized');
     expect(formatted.message).toContain('HTTP 401 Unauthorized');
     expect(formatted.message).toContain('invalid key');
-    expect(formatted.requestId).toBe('req_anthropic');
     expect(formatted.userRetryable).toBe(false);
   });
 });

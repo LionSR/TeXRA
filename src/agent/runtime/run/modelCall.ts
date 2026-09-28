@@ -17,7 +17,6 @@ import {
 } from '@texra-ai/llm/turn';
 
 import type { AgentTrace } from '@agent/trace';
-import type { ModelRouteVerdict } from '@common/errors/sdkError/providerErrorFormat';
 import type { SettingsStores } from '@shared/config/settingsAccess';
 import {
   MODEL_RETRY_MAX_ATTEMPTS_SETTING,
@@ -30,7 +29,7 @@ import { roundTo } from '@utils/core';
 import { readSettingFrom } from '@utils/config/platformSettings';
 import { ensureError } from '@utils/errors/errorMessage';
 
-import { classifyModelFailure } from './modelFailure';
+import { classifyModelFailure, type ModelRouteVerdict } from './modelFailure';
 import { priceTurnUsage } from './pricing';
 import type { ModelRetryGate, RoutePolicy } from '../ModelRetryGate';
 import type { BoundModel } from './modelBinding';
@@ -224,7 +223,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
       call.gate.withRoutes(
         routePolicies(
           bound,
-          (error) => classifyModelFailure(error, bound.usageRoute).verdict,
+          (error) => classifyModelFailure(error, bound).verdict,
         ),
         {
           baseBackoffMs: RETRY_BACKOFF_MS,
@@ -253,7 +252,7 @@ export const callModel = Effect.fn('ModelInvoker.call')(function* <R>(
     if (
       Cause.hasInterrupts(exit.cause) ||
       attempt >= retries ||
-      !classifyModelFailure(error, bound.usageRoute).autoRetryable
+      !classifyModelFailure(error, bound).autoRetryable
     ) {
       return yield* Effect.failCause(exit.cause);
     }

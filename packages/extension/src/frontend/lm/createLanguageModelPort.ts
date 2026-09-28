@@ -11,6 +11,7 @@ import {
   type LanguageModelPort,
 } from '@platform/languageModel';
 import { ensureError, toErrorMessage } from '@utils/errors/errorMessage';
+import { acquireVscodeLanguageModel } from './acquireVscodeLanguageModel';
 
 const CHANNEL = 'LanguageModelPort';
 
@@ -72,6 +73,9 @@ export function createLanguageModelPort(
           ).pipe(withLogChannel(CHANNEL)),
         ),
       ),
+
+    acquire: (configuration) =>
+      acquireVscodeLanguageModel(context, configuration),
 
     onDidChange(listener) {
       const models = lmApi.onDidChangeChatModels(listener);

@@ -23,11 +23,7 @@ import {
 } from '@utils/errors/errorMessage';
 import { capitalize } from '@utils/text/stringUtils';
 
-import {
-  causeChain,
-  findInCauseChain,
-  isDiskFullError,
-} from '../errorPredicates';
+import { findInCauseChain, isDiskFullError } from '../errorPredicates';
 import { isContextWindowError, isUserAbort } from './errorPatterns';
 import {
   detectSdkUsageRoute,
@@ -36,18 +32,12 @@ import {
   providerErrorMetadata,
 } from './errorMetadata';
 import {
-  type HeaderBag,
-  detectProvider,
   detectRawErrorBody,
-  detectRequestId,
   detectStatusCode,
   detectStatusText,
   firstBodyStringField,
-  getErrorClassNames,
-  getHeaderValue,
   inferStatusCodeFromBody,
   matchUsageLimitMessage,
-  isModelScopedRateLimitBody,
   isUpstreamCreditDepletedBody,
   safeGetReasonPhrase,
   type QuotaLimitInfo,
@@ -58,14 +48,7 @@ import {
   isGlmCodingPlanRateLimit,
   parseGlmCodingPlanLimit,
 } from './glmCodingPlanDetection';
-import {
-  type SdkErrorEntry,
-  SDK_ERRORS,
-  isRetryableStatusCode,
-} from './sdkErrorKinds';
-
-/** Partial result before body detection (rawErrorBody added later). */
-type SdkMatchResult = Omit<ProviderError, 'rawErrorBody'>;
+import { isRetryableStatusCode } from './sdkErrorKinds';
 
 interface QuotaLimitMatch {
   readonly exhaustionReason: ExhaustionReason;
@@ -277,73 +260,6 @@ function resolveErrorStatusCode(
   );
 }
 
-/** The SDK error entry whose class name the thrown error carries. The
- *  provider SDK class is the only signal: the package rethrows the SDK's own
- *  `APIError` subclass as `ModelError.cause`, so the prototype chain names the
- *  failure kind without a side channel. */
-function matchSdkErrorEntry(err: unknown): SdkErrorEntry | undefined {
-  const errorClassNames = getErrorClassNames(err);
-  return SDK_ERRORS.find(({ classNames }) =>
-    classNames.some((className) => errorClassNames.includes(className)),
-  );
-}
-
-/** Match known SDK error types and return structured error details. */
-function matchSdkError(
-  err: unknown,
-  rawErrorBody: unknown,
-): SdkMatchResult | undefined {
-  const entry = matchSdkErrorEntry(err);
-  if (!entry) {
-    return undefined;
-  }
-
-  const provider = detectProvider(err);
-  const requestId = detectRequestId(err);
-
-  // Message-only errors (connection, abort) - use the entry's message
-  if (entry.message !== undefined) {
-    return {
-      message: entry.message,
-      provider,
-      userRetryable: entry.userRetryable ?? false,
-      requestId,
-    };
-  }
-
-  // HTTP errors - detect status code from error object, SDK class, or error body.
-  const statusCode = resolveErrorStatusCode(
-    detectStatusCode(err),
-    rawErrorBody,
-    entry.fallbackStatusCode,
-  );
-  const { statusText, message } = describeHttpError(
-    err,
-    statusCode,
-    extractErrorMessage(err),
-    rawErrorBody,
-  );
-
-  if (!statusCode) {
-    // SDK errors without status codes are unusual - be conservative and don't offer retry
-    return {
-      message,
-      provider,
-      userRetryable: false,
-      requestId,
-    };
-  }
-
-  return {
-    message,
-    statusCode,
-    statusText,
-    provider,
-    userRetryable: isRetryableStatusCode(statusCode),
-    requestId,
-  };
-}
-
 /**
  * Builds a fresh `ProviderError` without caching it on the thrown value.
  *
@@ -399,8 +315,8 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     };
   }
 
-  // Handle DOMException AbortError (from AbortController.abort())
-  if (err instanceof DOMException && err.name === 'AbortError') {
+  // An AbortController abort or an SDK user-abort error.
+  if (isUserAbort(err)) {
     return terminalError('Request aborted');
   }
 
@@ -411,11 +327,10 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     );
   }
 
-  // The status this error resolves to outside the SDK-matched path, shared by
-  // the context-window guard and the unrecognized-error return below. Routed
-  // through the shared resolver so a misleading sub-400 code (an SSE 200, a
-  // wrapper's errno) cannot outrank a status inferable from the body. The
-  // SDK-matched path resolves its own, adding the matched entry's fallback.
+  // The status this error resolves to, shared by the context-window guard and
+  // the return below. Routed through the shared resolver so a misleading
+  // sub-400 code (an SSE 200, a wrapper's errno) cannot outrank a status
+  // inferable from the body.
   const statusCode = resolveErrorStatusCode(
     detectStatusCode(err),
     rawErrorBody,
@@ -442,53 +357,28 @@ export function formatProviderHttpError(err: unknown): ProviderError {
     );
   }
 
-  // Classification + diagnostics carried by BOTH the SDK-matched and the
-  // unrecognized returns below. The abort / disk-full early returns above
-  // deliberately opt out. Single source for these fields keeps the SDK and
-  // fallback paths identical.
-  const providerDetails = {
-    classification: markerClassification,
-    rawErrorBody,
-  };
-
-  // Try matching a known SDK error type (connection, abort, HTTP errors)
-  const sdkMatch = matchSdkError(err, rawErrorBody);
-  if (sdkMatch) {
-    return {
-      ...sdkMatch,
-      ...providerDetails,
-      message: subscriptionLimitMessage ?? sdkMatch.message,
-      // Credential-exhausted errors keep userRetryable=true so the retry
-      // panel surfaces with the "Use your own API key" affordance, but
-      // shouldAutoRetry separately suppresses auto-retry for them — a
-      // fresh attempt with the same depleted credential would just fail.
-      userRetryable: sdkMatch.userRetryable || isCredentialExhausted,
-    };
-  }
-
-  // Unrecognized error — extract what we can, on the status resolved above.
-  const provider = detectProvider(err);
-  const requestId = detectRequestId(err);
   const { statusText, message } = describeHttpError(
     err,
     statusCode,
     extractedMessage,
     rawErrorBody,
   );
-  // No status code on an unrecognized error likely means a network-level failure
-  // (DNS, proxy, TLS, etc.) — show retry button for safety.
+  // No status code likely means a network-level failure (DNS, proxy, TLS,
+  // etc.) — show retry button for safety. Credential-exhausted errors keep
+  // userRetryable=true so the retry panel surfaces with the "Use your own API
+  // key" affordance, but shouldAutoRetry separately suppresses auto-retry for
+  // them — a fresh attempt with the same depleted credential would just fail.
   const userRetryable =
     isCredentialExhausted ||
     (statusCode ? isRetryableStatusCode(statusCode) : true);
 
   return {
-    ...providerDetails,
+    classification: markerClassification,
+    rawErrorBody,
     message: subscriptionLimitMessage ?? message,
     statusCode,
     statusText,
-    provider,
     userRetryable,
-    requestId,
   };
 }
 
@@ -516,139 +406,6 @@ export function normalizeProviderError(err: unknown): ProviderError {
   // `attachProviderError` at provider/flow boundaries seeds the cache the
   // lookup above recovers.
   return formatProviderHttpError(err);
-}
-
-const TRANSPORT_ERROR_CODES = new Set([
-  'EAI_AGAIN',
-  'ECONNREFUSED',
-  'ECONNRESET',
-  'EHOSTUNREACH',
-  'ENETUNREACH',
-  'ETIMEDOUT',
-  'UND_ERR_BODY_TIMEOUT',
-  'UND_ERR_CONNECT_TIMEOUT',
-  'UND_ERR_HEADERS_TIMEOUT',
-  'UND_ERR_SOCKET',
-]);
-
-function detectRetryAfterMs(chain: readonly unknown[]): number | undefined {
-  for (const current of chain) {
-    const headers = (current as { headers?: HeaderBag }).headers;
-    const explicitMs = getHeaderValue(headers, 'retry-after-ms');
-    if (explicitMs !== undefined) {
-      const ms = Number(explicitMs);
-      if (Number.isFinite(ms) && ms >= 0) return ms;
-    }
-
-    const retryAfter = getHeaderValue(headers, 'retry-after');
-    if (retryAfter === undefined) continue;
-    const seconds = Number(retryAfter);
-    if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
-    const date = Date.parse(retryAfter);
-    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
-  }
-  return undefined;
-}
-
-/** Which recovery scope owns a 429, read from the normalized provider error. */
-function detectRateLimitScope(formatted: ProviderError): 'model' | 'wire' {
-  if (getExhaustionReason(formatted) !== undefined) return 'wire';
-  return isModelScopedRateLimitBody(formatted.rawErrorBody) ? 'model' : 'wire';
-}
-
-/**
- * What one failed model call proves about the recovery routes it ran under.
- * Every route asks a different question of the same failure — the shared wire
- * route and the model-specific limit scope — and each answer reads the same
- * cause chain, status code and rate-limit scope, so the call site classifies
- * once and reads the verdict.
- */
-export interface ModelRouteVerdict {
-  /** The scope that owns the limit. Defined only for a 429. */
-  readonly rateLimitScope: 'model' | 'wire' | undefined;
-  /** Credential exhaustion (subscription quota, upstream credit). */
-  readonly exhaustionReason: ExhaustionReason | undefined;
-  /**
-   * The failure carries evidence about a shared wire route (provider +
-   * credential + endpoint): a transport failure, a 5xx/408 server failure, or
-   * a rate limit without an explicit model scope — that one uses its own
-   * recovery scope.
-   * A 409, retryable per request by `isRetryableStatusCode`, stays node-local:
-   * a conflict does not imply the route is unhealthy.
-   */
-  readonly wireRouteFailure: boolean;
-  /** `retry-after` / `retry-after-ms` guidance from the cause chain's headers. */
-  readonly retryAfterMs: number | undefined;
-}
-
-/** Classifies a failed model call for every recovery route it ran under. */
-export function classifyModelRouteFailure(error: Error): ModelRouteVerdict {
-  const chain = causeChain(error);
-  const formatted = normalizeProviderError(error);
-  // Per-element field reads with an HTTP range guard, so a wrapper's non-HTTP
-  // numeric `code` (an errno, a gRPC status) cannot shadow a real status
-  // deeper in the chain. The normalized error is the fallback for statuses
-  // only inferable from provider bodies.
-  const statusCode =
-    chain
-      .map((current) => detectStatusCode(current))
-      .find(
-        (status) => status !== undefined && status >= 100 && status <= 599,
-      ) ?? formatted.statusCode;
-  const rateLimitScope =
-    statusCode === StatusCodes.TOO_MANY_REQUESTS
-      ? detectRateLimitScope(formatted)
-      : undefined;
-
-  const candidates = chain.map((current) => {
-    const candidate = current as {
-      code?: unknown;
-      message?: unknown;
-      name?: unknown;
-    };
-    return {
-      code: typeof candidate.code === 'string' ? candidate.code : '',
-      name: typeof candidate.name === 'string' ? candidate.name : '',
-      message: typeof candidate.message === 'string' ? candidate.message : '',
-    };
-  });
-  const hasStructuredUndiciFailure = candidates.some(({ code }) =>
-    code.startsWith('UND_ERR_'),
-  );
-  // The SDK's own connection classes, read off the prototype chain by the
-  // same table `matchSdkError` uses — an `APIConnectionError` carries neither
-  // an errno nor a `…ConnectionError` `name`, so the heuristics below miss it.
-  const sdkTransportFailure = chain.some((current) => {
-    const kind = matchSdkErrorEntry(current)?.kind;
-    return kind === 'connection' || kind === 'connection_timeout';
-  });
-  const transportFailure =
-    sdkTransportFailure ||
-    candidates.some(({ code, name, message }) => {
-      if (
-        TRANSPORT_ERROR_CODES.has(code) ||
-        (code === 'UND_ERR_INFO' && /\b(?:stream )?timeout\b/i.test(message))
-      ) {
-        return true;
-      }
-      return (
-        !hasStructuredUndiciFailure &&
-        (/(?:Connection|Timeout)Error$/.test(name) ||
-          /^(?:fetch failed|failed to fetch)$/i.test(message.trim()))
-      );
-    });
-
-  const retryAfterMs = detectRetryAfterMs(chain);
-  return {
-    rateLimitScope,
-    exhaustionReason: getExhaustionReason(formatted),
-    wireRouteFailure:
-      rateLimitScope === 'wire' ||
-      statusCode === StatusCodes.REQUEST_TIMEOUT ||
-      (statusCode != null && statusCode >= 500) ||
-      transportFailure,
-    retryAfterMs,
-  };
 }
 
 /** Whether repeating the same provider request can recover without user action. */

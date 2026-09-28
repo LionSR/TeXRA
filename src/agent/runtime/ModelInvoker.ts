@@ -346,7 +346,7 @@ export const modelInvokerLayer = (): Layer.Layer<
       ) =>
         Effect.fail(
           new AttemptFailed({
-            failure: classifyModelFailure(cause, bound.usageRoute, partialText),
+            failure: classifyModelFailure(cause, bound, partialText),
           }),
         );
 
@@ -849,7 +849,7 @@ export const modelInvokerLayer = (): Layer.Layer<
         const routes = routePolicies(bound, (error) =>
           error instanceof AttemptFailed
             ? error.failure.verdict
-            : classifyModelFailure(error).verdict,
+            : classifyModelFailure(error, bound).verdict,
         );
         return session.modelRetries.withRoutes(routes, {
           baseBackoffMs: RETRY_BACKOFF_MS,
