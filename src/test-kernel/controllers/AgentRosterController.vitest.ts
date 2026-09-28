@@ -291,27 +291,25 @@ describe('AgentRosterController', () => {
   );
 
   it.effect(
-    "forgets a deleted custom agent's hidden key, and keeps another category's",
+    'keeps hidden keys through an empty catalog; a delete drops only its own',
     () =>
       Effect.gen(function* () {
         const workspaceState = new FakeStateStore({
           [WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS]: [
             'custom:review',
-            'custom:deleted-long-ago',
+            'custom:search',
           ],
         });
-        const roster = controller(workspaceState);
+        // The catalog has not published its first scan: no agent is known.
+        const roster = controller(workspaceState, { getAgents: () => [] });
+        const hidden = () =>
+          workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS);
 
-        yield* roster.setAgentEnabled({
-          category: 'toolUse',
-          source: 'builtInToolUse',
-          name: 'lead',
-          enabled: false,
-        });
+        yield* roster.setEnabledAgentKeys('toolUse', []);
+        expect(yield* hidden()).toEqual(['custom:review', 'custom:search']);
 
-        expect(
-          yield* workspaceState.get(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS),
-        ).toEqual(['custom:review']);
+        yield* roster.forgetDeletedAgent('review');
+        expect(yield* hidden()).toEqual(['custom:search']);
       }),
   );
 

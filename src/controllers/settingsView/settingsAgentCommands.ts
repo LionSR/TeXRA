@@ -137,6 +137,7 @@ export function settingsAgentCommands(ports: SettingsAgentCommandsPorts) {
     showInfoMessage: present.notice,
     showErrorMessage: present.alert,
     refreshAfterMutation: () => refreshAfterAgentMutation(),
+    forgetDeletedAgent: (name) => roster.forgetDeletedAgent(name),
   });
 
   const handlers = {

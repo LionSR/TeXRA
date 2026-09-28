@@ -124,10 +124,12 @@ export function unlistedCustomAgents<Entry extends RosterEntry>(
 /**
  * Record which custom agents the written lists turn on and off: in a
  * category `selections` names, one its list leaves out is hidden, one it
- * names is shown again, and `'all'` shows them all; elsewhere a custom agent
- * keeps its choice. The hidden keys are rebuilt from the agents that exist,
- * in every category (a key names an agent whatever its category), so a
- * deleted agent's key goes with it. The caller holds the roster's write lane.
+ * names is shown again, and `'all'` shows them all. Only the agents listed
+ * now change; every other stored choice stays, a key whose agent is absent
+ * included, since absence (a first scan not yet published, a file that no
+ * longer parses) is no removal. A deleted agent's key goes where it is
+ * deleted ({@link forgetHiddenAgent}). The caller holds the roster's write
+ * lane.
  */
 export function recordCustomChoices(
   repoState: StateStore,
@@ -135,22 +137,43 @@ export function recordCustomChoices(
   selections: Partial<Record<AgentCategory, AgentRosterCategorySelection>>,
 ): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
   return Effect.gen(function* () {
-    const stored = yield* readHidden(repoState);
-    const hidden = new Set<string>();
+    const hidden = yield* readHidden(repoState);
     for (const category of AGENT_CATEGORIES) {
       const selection = selections[category];
+      if (selection === undefined) continue;
       for (const entry of agentsOf(category)) {
         if (entry.source !== AGENT_SOURCE.CUSTOM) continue;
         const key = agentKeyOf(entry);
-        const hide =
-          selection === undefined
-            ? stored.has(key)
-            : selection !== 'all' && !listNames(selection, entry);
-        if (hide) hidden.add(key);
+        if (selection === 'all' || listNames(selection, entry))
+          hidden.delete(key);
+        else hidden.add(key);
       }
     }
     yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
       ...hidden,
     ]);
   });
+}
+
+/**
+ * Forget the hidden choice of a custom agent the user deleted: the one
+ * place that knows its removal is real. A file removed outside TeXRA keeps
+ * its key, which is harmless, until that name is deleted here or recreated
+ * and chosen again. Takes the roster's write lane itself.
+ */
+export function forgetHiddenAgent(
+  repoState: StateStore,
+  name: string,
+): Effect.Effect<void, StateReadFailed | StateWriteFailed> {
+  return serializeWorkspaceWrite(
+    repoState,
+    Effect.gen(function* () {
+      const hidden = yield* readHidden(repoState);
+      const key = agentKeyOf({ source: AGENT_SOURCE.CUSTOM, name });
+      if (!hidden.delete(key)) return;
+      yield* repoState.update(WorkspaceStateKey.HIDDEN_CUSTOM_AGENTS, [
+        ...hidden,
+      ]);
+    }),
+  );
 }
