@@ -62,7 +62,6 @@ export type ResumeRunResult =
 
 export interface ResumeRunOptions extends Pick<
   ResumeToolUseFromResumeDataOptions,
-  | 'approvalPromptsUnavailable'
   | 'onApprovalPolicyDenial'
   | 'publishWorkflowOutput'
   | 'beforeRunEnd'
@@ -255,7 +254,6 @@ const resumeRunWithRecoveryProvenance = Effect.fn(
 /** What every resumed run takes from the resume's caller. */
 const runLaunchOptions = (options: ResumeRunOptions) => ({
   session: options.session,
-  approvalPromptsUnavailable: options.approvalPromptsUnavailable,
   onApprovalPolicyDenial: options.onApprovalPolicyDenial,
   isCancellationRequested: options.isCancellationRequested,
   publishWorkflowOutput: options.publishWorkflowOutput,

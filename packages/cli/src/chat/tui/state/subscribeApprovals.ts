@@ -17,7 +17,7 @@ import { Effect } from 'effect';
 
 import type { HostInteractions, SessionHandle } from '@agent/runtime';
 import {
-  cliToolUseApprovalOptions,
+  cliApprovalPromptsUnavailable,
   settleExecutable,
   settleHumanInputDenial,
   settleRetry,
@@ -324,8 +324,7 @@ export function createTuiHostInteractions(
     // What the session withholds on every run it launches or resumes, read
     // live: `/approval` changes the policy mid-session.
     get approvalPromptsUnavailable() {
-      return cliToolUseApprovalOptions(stores.session, context)
-        .approvalPromptsUnavailable;
+      return cliApprovalPromptsUnavailable(stores.session, context);
     },
     // The CLI host renders the notice itself and says whether it rendered a
     // user-visible record; there is no program for the session to fork.

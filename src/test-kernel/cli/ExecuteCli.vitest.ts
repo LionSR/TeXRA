@@ -10,6 +10,8 @@ import { Deferred, Effect, Exit, Fiber, Scope } from 'effect';
 import type { RunAgentOptions } from '@agent/runtime/runAgent';
 import { RunHandle } from '@agent/runtime/RunHandle';
 import type { SessionHandle } from '@agent/runtime/SessionHandle';
+import { cliApprovalPromptsUnavailable } from '@cli/runtime/approval/settleApprovals';
+import type { CliContext } from '@cli/runtime/cliContext';
 import { CliExitCode } from '@cli/runtime/exitCodes';
 import type { executeCliRequest } from '@cli/runtime/executeCli';
 import { AgentError } from '@common/errors';
@@ -325,13 +327,20 @@ async function stubExecuteCliDeps(): Promise<void> {
   mocks.attachWorkflowPlainOutput.mockReturnValue(
     mocks.detachWorkflowPlainOutput,
   );
-  mocks.createHeadlessCliHostInteractions.mockReturnValue({
-    emit: mocks.emit,
-    pending: vi.fn(() => []),
-    resolve: vi.fn(() => false),
-    cancel: vi.fn(),
-    dispose: mocks.disposeHostInteractions,
-  });
+  // The host answers the session's approval question the way the headless
+  // adapter does: from the session's policy and this context.
+  mocks.createHeadlessCliHostInteractions.mockImplementation(
+    (session: SessionHandle, _runtime: unknown, context: CliContext) => ({
+      emit: mocks.emit,
+      pending: vi.fn(() => []),
+      resolve: vi.fn(() => false),
+      cancel: vi.fn(),
+      dispose: mocks.disposeHostInteractions,
+      get approvalPromptsUnavailable() {
+        return cliApprovalPromptsUnavailable(session, context);
+      },
+    }),
+  );
   mocks.createCliRuntimeHost.mockReturnValue({
     emit: mocks.emit,
     attachRunProgressRenderer: mocks.attachRunProgressRenderer,
@@ -436,6 +445,19 @@ describe('executeCliRequest', () => {
       }),
   );
 
+  /** What the session's attached host answered while the run launched: the
+   *  one fact a launch reads to withhold approval-gated tools. */
+  const promptsUnavailableAtLaunch = (): (() => boolean | undefined) => {
+    let seen: boolean | undefined;
+    mocks.runAgent.mockImplementationOnce(
+      async (_request, options: { session: SessionHandle }) => {
+        seen = options.session.interactions.approvalPromptsUnavailable;
+        return COMPLETED_RUN;
+      },
+    );
+    return () => seen;
+  };
+
   it.effect.each([
     { policy: 'never', overrides: {} },
     { policy: 'ask', overrides: { approvalPolicy: 'ask' } },
@@ -444,33 +466,26 @@ describe('executeCliRequest', () => {
     ({ overrides }) =>
       Effect.gen(function* () {
         const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-        const request = baseRequest();
+        const seen = promptsUnavailableAtLaunch();
 
-        yield* executeCliRequest(request, cliContext(overrides));
+        yield* executeCliRequest(baseRequest(), cliContext(overrides));
 
-        expect(mocks.runAgent).toHaveBeenCalledWith(
-          request,
-          expect.objectContaining({
-            approvalPromptsUnavailable: true,
-          }),
-        );
+        expect(seen()).toBe(true);
       }),
   );
 
   it.effect('keeps yolo runs approval-available for agent run', () =>
     Effect.gen(function* () {
       const { executeCliRequest } = yield* Effect.promise(loadExecuteCli);
-      const request = baseRequest();
+      const seen = promptsUnavailableAtLaunch();
 
-      yield* executeCliRequest(request, cliContext({ approvalPolicy: 'yolo' }));
+      yield* executeCliRequest(
+        baseRequest(),
+        cliContext({ approvalPolicy: 'yolo' }),
+      );
 
       expect(testDefaultSession().approvalPolicy).toBe('yolo');
-      expect(mocks.runAgent).toHaveBeenCalledWith(
-        request,
-        expect.objectContaining({
-          approvalPromptsUnavailable: false,
-        }),
-      );
+      expect(seen()).toBe(false);
     }),
   );
 

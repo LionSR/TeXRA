@@ -793,8 +793,6 @@ export function createWorkflowScriptAgentRunner(
               configPayload,
               parentRunId: run.runId,
               session,
-              approvalPromptsUnavailable:
-                parent.run.toolPolicy.approvalPromptsUnavailable,
               parentOffered: yield* offeredBy(parent.run),
               onApprovalPolicyDenial: parent.run.onApprovalPolicyDenial,
               // Live inherited bypass values, matching LLM delegation: each
